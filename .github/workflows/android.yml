@@ -1,9 +1,8 @@
-name: Build Android APK
+name: Android CI Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -11,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Project
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -21,14 +20,41 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Grant execute permission
+      - name: Grant permission
         run: chmod +x gradlew
 
+      # حل مشكلة التوقيع
+      - name: Create Debug Keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v \
+            -keystore ~/.android/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      # Build Debug APK
       - name: Build Debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
+      # Build Release APK
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      # Upload Debug
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: APK
+          name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      # Upload Release
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: app/build/outputs/apk/release/*.apk
