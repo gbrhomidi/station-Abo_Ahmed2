@@ -7,13 +7,13 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
-  compileSdk = 35
+  namespace = "com.aistudio.dieselstationsms.kxmpzq"
+  compileSdk = 36
 
   defaultConfig {
     applicationId = "com.aistudio.dieselstationsms.kxmpzq"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = 2
     versionName = "2.0 Pro"
 

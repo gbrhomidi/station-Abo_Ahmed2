@@ -1,4 +1,4 @@
-package com.example
+package com.aistudio.dieselstationsms.kxmpzq
 
 import android.app.Service
 import android.content.Intent
@@ -97,7 +97,7 @@ class SMSService : Service() {
             val response = if (responseCode == 200) {
                 conn.inputStream.bufferedReader().use { it.readText() }
             } else {
-                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{"error": "HTTP $responseCode"}"
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
             }
             conn.disconnect()
 
@@ -131,8 +131,8 @@ class SMSService : Service() {
             قدم تحليلاً مختصراً ومهنياً باللغة العربية للبيانات التالية:
 
             - المخزون المتبقي: ${stock.toInt()} لتر
-            - الديون المستحقة: ${due.toInt()} د.ع
-            - مبيعات اليوم: ${todaySales.toInt()} د.ع
+            - الديون المستحقة: ${due.toInt()} ريال
+            - مبيعات اليوم: ${todaySales.toInt()} ريال
             - عدد العملاء النشطين: $customers
             - عدد أيام المبيعات المتاحة: ${sales.length()}
 
@@ -171,7 +171,7 @@ class SMSService : Service() {
             قم بتحليل سلوك العميل التالي وقدم نصيحة:
 
             - الاسم: ${customerData.optString("full_name", "غير معروف")}
-            - الرصيد المستحق: ${customerData.optDouble("current_balance", 0.0).toInt()} د.ع
+            - الرصيد المستحق: ${customerData.optDouble("current_balance", 0.0).toInt()} ريال
             - نقاط الولاء: ${customerData.optInt("loyalty_points", 0)}
             - مستوى VIP: ${customerData.optInt("vip_level", 0)}
 
@@ -270,7 +270,7 @@ class SMSService : Service() {
                                     val customer = db.getCustomer(customerId)
                                     val phone = customer?.getString("phone")
                                     if (phone != null) {
-                                        val msg = "تذكير: لديك مبلغ مستحق $due د.ع قبل $dueDate"
+                                        val msg = "تذكير: لديك مبلغ مستحق $due ريال قبل $dueDate"
                                         sendSMS(db, phone, msg, "new_sale_due")
                                     }
                                 }
@@ -289,7 +289,6 @@ class SMSService : Service() {
                             responseJson.put("success", true)
                             responseJson.put("data", stats)
 
-                            // Add AI insight if enabled
                             if (db.getSetting("ai_enabled") == "1") {
                                 val sales = db.getDailySales()
                                 val aiInsight = generateAIInsight(stats.getJSONObject(0), sales)
@@ -322,10 +321,8 @@ class SMSService : Service() {
                             val message = params["message"]?.firstOrNull() ?: ""
                             val sessionId = params["session_id"]?.firstOrNull() ?: "default"
 
-                            // Save user message
                             db.saveAiMessage(sessionId, "user", message)
 
-                            // Get context
                             val history = db.getAiChatHistory(sessionId)
                             val context = if (history.length() > 0) {
                                 "سياق المحادثة السابقة: ${history.toString().take(500)}\n\n"
@@ -339,8 +336,8 @@ class SMSService : Service() {
                                 السؤال: $message
 
                                 ملاحظات:
-                                - سعر اللتر الحالي: 950 د.ع
-                                - العملة: الدينار العراقي (د.ع)
+                                - سعر اللتر الحالي: 500 ريال
+                                - العملة: الريال اليمني (ريال)
                                 - الرد يجب أن يكون بالعربية
                                 - اجعل الرد مختصراً ومفيداً
                             """.trimIndent()
@@ -382,7 +379,7 @@ class SMSService : Service() {
                                 val name = t.getString("customer_name")
                                 val due = t.getDouble("due")
                                 val dueDate = t.getString("due_date")
-                                val msg = "عزيزي $name، نحيطكم علماً بوجود مبلغ مستحق قدره $due د.ع تجاوز تاريخ الاستحقاق ($dueDate). يرجى المبادرة بالتسديد. محطة أبو أحمد."
+                                val msg = "عزيزي $name، نحيطكم علماً بوجود مبلغ مستحق قدره $due ريال تجاوز تاريخ الاستحقاق ($dueDate). يرجى المبادرة بالتسديد. محطة أبو أحمد."
                                 if (sendSMS(db, phone, msg, "overdue_reminder")) sentCount++ else failedList.put(name)
                             }
                             responseJson.put("success", true)

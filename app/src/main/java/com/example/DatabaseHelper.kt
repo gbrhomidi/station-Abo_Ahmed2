@@ -1,4 +1,4 @@
-package com.example
+package com.aistudio.dieselstationsms.kxmpzq
 
 import android.content.ContentValues
 import android.content.Context
@@ -34,7 +34,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("INSERT INTO settings VALUES ('sms_gateway_type', 'android_app')")
         db.execSQL("INSERT INTO settings VALUES ('sms_sim_slot', '1')")
         db.execSQL("INSERT INTO settings VALUES ('low_stock_threshold', '1000')")
-        db.execSQL("INSERT INTO settings VALUES ('currency', 'د.ع')")
+        db.execSQL("INSERT INTO settings VALUES ('currency', 'ريال')")
         db.execSQL("INSERT INTO settings VALUES ('station_name', 'محطة ابو أحمد لمشتقات الديزل')")
         db.execSQL("INSERT INTO settings VALUES ('ai_enabled', '1')")
         db.execSQL("INSERT INTO settings VALUES ('auto_backup_interval', '24')")
@@ -249,7 +249,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         cv.put("payment_type", paymentType)
         val id = db.insert("transactions", null, cv).toInt()
 
-        // تحديث نقاط الولاء
         if (getSetting("loyalty_enabled") == "1") {
             val points = (qty * getSetting("points_per_liter").toDoubleOrNull()!!).toInt()
             db.execSQL("UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id=?", arrayOf(points, customerId))

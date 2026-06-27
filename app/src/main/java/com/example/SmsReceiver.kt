@@ -1,4 +1,4 @@
-package com.example
+package com.aistudio.dieselstationsms.kxmpzq
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -27,22 +27,28 @@ class SmsReceiver : BroadcastReceiver() {
                         sendReply(context, db, sender, "شكراً لتواصلك. يرجى زيارة المحطة لإتمام عملية الدفع وتزويدنا بوصل الاستلام.")
                     }
                     msgBody.contains("استعلام") || msgBody.contains("help") -> {
-                        sendReply(context, db, sender, "مرحباً بك في محطة أبو أحمد لمشتقات الديزل.
-الخدمات المتاحة:
-1. الاستعلام عن الرصيد (أرسل: رصيد)
-2. معرفة العروض (أرسل: عروض)
-3. الموقع (أرسل: موقع)")
+                        sendReply(
+                            context, db, sender,
+                            "مرحباً بك في محطة أبو أحمد لمشتقات الديزل.\n" +
+                            "الخدمات المتاحة:\n" +
+                            "1. الاستعلام عن الرصيد (أرسل: رصيد)\n" +
+                            "2. معرفة العروض (أرسل: عروض)\n" +
+                            "3. الموقع (أرسل: موقع)"
+                        )
                     }
                     msgBody.contains("عروض") || msgBody.contains("offer") -> {
-                        sendReply(context, db, sender, "عروض اليوم:
-- سعر اللتر: 950 د.ع
-- خصم الولاء: 5% للعملاء الذهبيين
-- توصيل مجاني للطلبات +5000 لتر")
+                        sendReply(
+                            context, db, sender,
+                            "عروض اليوم:\n- سعر اللتر: 500 ريال\n" +
+                            "- خصم الولاء: 5% للعملاء الذهبيين\n" +
+                            "- توصيل مجاني للطلبات +5000 لتر"
+                        )
                     }
                     msgBody.contains("موقع") || msgBody.contains("location") -> {
-                        sendReply(context, db, sender, "موقع محطة أبو أحمد:
-شارع تعز - المنصورة
-أوقات العمل: 6 ص - 12 ص")
+                        sendReply(
+                            context, db, sender,
+                            "موقع محطة أبو أحمد:\nبجانب مدرسة الاتحاد براس وادي ثاة - الحميدة - العرش\nأوقات العمل: 24 ساعة"
+                        )
                     }
                 }
             }
@@ -59,11 +65,12 @@ class SmsReceiver : BroadcastReceiver() {
                 val bal = c.optDouble("current_balance", 0.0)
                 val points = c.optInt("loyalty_points", 0)
                 val vip = c.optInt("vip_level", 0)
-                val vipText = when(vip) { 3 -> "ذهبي 🥇" 2 -> "فضي 🥈" else -> "عادي" }
-                val reply = "مرحباً ${c.optString("full_name")},
-رصيدك: $bal د.ع
-نقاط الولاء: $points
-العضوية: $vipText"
+                val vipText = when (vip) {
+                    3 -> "ذهبي 🥇"
+                    2 -> "فضي 🥈"
+                    else -> "عادي"
+                }
+                val reply = "مرحباً ${c.optString("full_name")},\nرصيدك: $bal ريال\nنقاط الولاء: $points\nالعضوية: $vipText"
                 sendReply(context, db, sender, reply)
                 found = true
                 break

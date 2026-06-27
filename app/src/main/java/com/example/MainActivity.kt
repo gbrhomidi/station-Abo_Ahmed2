@@ -1,4 +1,4 @@
-package com.example
+package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.ui.theme.MyApplicationTheme
+import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -109,15 +109,29 @@ class MainActivity : ComponentActivity() {
                     settings.javaScriptCanOpenWindowsAutomatically = true
                     settings.mediaPlaybackRequiresUserGesture = false
 
-                    webViewClient = WebViewClient()
+                    webViewClient = object : WebViewClient() {
+                        override fun onReceivedError(
+                            view: WebView?,
+                            errorCode: Int,
+                            description: String?,
+                            failingUrl: String?
+                        ) {
+                            super.onReceivedError(view, errorCode, description, failingUrl)
+                            Log.e("WebView", "Error loading page: $description")
+                            // إعادة المحاولة بعد تأخير
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                loadUrl("http://127.0.0.1:8080/")
+                            }, 2000)
+                        }
+                    }
                     webChromeClient = WebChromeClient()
 
                     addJavascriptInterface(WebAppInterface(context, this@MainActivity), "AndroidInterface")
 
-                    // تأخير بسيط للسماح لخادم NanoHTTPD بالبدء
+                    // تأخير أكبر للسماح لخادم NanoHTTPD بالبدء
                     Handler(Looper.getMainLooper()).postDelayed({
                         loadUrl("http://127.0.0.1:8080/")
-                    }, 1500)
+                    }, 2000)
                 }
             }
         )
@@ -142,7 +156,7 @@ class MainActivity : ComponentActivity() {
             biometricPrompt.authenticate(
                 cancellationSignal, executor,
                 object : BiometricPrompt.AuthenticationCallback() {
-                    override fun onAuthenticationSucceeded(result: AuthenticationResult?) {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
                         super.onAuthenticationSucceeded(result)
                         runOnUiThread { onSuccess() }
                     }
