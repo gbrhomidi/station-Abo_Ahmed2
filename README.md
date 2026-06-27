@@ -341,9 +341,9 @@ copies or substantial portions of the Software.
 
 **محطة أبو أحمد لمشتقات الديزل**
 
-📍 العراق  
-📧 البريد الإلكتروني: [your-email@example.com](mailto:your-email@example.com)  
-🌐 الموقع الإلكتروني: [www.example.com](https://www.example.com)
+📍 اليمن
+📧 البريد الإلكتروني: [your-email@example.com](mailto:db7r01@gmail.com)  
+🌐 الموقع الإلكتروني: [www.example.com](db7r01@gmail.com)
 
 ---
 
