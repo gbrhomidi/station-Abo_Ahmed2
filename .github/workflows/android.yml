@@ -1,8 +1,9 @@
-name: Android CI Build
+name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -10,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Project
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -20,41 +21,22 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - name: Grant permission
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+
+      - name: Grant execute permission
         run: chmod +x gradlew
 
-      # حل مشكلة التوقيع
-      - name: Create Debug Keystore
-        run: |
-          mkdir -p ~/.android
-          keytool -genkey -v \
-            -keystore ~/.android/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-
-      # Build Debug APK
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      # Build Release APK
       - name: Build Release APK
         run: ./gradlew assembleRelease
+        env:
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
-      # Upload Debug
-      - name: Upload Debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-
-      # Upload Release
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-apk
+          name: Station_Abo_Ahmed_Release_APK
           path: app/build/outputs/apk/release/*.apk
