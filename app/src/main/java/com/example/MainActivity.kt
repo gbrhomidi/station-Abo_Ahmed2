@@ -9,6 +9,9 @@ import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.Bundle
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -43,7 +46,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Load Gemini API Key from .env
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
 
         requestAllPermissions()
@@ -60,18 +62,14 @@ class MainActivity : ComponentActivity() {
 
     private fun loadEnvKey(key: String): String {
         return try {
-            val envFile = assets.open(".env")
-            val reader = BufferedReader(InputStreamReader(envFile))
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val trimmed = line?.trim() ?: continue
-                if (trimmed.startsWith(key + "=")) {
-                    return trimmed.substringAfter("=").trim()
+            assets.open(".env").use { stream ->
+                BufferedReader(InputStreamReader(stream)).useLines { lines ->
+                    lines.mapNotNull { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("$key=")) trimmed.substringAfter("=").trim() else null
+                    }.firstOrNull() ?: ""
                 }
             }
-            reader.close()
-            envFile.close()
-            ""
         } catch (e: Exception) {
             Log.e("MainActivity", "Error loading .env: ${e.message}")
             ""
@@ -115,13 +113,16 @@ class MainActivity : ComponentActivity() {
                     webChromeClient = WebChromeClient()
 
                     addJavascriptInterface(WebAppInterface(context, this@MainActivity), "AndroidInterface")
-                    loadUrl("http://127.0.0.1:8080/")
+
+                    // تأخير بسيط للسماح لخادم NanoHTTPD بالبدء
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        loadUrl("http://127.0.0.1:8080/")
+                    }, 1500)
                 }
             }
         )
     }
 
-    // Biometric Authentication
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val executor = Executors.newSingleThreadExecutor()
@@ -160,7 +161,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // QR Scanner Bridge
     fun startQrScanner(callback: (String) -> Unit) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             runOnUiThread {
