@@ -7,23 +7,22 @@ plugins {
 }
 
 android {
-  namespace = "com.aistudio.dieselstationsms.kxmpzq"
-  compileSdk = 36
+  namespace = "com.example"
+  compileSdk = 35
 
   defaultConfig {
     applicationId = "com.aistudio.dieselstationsms.kxmpzq"
     minSdk = 24
-    targetSdk = 36
+    targetSdk = 35
     versionCode = 2
     versionName = "2.0 Pro"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // 🔐 إضافة تكوين التوقيع للإصدار (release)
   signingConfigs {
     create("release") {
-      storeFile = file("../my-upload-key.jks")          // الملف في جذر المشروع
+      storeFile = file("../my-upload-key.jks")
       storePassword = System.getenv("STORE_PASSWORD")
       keyAlias = System.getenv("KEY_ALIAS")
       keyPassword = System.getenv("KEY_PASSWORD")
@@ -34,20 +33,19 @@ android {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
-      signingConfig = signingConfigs["release"]       // ← ربط التوقيع
+      signingConfig = signingConfigs["release"]
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),
         "proguard-rules.pro"
       )
     }
     debug {
-      // يبقى بدون توقيع (يمكنك إضافة توقيع تصحيح إذا أردت)
     }
   }
 
   compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
   }
 
   buildFeatures {
