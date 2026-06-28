@@ -1,19 +1,16 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.app.Application
-import android.util.Log
+import java.io.File
+import java.util.Date
 
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-
-        // حفظ معالج الاستثناءات الافتراضي للنظام
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-
-        // تعيين معالج مخصص مع تمرير الخطأ للنظام
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e("MyApplication", "Uncaught exception in thread ${thread.name}", throwable)
-            // تمرير الاستثناء للمعالج الافتراضي لإغلاق التطبيق بشكل صحيح وعرض رسالة الخطأ
+            val logFile = File(getExternalFilesDir(null), "crash_log.txt")
+            logFile.appendText("${Date()}: ${throwable.stackTraceToString()}\n")
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }
