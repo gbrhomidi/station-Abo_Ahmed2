@@ -6,10 +6,15 @@ import android.util.Log
 class MyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        // معالج استثناءات عام لمنع الانهيار غير المتوقع وتسجيل السبب
+
+        // حفظ معالج الاستثناءات الافتراضي للنظام
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+
+        // تعيين معالج مخصص مع تمرير الخطأ للنظام
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e("MyApplication", "Uncaught exception in thread ${thread.name}", throwable)
-            // يمكن إعادة تشغيل التطبيق أو إظهار رسالة، لكننا نكتفي بالتسجيل
+            // تمرير الاستثناء للمعالج الافتراضي لإغلاق التطبيق بشكل صحيح وعرض رسالة الخطأ
+            defaultHandler?.uncaughtException(thread, throwable)
         }
     }
 }
