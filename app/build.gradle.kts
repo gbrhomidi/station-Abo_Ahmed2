@@ -8,19 +8,22 @@ plugins {
 
 android {
     namespace = "com.aistudio.dieselstationsms.kxmpzq"
-    compileSdk = 34  // ✅ خفضنا إلى 34 للتوافق
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.aistudio.dieselstationsms.kxmpzq"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 2
         versionName = "2.0 Pro"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ✅ إزالة abiFilters لمنع مشاكل المحاكيات
-        // ndk { abiFilters.add("armeabi-v7a"); abiFilters.add("arm64-v8a") }
+        // تم إزالة abiFilters لدعم المحاكيات بشكل كامل
+        // ndk {
+        //     abiFilters.add("armeabi-v7a")
+        //     abiFilters.add("arm64-v8a")
+        // }
     }
 
     signingConfigs {
@@ -63,7 +66,7 @@ android {
         }
     }
 
-    // ✅ حل تعارضات الحزم
+    // حل تعارضات الحزم
     packagingOptions {
         resources {
             excludes += setOf(
@@ -85,7 +88,7 @@ secrets {
     defaultPropertiesFileName = ".env.example"
 }
 
-// ✅ حل تعارضات الإصدارات
+// حل تعارضات الإصدارات
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
@@ -98,10 +101,11 @@ configurations.all {
 }
 
 dependencies {
+    // ===== PLATFORMS =====
     implementation(platform(libs.androidx.compose.bom))
     implementation(platform(libs.firebase.bom))
 
-    // Compose
+    // ===== COMPOSE & UI =====
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material3)
@@ -109,46 +113,53 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
 
-    // Core
+    // ===== CORE & LIFECYCLE =====
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // Database
+    // ===== DATA & PERSISTENCE =====
     implementation(libs.androidx.room.ktx) {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
     }
     implementation(libs.androidx.room.runtime)
     implementation(libs.moshi.kotlin)
 
-    // ✅ WorkManager (للنسخ الاحتياطي)
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // ===== WORK MANAGER (للنسخ الاحتياطي) =====
+    implementation(libs.androidx.work)
 
-    // Network
+    // ===== NETWORK & SERVER =====
+    // NanoHTTPD مع استبعاد التبعيات المتعارضة
     implementation(libs.nanohttpd) {
         exclude(group = "org.slf4j", module = "slf4j-api")
         exclude(group = "org.apache.httpcomponents", module = "httpclient")
         exclude(group = "org.apache.httpcomponents", module = "httpcore")
         exclude(group = "org.json", module = "json")
     }
+
+    // OkHttp
     implementation(libs.okhttp) {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
     }
+
+    // OkHttp Logging Interceptor
     implementation(libs.logging.interceptor) {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
     }
+
+    // Retrofit
     implementation(libs.retrofit) {
         exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
     }
     implementation(libs.converter.moshi)
 
-    // Coroutines
+    // ===== COROUTINES =====
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
 
-    // Test
+    // ===== TEST DEPENDENCIES =====
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.core)
     testImplementation(libs.androidx.junit)
@@ -159,15 +170,18 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
 
+    // ===== ANDROID TEST =====
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.runner)
 
+    // ===== DEBUG =====
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
+    // ===== KSP =====
     "ksp"(libs.androidx.room.compiler)
     "ksp"(libs.moshi.kotlin.codegen)
 }
