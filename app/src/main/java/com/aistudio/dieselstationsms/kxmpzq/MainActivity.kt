@@ -44,6 +44,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // تفعيل تصحيح أخطاء الـ WebView في نسخة التطوير فقط
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
+        
         enableEdgeToEdge()
 
         try {
@@ -131,7 +137,6 @@ class MainActivity : ComponentActivity() {
                         ) {
                             super.onReceivedError(view, errorCode, description, failingUrl)
                             Log.e("WebView", "Error loading page: $description")
-                            // إعادة المحاولة بعد تأخير
                             Handler(Looper.getMainLooper()).postDelayed({
                                 loadUrl("http://127.0.0.1:8080/")
                             }, 3000)
@@ -146,7 +151,6 @@ class MainActivity : ComponentActivity() {
 
                     addJavascriptInterface(WebAppInterface(context, this@MainActivity), "AndroidInterface")
 
-                    // تأخير 3 ثوانٍ لضمان بدء الخادم
                     Handler(Looper.getMainLooper()).postDelayed({
                         loadUrl("http://127.0.0.1:8080/")
                     }, 3000)
