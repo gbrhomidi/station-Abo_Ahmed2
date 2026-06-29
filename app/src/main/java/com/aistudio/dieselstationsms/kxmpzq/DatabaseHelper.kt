@@ -12,97 +12,76 @@ import java.security.MessageDigest
 
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
+    // ==================== onCreate ====================
     override fun onCreate(db: SQLiteDatabase) {
-        db.beginTransaction() // بدء معاملة لضمان سلامة البيانات
+        db.beginTransaction()
         try {
-            // الجداول الأساسية
-            db.execSQL("CREATE TABLE customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, credit_limit REAL, balance REAL, status TEXT, loyalty_points INTEGER DEFAULT 0, vip_level INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE refills (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, supplier TEXT, total_qty REAL, remaining_qty REAL, sell_price REAL, allow_credit INTEGER, alert_threshold REAL DEFAULT 1000)")
-            db.execSQL("CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, refill_id INTEGER, qty REAL, price REAL, total REAL, paid REAL, due REAL, method TEXT, due_date TEXT, status TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP, invoice_number TEXT, payment_type TEXT DEFAULT 'نقداً')")
-            db.execSQL("CREATE TABLE payments (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, amount REAL, method TEXT, date TEXT, notes TEXT)")
-            db.execSQL("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
-            db.execSQL("CREATE TABLE sms_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, message TEXT, type TEXT, status TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE activity_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, operator TEXT, action TEXT, details TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
-
-            // جداول جديدة متطورة
-            db.execSQL("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, full_name TEXT, role TEXT DEFAULT 'cashier', biometric_enabled INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE loyalty_rewards (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, points_used INTEGER, reward_type TEXT, description TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE inventory_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, refill_id INTEGER, alert_type TEXT, message TEXT, is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE ai_chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, message TEXT, timestamp TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE print_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, content TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-            db.execSQL("CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT, record_id INTEGER, action TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-
-            // الإعدادات الافتراضية
-            db.execSQL("INSERT INTO settings VALUES ('sms_gateway_type', 'android_app')")
-            db.execSQL("INSERT INTO settings VALUES ('sms_sim_slot', '1')")
-            db.execSQL("INSERT INTO settings VALUES ('low_stock_threshold', '1000')")
-            db.execSQL("INSERT INTO settings VALUES ('currency', 'ريال')")
-            db.execSQL("INSERT INTO settings VALUES ('station_name', 'محطة ابو أحمد لمشتقات الديزل')")
-            db.execSQL("INSERT INTO settings VALUES ('ai_enabled', '1')")
-            db.execSQL("INSERT INTO settings VALUES ('auto_backup_interval', '24')")
-            db.execSQL("INSERT INTO settings VALUES ('dark_mode_default', '0')")
-            db.execSQL("INSERT INTO settings VALUES ('require_biometric', '0')")
-            db.execSQL("INSERT INTO settings VALUES ('loyalty_enabled', '1')")
-            db.execSQL("INSERT INTO settings VALUES ('points_per_liter', '1')")
-            db.execSQL("INSERT INTO settings VALUES ('min_points_redeem', '100')")
-
-            // مستخدم افتراضي
-            db.execSQL("INSERT INTO users (username, password_hash, full_name, role) VALUES ('admin', '${hashPassword("admin123")}', 'المدير العام', 'admin')")
-
-            // بيانات تجريبية للعرض
+            // جميع جداول الإنشاء
+            createAllTables(db)
+            // إدراج الإعدادات الافتراضية
+            insertDefaultSettings(db)
+            // إدراج المستخدم الافتراضي مع حماية
+            try {
+                insertDefaultUser(db)
+            } catch (e: Exception) {
+                Log.e("DatabaseHelper", "Failed to create default user, continuing: ${e.message}", e)
+            }
+            // بيانات تجريبية
             seedDemoData(db)
-
             db.setTransactionSuccessful()
-            Log.d("DatabaseHelper", "Database created successfully with transaction")
+            Log.d("DatabaseHelper", "Database created successfully")
         } catch (e: Exception) {
             Log.e("DatabaseHelper", "Failed to initialize database: ${e.message}", e)
-            throw e // إعادة رمي الاستثناء للإشارة إلى فشل الإنشاء
+            throw e
         } finally {
             db.endTransaction()
         }
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.beginTransaction() // بدء معاملة لضمان سلامة البيانات أثناء الترقية
-        try {
-            if (oldVersion < 4) {
-                db.execSQL("ALTER TABLE customers ADD COLUMN loyalty_points INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE customers ADD COLUMN vip_level INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE customers ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
-                db.execSQL("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, full_name TEXT, role TEXT DEFAULT 'cashier', biometric_enabled INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS loyalty_rewards (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, points_used INTEGER, reward_type TEXT, description TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS inventory_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, refill_id INTEGER, alert_type TEXT, message TEXT, is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS ai_chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, message TEXT, timestamp TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS print_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, content TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT, record_id INTEGER, action TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
-                db.execSQL("ALTER TABLE transactions ADD COLUMN invoice_number TEXT")
-                db.execSQL("ALTER TABLE transactions ADD COLUMN payment_type TEXT DEFAULT 'نقداً'")
-                db.execSQL("ALTER TABLE refills ADD COLUMN alert_threshold REAL DEFAULT 1000")
-                
-                // إضافة المستخدم الافتراضي إذا لم يكن موجوداً
-                val userCheck = db.rawQuery("SELECT COUNT(*) FROM users WHERE username='admin'", null)
-                if (userCheck.moveToFirst() && userCheck.getInt(0) == 0) {
-                    db.execSQL("INSERT INTO users (username, password_hash, full_name, role) VALUES ('admin', '${hashPassword("admin123")}', 'المدير العام', 'admin')")
-                }
-                userCheck.close()
-                
-                // إضافة الإعدادات الافتراضية إذا لم تكن موجودة
-                val settingsCheck = db.rawQuery("SELECT COUNT(*) FROM settings WHERE key='loyalty_enabled'", null)
-                if (settingsCheck.moveToFirst() && settingsCheck.getInt(0) == 0) {
-                    db.execSQL("INSERT INTO settings VALUES ('loyalty_enabled', '1')")
-                    db.execSQL("INSERT INTO settings VALUES ('points_per_liter', '1')")
-                    db.execSQL("INSERT INTO settings VALUES ('min_points_redeem', '100')")
-                }
-                settingsCheck.close()
-            }
-            db.setTransactionSuccessful()
-            Log.d("DatabaseHelper", "Database upgraded successfully from version $oldVersion to $newVersion")
-        } catch (e: Exception) {
-            Log.e("DatabaseHelper", "Failed to upgrade database: ${e.message}", e)
-            throw e // إعادة رمي الاستثناء للإشارة إلى فشل الترقية
-        } finally {
-            db.endTransaction()
+    private fun createAllTables(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, credit_limit REAL, balance REAL, status TEXT, loyalty_points INTEGER DEFAULT 0, vip_level INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE refills (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, supplier TEXT, total_qty REAL, remaining_qty REAL, sell_price REAL, allow_credit INTEGER, alert_threshold REAL DEFAULT 1000)")
+        db.execSQL("CREATE TABLE transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, refill_id INTEGER, qty REAL, price REAL, total REAL, paid REAL, due REAL, method TEXT, due_date TEXT, status TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP, invoice_number TEXT, payment_type TEXT DEFAULT 'نقداً')")
+        db.execSQL("CREATE TABLE payments (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, amount REAL, method TEXT, date TEXT, notes TEXT)")
+        db.execSQL("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+        db.execSQL("CREATE TABLE sms_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT, message TEXT, type TEXT, status TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE activity_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, operator TEXT, action TEXT, details TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, full_name TEXT, role TEXT DEFAULT 'cashier', biometric_enabled INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE loyalty_rewards (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, points_used INTEGER, reward_type TEXT, description TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE inventory_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, refill_id INTEGER, alert_type TEXT, message TEXT, is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE ai_chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, message TEXT, timestamp TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE print_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, content TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+        db.execSQL("CREATE TABLE sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT, record_id INTEGER, action TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+    }
+
+    private fun insertDefaultSettings(db: SQLiteDatabase) {
+        val settings = mapOf(
+            "sms_gateway_type" to "android_app",
+            "sms_sim_slot" to "1",
+            "low_stock_threshold" to "1000",
+            "currency" to "ريال",
+            "station_name" to "محطة ابو أحمد لمشتقات الديزل",
+            "ai_enabled" to "1",
+            "auto_backup_interval" to "24",
+            "dark_mode_default" to "0",
+            "require_biometric" to "0",
+            "loyalty_enabled" to "1",
+            "points_per_liter" to "1",
+            "min_points_redeem" to "100"
+        )
+        settings.forEach { (key, value) ->
+            db.execSQL("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", arrayOf(key, value))
         }
+    }
+
+    private fun insertDefaultUser(db: SQLiteDatabase) {
+        val cv = ContentValues().apply {
+            put("username", "admin")
+            put("password_hash", hashPassword("admin123"))
+            put("full_name", "المدير العام")
+            put("role", "admin")
+        }
+        db.insertWithOnConflict("users", null, cv, SQLiteDatabase.CONFLICT_IGNORE)
     }
 
     private fun seedDemoData(db: SQLiteDatabase) {
@@ -111,6 +90,123 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("INSERT OR IGNORE INTO customers (name, phone, credit_limit, balance, status, loyalty_points, vip_level) VALUES ('سعد علي', '0771122334', 100000, 45000, 'active', 80, 1)")
         db.execSQL("INSERT OR IGNORE INTO refills (date, supplier, total_qty, remaining_qty, sell_price, allow_credit, alert_threshold) VALUES ('2026-06-01', 'شركة النفط اليمنية', 10000, 8500, 950, 1, 1000)")
         db.execSQL("INSERT OR IGNORE INTO refills (date, supplier, total_qty, remaining_qty, sell_price, allow_credit, alert_threshold) VALUES ('2026-06-15', 'مورد الجنوب', 5000, 3200, 940, 1, 500)")
+    }
+
+    // ==================== onUpgrade ====================
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.beginTransaction()
+        try {
+            when (oldVersion) {
+                1 -> {
+                    upgradeFrom1To2(db)
+                    upgradeFrom2To3(db)
+                    upgradeFrom3To4(db)
+                }
+                2 -> {
+                    upgradeFrom2To3(db)
+                    upgradeFrom3To4(db)
+                }
+                3 -> {
+                    upgradeFrom3To4(db)
+                }
+                else -> {
+                    Log.w("DatabaseHelper", "Unknown version $oldVersion, recreating database")
+                    dropAllTables(db)
+                    onCreate(db)
+                }
+            }
+            db.setTransactionSuccessful()
+            Log.d("DatabaseHelper", "Database upgraded successfully from version $oldVersion to $newVersion")
+        } catch (e: Exception) {
+            Log.e("DatabaseHelper", "Failed to upgrade database: ${e.message}", e)
+            // محاولة إنشاء قاعدة جديدة
+            try {
+                dropAllTables(db)
+                onCreate(db)
+                db.setTransactionSuccessful()
+                Log.w("DatabaseHelper", "Database recreated after upgrade failure")
+            } catch (ex: Exception) {
+                Log.e("DatabaseHelper", "Failed to recreate database: ${ex.message}", ex)
+                throw ex
+            }
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun upgradeFrom1To2(db: SQLiteDatabase) {
+        try {
+            db.execSQL("ALTER TABLE customers ADD COLUMN loyalty_points INTEGER DEFAULT 0")
+            db.execSQL("ALTER TABLE customers ADD COLUMN vip_level INTEGER DEFAULT 0")
+            db.execSQL("ALTER TABLE customers ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
+            Log.d("DatabaseHelper", "Upgrade 1->2 completed")
+        } catch (e: Exception) {
+            Log.e("DatabaseHelper", "Upgrade 1->2 failed: ${e.message}", e)
+        }
+    }
+
+    private fun upgradeFrom2To3(db: SQLiteDatabase) {
+        try {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN invoice_number TEXT")
+            db.execSQL("ALTER TABLE transactions ADD COLUMN payment_type TEXT DEFAULT 'نقداً'")
+            db.execSQL("ALTER TABLE refills ADD COLUMN alert_threshold REAL DEFAULT 1000")
+            Log.d("DatabaseHelper", "Upgrade 2->3 completed")
+        } catch (e: Exception) {
+            Log.e("DatabaseHelper", "Upgrade 2->3 failed: ${e.message}", e)
+        }
+    }
+
+    private fun upgradeFrom3To4(db: SQLiteDatabase) {
+        try {
+            db.execSQL("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password_hash TEXT, full_name TEXT, role TEXT DEFAULT 'cashier', biometric_enabled INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS loyalty_rewards (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, points_used INTEGER, reward_type TEXT, description TEXT, date TEXT DEFAULT CURRENT_TIMESTAMP)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS inventory_alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, refill_id INTEGER, alert_type TEXT, message TEXT, is_read INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS ai_chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, role TEXT, message TEXT, timestamp TEXT DEFAULT CURRENT_TIMESTAMP)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS print_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, content TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+            db.execSQL("CREATE TABLE IF NOT EXISTS sync_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT, record_id INTEGER, action TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+            
+            // إضافة المستخدم admin إذا لم يكن موجوداً
+            val userCheck = db.rawQuery("SELECT COUNT(*) FROM users WHERE username='admin'", null)
+            if (userCheck.moveToFirst() && userCheck.getInt(0) == 0) {
+                val cv = ContentValues().apply {
+                    put("username", "admin")
+                    put("password_hash", hashPassword("admin123"))
+                    put("full_name", "المدير العام")
+                    put("role", "admin")
+                }
+                db.insertWithOnConflict("users", null, cv, SQLiteDatabase.CONFLICT_IGNORE)
+            }
+            userCheck.close()
+            
+            // إضافة الإعدادات المفقودة
+            val settingsCheck = db.rawQuery("SELECT COUNT(*) FROM settings WHERE key='loyalty_enabled'", null)
+            if (settingsCheck.moveToFirst() && settingsCheck.getInt(0) == 0) {
+                db.execSQL("INSERT OR IGNORE INTO settings (key, value) VALUES ('loyalty_enabled', '1')")
+                db.execSQL("INSERT OR IGNORE INTO settings (key, value) VALUES ('points_per_liter', '1')")
+                db.execSQL("INSERT OR IGNORE INTO settings (key, value) VALUES ('min_points_redeem', '100')")
+            }
+            settingsCheck.close()
+            
+            Log.d("DatabaseHelper", "Upgrade 3->4 completed")
+        } catch (e: Exception) {
+            Log.e("DatabaseHelper", "Upgrade 3->4 failed: ${e.message}", e)
+        }
+    }
+
+    private fun dropAllTables(db: SQLiteDatabase) {
+        val tables = listOf(
+            "customers", "refills", "transactions", "payments", "settings",
+            "sms_logs", "activity_logs", "users", "loyalty_rewards",
+            "inventory_alerts", "ai_chat_history", "print_queue", "sync_queue"
+        )
+        tables.forEach { table ->
+            try {
+                db.execSQL("DROP TABLE IF EXISTS $table")
+                Log.d("DatabaseHelper", "Dropped table: $table")
+            } catch (e: Exception) {
+                Log.e("DatabaseHelper", "Failed to drop table $table: ${e.message}", e)
+            }
+        }
     }
 
     // ==================== المستخدمين والمصادقة ====================
