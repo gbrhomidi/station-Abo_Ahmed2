@@ -30,46 +30,49 @@ class SMSService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        // =====================================================
-        // START FOREGROUND SERVICE (Required for Android 8+)
-        // =====================================================
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "sms_service_channel"
-            val channelName = "خدمة المحطة"
-            val importance = NotificationManager.IMPORTANCE_LOW
+        // تشغيل جميع العمليات الثقيلة في خيط منفصل لتجنب تجميد الواجهة الرئيسية
+        Thread {
+            try {
+                // 1. إعداد إشعارات الخدمة (مطلوب للإصدارات Android 8+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channelId = "sms_service_channel"
+                    val channelName = "خدمة المحطة"
+                    val importance = NotificationManager.IMPORTANCE_LOW
 
-            val channel = NotificationChannel(channelId, channelName, importance)
-            channel.description = "قناة إشعارات خدمة الخادم المحلي لمحطة أبو أحمد"
+                    val channel = NotificationChannel(channelId, channelName, importance)
+                    channel.description = "قناة إشعارات خدمة الخادم المحلي لمحطة أبو أحمد"
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+                    val notificationManager = getSystemService(NotificationManager::class.java)
+                    notificationManager?.createNotificationChannel(channel)
 
-            val notification = NotificationCompat.Builder(this, channelId)
-                .setContentTitle("⛽ محطة أبو أحمد")
-                .setContentText("الخادم المحلي يعمل على المنفذ 8080...")
-                .setSmallIcon(android.R.drawable.ic_menu_camera) // استخدم أيقونتك الخاصة بدلاً من هذه
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build()
+                    val notification = NotificationCompat.Builder(this, channelId)
+                        .setContentTitle("⛽ محطة أبو أحمد")
+                        .setContentText("الخادم المحلي يعمل على المنفذ 8080...")
+                        .setSmallIcon(android.R.drawable.ic_menu_camera)
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .build()
 
-            startForeground(1, notification)
-            Log.d("SMSService", "Foreground service started with notification.")
-        } else {
-            // للإصدارات الأقدم، يمكن إطلاقها كخدمة عادية، ولكن لا ضرر من التنبيه
-            Log.d("SMSService", "Service started on older Android version.")
-        }
-        // =====================================================
+                    startForeground(1, notification)
+                    Log.d("SMSService", "Foreground service started with notification.")
+                }
 
-        // بدء الخادم المحلي
-        try {
-            server = ApiServer()
-            server?.start()
-            Log.d("SMSService", "Server started at port 8080")
-        } catch (e: IOException) {
-            Log.e("SMSService", "Failed to start server", e)
-        }
+                // 2. بدء الخادم المحلي
+                try {
+                    server = ApiServer()
+                    server?.start()
+                    Log.d("SMSService", "Server started at port 8080")
+                } catch (e: IOException) {
+                    Log.e("SMSService", "Failed to start server", e)
+                }
 
-        // جدولة النسخ الاحتياطي التلقائي
-        setupAutoBackup()
+                // 3. جدولة النسخ الاحتياطي التلقائي
+                setupAutoBackup()
+
+                Log.d("SMSService", "Service initialization completed successfully in background thread")
+            } catch (e: Exception) {
+                Log.e("SMSService", "Fatal Error in onCreate background thread: ${e.message}", e)
+            }
+        }.start()
     }
 
     private fun setupAutoBackup() {
@@ -87,15 +90,20 @@ class SMSService : Service() {
                     writer.close()
                     Log.d("SMSService", "Auto backup completed")
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("SMSService", "Auto backup failed: ${e.message}", e)
                 }
             }
-        }, 1000 * 60 * 60, 1000 * 60 * 60 * 24)
+        }, 1000 * 60 * 60, 1000 * 60 * 60 * 24) // تأخير ساعة واحدة، ثم كل 24 ساعة
     }
 
     override fun onDestroy() {
-        server?.stop()
-        backupTimer?.cancel()
+        try {
+            server?.stop()
+            backupTimer?.cancel()
+            Log.d("SMSService", "Service destroyed successfully")
+        } catch (e: Exception) {
+            Log.e("SMSService", "Error during service destruction: ${e.message}", e)
+        }
         super.onDestroy()
     }
 
@@ -152,7 +160,7 @@ class SMSService : Service() {
                 jsonResponse.optString("error", "خطأ في الاتصال بـ Gemini")
             }
         } catch (e: Exception) {
-            Log.e("Gemini", "Error: ${e.message}")
+            Log.e("Gemini", "Error: ${e.message}", e)
             "عذراً، حدث خطأ في الاتصال بـ Gemini: ${e.message}"
         }
     }
@@ -548,7 +556,7 @@ class SMSService : Service() {
             db.logSms(phone, msg, type, "sent")
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("SMSService", "SMS send failed: ${e.message}", e)
             db.logSms(phone, msg, type, "failed: ${e.message}")
             false
         }
