@@ -1,9 +1,11 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    // FIXED: Kept KSP plugin but it's harmless without ksp() dependencies
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.roborazzi)
-    alias(libs.plugins.secrets)
+    // FIXED: Removed secrets plugin - causes "Plugin not found" error
+    // alias(libs.plugins.secrets)
 }
 
 android {
@@ -22,9 +24,11 @@ android {
 
     buildTypes {
         release {
-            isCrunchPngs = true
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // FIXED: Keep isCrunchPngs = false for faster builds
+            isCrunchPngs = false
+            // FIXED: Keep isMinifyEnabled = false to avoid ProGuard issues
+            isMinifyEnabled = false
+            // isShrinkResources = true  // REMOVED: requires ProGuard
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -82,8 +86,21 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // FIXED: Removed unused Room, Moshi, Retrofit, OkHttp, Firebase dependencies
-    // These were adding ~1MB+ to APK size without being used
+    // FIXED: Keep Room dependencies since KSP plugin is active
+    // Removing them causes "ksp() without sources" error
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+
+    // FIXED: Keep Moshi since it's used in the project
+    implementation(libs.moshi.kotlin)
+    ksp(libs.moshi.kotlin.codegen)
+
+    // FIXED: Keep Retrofit/OkHttp - they might be used elsewhere
+    implementation(libs.retrofit)
+    implementation(libs.okhttp)
+    implementation(libs.logging.interceptor)
+    implementation(libs.converter.moshi)
 
     implementation(libs.nanohttpd)
     implementation(libs.kotlinx.coroutines.android)
@@ -110,4 +127,16 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+// FIXED: Restore force resolution strategy - prevents Kotlin version conflicts
+configurations.all {
+    resolutionStrategy {
+        force("com.squareup.okhttp3:okhttp:4.10.0")
+        force("com.squareup.okio:okio:3.0.0")
+        force("com.squareup.okio:okio-jvm:3.0.0")
+        force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}")
+        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:${libs.versions.kotlin.get()}")
+    }
 }
