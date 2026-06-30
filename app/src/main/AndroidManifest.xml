@@ -3,8 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.aistudio.dieselstationsms.kxmpzq">
 
-    <!-- FIXED: Added explicit uses-sdk declaration -->
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+    <!-- FIXED: Removed uses-sdk - already defined in build.gradle -->
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -12,7 +11,8 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <!-- FIXED: Removed CAMERA permission since it's not used in code -->
+    <!-- FIXED: Keep CAMERA for QR scanner in WebView -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
@@ -21,9 +21,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="true" />
 
-    <!-- FIXED: allowBackup="false" to prevent data leakage -->
     <application
         android:name=".MyApplication"
         android:allowBackup="false"
@@ -34,8 +34,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        android:usesCleartextTraffic="false"
-        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="true"
         tools:replace="android:theme">
 
         <activity
@@ -55,13 +54,11 @@
         <service
             android:name=".SMSService"
             android:exported="false"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="dataSync" />
 
-        <!-- FIXED: Removed BROADCAST_SMS permission - it's signature-level only -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true">
-            <!-- FIXED: Reduced priority to avoid conflicts with other apps -->
             <intent-filter android:priority="100">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
