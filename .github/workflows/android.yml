@@ -35,13 +35,20 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
 
-      - name: List generated APKs
+      - name: Show build outputs
         run: |
-          ls -lah app/build/outputs/apk/release/
+          echo "===== APK ====="
+          find app/build -type f -name "*.apk"
+
+          echo "===== AAB ====="
+          find app/build -type f -name "*.aab"
+
+          echo "===== ALL OUTPUTS ====="
+          find app/build/outputs -type f
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Station_Abo_Ahmed_Release_APK
-          path: |
-            app/build/outputs/**/*.apk
+          path: app/build/outputs/**/*.apk
+          if-no-files-found: error
