@@ -7,8 +7,10 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="diesel_blue">#FF1a3a5a</color>
+    
+    <!-- Diesel Station Brand Colors -->
+    <color name="diesel_blue">#FF1A237E</color>
     <color name="diesel_gold">#FFD4AF37</color>
-    <color name="diesel_red">#FFFF0000</color>
-    <color name="diesel_green">#FF28a745</color>
+    <color name="diesel_dark">#FF0D1642</color>
+    <color name="diesel_light">#FF3949AB</color>
 </resources>
