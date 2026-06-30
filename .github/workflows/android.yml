@@ -28,8 +28,8 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      - name: Clean and Build Release APK
+        run: ./gradlew clean assembleRelease
         env:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -43,4 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Station_Abo_Ahmed_Release_APK
-          path: app/build/outputs/apk/release/app-release.apk
+          path: |
+            app/build/outputs/**/*.apk
