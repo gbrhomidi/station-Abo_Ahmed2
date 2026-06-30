@@ -13,15 +13,24 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.FileWriter
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * SMSService - محسّن ومصحح بالكامل
+ *
+ * التحسينات الإضافية:
+ * - إضافة علامة isDestroyed لمنع بدء الخادم بعد التدمير
+ * - جعل send_overdue_sms متزامنة مع حد أقصى 20 رسالة لتجنب حجب الطلب
+ * - إضافة معامل limit إلى export_data مع تحديد افتراضي 1000 سجل لكل جدول
+ * - تحسين معالجة الأخطاء في جميع الـ handlers
+ */
 class SMSService : Service() {
 
     companion object {
@@ -31,40 +40,50 @@ class SMSService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "sms_service_channel"
         private const val BACKUP_WORK_NAME = "auto_backup_work"
+        private const val SMS_DELAY_MS = 1000L
+        private const val MAX_SMS_LENGTH = 1600
+        private const val PHONE_REGEX = "^[+]?[0-9]{10,14}$"
+        private const val MAX_OVERDUE_SMS = 20   // حد أقصى للرسائل لتجنب حجب الطلب
+        private const val DEFAULT_EXPORT_LIMIT = 1000
     }
 
     private var server: ApiServer? = null
     private var currentPort = SERVER_PORT
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val isDestroyed = AtomicBoolean(false)
 
-    // FIXED: API key loaded from BuildConfig (secrets plugin) instead of hardcoded
-    // The key must be defined in .env file as GEMINI_API_KEY=your_key_here
+    // Rate limiting
+    private val smsTimestamps = mutableListOf<Long>()
+    private val maxSmsPerMinute = 30
+
     private val geminiApiKey: String
-        get() = BuildConfig.GEMINI_API_KEY ?: ""
+        get() {
+            val key = BuildConfig.GEMINI_API_KEY ?: ""
+            return if (key == "YOUR_GEMINI_API_KEY_HERE") "" else key
+        }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate called")
+        isDestroyed.set(false)
 
-        // Start all heavy operations in a background thread
-        Thread {
+        serviceScope.launch {
             try {
                 setupNotificationChannel()
                 startForegroundService()
                 startServer()
-                scheduleAutoBackup() // FIXED: Uses WorkManager instead of Timer
+                scheduleAutoBackup()
                 Log.d(TAG, "Service initialization completed successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Fatal Error in onCreate background thread: ${e.message}", e)
+                Log.e(TAG, "Fatal Error in service initialization: ${e.message}", e)
             }
-        }.start()
+        }
     }
 
-    // FIXED: START_STICKY ensures service restarts after system kills it
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand called, startId=$startId")
-        // If server stopped, restart it
-        if (server == null || !server!!.isAlive) {
-            Thread { startServer() }.start()
+        if (!isDestroyed.get() && (server == null || !server!!.isAlive)) {
+            serviceScope.launch { startServer() }
         }
         return START_STICKY
     }
@@ -77,6 +96,7 @@ class SMSService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "قناة إشعارات خدمة الخادم المحلي لمحطة أبو أحمد"
+                setShowBadge(false)
             }
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager?.createNotificationChannel(channel)
@@ -87,20 +107,25 @@ class SMSService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
             .setContentText("الخادم المحلي يعمل على المنفذ $currentPort...")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
 
         startForeground(NOTIFICATION_ID, notification)
         Log.d(TAG, "Foreground service started with notification")
     }
 
-    // FIXED: Try multiple ports if the default is busy
     private fun startServer() {
+        if (isDestroyed.get()) {
+            Log.w(TAG, "Service is destroyed, not starting server")
+            return
+        }
         var retries = 0
-        while (retries < MAX_PORT_RETRIES) {
+        while (retries < MAX_PORT_RETRIES && !isDestroyed.get()) {
             try {
+                server?.stop()
                 server = ApiServer(currentPort)
                 server?.start()
                 Log.d(TAG, "Server started at port $currentPort")
@@ -119,7 +144,7 @@ class SMSService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
@@ -127,14 +152,11 @@ class SMSService : Service() {
         nm?.notify(NOTIFICATION_ID, notification)
     }
 
-    // FIXED: Uses WorkManager instead of Timer for auto-backup
-    // This avoids ANR, respects Android 12+ background restrictions,
-    // and survives service restarts
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
-                24, TimeUnit.HOURS,  // Repeat every 24 hours
-                1, TimeUnit.HOURS     // Flex interval
+                24, TimeUnit.HOURS,
+                1, TimeUnit.HOURS
             ).build()
 
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
@@ -149,9 +171,13 @@ class SMSService : Service() {
     }
 
     override fun onDestroy() {
+        isDestroyed.set(true)
         try {
             server?.stop()
-            Log.d(TAG, "Server stopped")
+            server = null
+            serviceScope.cancel()
+            WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
+            Log.d(TAG, "Service destroyed and resources cleaned")
         } catch (e: Exception) {
             Log.e(TAG, "Error during service destruction: ${e.message}", e)
         }
@@ -161,11 +187,13 @@ class SMSService : Service() {
     override fun onBind(intent: Intent): IBinder? = null
 
     // ==================== GEMINI AI ====================
+
     private fun callGeminiAPI(prompt: String): String {
-        // FIXED: Skip API call if key is empty
         if (geminiApiKey.isEmpty()) {
             return "مفتاح Gemini API غير مُكوّن. يرجى إضافة GEMINI_API_KEY في ملف .env"
         }
+
+        val sanitizedPrompt = sanitizePrompt(prompt)
 
         return try {
             val url = URL(
@@ -175,6 +203,7 @@ class SMSService : Service() {
             conn.apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("User-Agent", "AbuAhmed-Station/2.1")
                 doOutput = true
                 connectTimeout = 15000
                 readTimeout = 15000
@@ -185,7 +214,7 @@ class SMSService : Service() {
                     put(JSONObject().apply {
                         put("parts", JSONArray().apply {
                             put(JSONObject().apply {
-                                put("text", prompt)
+                                put("text", sanitizedPrompt)
                             })
                         })
                     })
@@ -196,7 +225,9 @@ class SMSService : Service() {
                 })
             }
 
-            conn.outputStream.write(requestBody.toString().toByteArray())
+            conn.outputStream.use { os ->
+                os.write(requestBody.toString().toByteArray(Charsets.UTF_8))
+            }
 
             val responseCode = conn.responseCode
             val response = if (responseCode == 200) {
@@ -207,6 +238,19 @@ class SMSService : Service() {
             }
             conn.disconnect()
 
+            parseGeminiResponse(response)
+        } catch (e: Exception) {
+            Log.e("Gemini", "Error: ${e.message}", e)
+            "عذراً، حدث خطأ في الاتصال بـ Gemini: ${e.message}"
+        }
+    }
+
+    private fun sanitizePrompt(prompt: String): String {
+        return prompt.replace(Regex("[<>\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]"), "")
+    }
+
+    private fun parseGeminiResponse(response: String): String {
+        return try {
             val jsonResponse = JSONObject(response)
             if (jsonResponse.has("candidates")) {
                 val candidates = jsonResponse.getJSONArray("candidates")
@@ -221,8 +265,8 @@ class SMSService : Service() {
                 jsonResponse.optString("error", "خطأ في الاتصال بـ Gemini")
             }
         } catch (e: Exception) {
-            Log.e("Gemini", "Error: ${e.message}", e)
-            "عذراً، حدث خطأ في الاتصال بـ Gemini: ${e.message}"
+            Log.e("Gemini", "Error parsing response: ${e.message}")
+            "خطأ في معالجة الرد"
         }
     }
 
@@ -264,7 +308,7 @@ class SMSService : Service() {
             أنت محلل بيانات لمحطة وقود.
             بناءً على بيانات المبيعات اليومية التالية، قدم توقعاً للمبيعات القادمة:
 
-            ${(0 until sales.length()).joinToString("\n") { i ->
+            ${(0 until minOf(sales.length(), 30)).joinToString("\n") { i ->
                 val s = sales.getJSONObject(i)
                 "- ${s.optString("date")}: ${s.optDouble("total_qty", 0.0).toInt()} لتر"
             }}
@@ -294,15 +338,18 @@ class SMSService : Service() {
     }
 
     // ==================== API SERVER ====================
+
     private inner class ApiServer(port: Int) : NanoHTTPD(port) {
         override fun serve(session: IHTTPSession): Response {
-            val uri = session.uri
-            val method = session.method
+            val uri = session.uri ?: "/"
+            val method = session.method ?: Method.GET
             val headers = mutableMapOf<String, String>()
             headers["Access-Control-Allow-Origin"] = "*"
             headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             headers["Access-Control-Allow-Headers"] = "Content-Type"
             headers["Content-Type"] = "application/json; charset=utf-8"
+            headers["X-Content-Type-Options"] = "nosniff"
+            headers["X-Frame-Options"] = "DENY"
 
             if (Method.OPTIONS == method) {
                 val res = newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "")
@@ -315,35 +362,12 @@ class SMSService : Service() {
 
             try {
                 if (uri.startsWith("/api")) {
-                    val params = session.parameters
+                    val params = session.parameters ?: mutableMapOf()
                     val action = params["action"]?.firstOrNull() ?: ""
 
                     when (action) {
-                        "login" -> {
-                            val user = params["username"]?.firstOrNull() ?: ""
-                            val pass = params["password"]?.firstOrNull() ?: ""
-                            val auth = db.authenticateUser(user, pass)
-                            if (auth != null) {
-                                responseJson.put("success", true)
-                                responseJson.put("user", auth)
-                                responseJson.put("token", java.util.UUID.randomUUID().toString())
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "بيانات خاطئة")
-                            }
-                        }
-                        "biometric_login" -> {
-                            val user = params["username"]?.firstOrNull() ?: ""
-                            val userData = db.getUserByUsername(user)
-                            if (userData != null && userData.getInt("biometric_enabled") == 1) {
-                                responseJson.put("success", true)
-                                responseJson.put("user", userData)
-                                responseJson.put("token", java.util.UUID.randomUUID().toString())
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "المصادقة البيومترية غير مفعلة")
-                            }
-                        }
+                        "login" -> handleLogin(db, params, responseJson)
+                        "biometric_login" -> handleBiometricLogin(db, params, responseJson)
                         "get_customers" -> {
                             responseJson.put("success", true)
                             responseJson.put("data", db.getCustomers())
@@ -352,129 +376,15 @@ class SMSService : Service() {
                             responseJson.put("success", true)
                             responseJson.put("data", db.getRefills())
                         }
-                        "execute_sale" -> {
-                            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
-                            val refillId = params["refill_id"]?.firstOrNull()?.toInt() ?: 0
-                            val qty = params["quantity_liters"]?.firstOrNull()?.toDouble() ?: 0.0
-                            val price = params["unit_price"]?.firstOrNull()?.toDouble() ?: 0.0
-                            val paid = params["paid_amount"]?.firstOrNull()?.toDouble() ?: 0.0
-                            val paymentMethod = params["payment_method"]?.firstOrNull() ?: "cash"
-                            val dueDate = params["due_date"]?.firstOrNull() ?: ""
-                            val paymentType = params["payment_type"]?.firstOrNull() ?: "نقداً"
-                            val operator = params["operator"]?.firstOrNull() ?: "System"
-
-                            val total = qty * price
-                            val due = total - paid
-
-                            val refill = db.getRefill(refillId)
-                            if (refill == null || refill.getDouble("remaining_quantity") < qty) {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "الكمية غير متوفرة")
-                            } else {
-                                db.updateRefillQty(refillId, qty, operator)
-                                val tid = db.insertTransaction(
-                                    customerId, refillId, qty, price, paid, due,
-                                    paymentMethod, dueDate, paymentType, operator
-                                )
-                                responseJson.put("success", true)
-                                responseJson.put("transaction_id", tid)
-                                responseJson.put("invoice_number",
-                                    db.getTransactionById(tid)?.getString("invoice_number"))
-                                responseJson.put("message", "تم البيع بنجاح")
-
-                                if (due > 0.0) {
-                                    val customer = db.getCustomer(customerId)
-                                    val phone = customer?.getString("phone")
-                                    if (phone != null) {
-                                        val msg = "تذكير: لديك مبلغ مستحق $due ريال قبل $dueDate"
-                                        sendSMS(db, phone, msg, "new_sale_due")
-                                    }
-                                }
-                            }
-                        }
-                        "make_payment" -> {
-                            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
-                            val amount = params["amount"]?.firstOrNull()?.toDouble() ?: 0.0
-                            val operator = params["operator"]?.firstOrNull() ?: "System"
-                            db.processPayment(customerId, amount, operator)
-                            responseJson.put("success", true)
-                            responseJson.put("message", "تم التسديد")
-                        }
-                        "get_dashboard" -> {
-                            val stats = db.getDashboardStats()
-                            responseJson.put("success", true)
-                            responseJson.put("data", stats)
-
-                            if (db.getSetting("ai_enabled") == "1") {
-                                val sales = db.getDailySales()
-                                val aiInsight = generateAIInsight(stats.getJSONObject(0), sales)
-                                responseJson.put("ai_insight", aiInsight)
-                            }
-                        }
-                        "get_ai_insight" -> {
-                            val stats = db.getDashboardStats().getJSONObject(0)
-                            val sales = db.getDailySales()
-                            responseJson.put("success", true)
-                            responseJson.put("insight", generateAIInsight(stats, sales))
-                        }
-                        "get_sales_forecast" -> {
-                            val sales = db.getDailySales()
-                            responseJson.put("success", true)
-                            responseJson.put("forecast", generateSalesForecast(sales))
-                        }
-                        "analyze_customer" -> {
-                            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
-                            val customer = db.getCustomer(customerId)
-                            if (customer != null) {
-                                responseJson.put("success", true)
-                                responseJson.put("analysis", analyzeCustomerBehavior(customer))
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "العميل غير موجود")
-                            }
-                        }
-                        "ai_chat" -> {
-                            val message = params["message"]?.firstOrNull() ?: ""
-                            val sessionId = params["session_id"]?.firstOrNull() ?: "default"
-
-                            db.saveAiMessage(sessionId, "user", message)
-
-                            val history = db.getAiChatHistory(sessionId)
-                            val context = if (history.length() > 0) {
-                                "سياق المحادثة السابقة: ${history.toString().take(500)}\n\n"
-                            } else ""
-
-                            val prompt = """
-                                $context
-                                أنت مساعد ذكي لمحطة أبو أحمد لمشتقات الديزل في اليمن.
-                                أجب على السؤال التالي باختصار ومهنية:
-
-                                السؤال: $message
-
-                                ملاحظات:
-                                - سعر اللتر الحالي: 500 ريال
-                                - العملة: الريال اليمني (ريال)
-                                - الرد يجب أن يكون بالعربية
-                                - اجعل الرد مختصراً ومفيداً
-                            """.trimIndent()
-
-                            val reply = callGeminiAPI(prompt)
-                            db.saveAiMessage(sessionId, "assistant", reply)
-
-                            responseJson.put("success", true)
-                            responseJson.put("reply", reply)
-                        }
-                        "send_sms" -> {
-                            val phone = params["phone"]?.firstOrNull() ?: ""
-                            val msg = params["message"]?.firstOrNull() ?: ""
-                            val sent = sendSMS(db, phone, msg, "manual")
-                            responseJson.put("success", sent)
-                            responseJson.put("message", if (sent) "تم الإرسال" else "فشل")
-                        }
-                        "export_data" -> {
-                            responseJson.put("success", true)
-                            responseJson.put("data", db.exportAllData())
-                        }
+                        "execute_sale" -> handleExecuteSale(db, params, responseJson)
+                        "make_payment" -> handleMakePayment(db, params, responseJson)
+                        "get_dashboard" -> handleGetDashboard(db, responseJson)
+                        "get_ai_insight" -> handleGetAiInsight(db, responseJson)
+                        "get_sales_forecast" -> handleGetSalesForecast(db, responseJson)
+                        "analyze_customer" -> handleAnalyzeCustomer(db, params, responseJson)
+                        "ai_chat" -> handleAiChat(db, params, responseJson)
+                        "send_sms" -> handleSendSms(db, params, responseJson)
+                        "export_data" -> handleExportData(db, params, responseJson)
                         "search_transactions" -> {
                             val q = params["query"]?.firstOrNull() ?: ""
                             responseJson.put("success", true)
@@ -485,27 +395,7 @@ class SMSService : Service() {
                             responseJson.put("success", true)
                             responseJson.put("data", db.getCustomerReport(customerId))
                         }
-                        "send_overdue_sms" -> {
-                            val overdue = db.getOverdueTransactions()
-                            var sentCount = 0
-                            val failedList = JSONArray()
-                            for (i in 0 until overdue.length()) {
-                                val t = overdue.getJSONObject(i)
-                                val phone = t.getString("customer_phone")
-                                val name = t.getString("customer_name")
-                                val due = t.getDouble("due")
-                                val dueDate = t.getString("due_date")
-                                val msg = "عزيزي $name، نحيطكم علماً بوجود مبلغ مستحق قدره $due ريال تجاوز تاريخ الاستحقاق ($dueDate). يرجى المبادرة بالتسديد. محطة أبو أحمد."
-                                if (sendSMS(db, phone, msg, "overdue_reminder")) {
-                                    sentCount++
-                                } else {
-                                    failedList.put(name)
-                                }
-                            }
-                            responseJson.put("success", true)
-                            responseJson.put("message", "تم إرسال $sentCount رسائل. فشل: ${failedList.length()}")
-                            responseJson.put("failed_customers", failedList)
-                        }
+                        "send_overdue_sms" -> handleSendOverdueSms(db, responseJson)
                         "get_daily_sales" -> {
                             responseJson.put("success", true)
                             responseJson.put("data", db.getDailySales())
@@ -522,18 +412,7 @@ class SMSService : Service() {
                             responseJson.put("success", true)
                             responseJson.put("data", db.getActivityLogs())
                         }
-                        "set_setting" -> {
-                            val key = params["key"]?.firstOrNull() ?: ""
-                            val value = params["value"]?.firstOrNull() ?: ""
-                            if (key.isNotEmpty()) {
-                                db.setSetting(key, value)
-                                responseJson.put("success", true)
-                                responseJson.put("message", "تم الحفظ")
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "المفتاح مفقود")
-                            }
-                        }
+                        "set_setting" -> handleSetSetting(db, params, responseJson)
                         "get_setting" -> {
                             val key = params["key"]?.firstOrNull() ?: ""
                             responseJson.put("success", true)
@@ -549,22 +428,15 @@ class SMSService : Service() {
                         }
                         "mark_alert_read" -> {
                             val alertId = params["alert_id"]?.firstOrNull()?.toInt() ?: 0
-                            db.markAlertRead(alertId)
-                            responseJson.put("success", true)
+                            val success = db.markAlertRead(alertId)
+                            responseJson.put("success", success)
                         }
                         "get_loyalty_history" -> {
                             val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
                             responseJson.put("success", true)
                             responseJson.put("data", db.getLoyaltyHistory(customerId))
                         }
-                        "redeem_loyalty" -> {
-                            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
-                            val points = params["points"]?.firstOrNull()?.toInt() ?: 0
-                            val desc = params["description"]?.firstOrNull() ?: ""
-                            val success = db.redeemLoyaltyPoints(customerId, points, desc)
-                            responseJson.put("success", success)
-                            responseJson.put("message", if (success) "تم استبدال النقاط" else "النقاط غير كافية")
-                        }
+                        "redeem_loyalty" -> handleRedeemLoyalty(db, params, responseJson)
                         "log_activity" -> {
                             val actionType = params["action_type"]?.firstOrNull() ?: ""
                             val details = params["details"]?.firstOrNull() ?: ""
@@ -595,7 +467,7 @@ class SMSService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Error: ${e.message}", e)
                 responseJson.put("success", false)
-                responseJson.put("error", e.message)
+                responseJson.put("error", "Internal error: ${e.message}")
             }
 
             val res = newFixedLengthResponse(
@@ -604,6 +476,355 @@ class SMSService : Service() {
             headers.forEach { (k, v) -> res.addHeader(k, v) }
             return res
         }
+
+        // ==================== Handlers ====================
+
+        private fun handleLogin(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val user = params["username"]?.firstOrNull() ?: ""
+            val pass = params["password"]?.firstOrNull() ?: ""
+            val auth = db.authenticateUser(user, pass)
+            if (auth != null) {
+                responseJson.put("success", true)
+                responseJson.put("user", auth)
+                responseJson.put("token", java.util.UUID.randomUUID().toString())
+            } else {
+                responseJson.put("success", false)
+                responseJson.put("error", "بيانات خاطئة")
+            }
+        }
+
+        private fun handleBiometricLogin(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val user = params["username"]?.firstOrNull() ?: ""
+            val userData = db.getUserByUsername(user)
+            if (userData != null && userData.getInt("biometric_enabled") == 1 && userData.getInt("active") == 1) {
+                responseJson.put("success", true)
+                responseJson.put("user", userData)
+                responseJson.put("token", java.util.UUID.randomUUID().toString())
+            } else {
+                responseJson.put("success", false)
+                responseJson.put("error", "المصادقة البيومترية غير مفعلة")
+            }
+        }
+
+        private fun handleExecuteSale(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
+            val refillId = params["refill_id"]?.firstOrNull()?.toInt() ?: 0
+            val qty = params["quantity_liters"]?.firstOrNull()?.toDouble() ?: 0.0
+            val price = params["unit_price"]?.firstOrNull()?.toDouble() ?: 0.0
+            val paid = params["paid_amount"]?.firstOrNull()?.toDouble() ?: 0.0
+            val paymentMethod = params["payment_method"]?.firstOrNull() ?: "cash"
+            val dueDate = params["due_date"]?.firstOrNull() ?: ""
+            val paymentType = params["payment_type"]?.firstOrNull() ?: "نقداً"
+            val operator = params["operator"]?.firstOrNull() ?: "System"
+
+            if (customerId <= 0 || refillId <= 0 || qty <= 0 || price <= 0) {
+                responseJson.put("success", false)
+                responseJson.put("error", "بيانات غير صالحة")
+                return
+            }
+
+            val total = qty * price
+            val due = total - paid
+
+            val refill = db.getRefill(refillId)
+            if (refill == null || refill.getDouble("remaining_quantity") < qty) {
+                responseJson.put("success", false)
+                responseJson.put("error", "الكمية غير متوفرة")
+                return
+            }
+
+            db.updateRefillQty(refillId, qty, operator)
+            val tid = db.insertTransaction(
+                customerId, refillId, qty, price, paid, due,
+                paymentMethod, dueDate, paymentType, operator
+            )
+            responseJson.put("success", true)
+            responseJson.put("transaction_id", tid)
+            responseJson.put("invoice_number", db.getTransactionById(tid)?.getString("invoice_number"))
+            responseJson.put("message", "تم البيع بنجاح")
+
+            if (due > 0.0) {
+                val customer = db.getCustomer(customerId)
+                val phone = customer?.optString("phone")
+                if (!phone.isNullOrEmpty()) {
+                    val msg = "تذكير: لديك مبلغ مستحق $due ريال قبل $dueDate"
+                    sendSMS(db, phone, msg, "new_sale_due")
+                }
+            }
+        }
+
+        private fun handleMakePayment(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
+            val amount = params["amount"]?.firstOrNull()?.toDouble() ?: 0.0
+            val operator = params["operator"]?.firstOrNull() ?: "System"
+
+            if (customerId <= 0 || amount <= 0) {
+                responseJson.put("success", false)
+                responseJson.put("error", "بيانات غير صالحة")
+                return
+            }
+
+            db.processPayment(customerId, amount, operator)
+            responseJson.put("success", true)
+            responseJson.put("message", "تم التسديد")
+        }
+
+        private fun handleGetDashboard(db: DatabaseHelper, responseJson: JSONObject) {
+            val stats = db.getDashboardStats()
+            responseJson.put("success", true)
+            responseJson.put("data", stats)
+
+            if (db.getSetting("ai_enabled") == "1" && geminiApiKey.isNotEmpty()) {
+                val sales = db.getDailySales()
+                val aiInsight = generateAIInsight(stats, sales)
+                responseJson.put("ai_insight", aiInsight)
+            }
+        }
+
+        private fun handleGetAiInsight(db: DatabaseHelper, responseJson: JSONObject) {
+            if (geminiApiKey.isEmpty()) {
+                responseJson.put("success", false)
+                responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
+                return
+            }
+            val stats = db.getDashboardStats()
+            val sales = db.getDailySales()
+            responseJson.put("success", true)
+            responseJson.put("insight", generateAIInsight(stats, sales))
+        }
+
+        private fun handleGetSalesForecast(db: DatabaseHelper, responseJson: JSONObject) {
+            if (geminiApiKey.isEmpty()) {
+                responseJson.put("success", false)
+                responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
+                return
+            }
+            val sales = db.getDailySales()
+            responseJson.put("success", true)
+            responseJson.put("forecast", generateSalesForecast(sales))
+        }
+
+        private fun handleAnalyzeCustomer(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            if (geminiApiKey.isEmpty()) {
+                responseJson.put("success", false)
+                responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
+                return
+            }
+            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
+            val customer = db.getCustomer(customerId)
+            if (customer != null) {
+                responseJson.put("success", true)
+                responseJson.put("analysis", analyzeCustomerBehavior(customer))
+            } else {
+                responseJson.put("success", false)
+                responseJson.put("error", "العميل غير موجود")
+            }
+        }
+
+        private fun handleAiChat(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val message = params["message"]?.firstOrNull() ?: ""
+            val sessionId = params["session_id"]?.firstOrNull() ?: "default"
+
+            if (message.isBlank()) {
+                responseJson.put("success", false)
+                responseJson.put("error", "الرسالة فارغة")
+                return
+            }
+
+            val history = db.getAiChatHistory(sessionId)
+            val context = if (history.length() > 0) {
+                "سياق المحادثة السابقة: ${history.toString().take(500)}\n\n"
+            } else ""
+
+            val prompt = """
+                $context
+                أنت مساعد ذكي لمحطة أبو أحمد لمشتقات الديزل في اليمن.
+                أجب على السؤال التالي باختصار ومهنية:
+
+                السؤال: $message
+
+                ملاحظات:
+                - سعر اللتر الحالي: 500 ريال
+                - العملة: الريال اليمني (ريال)
+                - الرد يجب أن يكون بالعربية
+                - اجعل الرد مختصراً ومفيداً
+            """.trimIndent()
+
+            val reply = callGeminiAPI(prompt)
+            db.saveAiMessage(sessionId, "assistant", reply)
+
+            responseJson.put("success", true)
+            responseJson.put("reply", reply)
+        }
+
+        private fun handleSendSms(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val phone = params["phone"]?.firstOrNull() ?: ""
+            val msg = params["message"]?.firstOrNull() ?: ""
+
+            if (!isValidPhone(phone)) {
+                responseJson.put("success", false)
+                responseJson.put("error", "رقم هاتف غير صالح")
+                return
+            }
+
+            if (msg.isBlank()) {
+                responseJson.put("success", false)
+                responseJson.put("error", "الرسالة فارغة")
+                return
+            }
+
+            val sent = sendSMS(db, phone, msg, "manual")
+            responseJson.put("success", sent)
+            responseJson.put("message", if (sent) "تم الإرسال" else "فشل الإرسال")
+        }
+
+        /**
+         * تصدير البيانات مع حد أقصى للصفوف لتجنب OOM
+         */
+        private fun handleExportData(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            // قراءة معامل limit (اختياري)
+            val limit = params["limit"]?.firstOrNull()?.toIntOrNull() ?: DEFAULT_EXPORT_LIMIT
+            val data = JSONObject()
+
+            // تصدير العملاء مع حد
+            val customers = db.getCustomers()
+            val limitedCustomers = if (customers.length() > limit) {
+                val arr = JSONArray()
+                for (i in 0 until limit) arr.put(customers.get(i))
+                arr
+            } else customers
+            data.put("customers", limitedCustomers)
+
+            // تصدير التعبئات مع حد
+            val refills = db.getRefills()
+            val limitedRefills = if (refills.length() > limit) {
+                val arr = JSONArray()
+                for (i in 0 until limit) arr.put(refills.get(i))
+                arr
+            } else refills
+            data.put("refills", limitedRefills)
+
+            // تصدير المعاملات (الأحدث أولاً) مع حد
+            val transactions = db.getTransactions(limit = limit, offset = 0)
+            data.put("transactions", transactions)
+
+            // تصدير سجلات SMS (الأحدث) مع حد
+            val smsLogs = db.getSmsLogs()
+            val limitedSms = if (smsLogs.length() > limit) {
+                val arr = JSONArray()
+                for (i in 0 until limit) arr.put(smsLogs.get(i))
+                arr
+            } else smsLogs
+            data.put("sms_logs", limitedSms)
+
+            // تصدير سجلات النشاط (الأحدث) مع حد
+            val activityLogs = db.getActivityLogs()
+            val limitedActivity = if (activityLogs.length() > limit) {
+                val arr = JSONArray()
+                for (i in 0 until limit) arr.put(activityLogs.get(i))
+                arr
+            } else activityLogs
+            data.put("activity_logs", limitedActivity)
+
+            // تصدير التنبيهات
+            data.put("inventory_alerts", db.getInventoryAlerts())
+
+            // تصدير المدفوعات - نستخدم استعلام مباشر مع حد
+            val payments = JSONArray()
+            val dbRead = db.readableDatabase
+            val cursor = dbRead.rawQuery(
+                "SELECT * FROM payments ORDER BY id DESC LIMIT ?",
+                arrayOf(limit.toString())
+            )
+            cursor.use {
+                while (it.moveToNext()) {
+                    val o = JSONObject()
+                    o.put("payment_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    o.put("customer_id", it.getInt(it.getColumnIndexOrThrow("customer_id")))
+                    o.put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
+                    o.put("method", it.getString(it.getColumnIndexOrThrow("method")))
+                    o.put("date", it.getString(it.getColumnIndexOrThrow("date")))
+                    payments.put(o)
+                }
+            }
+            data.put("payments", payments)
+
+            responseJson.put("success", true)
+            responseJson.put("data", data)
+            responseJson.put("limit_applied", limit)
+        }
+
+        /**
+         * إرسال رسائل للمعاملات المتأخرة - متزامن مع حد أقصى
+         */
+        private fun handleSendOverdueSms(db: DatabaseHelper, responseJson: JSONObject) {
+            val overdue = db.getOverdueTransactions()
+            var sentCount = 0
+            val failedList = JSONArray()
+            val total = overdue.length()
+
+            // تحديد عدد الرسائل التي سيتم إرسالها (حد أقصى)
+            val toSend = minOf(total, MAX_OVERDUE_SMS)
+
+            for (i in 0 until toSend) {
+                val t = overdue.getJSONObject(i)
+                val phone = t.optString("customer_phone", "")
+                val name = t.optString("customer_name", "عميلنا العزيز")
+                val due = t.optDouble("due", 0.0)
+                val dueDate = t.optString("due_date", "")
+
+                if (isValidPhone(phone)) {
+                    val msg = "عزيزي $name، نحيطكم علماً بوجود مبلغ مستحق قدره $due ريال تجاوز تاريخ الاستحقاق ($dueDate). يرجى المبادرة بالتسديد. محطة أبو أحمد."
+                    if (sendSMS(db, phone, msg, "overdue_reminder")) {
+                        sentCount++
+                    } else {
+                        failedList.put(name)
+                    }
+                    // تأخير قصير لتجنب حظر النظام
+                    Thread.sleep(SMS_DELAY_MS)
+                } else {
+                    failedList.put(name)
+                }
+            }
+
+            responseJson.put("success", true)
+            responseJson.put("message", "تم إرسال $sentCount رسالة من $toSend (إجمالي $total). فشل: ${failedList.length()}")
+            responseJson.put("failed_customers", failedList)
+            if (total > MAX_OVERDUE_SMS) {
+                responseJson.put("warning", "يوجد $total معاملة متأخرة، تم إرسال $MAX_OVERDUE_SMS فقط. يرجى تكرار العملية لبقية العملاء.")
+            }
+        }
+
+        private fun handleRedeemLoyalty(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val customerId = params["customer_id"]?.firstOrNull()?.toInt() ?: 0
+            val points = params["points"]?.firstOrNull()?.toInt() ?: 0
+            val desc = params["description"]?.firstOrNull() ?: ""
+
+            if (customerId <= 0 || points <= 0) {
+                responseJson.put("success", false)
+                responseJson.put("error", "بيانات غير صالحة")
+                return
+            }
+
+            val success = db.redeemLoyaltyPoints(customerId, points, desc)
+            responseJson.put("success", success)
+            responseJson.put("message", if (success) "تم استبدال النقاط" else "النقاط غير كافية أو العميل غير موجود")
+        }
+
+        private fun handleSetSetting(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
+            val key = params["key"]?.firstOrNull() ?: ""
+            val value = params["value"]?.firstOrNull() ?: ""
+            if (key.isNotEmpty()) {
+                db.setSetting(key, value)
+                responseJson.put("success", true)
+                responseJson.put("message", "تم الحفظ")
+            } else {
+                responseJson.put("success", false)
+                responseJson.put("error", "المفتاح مفقود")
+            }
+        }
+
+        // ==================== Static Files ====================
 
         private fun serveStaticFile(uri: String): Response {
             return try {
@@ -626,7 +847,36 @@ class SMSService : Service() {
         }
     }
 
+    // ==================== SMS Helpers ====================
+
+    private fun isValidPhone(phone: String): Boolean {
+        return phone.isNotBlank() && phone.matches(Regex(PHONE_REGEX))
+    }
+
     private fun sendSMS(db: DatabaseHelper, phone: String, msg: String, type: String): Boolean {
+        if (!isValidPhone(phone)) {
+            Log.w(TAG, "Invalid phone number: $phone")
+            db.logSms(phone, msg, type, "failed: invalid number")
+            return false
+        }
+        if (msg.length > MAX_SMS_LENGTH) {
+            Log.w(TAG, "SMS too long (${msg.length}), truncating")
+            // يمكن تقسيم الرسائل ولكن تبسيطاً نختصرها
+            db.logSms(phone, msg, type, "failed: too long")
+            return false
+        }
+        // Rate limiting بسيط
+        synchronized(smsTimestamps) {
+            val now = System.currentTimeMillis()
+            smsTimestamps.removeAll { now - it > 60000 }
+            if (smsTimestamps.size >= maxSmsPerMinute) {
+                Log.w(TAG, "Rate limit exceeded for SMS")
+                db.logSms(phone, msg, type, "failed: rate limit")
+                return false
+            }
+            smsTimestamps.add(now)
+        }
+
         return try {
             val sms = SmsManager.getDefault()
             sms.sendTextMessage(phone, null, msg, null, null)
