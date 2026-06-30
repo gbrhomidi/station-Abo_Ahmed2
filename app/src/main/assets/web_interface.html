@@ -981,3 +981,663 @@
             <div style="font-size:16px; font-weight:700;">جاري المعالجة...</div>
         </div>
     </div>
+
+    <script>
+        // ============================================================
+        //  API HELPER
+        // ============================================================
+        async function apiCall(action, params = {}) {
+            const url = new URL('/api', window.location.origin);
+            url.searchParams.append('action', action);
+            Object.keys(params).forEach(key => {
+                if (params[key] !== null && params[key] !== undefined) {
+                    url.searchParams.append(key, params[key]);
+                }
+            });
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (e) {
+                console.error('API Error:', e);
+                showToast('خطأ في الاتصال بالخادم', 'error');
+                throw e;
+            }
+        }
+
+        // ============================================================
+        //  TOAST & LOADING
+        // ============================================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        }
+
+        // ============================================================
+        //  THEME
+        // ============================================================
+        function toggleTheme() {
+            const html = document.documentElement;
+            const dark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', dark ? 'light' : 'dark');
+            document.getElementById('darkModeToggle').checked = !dark;
+            localStorage.setItem('darkMode', !dark);
+        }
+
+        // ============================================================
+        //  SCREEN NAVIGATION
+        // ============================================================
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById('screen-' + screenId).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const navBtn = document.querySelector(`.nav-item[data-screen="${screenId}"]`);
+            if (navBtn) navBtn.classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showAboutModal() {
+            document.getElementById('aboutModal').classList.add('active');
+        }
+
+        // ============================================================
+        //  LOGIN
+        // ============================================================
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            document.getElementById('loginBtnText').innerHTML = '<div class="loading"></div>';
+
+            try {
+                const result = await apiCall('login', { username, password });
+                if (result.success) {
+                    localStorage.setItem('authToken', result.token);
+                    localStorage.setItem('user', JSON.stringify(result.user));
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('appContainer').classList.add('active');
+                    await loadDashboard();
+                    await loadCustomers();
+                    await loadSaleDropdowns();
+                    await loadPaymentCustomers();
+                    showToast('مرحباً بك!', 'success');
+                } else {
+                    showToast(result.error || 'بيانات خاطئة', 'error');
+                }
+            } catch (e) {
+                showToast('فشل الاتصال', 'error');
+            } finally {
+                document.getElementById('loginBtnText').textContent = 'تسجيل الدخول';
+            }
+        }
+
+        function handleBiometric() {
+            if (window.AndroidInterface) {
+                window.AndroidInterface.requestBiometricAuth();
+                // النتيجة ستأتي عبر callback
+            } else {
+                showToast('الميزة غير مدعومة في هذا المتصفح', 'warning');
+            }
+        }
+
+        // ============================================================
+        //  DASHBOARD
+        // ============================================================
+        async function loadDashboard() {
+            try {
+                const result = await apiCall('get_dashboard');
+                if (result.success && result.data.length > 0) {
+                    const stats = result.data[0];
+                    document.getElementById('dashSales').textContent = stats.total_sales?.toLocaleString() || 0;
+                    document.getElementById('dashLiters').textContent = stats.total_liters?.toFixed(0) || 0;
+                    document.getElementById('dashStock').textContent = stats.total_remaining?.toFixed(0) || 0;
+                    document.getElementById('dashDue').textContent = stats.total_due?.toLocaleString() || 0;
+
+                    displayAlerts(stats.inventory_alerts || []);
+                    displayInventoryProgress(stats);
+                    await loadDailySalesChart();
+                    if (result.ai_insight) {
+                        document.getElementById('aiInsight').innerHTML = result.ai_insight;
+                    } else {
+                        document.getElementById('aiInsight').innerHTML = 'لا توجد توقعات متاحة حالياً.';
+                    }
+                }
+            } catch (e) {
+                console.error('Dashboard load error', e);
+            }
+        }
+
+        function displayAlerts(alerts) {
+            const container = document.getElementById('dashAlerts');
+            container.innerHTML = '';
+            if (!alerts || alerts.length === 0) return;
+            alerts.forEach(a => {
+                const div = document.createElement('div');
+                div.className = 'alert-banner';
+                div.innerHTML = `<span class="icon">⚠️</span><span>${a.message}</span>`;
+                container.appendChild(div);
+            });
+        }
+
+        function displayInventoryProgress(stats) {
+            const container = document.getElementById('inventoryProgress');
+            container.innerHTML = '';
+            // يمكن عرض تقدم المخزون إن وجد
+        }
+
+        async function loadDailySalesChart() {
+            try {
+                const result = await apiCall('get_daily_sales');
+                if (result.success && result.data.length > 0) {
+                    const chart = document.getElementById('dailySalesChart');
+                    chart.innerHTML = '';
+                    const max = Math.max(...result.data.map(d => d.total_sales || 0)) || 1;
+                    result.data.slice(0, 7).forEach(d => {
+                        const item = document.createElement('div');
+                        item.className = 'bar-item';
+                        const bar = document.createElement('div');
+                        bar.className = 'bar';
+                        bar.style.height = ((d.total_sales || 0) / max * 160) + 'px';
+                        const label = document.createElement('div');
+                        label.className = 'bar-label';
+                        label.textContent = d.date || '';
+                        const value = document.createElement('div');
+                        value.className = 'bar-value';
+                        value.textContent = (d.total_sales || 0).toLocaleString();
+                        item.appendChild(bar);
+                        item.appendChild(value);
+                        item.appendChild(label);
+                        chart.appendChild(item);
+                    });
+                }
+            } catch (e) {
+                console.error('Chart load error', e);
+            }
+        }
+
+        // ============================================================
+        //  CUSTOMERS
+        // ============================================================
+        async function loadCustomers() {
+            try {
+                const result = await apiCall('get_customers');
+                if (result.success) {
+                    const list = document.getElementById('customersList');
+                    list.innerHTML = '';
+                    result.data.forEach(c => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.margin = '8px 0';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong>${c.full_name}</strong><br>
+                                    <small>${c.phone}</small>
+                                </div>
+                                <div style="text-align:left;">
+                                    <span class="badge ${c.status === 'active' ? 'badge-success' : 'badge-danger'}">${c.status}</span>
+                                    <span class="badge badge-primary">نقاط: ${c.loyalty_points}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; font-size:13px;">
+                                الرصيد: ${c.current_balance.toLocaleString()} ريال | الحد: ${c.credit_limit.toLocaleString()} ريال
+                            </div>
+                            <div style="margin-top:6px;">
+                                <button class="btn btn-small btn-info" onclick="viewCustomer(${c.customer_id})">عرض الملف</button>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+            } catch (e) {
+                console.error('Customers load error', e);
+            }
+        }
+
+        function filterCustomers() {
+            // يمكن التصفية محلياً أو إعادة التحميل
+        }
+
+        async function viewCustomer(id) {
+            try {
+                const result = await apiCall('get_customer_report', { customer_id: id });
+                if (result.success) {
+                    const data = result.data;
+                    const body = document.getElementById('customerModalBody');
+                    body.innerHTML = `
+                        <div><strong>الاسم:</strong> ${data.customer.full_name}</div>
+                        <div><strong>الهاتف:</strong> ${data.customer.phone}</div>
+                        <div><strong>الرصيد:</strong> ${data.customer.current_balance} ريال</div>
+                        <div><strong>نقاط الولاء:</strong> ${data.customer.loyalty_points}</div>
+                        <div><strong>المستوى:</strong> VIP ${data.customer.vip_level}</div>
+                        <hr>
+                        <div><strong>عدد المعاملات:</strong> ${data.transactions.length}</div>
+                        <div><strong>عدد المدفوعات:</strong> ${data.payments.length}</div>
+                    `;
+                    document.getElementById('customerModal').classList.add('active');
+                }
+            } catch (e) {
+                showToast('فشل تحميل الملف', 'error');
+            }
+        }
+
+        // ============================================================
+        //  SALE DROPDOWNS
+        // ============================================================
+        async function loadSaleDropdowns() {
+            try {
+                const [custResult, refillResult] = await Promise.all([
+                    apiCall('get_customers'),
+                    apiCall('get_refills')
+                ]);
+                if (custResult.success) {
+                    const sel = document.getElementById('saleCustomer');
+                    sel.innerHTML = '<option value="">-- اختر العميل --</option>';
+                    custResult.data.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.customer_id;
+                        opt.textContent = `${c.full_name} (${c.phone})`;
+                        sel.appendChild(opt);
+                    });
+                }
+                if (refillResult.success) {
+                    const sel = document.getElementById('saleRefill');
+                    sel.innerHTML = '<option value="">-- اختر التعبئة --</option>';
+                    refillResult.data.forEach(r => {
+                        const opt = document.createElement('option');
+                        opt.value = r.refill_id;
+                        opt.textContent = `${r.supplier_name} - ${r.remaining_quantity} لتر`;
+                        opt.dataset.price = r.sell_price_per_liter;
+                        sel.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Dropdown load error', e);
+            }
+        }
+
+        // ============================================================
+        //  PAYMENT CUSTOMERS
+        // ============================================================
+        async function loadPaymentCustomers() {
+            try {
+                const result = await apiCall('get_customers');
+                if (result.success) {
+                    const sel = document.getElementById('payCustomer');
+                    sel.innerHTML = '<option value="">-- اختر العميل --</option>';
+                    result.data.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.customer_id;
+                        opt.textContent = `${c.full_name} (${c.phone})`;
+                        sel.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Payment customers load error', e);
+            }
+        }
+
+        // ============================================================
+        //  SALE EXECUTION
+        // ============================================================
+        function setQty(value) {
+            document.getElementById('saleQty').value = value;
+            updateSalePreview();
+        }
+
+        function setPaid(value) {
+            document.getElementById('salePaid').value = value;
+            updateSalePreview();
+        }
+
+        function setPaidFull() {
+            const total = parseFloat(document.getElementById('saleTotalPreview').textContent) || 0;
+            document.getElementById('salePaid').value = total;
+            updateSalePreview();
+        }
+
+        function setPayAmount(value) {
+            document.getElementById('payAmount').value = value;
+        }
+
+        function updateSalePrice() {
+            const sel = document.getElementById('saleRefill');
+            const price = sel.options[sel.selectedIndex]?.dataset?.price || 950;
+            document.getElementById('salePrice').value = price;
+            updateSalePreview();
+        }
+
+        function updateSalePreview() {
+            const qty = parseFloat(document.getElementById('saleQty').value) || 0;
+            const price = parseFloat(document.getElementById('salePrice').value) || 0;
+            const total = qty * price;
+            document.getElementById('saleTotalPreview').textContent = total.toLocaleString() + ' د.ع';
+            const paid = parseFloat(document.getElementById('salePaid').value) || 0;
+            document.getElementById('saleDuePreview').textContent = (total - paid).toLocaleString() + ' د.ع';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            ['saleQty', 'salePrice', 'salePaid'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateSalePreview);
+            });
+            document.getElementById('saleRefill').addEventListener('change', updateSalePrice);
+            updateSalePreview();
+        });
+
+        async function executeSale(event) {
+            event.preventDefault();
+            const form = document.getElementById('saleForm');
+            const data = new FormData(form);
+            const params = {
+                customer_id: data.get('customer_id'),
+                refill_id: data.get('refill_id'),
+                quantity_liters: data.get('quantity_liters'),
+                unit_price: data.get('unit_price'),
+                paid_amount: data.get('paid_amount'),
+                payment_type: data.get('payment_type'),
+                due_date: data.get('due_date'),
+                operator: 'WebInterface'
+            };
+
+            showLoading(true);
+            try {
+                const result = await apiCall('execute_sale', params);
+                if (result.success) {
+                    showToast(result.message, 'success');
+                    form.reset();
+                    updateSalePreview();
+                    await loadDashboard();
+                    await loadSaleDropdowns();
+                    if (result.invoice_number) {
+                        showToast(`رقم الفاتورة: ${result.invoice_number}`, 'success');
+                    }
+                } else {
+                    showToast(result.error || 'فشل البيع', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        //  PAYMENT
+        // ============================================================
+        async function makePayment(event) {
+            event.preventDefault();
+            const customerId = document.getElementById('payCustomer').value;
+            const amount = document.getElementById('payAmount').value;
+            if (!customerId || !amount) {
+                showToast('يرجى تحديد العميل والمبلغ', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const result = await apiCall('make_payment', {
+                    customer_id: customerId,
+                    amount: amount,
+                    operator: 'WebInterface'
+                });
+                if (result.success) {
+                    showToast(result.message, 'success');
+                    document.getElementById('paymentForm').reset();
+                    await loadDashboard();
+                    await loadCustomers();
+                } else {
+                    showToast(result.error || 'فشل التسديد', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        //  OVERDUE SMS
+        // ============================================================
+        async function sendOverdueSms() {
+            if (!confirm('سيتم إرسال رسائل تذكير لكل العملاء المتأخرين. هل تريد الاستمرار؟')) return;
+
+            showLoading(true);
+            try {
+                const result = await apiCall('send_overdue_sms');
+                if (result.success) {
+                    showToast(result.message, 'success');
+                } else {
+                    showToast(result.message || 'فشل الإرسال', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        //  SEARCH
+        // ============================================================
+        async function searchTransactions() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) {
+                showToast('أدخل كلمة للبحث', 'warning');
+                return;
+            }
+
+            try {
+                const result = await apiCall('search_transactions', { query });
+                const tbody = document.getElementById('searchResultsTable');
+                tbody.innerHTML = '';
+                if (result.success && result.data.length > 0) {
+                    result.data.forEach(t => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${t.transaction_id}</td>
+                            <td>${t.customer_name || t.customer_id}</td>
+                            <td>${t.qty}</td>
+                            <td>${t.total.toLocaleString()}</td>
+                            <td>${t.paid.toLocaleString()}</td>
+                            <td>${t.due.toLocaleString()}</td>
+                            <td>${t.date}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد نتائج</td></tr>';
+                }
+            } catch (e) {
+                console.error('Search error', e);
+            }
+        }
+
+        // ============================================================
+        //  INVOICE PREVIEW
+        // ============================================================
+        function previewInvoice() {
+            // محاكاة بيانات الفاتورة من نموذج البيع
+            const customerName = document.getElementById('saleCustomer').options[document.getElementById('saleCustomer').selectedIndex]?.text || 'عميل';
+            const qty = document.getElementById('saleQty').value || 0;
+            const price = document.getElementById('salePrice').value || 0;
+            const total = qty * price;
+            const paid = document.getElementById('salePaid').value || 0;
+            const due = total - paid;
+            const invoice = document.getElementById('invoicePreview');
+            invoice.innerHTML = `
+                <div class="invoice-header">
+                    <h2>محطة أبو أحمد</h2>
+                    <div>لمشتقات الديزل</div>
+                    <div style="font-size:11px;">الفاتورة رقم: ${Date.now().toString().slice(-6)}</div>
+                </div>
+                <div class="invoice-row"><span>العميل</span><span>${customerName}</span></div>
+                <div class="invoice-row"><span>الكمية (لتر)</span><span>${qty}</span></div>
+                <div class="invoice-row"><span>سعر اللتر</span><span>${price} ريال</span></div>
+                <div class="invoice-row"><span>الإجمالي</span><span>${total.toLocaleString()} ريال</span></div>
+                <div class="invoice-row"><span>المدفوع</span><span>${paid.toLocaleString()} ريال</span></div>
+                <div class="invoice-row"><span>المتبقي</span><span>${due.toLocaleString()} ريال</span></div>
+                <div class="invoice-total">الإجمالي: ${total.toLocaleString()} ريال</div>
+                <div style="margin-top:12px; text-align:center; font-size:11px; color:#999;">
+                    تاريخ: ${new Date().toLocaleDateString('ar-EG')}
+                </div>
+            `;
+            document.getElementById('invoiceModal').classList.add('active');
+        }
+
+        function printInvoice() {
+            window.print();
+        }
+
+        function shareInvoice() {
+            const content = document.getElementById('invoicePreview').innerText;
+            if (navigator.share) {
+                navigator.share({ title: 'فاتورة', text: content }).catch(() => {});
+            } else {
+                showToast('مشاركة غير مدعومة', 'warning');
+            }
+        }
+
+        // ============================================================
+        //  QR SCANNER (placeholder)
+        // ============================================================
+        function useQrResult() {
+            // تنفيذ استخدام نتيجة المسح
+        }
+
+        function clearQrResult() {
+            document.getElementById('qrResult').style.display = 'none';
+        }
+
+        // ============================================================
+        //  ACTIVITY & SMS LOGS (placeholders)
+        // ============================================================
+        function filterSmsLogs() {
+            // تنفيذ التصفية
+        }
+
+        // ============================================================
+        //  REPORTS / EXPORT
+        // ============================================================
+        async function generateEodReport() {
+            try {
+                const result = await apiCall('get_eod_report');
+                if (result.success) {
+                    const data = result.data;
+                    const container = document.getElementById('eodReportContainer');
+                    container.innerHTML = `
+                        <div class="card" style="background:var(--bg);">
+                            <div class="card-title">📋 تقرير نهاية اليوم</div>
+                            <div class="invoice-row"><span>إجمالي المبيعات</span><span>${data.total_sales_amount?.toLocaleString() || 0} ريال</span></div>
+                            <div class="invoice-row"><span>اللترات المباعة</span><span>${data.total_liters_sold || 0} لتر</span></div>
+                            <div class="invoice-row"><span>عدد المعاملات</span><span>${data.total_transactions || 0}</span></div>
+                            <div class="invoice-row"><span>إجمالي المدفوعات</span><span>${data.total_payments?.toLocaleString() || 0} ريال</span></div>
+                            <div class="invoice-row"><span>رسائل SMS</span><span>${data.total_sms_sent || 0}</span></div>
+                            <div style="margin-top:8px; font-size:12px; color:var(--text-secondary);">التاريخ: ${data.report_date || ''}</div>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error('EOD report error', e);
+            }
+        }
+
+        async function exportData(format) {
+            try {
+                const result = await apiCall('export_data');
+                if (result.success) {
+                    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('تم التصدير بنجاح', 'success');
+                }
+            } catch (e) {
+                showToast('فشل التصدير', 'error');
+            }
+        }
+
+        // ============================================================
+        //  SETTINGS
+        // ============================================================
+        async function saveThreshold() {
+            const value = document.getElementById('thresholdInput').value;
+            try {
+                await apiCall('set_setting', { key: 'low_stock_threshold', value });
+                showToast('تم حفظ الإعداد', 'success');
+            } catch (e) {
+                showToast('فشل الحفظ', 'error');
+            }
+        }
+
+        // ============================================================
+        //  AI CHAT
+        // ============================================================
+        async function sendAiMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = '';
+
+            const container = document.getElementById('chatMessages');
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.textContent = message;
+            container.appendChild(userBubble);
+
+            try {
+                const result = await apiCall('ai_chat', { message, session_id: 'web' });
+                const aiBubble = document.createElement('div');
+                aiBubble.className = 'chat-bubble ai';
+                aiBubble.textContent = result.reply || 'عذراً، لم أستطع الرد.';
+                container.appendChild(aiBubble);
+            } catch (e) {
+                const errorBubble = document.createElement('div');
+                errorBubble.className = 'chat-bubble ai';
+                errorBubble.textContent = 'حدث خطأ في الاتصال بالذكاء الاصطناعي.';
+                container.appendChild(errorBubble);
+            }
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ============================================================
+        //  INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // استعادة الوضع الليلي
+            const darkMode = localStorage.getItem('darkMode') === 'true';
+            if (darkMode) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('darkModeToggle').checked = true;
+            }
+
+            // التحقق من وجود token
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                loadDashboard();
+                loadCustomers();
+                loadSaleDropdowns();
+                loadPaymentCustomers();
+            }
+        });
+    </script>
+</body>
+</html>
