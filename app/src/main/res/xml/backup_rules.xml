@@ -1,6 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════
+  محطة أبو أحمد - قواعد النسخ الاحتياطي (backup_rules.xml)
+  ═══════════════════════════════════════════════════════════════
+
+  هذا الملف يحدد البيانات التي يُسمح بنسخها احتياطياً عبر 
+  Google Cloud Backup و Android Backup Service.
+
+  ⚠️ تحذير أمني: نستثني جميع البيانات الحساسة:
+  - قواعد البيانات (SQLite)
+  - الملفات المشتركة (SharedPreferences)
+  - النسخ الاحتياطية المحلية
+  - تقارير الأعطال
+  - مفاتيح API والإعدادات السرية
+
+  يسمح فقط بـ:
+  - إعدادات واجهة المستخدم غير الحساسة
+  - بيانات التخصيص العامة
+  ═══════════════════════════════════════════════════════════════
+-->
 <full-backup-content>
-    <include domain="database" path="diesel_station.db"/>
-    <include domain="sharedpref" path="."/>
-    <exclude domain="sharedpref" path="device.xml"/>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- استثناء البيانات الحساسة - ممنوع النسخ        -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- قاعدة البيانات الرئيسية -->
+    <exclude domain="database" path="diesel_station.db"/>
+    <exclude domain="database" path="diesel_station.db-shm"/>
+    <exclude domain="database" path="diesel_station.db-wal"/>
+    <exclude domain="database" path="diesel_station.db-journal"/>
+
+    <!-- قواعد بيانات Jetpack (Room, etc) -->
+    <exclude domain="database" path="."/>
+
+    <!-- الملفات المشتركة (SharedPreferences) -->
+    <exclude domain="sharedpref" path="."/>
+    <exclude domain="sharedpref" path="secure_prefs.xml"/>
+    <exclude domain="sharedpref" path="settings.xml"/>
+
+    <!-- النسخ الاحتياطية المحلية -->
+    <exclude domain="file" path="backups/"/>
+    <exclude domain="file" path="backups/auto_backup_"/>
+    <exclude domain="file" path="backups/restore/"/>
+
+    <!-- تقارير الأعطال والسجلات -->
+    <exclude domain="file" path="crashes/"/>
+    <exclude domain="file" path="crashes/crash_log.txt"/>
+    <exclude domain="file" path="logs/"/>
+    <exclude domain="file" path="logs/"/>
+
+    <!-- الملفات المؤقتة والكاش -->
+    <exclude domain="file" path="cache/"/>
+    <exclude domain="file" path="temp/"/>
+    <exclude domain="file" path=".cache/"/>
+    <exclude domain="external" path="."/>
+
+    <!-- مفاتيح API والأسرار (إذا وُجدت في files) -->
+    <exclude domain="file" path=".env"/>
+    <exclude domain="file" path="secrets/"/>
+    <exclude domain="file" path="keys/"/>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- السماح بالنسخ - بيانات غير حساسة              -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- إعدادات واجهة المستخدم (الوضع الداكن، إلخ) -->
+    <include domain="sharedpref" path="ui_settings.xml"/>
+    <include domain="sharedpref" path="theme_prefs.xml"/>
+
+    <!-- بيانات تخصيص العرض -->
+    <include domain="file" path="custom_themes/"/>
+    <include domain="file" path="ui_config.json"/>
+
+    <!-- إعدادات اللغة والمنطقة -->
+    <include domain="sharedpref" path="locale_prefs.xml"/>
+
 </full-backup-content>
