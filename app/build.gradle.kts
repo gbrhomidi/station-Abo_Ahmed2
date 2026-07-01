@@ -98,19 +98,25 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    // ═══ إصلاح: استخدام كتلة kotlin بدلاً من kotlinOptions ═══
+    // في AGP 8.x مع Kotlin 2.x، تم استبدال kotlinOptions بـ kotlin {}
+    kotlin {
+        jvmToolchain(17)
         // إضافة: دعم الميزات الحديثة
-        freeCompilerArgs += listOf(
-            "-opt-in=kotlin.RequiresOptIn",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
-        )
+        compilerOptions {
+            freeCompilerArgs.addAll(
+                listOf(
+                    "-opt-in=kotlin.RequiresOptIn",
+                    "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
+                )
+            )
+        }
     }
 
     buildFeatures {
         compose = true
-        // إزالة: buildConfig من الإنتاج لمنع تسريب المعلومات
-        // buildConfig = true
+        // إعادة تفعيل buildConfig لأننا نستخدم buildConfigField
+        buildConfig = true
         // إضافة: ViewBinding (إذا لزم الأمر مستقبلاً)
         viewBinding = false
         // إضافة: DataBinding (إذا لزم الأمر مستقبلاً)
@@ -133,9 +139,7 @@ android {
                 "META-INF/DEPENDENCIES",
                 "META-INF/INDEX.LIST",
                 // إضافة: إزالة ملفات غير ضرورية
-                "META-INF/DEPENDENCIES",
                 "META-INF/io.netty.versions.properties",
-                "META-INF/INDEX.LIST",
                 "META-INF/services/*"
             )
         }
