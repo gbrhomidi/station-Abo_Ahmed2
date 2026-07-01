@@ -7,7 +7,7 @@
   التحديثات الأمنية:
   1. منع الاتصالات غير المشفرة (Cleartext) بشكل افتراضي
   2. استثناء محدد للخادم المحلي فقط (127.0.0.1 / localhost)
-  3. Certificate Pinning لـ Gemini API
+  3. Certificate Pinning لـ Gemini API باستخدام Public Key Pins
   4. Trust Anchors محدودة (System + User)
   5. إعدادات Debuggable منفصلة
 
@@ -31,14 +31,20 @@
         <pin-set expiration="2027-01-01">
             <!-- 
                 Certificate Pinning لـ Gemini API
-                SHA-256 hashes للشهادات الرئيسية لـ Google APIs
-                يمكن الحصول على القيم الصحيحة باستخدام:
-                openssl s_client -connect generativelanguage.googleapis.com:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+                تم الحصول على هذه القيم باستخدام:
+                openssl s_client -connect generativelanguage.googleapis.com:443 -servername generativelanguage.googleapis.com 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+
+                النتيجة: xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=
             -->
+
+            <!-- Primary Pin: Public Key (EC prime256v1) - الأكثر استقراراً -->
+            <pin digest="SHA-256">xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=</pin>
+
+            <!-- Backup Pin 1: GTS Root R1 (Root CA) -->
             <pin digest="SHA-256">Vfd95KMHNCyP4qPm+nrX+Ir2v8E8Ihr8aRr4D45E1gk=</pin>
+
+            <!-- Backup Pin 2: WR2 Intermediate CA -->
             <pin digest="SHA-256">Y9mvm0exBk1JoQ57f9Vm28eKZ71WHYAPSfwAqo3eT0I=</pin>
-            <!-- Pin احتياطي في حالة تغيير الشهادة -->
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
         </pin-set>
 
         <!-- منع الاتصال إذا فشل Certificate Pinning -->
@@ -81,9 +87,14 @@
 
         <!-- Certificate Pinning إلزامي -->
         <pin-set expiration="2027-01-01">
+            <!-- Primary Pin: Public Key (EC prime256v1) -->
+            <pin digest="SHA-256">xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=</pin>
+
+            <!-- Backup Pin 1: GTS Root R1 (Root CA) -->
             <pin digest="SHA-256">Vfd95KMHNCyP4qPm+nrX+Ir2v8E8Ihr8aRr4D45E1gk=</pin>
+
+            <!-- Backup Pin 2: WR2 Intermediate CA -->
             <pin digest="SHA-256">Y9mvm0exBk1JoQ57f9Vm28eKZ71WHYAPSfwAqo3eT0I=</pin>
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
         </pin-set>
 
         <!-- منع الاتصال إذا فشل التحقق -->
