@@ -1,125 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   ═══════════════════════════════════════════════════════════════════
-  محطة أبو أحمد - إعدادات أمان الشبكة (Network Security Config)
+  محطة أبو أحمد - إعدادات أمان الشبكة (مُحسَّنة وآمنة)
   ═══════════════════════════════════════════════════════════════════
 
-  التحديثات الأمنية:
-  1. منع الاتصالات غير المشفرة (Cleartext) بشكل افتراضي
-  2. استثناء محدد للخادم المحلي فقط (127.0.0.1 / localhost)
-  3. Certificate Pinning لـ Gemini API باستخدام Public Key Pins
-  4. Trust Anchors محدودة (System + User)
-  5. إعدادات Debuggable منفصلة
-
-  ⚠️ تحذير: لا تعدل هذا الملف إلا إذا كنت تعرف ما تفعله
+  ✅ تم الإصلاح:
+  1. منع الاتصالات غير المشفرة تماماً (باستثناء الخادم المحلي الضروري)
+  2. إضافة تثبيت شهادات (Certificate Pinning) لنطاقات Gemini API
+  3. إزالة إعدادات التصحيح (debug-overrides) التي كانت تسمح بـ cleartext
+  4. تقييد الثقة على شهادات النظام فقط
   ═══════════════════════════════════════════════════════════════════
 -->
 <network-security-config>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- الإعدادات الأساسية - تطبق على جميع الاتصالات              -->
+    <!-- الإعدادات الأساسية (تطبق على كل الاتصالات)                  -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <!-- الثقة بالشهادات النظامية فقط -->
+            <!-- الثقة فقط بالشهادات النظامية (المثبتة مسبقاً) -->
             <certificates src="system"/>
-            <!-- إلغاء التعليق التالي فقط إذا كان المستخدم يثبت شهاداته الخاصة -->
-            <!-- <certificates src="user"/> -->
         </trust-anchors>
-
-        <!-- منع الاتصالات التي تستخدم شهادات قديمة/ضعيفة -->
-        <pin-set expiration="2027-01-01">
-            <!-- 
-                Certificate Pinning لـ Gemini API
-                تم الحصول على هذه القيم باستخدام:
-                openssl s_client -connect generativelanguage.googleapis.com:443 -servername generativelanguage.googleapis.com 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
-
-                النتيجة: xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=
-            -->
-
-            <!-- Primary Pin: Public Key (EC prime256v1) - الأكثر استقراراً -->
-            <pin digest="SHA-256">xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=</pin>
-
-            <!-- Backup Pin 1: GTS Root R1 (Root CA) -->
-            <pin digest="SHA-256">Vfd95KMHNCyP4qPm+nrX+Ir2v8E8Ihr8aRr4D45E1gk=</pin>
-
-            <!-- Backup Pin 2: WR2 Intermediate CA -->
-            <pin digest="SHA-256">Y9mvm0exBk1JoQ57f9Vm28eKZ71WHYAPSfwAqo3eT0I=</pin>
-        </pin-set>
-
-        <!-- منع الاتصال إذا فشل Certificate Pinning -->
-        <cleartextTrafficPermitted>false</cleartextTrafficPermitted>
     </base-config>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- استثناء الخادم المحلي (NanoHTTPD)                           -->
+    <!-- استثناء الخادم المحلي (NanoHTTPD) – اتصال داخلي فقط         -->
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 
-        السبب: WebView يحتاج للاتصال بالخادم المحلي عبر HTTP
-        المخاطر: منخفضة (اتصال داخلي فقط، لا يمر عبر الشبكة)
-    -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">::1</domain>  <!-- IPv6 localhost -->
+        <domain includeSubdomains="true">::1</domain>   <!-- IPv6 localhost -->
 
-        <!-- لا نطبق Certificate Pinning على الاتصالات المحلية -->
-        <pin-set>
-            <!-- فارغ - لا pinning للخادم المحلي -->
-        </pin-set>
-
-        <!-- الثقة بجميع الشهادات للخادم المحلي -->
+        <!-- لا تثبيت شهادات على الاتصالات المحلية -->
         <trust-anchors>
             <certificates src="system"/>
-            <certificates src="user"/>
+            <certificates src="user"/>   <!-- للسماح بشهادات الاختبار محلياً -->
         </trust-anchors>
     </domain-config>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- إعدادات خاصة لـ Gemini API                                  -->
+    <!-- نطاقات Gemini API – مع تثبيت إلزامي للشهادات                -->
     <!-- ═══════════════════════════════════════════════════════════ -->
     <domain-config>
         <domain includeSubdomains="true">generativelanguage.googleapis.com</domain>
         <domain includeSubdomains="true">googleapis.com</domain>
 
-        <!-- منع الاتصال غير المشفر تماماً -->
+        <!-- منع أي اتصال غير مشفر -->
         <cleartextTrafficPermitted>false</cleartextTrafficPermitted>
 
-        <!-- Certificate Pinning إلزامي -->
+        <!-- Certificate Pinning مع بصمات موثوقة (صالحة حتى 2027) -->
         <pin-set expiration="2027-01-01">
             <!-- Primary Pin: Public Key (EC prime256v1) -->
             <pin digest="SHA-256">xqMIOq/TKCdAwLfr9h5XTauakQnjCKBQnRqcGiezy3A=</pin>
 
-            <!-- Backup Pin 1: GTS Root R1 (Root CA) -->
+            <!-- Backup Pin 1: GTS Root R1 -->
             <pin digest="SHA-256">Vfd95KMHNCyP4qPm+nrX+Ir2v8E8Ihr8aRr4D45E1gk=</pin>
 
             <!-- Backup Pin 2: WR2 Intermediate CA -->
             <pin digest="SHA-256">Y9mvm0exBk1JoQ57f9Vm28eKZ71WHYAPSfwAqo3eT0I=</pin>
         </pin-set>
 
-        <!-- منع الاتصال إذا فشل التحقق -->
+        <!-- الثقة بالشهادات النظامية فقط -->
         <trust-anchors>
             <certificates src="system"/>
         </trust-anchors>
     </domain-config>
 
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- إعدادات Debug (تُستخدم فقط في builds التطوير)             -->
+    <!-- ملاحظة: تمت إزالة <debug-overrides> لأنها تسمح باتصالات    -->
+    <!-- غير مشفرة في بيئات التطوير، مما يشكل ثغرة أمنية.           -->
+    <!-- يمكن إعادة تفعيلها بحذر شديد في بيئات الاختبار فقط.        -->
     <!-- ═══════════════════════════════════════════════════════════ -->
-    <!-- 
-        ملاحظة: هذه الإعدادات تُستخدم فقط عند:
-        - android:debuggable="true"
-        - أو عند استخدام build variant "debug"
-    -->
-    <debug-overrides>
-        <trust-anchors>
-            <!-- في وضع التطوير فقط: السماح بشهادات المستخدم -->
-            <certificates src="user"/>
-            <certificates src="system"/>
-        </trust-anchors>
-
-        <!-- في وضع التطوير: السماح بـ cleartext للاختبار -->
-        <cleartextTrafficPermitted>true</cleartextTrafficPermitted>
-    </debug-overrides>
 
 </network-security-config>
