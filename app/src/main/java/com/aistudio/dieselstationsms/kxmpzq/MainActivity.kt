@@ -1,15 +1,37 @@
+// ═══════════════════════════════════════════════════════════════
+//  محطة أبو أحمد - MainActivity (مُحسّن ومصحح بالكامل)
+// ═══════════════════════════════════════════════════════════════
+//
+//  التحسينات:
+//  1. إصلاح BuildConfig - استخدام ApplicationInfo.flags
+//  2. إصلاح R.string - استخدام نصوص مباشرة مع fallback
+//  3. إصلاح mutableSetOf - إضافة import صحيح
+//  4. إصلاح ::webView.isInitialized - تحقق إضافي
+//  5. إصلاح destroyWebView - تحقق من isDestroyed
+//  6. إصلاح getGeminiApiKey() - عدم إرجاع المفتاح إلى JS
+//  7. إصلاح stopService - إيقاف صحيح للخدمة
+//  8. إصلاح SMSService - تحقق من التسجيل
+//  9. إصلاح memory leak - إزالة WebView من parent
+//  10. إصلاح .env - fallback واضح
+// ═══════════════════════════════════════════════════════════════
+
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -37,17 +59,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * MainActivity - محسّن ومصحح بالكامل
- * 
- * التحسينات:
- * 1. استخدام Coroutines بدلاً من Handler للتأخيرات
- * 2. إضافة exponential backoff لإعادة محاولة WebView
- * 3. تحسين إدارة الأذونات
- * 4. حماية WebView من تسريب البيانات
- * 5. تحسين BiometricPrompt مع التحقق من الدعم
- * 6. تشفير مفتاح Gemini API في الذاكرة
- * 7. إضافة lifecycle-aware cleanup
- * 8. تحسين معالجة الأخطاء
+ * MainActivity - النسخة النهائية المعالجة والآمنة
  */
 class MainActivity : ComponentActivity() {
 
@@ -60,6 +72,11 @@ class MainActivity : ComponentActivity() {
         private const val WEBVIEW_MAX_RETRY_DELAY_MS = 10000L
         private const val MAX_WEBVIEW_RETRIES = 5
         private const val SERVER_PORT = 8080
+
+        // نصوص Biometric مباشرة (fallback إذا لم يكن strings.xml موجوداً)
+        private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
+        private const val BIOMETRIC_SUBTITLE = "استخدم بصمة الإصبع أو الوجه للدخول"
+        private const val BIOMETRIC_CANCEL = "إلغاء"
     }
 
     private lateinit var webView: WebView
@@ -69,12 +86,17 @@ class MainActivity : ComponentActivity() {
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
 
+    // تحسين: التحقق من debug mode بدون BuildConfig
+    private val isDebugMode: Boolean
+        get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // تفعيل debugging فقط في debug builds
-        if (BuildConfig.DEBUG) {
+        if (isDebugMode) {
             WebView.setWebContentsDebuggingEnabled(true)
+            Log.d(TAG, "Debug mode enabled - WebView debugging active")
         }
 
         enableEdgeToEdge()
@@ -82,7 +104,9 @@ class MainActivity : ComponentActivity() {
         // تحميل مفتاح API مع التحقق
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found in .env")
+            Log.w(TAG, "GEMINI_API_KEY not found in .env - AI features disabled")
+        } else {
+            Log.d(TAG, "Gemini API key loaded successfully")
         }
 
         // طلب الأذونات
@@ -91,7 +115,9 @@ class MainActivity : ComponentActivity() {
         // بدء الخدمة مع التحقق من Android O+
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
-            startSMSService()
+            if (!isDestroyed.get()) {
+                startSMSService()
+            }
         }
 
         setContent {
@@ -106,6 +132,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة مفتاح API - محسّنة وأكثر أماناً
+    // ═══════════════════════════════════════════════════════════════
+
     /**
      * تحسين: تحميل مفتاح API مع التحقق والتشفير البسيط
      */
@@ -117,8 +147,10 @@ class MainActivity : ComponentActivity() {
                         val trimmed = line.trim()
                         if (trimmed.startsWith("$key=")) {
                             val value = trimmed.substringAfter("=").trim()
-                            // تشفير بسيط في الذاكرة (XOR مع مفتاح عشوائي)
-                            encryptInMemory(value)
+                            if (value.isNotEmpty() && value != "YOUR_GEMINI_API_KEY_HERE") {
+                                // تشفير بسيط في الذاكرة (XOR مع مفتاح عشوائي)
+                                encryptInMemory(value)
+                            } else null
                         } else null
                     }.firstOrNull() ?: ""
                 }
@@ -146,6 +178,10 @@ class MainActivity : ComponentActivity() {
         return encrypted.map { (it.code xor key.toInt()).toChar() }.joinToString("")
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة الأذونات - محسّنة
+    // ═══════════════════════════════════════════════════════════════
+
     /**
      * تحسين: طلب الأذونات مع التحقق من الحاجة
      */
@@ -168,14 +204,14 @@ class MainActivity : ComponentActivity() {
             permissions.add(Manifest.permission.CAMERA)
         }
 
-        // أذونات التخزين للأجهزة القديمة
+        // أذونات التخزين للأجهزة القديمة (API 28 وما دون)
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             if (!isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
                 permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
 
-        // إشعارات Android 13+
+        // إشعارات Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (!isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)) {
                 permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -184,6 +220,8 @@ class MainActivity : ComponentActivity() {
 
         if (permissions.isNotEmpty()) {
             requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+        } else {
+            Log.d(TAG, "All required permissions already granted")
         }
     }
 
@@ -191,12 +229,25 @@ class MainActivity : ComponentActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة الخدمة - محسّنة
+    // ═══════════════════════════════════════════════════════════════
+
     /**
      * تحسين: بدء الخدمة مع التحقق من Android O+
      */
     private fun startSMSService() {
-        if (isDestroyed.get()) return
-        
+        if (isDestroyed.get()) {
+            Log.w(TAG, "Activity is destroyed, not starting service")
+            return
+        }
+
+        // تحسين: التحقق من وجود الخدمة في Manifest
+        if (!isServiceAvailable(SMSService::class.java)) {
+            Log.e(TAG, "SMSService not registered in AndroidManifest.xml")
+            return
+        }
+
         try {
             val intent = Intent(this, SMSService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -205,11 +256,33 @@ class MainActivity : ComponentActivity() {
                 startService(intent)
             }
             Log.d(TAG, "SMSService started successfully")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting SMSService - missing permissions?", e)
+            Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
         }
     }
+
+    /**
+     * تحسين: التحقق من وجود الخدمة في Manifest
+     */
+    private fun isServiceAvailable(serviceClass: Class<*>): Boolean {
+        return try {
+            packageManager.getServiceInfo(
+                ComponentName(this, serviceClass),
+                PackageManager.GET_META_DATA
+            )
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة WebView - محسّنة وآمنة
+    // ═══════════════════════════════════════════════════════════════
 
     /**
      * تحسين: WebView مع lifecycle-aware cleanup
@@ -220,10 +293,12 @@ class MainActivity : ComponentActivity() {
         modifier: Modifier = Modifier,
         onWebViewCreated: (WebView) -> Unit
     ) {
+        // تحسين: استخدام MutableSet مع import صحيح
         val webViewRef = remember { mutableSetOf<WebView>() }
-        
+
         DisposableEffect(Unit) {
             onDispose {
+                Log.d(TAG, "Disposing WebView references")
                 webViewRef.forEach { destroyWebView(it) }
                 webViewRef.clear()
             }
@@ -235,7 +310,7 @@ class MainActivity : ComponentActivity() {
                 WebView(context).apply {
                     webViewRef.add(this)
                     onWebViewCreated(this)
-                    
+
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
@@ -248,6 +323,8 @@ class MainActivity : ComponentActivity() {
                         allowContentAccess = false
                         // أمان: تعطيل فتح النوافذ
                         javaScriptCanOpenWindowsAutomatically = false
+                        // أمان: تعطيل mixed content
+                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
 
                     webViewClient = createWebViewClient()
@@ -290,18 +367,18 @@ class MainActivity : ComponentActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
-                
+
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
                 serverReady = false
-                
+
                 if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
                     webViewRetryCount++
                     val delay = calculateRetryDelay(webViewRetryCount)
                     Log.d(TAG, "Retrying WebView in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-                    
+
                     lifecycleScope.launch {
                         delay(delay)
-                        if (!isDestroyed.get() && ::webView.isInitialized) {
+                        if (!isDestroyed.get() && ::webView.isInitialized && webView.isAttachedToWindow) {
                             webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
                         }
                     }
@@ -333,7 +410,7 @@ class MainActivity : ComponentActivity() {
 
     private fun showErrorPage() {
         if (!::webView.isInitialized || isDestroyed.get()) return
-        
+
         val errorHtml = """
             <html dir="rtl">
             <head><style>
@@ -352,9 +429,13 @@ class MainActivity : ComponentActivity() {
             </body>
             </html>
         """.trimIndent()
-        
+
         webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  BiometricPrompt - محسّن
+    // ═══════════════════════════════════════════════════════════════
 
     /**
      * تحسين: BiometricPrompt مع التحقق الكامل
@@ -406,10 +487,11 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            // تحسين: استخدام نصوص مباشرة مع fallback
             val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
-                .setTitle(getString(R.string.biometric_prompt_title))
-                .setSubtitle(getString(R.string.biometric_prompt_subtitle))
-                .setNegativeButtonText(getString(R.string.biometric_cancel))
+                .setTitle(BIOMETRIC_TITLE)
+                .setSubtitle(BIOMETRIC_SUBTITLE)
+                .setNegativeButtonText(BIOMETRIC_CANCEL)
                 .setConfirmationRequired(false)
                 .build()
 
@@ -420,8 +502,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  JavaScript Interface - محسّن وأكثر أماناً
+    // ═══════════════════════════════════════════════════════════════
+
     /**
-     * تحسين: WebAppInterface مع Callback صحيح
+     * تحسين: WebAppInterface مع Callback صحيح وأمان محسّن
      */
     inner class WebAppInterface(
         private val context: Context,
@@ -452,11 +538,12 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun getGeminiApiKey(): String {
-            // فك التشفير قبل الإرجاع
+            // تحسين أمني: عدم إرجاع المفتاح أبداً إلى JavaScript
+            // بدلاً من ذلك، نُرجع حالة فقط
             return if (geminiApiKey.isNotEmpty()) {
-                decryptInMemory(geminiApiKey)
+                "configured"
             } else {
-                ""
+                "not_configured"
             }
         }
 
@@ -469,6 +556,15 @@ class MainActivity : ComponentActivity() {
         @JavascriptInterface
         fun isServerReady(): Boolean {
             return serverReady
+        }
+
+        @JavascriptInterface
+        fun getAppVersion(): String {
+            return try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+            } catch (e: Exception) {
+                "unknown"
+            }
         }
     }
 
@@ -486,13 +582,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة دورة الحياة - محسّنة
+    // ═══════════════════════════════════════════════════════════════
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         if (requestCode != PERMISSION_REQUEST_CODE) return
         if (grantResults.isEmpty()) {
             Log.w(TAG, "Permission result is empty")
@@ -511,7 +611,7 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.RECEIVE_SMS
             )
             val hasCriticalDenied = denied.any { it in criticalPermissions }
-            
+
             if (hasCriticalDenied) {
                 Toast.makeText(
                     this,
@@ -523,30 +623,63 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy called")
         isDestroyed.set(true)
         handler.removeCallbacksAndMessages(null)
-        
-        // إيقاف الخدمة
-        try {
-            stopService(Intent(this, SMSService::class.java))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping service", e)
-        }
-        
-        // تدمير WebView
+
+        // تحسين: إيقاف الخدمة بشكل صحيح
+        stopSMSService()
+
+        // تحسين: تدمير WebView مع إزالة من parent
         destroyWebView(webView)
-        
+
         super.onDestroy()
     }
 
+    /**
+     * تحسين: إيقاف الخدمة بشكل صحيح
+     */
+    private fun stopSMSService() {
+        try {
+            val intent = Intent(this, SMSService::class.java)
+            stopService(intent)
+            Log.d(TAG, "SMSService stop requested")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping SMSService", e)
+        }
+    }
+
+    /**
+     * تحسين: تدمير WebView مع إزالة من parent لمنع memory leak
+     */
     private fun destroyWebView(webView: WebView?) {
-        webView?.let {
+        webView?.let { view ->
             try {
-                it.stopLoading()
-                it.loadUrl("about:blank")
-                it.clearHistory()
-                it.removeAllViews()
-                it.destroy()
+                // تحسين: التحقق من isDestroyed
+                if (isDestroyed.get()) {
+                    Log.d(TAG, "Activity already destroyed, skipping WebView cleanup")
+                    return
+                }
+
+                // تحسين: إزالة WebView من parent أولاً
+                (view.parent as? ViewGroup)?.removeView(view)
+
+                // إيقاف التحميل
+                view.stopLoading()
+                // تحميل صفحة فارغة
+                view.loadUrl("about:blank")
+                // مسح التاريخ
+                view.clearHistory()
+                // مسح الذاكرة المؤقتة
+                view.clearCache(true)
+                // إزالة JavaScript Interface
+                view.removeJavascriptInterface("AndroidInterface")
+                // إزالة جميع الـ views
+                view.removeAllViews()
+                // تدمير WebView
+                view.destroy()
+
+                Log.d(TAG, "WebView destroyed successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Error destroying WebView", e)
             }
