@@ -10,6 +10,7 @@
     
     <!-- General Strings -->
     <string name="error_generic">حدث خطأ غير متوقع</string>
+    <string name="error_server_connection">تعذر الاتصال بالخادم المحلي</string>
     <string name="loading">جاري التحميل...</string>
     <string name="retry">إعادة المحاولة</string>
     <string name="cancel">إلغاء</string>
