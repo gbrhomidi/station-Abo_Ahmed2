@@ -1,51 +1,661 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">محطة ابو أحمد لمشتقات الديزل</string>
-    
-    <!-- Biometric Prompt Strings -->
+<!--
+  ═══════════════════════════════════════════════════════════════
+   محطة أبو أحمد لمشتقات الديزل - ملف النصوص (strings.xml)
+  ═══════════════════════════════════════════════════════════════
+
+   هذا الملف يحتوي على جميع النصوص المستخدمة في التطبيق.
+   يدعم اللغة العربية كلغة افتراضية مع إمكانية إضافة لغات أخرى.
+
+   ⚠️ ملاحظة: لا تضع أي بيانات حساسة أو مفاتيح API في هذا الملف
+  ═══════════════════════════════════════════════════════════════
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="MissingTranslation">
+
+    <!-- ═══════════════════════════════════════════════════════════
+          الأسماء والعناوين الأساسية
+         ═══════════════════════════════════════════════════════════ -->
+
+    <!-- اسم التطبيق الرسمي -->
+    <string name="app_name">محطة أبو أحمد لمشتقات الديزل</string>
+
+    <!-- اسم مختصر للتطبيق -->
+    <string name="app_name_short">أبو أحمد</string>
+
+    <!-- شعار التطبيق -->
+    <string name="app_tagline">نظام إدارة محطة وقود متطور</string>
+
+    <!-- اسم الشركة/المالك -->
+    <string name="company_name">محطة أبو أحمد</string>
+
+    <!-- العنوان الكامل -->
+    <string name="full_address">بجانب مدرسة الاتحاد برأس وادي ثاة - الحميدة - العرش</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          شاشة تسجيل الدخول (Login Screen)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="login_title">تسجيل الدخول</string>
+    <string name="login_subtitle">مرحباً بك في نظام محطة أبو أحمد</string>
+    <string name="login_username_hint">اسم المستخدم</string>
+    <string name="login_password_hint">كلمة المرور</string>
+    <string name="login_button">دخول</string>
+    <string name="login_remember_me">تذكرني</string>
+    <string name="login_forgot_password">نسيت كلمة المرور؟</string>
+    <string name="login_biometric_option">أو استخدم البصمة</string>
+    <string name="login_error_empty_username">الرجاء إدخال اسم المستخدم</string>
+    <string name="login_error_empty_password">الرجاء إدخال كلمة المرور</string>
+    <string name="login_error_invalid_credentials">اسم المستخدم أو كلمة المرور غير صحيحة</string>
+    <string name="login_error_account_disabled">الحساب معطل، تواصل مع المدير</string>
+    <string name="login_success">تم تسجيل الدخول بنجاح</string>
+    <string name="login_first_time">تسجيل الدخول للمرة الأولى - تم إنشاء حساب افتراضي</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          المصادقة البيومترية (Biometric Authentication)
+         ═══════════════════════════════════════════════════════════ -->
+
     <string name="biometric_prompt_title">المصادقة البيومترية</string>
-    <string name="biometric_prompt_subtitle">استخدم بصمة إصبعك أو وجهك للدخول</string>
+    <string name="biometric_prompt_subtitle">استخدم بصمة الإصبع أو الوجه للدخول</string>
+    <string name="biometric_prompt_description">قم بالمصادقة للوصول إلى النظام</string>
     <string name="biometric_cancel">إلغاء</string>
-    <string name="biometric_error_unsupported">المصادقة البيومترية غير مدعومة على هذا الجهاز</string>
-    
-    <!-- General Strings -->
-    <string name="error_generic">حدث خطأ غير متوقع</string>
+    <string name="biometric_use_password">استخدام كلمة المرور بدلاً من ذلك</string>
+    <string name="biometric_error_no_hardware">الجهاز لا يدعم المصادقة البيومترية</string>
+    <string name="biometric_error_not_enrolled">لم يتم تسجيل بصمة أو وجه</string>
+    <string name="biometric_error_lockout">تم قفل المصادقة مؤقتاً، جرب لاحقاً</string>
+    <string name="biometric_error_generic">حدث خطأ في المصادقة البيومترية</string>
+    <string name="biometric_success">تمت المصادقة بنجاح</string>
+    <string name="biometric_setup_title">تفعيل البصمة</string>
+    <string name="biometric_setup_message">هل تريد تفعيل تسجيل الدخول بالبصمة؟</string>
+    <string name="biometric_setup_yes">نعم، فعلها</string>
+    <string name="biometric_setup_no">لا، شكراً</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          شاشة لوحة التحكم الرئيسية (Dashboard)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="dashboard_title">لوحة التحكم</string>
+    <string name="dashboard_welcome">مرحباً، %1$s</string>
+    <string name="dashboard_role_admin">مدير النظام</string>
+    <string name="dashboard_role_cashier">أمين الصندوق</string>
+    <string name="dashboard_role_supervisor">مشرف</string>
+
+    <!-- بطاقات الإحصائيات -->
+    <string name="stat_total_sales">إجمالي المبيعات اليوم</string>
+    <string name="stat_total_liters">إجمالي اللترات المباعة</string>
+    <string name="stat_remaining_stock">المخزون المتبقي</string>
+    <string name="stat_total_customers">عدد العملاء النشطين</string>
+    <string name="stat_total_due">إجمالي الديون المستحقة</string>
+    <string name="stat_transactions_today">عدد المعاملات اليوم</string>
+    <string name="stat_low_stock_alert">تنبيه: مخزون منخفض!</string>
+    <string name="stat_currency">ريال</string>
+    <string name="stat_liter">لتر</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          إدارة العملاء (Customers Management)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="customers_title">العملاء</string>
+    <string name="customers_add_new">إضافة عميل جديد</string>
+    <string name="customers_search_hint">البحث باسم العميل أو رقم الهاتف…</string>
+    <string name="customers_no_results">لا يوجد عملاء مطابقين</string>
+    <string name="customers_empty_list">لا يوجد عملاء مسجلين</string>
+
+    <!-- تفاصيل العميل -->
+    <string name="customer_name">اسم العميل</string>
+    <string name="customer_phone">رقم الهاتف</string>
+    <string name="customer_credit_limit">حد الائتمان</string>
+    <string name="customer_current_balance">الرصيد الحالي</string>
+    <string name="customer_status">الحالة</string>
+    <string name="customer_status_active">نشط</string>
+    <string name="customer_status_inactive">غير نشط</string>
+    <string name="customer_status_blocked">محظور</string>
+    <string name="customer_loyalty_points">نقاط الولاء</string>
+    <string name="customer_vip_level">مستوى العضوية</string>
+    <string name="customer_vip_gold">ذهبي 🥇</string>
+    <string name="customer_vip_silver">فضي 🥈</string>
+    <string name="customer_vip_bronze">عادي</string>
+    <string name="customer_created_at">تاريخ التسجيل</string>
+    <string name="customer_actions">إجراءات</string>
+    <string name="customer_view_details">عرض التفاصيل</string>
+    <string name="customer_edit">تعديل</string>
+    <string name="customer_delete">حذف</string>
+    <string name="customer_call">اتصال</string>
+    <string name="customer_send_sms">إرسال رسالة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          إدارة المخزون والتعبئة (Inventory & Refills)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="inventory_title">المخزون والتعبئة</string>
+    <string name="inventory_add_refill">تعبئة جديدة</string>
+    <string name="inventory_supplier">المورد</string>
+    <string name="inventory_total_quantity">الكمية الإجمالية</string>
+    <string name="inventory_remaining_quantity">الكمية المتبقية</string>
+    <string name="inventory_sell_price">سعر البيع للتر</string>
+    <string name="inventory_allow_credit">السماح بالبيع الآجل</string>
+    <string name="inventory_alert_threshold">حد التنبيه</string>
+    <string name="inventory_date">تاريخ التعبئة</string>
+    <string name="inventory_low_stock_warning">⚠️ المخزون منخفض!</string>
+    <string name="inventory_stock_critical">🚨 المخزون وصل للحد الأدنى!</string>
+    <string name="inventory_empty">لا يوجد تعبئات مسجلة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          المبيعات والمعاملات (Sales & Transactions)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="sales_title">المبيعات</string>
+    <string name="sales_new_sale">بيع جديد</string>
+    <string name="sales_select_customer">اختيار العميل</string>
+    <string name="sales_select_refill">اختيار التعبئة</string>
+    <string name="sales_quantity_liters">الكمية (لتر)</string>
+    <string name="sales_unit_price">سعر اللتر</string>
+    <string name="sales_total_amount">المبلغ الإجمالي</string>
+    <string name="sales_paid_amount">المبلغ المدفوع</string>
+    <string name="sales_due_amount">المبلغ المتبقي</string>
+    <string name="sales_payment_method">طريقة الدفع</string>
+    <string name="sales_payment_cash">نقداً</string>
+    <string name="sales_payment_credit">آجل</string>
+    <string name="sales_payment_mixed">مختلط</string>
+    <string name="sales_due_date">تاريخ الاستحقاق</string>
+    <string name="sales_invoice_number">رقم الفاتورة</string>
+    <string name="sales_status">حالة المعاملة</string>
+    <string name="sales_status_paid">مدفوعة</string>
+    <string name="sales_status_unpaid">غير مدفوعة</string>
+    <string name="sales_status_partial">مدفوعة جزئياً</string>
+    <string name="sales_confirm">تأكيد البيع</string>
+    <string name="sales_success">تمت عملية البيع بنجاح</string>
+    <string name="sales_error_insufficient_stock">الكمية غير متوفرة في المخزون</string>
+    <string name="sales_error_invalid_quantity">الرجاء إدخال كمية صحيحة</string>
+    <string name="sales_error_exceeds_credit">المبلغ يتجاوز حد الائتمان المتاح</string>
+    <string name="sales_print_invoice">طباعة الفاتورة</string>
+    <string name="sales_share_invoice">مشاركة الفاتورة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          المدفوعات والتسديد (Payments)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="payments_title">المدفوعات</string>
+    <string name="payments_new_payment">تسديد جديد</string>
+    <string name="payments_customer">العميل</string>
+    <string name="payments_amount">المبلغ</string>
+    <string name="payments_method">طريقة التسديد</string>
+    <string name="payments_method_cash">نقداً</string>
+    <string name="payments_method_transfer">تحويل بنكي</string>
+    <string name="payments_method_check">شيك</string>
+    <string name="payments_date">تاريخ التسديد</string>
+    <string name="payments_notes">ملاحظات</string>
+    <string name="payments_success">تم التسديد بنجاح</string>
+    <string name="payments_error_invalid_amount">الرجاء إدخال مبلغ صحيح</string>
+    <string name="payments_error_exceeds_due">المبلغ يتجاوز الدين المستحق</string>
+    <string name="payments_receipt">إيصال التسديد</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          نظام الولاء والمكافآت (Loyalty System)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="loyalty_title">نظام الولاء</string>
+    <string name="loyalty_points">النقاط</string>
+    <string name="loyalty_points_per_liter">نقطة لكل لتر</string>
+    <string name="loyalty_min_redeem">الحد الأدنى للاستبدال</string>
+    <string name="loyalty_redeem">استبدال النقاط</string>
+    <string name="loyalty_redeem_points">عدد النقاط للاستبدال</string>
+    <string name="loyalty_redeem_description">وصف المكافأة</string>
+    <string name="loyalty_history">سجل النقاط</string>
+    <string name="loyalty_earned">مكتسبة</string>
+    <string name="loyalty_redeemed">مستبدلة</string>
+    <string name="loyalty_balance">الرصيد: %1$d نقطة</string>
+    <string name="loyalty_not_enough">النقاط غير كافية للاستبدال</string>
+    <string name="loyalty_success_redeem">تم استبدال %1$d نقطة بنجاح</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          نظام الرسائل القصيرة (SMS System)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="sms_title">الرسائل</string>
+    <string name="sms_send_new">رسالة جديدة</string>
+    <string name="sms_phone_number">رقم الهاتف</string>
+    <string name="sms_message">نص الرسالة</string>
+    <string name="sms_type_manual">يدوي</string>
+    <string name="sms_type_auto_reply">رد آلي</string>
+    <string name="sms_type_reminder">تذكير</string>
+    <string name="sms_type_promotion">عرض ترويجي</string>
+    <string name="sms_logs">سجل الرسائل</string>
+    <string name="sms_status_sent">تم الإرسال</string>
+    <string name="sms_status_failed">فشل الإرسال</string>
+    <string name="sms_status_pending">قيد الانتظار</string>
+    <string name="sms_error_invalid_phone">رقم هاتف غير صالح</string>
+    <string name="sms_error_too_long">الرسالة طويلة جداً</string>
+    <string name="sms_error_rate_limit">تم تجاوز الحد المسموح من الرسائل</string>
+    <string name="sms_overdue_reminder">تذكير: مبلغ مستحق %1$s ريال - تاريخ الاستحقاق: %2$s</string>
+    <string name="sms_new_sale_due">تذكير: لديك مبلغ مستحق %1$s ريال قبل %2$s</string>
+    <string name="sms_balance_query_result">مرحباً %1$s،
+الرصيد: %2$s ريال
+نقاط: %3$d
+العضوية: %4$s</string>
+    <string name="sms_auto_reply_help">مرحباً بك في محطة أبو أحمد!
+الخدمات:
+1. رصيد (أرسل: رصيد)
+2. عروض (أرسل: عروض)
+3. موقع (أرسل: موقع)</string>
+    <string name="sms_auto_reply_offers">عروض اليوم:
+- سعر اللتر: 500 ريال
+- خصم الولاء: 5% للذهبيين
+- توصيل مجاني +5000 لتر</string>
+    <string name="sms_auto_reply_location">موقعنا:
+بجانب مدرسة الاتحاد
+برأس وادي ثاة - الحميدة
+أوقات العمل: 24 ساعة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          الذكاء الاصطناعي والمحادثة (AI & Chat)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="ai_title">المساعد الذكي</string>
+    <string name="ai_welcome">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك؟</string>
+    <string name="ai_input_hint">اكتب سؤالك هنا…</string>
+    <string name="ai_send">إرسال</string>
+    <string name="ai_typing">يكتب…</string>
+    <string name="ai_error_no_key">مفتاح Gemini API غير مُكوّن</string>
+    <string name="ai_error_connection">خطأ في الاتصال بالذكاء الاصطناعي</string>
+    <string name="ai_insight_title">تحليل ذكي</string>
+    <string name="ai_forecast_title">توقع المبيعات</string>
+    <string name="ai_customer_analysis">تحليل العميل</string>
+    <string name="ai_save_chat">حفظ المحادثة</string>
+    <string name="ai_clear_chat">مسح المحادثة</string>
+    <string name="ai_history">سجل المحادثات</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          التقارير والإحصائيات (Reports & Statistics)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="reports_title">التقارير</string>
+    <string name="reports_daily">التقرير اليومي</string>
+    <string name="reports_monthly">التقرير الشهري</string>
+    <string name="reports_customer">تقرير عميل</string>
+    <string name="reports_inventory">تقرير المخزون</string>
+    <string name="reports_eod">تقرير نهاية اليوم</string>
+    <string name="reports_export">تصدير البيانات</string>
+    <string name="reports_export_json">تصدير JSON</string>
+    <string name="reports_export_csv">تصدير CSV</string>
+    <string name="reports_export_pdf">تصدير PDF</string>
+    <string name="reports_print">طباعة</string>
+    <string name="reports_share">مشاركة</string>
+    <string name="reports_date_range">نطاق التاريخ</string>
+    <string name="reports_from">من</string>
+    <string name="reports_to">إلى</string>
+    <string name="reports_no_data">لا توجد بيانات في الفترة المحددة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          الإعدادات (Settings)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_general">عام</string>
+    <string name="settings_station_name">اسم المحطة</string>
+    <string name="settings_currency">العملة</string>
+    <string name="settings_language">اللغة</string>
+    <string name="settings_dark_mode">الوضع الداكن</string>
+    <string name="settings_sms">إعدادات الرسائل</string>
+    <string name="settings_sms_gateway">بوابة الرسائل</string>
+    <string name="settings_sms_sim_slot">شريحة SIM</string>
+    <string name="settings_sms_sim_1">SIM 1</string>
+    <string name="settings_sms_sim_2">SIM 2</string>
+    <string name="settings_ai">إعدادات الذكاء الاصطناعي</string>
+    <string name="settings_ai_enabled">تفعيل AI</string>
+    <string name="settings_ai_api_key">مفتاح Gemini API</string>
+    <string name="settings_ai_api_key_hint">أدخل مفتاح API هنا…</string>
+    <string name="settings_security">الأمان</string>
+    <string name="settings_biometric">تفعيل البصمة</string>
+    <string name="settings_require_biometric">طلب البصمة عند الدخول</string>
+    <string name="settings_change_password">تغيير كلمة المرور</string>
+    <string name="settings_current_password">كلمة المرور الحالية</string>
+    <string name="settings_new_password">كلمة المرور الجديدة</string>
+    <string name="settings_confirm_password">تأكيد كلمة المرور</string>
+    <string name="settings_backup">النسخ الاحتياطي</string>
+    <string name="settings_auto_backup">نسخ احتياطي تلقائي</string>
+    <string name="settings_backup_interval">فترة النسخ الاحتياطي</string>
+    <string name="settings_backup_now">نسخ احتياطي الآن</string>
+    <string name="settings_restore">استعادة البيانات</string>
+    <string name="settings_loyalty">نظام الولاء</string>
+    <string name="settings_loyalty_enabled">تفعيل نظام الولاء</string>
+    <string name="settings_points_per_liter">النقاط لكل لتر</string>
+    <string name="settings_min_points_redeem">الحد الأدنى للاستبدال</string>
+    <string name="settings_low_stock">تنبيه المخزون المنخفض</string>
+    <string name="settings_low_stock_threshold">حد التنبيه (لتر)</string>
+    <string name="settings_save">حفظ الإعدادات</string>
+    <string name="settings_reset">إعادة الضبط الافتراضي</string>
+    <string name="settings_saved">تم حفظ الإعدادات</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          سجل النشاط (Activity Logs)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="logs_title">سجل النشاط</string>
+    <string name="logs_operator">المشغل</string>
+    <string name="logs_action">الإجراء</string>
+    <string name="logs_details">التفاصيل</string>
+    <string name="logs_date">التاريخ</string>
+    <string name="logs_filter">تصفية</string>
+    <string name="logs_clear">مسح السجل</string>
+    <string name="logs_empty">لا يوجد سجلات</string>
+    <string name="logs_action_login">تسجيل دخول</string>
+    <string name="logs_action_logout">تسجيل خروج</string>
+    <string name="logs_action_sale">بيع</string>
+    <string name="logs_action_payment">تسديد</string>
+    <string name="logs_action_refill">تعبئة</string>
+    <string name="logs_action_sms">رسالة</string>
+    <string name="logs_action_setting">تغيير إعداد</string>
+    <string name="logs_action_backup">نسخ احتياطي</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          المستخدمين وإدارة الصلاحيات (Users & Permissions)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="users_title">المستخدمين</string>
+    <string name="users_add_new">إضافة مستخدم</string>
+    <string name="users_username">اسم المستخدم</string>
+    <string name="users_full_name">الاسم الكامل</string>
+    <string name="users_role">الدور</string>
+    <string name="users_role_admin">مدير</string>
+    <string name="users_role_cashier">أمين صندوق</string>
+    <string name="users_role_supervisor">مشرف</string>
+    <string name="users_password">كلمة المرور</string>
+    <string name="users_confirm_password">تأكيد كلمة المرور</string>
+    <string name="users_biometric_enabled">البصمة مفعلة</string>
+    <string name="users_active">نشط</string>
+    <string name="users_inactive">غير نشط</string>
+    <string name="users_created_at">تاريخ الإنشاء</string>
+    <string name="users_last_login">آخر دخول</string>
+    <string name="users_actions">إجراءات</string>
+    <string name="users_edit">تعديل</string>
+    <string name="users_delete">حذف</string>
+    <string name="users_reset_password">إعادة تعيين كلمة المرور</string>
+    <string name="users_cannot_delete_self">لا يمكن حذف حسابك الحالي</string>
+    <string name="users_cannot_delete_admin">لا يمكن حذف المدير الوحيد</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          التنبيهات والإشعارات (Alerts & Notifications)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="alerts_title">التنبيهات</string>
+    <string name="alerts_inventory">تنبيهات المخزون</string>
+    <string name="alerts_overdue">معاملات متأخرة</string>
+    <string name="alerts_low_stock">مخزون منخفض</string>
+    <string name="alerts_mark_read">تحديد كمقروء</string>
+    <string name="alerts_mark_all_read">تحديد الكل كمقروء</string>
+    <string name="alerts_clear_all">مسح الكل</string>
+    <string name="alerts_empty">لا يوجد تنبيهات جديدة</string>
+    <string name="alert_low_stock_message">تنبيه: مخزون %1$s وصل إلى %2$d لتر (الحد: %3$d)</string>
+    <string name="alert_overdue_message">عميل %1$s لديه مبلغ مستحق %2$s ريال منذ %3$s</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          أزرار وإجراءات عامة (Common Buttons & Actions)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="button_ok">موافق</string>
+    <string name="button_cancel">إلغاء</string>
+    <string name="button_save">حفظ</string>
+    <string name="button_delete">حذف</string>
+    <string name="button_edit">تعديل</string>
+    <string name="button_add">إضافة</string>
+    <string name="button_search">بحث</string>
+    <string name="button_filter">تصفية</string>
+    <string name="button_refresh">تحديث</string>
+    <string name="button_back">رجوع</string>
+    <string name="button_next">التالي</string>
+    <string name="button_previous">السابق</string>
+    <string name="button_confirm">تأكيد</string>
+    <string name="button_close">إغلاق</string>
+    <string name="button_share">مشاركة</string>
+    <string name="button_print">طباعة</string>
+    <string name="button_export">تصدير</string>
+    <string name="button_import">استيراد</string>
+    <string name="button_call">اتصال</string>
+    <string name="button_message">رسالة</string>
+    <string name="button_view">عرض</string>
+    <string name="button_download">تحميل</string>
+    <string name="button_upload">رفع</string>
+    <string name="button_camera">كاميرا</string>
+    <string name="button_gallery">معرض الصور</string>
+    <string name="button_scan">مسح ضوئي</string>
+    <string name="button_generate">إنشاء</string>
+    <string name="button_copy">نسخ</string>
+    <string name="button_paste">لصق</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          رسائل الخطأ العامة (Common Error Messages)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="error_generic">حدث خطأ، يرجى المحاولة مرة أخرى</string>
+    <string name="error_network">خطأ في الاتصال بالشبكة</string>
+    <string name="error_server">خطأ في الخادم</string>
+    <string name="error_timeout">انتهت مهلة الاتصال</string>
+    <string name="error_no_internet">لا يوجد اتصال بالإنترنت</string>
+    <string name="error_permission_denied">تم رفض الإذن المطلوب</string>
+    <string name="error_permission_required">الإذن مطلوب لاستخدام هذه الميزة</string>
+    <string name="error_camera_permission">إذن الكاميرا مطلوب لمسح QR</string>
+    <string name="error_sms_permission">إذن الرسائل مطلوب لإرسال SMS</string>
+    <string name="error_storage_permission">إذن التخزين مطلوب لحفظ الملفات</string>
+    <string name="error_phone_permission">إذن الهاتف مطلوب لإرسال الرسائل</string>
+    <string name="error_biometric_permission">إذن البصمة مطلوب</string>
+    <string name="error_invalid_input">إدخال غير صالح</string>
+    <string name="error_required_field">هذا الحقل مطلوب</string>
+    <string name="error_invalid_email">بريد إلكتروني غير صالح</string>
+    <string name="error_invalid_phone">رقم هاتف غير صالح</string>
+    <string name="error_password_short">كلمة المرور قصيرة جداً (8 أحرف على الأقل)</string>
+    <string name="error_password_mismatch">كلمتا المرور غير متطابقتين</string>
+    <string name="error_user_exists">اسم المستخدم موجود مسبقاً</string>
+    <string name="error_user_not_found">المستخدم غير موجود</string>
+    <string name="error_database">خطأ في قاعدة البيانات</string>
+    <string name="error_file_not_found">الملف غير موجود</string>
+    <string name="error_read_file">خطأ في قراءة الملف</string>
+    <string name="error_write_file">خطأ في كتابة الملف</string>
     <string name="error_server_connection">تعذر الاتصال بالخادم المحلي</string>
-    <string name="loading">جاري التحميل...</string>
-    <string name="retry">إعادة المحاولة</string>
-    <string name="cancel">إلغاء</string>
-    <string name="confirm">تأكيد</string>
-    <string name="save">حفظ</string>
-    <string name="delete">حذف</string>
-    <string name="edit">تعديل</string>
-    <string name="search">بحث</string>
-    <string name="filter">تصفية</string>
-    <string name="sort">ترتيب</string>
-    <string name="export">تصدير</string>
-    <string name="import_data">استيراد</string>
-    <string name="backup">نسخ احتياطي</string>
-    <string name="restore">استعادة</string>
-    <string name="settings">الإعدادات</string>
-    <string name="logout">تسجيل الخروج</string>
-    <string name="login">تسجيل الدخول</string>
-    <string name="username">اسم المستخدم</string>
-    <string name="password">كلمة المرور</string>
-    <string name="remember_me">تذكرني</string>
-    <string name="forgot_password">نسيت كلمة المرور</string>
-    <string name="dashboard">لوحة التحكم</string>
-    <string name="customers">العملاء</string>
-    <string name="transactions">المعاملات</string>
-    <string name="inventory">المخزون</string>
-    <string name="reports">التقارير</string>
-    <string name="ai_assistant">المساعد الذكي</string>
-    <string name="sms_center">مركز الرسائل</string>
-    <string name="loyalty_program">برنامج الولاء</string>
-    <string name="notifications">الإشعارات</string>
-    <string name="profile">الملف الشخصي</string>
-    <string name="help">المساعدة</string>
-    <string name="about">عن التطبيق</string>
-    <string name="version">الإصدار</string>
-    <string name="contact_us">تواصل معنا</string>
-    <string name="privacy_policy">سياسة الخصوصية</string>
-    <string name="terms_of_service">شروط الخدمة</string>
+    <string name="error_server_not_ready">الخادم المحلي غير جاهز</string>
+    <string name="error_retry">إعادة المحاولة</string>
+    <string name="error_contact_support">تواصل مع الدعم الفني</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          رسائل النجاح (Success Messages)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="success_saved">تم الحفظ بنجاح</string>
+    <string name="success_deleted">تم الحذف بنجاح</string>
+    <string name="success_updated">تم التحديث بنجاح</string>
+    <string name="success_created">تم الإنشاء بنجاح</string>
+    <string name="success_sent">تم الإرسال بنجاح</string>
+    <string name="success_exported">تم التصدير بنجاح</string>
+    <string name="success_imported">تم الاستيراد بنجاح</string>
+    <string name="success_backup">تم النسخ الاحتياطي بنجاح</string>
+    <string name="success_restore">تمت الاستعادة بنجاح</string>
+    <string name="success_sync">تمت المزامنة بنجاح</string>
+    <string name="success_copied">تم النسخ إلى الحافظة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          رسائل التأكيد (Confirmation Dialogs)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="confirm_title">تأكيد</string>
+    <string name="confirm_delete">هل أنت متأكد من الحذف؟</string>
+    <string name="confirm_delete_customer">حذف العميل %1$s؟ لا يمكن التراجع!</string>
+    <string name="confirm_delete_transaction">حذف المعاملة؟ لا يمكن التراجع!</string>
+    <string name="confirm_delete_user">حذف المستخدم %1$s؟</string>
+    <string name="confirm_clear_logs">مسح جميع السجلات؟</string>
+    <string name="confirm_clear_chat">مسح المحادثة الحالية؟</string>
+    <string name="confirm_logout">تسجيل الخروج؟</string>
+    <string name="confirm_exit">الخروج من التطبيق؟</string>
+    <string name="confirm_reset_settings">إعادة ضبط الإعدادات الافتراضية؟</string>
+    <string name="confirm_restore_backup">استعادة البيانات من النسخة الاحتياطية؟ سيتم استبدال البيانات الحالية!</string>
+    <string name="confirm_yes">نعم</string>
+    <string name="confirm_no">لا</string>
+    <string name="confirm_yes_delete">نعم، احذف</string>
+    <string name="confirm_cancel">إلغاء</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          شريط التنقل السفلي (Bottom Navigation)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="nav_dashboard">الرئيسية</string>
+    <string name="nav_sales">المبيعات</string>
+    <string name="nav_customers">العملاء</string>
+    <string name="nav_inventory">المخزون</string>
+    <string name="nav_reports">التقارير</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_more">المزيد</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          شاشة البداية والتحميل (Splash & Loading)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="splash_loading">جاري التحميل…</string>
+    <string name="splash_welcome">أهلاً بك في</string>
+    <string name="splash_app_name">محطة أبو أحمد</string>
+    <string name="splash_init_db">جاري تهيئة قاعدة البيانات…</string>
+    <string name="splash_init_server">جاري تشغيل الخادم المحلي…</string>
+    <string name="splash_check_updates">جاري التحقق من التحديثات…</string>
+    <string name="loading_please_wait">يرجى الانتظار…</string>
+    <string name="loading_processing">جاري المعالجة…</string>
+    <string name="loading_saving">جاري الحفظ…</string>
+    <string name="loading_deleting">جاري الحذف…</string>
+    <string name="loading_exporting">جاري التصدير…</string>
+    <string name="loading_importing">جاري الاستيراد…</string>
+    <string name="loading_generating">جاري الإنشاء…</string>
+    <string name="loading_scanning">جاري المسح…</string>
+    <string name="loading_connecting">جاري الاتصال…</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          مسح QR Code (QR Scanning)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="qr_scan_title">مسح QR Code</string>
+    <string name="qr_scan_instruction">وجه الكاميرا نحو QR Code</string>
+    <string name="qr_scan_success">تم المسح بنجاح</string>
+    <string name="qr_scan_error">خطأ في المسح، حاول مرة أخرى</string>
+    <string name="qr_scan_permission">إذن الكاميرا مطلوب</string>
+    <string name="qr_scan_torch">تشغيل الفلاش</string>
+    <string name="qr_scan_gallery">اختيار من المعرض</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          معلومات التطبيق (About)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="about_title">عن التطبيق</string>
+    <string name="about_version">الإصدار %1$s</string>
+    <string name="about_build">رقم البناء: %1$d</string>
+    <string name="about_description">نظام إدارة محطة وقود متطور مع دعم SMS، الذكاء الاصطناعي، ونظام الولاء</string>
+    <string name="about_developer">تم التطوير بواسطة: AI Studio</string>
+    <string name="about_copyright">© 2026 محطة أبو أحمد. جميع الحقوق محفوظة.</string>
+    <string name="about_privacy_policy">سياسة الخصوصية</string>
+    <string name="about_terms">شروط الاستخدام</string>
+    <string name="about_contact">تواصل معنا</string>
+    <string name="about_rate">تقييم التطبيق</string>
+    <string name="about_share">مشاركة التطبيق</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          خدمة المقدمة (Foreground Service)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="service_notification_title">⛽ محطة أبو أحمد</string>
+    <string name="service_notification_text">الخادم المحلي يعمل…</string>
+    <string name="service_channel_name">خدمة المحطة</string>
+    <string name="service_channel_description">قناة إشعارات خدمة الخادم المحلي</string>
+    <string name="service_running">الخدمة تعمل</string>
+    <string name="service_stopped">الخدمة متوقفة</string>
+    <string name="service_start_error">فشل في بدء الخدمة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          حقول الإدخال والنماذج (Forms & Input Fields)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="hint_name">الاسم</string>
+    <string name="hint_phone">رقم الهاتف</string>
+    <string name="hint_email">البريد الإلكتروني</string>
+    <string name="hint_address">العنوان</string>
+    <string name="hint_notes">ملاحظات</string>
+    <string name="hint_search">بحث…</string>
+    <string name="hint_amount">المبلغ</string>
+    <string name="hint_quantity">الكمية</string>
+    <string name="hint_price">السعر</string>
+    <string name="hint_date">التاريخ</string>
+    <string name="hint_description">الوصف</string>
+    <string name="hint_optional">اختياري</string>
+    <string name="hint_required">مطلوب</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          حالات التحميل والفارغة (Empty & Loading States)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="empty_title">لا توجد بيانات</string>
+    <string name="empty_subtitle">ابدأ بإضافة بيانات جديدة</string>
+    <string name="empty_customers">لا يوجد عملاء مسجلين</string>
+    <string name="empty_sales">لا توجد مبيعات</string>
+    <string name="empty_inventory">لا يوجد مخزون</string>
+    <string name="empty_transactions">لا توجد معاملات</string>
+    <string name="empty_payments">لا توجد مدفوعات</string>
+    <string name="empty_sms">لا توجد رسائل</string>
+    <string name="empty_alerts">لا توجد تنبيهات</string>
+    <string name="empty_logs">لا توجد سجلات</string>
+    <string name="empty_ai_chat">ابدأ محادثة جديدة مع المساعد الذكي</string>
+    <string name="empty_search_results">لا توجد نتائج مطابقة</string>
+    <string name="error_title">حدث خطأ</string>
+    <string name="error_subtitle">حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى</string>
+    <string name="retry_button">إعادة المحاولة</string>
+    <string name="go_back_button">العودة</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          أرقام وتواريخ (Numbers & Dates)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="format_date">dd/MM/yyyy</string>
+    <string name="format_time">HH:mm</string>
+    <string name="format_datetime">dd/MM/yyyy HH:mm</string>
+    <string name="format_currency">%1$s ريال</string>
+    <string name="format_quantity">%1$s لتر</string>
+    <string name="format_percentage">%1$s%%</string>
+    <string name="today">اليوم</string>
+    <string name="yesterday">أمس</string>
+    <string name="tomorrow">غداً</string>
+    <string name="now">الآن</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          إعدادات متقدمة (Advanced Settings)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="advanced_title">إعدادات متقدمة</string>
+    <string name="advanced_debug_mode">وضع التصحيح</string>
+    <string name="advanced_clear_cache">مسح ذاكرة التخزين المؤقت</string>
+    <string name="advanced_clear_data">مسح جميع البيانات</string>
+    <string name="advanced_database_info">معلومات قاعدة البيانات</string>
+    <string name="advanced_export_database">تصدير قاعدة البيانات</string>
+    <string name="advanced_import_database">استيراد قاعدة البيانات</string>
+    <string name="advanced_view_logs">عرض سجلات الأخطاء</string>
+    <string name="advanced_send_logs">إرسال سجلات الأخطاء</string>
+    <string name="advanced_factory_reset">إعادة ضبط المصنع</string>
+    <string name="advanced_factory_reset_warning">⚠️ سيتم حذف جميع البيانات بشكل دائم!</string>
+
+    <!-- ═══════════════════════════════════════════════════════════
+          نصوص إضافية متنوعة (Miscellaneous)
+         ═══════════════════════════════════════════════════════════ -->
+
+    <string name="welcome_message">مرحباً بك في نظام محطة أبو أحمد!</string>
+    <string name="good_morning">صباح الخير</string>
+    <string name="good_afternoon">مساء الخير</string>
+    <string name="good_evening">مساء الخير</string>
+    <string name="welcome_back">أهلاً بعودتك، %1$s</string>
+    <string name="session_expired">انتهت الجلسة، يرجى تسجيل الدخول مرة أخرى</string>
+    <string name="feature_coming_soon">قريباً!</string>
+    <string name="feature_not_available">هذه الميزة غير متوفرة حالياً</string>
+    <string name="maintenance_mode">النظام في وضع الصيانة</string>
+    <string name="update_available">تحديث جديد متاح</string>
+    <string name="update_required">يجب تحديث التطبيق للاستمرار</string>
+    <string name="rate_app">هل تريد تقييم التطبيق؟</string>
+    <string name="rate_now">تقييم الآن</string>
+    <string name="rate_later">لاحقاً</string>
+    <string name="never_ask">لا تسأل مرة أخرى</string>
+    <string name="share_via">مشاركة عبر</string>
+    <string name="share_text">جرب تطبيق محطة أبو أحمد! %1$s</string>
+    <string name="copied_to_clipboard">تم النسخ إلى الحافظة</string>
+    <string name="not_implemented">لم يتم التنفيذ بعد</string>
+
 </resources>
