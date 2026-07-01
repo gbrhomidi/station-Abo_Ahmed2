@@ -1,19 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)    // ← تمت الإضافة (ضروري لتفعيل kotlinOptions داخل android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.roborazzi)
-}
-
-// إعدادات Kotlin عبر مهام التجميع – متوافقة مع kotlin.compose
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=kotlin.RequiresOptIn",
-            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
-        )
-    }
 }
 
 android {
@@ -22,14 +12,14 @@ android {
 
     defaultConfig {
         applicationId = "com.aistudio.dieselstationsms.kxmpzq"
-        minSdk = 26
+        minSdk = 26                      // ✅ رفع إلى Android 8.0 لتجنب ثغرات الإصدارات القديمة
         targetSdk = 35
         versionCode = 3
         versionName = "2.1 Pro"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // ✅ الطريقة الحديثة لتصفية اللغات بدلاً من resConfigs / resourceConfigurations
+        // ✅ تصفية الموارد اللغوية (بديل حديث عن resConfigs)
         androidResources {
             localeFilters += listOf("ar", "en")
         }
@@ -38,8 +28,8 @@ android {
     buildTypes {
         release {
             isCrunchPngs = true
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = true       // ✅ تفعيل R8/ProGuard
+            isShrinkResources = true     // ✅ إزالة الموارد غير المستخدمة
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -58,17 +48,21 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // ❌ لا نضع kotlinOptions هنا (غير متوافقة)
-    // استخدمنا tasks.withType<KotlinCompile> أعلاه
+    // ✅ مع وجود kotlin-android أصبح kotlinOptions معرّفًا داخل android
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += listOf(
+            "-opt-in=kotlin.RequiresOptIn",
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
+        )
+    }
 
     buildFeatures {
         compose = true
-        buildConfig = false
+        buildConfig = true   // ✅ تم التغيير إلى true لاستخدام buildConfigField
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
+    // ❌ حذف composeOptions بالكامل (Kotlin 2.1 + Compose Plugin يديران الإصدار تلقائياً)
 
     packaging {
         resources {
@@ -179,7 +173,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// حل تعارضات الإصدارات وفرض أحدث الإصلاحات الأمنية
+// حل تعارضات الإصدارات وفرض أحدث التصحيحات الأمنية
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
