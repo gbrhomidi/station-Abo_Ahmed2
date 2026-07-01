@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+   ═══════════════════════════════════════════════════════════
+   محطة أبو أحمد - ملف السمات (Themes)
+   تحديث: أمان بصري – منع لقطة شاشة المعاينة
+   ═══════════════════════════════════════════════════════════
+-->
 <resources>
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+    <!-- السمة الأساسية للتطبيق – مظهر Material Light بدون شريط عنوان -->
+    <style name="Theme.MyApplication" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- ألوان هوية المحطة -->
         <item name="android:windowBackground">@color/diesel_blue</item>
         <item name="android:statusBarColor">@color/diesel_blue</item>
         <item name="android:navigationBarColor">@color/black</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:forceDarkAllowed">true</item>
+
+        <!-- ✅ أمان بصري: منع ظهور معاينة للتطبيق في شاشة المهام المتعددة (Recent Apps)
+             يحمي من إظهار بيانات حساسة عند تصغير التطبيق -->
+        <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>
