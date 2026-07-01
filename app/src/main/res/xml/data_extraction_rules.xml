@@ -1,10 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════
+   محطة أبو أحمد - قواعد استخراج وحماية البيانات
+   data_extraction_rules.xml
+  ═══════════════════════════════════════════════════════════════
+
+  هذا الملف يتحكم في البيانات التي يمكن نسخها احتياطياً أو 
+  نقلها بين الأجهزة عبر خدمات Google (Android Backup).
+
+  ⚠️ تحذير أمني: جميع البيانات الحساسة مستثناة من النسخ الاحتياطي
+  ═══════════════════════════════════════════════════════════════
+-->
 <data-extraction-rules>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!--  قسم النسخ الاحتياطي السحابي (Cloud Backup)  -->
+    <!-- ═══════════════════════════════════════════════ -->
     <cloud-backup>
-        <include domain="database" path="diesel_station.db"/>
-        <include domain="sharedpref" path="."/>
+
+        <!-- ✅ السماح: الموارد العامة فقط -->
+        <include domain="root" path=".nomedia"/>
+
+        <!-- ❌ استثناء: قواعد البيانات (تحتوي على بيانات العملاء والمعاملات) -->
+        <exclude domain="database" path="."/>
+
+        <!-- ❌ استثناء: قواعد البيانات المشتركة -->
+        <exclude domain="sharedpref" path="."/>
+
+        <!-- ❌ استثناء: الملفات الداخلية الحساسة -->
+        <exclude domain="file" path="backups/"/>
+        <exclude domain="file" path="crashes/"/>
+        <exclude domain="file" path="logs/"/>
+        <exclude domain="file" path="secure/"/>
+        <exclude domain="file" path=".env"/>
+
+        <!-- ❌ استثناء: ملفات التخزين الخارجي الحساسة -->
+        <exclude domain="external" path="AbuAhmed/"/>
+
+        <!-- ❌ استثناء: ذاكرة التخزين المؤقت (قد تحتوي على بيانات مؤقتة حساسة) -->
+        <exclude domain="cache" path="."/>
+
     </cloud-backup>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!--  قسم نقل البيانات بين الأجهزة (Device Transfer) -->
+    <!-- ═══════════════════════════════════════════════ -->
     <device-transfer>
-        <include domain="database" path="diesel_station.db"/>
+
+        <!-- ❌ استثناء: قواعد البيانات -->
+        <exclude domain="database" path="."/>
+
+        <!-- ❌ استثناء: الإعدادات المشتركة -->
+        <exclude domain="sharedpref" path="."/>
+
+        <!-- ❌ استثناء: الملفات الداخلية -->
+        <exclude domain="file" path="backups/"/>
+        <exclude domain="file" path="crashes/"/>
+        <exclude domain="file" path="logs/"/>
+        <exclude domain="file" path="secure/"/>
+
+        <!-- ❌ استثناء: ذاكرة التخزين المؤقت -->
+        <exclude domain="cache" path="."/>
+
     </device-transfer>
+
 </data-extraction-rules>
