@@ -33,7 +33,11 @@ robolectric = "4.14.1"
 roborazzi = "1.39.0"
 firebaseBom = "33.7.0"
 secretsGradlePlugin = "2.0.1"
-work = "2.9.1"   # إضافة WorkManager
+work = "2.9.1"   # WorkManager
+
+# أمان (مضاف حديثاً)
+securityCrypto = "1.1.0-alpha06"
+rootbeer = "0.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -75,6 +79,10 @@ roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "robora
 nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+
+# مكتبات الأمان (مضافة حديثاً)
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+rootbeer-lib = { group = "com.scottyab", name = "rootbeer-lib", version.ref = "rootbeer" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
