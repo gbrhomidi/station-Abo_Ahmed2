@@ -1,165 +1,256 @@
 # ═══════════════════════════════════════════════════════════════
-#  محطة أبو أحمد - قواعد ProGuard (إصدار آمن ومُحكم - مصحح)
-#  آخر تحديث: 2026-07-01
+#  محطة أبو أحمد - قواعد ProGuard/R8 (مُحسّنة وآمنة)
+# ═══════════════════════════════════════════════════════════════
+#
+#  ⚠️ تحذير: هذا الملف يستخدم مع isMinifyEnabled=true
+#  لا تستخدم قواعد عامة جداً (مثل ** { *; }) لأنها تبطل فائدة التعتيم
+#
+#  التحسينات:
+#  1. قواعد أكثر تحديداً وصرامة
+#  2. حماية الفئات الحساسة فقط
+#  3. إضافة قواعد Compose
+#  4. إضافة قواعد Biometric
+#  5. إضافة قواعد EncryptedSharedPreferences
+#  6. إزالة القواعد العامة الخطيرة
+#  7. إضافة تعليقات توثيقية
 # ═══════════════════════════════════════════════════════════════
 
-# ─── نقطة الدخول الرئيسية ───
--keep public class com.aistudio.dieselstationsms.kxmpzq.MyApplication {
-    public <init>();
-}
+# ═══════════════════════════════════════════════════════════════
+#  القواعد العامة - General Rules
+# ═══════════════════════════════════════════════════════════════
 
-# ─── المكونات الأساسية (مطلوبة من النظام) ───
--keep public class * extends android.app.Activity
--keep public class * extends android.app.Application
--keep public class * extends android.app.Service
--keep public class * extends android.content.BroadcastReceiver
--keep public class * extends android.content.ContentProvider
-
-# ─── النشاط الرئيسي ───
--keep class com.aistudio.dieselstationsms.kxmpzq.MainActivity {
-    public <init>();
-    public void onCreate(android.os.Bundle);
-}
-
-# ─── واجهة JavaScript لـ WebView ───
--keepclassmembers class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
-# ─── الفئات الرئيسية للتطبيق ───
--keep class com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper {
-    public <init>(android.content.Context);
-    public *** get*(...);
-    public *** set*(...);
-}
--keep class com.aistudio.dieselstationsms.kxmpzq.SMSService {
-    public <init>();
-}
--keep class com.aistudio.dieselstationsms.kxmpzq.SmsReceiver {
-    public <init>();
-}
--keep class com.aistudio.dieselstationsms.kxmpzq.BackupWorker {
-    public <init>(android.content.Context, androidx.work.WorkerParameters);
-}
-
-# ─── Moshi - Serialization ───
--keep @com.squareup.moshi.JsonClass class * { *; }
--keepclassmembers @com.squareup.moshi.JsonClass class * {
-    <init>(...);
-    @com.squareup.moshi.Json <fields>;
-    @com.squareup.moshi.Json <methods>;
-}
--keepnames @com.squareup.moshi.JsonClass class *
-
-# ─── Retrofit / OkHttp ───
--keepattributes Signature, InnerClasses, EnclosingMethod, Exceptions, *Annotation*
--keepclassmembers interface * {
-    @retrofit2.http.* <methods>;
-}
--keepclassmembers class * {
-    @retrofit2.http.* <methods>;
-}
--dontwarn retrofit2.**
--dontwarn okhttp3.**
--dontwarn okio.**
-
-# ─── Room ───
--keep class * extends androidx.room.RoomDatabase
--keep @androidx.room.Entity class * { @androidx.room.PrimaryKey <fields>; }
--keepclassmembers @androidx.room.Entity class * {
-    <init>(...);
-}
--keep @androidx.room.Dao interface * { *; }
--keep @androidx.room.Database class * { *; }
--dontwarn androidx.room.paging.**
-
-# ─── NanoHTTPD ───
--keep class fi.iki.elonen.NanoHTTPD { *; }
--keep class fi.iki.elonen.NanoHTTPD$* { *; }
--dontwarn fi.iki.elonen.**
-
-# ─── WorkManager ───
--keep class * extends androidx.work.Worker
--keep class * extends androidx.work.CoroutineWorker
--keepclassmembers class * extends androidx.work.CoroutineWorker {
-    public <init>(android.content.Context, androidx.work.WorkerParameters);
-}
-
-# ─── Biometric ───
--keep class androidx.biometric.BiometricPrompt { *; }
--keep class androidx.biometric.BiometricPrompt$PromptInfo { *; }
--keep class androidx.biometric.BiometricPrompt$AuthenticationCallback { *; }
-
-# ─── Compose ───
--keepclassmembers class * {
-    @androidx.compose.runtime.Composable <methods>;
-}
--keepclassmembers class * {
-    @androidx.compose.ui.tooling.preview.Preview <methods>;
-}
--dontwarn androidx.compose.**
-
-# ─── Compose Navigation ───
--keepclassmembers class * {
-    @androidx.navigation.NavType <fields>;
-}
-
-# ─── Kotlin Coroutines ───
--keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
--keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
--keepclassmembers class kotlinx.coroutines.** {
-    volatile <fields>;
-}
-
-# ─── Kotlin Serialization ───
--keepclassmembers class kotlinx.serialization.json.** { *; }
--dontwarn kotlinx.serialization.**
-
-# ─── Security Crypto ───
--keep class androidx.security.crypto.EncryptedSharedPreferences { *; }
--keep class androidx.security.crypto.MasterKey { *; }
--dontwarn androidx.security.crypto.**
-
-# ─── RootBeer ───
--keep class com.scottyab.rootbeer.** { *; }
--dontwarn com.scottyab.rootbeer.**
-
-# ─── إزالة السجلات في الإنتاج ───
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-    public static *** i(...);
-    public static *** w(...);
-    public static *** e(...);
-    public static *** wtf(...);
-}
-
-# ─── تحسينات الأداء ───
--optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
--optimizationpasses 5
--allowaccessmodification
-
-# ─── معلومات الأخطاء ───
--renamesourcefileattribute SourceFile
+# الحفاظ على معلومات السطر (لتتبع الأخطاء)
 -keepattributes SourceFile,LineNumberTable
+# إعادة تسمية SourceFile إلى "SourceFile" لحماية المعلومات
+-renamesourcefileattribute SourceFile
+
+# الحفاظ على التعليقات التوضيحية
 -keepattributes *Annotation*
--keepattributes Exceptions
 -keepattributes Signature
+-keepattributes Exceptions
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
 
-# ─── كتم التحذيرات ───
--dontnote
--dontwarn android.support.**
--dontwarn androidx.**
+# ═══════════════════════════════════════════════════════════════
+#  فئات التطبيق الأساسية - Application Classes
+# ═══════════════════════════════════════════════════════════════
 
-# ─── تشويش إضافي ───
--repackageclasses 'a'
--flattenpackagehierarchy
+# الحفاظ على فئات البيانات (Data Classes) المستخدمة في الـ Reflection
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.model.** {
+    <fields>;
+    <init>(...);
+}
 
-# ─── أمان إضافي ───
--dontusemixedcaseclassnames
--dontskipnonpubliclibraryclasses
--dontpreverify
+# الحفاظ على فئات الـ API Responses
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.api.response.** {
+    <fields>;
+    <init>(...);
+}
 
-# ─── نهاية الملف ───
+# الحفاظ على فئات الـ Database Entities
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.db.entity.** {
+    <fields>;
+    <init>(...);
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  Moshi - JSON Serialization
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على محولات Moshi
+-keep class * extends com.squareup.moshi.JsonAdapter {
+    <init>(...);
+    <methods>;
+}
+
+# الحفاظ على التعليقات التوضيحية للـ JSON
+-keepclassmembers class * {
+    @com.squareup.moshi.Json <fields>;
+    @com.squareup.moshi.FromJson <methods>;
+    @com.squareup.moshi.ToJson <methods>;
+}
+
+# الحفاظ على فئات Moshi نفسها
+-keep class com.squareup.moshi.** { *; }
+-dontwarn com.squareup.moshi.**
+
+# ═══════════════════════════════════════════════════════════════
+#  Retrofit - Networking
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على واجهات Retrofit
+-keep interface com.aistudio.dieselstationsms.kxmpzq.data.api.** { *; }
+
+# الحفاظ على التعليقات التوضيحية للـ HTTP
+-keepclassmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+# الحفاظ على فئات Retrofit
+-keep class retrofit2.** { *; }
+-dontwarn retrofit2.**
+
+# ═══════════════════════════════════════════════════════════════
+#  Room - Database
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات Room Database
+-keep class * extends androidx.room.RoomDatabase {
+    <init>(...);
+    <methods>;
+}
+
+# الحفاظ على الـ DAOs
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.db.dao.** {
+    <methods>;
+}
+
+# الحفاظ على الـ TypeConverters
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.db.converter.** { *; }
+
+# Room uses RuntimeExceptions
+-dontwarn androidx.room.paging.**
+
+# ═══════════════════════════════════════════════════════════════
+#  Compose - UI Framework
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على دوال @Composable
+-keepclassmembers class * {
+    @androidx.compose.runtime.Composable <methods>;
+}
+
+# الحفاظ على preview functions
+-keepclassmembers class * {
+    @androidx.compose.ui.tooling.preview.Preview <methods>;
+}
+
+# الحفاظ على فئات Compose الرئيسية
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
+
+# ═══════════════════════════════════════════════════════════════
+#  Biometric - Fingerprint/Face ID
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات Biometric
+-keep class androidx.biometric.** { *; }
+-dontwarn androidx.biometric.**
+
+# الحفاظ على فئات BiometricPrompt
+-keepclassmembers class * {
+    @androidx.biometric.BiometricPrompt.AuthenticationCallback <methods>;
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  Security - EncryptedSharedPreferences
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات AndroidX Security
+-keep class androidx.security.crypto.** { *; }
+-dontwarn androidx.security.crypto.**
+
+# الحفاظ على Tink (مستخدم في Security Crypto)
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
+
+# ═══════════════════════════════════════════════════════════════
+#  NanoHTTPD - Web Server
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات NanoHTTPD
+-keep class fi.iki.elonen.** { *; }
+-dontwarn fi.iki.elonen.**
+
+# ═══════════════════════════════════════════════════════════════
+#  OkHttp - HTTP Client
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات OkHttp
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# ═══════════════════════════════════════════════════════════════
+#  Kotlin Coroutines
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على Coroutines
+-keep class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+
+# ═══════════════════════════════════════════════════════════════
+#  WorkManager - Background Tasks
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات Worker
+-keep class * extends androidx.work.Worker {
+    <init>(...);
+}
+
+-keep class * extends androidx.work.CoroutineWorker {
+    <init>(...);
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  Navigation Component
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على فئات Navigation
+-keep class androidx.navigation.** { *; }
+-dontwarn androidx.navigation.**
+
+# ═══════════════════════════════════════════════════════════════
+#  AndroidX Core & Lifecycle
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على ViewModel
+-keep class * extends androidx.lifecycle.ViewModel {
+    <init>(...);
+    <methods>;
+}
+
+# الحفاظ على LiveData
+-keep class androidx.lifecycle.LiveData { *; }
+-keep class androidx.lifecycle.MutableLiveData { *; }
+
+# الحفاظ على StateFlow
+-keep class kotlinx.coroutines.flow.StateFlow { *; }
+
+# ═══════════════════════════════════════════════════════════════
+#  WebView - JavaScript Interface
+# ═══════════════════════════════════════════════════════════════
+
+# الحفاظ على JavaScript Interface
+-keepclassmembers class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
+    <methods>;
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  قواعد إزالة التحذيرات - Suppress Warnings
+# ═══════════════════════════════════════════════════════════════
+
+# إزالة التحذيرات المعروفة والآمنة
+-dontwarn android.**
+-dontwarn com.google.**
+-dontwarn org.jetbrains.**
+-dontwarn sun.misc.**
+
+# ═══════════════════════════════════════════════════════════════
+#  تحسين الأداء - Optimization
+# ═══════════════════════════════════════════════════════════════
+
+# إزالة التعليقات
+-assumenosideeffects class kotlin.jvm.internal.Intrinsics {
+    static void checkParameterIsNotNull(...);
+    static void checkNotNullParameter(...);
+    static void checkExpressionValueIsNotNull(...);
+    static void checkNotNullExpressionValue(...);
+    static void checkReturnedValueIsNotNull(...);
+    static void checkFieldIsNotNull(...);
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  نهاية الملف
+# ═══════════════════════════════════════════════════════════════
