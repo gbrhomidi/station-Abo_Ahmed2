@@ -25,6 +25,7 @@ import java.security.SecureRandom
  * 8. تحسين إدارة الذاكرة باستخدام use() للـ Cursors
  * 9. إضافة التحقق من البيانات المكررة
  * 10. تحسين جودة الكود وتبسيط الدوال المعقدة
+ * 11. استخدام موارد التطبيق لقيم الحدود بدلاً من الثوابت الصلبة
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
@@ -77,6 +78,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             return hash == storedHash
         }
     }
+
+    // مرجع السياق لاستخدام الموارد
+    private val appContext = context.applicationContext
 
     // Thread-Safety: استخدام ReentrantLock للعمليات الحرجة
     private val dbLock = java.util.concurrent.locks.ReentrantLock()
@@ -525,10 +529,17 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
     // FIXED: Insert default settings with transaction
     private fun insertDefaultSettings(db: SQLiteDatabase) {
+        // الحصول على الحد الافتراضي من الموارد
+        val defaultLowStock = try {
+            appContext.resources.getInteger(R.integer.low_stock_threshold).toString()
+        } catch (e: Exception) {
+            "1000"  // قيمة احتياطية في حالة عدم وجود المورد
+        }
+
         val defaults = listOf(
             "sms_gateway_type" to "android_app",
             "sms_sim_slot" to "1",
-            "low_stock_threshold" to "1000",
+            "low_stock_threshold" to defaultLowStock,  // ← استخدام المورد بدلاً من "1000"
             "currency" to "ريال",
             "station_name" to "محطة ابو أحمد لمشتقات الديزل",
             "ai_enabled" to "1",
@@ -1065,7 +1076,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 if (c.moveToFirst()) stats.put("transactions_today", c.getInt(0))
             }
 
-            val threshold = getSetting("low_stock_threshold").toDoubleOrNull() ?: 1000.0
+            // استخدام الحد من الموارد كقيمة احتياطية
+            val threshold = getSetting("low_stock_threshold").toDoubleOrNull()
+                ?: appContext.resources.getInteger(R.integer.low_stock_threshold).toDouble()
             stats.put("alerts", getLowStockRefills(threshold))
             stats.put("inventory_alerts", getInventoryAlerts())
             stats.put("total_sms_today", getSmsCountToday())
