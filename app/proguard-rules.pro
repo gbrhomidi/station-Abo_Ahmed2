@@ -1,14 +1,14 @@
 # ═══════════════════════════════════════════════════════════════
-#  محطة أبو أحمد - قواعد ProGuard/ProGuard Rules
-#  إصدار محسّن وأكثر صرامة - 2026
+#  محطة أبو أحمد - قواعد ProGuard (إصدار آمن ومُحكم)
+#  آخر تحديث: 2026-07-01
 # ═══════════════════════════════════════════════════════════════
 
-# ─── الحفاظ على نقطة الدخول الرئيسية ───
+# ─── نقطة الدخول الرئيسية ───
 -keep public class com.aistudio.dieselstationsms.kxmpzq.MyApplication {
     public <init>();
 }
 
-# ─── الحفاظ على الأنشطة والخدمات والمستقبلات ───
+# ─── المكونات الأساسية (أنشطة، خدمات، مستقبلات، مزودات) ───
 -keep public class * extends android.app.Activity
 -keep public class * extends android.app.Application
 -keep public class * extends android.app.Service
@@ -17,19 +17,23 @@
 -keep public class * extends android.app.backup.BackupAgent
 -keep public class * extends android.preference.Preference
 
-# ─── الحفاظ على الأنشطة المحددة ───
+# ─── النشاط الرئيسي (MainActivity) ───
 -keep class com.aistudio.dieselstationsms.kxmpzq.MainActivity {
     public <init>();
     public void onCreate(android.os.Bundle);
 }
 
-# ─── الحفاظ على واجهة JavaScript ───
+# ─── واجهة JavaScript لـ WebView ───
 -keepclassmembers class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# ─── Moshi - JSON Serialization (محدد بدقة) ───
--keep class com.squareup.moshi.** { *; }
+# ─── الحفاظ على حزم البيانات والنماذج الخاصة بالتطبيق (للتسلسل وعمليات JSON) ───
+-keep class com.aistudio.dieselstationsms.kxmpzq.data.** { *; }
+-keep class com.aistudio.dieselstationsms.kxmpzq.model.** { *; }
+
+# ─── Moshi - Serialization (مع كود gen) ───
+# نحتفظ فقط بالتعليقات التوضيحية الضرورية، لا بكل مكتبة Moshi
 -keep @com.squareup.moshi.JsonClass class * { *; }
 -keepclassmembers @com.squareup.moshi.JsonClass class * {
     <init>(...);
@@ -37,8 +41,10 @@
     @com.squareup.moshi.Json <methods>;
 }
 -keepnames @com.squareup.moshi.JsonClass class *
+# نحذف السطر القديم الذي كان يحتفظ بكل محتوى Moshi:
+# -keep class com.squareup.moshi.** { *; }  ← تمت إزالته لمنع الهندسة العكسية
 
-# ─── Retrofit - Network (محدد بدقة) ───
+# ─── Retrofit / OkHttp (ضروري للشبكة) ───
 -keepattributes Signature, InnerClasses, EnclosingMethod, Exceptions, *Annotation*
 -keepclassmembers interface * {
     @retrofit2.http.* <methods>;
@@ -50,7 +56,6 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
-# ─── OkHttp - محدود جداً ───
 -keep class okhttp3.OkHttpClient { *; }
 -keep class okhttp3.Request { *; }
 -keep class okhttp3.Response { *; }
@@ -58,7 +63,7 @@
 -keep class okhttp3.logging.HttpLoggingInterceptor { *; }
 -dontwarn okhttp3.internal.**
 
-# ─── Room - Database (محدد بدقة) ───
+# ─── Room - قاعدة البيانات ───
 -keep class * extends androidx.room.RoomDatabase
 -keep @androidx.room.Entity class * { @androidx.room.PrimaryKey <fields>; }
 -keepclassmembers @androidx.room.Entity class * {
@@ -68,7 +73,7 @@
 -keep @androidx.room.Database class * { *; }
 -dontwarn androidx.room.paging.**
 
-# ─── NanoHTTPD - محدود جداً ───
+# ─── NanoHTTPD (خادم محلي) ───
 -keep class fi.iki.elonen.NanoHTTPD { *; }
 -keep class fi.iki.elonen.NanoHTTPD$* { *; }
 -dontwarn fi.iki.elonen.**
@@ -80,11 +85,10 @@
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
 
-# ─── Biometric (محدد) ───
--keep class androidx.biometric.BiometricPrompt { *; }
--keep class androidx.biometric.BiometricPrompt$* { *; }
+# ─── Biometric (توسيع القاعدة لتغطية الواجهة الجديدة) ───
+-keep class androidx.biometric.** { *; }
 
-# ─── Compose - قواعد أساسية فقط ───
+# ─── Compose (قواعد أساسية) ───
 -keepclassmembers class * {
     @androidx.compose.runtime.Composable <methods>;
 }
@@ -100,7 +104,7 @@
     volatile <fields>;
 }
 
-# ─── Kotlin Serialization (إذا استخدمت) ───
+# ─── Kotlin Serialization ───
 -keepclassmembers class kotlinx.serialization.json.** { *; }
 -dontwarn kotlinx.serialization.**
 
@@ -108,7 +112,7 @@
 -keep class androidx.core.content.FileProvider { *; }
 -keep class androidx.core.app.NotificationCompat { *; }
 
-# ─── إزالة السجلات في الإنتاج ───
+# ─── إزالة جميع السجلات في الإصدار النهائي ───
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
@@ -118,19 +122,19 @@
     public static *** wtf(...);
 }
 
-# ─── إزالة Log من التطبيق نفسه ───
+# ─── إزالة Log الخاص بالتطبيق ───
 -assumenosideeffects class com.aistudio.dieselstationsms.kxmpzq.** {
     void log*(...);
     void debug*(...);
 }
 
-# ─── تحسينات الأداء ───
+# ─── تحسينات الأداء والتشويش ───
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
 -optimizationpasses 5
 -allowaccessmodification
 -mergeinterfacesaggressively
 
-# ─── الحفاظ على معلومات الأخطاء ───
+# ─── الحفاظ على معلومات الأخطاء (لتتبع الأعطال) ───
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
 -keepattributes *Annotation*
@@ -139,7 +143,7 @@
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
 
-# ─── إزالة التعليقات والسجلات ───
+# ─── كتم التحذيرات غير المهمة ───
 -dontnote
 -dontwarn android.support.**
 -dontwarn androidx.**
@@ -149,25 +153,22 @@
 -flattenpackagehierarchy
 -allowaccessmodification
 
-# ─── قواعد إضافية للأمان ───
-# منع الاحتفاظ بأسماء الفئات غير الضرورية
+# ─── إجراءات أمان إضافية ───
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
 -dontpreverify
 
-# ─── قواعد خاصة بالتطبيق ───
-# الحفاظ على DatabaseHelper فقط للأسماء العامة
+# ─── الحفاظ على أسماء الفئات الرئيسية (للعمل مع النظام) ───
 -keepnames class com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 -keepclassmembers class com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper {
     public <init>(android.content.Context);
 }
 
-# الحفاظ على SMSService و SmsReceiver
 -keepnames class com.aistudio.dieselstationsms.kxmpzq.SMSService
 -keepnames class com.aistudio.dieselstationsms.kxmpzq.SmsReceiver
 -keepnames class com.aistudio.dieselstationsms.kxmpzq.BackupWorker
 
-# ─── قواعد JSON/JSONObject (للاستخدام مع SQLite) ───
+# ─── JSON (للاستخدام مع SQLite) ───
 -keepclassmembers class org.json.JSONObject {
     <init>(...);
     *** get*(...);
@@ -181,18 +182,18 @@
     *** put*(...);
 }
 
-# ─── قواعد Reflection المحدودة ───
+# ─── حماية الـ Reflection للمستمعين (Listeners) ───
 -keepclassmembers class * {
     *** *Callback;
     *** *Listener;
 }
 
-# ─── إزالة الأكواد غير المستخدمة ───
+# ─── تجاهل التحذيرات من مكتبات التشفير الداخلية ───
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
-# ─── قواعد Android الرسمية ───
+# ─── قواعد Android الرسمية لـ WebView ───
 -keep public class android.net.http.SslError
 -keep public class android.webkit.WebViewClient
 
