@@ -14,12 +14,14 @@ jobs:
       - name: Checkout Project
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-          cache: gradle
+          java-version: '17'
+
+      - name: Verify java version
+        run: java -version
 
       - name: Decode Keystore
         run: |
@@ -46,7 +48,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease
+        run: ./gradlew clean assembleRelease --no-daemon --stacktrace --info
         env:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
