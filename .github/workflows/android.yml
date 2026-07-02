@@ -48,11 +48,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease --no-daemon --stacktrace --info
+        run: ./gradlew clean assembleRelease --no-daemon --stacktrace --info -PGEMINI_API_KEY=$GEMINI_API_KEY
         env:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Show build outputs
         run: |
