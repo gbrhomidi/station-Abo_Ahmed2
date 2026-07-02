@@ -3,16 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.aistudio.dieselstationsms.kxmpzq">
 
-    <!--
-      محطة أبو أحمد - ملف البيان المحدّث والمُعالج (إصدار آمن)
-      الإصدار: 2.1 Pro - Security Enhanced (مُراجع)
-      آخر تحديث: 2026-07-01
-
-      تم تحديث الإعدادات الأمنية: منع النسخ الاحتياطي، منع الاتصالات غير المشفرة، تفعيل SafeBrowsing في WebView،
-      ضبط requestLegacyExternalStorage للتوافق مع الأجهزة القديمة (API 29)، وتحديث إعدادات الأذونات.
-
-      ⚠️ لا ترفع مفاتيح أو أسرار حساسة إلى المستودع.
-    -->
+    <!-- Manifest header cleaned. Security notes moved outside start tags to avoid XML parse errors -->
 
     <!-- ==================== PERMISSIONS ==================== -->
     
@@ -99,9 +90,13 @@
     </queries>
 
     <!-- ==================== APPLICATION ==================== -->
+
+    <!-- Security notes: allowBackup disabled, cleartext traffic disabled, SafeBrowsing enabled for WebView,
+         requestLegacyExternalStorage set for API29 compatibility. Do not commit secrets to the repo. -->
+
     <application
         android:name=".MyApplication"
-        android:allowBackup="false"   <!-- ✅ تم الإصلاح: منع النسخ الاحتياطي للبيانات الحساسة -->
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -109,18 +104,18 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        android:networkSecurityConfig="@xml/network_security_config"  <!-- ⚠️ مطلوب لتفعيل قيود الاتصال الآمن -->
+        android:networkSecurityConfig="@xml/network_security_config"
         android:extractNativeLibs="false"
-        android:usesCleartextTraffic="false"   <!-- ✅ تم الإصلاح: منع الاتصالات غير المشفرة (HTTP) -->
+        android:usesCleartextTraffic="false"
         android:screenOrientation="portrait"
-        android:requestLegacyExternalStorage="true"   <!-- ✅ تم الإصلاح: للأجهزة القديمة (API 29) للتوافق مع التخزين -->
+        android:requestLegacyExternalStorage="true"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:enableOnBackInvokedCallback="true"
         tools:replace="android:theme"
         tools:targetApi="35">
 
-        <!-- ═══ WebView Security Configuration (✅ تمت الإضافة) ═══ -->
+        <!-- WebView/other metadata -->
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"
             android:value="true" />
@@ -129,19 +124,16 @@
             android:value="true" />
         <meta-data
             android:name="android.webkit.WebView.MixedContentMode"
-            android:value="2" />  <!-- يمنع تحميل المحتوى المختلط تماماً -->
+            android:value="2" />
         
-        <!-- ═══ App Security Metadata ═══ -->
         <meta-data
             android:name="com.google.android.gms.basement.version"
             android:value="@integer/google_play_services_version" />
         
-        <!-- ═══ Screen Recording Detection (Android 15+) ═══ -->
         <meta-data
             android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_ALLOW_SYSTEM_OVERRIDE"
             android:value="false" />
 
-        <!-- ═══ Main Activity ═══ -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -158,13 +150,11 @@
             android:allowEmbedded="false"
             android:resizeableActivity="false">
             
-            <!-- Main Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             
-            <!-- Deep Link for SMS handling -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -173,7 +163,6 @@
                 <data android:scheme="smsto" />
             </intent-filter>
             
-            <!-- Deep Link for Tel handling -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -182,7 +171,6 @@
             </intent-filter>
         </activity>
 
-        <!-- ═══ SMS Service - Updated for Android 15 ═══ -->
         <service
             android:name=".SMSService"
             android:exported="false"
@@ -191,7 +179,6 @@
             android:persistent="true"
             android:directBootAware="false" />
 
-        <!-- ═══ SMS Receiver ═══ -->
         <receiver
             android:name=".SmsReceiver"
             android:exported="true"
@@ -201,7 +188,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- ═══ File Provider ═══ -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -212,7 +198,6 @@
                 android:resource="@xml/file_paths" />
         </provider>
         
-        <!-- ═══ Backup Configuration (Disabled for Security) ═══ -->
         <meta-data
             android:name="com.google.android.backup.api_key"
             android:value="@string/backup_api_key" />
