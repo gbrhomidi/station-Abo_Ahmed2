@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)      // ضروري لـ kotlinOptions
-    alias(libs.plugins.kotlin.compose)       // Compose compiler plugin (يحل محل composeOptions)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.roborazzi)
 }
@@ -22,6 +22,12 @@ android {
         androidResources {
             localeFilters += listOf("ar", "en")
         }
+
+        // ✅ مفتاح Gemini API: من خصائص Gradle أو متغيرات البيئة (لـ CI/CD)
+        val geminiKey = project.properties["GEMINI_API_KEY"] as? String
+            ?: System.getenv("GEMINI_API_KEY")
+            ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
     buildTypes {
@@ -165,16 +171,12 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// حل تعارضات الإصدارات وفرض أحدث التصحيحات الأمنية
+// حل تعارضات الإصدارات – يقتصر على الضروري فقط
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
         force("com.squareup.okio:okio:3.0.0")
-        force("com.squareup.okio:okio-jvm:3.0.0")
         force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${libs.versions.kotlin.get()}")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:${libs.versions.kotlin.get()}")
-        force("org.nanohttpd:nanohttpd:2.3.1")
         force("androidx.core:core-ktx:1.15.0")
     }
 }
