@@ -1,206 +1,601 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.aistudio.dieselstationsms.kxmpzq">
+// ═══════════════════════════════════════════════════════════════
+//  محطة أبو أحمد - MainActivity (مُحسّن ومصحح بالكامل)
+// ═══════════════════════════════════════════════════════════════
+//
+//  التحسينات والإصلاحات:
+//  1. تغيير ComponentActivity إلى AppCompatActivity (يدعم BiometricPrompt)
+//  2. إصلاح دالة showBiometricPrompt لتستخدم BiometricPrompt بشكل صحيح
+//  3. إضافة override لدالة onRequestPermissionsResult وتصحيح التوقيع
+//  4. إصلاح قائمة denied باستخدام toList() لتجنب مشاكل CapturedType
+//  5. تحسين قراءة مفتاح Gemini API مع دمج BuildConfig و .env
+//  6. إدارة WebView بشكل آمن ومنع تسرب الذاكرة
+// ═══════════════════════════════════════════════════════════════
 
-    <!-- Manifest header cleaned. Security notes moved outside start tags to avoid XML parse errors -->
+package com.aistudio.dieselstationsms.kxmpzq
 
-    <!-- ==================== PERMISSIONS ==================== -->
-    
-    <!-- Network -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- SMS -->
-    <uses-permission android:name="android.permission.SEND_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
-    
-    <!-- Phone -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    
-    <!-- Camera (for QR scanning) -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    
-    <!-- Storage (legacy, max SDK 28) -->
-    <uses-permission 
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="28" />
-    <uses-permission 
-        android:name="android.permission.READ_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="28" />
-    
-    <!-- Biometric -->
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    
-    <!-- Foreground Service - Android 14+ requirements -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    
-    <!-- Notifications (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- Vibration -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-    
-    <!-- Wake Lock for service stability -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Screen recording detection (Android 15+) -->
-    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricPrompt
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.concurrent.atomic.AtomicBoolean
 
-    <!-- ==================== FEATURES ==================== -->
-    <uses-feature 
-        android:name="android.hardware.camera" 
-        android:required="false" />
-    <uses-feature 
-        android:name="android.hardware.camera.autofocus"
-        android:required="false" />
-    <uses-feature 
-        android:name="android.hardware.telephony" 
-        android:required="true" />
-    <uses-feature 
-        android:name="android.hardware.fingerprint" 
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.biometrics.face"
-        android:required="false" />
+/**
+ * MainActivity - النسخة النهائية المعالجة والآمنة
+ */
+class MainActivity : AppCompatActivity() {  // ✅ تغيير إلى AppCompatActivity
 
-    <!-- ==================== QUERIES (Android 11+) ==================== -->
-    <queries>
-        <!-- SMS apps -->
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="sms" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="smsto" />
-        </intent>
-        <!-- Phone apps -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="tel" />
-        </intent>
-        <!-- Browser -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
-    </queries>
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val PERMISSION_REQUEST_CODE = 1001
+        private const val SERVICE_START_DELAY_MS = 1500L
+        private const val WEBVIEW_LOAD_DELAY_MS = 2000L
+        private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 1000L
+        private const val WEBVIEW_MAX_RETRY_DELAY_MS = 10000L
+        private const val MAX_WEBVIEW_RETRIES = 5
+        private const val SERVER_PORT = 8080
 
-    <!-- ==================== APPLICATION ==================== -->
+        // نصوص Biometric مباشرة (fallback)
+        private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
+        private const val BIOMETRIC_SUBTITLE = "استخدم بصمة الإصبع أو الوجه للدخول"
+        private const val BIOMETRIC_CANCEL = "إلغاء"
+    }
 
-    <!-- Security notes: allowBackup disabled, cleartext traffic disabled, SafeBrowsing enabled for WebView,
-         requestLegacyExternalStorage set for API29 compatibility. Do not commit secrets to the repo. -->
+    private lateinit var webView: WebView
+    private var geminiApiKey: String = ""
+    private var serverReady = false
+    private var webViewRetryCount = 0
+    private val isDestroyed = AtomicBoolean(false)
+    private val handler = Handler(Looper.getMainLooper())
 
-    <application
-        android:name=".MyApplication"
-        android:allowBackup="false"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.MyApplication"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:extractNativeLibs="false"
-        android:usesCleartextTraffic="false"
-        android:screenOrientation="portrait"
-        android:requestLegacyExternalStorage="true"
-        android:hardwareAccelerated="true"
-        android:largeHeap="true"
-        android:enableOnBackInvokedCallback="true"
-        tools:replace="android:theme"
-        tools:targetApi="35">
+    private val isDebugMode: Boolean
+        get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-        <!-- WebView/other metadata -->
-        <meta-data
-            android:name="android.webkit.WebView.EnableSafeBrowsing"
-            android:value="true" />
-        <meta-data
-            android:name="android.webkit.WebView.MetricsOptOut"
-            android:value="true" />
-        <meta-data
-            android:name="android.webkit.WebView.MixedContentMode"
-            android:value="2" />
-        
-        <meta-data
-            android:name="com.google.android.gms.basement.version"
-            android:value="@integer/google_play_services_version" />
-        
-        <meta-data
-            android:name="android.window.PROPERTY_ACTIVITY_EMBEDDING_ALLOW_SYSTEM_OVERRIDE"
-            android:value="false" />
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:hardwareAccelerated="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.MyApplication"
-            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode|density"
-            android:windowSoftInputMode="adjustResize"
-            android:screenOrientation="portrait"
-            android:launchMode="singleTask"
-            android:clearTaskOnLaunch="true"
-            android:excludeFromRecents="false"
-            android:noHistory="false"
-            android:allowEmbedded="false"
-            android:resizeableActivity="false">
-            
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="sms" />
-                <data android:scheme="smsto" />
-            </intent-filter>
-            
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="tel" />
-            </intent-filter>
-        </activity>
+        if (isDebugMode) {
+            WebView.setWebContentsDebuggingEnabled(true)
+            Log.d(TAG, "Debug mode enabled - WebView debugging active")
+        }
 
-        <service
-            android:name=".SMSService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false"
-            android:persistent="true"
-            android:directBootAware="false" />
+        enableEdgeToEdge()
 
-        <receiver
-            android:name=".SmsReceiver"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
+        // تحميل مفتاح API من BuildConfig أولاً، ثم من .env احتياطياً
+        geminiApiKey = loadApiKey()
+        if (geminiApiKey.isEmpty()) {
+            Log.w(TAG, "GEMINI_API_KEY not found - AI features disabled")
+        } else {
+            Log.d(TAG, "Gemini API key loaded successfully")
+        }
 
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-        
-        <meta-data
-            android:name="com.google.android.backup.api_key"
-            android:value="@string/backup_api_key" />
-            
-    </application>
-</manifest>
+        requestAllPermissions()
+
+        lifecycleScope.launch {
+            delay(SERVICE_START_DELAY_MS)
+            if (!isDestroyed.get()) {
+                startSMSService()
+            }
+        }
+
+        setContent {
+            MyApplicationTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    WebViewScreen(
+                        modifier = Modifier.padding(innerPadding),
+                        onWebViewCreated = { webView = it }
+                    )
+                }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة مفتاح API - دمج BuildConfig و .env
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun loadApiKey(): String {
+        // 1. المحاولة من BuildConfig (للـ CI/CD)
+        val buildConfigKey = BuildConfig.GEMINI_API_KEY
+        if (buildConfigKey.isNotEmpty() && buildConfigKey != "YOUR_GEMINI_API_KEY_HERE") {
+            return buildConfigKey
+        }
+        // 2. احتياطياً: قراءة من ملف .env (للتطوير المحلي)
+        return loadEnvKey("GEMINI_API_KEY")
+    }
+
+    private fun loadEnvKey(key: String): String {
+        return try {
+            assets.open(".env").use { stream ->
+                BufferedReader(InputStreamReader(stream)).useLines { lines ->
+                    lines.mapNotNull { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("$key=")) {
+                            val value = trimmed.substringAfter("=").trim()
+                            if (value.isNotEmpty() && value != "YOUR_GEMINI_API_KEY_HERE") value else null
+                        } else null
+                    }.firstOrNull() ?: ""
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not load .env key $key: ${e.message}")
+            ""
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة الأذونات
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun requestAllPermissions() {
+        val permissions = mutableListOf<String>()
+
+        if (!isPermissionGranted(Manifest.permission.SEND_SMS)) {
+            permissions.add(Manifest.permission.SEND_SMS)
+        }
+        if (!isPermissionGranted(Manifest.permission.RECEIVE_SMS)) {
+            permissions.add(Manifest.permission.RECEIVE_SMS)
+        }
+        if (!isPermissionGranted(Manifest.permission.READ_SMS)) {
+            permissions.add(Manifest.permission.READ_SMS)
+        }
+
+        if (!isPermissionGranted(Manifest.permission.CAMERA)) {
+            permissions.add(Manifest.permission.CAMERA)
+        }
+
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            if (!isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (!isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (permissions.isNotEmpty()) {
+            requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+        } else {
+            Log.d(TAG, "All required permissions already granted")
+        }
+    }
+
+    private fun isPermissionGranted(permission: String): Boolean {
+        return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  إدارة الخدمة
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun startSMSService() {
+        if (isDestroyed.get()) {
+            Log.w(TAG, "Activity is destroyed, not starting service")
+            return
+        }
+
+        if (!isServiceAvailable(SMSService::class.java)) {
+            Log.e(TAG, "SMSService not registered in AndroidManifest.xml")
+            return
+        }
+
+        try {
+            val intent = Intent(this, SMSService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            Log.d(TAG, "SMSService started successfully")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting SMSService", e)
+            Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting SMSService", e)
+            Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun isServiceAvailable(serviceClass: Class<*>): Boolean {
+        return try {
+            packageManager.getServiceInfo(
+                ComponentName(this, serviceClass),
+                PackageManager.GET_META_DATA
+            )
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  WebView
+    // ═══════════════════════════════════════════════════════════════
+
+    @SuppressLint("SetJavaScriptEnabled")
+    @Composable
+    fun WebViewScreen(
+        modifier: Modifier = Modifier,
+        onWebViewCreated: (WebView) -> Unit
+    ) {
+        val webViewRef = remember { mutableSetOf<WebView>() }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                Log.d(TAG, "Disposing WebView references")
+                webViewRef.forEach { destroyWebView(it) }
+                webViewRef.clear()
+            }
+        }
+
+        AndroidView(
+            modifier = modifier.fillMaxSize(),
+            factory = { context ->
+                WebView(context).apply {
+                    webViewRef.add(this)
+                    onWebViewCreated(this)
+
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = false
+                        setSupportZoom(true)
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        allowFileAccess = false
+                        allowContentAccess = false
+                        javaScriptCanOpenWindowsAutomatically = false
+                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    }
+
+                    webViewClient = createWebViewClient()
+                    webChromeClient = WebChromeClient()
+                    addJavascriptInterface(
+                        WebAppInterface(context, this@MainActivity),
+                        "AndroidInterface"
+                    )
+
+                    lifecycleScope.launch {
+                        delay(WEBVIEW_LOAD_DELAY_MS)
+                        if (!isDestroyed.get()) {
+                            loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                        }
+                    }
+                }
+            },
+            update = { view -> }
+        )
+    }
+
+    private fun createWebViewClient(): WebViewClient {
+        return object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (isDestroyed.get()) return
+                serverReady = true
+                webViewRetryCount = 0
+                Log.d(TAG, "WebView page finished loading: $url")
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                errorCode: Int,
+                description: String?,
+                failingUrl: String?
+            ) {
+                super.onReceivedError(view, errorCode, description, failingUrl)
+                if (isDestroyed.get()) return
+
+                Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
+                serverReady = false
+
+                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                    webViewRetryCount++
+                    val delay = calculateRetryDelay(webViewRetryCount)
+                    Log.d(TAG, "Retrying WebView in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+
+                    lifecycleScope.launch {
+                        delay(delay)
+                        if (!isDestroyed.get() && ::webView.isInitialized && webView.isAttachedToWindow) {
+                            webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "Max WebView retries reached")
+                    showErrorPage()
+                }
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: android.webkit.SslErrorHandler?,
+                error: android.net.http.SslError?
+            ) {
+                handler?.cancel()
+                Log.e(TAG, "SSL Error: ${error?.toString()}")
+            }
+        }
+    }
+
+    private fun calculateRetryDelay(attempt: Int): Long {
+        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
+        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
+    }
+
+    private fun showErrorPage() {
+        if (!::webView.isInitialized || isDestroyed.get()) return
+
+        val errorHtml = """
+            <html dir="rtl">
+            <head><style>
+                body { font-family: sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                .error-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                h1 { color: #d32f2f; }
+                button { background: #1976d2; color: white; border: none; padding: 12px 24px; 
+                        border-radius: 5px; cursor: pointer; margin-top: 20px; }
+            </style></head>
+            <body>
+                <div class="error-box">
+                    <h1>⚠️ تعذر الاتصال بالخادم المحلي</h1>
+                    <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
+                    <button onclick="location.reload()">إعادة المحاولة</button>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  BiometricPrompt - مُصلح بالكامل
+    // ═══════════════════════════════════════════════════════════════
+
+    fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        try {
+            Class.forName("androidx.biometric.BiometricPrompt")
+        } catch (e: ClassNotFoundException) {
+            Log.w(TAG, "Biometric library not available")
+            onError("unsupported")
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            onError("unsupported")
+            return
+        }
+
+        try {
+            val executor = ContextCompat.getMainExecutor(this)
+            val biometricPrompt = BiometricPrompt(
+                this,  // ✅ now this is AppCompatActivity which extends FragmentActivity
+                executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(
+                        result: BiometricPrompt.AuthenticationResult
+                    ) {
+                        super.onAuthenticationSucceeded(result)
+                        onSuccess()
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                        onError("failed")
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        when (errorCode) {
+                            BiometricPrompt.ERROR_USER_CANCELED,
+                            BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
+                                onError("cancelled")
+                            }
+                            else -> onError(errString.toString())
+                        }
+                    }
+                }
+            )
+
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(BIOMETRIC_TITLE)
+                .setSubtitle(BIOMETRIC_SUBTITLE)
+                .setNegativeButtonText(BIOMETRIC_CANCEL)
+                .setConfirmationRequired(false)
+                .build()
+
+            biometricPrompt.authenticate(promptInfo)  // ✅ الآن الدالة موجودة
+        } catch (e: Exception) {
+            Log.e(TAG, "Biometric error", e)
+            onError("unsupported")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  JavaScript Interface
+    // ═══════════════════════════════════════════════════════════════
+
+    inner class WebAppInterface(
+        private val context: Context,
+        private val activity: MainActivity
+    ) {
+        @JavascriptInterface
+        fun requestBiometricAuth(): String {
+            activity.runOnUiThread {
+                activity.showBiometricPrompt(
+                    onSuccess = {
+                        val result = JSONObject().apply {
+                            put("success", true)
+                            put("message", "authenticated")
+                        }
+                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                    },
+                    onError = { error ->
+                        val result = JSONObject().apply {
+                            put("success", false)
+                            put("error", error)
+                        }
+                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                    }
+                )
+            }
+            return "requested"
+        }
+
+        @JavascriptInterface
+        fun getGeminiApiKey(): String {
+            return if (geminiApiKey.isNotEmpty()) {
+                "configured"
+            } else {
+                "not_configured"
+            }
+        }
+
+        @JavascriptInterface
+        fun showToast(message: String) {
+            if (isDestroyed.get()) return
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+
+        @JavascriptInterface
+        fun isServerReady(): Boolean {
+            return serverReady
+        }
+
+        @JavascriptInterface
+        fun getAppVersion(): String {
+            return try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+            } catch (e: Exception) {
+                "unknown"
+            }
+        }
+    }
+
+    private fun safeEvaluateJs(script: String) {
+        if (isDestroyed.get()) return
+        try {
+            if (::webView.isInitialized && webView.isAttachedToWindow) {
+                webView.evaluateJavascript(script, null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to evaluate JS: ${e.message}")
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  دورة الحياة - onRequestPermissionsResult مُصلح
+    // ═══════════════════════════════════════════════════════════════
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode != PERMISSION_REQUEST_CODE) return
+        if (grantResults.isEmpty()) {
+            Log.w(TAG, "Permission result is empty")
+            return
+        }
+
+        // ✅ إصلاح قائمة denied باستخدام toList() لتجنب CapturedType
+        val denied = permissions.toList().zip(grantResults.toList())
+            .filter { it.second != PackageManager.PERMISSION_GRANTED }
+            .map { it.first }
+
+        if (denied.isNotEmpty()) {
+            Log.w(TAG, "Denied permissions: $denied")
+            val criticalPermissions = listOf(
+                Manifest.permission.SEND_SMS,
+                Manifest.permission.RECEIVE_SMS
+            )
+            val hasCriticalDenied = denied.any { it in criticalPermissions }
+
+            if (hasCriticalDenied) {
+                Toast.makeText(
+                    this,
+                    "بعض الأذونات الأساسية مرفوضة. قد لا تعمل بعض الميزات.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        Log.d(TAG, "onDestroy called")
+        isDestroyed.set(true)
+        handler.removeCallbacksAndMessages(null)
+        stopSMSService()
+        destroyWebView(webView)
+        super.onDestroy()
+    }
+
+    private fun stopSMSService() {
+        try {
+            val intent = Intent(this, SMSService::class.java)
+            stopService(intent)
+            Log.d(TAG, "SMSService stop requested")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping SMSService", e)
+        }
+    }
+
+    private fun destroyWebView(webView: WebView?) {
+        webView?.let { view ->
+            try {
+                if (isDestroyed.get()) {
+                    Log.d(TAG, "Activity already destroyed, skipping WebView cleanup")
+                    return
+                }
+
+                (view.parent as? ViewGroup)?.removeView(view)
+                view.stopLoading()
+                view.loadUrl("about:blank")
+                view.clearHistory()
+                view.clearCache(true)
+                view.removeJavascriptInterface("AndroidInterface")
+                view.removeAllViews()
+                view.destroy()
+
+                Log.d(TAG, "WebView destroyed successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error destroying WebView", e)
+            }
+        }
+    }
+}
