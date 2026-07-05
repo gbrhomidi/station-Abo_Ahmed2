@@ -3,16 +3,10 @@
 // ═══════════════════════════════════════════════════════════════
 //
 //  التحسينات:
-//  1. إصلاح BuildConfig - استخدام ApplicationInfo.flags
-//  2. إصلاح R.string - استخدام نصوص مباشرة مع fallback
-//  3. إصلاح mutableSetOf - إضافة import صحيح
-//  4. إصلاح ::webView.isInitialized - تحقق إضافي
-//  5. إصلاح destroyWebView - تحقق من isDestroyed
-//  6. إصلاح getGeminiApiKey() - عدم إرجاع المفتاح إلى JS
-//  7. إصلاح stopService - إيقاف صحيح للخدمة
-//  8. إصلاح SMSService - تحقق من التسجيل
-//  9. إصلاح memory leak - إزالة WebView من parent
-//  10. إصلاح .env - fallback واضح
+//  1. تغيير الوراثة إلى AppCompatActivity لدعم BiometricPrompt
+//  2. إصلاح onRequestPermissionsResult بتوقيع صحيح
+//  3. إضافة استيرادات مفقودة
+//  4. تحسين إدارة دورة الحياة
 // ═══════════════════════════════════════════════════════════════
 
 package com.aistudio.dieselstationsms.kxmpzq
@@ -37,7 +31,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,7 +55,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * MainActivity - النسخة النهائية المعالجة والآمنة
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {  // ← تغيير الوراثة إلى AppCompatActivity
 
     companion object {
         private const val TAG = "MainActivity"
@@ -91,15 +85,14 @@ class MainActivity : ComponentActivity() {
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        super.onCreate(savedInstanceState)  // ← استدعاء super أولاً
+        enableEdgeToEdge()
 
         // تفعيل debugging فقط في debug builds
         if (isDebugMode) {
             WebView.setWebContentsDebuggingEnabled(true)
             Log.d(TAG, "Debug mode enabled - WebView debugging active")
         }
-
-        enableEdgeToEdge()
 
         // تحميل مفتاح API مع التحقق
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
@@ -458,7 +451,7 @@ class MainActivity : ComponentActivity() {
         try {
             val executor = ContextCompat.getMainExecutor(this)
             val biometricPrompt = androidx.biometric.BiometricPrompt(
-                this,
+                this,  // الآن MainActivity هو AppCompatActivity → FragmentActivity
                 executor,
                 object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
                     override fun onAuthenticationSucceeded(
@@ -475,7 +468,6 @@ class MainActivity : ComponentActivity() {
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
-                        // أخطاء معينة يمكن تجاهلها
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
                             androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
@@ -487,7 +479,6 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
-            // تحسين: استخدام نصوص مباشرة مع fallback
             val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
                 .setTitle(BIOMETRIC_TITLE)
                 .setSubtitle(BIOMETRIC_SUBTITLE)
@@ -588,7 +579,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<out String>,
+        permissions: Array<out String>,  // ← استخدم out
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -605,7 +596,6 @@ class MainActivity : ComponentActivity() {
 
         if (denied.isNotEmpty()) {
             Log.w(TAG, "Denied permissions: $denied")
-            // عرض رسالة للمستخدم
             val criticalPermissions = listOf(
                 Manifest.permission.SEND_SMS,
                 Manifest.permission.RECEIVE_SMS
@@ -655,28 +645,19 @@ class MainActivity : ComponentActivity() {
     private fun destroyWebView(webView: WebView?) {
         webView?.let { view ->
             try {
-                // تحسين: التحقق من isDestroyed
                 if (isDestroyed.get()) {
                     Log.d(TAG, "Activity already destroyed, skipping WebView cleanup")
                     return
                 }
 
-                // تحسين: إزالة WebView من parent أولاً
                 (view.parent as? ViewGroup)?.removeView(view)
 
-                // إيقاف التحميل
                 view.stopLoading()
-                // تحميل صفحة فارغة
                 view.loadUrl("about:blank")
-                // مسح التاريخ
                 view.clearHistory()
-                // مسح الذاكرة المؤقتة
                 view.clearCache(true)
-                // إزالة JavaScript Interface
                 view.removeJavascriptInterface("AndroidInterface")
-                // إزالة جميع الـ views
                 view.removeAllViews()
-                // تدمير WebView
                 view.destroy()
 
                 Log.d(TAG, "WebView destroyed successfully")
