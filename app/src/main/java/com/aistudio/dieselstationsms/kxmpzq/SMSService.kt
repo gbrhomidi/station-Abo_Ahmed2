@@ -1,3 +1,13 @@
+// ═══════════════════════════════════════════════════════════════
+//  محطة أبو أحمد - SMSService (مُحسّن ومصحح بالكامل)
+// ═══════════════════════════════════════════════════════════════
+//
+//  التحسينات والإصلاحات:
+//  1. قراءة مفتاح Gemini API من BuildConfig مع fallback إلى .env
+//  2. استخدام lazy loading للمفتاح
+//  3. دمج استراتيجية القراءة مع MainActivity
+// ═══════════════════════════════════════════════════════════════
+
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.app.NotificationChannel
@@ -16,22 +26,13 @@ import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * SMSService - محسّن ومصحح بالكامل
- *
- * التحسينات الإضافية:
- * - استخدام موارد التطبيق للقيم القابلة للتكوين (مثل max_sms_per_minute)
- * - إضافة علامة isDestroyed لمنع بدء الخادم بعد التدمير
- * - جعل send_overdue_sms متزامنة مع حد أقصى 20 رسالة لتجنب حجب الطلب
- * - إضافة معامل limit إلى export_data مع تحديد افتراضي 1000 سجل لكل جدول
- * - تحسين معالجة الأخطاء في جميع الـ handlers
- */
 class SMSService : Service() {
 
     companion object {
@@ -44,7 +45,7 @@ class SMSService : Service() {
         private const val SMS_DELAY_MS = 1000L
         private const val MAX_SMS_LENGTH = 1600
         private const val PHONE_REGEX = "^[+]?[0-9]{10,14}$"
-        private const val MAX_OVERDUE_SMS = 20   // حد أقصى للرسائل لتجنب حجب الطلب
+        private const val MAX_OVERDUE_SMS = 20
         private const val DEFAULT_EXPORT_LIMIT = 1000
     }
 
@@ -53,17 +54,40 @@ class SMSService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
-    // Rate limiting – الآن يتم قراءة الحد الأقصى من المورد (res/values/integers.xml)
     private val maxSmsPerMinute: Int by lazy {
         resources.getInteger(R.integer.max_sms_per_minute)
     }
     private val smsTimestamps = mutableListOf<Long>()
 
-    private val geminiApiKey: String
-        get() {
-            val key = BuildConfig.GEMINI_API_KEY ?: ""
-            return if (key == "YOUR_GEMINI_API_KEY_HERE") "" else key
+    // ✅ قراءة المفتاح من BuildConfig مع fallback إلى .env
+    private val geminiApiKey: String by lazy {
+        // 1. المحاولة من BuildConfig (للـ CI/CD)
+        val buildConfigKey = BuildConfig.GEMINI_API_KEY
+        if (buildConfigKey.isNotEmpty() && buildConfigKey != "YOUR_GEMINI_API_KEY_HERE") {
+            return@lazy buildConfigKey
         }
+        // 2. احتياطياً: قراءة من .env (للتطوير المحلي)
+        loadEnvKey("GEMINI_API_KEY")
+    }
+
+    private fun loadEnvKey(key: String): String {
+        return try {
+            assets.open(".env").use { stream ->
+                BufferedReader(InputStreamReader(stream)).useLines { lines ->
+                    lines.mapNotNull { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.startsWith("$key=")) {
+                            val value = trimmed.substringAfter("=").trim()
+                            if (value.isNotEmpty() && value != "YOUR_GEMINI_API_KEY_HERE") value else null
+                        } else null
+                    }.firstOrNull() ?: ""
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not load .env key $key: ${e.message}")
+            ""
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -681,9 +705,6 @@ class SMSService : Service() {
             responseJson.put("message", if (sent) "تم الإرسال" else "فشل الإرسال")
         }
 
-        /**
-         * تصدير البيانات مع حد أقصى للصفوف لتجنب OOM
-         */
         private fun handleExportData(db: DatabaseHelper, params: Map<String, List<String>>, responseJson: JSONObject) {
             val limit = params["limit"]?.firstOrNull()?.toIntOrNull() ?: DEFAULT_EXPORT_LIMIT
             val data = JSONObject()
@@ -749,9 +770,6 @@ class SMSService : Service() {
             responseJson.put("limit_applied", limit)
         }
 
-        /**
-         * إرسال رسائل للمعاملات المتأخرة - متزامن مع حد أقصى
-         */
         private fun handleSendOverdueSms(db: DatabaseHelper, responseJson: JSONObject) {
             val overdue = db.getOverdueTransactions()
             var sentCount = 0
@@ -857,7 +875,6 @@ class SMSService : Service() {
             db.logSms(phone, msg, type, "failed: too long")
             return false
         }
-        // Rate limiting باستخدام الحد المأخوذ من المورد
         synchronized(smsTimestamps) {
             val now = System.currentTimeMillis()
             smsTimestamps.removeAll { now - it > 60000 }
