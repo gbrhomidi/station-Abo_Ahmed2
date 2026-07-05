@@ -48,7 +48,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease --no-daemon --stacktrace --info -PGEMINI_API_KEY=$GEMINI_API_KEY
+        run: ./gradlew clean assembleRelease --no-daemon -PGEMINI_API_KEY=$GEMINI_API_KEY
         env:
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
