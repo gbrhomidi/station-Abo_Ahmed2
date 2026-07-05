@@ -9,7 +9,7 @@
 //  4. تحسين إدارة دورة الحياة
 // ═══════════════════════════════════════════════════════════════
 
-package com.aistudio.dieselstationsms.kxmpxq
+package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
 import android.annotation.SuppressLint
