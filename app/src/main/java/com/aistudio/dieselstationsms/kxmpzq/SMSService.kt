@@ -3,9 +3,10 @@
 // ═══════════════════════════════════════════════════════════════
 //
 //  التحسينات والإصلاحات:
-//  1. قراءة مفتاح Gemini API من BuildConfig مع fallback إلى .env
-//  2. استخدام lazy loading للمفتاح
-//  3. دمج استراتيجية القراءة مع MainActivity
+//  1. إضافة import java.io.IOException (إصلاح الخطأ)
+//  2. إضافة import BuildConfig (لقراءة المفتاح)
+//  3. استخدام lazy loading للمفتاح مع fallback إلى .env
+//  4. تحسين معالجة الاستثناءات
 // ═══════════════════════════════════════════════════════════════
 
 package com.aistudio.dieselstationsms.kxmpzq
@@ -27,6 +28,7 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException          // ← استيراد IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -61,7 +63,7 @@ class SMSService : Service() {
 
     // ✅ قراءة المفتاح من BuildConfig مع fallback إلى .env
     private val geminiApiKey: String by lazy {
-        // 1. المحاولة من BuildConfig (للـ CI/CD)
+        // 1. المحاولة من BuildConfig (لـ CI/CD)
         val buildConfigKey = BuildConfig.GEMINI_API_KEY
         if (buildConfigKey.isNotEmpty() && buildConfigKey != "YOUR_GEMINI_API_KEY_HERE") {
             return@lazy buildConfigKey
@@ -158,7 +160,7 @@ class SMSService : Service() {
                 Log.d(TAG, "Server started at port $currentPort")
                 updateNotification("الخادم المحلي يعمل على المنفذ $currentPort")
                 return
-            } catch (e: IOException) {
+            } catch (e: IOException) {   // ← الآن IOException معرّف
                 Log.w(TAG, "Port $currentPort busy, trying next...")
                 currentPort++
                 retries++
