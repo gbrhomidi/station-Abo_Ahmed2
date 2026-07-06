@@ -23,7 +23,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // ✅ مفتاح Gemini API: من خصائص Gradle أو متغيرات البيئة (لـ CI/CD)
+        // مفتاح Gemini API: من خصائص Gradle أو متغيرات البيئة
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
@@ -104,8 +104,8 @@ dependencies {
 
     // Core Android
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)  // ✅ أضيف: AppCompat
-    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)                // ✅ الآن معرف
+    implementation(libs.androidx.activity.compose)         // ✅ معرف
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -140,14 +140,14 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work)
 
-    // Biometric
+    // Biometric (مباشر)
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // Security
+    // Security (مباشر)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
-    // NanoHTTPD
+    // NanoHTTPD (الآن معرف في libs)
     implementation(libs.nanohttpd)
 
     // Testing
@@ -172,7 +172,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// حل تعارضات الإصدارات – يقتصر على الضروري فقط
+// حل تعارضات الإصدارات
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
@@ -182,7 +182,7 @@ configurations.all {
     }
 }
 
-// فحص أمني تلقائي – يمنع رفع المفاتيح الحساسة
+// فحص أمني تلقائي
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"
