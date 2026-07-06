@@ -44,8 +44,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
-        private const val SERVICE_START_DELAY_MS = 1500L
-        private const val WEBVIEW_LOAD_DELAY_MS = 2000L
+        private const val SERVICE_START_DELAY_MS = 3000L   // زيادة التأخير
+        private const val WEBVIEW_LOAD_DELAY_MS = 4000L    // انتظار الخادم
         private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 1000L
         private const val WEBVIEW_MAX_RETRY_DELAY_MS = 10000L
         private const val MAX_WEBVIEW_RETRIES = 5
@@ -67,38 +67,67 @@ class MainActivity : AppCompatActivity() {
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        try {
+            super.onCreate(savedInstanceState)
+            Log.d(TAG, "onCreate started")
 
-        if (isDebugMode) {
-            WebView.setWebContentsDebuggingEnabled(true)
-            Log.d(TAG, "Debug mode enabled")
-        }
-
-        geminiApiKey = loadEnvKey("GEMINI_API_KEY")
-        if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found")
-        }
-
-        requestAllPermissions()
-
-        // بدء الخدمة المبسطة (بدون أخطاء)
-        lifecycleScope.launch {
-            delay(SERVICE_START_DELAY_MS)
-            if (!isDestroyed.get()) {
-                startSMSService()
+            // محاولة تفعيل EdgeToEdge مع معالجة الخطأ
+            try {
+                enableEdgeToEdge()
+                Log.d(TAG, "enableEdgeToEdge succeeded")
+            } catch (e: Exception) {
+                Log.e(TAG, "enableEdgeToEdge failed: ${e.message}", e)
+                // نستمر بدونها
             }
-        }
 
-        setContent {
-            MyApplicationTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    WebViewScreen(
-                        modifier = Modifier.padding(innerPadding),
-                        onWebViewCreated = { webView = it }
-                    )
+            if (isDebugMode) {
+                WebView.setWebContentsDebuggingEnabled(true)
+                Log.d(TAG, "Debug mode enabled")
+            }
+
+            geminiApiKey = loadEnvKey("GEMINI_API_KEY")
+            if (geminiApiKey.isEmpty()) {
+                Log.w(TAG, "GEMINI_API_KEY not found")
+            }
+
+            requestAllPermissions()
+
+            // بدء الخدمة بعد تأخير أطول
+            lifecycleScope.launch {
+                try {
+                    delay(SERVICE_START_DELAY_MS)
+                    if (!isDestroyed.get()) {
+                        startSMSService()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error starting service: ${e.message}", e)
                 }
             }
+
+            // تحميل الواجهة مع try-catch شامل
+            try {
+                setContent {
+                    MyApplicationTheme {
+                        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                            WebViewScreen(
+                                modifier = Modifier.padding(innerPadding),
+                                onWebViewCreated = { webView = it }
+                            )
+                        }
+                    }
+                }
+                Log.d(TAG, "setContent succeeded")
+            } catch (e: Exception) {
+                Log.e(TAG, "setContent failed: ${e.message}", e)
+                // عرض رسالة خطأ بدلاً من الانهيار
+                Toast.makeText(this, "خطأ في تحميل الواجهة: ${e.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Fatal error in onCreate: ${e.message}", e)
+            Toast.makeText(this, "حدث خطأ جسيم: ${e.message}", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -170,7 +199,7 @@ class MainActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    // ========== خدمة SMS مبسطة (بدون تعقيدات) ==========
+    // ========== خدمة SMS مبسطة مع معالجة الأخطاء ==========
     private fun startSMSService() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Activity is destroyed, not starting service")
@@ -186,7 +215,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "SMSService started successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء الخدمة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل في بدء الخدمة: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -200,7 +229,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== WebView ==========
+    // ========== WebView (محمي بالكامل) ==========
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
     fun WebViewScreen(
@@ -220,35 +249,51 @@ class MainActivity : AppCompatActivity() {
         AndroidView(
             modifier = modifier.fillMaxSize(),
             factory = { context ->
-                WebView(context).apply {
-                    webViewRef.add(this)
-                    onWebViewCreated(this)
+                try {
+                    WebView(context).apply {
+                        webViewRef.add(this)
+                        onWebViewCreated(this)
 
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = false
-                        setSupportZoom(true)
-                        builtInZoomControls = true
-                        displayZoomControls = false
-                        allowFileAccess = false
-                        allowContentAccess = false
-                        javaScriptCanOpenWindowsAutomatically = false
-                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    }
-
-                    webViewClient = createWebViewClient()
-                    webChromeClient = WebChromeClient()
-                    addJavascriptInterface(
-                        WebAppInterface(context, this@MainActivity),
-                        "AndroidInterface"
-                    )
-
-                    lifecycleScope.launch {
-                        delay(WEBVIEW_LOAD_DELAY_MS)
-                        if (!isDestroyed.get()) {
-                            loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                        settings.apply {
+                            javaScriptEnabled = true
+                            domStorageEnabled = true
+                            databaseEnabled = false
+                            setSupportZoom(true)
+                            builtInZoomControls = true
+                            displayZoomControls = false
+                            allowFileAccess = false
+                            allowContentAccess = false
+                            javaScriptCanOpenWindowsAutomatically = false
+                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                         }
+
+                        webViewClient = createWebViewClient()
+                        webChromeClient = WebChromeClient()
+                        addJavascriptInterface(
+                            WebAppInterface(context, this@MainActivity),
+                            "AndroidInterface"
+                        )
+
+                        // تحميل WebView بعد تأخير كافٍ
+                        lifecycleScope.launch {
+                            try {
+                                delay(WEBVIEW_LOAD_DELAY_MS)
+                                if (!isDestroyed.get()) {
+                                    loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                                    Log.d(TAG, "WebView loadUrl called")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "WebView load error: ${e.message}", e)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "WebView factory error: ${e.message}", e)
+                    // عرض نص عادي بدلاً من WebView عند الفشل
+                    android.widget.TextView(context).apply {
+                        text = "حدث خطأ في تحميل WebView: ${e.message}"
+                        textSize = 18f
+                        setPadding(32, 32, 32, 32)
                     }
                 }
             },
@@ -284,7 +329,11 @@ class MainActivity : AppCompatActivity() {
                     lifecycleScope.launch {
                         delay(delay)
                         if (!isDestroyed.get() && ::webView.isInitialized && webView.isAttachedToWindow) {
-                            webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                            try {
+                                webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Retry load failed: ${e.message}", e)
+                            }
                         }
                     }
                 } else {
@@ -329,7 +378,11 @@ class MainActivity : AppCompatActivity() {
             </body>
             </html>
         """.trimIndent()
-        webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+        try {
+            webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing error page: ${e.message}", e)
+        }
     }
 
     // ========== Biometric ==========
