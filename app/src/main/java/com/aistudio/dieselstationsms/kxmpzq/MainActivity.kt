@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
+        // بدء الخدمة المبسطة (بدون أخطاء)
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -169,17 +170,12 @@ class MainActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
+    // ========== خدمة SMS مبسطة (بدون تعقيدات) ==========
     private fun startSMSService() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Activity is destroyed, not starting service")
             return
         }
-
-        if (!isServiceAvailable(SMSService::class.java)) {
-            Log.e(TAG, "SMSService not registered in AndroidManifest.xml")
-            return
-        }
-
         try {
             val intent = Intent(this, SMSService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -188,27 +184,23 @@ class MainActivity : AppCompatActivity() {
                 startService(intent)
             }
             Log.d(TAG, "SMSService started successfully")
-        } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل في بدء الخدمة", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun isServiceAvailable(serviceClass: Class<*>): Boolean {
-        return try {
-            packageManager.getServiceInfo(
-                ComponentName(this, serviceClass),
-                PackageManager.GET_META_DATA
-            )
-            true
-        } catch (e: PackageManager.NameNotFoundException) {
-            false
+    private fun stopSMSService() {
+        try {
+            val intent = Intent(this, SMSService::class.java)
+            stopService(intent)
+            Log.d(TAG, "SMSService stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping SMSService", e)
         }
     }
 
+    // ========== WebView ==========
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
     fun WebViewScreen(
@@ -289,8 +281,6 @@ class MainActivity : AppCompatActivity() {
                 if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
                     webViewRetryCount++
                     val delay = calculateRetryDelay(webViewRetryCount)
-                    Log.d(TAG, "Retrying WebView in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-
                     lifecycleScope.launch {
                         delay(delay)
                         if (!isDestroyed.get() && ::webView.isInitialized && webView.isAttachedToWindow) {
@@ -321,7 +311,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showErrorPage() {
         if (!::webView.isInitialized || isDestroyed.get()) return
-
         val errorHtml = """
             <html dir="rtl">
             <head><style>
@@ -340,10 +329,10 @@ class MainActivity : AppCompatActivity() {
             </body>
             </html>
         """.trimIndent()
-
         webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
     }
 
+    // ========== Biometric ==========
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
@@ -370,19 +359,15 @@ class MainActivity : AppCompatActivity() {
                         super.onAuthenticationSucceeded(result)
                         onSuccess()
                     }
-
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
                         onError("failed")
                     }
-
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
-                            androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
-                                onError("cancelled")
-                            }
+                            androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> onError("cancelled")
                             else -> onError(errString.toString())
                         }
                     }
@@ -403,6 +388,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ========== JavaScript Interface ==========
     inner class WebAppInterface(
         private val context: Context,
         private val activity: MainActivity
@@ -465,23 +451,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ========== Lifecycle ==========
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
         if (requestCode != PERMISSION_REQUEST_CODE) return
         if (grantResults.isEmpty()) {
             Log.w(TAG, "Permission result is empty")
             return
         }
-
         val denied = permissions.zip(grantResults.toList())
             .filter { it.second != PackageManager.PERMISSION_GRANTED }
             .map { it.first }
-
         if (denied.isNotEmpty()) {
             Log.w(TAG, "Denied permissions: $denied")
             val criticalPermissions = listOf(
@@ -489,7 +473,6 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.RECEIVE_SMS
             )
             val hasCriticalDenied = denied.any { it in criticalPermissions }
-
             if (hasCriticalDenied) {
                 Toast.makeText(
                     this,
@@ -509,16 +492,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun stopSMSService() {
-        try {
-            val intent = Intent(this, SMSService::class.java)
-            stopService(intent)
-            Log.d(TAG, "SMSService stop requested")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping SMSService", e)
-        }
-    }
-
     private fun destroyWebView(webView: WebView?) {
         webView?.let { view ->
             try {
@@ -526,9 +499,7 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "Activity already destroyed, skipping WebView cleanup")
                     return
                 }
-
                 (view.parent as? ViewGroup)?.removeView(view)
-
                 view.stopLoading()
                 view.loadUrl("about:blank")
                 view.clearHistory()
@@ -536,7 +507,6 @@ class MainActivity : AppCompatActivity() {
                 view.removeJavascriptInterface("AndroidInterface")
                 view.removeAllViews()
                 view.destroy()
-
                 Log.d(TAG, "WebView destroyed successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Error destroying WebView", e)
