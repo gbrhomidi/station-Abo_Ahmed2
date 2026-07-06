@@ -20,54 +20,39 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify java version
+      - name: Verify Java version
         run: java -version
 
-      - name: Decode Keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
-
-      - name: Verify keystore
-        run: |
-          echo "===== CURRENT DIRECTORY ====="
-          pwd
-
-          echo
-          echo "===== FILES ====="
-          ls -lah
-
-          echo
-          echo "===== KEYSTORE INFO ====="
-          file my-upload-key.jks || true
-
-          echo
-          echo "===== KEYSTORE SIZE ====="
-          ls -lh my-upload-key.jks || true
-
-      - name: Grant execute permission
+      - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Clean and Build Release APK
+      # توليد debug.keystore مؤقت إذا لم يكن موجوداً (سيستخدمه build.gradle.kts)
+      - name: Generate debug keystore (if missing)
+        run: |
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "🔑 Generating debug.keystore..."
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug, O=Android, C=US"
+            echo "✅ debug.keystore generated."
+          else
+            echo "✅ debug.keystore already exists."
+          fi
+
+      - name: Clean and Build Release APK (using debug signing)
         run: ./gradlew clean assembleRelease --no-daemon -PGEMINI_API_KEY=$GEMINI_API_KEY
         env:
-          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - name: Show build outputs
+      - name: List APK outputs
         run: |
           echo "===== APK FILES ====="
           find app/build -type f -name "*.apk"
-
-          echo
-          echo "===== AAB FILES ====="
-          find app/build -type f -name "*.aab"
-
-          echo
-          echo "===== ALL OUTPUT FILES ====="
-          find app/build/outputs -type f
-
           echo
           echo "===== APK DETAILS ====="
           ls -lahR app/build/outputs || true
