@@ -1,60 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-   ═══════════════════════════════════════════════════════════════
-   محطة أبو أحمد - ملف السمات (Themes)
-   ═══════════════════════════════════════════════════════════════
-   
-   الإصدار: 2.1 – متوافق مع Material Components و AppCompatActivity
-   التحديثات:
-   - إزالة مراجع غير موجودة (color/red, Animation.AppCompat)
-   - استخدام ألوان محددة بالفعل في colors.xml
-   - إضافة Material Components مع ألوان الهوية
-   ═══════════════════════════════════════════════════════════════
--->
 <resources>
-    <!-- السمة الأساسية للتطبيق – Material Components مع دعم AppCompatActivity -->
-    <style name="Theme.MyApplication" parent="Theme.MaterialComponents.Light.NoActionBar">
-        
-        <!-- ═══ ألوان Material Design 3 (M3) ═══ -->
-        <!-- اللون الأساسي (Primary) – المستخدم في شريط الحالة والأزرار الرئيسية -->
-        <item name="colorPrimary">@color/diesel_blue</item>
-        <item name="colorPrimaryVariant">@color/diesel_dark</item>
-        <item name="colorOnPrimary">@color/white</item>
-        
-        <!-- اللون الثانوي (Secondary) – يستخدم للعناصر المميزة -->
-        <item name="colorSecondary">@color/diesel_gold</item>
-        <item name="colorSecondaryVariant">@color/diesel_gold</item>
-        <item name="colorOnSecondary">@color/black</item>
-        
-        <!-- ألوان الخلفية والسطح -->
+    <!-- سمة بسيطة متوافقة مع AppCompatActivity -->
+    <style name="Theme.MyApplication" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- ألوان الهوية -->
         <item name="android:windowBackground">@color/diesel_blue</item>
-        <item name="colorSurface">@color/white</item>
-        <item name="colorOnSurface">@color/black</item>
-        
-        <!-- ⚠️ ألوان الأخطاء – استخدم لوناً موجوداً بدلاً من color/red -->
-        <item name="colorError">@color/diesel_dark</item>
-        <item name="colorOnError">@color/white</item>
-        
-        <!-- ═══ إعدادات شريط الحالة والتنقل ═══ -->
         <item name="android:statusBarColor">@color/diesel_blue</item>
         <item name="android:navigationBarColor">@color/black</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:forceDarkAllowed">true</item>
         
-        <!-- ═══ أمان بصري: منع معاينة التطبيق ═══ -->
+        <!-- منع معاينة التطبيق في Recent Apps -->
         <item name="android:windowDisablePreview">true</item>
         
-        <!-- ═══ إعدادات إضافية ═══ -->
-        <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textColorPrimary">@color/white</item>
-        <item name="android:textColorSecondary">@color/diesel_gold</item>
-        
-        <!-- تم إزالة android:windowAnimationStyle لتجنب أخطاء الربط -->
-        <!-- بدلاً من ذلك، يمكن استخدام الرسوم المتحركة الافتراضية -->
-        
-        <!-- إعدادات الـ Toolbar و Button (اختيارية) -->
-        <item name="toolbarStyle">@style/Widget.MaterialComponents.Toolbar.Primary</item>
-        <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
-        <item name="cardViewStyle">@style/Widget.MaterialComponents.CardView</item>
+        <!-- ألوان Material -->
+        <item name="colorPrimary">@color/diesel_blue</item>
+        <item name="colorPrimaryDark">@color/diesel_dark</item>
+        <item name="colorAccent">@color/diesel_gold</item>
     </style>
 </resources>
