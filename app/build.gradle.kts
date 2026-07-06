@@ -101,29 +101,30 @@ android {
 dependencies {
     // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
-    
+
     // Core Android
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)  // ✅ أضيف: AppCompat
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    
+
     // Compose UI
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
-    
+
     // Navigation
     implementation(libs.androidx.navigation.compose)
-    
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-    
+
     // Network
     implementation(libs.retrofit)
     implementation(libs.converter.moshi)
@@ -131,24 +132,24 @@ dependencies {
     implementation(libs.logging.interceptor)
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
-    
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
-    
+
     // WorkManager
     implementation(libs.androidx.work)
-    
+
     // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
-    
+
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
-    
+
     // NanoHTTPD
     implementation(libs.nanohttpd)
-    
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -160,13 +161,13 @@ dependencies {
     testImplementation(libs.androidx.junit)
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.runner)
-    
+
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.runner)
-    
+
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
