@@ -38,7 +38,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // ✅ استخدم توقيع debug (موجود افتراضياً)
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
@@ -150,6 +149,9 @@ dependencies {
 
     // NanoHTTPD
     implementation(libs.nanohttpd)
+
+    // ✅ Material Components (للتوافق مع Theme.MaterialComponents)
+    implementation("com.google.android.material:material:1.12.0")
 
     // Testing
     testImplementation(libs.junit)
