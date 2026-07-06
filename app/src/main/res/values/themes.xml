@@ -4,12 +4,11 @@
    محطة أبو أحمد - ملف السمات (Themes)
    ═══════════════════════════════════════════════════════════════
    
-   الإصدار: 2.0 – متوافق مع Material Components و AppCompatActivity
+   الإصدار: 2.1 – متوافق مع Material Components و AppCompatActivity
    التحديثات:
-   - استخدام Theme.MaterialComponents.Light.NoActionBar (متوافق مع AppCompat)
-   - إضافة ألوان Material Design 3 (colorPrimary, colorSecondary, إلخ)
-   - الحفاظ على ألوان الهوية (diesel_blue, diesel_gold)
-   - أمان بصري: منع معاينة التطبيق في Recent Apps
+   - إزالة مراجع غير موجودة (color/red, Animation.AppCompat)
+   - استخدام ألوان محددة بالفعل في colors.xml
+   - إضافة Material Components مع ألوان الهوية
    ═══════════════════════════════════════════════════════════════
 -->
 <resources>
@@ -22,7 +21,7 @@
         <item name="colorPrimaryVariant">@color/diesel_dark</item>
         <item name="colorOnPrimary">@color/white</item>
         
-        <!-- اللون الثانوي (Secondary) – يستخدم للعناصر المميزة مثل الأزرار الثانوية -->
+        <!-- اللون الثانوي (Secondary) – يستخدم للعناصر المميزة -->
         <item name="colorSecondary">@color/diesel_gold</item>
         <item name="colorSecondaryVariant">@color/diesel_gold</item>
         <item name="colorOnSecondary">@color/black</item>
@@ -32,8 +31,8 @@
         <item name="colorSurface">@color/white</item>
         <item name="colorOnSurface">@color/black</item>
         
-        <!-- ألوان الأخطاء والتحذيرات -->
-        <item name="colorError">@color/red</item>
+        <!-- ⚠️ ألوان الأخطاء – استخدم لوناً موجوداً بدلاً من color/red -->
+        <item name="colorError">@color/diesel_dark</item>
         <item name="colorOnError">@color/white</item>
         
         <!-- ═══ إعدادات شريط الحالة والتنقل ═══ -->
@@ -42,26 +41,20 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:forceDarkAllowed">true</item>
         
-        <!-- ═══ أمان بصري: منع معاينة التطبيق (windowDisablePreview) ═══ -->
-        <!-- يمنع ظهور لقطة شاشة للتطبيق في شاشة المهام المتعددة (Recent Apps) -->
+        <!-- ═══ أمان بصري: منع معاينة التطبيق ═══ -->
         <item name="android:windowDisablePreview">true</item>
         
-        <!-- ═══ إعدادات إضافية لتحسين المظهر ═══ -->
-        <!-- استخدام الخطوط الافتراضية (يمكن تغييرها حسب الرغبة) -->
+        <!-- ═══ إعدادات إضافية ═══ -->
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:textColorPrimary">@color/white</item>
         <item name="android:textColorSecondary">@color/diesel_gold</item>
         
-        <!-- تفعيل الرسوم المتحركة للانتقال بين الشاشات -->
-        <item name="android:windowAnimationStyle">@style/Animation.AppCompat</item>
+        <!-- تم إزالة android:windowAnimationStyle لتجنب أخطاء الربط -->
+        <!-- بدلاً من ذلك، يمكن استخدام الرسوم المتحركة الافتراضية -->
         
-        <!-- إعدادات الـ Toolbar (إذا تم استخدامه) -->
+        <!-- إعدادات الـ Toolbar و Button (اختيارية) -->
         <item name="toolbarStyle">@style/Widget.MaterialComponents.Toolbar.Primary</item>
-        
-        <!-- إعدادات الـ Button (نمط Material) -->
         <item name="materialButtonStyle">@style/Widget.MaterialComponents.Button</item>
-        
-        <!-- إعدادات الـ CardView (إذا تم استخدامه) -->
         <item name="cardViewStyle">@style/Widget.MaterialComponents.CardView</item>
     </style>
 </resources>
