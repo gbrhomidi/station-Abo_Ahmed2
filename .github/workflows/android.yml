@@ -26,9 +26,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # توليد debug.keystore مؤقت إذا لم يكن موجوداً (سيستخدمه build.gradle.kts)
+      # توليد debug.keystore في المجلد الصحيح
       - name: Generate debug keystore (if missing)
         run: |
+          mkdir -p ~/.android
           if [ ! -f ~/.android/debug.keystore ]; then
             echo "🔑 Generating debug.keystore..."
             keytool -genkey -v -keystore ~/.android/debug.keystore \
