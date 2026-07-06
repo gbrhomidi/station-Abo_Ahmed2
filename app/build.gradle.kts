@@ -29,40 +29,6 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
-    // ✅ التوليد التلقائي لملف debug.keystore إذا لم يكن موجوداً
-    fun createDebugKeystore() {
-        val keystoreFile = file("debug.keystore")
-        if (!keystoreFile.exists()) {
-            println("🔑 Generating debug.keystore automatically...")
-            exec {
-                commandLine(
-                    "keytool", "-genkey", "-v",
-                    "-keystore", "debug.keystore",
-                    "-alias", "androiddebugkey",
-                    "-keyalg", "RSA",
-                    "-keysize", "2048",
-                    "-validity", "10000",
-                    "-storepass", "android",
-                    "-keypass", "android",
-                    "-dname", "CN=Android Debug, O=Android, C=US"
-                )
-            }
-            println("✅ debug.keystore generated successfully.")
-        }
-    }
-
-    // استدعاء الدالة قبل تكوين التوقيع
-    createDebugKeystore()
-
-    signingConfigs {
-        create("release") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
         release {
             isCrunchPngs = true
@@ -72,7 +38,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // ✅ استخدم توقيع debug (موجود افتراضياً)
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
