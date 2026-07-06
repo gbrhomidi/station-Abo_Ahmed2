@@ -2,7 +2,6 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -14,9 +13,13 @@ import android.os.Looper
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
@@ -44,11 +47,12 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
-        private const val SERVICE_START_DELAY_MS = 3000L   // زيادة التأخير
-        private const val WEBVIEW_LOAD_DELAY_MS = 4000L    // انتظار الخادم
-        private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 1000L
-        private const val WEBVIEW_MAX_RETRY_DELAY_MS = 10000L
-        private const val MAX_WEBVIEW_RETRIES = 5
+        private const val SERVICE_START_DELAY_MS = 1000L
+        private const val WEBVIEW_INIT_DELAY_MS = 500L
+        private const val WEBVIEW_LOAD_DELAY_MS = 4000L
+        private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 2000L
+        private const val WEBVIEW_MAX_RETRY_DELAY_MS = 15000L
+        private const val MAX_WEBVIEW_RETRIES = 10
         private const val SERVER_PORT = 8080
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
@@ -56,79 +60,150 @@ class MainActivity : AppCompatActivity() {
         private const val BIOMETRIC_CANCEL = "إلغاء"
     }
 
-    private lateinit var webView: WebView
+    private var webView: WebView? = null
     private var geminiApiKey: String = ""
     private var serverReady = false
     private var webViewRetryCount = 0
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
+    private var isWebViewInitialized = false
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // ✅ تحسين: try-catch حول enableEdgeToEdge
         try {
-            super.onCreate(savedInstanceState)
-            Log.d(TAG, "onCreate started")
-
-            // محاولة تفعيل EdgeToEdge مع معالجة الخطأ
-            try {
-                enableEdgeToEdge()
-                Log.d(TAG, "enableEdgeToEdge succeeded")
-            } catch (e: Exception) {
-                Log.e(TAG, "enableEdgeToEdge failed: ${e.message}", e)
-                // نستمر بدونها
-            }
-
-            if (isDebugMode) {
-                WebView.setWebContentsDebuggingEnabled(true)
-                Log.d(TAG, "Debug mode enabled")
-            }
-
-            geminiApiKey = loadEnvKey("GEMINI_API_KEY")
-            if (geminiApiKey.isEmpty()) {
-                Log.w(TAG, "GEMINI_API_KEY not found")
-            }
-
-            requestAllPermissions()
-
-            // بدء الخدمة بعد تأخير أطول
-            lifecycleScope.launch {
-                try {
-                    delay(SERVICE_START_DELAY_MS)
-                    if (!isDestroyed.get()) {
-                        startSMSService()
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error starting service: ${e.message}", e)
-                }
-            }
-
-            // تحميل الواجهة مع try-catch شامل
-            try {
-                setContent {
-                    MyApplicationTheme {
-                        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                            WebViewScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                onWebViewCreated = { webView = it }
-                            )
-                        }
-                    }
-                }
-                Log.d(TAG, "setContent succeeded")
-            } catch (e: Exception) {
-                Log.e(TAG, "setContent failed: ${e.message}", e)
-                // عرض رسالة خطأ بدلاً من الانهيار
-                Toast.makeText(this, "خطأ في تحميل الواجهة: ${e.message}", Toast.LENGTH_LONG).show()
-                finish()
-            }
-
+            enableEdgeToEdge()
         } catch (e: Exception) {
-            Log.e(TAG, "Fatal error in onCreate: ${e.message}", e)
-            Toast.makeText(this, "حدث خطأ جسيم: ${e.message}", Toast.LENGTH_LONG).show()
-            finish()
+            Log.e(TAG, "enableEdgeToEdge failed: ${e.message}", e)
         }
+
+        if (isDebugMode) {
+            try {
+                WebView.setWebContentsDebuggingEnabled(true)
+            } catch (e: Exception) {
+                Log.w(TAG, "WebView debugging enable failed: ${e.message}")
+            }
+            Log.d(TAG, "Debug mode enabled")
+        }
+
+        geminiApiKey = loadEnvKey("GEMINI_API_KEY")
+        if (geminiApiKey.isEmpty()) {
+            Log.w(TAG, "GEMINI_API_KEY not found")
+        }
+
+        requestAllPermissions()
+
+        // بدء خدمة SMS
+        lifecycleScope.launch {
+            delay(SERVICE_START_DELAY_MS)
+            if (!isDestroyed.get()) {
+                startSMSService()
+            }
+        }
+
+        // ✅ تحسين: try-catch حول setContent
+        try {
+            setContent {
+                MyApplicationTheme {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        WebViewScreen(
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "setContent failed: ${e.message}", e)
+            Toast.makeText(this, "خطأ في تحميل الواجهة: ${e.message}", Toast.LENGTH_LONG).show()
+            // عرض واجهة بديلة بسيطة
+            setContent {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    androidx.compose.material3.Text(
+                        text = "⚠️ تعذر تحميل الواجهة\n${e.message}",
+                        color = androidx.compose.ui.graphics.Color.Red,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // جدولة تحميل WebView بعد التأكد من تشغيل كل شيء
+        lifecycleScope.launch {
+            delay(WEBVIEW_INIT_DELAY_MS)
+            initializeWebViewLoading()
+        }
+    }
+
+    private fun initializeWebViewLoading() {
+        if (isDestroyed.get()) return
+
+        handler.postDelayed({
+            if (isDestroyed.get()) return@postDelayed
+
+            val wv = webView
+            if (wv != null && !isDestroyed.get()) {
+                Log.d(TAG, "Initializing WebView URL load")
+                loadWebViewUrl()
+            } else {
+                Log.w(TAG, "WebView not ready yet, retrying...")
+                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                    webViewRetryCount++
+                    initializeWebViewLoading()
+                }
+            }
+        }, WEBVIEW_LOAD_DELAY_MS)
+    }
+
+    private fun loadWebViewUrl() {
+        if (isDestroyed.get()) return
+
+        val wv = webView ?: run {
+            Log.w(TAG, "WebView is null, cannot load URL")
+            return
+        }
+
+        try {
+            if (wv.isAttachedToWindow) {
+                Log.d(TAG, "Loading URL: http://127.0.0.1:$SERVER_PORT/")
+                wv.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+            } else {
+                Log.w(TAG, "WebView not attached to window yet")
+                retryLoadUrl()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading URL: ${e.message}", e)
+            retryLoadUrl()
+        }
+    }
+
+    private fun retryLoadUrl() {
+        if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
+            webViewRetryCount++
+            val delay = calculateRetryDelay(webViewRetryCount)
+            Log.d(TAG, "Retrying URL load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+
+            lifecycleScope.launch {
+                delay(delay)
+                if (!isDestroyed.get()) {
+                    loadWebViewUrl()
+                }
+            }
+        } else {
+            Log.e(TAG, "Max retries reached, showing error page")
+            showErrorPage()
+        }
+    }
+
+    private fun calculateRetryDelay(attempt: Int): Long {
+        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
+        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
     }
 
     private fun loadEnvKey(key: String): String {
@@ -199,7 +274,7 @@ class MainActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    // ========== خدمة SMS مبسطة مع معالجة الأخطاء ==========
+    // ========== خدمة SMS ==========
     private fun startSMSService() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Activity is destroyed, not starting service")
@@ -215,7 +290,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "SMSService started successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء الخدمة: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل في بدء الخدمة", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -229,13 +304,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== WebView (محمي بالكامل) ==========
+    // ========== WebView مع FrameLayout Wrapper ==========
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
-    fun WebViewScreen(
-        modifier: Modifier = Modifier,
-        onWebViewCreated: (WebView) -> Unit
-    ) {
+    fun WebViewScreen(modifier: Modifier = Modifier) {
         val webViewRef = remember { mutableSetOf<WebView>() }
 
         DisposableEffect(Unit) {
@@ -249,10 +321,19 @@ class MainActivity : AppCompatActivity() {
         AndroidView(
             modifier = modifier.fillMaxSize(),
             factory = { context ->
-                try {
-                    WebView(context).apply {
-                        webViewRef.add(this)
-                        onWebViewCreated(this)
+                FrameLayout(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                    val wv = WebView(context).apply {
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+
+                        setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
                         settings.apply {
                             javaScriptEnabled = true
@@ -265,36 +346,29 @@ class MainActivity : AppCompatActivity() {
                             allowContentAccess = false
                             javaScriptCanOpenWindowsAutomatically = false
                             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+                            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                         }
 
                         webViewClient = createWebViewClient()
                         webChromeClient = WebChromeClient()
-                        addJavascriptInterface(
-                            WebAppInterface(context, this@MainActivity),
-                            "AndroidInterface"
-                        )
 
-                        // تحميل WebView بعد تأخير كافٍ
-                        lifecycleScope.launch {
-                            try {
-                                delay(WEBVIEW_LOAD_DELAY_MS)
-                                if (!isDestroyed.get()) {
-                                    loadUrl("http://127.0.0.1:$SERVER_PORT/")
-                                    Log.d(TAG, "WebView loadUrl called")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "WebView load error: ${e.message}", e)
-                            }
+                        try {
+                            addJavascriptInterface(
+                                WebAppInterface(context, this@MainActivity),
+                                "AndroidInterface"
+                            )
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to add JS interface: ${e.message}")
                         }
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "WebView factory error: ${e.message}", e)
-                    // عرض نص عادي بدلاً من WebView عند الفشل
-                    android.widget.TextView(context).apply {
-                        text = "حدث خطأ في تحميل WebView: ${e.message}"
-                        textSize = 18f
-                        setPadding(32, 32, 32, 32)
-                    }
+
+                    addView(wv)
+                    webViewRef.add(wv)
+                    this@MainActivity.webView = wv
+                    this@MainActivity.isWebViewInitialized = true
+
+                    Log.d(TAG, "WebView created and added to FrameLayout")
                 }
             },
             update = { }
@@ -313,6 +387,30 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(
                 view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (isDestroyed.get()) return
+
+                val errorCode = error?.errorCode ?: -1
+                val description = error?.description?.toString() ?: "Unknown error"
+                val failingUrl = request?.url?.toString() ?: "unknown"
+
+                Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
+                serverReady = false
+
+                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                    retryLoadUrl()
+                } else {
+                    Log.e(TAG, "Max WebView retries reached")
+                    showErrorPage()
+                }
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onReceivedError(
+                view: WebView?,
                 errorCode: Int,
                 description: String?,
                 failingUrl: String?
@@ -324,18 +422,7 @@ class MainActivity : AppCompatActivity() {
                 serverReady = false
 
                 if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    val delay = calculateRetryDelay(webViewRetryCount)
-                    lifecycleScope.launch {
-                        delay(delay)
-                        if (!isDestroyed.get() && ::webView.isInitialized && webView.isAttachedToWindow) {
-                            try {
-                                webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Retry load failed: ${e.message}", e)
-                            }
-                        }
-                    }
+                    retryLoadUrl()
                 } else {
                     Log.e(TAG, "Max WebView retries reached")
                     showErrorPage()
@@ -350,24 +437,37 @@ class MainActivity : AppCompatActivity() {
                 handler?.cancel()
                 Log.e(TAG, "SSL Error: ${error?.toString()}")
             }
+
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                Log.e(TAG, "WebView RenderProcess gone. didCrash: ${detail?.didCrash()}")
+                view?.let { destroyWebView(it) }
+                if (!isDestroyed.get()) {
+                    webView = null
+                    isWebViewInitialized = false
+                }
+                return true
+            }
         }
     }
 
-    private fun calculateRetryDelay(attempt: Int): Long {
-        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
-        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
-    }
-
     private fun showErrorPage() {
-        if (!::webView.isInitialized || isDestroyed.get()) return
+        val wv = webView ?: return
+        if (isDestroyed.get()) return
+
         val errorHtml = """
             <html dir="rtl">
-            <head><style>
-                body { font-family: sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-                .error-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                h1 { color: #d32f2f; }
-                button { background: #1976d2; color: white; border: none; padding: 12px 24px; 
-                        border-radius: 5px; cursor: pointer; margin-top: 20px; }
+            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; margin: 0; }
+                .error-box { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+                h1 { color: #d32f2f; font-size: 24px; }
+                p { color: #666; line-height: 1.6; }
+                button { background: #1976d2; color: white; border: none; padding: 12px 24px;
+                        border-radius: 5px; cursor: pointer; margin-top: 20px; font-size: 16px; }
+                button:hover { background: #1565c0; }
             </style></head>
             <body>
                 <div class="error-box">
@@ -378,10 +478,11 @@ class MainActivity : AppCompatActivity() {
             </body>
             </html>
         """.trimIndent()
+
         try {
-            webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+            wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
         } catch (e: Exception) {
-            Log.e(TAG, "Error showing error page: ${e.message}", e)
+            Log.e(TAG, "Failed to load error page: ${e.message}")
         }
     }
 
@@ -496,8 +597,9 @@ class MainActivity : AppCompatActivity() {
     private fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
-            if (::webView.isInitialized && webView.isAttachedToWindow) {
-                webView.evaluateJavascript(script, null)
+            val wv = webView
+            if (wv != null && wv.isAttachedToWindow) {
+                wv.evaluateJavascript(script, null)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to evaluate JS: ${e.message}")
@@ -541,29 +643,35 @@ class MainActivity : AppCompatActivity() {
         isDestroyed.set(true)
         handler.removeCallbacksAndMessages(null)
         stopSMSService()
-        destroyWebView(webView)
+
+        try {
+            val wv = webView
+            if (wv != null) {
+                destroyWebView(wv)
+                webView = null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
+        }
+
         super.onDestroy()
     }
 
     private fun destroyWebView(webView: WebView?) {
-        webView?.let { view ->
-            try {
-                if (isDestroyed.get()) {
-                    Log.d(TAG, "Activity already destroyed, skipping WebView cleanup")
-                    return
-                }
-                (view.parent as? ViewGroup)?.removeView(view)
-                view.stopLoading()
-                view.loadUrl("about:blank")
-                view.clearHistory()
-                view.clearCache(true)
-                view.removeJavascriptInterface("AndroidInterface")
-                view.removeAllViews()
-                view.destroy()
-                Log.d(TAG, "WebView destroyed successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error destroying WebView", e)
-            }
+        if (webView == null) return
+
+        try {
+            (webView.parent as? ViewGroup)?.removeView(webView)
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.clearHistory()
+            webView.clearCache(true)
+            webView.removeJavascriptInterface("AndroidInterface")
+            webView.removeAllViews()
+            webView.destroy()
+            Log.d(TAG, "WebView destroyed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error destroying WebView", e)
         }
     }
 }
