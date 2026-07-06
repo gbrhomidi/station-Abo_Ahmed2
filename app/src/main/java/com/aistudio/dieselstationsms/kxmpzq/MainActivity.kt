@@ -1,14 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  محطة أبو أحمد - MainActivity (مُحسّن ومصحح بالكامل)
-// ═══════════════════════════════════════════════════════════════
-//
-//  التحسينات:
-//  1. تغيير الوراثة إلى AppCompatActivity لدعم BiometricPrompt
-//  2. إصلاح onRequestPermissionsResult بتوقيع صحيح
-//  3. إضافة استيرادات مفقودة
-//  4. تحسين إدارة دورة الحياة
-// ═══════════════════════════════════════════════════════════════
-
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
@@ -50,9 +39,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * MainActivity - النسخة النهائية المعالجة والآمنة
- */
 class MainActivity : AppCompatActivity() {
 
     companion object {
@@ -86,14 +72,12 @@ class MainActivity : AppCompatActivity() {
 
         if (isDebugMode) {
             WebView.setWebContentsDebuggingEnabled(true)
-            Log.d(TAG, "Debug mode enabled - WebView debugging active")
+            Log.d(TAG, "Debug mode enabled")
         }
 
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found in .env - AI features disabled")
-        } else {
-            Log.d(TAG, "Gemini API key loaded successfully")
+            Log.w(TAG, "GEMINI_API_KEY not found")
         }
 
         requestAllPermissions()
@@ -205,7 +189,7 @@ class MainActivity : AppCompatActivity() {
             }
             Log.d(TAG, "SMSService started successfully")
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException starting SMSService - missing permissions?", e)
+            Log.e(TAG, "SecurityException starting SMSService", e)
             Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
@@ -448,11 +432,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getGeminiApiKey(): String {
-            return if (geminiApiKey.isNotEmpty()) {
-                "configured"
-            } else {
-                "not_configured"
-            }
+            return if (geminiApiKey.isNotEmpty()) "configured" else "not_configured"
         }
 
         @JavascriptInterface
@@ -462,9 +442,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun isServerReady(): Boolean {
-            return serverReady
-        }
+        fun isServerReady(): Boolean = serverReady
 
         @JavascriptInterface
         fun getAppVersion(): String {
