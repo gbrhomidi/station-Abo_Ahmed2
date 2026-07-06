@@ -23,22 +23,56 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفتاح Gemini API: من خصائص Gradle أو متغيرات البيئة
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
+    // ✅ التوليد التلقائي لملف debug.keystore إذا لم يكن موجوداً
+    fun createDebugKeystore() {
+        val keystoreFile = file("debug.keystore")
+        if (!keystoreFile.exists()) {
+            println("🔑 Generating debug.keystore automatically...")
+            exec {
+                commandLine(
+                    "keytool", "-genkey", "-v",
+                    "-keystore", "debug.keystore",
+                    "-alias", "androiddebugkey",
+                    "-keyalg", "RSA",
+                    "-keysize", "2048",
+                    "-validity", "10000",
+                    "-storepass", "android",
+                    "-keypass", "android",
+                    "-dname", "CN=Android Debug, O=Android, C=US"
+                )
+            }
+            println("✅ debug.keystore generated successfully.")
+        }
+    }
+
+    // استدعاء الدالة قبل تكوين التوقيع
+    createDebugKeystore()
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isCrunchPngs = true
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
@@ -104,8 +138,8 @@ dependencies {
 
     // Core Android
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)                // ✅ الآن معرف
-    implementation(libs.androidx.activity.compose)         // ✅ معرف
+    implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -140,14 +174,14 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work)
 
-    // Biometric (مباشر)
+    // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // Security (مباشر)
+    // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
-    // NanoHTTPD (الآن معرف في libs)
+    // NanoHTTPD
     implementation(libs.nanohttpd)
 
     // Testing
@@ -172,7 +206,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// حل تعارضات الإصدارات
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
@@ -182,7 +215,6 @@ configurations.all {
     }
 }
 
-// فحص أمني تلقائي
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"
