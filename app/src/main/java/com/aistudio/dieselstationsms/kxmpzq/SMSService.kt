@@ -3,6 +3,7 @@ package com.aistudio.dieselstationsms.kxmpzq
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -21,9 +22,27 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * SMSService - خدمة الخادم المحلي المتكاملة
+ *
+ * الإصدار 4.0 – متوافق مع قاعدة البيانات V7 وواجهة الويب المتطورة
+ *
+ * الميزات:
+ * - خادم ويب NanoHTTPD على المنفذ 8080
+ * - واجهة برمجة تطبيقات (API) متكاملة مع DatabaseHelper V7
+ * - خدمة الملفات الثابتة (web_interface.html, html5-qrcode.min.js)
+ * - إرسال واستقبال الرسائل النصية (SMS)
+ * - دعم الذكاء الاصطناعي (Gemini, DeepSeek, Grok, Kimi, ChatGPT)
+ * - قائمة بيضاء للرسائل النصية لمنع الإرسال العشوائي
+ * - نسخ احتياطي تلقائي عبر WorkManager
+ * - إدارة الخزانات والمضخات وطلبات الصيانة
+ * - تقارير الأرباح والخسائر
+ */
 class SMSService : Service() {
 
     companion object {
@@ -38,6 +57,9 @@ class SMSService : Service() {
         private const val PHONE_REGEX = "^[+]?[0-9]{10,14}$"
         private const val MAX_OVERDUE_SMS = 20
         private const val DEFAULT_EXPORT_LIMIT = 1000
+
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        private val DATETIME_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     }
 
     private var server: ApiServer? = null
@@ -45,7 +67,7 @@ class SMSService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
-    // قراءة المفتاح من BuildConfig (من secrets)
+    // قراءة مفتاح Gemini من BuildConfig (من secrets في CI/CD)
     private val geminiApiKey: String by lazy {
         BuildConfig.GEMINI_API_KEY
     }
@@ -69,7 +91,7 @@ class SMSService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand called")
+        Log.d(TAG, "onStartCommand called, startId=$startId")
         if (!isDestroyed.get() && (server == null || !server!!.isAlive)) {
             serviceScope.launch { startServer() }
         }
@@ -83,16 +105,19 @@ class SMSService : Service() {
             server = null
             serviceScope.cancel()
             WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
-            Log.d(TAG, "Service destroyed")
+            Log.d(TAG, "Service destroyed and resources cleaned")
         } catch (e: Exception) {
-            Log.e(TAG, "Error during service destruction", e)
+            Log.e(TAG, "Error during service destruction: ${e.message}", e)
         }
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent): IBinder? = null
 
-    // ========== الإشعارات ==========
+    // ============================================================
+    //  الإشعارات (Foreground Service)
+    // ============================================================
+
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -100,26 +125,32 @@ class SMSService : Service() {
                 "خدمة المحطة",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "قناة إشعارات خدمة الخادم المحلي"
+                description = "قناة إشعارات خدمة الخادم المحلي لمحطة أبو أحمد"
+                setShowBadge(false)
             }
-            val nm = getSystemService(NotificationManager::class.java)
-            nm?.createNotificationChannel(channel)
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager?.createNotificationChannel(channel)
         }
     }
 
     private fun startForegroundService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
-            .setContentText("الخادم المحلي يعمل على المنفذ $currentPort")
+            .setContentText("الخادم المحلي يعمل على المنفذ $currentPort...")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
+
         startForeground(NOTIFICATION_ID, notification)
-        Log.d(TAG, "Foreground service started")
+        Log.d(TAG, "Foreground service started with notification")
     }
 
-    // ========== خادم الويب ==========
+    // ============================================================
+    //  بدء الخادم
+    // ============================================================
+
     private fun startServer() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Service is destroyed, not starting server")
@@ -132,6 +163,7 @@ class SMSService : Service() {
                 server = ApiServer(currentPort)
                 server?.start()
                 Log.d(TAG, "Server started at port $currentPort")
+                updateNotification("الخادم المحلي يعمل على المنفذ $currentPort")
                 return
             } catch (e: IOException) {
                 Log.w(TAG, "Port $currentPort busy, trying next...")
@@ -142,44 +174,67 @@ class SMSService : Service() {
         Log.e(TAG, "Failed to start server after $MAX_PORT_RETRIES attempts")
     }
 
+    private fun updateNotification(text: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("⛽ محطة أبو أحمد")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm?.notify(NOTIFICATION_ID, notification)
+    }
+
+    // ============================================================
+    //  النسخ الاحتياطي التلقائي
+    // ============================================================
+
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
                 24, TimeUnit.HOURS,
                 1, TimeUnit.HOURS
             ).build()
+
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 BACKUP_WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 backupRequest
             )
-            Log.d(TAG, "Auto backup scheduled")
+            Log.d(TAG, "Auto backup scheduled via WorkManager")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to schedule auto backup", e)
+            Log.e(TAG, "Failed to schedule auto backup: ${e.message}", e)
         }
     }
 
-    // ========== خادم API ==========
+    // ============================================================
+    //  خادم API (NanoHTTPD)
+    // ============================================================
+
     private inner class ApiServer(port: Int) : NanoHTTPD(port) {
 
         override fun serve(session: IHTTPSession): Response {
             val uri = session.uri ?: "/"
             val method = session.method ?: Method.GET
 
-            // إضافة رؤوس CORS
+            // رؤوس CORS للسماح بـ WebView بالاتصال
             val headers = mutableMapOf<String, String>()
             headers["Access-Control-Allow-Origin"] = "*"
             headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             headers["Access-Control-Allow-Headers"] = "Content-Type"
             headers["Content-Type"] = "application/json; charset=utf-8"
+            headers["X-Content-Type-Options"] = "nosniff"
+            headers["X-Frame-Options"] = "DENY"
 
+            // معالجة طلبات OPTIONS (CORS Preflight)
             if (Method.OPTIONS == method) {
                 val res = newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "")
                 headers.forEach { (k, v) -> res.addHeader(k, v) }
                 return res
             }
 
-            // خدمة الملفات الثابتة (web_interface.html)
+            // خدمة الملفات الثابتة (غير /api)
             if (!uri.startsWith("/api")) {
                 return serveStaticFile(uri)
             }
@@ -192,267 +247,581 @@ class SMSService : Service() {
 
             try {
                 when (action) {
+                    // ========== المصادقة ==========
                     "login" -> {
-                        val user = params["username"]?.firstOrNull() ?: ""
-                        val pass = params["password"]?.firstOrNull() ?: ""
-                        val auth = db.authenticateUser(user, pass)
+                        val username = params["username"]?.firstOrNull() ?: ""
+                        val password = params["password"]?.firstOrNull() ?: ""
+                        val auth = db.authenticateUser(username, password)
                         if (auth != null) {
                             responseJson.put("success", true)
                             responseJson.put("user", auth)
-                            responseJson.put("token", java.util.UUID.randomUUID().toString())
+                            responseJson.put("token", UUID.randomUUID().toString())
                         } else {
                             responseJson.put("success", false)
                             responseJson.put("error", "بيانات خاطئة")
                         }
                     }
-                    "biometric_login" -> {
-                        val user = params["username"]?.firstOrNull() ?: ""
-                        val userData = db.getUserByUsername(user)
-                        if (userData != null && userData.getInt("biometric_enabled") == 1 && userData.getInt("active") == 1) {
-                            responseJson.put("success", true)
-                            responseJson.put("user", userData)
-                            responseJson.put("token", java.util.UUID.randomUUID().toString())
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "المصادقة البيومترية غير مفعلة")
-                        }
-                    }
+
+                    // ========== العملاء ==========
                     "get_customers" -> {
                         responseJson.put("success", true)
-                        responseJson.put("data", db.getCustomers())
+                        responseJson.put("data", db.getParties())
                     }
-                    "get_refills" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getRefills())
+                    "add_customer" -> {
+                        val name = params["commercial_name"]?.firstOrNull() ?: ""
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val credit = params["credit_limit"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val type = params["party_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
+                        if (name.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "الاسم مطلوب")
+                        } else {
+                            val id = db.addParty(type, name, null, phone, credit)
+                            responseJson.put("success", true)
+                            responseJson.put("party_id", id)
+                        }
                     }
-                    "execute_sale" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val refillId = params["refill_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val qty = params["quantity_liters"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val price = params["unit_price"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val paid = params["paid_amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val paymentType = params["payment_type"]?.firstOrNull() ?: "نقداً"
-                        val dueDate = params["due_date"]?.firstOrNull() ?: ""
-                        val operator = params["operator"]?.firstOrNull() ?: "System"
-
-                        if (customerId <= 0 || refillId <= 0 || qty <= 0 || price <= 0) {
+                    "update_customer" -> {
+                        val id = params["party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val name = params["commercial_name"]?.firstOrNull() ?: ""
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val credit = params["credit_limit"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        if (id <= 0 || name.isBlank()) {
                             responseJson.put("success", false)
                             responseJson.put("error", "بيانات غير صالحة")
                         } else {
-                            val total = qty * price
-                            val due = total - paid
-                            val refill = db.getRefill(refillId)
-                            if (refill == null || refill.getDouble("remaining_quantity") < qty) {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "الكمية غير متوفرة")
-                            } else {
-                                db.updateRefillQty(refillId, qty, operator)
-                                val tid = db.insertTransaction(
-                                    customerId, refillId, qty, price, paid, due,
-                                    "cash", dueDate, paymentType, operator
-                                )
-                                responseJson.put("success", true)
-                                responseJson.put("transaction_id", tid)
-                                responseJson.put("invoice_number", db.getTransactionById(tid)?.getString("invoice_number"))
-                                responseJson.put("message", "تم البيع بنجاح")
-                            }
+                            db.updateParty(id, name, null, phone, credit, "active")
+                            responseJson.put("success", true)
                         }
                     }
+                    "delete_customer" -> {
+                        val id = params["party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        if (id <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "معرف غير صالح")
+                        } else {
+                            db.deleteParty(id)
+                            responseJson.put("success", true)
+                        }
+                    }
+                    "get_customer_report" -> {
+                        val id = params["party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        if (id <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "معرف العميل غير صالح")
+                        } else {
+                            responseJson.put("success", true)
+                            responseJson.put("data", db.getCustomerReport(id))
+                        }
+                    }
+
+                    // ========== المبيعات ==========
+                    "execute_sale" -> {
+                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
+                        val pumpId = params["pump_id"]?.firstOrNull()?.toIntOrNull() ?: 1
+                        val liters = params["liters"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val pricePerLiter = params["price_per_liter"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val paid = params["paid_amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val paymentMethod = params["payment_method"]?.firstOrNull() ?: "cash"
+                        val isCredit = params["is_credit"]?.firstOrNull()?.toIntOrNull() == 1
+                        val dueDate = params["due_date"]?.firstOrNull() ?: ""
+                        val notes = params["notes"]?.firstOrNull() ?: ""
+                        val cashierId = 1 // مؤقت: يمكن استبداله بمعرف المستخدم الحقيقي
+
+                        if (customerId <= 0 || liters <= 0 || pricePerLiter <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            val subtotal = liters * pricePerLiter
+                            val totalPaid = if (isCredit) 0.0 else paid
+                            val due = subtotal - totalPaid
+
+                            val saleId = db.insertSaleTransaction(
+                                stationId = 1,
+                                shiftId = 1,
+                                customerPartyId = customerId,
+                                fuelTypeId = fuelTypeId,
+                                pumpId = pumpId,
+                                nozzleId = null,
+                                liters = liters,
+                                pricePerLiter = pricePerLiter,
+                                subtotal = subtotal,
+                                discountAmount = 0.0,
+                                taxAmount = 0.0,
+                                grossAmount = subtotal,
+                                netAmount = subtotal,
+                                paymentMethod = paymentMethod,
+                                isCredit = isCredit,
+                                dueDate = if (isCredit) dueDate else null,
+                                cashierId = cashierId,
+                                notes = notes
+                            )
+
+                            // تسجيل النشاط
+                            db.logActivity("cashier_$cashierId", "sale", "بيع جديد: $liters لتر - $subtotal ريال")
+
+                            // إرسال SMS للعميل إذا كان لديه هاتف
+                            val customer = db.getParty(customerId)
+                            val phone = customer?.optString("phone", "")
+                            if (!phone.isNullOrEmpty() && isSmsEnabled(db)) {
+                                val msg = if (isCredit) {
+                                    "قيدنا عليكم: ${due.toInt()} ريال\nالتفاصيل: $liters لتر ديزل\nالرصيد الإجمالي: ..."
+                                } else {
+                                    "تم شراء $liters لتر ديزل بقيمة ${subtotal.toInt()} ريال\nشكراً لزيارتكم محطة أبو أحمد"
+                                }
+                                sendSMS(db, phone, msg, "sale_notification")
+                            }
+
+                            responseJson.put("success", true)
+                            responseJson.put("sale_id", saleId)
+                            responseJson.put("message", "تم البيع بنجاح")
+                            responseJson.put("invoice_number", "INV-${System.currentTimeMillis()}")
+                        }
+                    }
+
+                    // ========== المدفوعات والإيداعات ==========
                     "make_payment" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val method = params["payment_method"]?.firstOrNull() ?: "cash"
+                        val notes = params["notes"]?.firstOrNull() ?: ""
                         val operator = params["operator"]?.firstOrNull() ?: "System"
+
                         if (customerId <= 0 || amount <= 0) {
                             responseJson.put("success", false)
                             responseJson.put("error", "بيانات غير صالحة")
                         } else {
-                            db.processPayment(customerId, amount, operator)
-                            responseJson.put("success", true)
-                            responseJson.put("message", "تم التسديد")
+                            val success = db.processPayment(customerId, amount, method, operator)
+                            if (success) {
+                                db.logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId")
+                                responseJson.put("success", true)
+                                responseJson.put("message", "تم التسديد بنجاح")
+                            } else {
+                                responseJson.put("success", false)
+                                responseJson.put("error", "فشل التسديد")
+                            }
                         }
                     }
+                    "add_deposit" -> {
+                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val notes = params["notes"]?.firstOrNull() ?: ""
+                        val operator = params["operator"]?.firstOrNull() ?: "System"
+
+                        if (customerId <= 0 || amount <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            val success = db.addCashDeposit(customerId, amount, notes, operator)
+                            if (success) {
+                                // إرسال SMS للعميل
+                                val customer = db.getParty(customerId)
+                                val phone = customer?.optString("phone", "")
+                                if (!phone.isNullOrEmpty() && isSmsEnabled(db)) {
+                                    val msg = "قيدنا لكم: ${amount.toInt()} ريال\nالتفاصيل: ${notes.ifEmpty { "إيداع نقدي" }}\nالرصيد الإجمالي: ..."
+                                    sendSMS(db, phone, msg, "deposit_notification")
+                                }
+                                responseJson.put("success", true)
+                                responseJson.put("message", "تم الإيداع بنجاح")
+                            } else {
+                                responseJson.put("success", false)
+                                responseJson.put("error", "فشل الإيداع")
+                            }
+                        }
+                    }
+
+                    // ========== لوحة التحكم والتقارير ==========
                     "get_dashboard" -> {
                         responseJson.put("success", true)
-                        responseJson.put("data", JSONArray().apply { put(db.getDashboardStats()) })
+                        responseJson.put("data", db.getDashboardStats(1))
                     }
                     "get_daily_sales" -> {
                         responseJson.put("success", true)
-                        responseJson.put("data", db.getDailySales())
+                        responseJson.put("data", db.getDailySales(1))
                     }
                     "get_monthly_sales" -> {
                         responseJson.put("success", true)
-                        responseJson.put("data", db.getMonthlySales())
+                        responseJson.put("data", db.getMonthlySales(1))
                     }
                     "get_eod_report" -> {
+                        val from = params["from_date"]?.firstOrNull()
+                        val to = params["to_date"]?.firstOrNull()
                         responseJson.put("success", true)
-                        responseJson.put("data", db.getEodReport())
+                        responseJson.put("data", db.getEodReport(1, from, to))
+                    }
+                    "get_profit_report" -> {
+                        val from = params["from_date"]?.firstOrNull()
+                        val to = params["to_date"]?.firstOrNull()
+                        val report = db.getEodReport(1, from, to)
+                        responseJson.put("success", true)
+                        responseJson.put("data", report)
+                    }
+                    "export_data" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.exportAllData())
+                    }
+
+                    // ========== المخزون والتعبئة ==========
+                    "get_refills" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getRefills())
+                    }
+                    "add_refill" -> {
+                        val supplier = params["supplier"]?.firstOrNull() ?: ""
+                        val totalQty = params["total_qty"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
+                        val price = params["sell_price"]?.firstOrNull()?.toDoubleOrNull() ?: 500.0
+                        val allowCredit = params["allow_credit"]?.firstOrNull()?.toIntOrNull() ?: 1
+                        val threshold = params["alert_threshold"]?.firstOrNull()?.toDoubleOrNull() ?: 1000.0
+
+                        if (supplier.isBlank() || totalQty <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            // إضافة التعبئة في جدول tank_refills (V7)
+                            val dbWritable = db.writableDatabase
+                            val cv = android.content.ContentValues().apply {
+                                put("uuid", UUID.randomUUID().toString())
+                                put("refill_code", "REF-${System.currentTimeMillis()}")
+                                put("tank_id", 1) // مؤقت: خزان افتراضي
+                                put("supplier_id", 1)
+                                put("station_id", 1)
+                                put("fuel_type_id", fuelTypeId)
+                                put("delivered_quantity", totalQty)
+                                put("actual_quantity", totalQty)
+                                put("unit_price", price)
+                                put("status", "completed")
+                            }
+                            val id = dbWritable.insert("tank_refills", null, cv)
+                            // تحديث كمية الخزان
+                            db.execSQL("UPDATE tanks SET current_quantity = current_quantity + ? WHERE id = 1", arrayOf(totalQty))
+                            db.logActivity("System", "refill", "تعبئة جديدة: $totalQty لتر من $supplier")
+                            responseJson.put("success", true)
+                            responseJson.put("refill_id", id)
+                        }
+                    }
+
+                    // ========== الخزانات والمضخات ==========
+                    "get_tanks" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getTanks(1))
+                    }
+                    "get_pumps" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getPumps(1))
+                    }
+                    "get_fuel_types" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT id, fuel_code, fuel_name, fuel_name_ar FROM fuel_types WHERE is_active=1",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("fuel_type_id", it.getInt(0))
+                                    put("fuel_code", it.getString(1))
+                                    put("fuel_name", it.getString(2))
+                                    put("fuel_name_ar", it.getString(3))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+                    "update_tank_quantity" -> {
+                        val tankId = params["tank_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val quantity = params["quantity"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        if (tankId <= 0 || quantity < 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            db.updateTankQuantity(tankId, quantity, "System")
+                            responseJson.put("success", true)
+                        }
+                    }
+
+                    // ========== الموظفين ==========
+                    "get_employees" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getEmployees(1))
+                    }
+                    "add_employee" -> {
+                        val name = params["full_name"]?.firstOrNull() ?: ""
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val jobTitle = params["job_title"]?.firstOrNull() ?: ""
+                        val salary = params["basic_salary"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        if (name.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "الاسم مطلوب")
+                        } else {
+                            db.addEmployee(name, null, phone, jobTitle, salary, 1)
+                            responseJson.put("success", true)
+                        }
+                    }
+                    "update_employee" -> {
+                        val id = params["employee_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val name = params["full_name"]?.firstOrNull() ?: ""
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val jobTitle = params["job_title"]?.firstOrNull() ?: ""
+                        val salary = params["basic_salary"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val status = params["status"]?.firstOrNull() ?: "active"
+                        if (id <= 0 || name.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            db.updateEmployee(id, name, null, phone, jobTitle, salary, status, "", 1)
+                            responseJson.put("success", true)
+                        }
+                    }
+                    "delete_employee" -> {
+                        val id = params["employee_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        if (id <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "معرف غير صالح")
+                        } else {
+                            db.deleteEmployee(id)
+                            responseJson.put("success", true)
+                        }
+                    }
+                    "add_employee_payment" -> {
+                        val employeeId = params["employee_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
+                        val type = params["type"]?.firstOrNull() ?: "salary"
+                        val desc = params["description"]?.firstOrNull() ?: ""
+                        val operator = params["operator"]?.firstOrNull() ?: "System"
+                        if (employeeId <= 0 || amount <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            db.addEmployeePayment(employeeId, amount, type, desc, operator)
+                            responseJson.put("success", true)
+                        }
+                    }
+
+                    // ========== الصيانة ==========
+                    "add_maintenance_request" -> {
+                        val assetType = params["asset_type"]?.firstOrNull() ?: "pump"
+                        val assetId = params["asset_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val requestType = params["request_type"]?.firstOrNull() ?: ""
+                        val priority = params["priority"]?.firstOrNull() ?: "medium"
+                        val title = params["title"]?.firstOrNull() ?: ""
+                        val description = params["description"]?.firstOrNull() ?: ""
+                        val reportedBy = 1 // مؤقت
+
+                        if (assetId <= 0 || requestType.isBlank() || title.isBlank() || description.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, reportedBy, 1)
+                            responseJson.put("success", true)
+                            responseJson.put("request_id", id)
+                        }
+                    }
+                    "get_maintenance_requests" -> {
+                        val status = params["status"]?.firstOrNull()
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getMaintenanceRequests(1, status))
+                    }
+                    "update_maintenance_status" -> {
+                        val requestId = params["request_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        val status = params["status"]?.firstOrNull() ?: ""
+                        if (requestId <= 0 || status.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "بيانات غير صالحة")
+                        } else {
+                            val dbWritable = db.writableDatabase
+                            val cv = android.content.ContentValues().apply {
+                                put("status", status)
+                                if (status == "completed") {
+                                    put("completed_at", DATETIME_FORMAT.format(Date()))
+                                }
+                            }
+                            dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
+                            db.logActivity("System", "maintenance", "تحديث حالة الصيانة $requestId إلى $status")
+                            responseJson.put("success", true)
+                        }
+                    }
+
+                    // ========== الديون ==========
+                    "get_debts" -> {
+                        val type = params["type"]?.firstOrNull() ?: "all"
+                        val arr = JSONArray()
+                        val dbReadable = db.readableDatabase
+                        val sql = when (type) {
+                            "overdue" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='overdue' ORDER BY id DESC"
+                            "doubtful" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='doubtful' ORDER BY id DESC"
+                            "bad" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='bad' ORDER BY id DESC"
+                            else -> "SELECT * FROM bad_debts WHERE resolved=0 ORDER BY id DESC"
+                        }
+                        val cursor = dbReadable.rawQuery(sql, null)
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
+                                    put("customer_party_id", it.getInt(it.getColumnIndexOrThrow("customer_id")))
+                                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
+                                    put("type", it.getString(it.getColumnIndexOrThrow("type")))
+                                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
+                                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
+                                    put("customer_name", "عميل")
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+                    "resolve_debt" -> {
+                        val debtId = params["debt_id"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        if (debtId <= 0) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "معرف غير صالح")
+                        } else {
+                            db.resolveBadDebt(debtId)
+                            responseJson.put("success", true)
+                        }
+                    }
+
+                    // ========== الرسائل النصية (SMS) ==========
+                    "send_sms" -> {
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val message = params["message"]?.firstOrNull() ?: ""
+                        if (phone.isBlank() || message.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "رقم الهاتف والرسالة مطلوبان")
+                        } else {
+                            val sent = sendSMS(db, phone, message, "manual")
+                            responseJson.put("success", sent)
+                            responseJson.put("message", if (sent) "تم الإرسال" else "فشل الإرسال")
+                        }
                     }
                     "send_overdue_sms" -> {
-                        val overdue = db.getOverdueTransactions()
-                        var sent = 0
-                        for (i in 0 until minOf(overdue.length(), MAX_OVERDUE_SMS)) {
+                        val overdue = db.getOverdueTransactions(1)
+                        var sentCount = 0
+                        val total = minOf(overdue.length(), MAX_OVERDUE_SMS)
+                        for (i in 0 until total) {
                             val t = overdue.getJSONObject(i)
                             val phone = t.optString("customer_phone", "")
-                            if (phone.isNotEmpty()) {
-                                val msg = "عزيزي العميل، لديك مبلغ مستحق ${t.getDouble("due")} ريال. يرجى التسديد."
-                                if (sendSMS(db, phone, msg, "overdue_reminder")) sent++
+                            if (phone.isNotEmpty() && isSmsAllowed(phone, db)) {
+                                val msg = "تذكير: لديك مبلغ ${t.getDouble("remaining_amount").toInt()} ريال مستحق منذ ${t.optString("due_date", "")}"
+                                if (sendSMS(db, phone, msg, "overdue_reminder")) sentCount++
                                 Thread.sleep(SMS_DELAY_MS)
                             }
                         }
                         responseJson.put("success", true)
-                        responseJson.put("message", "تم إرسال $sent رسالة تذكير")
-                    }
-                    "export_data" -> {
-                        val data = db.exportAllData()
-                        responseJson.put("success", true)
-                        responseJson.put("data", data)
+                        responseJson.put("message", "تم إرسال $sentCount رسالة تذكير من $total")
                     }
                     "get_sms_logs" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getSmsLogs())
                     }
+
+                    // ========== القائمة البيضاء (Whitelist) ==========
+                    "get_whitelist" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getSmsWhitelist())
+                    }
+                    "add_whitelist" -> {
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        val name = params["name"]?.firstOrNull() ?: ""
+                        if (phone.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "رقم الهاتف مطلوب")
+                        } else {
+                            db.addToSmsWhitelist(phone, name)
+                            responseJson.put("success", true)
+                        }
+                    }
+                    "remove_whitelist" -> {
+                        val phone = params["phone"]?.firstOrNull() ?: ""
+                        if (phone.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "رقم الهاتف مطلوب")
+                        } else {
+                            db.removeFromSmsWhitelist(phone)
+                            responseJson.put("success", true)
+                        }
+                    }
+
+                    // ========== سجل النشاطات ==========
                     "get_activity_logs" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getActivityLogs())
                     }
-                    "get_customer_report" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        if (customerId > 0) {
+
+                    // ========== الإعدادات ==========
+                    "get_setting" -> {
+                        val key = params["key"]?.firstOrNull() ?: ""
+                        if (key.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "المفتاح مطلوب")
+                        } else {
+                            val value = db.getSetting(key)
                             responseJson.put("success", true)
-                            responseJson.put("data", db.getCustomerReport(customerId))
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف العميل غير صالح")
-                        }
-                    }
-                    "search_transactions" -> {
-                        val query = params["query"]?.firstOrNull() ?: ""
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.searchTransactions(query))
-                    }
-                    "get_inventory_alerts" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getInventoryAlerts())
-                    }
-                    "mark_alert_read" -> {
-                        val alertId = params["alert_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val success = db.markAlertRead(alertId)
-                        responseJson.put("success", success)
-                    }
-                    "get_loyalty_history" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        if (customerId > 0) {
-                            responseJson.put("success", true)
-                            responseJson.put("data", db.getLoyaltyHistory(customerId))
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف العميل غير صالح")
-                        }
-                    }
-                    "redeem_loyalty" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val points = params["points"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val desc = params["description"]?.firstOrNull() ?: ""
-                        if (customerId > 0 && points > 0) {
-                            val success = db.redeemLoyaltyPoints(customerId, points, desc)
-                            responseJson.put("success", success)
-                            responseJson.put("message", if (success) "تم استبدال النقاط" else "النقاط غير كافية")
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        }
-                    }
-                    "log_activity" -> {
-                        val operator = params["operator"]?.firstOrNull() ?: "System"
-                        val actionType = params["action_type"]?.firstOrNull() ?: ""
-                        val details = params["details"]?.firstOrNull() ?: ""
-                        db.logActivity(operator, actionType, details)
-                        responseJson.put("success", true)
-                    }
-                    "ai_chat" -> {
-                        val message = params["message"]?.firstOrNull() ?: ""
-                        val sessionId = params["session_id"]?.firstOrNull() ?: "default"
-                        if (geminiApiKey.isEmpty()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
-                        } else {
-                            val reply = callGeminiAPI(message, db, sessionId)
-                            responseJson.put("success", true)
-                            responseJson.put("reply", reply)
-                        }
-                    }
-                    "get_ai_insight" -> {
-                        if (geminiApiKey.isEmpty()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
-                        } else {
-                            val stats = db.getDashboardStats()
-                            val sales = db.getDailySales()
-                            val insight = generateAIInsight(stats, sales)
-                            responseJson.put("success", true)
-                            responseJson.put("insight", insight)
-                        }
-                    }
-                    "get_sales_forecast" -> {
-                        if (geminiApiKey.isEmpty()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
-                        } else {
-                            val sales = db.getDailySales()
-                            val forecast = generateSalesForecast(sales)
-                            responseJson.put("success", true)
-                            responseJson.put("forecast", forecast)
-                        }
-                    }
-                    "analyze_customer" -> {
-                        val customerId = params["customer_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        if (geminiApiKey.isEmpty()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
-                        } else if (customerId <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف العميل غير صالح")
-                        } else {
-                            val customer = db.getCustomer(customerId)
-                            if (customer != null) {
-                                val analysis = analyzeCustomerBehavior(customer)
-                                responseJson.put("success", true)
-                                responseJson.put("analysis", analysis)
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "العميل غير موجود")
-                            }
+                            responseJson.put("value", value)
                         }
                     }
                     "set_setting" -> {
                         val key = params["key"]?.firstOrNull() ?: ""
                         val value = params["value"]?.firstOrNull() ?: ""
-                        if (key.isNotEmpty()) {
+                        if (key.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "المفتاح مطلوب")
+                        } else {
                             db.setSetting(key, value)
                             responseJson.put("success", true)
-                            responseJson.put("message", "تم الحفظ")
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "المفتاح مفقود")
                         }
                     }
-                    "get_setting" -> {
-                        val key = params["key"]?.firstOrNull() ?: ""
-                        if (key.isNotEmpty()) {
+
+                    // ========== الذكاء الاصطناعي ==========
+                    "ai_chat" -> {
+                        val message = params["message"]?.firstOrNull() ?: ""
+                        val sessionId = params["session_id"]?.firstOrNull() ?: "default"
+                        if (message.isBlank()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "الرسالة فارغة")
+                        } else {
+                            // جلب المحادثة السابقة من قاعدة البيانات
+                            val history = db.getAiChatHistory(sessionId)
+                            val context = if (history.length() > 0) {
+                                "سياق المحادثة السابقة: ${history.toString().take(500)}\n\n"
+                            } else ""
+                            val prompt = "$context\nالسؤال: $message\nالرد بالعربية مختصراً ومهنياً."
+
+                            val reply = callAIWithFallback(prompt, db)
+                            db.saveAiMessage(sessionId, "assistant", reply)
                             responseJson.put("success", true)
-                            responseJson.put("value", db.getSetting(key))
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "المفتاح مفقود")
+                            responseJson.put("reply", reply)
                         }
                     }
+                    "get_ai_insight" -> {
+                        if (geminiApiKey.isEmpty() && db.getSetting("gemini_api_key").isEmpty()) {
+                            responseJson.put("success", false)
+                            responseJson.put("error", "مفتاح Gemini API غير مُكوّن")
+                        } else {
+                            val stats = db.getDashboardStats(1)
+                            val prompt = """
+                                أنت مساعد ذكي لمحطة وقود. قدم تحليلاً مختصراً للبيانات التالية:
+                                - المخزون المتبقي: ${stats.optDouble("total_remaining", 0.0).toInt()} لتر
+                                - الديون المستحقة: ${stats.optDouble("total_due", 0.0).toInt()} ريال
+                                - مبيعات اليوم: ${stats.optDouble("total_sales", 0.0).toInt()} ريال
+                                - عدد العملاء: ${stats.optInt("total_customers", 0)}
+                                قدم توصية واحدة عملية مختصرة (سطرين فقط).
+                            """.trimIndent()
+                            val insight = callAIWithFallback(prompt, db)
+                            responseJson.put("success", true)
+                            responseJson.put("insight", insight)
+                        }
+                    }
+
                     else -> {
                         responseJson.put("success", false)
                         responseJson.put("error", "إجراء غير معروف: $action")
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "API Error: ${e.message}", e)
+                Log.e(TAG, "API Error in $action: ${e.message}", e)
                 responseJson.put("success", false)
                 responseJson.put("error", "Internal error: ${e.message}")
             } finally {
@@ -466,7 +835,10 @@ class SMSService : Service() {
             return res
         }
 
-        // ========== خدمة الملفات الثابتة ==========
+        // ============================================================
+        //  خدمة الملفات الثابتة
+        // ============================================================
+
         private fun serveStaticFile(uri: String): Response {
             return try {
                 when {
@@ -492,12 +864,44 @@ class SMSService : Service() {
         }
     }
 
-    // ========== دوال الذكاء الاصطناعي ==========
-    private fun callGeminiAPI(prompt: String, db: DatabaseHelper, sessionId: String): String {
-        if (geminiApiKey.isEmpty()) return "مفتاح Gemini API غير مُكوّن"
+    // ============================================================
+    //  دوال الذكاء الاصطناعي (AI)
+    // ============================================================
 
+    private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
+        // ترتيب المزودين حسب الأولوية
+        val providers = listOf(
+            "gemini" to db.getSetting("gemini_api_key"),
+            "deepseek" to db.getSetting("deepseek_api_key"),
+            "grok" to db.getSetting("grok_api_key"),
+            "kimi" to db.getSetting("kimi_api_key"),
+            "chatgpt" to db.getSetting("chatgpt_api_key")
+        )
+
+        for ((provider, apiKey) in providers) {
+            if (apiKey.isEmpty()) continue
+            try {
+                val result = when (provider) {
+                    "gemini" -> callGeminiAPI(prompt, apiKey)
+                    "deepseek" -> callDeepSeekAPI(prompt, apiKey)
+                    "grok" -> callGrokAPI(prompt, apiKey)
+                    "kimi" -> callKimiAPI(prompt, apiKey)
+                    "chatgpt" -> callChatGPTAPI(prompt, apiKey)
+                    else -> null
+                }
+                if (result != null && !result.contains("خطأ") && !result.contains("API key")) {
+                    return result
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Provider $provider failed: ${e.message}")
+            }
+        }
+        return "جميع محاولات الاتصال بالذكاء الاصطناعي فشلت. يرجى التحقق من المفاتيح."
+    }
+
+    private fun callGeminiAPI(prompt: String, apiKey: String): String? {
         return try {
-            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$geminiApiKey")
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json")
@@ -509,9 +913,7 @@ class SMSService : Service() {
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
                         put("parts", JSONArray().apply {
-                            put(JSONObject().apply {
-                                put("text", prompt)
-                            })
+                            put(JSONObject().apply { put("text", prompt) })
                         })
                     })
                 })
@@ -533,14 +935,168 @@ class SMSService : Service() {
             }
             conn.disconnect()
 
-            parseGeminiResponse(response)
+            parseAIResponse(response)
         } catch (e: Exception) {
             Log.e(TAG, "Gemini error: ${e.message}", e)
-            "عذراً، حدث خطأ في الاتصال بـ Gemini"
+            null
         }
     }
 
-    private fun parseGeminiResponse(response: String): String {
+    private fun callDeepSeekAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.deepseek.com/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "deepseek-chat")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "DeepSeek error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callGrokAPI(prompt: String, apiKey: String): String? {
+        // Grok (xAI) - نقطة نهاية افتراضية
+        return try {
+            val url = URL("https://api.x.ai/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "grok-beta")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "Grok error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callKimiAPI(prompt: String, apiKey: String): String? {
+        // Kimi (Moonshot)
+        return try {
+            val url = URL("https://api.moonshot.cn/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "moonshot-v1-8k")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "Kimi error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callChatGPTAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.openai.com/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "gpt-3.5-turbo")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "ChatGPT error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun parseAIResponse(response: String): String {
         return try {
             val json = JSONObject(response)
             if (json.has("candidates")) {
@@ -553,64 +1109,61 @@ class SMSService : Service() {
                     }
                 }
             }
+            if (json.has("error")) {
+                return json.getJSONObject("error").optString("message", "خطأ في API")
+            }
             json.optString("error", "لم يتم الحصول على رد")
         } catch (e: Exception) {
             "خطأ في معالجة الرد"
         }
     }
 
-    private fun generateAIInsight(stats: JSONObject, sales: JSONArray): String {
-        val prompt = """
-            أنت مساعد ذكي لمحطة وقود. قدم تحليلاً مختصراً للبيانات التالية:
-            - المخزون المتبقي: ${stats.optDouble("total_remaining", 0.0).toInt()} لتر
-            - الديون المستحقة: ${stats.optDouble("total_due", 0.0).toInt()} ريال
-            - مبيعات اليوم: ${stats.optDouble("total_sales", 0.0).toInt()} ريال
-            - عدد العملاء: ${stats.optInt("total_customers", 0)}
-            قدم توصية واحدة عملية.
-        """.trimIndent()
-        return callGeminiAPI(prompt, DatabaseHelper(this), "insight")
+    // ============================================================
+    //  دوال الرسائل النصية (SMS)
+    // ============================================================
+
+    private fun isSmsEnabled(db: DatabaseHelper): Boolean {
+        return db.getSetting("sms_enabled") != "0"
     }
 
-    private fun generateSalesForecast(sales: JSONArray): String {
-        if (sales.length() < 3) return "لا توجد بيانات كافية للتوقع"
-        val prompt = """
-            بناءً على بيانات المبيعات اليومية التالية، قدم توقعاً للأسبوع القادم:
-            ${(0 until minOf(sales.length(), 30)).joinToString("\n") { i ->
-                val s = sales.getJSONObject(i)
-                "- ${s.optString("date")}: ${s.optDouble("total_qty", 0.0).toInt()} لتر"
-            }}
-        """.trimIndent()
-        return callGeminiAPI(prompt, DatabaseHelper(this), "forecast")
+    private fun isSmsAllowed(phone: String, db: DatabaseHelper): Boolean {
+        if (!isSmsEnabled(db)) return false
+        val whitelist = db.getSmsWhitelist()
+        for (i in 0 until whitelist.length()) {
+            val entry = whitelist.getJSONObject(i)
+            if (entry.getString("phone") == phone && entry.getInt("enabled") == 1) {
+                return true
+            }
+        }
+        return false
     }
 
-    private fun analyzeCustomerBehavior(customer: JSONObject): String {
-        val prompt = """
-            قم بتحليل سلوك العميل التالي وقدم نصيحة:
-            - الاسم: ${customer.optString("full_name", "غير معروف")}
-            - الرصيد المستحق: ${customer.optDouble("current_balance", 0.0).toInt()} ريال
-            - نقاط الولاء: ${customer.optInt("loyalty_points", 0)}
-            - مستوى VIP: ${customer.optInt("vip_level", 0)}
-        """.trimIndent()
-        return callGeminiAPI(prompt, DatabaseHelper(this), "analyze")
-    }
-
-    // ========== دوال SMS ==========
     private fun sendSMS(db: DatabaseHelper, phone: String, message: String, type: String): Boolean {
+        // التحقق من القائمة البيضاء
+        if (!isSmsAllowed(phone, db)) {
+            db.logSms(phone, message, type, "blocked: not in whitelist")
+            Log.w(TAG, "SMS blocked: $phone not in whitelist")
+            return false
+        }
+
         if (!phone.matches(Regex(PHONE_REGEX))) {
             db.logSms(phone, message, type, "failed: invalid number")
             return false
         }
+
         if (message.length > MAX_SMS_LENGTH) {
             db.logSms(phone, message, type, "failed: too long")
             return false
         }
+
         return try {
             val sms = SmsManager.getDefault()
             sms.sendTextMessage(phone, null, message, null, null)
             db.logSms(phone, message, type, "sent")
+            Log.d(TAG, "SMS sent to $phone")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "SMS send failed", e)
+            Log.e(TAG, "SMS send failed: ${e.message}", e)
             db.logSms(phone, message, type, "failed: ${e.message}")
             false
         }
