@@ -44,27 +44,30 @@ import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * MainActivity - النشاط الرئيسي للتطبيق
- * 
- * الإصدار 4.0 - متوافق مع قاعدة البيانات V7 وواجهة الويب المتطورة
- * 
+ * MainActivity - النشاط الرئيسي لتطبيق محطة أبو أحمد لمشتقات الديزل
+ *
+ * الإصدار 4.0 – متوافق مع:
+ * - قاعدة البيانات V7 (DatabaseHelper المتكامل مع نظام Parties)
+ * - خدمة الخادم المحلي SMSService المحدثة (قراءة المفاتيح من BuildConfig)
+ * - واجهة ويب متطورة (web_interface.html) مع دعم AI المتعدد
+ *
  * الميزات:
- * - عرض واجهة ويب متكاملة (web_interface.html) عبر WebView
- * - دعم المصادقة البيومترية (بصمة الإصبع / الوجه)
- * - بدء خدمة الخادم المحلي SMSService
- * - إدارة الأذونات المطلوبة
+ * - عرض واجهة ويب متكاملة عبر WebView
+ * - دعم المصادقة البيومترية (بصمة / وجه)
+ * - بدء خدمة الخادم المحلي (SMSService) تلقائياً
+ * - إدارة الأذونات المطلوبة للتشغيل
  * - معالجة الروابط المخصصة (واتساب، فيسبوك، بريد)
- * - دورة حياة محسنة وإدارة الذاكرة
+ * - دورة حياة محسنة وإدارة ذاكرة
  * - واجهة JavaScript للتفاعل مع التطبيق
- * - دعم مسح QR وباركود عبر مكتبة html5-qrcode
+ * - دعم مسح QR وباركود عبر مكتبة html5-qrcode (تُحمَّل من assets)
  */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
-        private const val SERVICE_START_DELAY_MS = 3000L
-        private const val WEBVIEW_LOAD_DELAY_MS = 4000L
+        private const val SERVICE_START_DELAY_MS = 3000L      // تأخير بدء الخدمة
+        private const val WEBVIEW_LOAD_DELAY_MS = 4000L       // تأخير تحميل WebView
         private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 2000L
         private const val WEBVIEW_MAX_RETRY_DELAY_MS = 15000L
         private const val MAX_WEBVIEW_RETRIES = 10
@@ -75,8 +78,12 @@ class MainActivity : AppCompatActivity() {
         private const val BIOMETRIC_CANCEL = "إلغاء"
     }
 
+    // ============================================================
+    //  متغيرات الحالة
+    // ============================================================
+
     private var webView: WebView? = null
-    private var geminiApiKey: String = ""
+    private var geminiApiKey: String = ""   // سيتم قراءتها من BuildConfig عبر SMSService، لكن نحتفظ بها للتوافق
     private var serverReady = false
     private var webViewRetryCount = 0
     private val isDestroyed = AtomicBoolean(false)
@@ -86,10 +93,14 @@ class MainActivity : AppCompatActivity() {
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
+    // ============================================================
+    //  دورة حياة النشاط
+    // ============================================================
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // معالجة enableEdgeToEdge مع try-catch لتجنب الأعطال
+        // تفعيل الحواف الكاملة (مع معالجة الأخطاء)
         try {
             enableEdgeToEdge()
         } catch (e: Exception) {
@@ -100,16 +111,16 @@ class MainActivity : AppCompatActivity() {
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
-                Log.d(TAG, "Debug mode enabled - WebView debugging active")
+                Log.d(TAG, "Debug mode enabled – WebView debugging active")
             } catch (e: Exception) {
                 Log.w(TAG, "WebView debugging enable failed: ${e.message}")
             }
         }
 
-        // تحميل مفتاح Gemini من ملف .env
+        // تحميل مفتاح Gemini (يُستخدم في JavaScript Interface)
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found in .env - AI features disabled")
+            Log.w(TAG, "GEMINI_API_KEY not found in .env – AI features may be limited")
         } else {
             Log.d(TAG, "Gemini API key loaded successfully")
         }
@@ -117,7 +128,7 @@ class MainActivity : AppCompatActivity() {
         // طلب الأذونات المطلوبة
         requestAllPermissions()
 
-        // بدء خدمة الخادم المحلي بعد تأخير
+        // بدء خدمة الخادم المحلي بعد تأخير (لتجنب تعارض بدء التشغيل)
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -136,7 +147,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // بدء تحميل WebView بعد تأخير للتأكد من تشغيل الخادم
+        // بدء تحميل WebView بعد تأخير كافٍ لضمان تشغيل الخادم
         lifecycleScope.launch {
             delay(WEBVIEW_LOAD_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -145,9 +156,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * تحميل مفتاح API من ملف .env في مجلد assets
-     */
+    // ============================================================
+    //  إدارة مفتاح Gemini (من .env للتوافق مع الإصدارات السابقة)
+    //  ملاحظة: المفاتيح تُقرأ الآن من BuildConfig في SMSService،
+    //  لكن نحتفظ بهذه الدالة لتوفير المفتاح لواجهة JavaScript.
+    // ============================================================
+
     private fun loadEnvKey(key: String): String {
         return try {
             assets.open(".env").use { stream ->
@@ -178,7 +192,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * فك التشفير عند الاستخدام
+     * فك التشفير عند الاستخدام (تُستخدم في واجهة JavaScript)
      */
     private fun decryptInMemory(encrypted: String): String {
         val key = Build.FINGERPRINT.hashCode().toByte()
@@ -227,7 +241,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    //  إدارة خدمة SMSService
+    //  إدارة خدمة SMSService (الخادم المحلي)
     // ============================================================
 
     private fun startSMSService() {
@@ -244,7 +258,7 @@ class MainActivity : AppCompatActivity() {
             }
             Log.d(TAG, "SMSService started successfully")
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException starting SMSService - missing permissions?", e)
+            Log.e(TAG, "SecurityException starting SMSService – missing permissions?", e)
             Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
@@ -263,7 +277,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    //  إدارة WebView
+    //  إدارة WebView (الواجهة الرئيسية)
     // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -334,10 +348,13 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "WebView created and added to FrameLayout")
                 }
             },
-            update = { /* تحديث إذا لزم الأمر */ }
+            update = { /* لا حاجة للتحديث هنا */ }
         )
     }
 
+    /**
+     * إنشاء WebViewClient مخصص مع معالجة الأخطاء والروابط المخصصة
+     */
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
 
@@ -349,17 +366,17 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "WebView page finished loading: $url")
             }
 
+            /**
+             * منع تحميل الروابط المخصصة داخل WebView، بل فتحها في تطبيقات خارجية
+             */
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
-
-                // معالجة الروابط المخصصة (واتساب، فيسبوك، بريد)
                 if (handleCustomUrl(url)) {
                     return true
                 }
-
                 // السماح للروابط العادية بالتحميل داخل WebView
                 return false
             }
@@ -458,9 +475,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * تحميل URL في WebView مع معالجة الأخطاء
-     */
+    // ============================================================
+    //  تحميل WebView URL وإعادة المحاولة
+    // ============================================================
+
     private fun loadWebViewUrl() {
         if (isDestroyed.get()) return
 
@@ -483,9 +501,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * إعادة محاولة تحميل URL مع تأخير تصاعدي (exponential backoff)
-     */
     private fun retryLoadUrl() {
         if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
             webViewRetryCount++
@@ -504,17 +519,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * حساب تأخير إعادة المحاولة باستخدام خوارزمية exponential backoff
-     */
     private fun calculateRetryDelay(attempt: Int): Long {
         val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
         return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
     }
 
-    /**
-     * عرض صفحة خطأ داخل WebView في حالة فشل الاتصال بالخادم
-     */
+    // ============================================================
+    //  عرض صفحة الخطأ داخل WebView
+    // ============================================================
+
     private fun showErrorPage() {
         val wv = webView ?: return
         if (isDestroyed.get()) return
@@ -548,10 +561,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * معالجة الروابط المخصصة (واتساب، فيسبوك، بريد إلكتروني)
-     * @return true إذا تم معالجة الرابط، false إذا لم يتم
-     */
+    // ============================================================
+    //  معالجة الروابط المخصصة (WhatsApp, Facebook, Email)
+    // ============================================================
+
     private fun handleCustomUrl(url: String): Boolean {
         return when {
             url.startsWith("whatsapp://") -> {
@@ -656,7 +669,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    //  JavaScript Interface
+    //  واجهة JavaScript (Bridge)
     // ============================================================
 
     inner class WebAppInterface(
@@ -688,6 +701,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getGeminiApiKey(): String {
+            // إرجاع الحالة فقط (المفتاح مشفر، لا نكشفه)
             return if (geminiApiKey.isNotEmpty()) "configured" else "not_configured"
         }
 
@@ -726,7 +740,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    //  دورة حياة النشاط (Lifecycle)
+    //  دورة حياة النشاط – إدارة النتائج والتنظيف
     // ============================================================
 
     override fun onRequestPermissionsResult(
