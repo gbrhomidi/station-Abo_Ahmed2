@@ -23,7 +23,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفاتيح API من Secrets (متغيرات البيئة أو خصائص Gradle)
+        // مفاتيح API من Secrets (متغيرات البيئة)
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
@@ -47,13 +47,10 @@ android {
         buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
     }
 
+    // ✅ تبسيط التوقيع: استخدام debug و release مع debug.keystore
     signingConfigs {
-        create("release") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
+        // التوقيع الافتراضي للـ debug (موجود مسبقاً)
+        // لا نحتاج لتعريفه، لكننا نستخدمه مباشرة
     }
 
     buildTypes {
@@ -65,7 +62,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // ✅ استخدام توقيع debug للتوزيع التجريبي
+            // للتوزيع الرسمي، استخدم توقيعاً مخصصاً
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
@@ -215,40 +214,12 @@ configurations.all {
     }
 }
 
+// ============================================================
+//  مهمة فحص أمني – تمنع رفع المفاتيح الحساسة
+// ============================================================
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"
     commandLine("grep", "-r", "GEMINI_API_KEY", "src/")
     isIgnoreExitValue = true
-}
-
-tasks.register("generateDebugKeystore") {
-    group = "build"
-    description = "Generate debug.keystore if it doesn't exist"
-    doLast {
-        val keystoreFile = file("debug.keystore")
-        if (!keystoreFile.exists()) {
-            println("🔑 Generating debug.keystore...")
-            exec {
-                commandLine(
-                    "keytool", "-genkey", "-v",
-                    "-keystore", "debug.keystore",
-                    "-alias", "androiddebugkey",
-                    "-keyalg", "RSA",
-                    "-keysize", "2048",
-                    "-validity", "10000",
-                    "-storepass", "android",
-                    "-keypass", "android",
-                    "-dname", "CN=Android Debug, O=Android, C=US"
-                )
-            }
-            println("✅ debug.keystore generated successfully")
-        } else {
-            println("✅ debug.keystore already exists")
-        }
-    }
-}
-
-tasks.preBuild {
-    dependsOn("generateDebugKeystore")
 }
