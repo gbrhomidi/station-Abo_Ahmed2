@@ -23,16 +23,31 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفتاح Gemini API من خصائص Gradle أو متغيرات البيئة
+        // مفاتيح API من Secrets (متغيرات البيئة أو خصائص Gradle)
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
+        val deepseekKey = project.properties["DEEPSEEK_API_KEY"] as? String
+            ?: System.getenv("DEEPSEEK_API_KEY")
+            ?: ""
+        val grokKey = project.properties["GROK_API_KEY"] as? String
+            ?: System.getenv("GROK_API_KEY")
+            ?: ""
+        val kimiKey = project.properties["KIMI_API_KEY"] as? String
+            ?: System.getenv("KIMI_API_KEY")
+            ?: ""
+        val chatgptKey = project.properties["CHATGPT_API_KEY"] as? String
+            ?: System.getenv("CHATGPT_API_KEY")
+            ?: ""
+
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+        buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekKey\"")
+        buildConfigField("String", "GROK_API_KEY", "\"$grokKey\"")
+        buildConfigField("String", "KIMI_API_KEY", "\"$kimiKey\"")
+        buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
     }
 
     signingConfigs {
-        // توقيع Release باستخدام debug.keystore (للتوزيع التجريبي)
-        // للتوزيع الرسمي، استخدم توقيعاً مخصصاً
         create("release") {
             storeFile = file("debug.keystore")
             storePassword = "android"
@@ -112,14 +127,10 @@ android {
 }
 
 dependencies {
-    // ============================================================
-    //  Compose BOM
-    // ============================================================
+    // Compose BOM
     implementation(platform(libs.androidx.compose.bom))
 
-    // ============================================================
-    //  Android Core
-    // ============================================================
+    // Core Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.compose)
@@ -127,30 +138,22 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // ============================================================
-    //  Compose UI
-    // ============================================================
+    // Compose UI
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
 
-    // ============================================================
-    //  Navigation
-    // ============================================================
+    // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // ============================================================
-    //  Room Database
-    // ============================================================
+    // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // ============================================================
-    //  Network
-    // ============================================================
+    // Network
     implementation(libs.retrofit)
     implementation(libs.converter.moshi)
     implementation(libs.okhttp)
@@ -158,46 +161,30 @@ dependencies {
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
 
-    // ============================================================
-    //  Coroutines
-    // ============================================================
+    // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
 
-    // ============================================================
-    //  WorkManager
-    // ============================================================
+    // WorkManager
     implementation(libs.androidx.work)
 
-    // ============================================================
-    //  Biometric Authentication
-    // ============================================================
+    // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // ============================================================
-    //  Security
-    // ============================================================
+    // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
-    // ============================================================
-    //  NanoHTTPD (خادم ويب مدمج)
-    // ============================================================
+    // NanoHTTPD
     implementation(libs.nanohttpd)
 
-    // ============================================================
-    //  Material Components
-    // ============================================================
+    // Material Components
     implementation("com.google.android.material:material:1.12.0")
 
-    // ============================================================
-    //  QR Code Scanning (ZXing)
-    // ============================================================
+    // QR Code Scanning (ZXing)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // ============================================================
-    //  Testing
-    // ============================================================
+    // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
@@ -209,25 +196,16 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.runner)
 
-    // ============================================================
-    //  Android Testing
-    // ============================================================
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.runner)
 
-    // ============================================================
-    //  Debug
-    // ============================================================
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-// ============================================================
-//  حل تعارضات الإصدارات
-// ============================================================
 configurations.all {
     resolutionStrategy {
         force("com.squareup.okhttp3:okhttp:4.10.0")
@@ -237,9 +215,6 @@ configurations.all {
     }
 }
 
-// ============================================================
-//  مهمة فحص أمني – تمنع رفع المفاتيح الحساسة
-// ============================================================
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"
@@ -247,9 +222,6 @@ tasks.register<Exec>("securityCheck") {
     isIgnoreExitValue = true
 }
 
-// ============================================================
-//  مهمة لإنشاء debug.keystore في حالة عدم وجوده
-// ============================================================
 tasks.register("generateDebugKeystore") {
     group = "build"
     description = "Generate debug.keystore if it doesn't exist"
@@ -277,7 +249,6 @@ tasks.register("generateDebugKeystore") {
     }
 }
 
-// تأكد من تنفيذ مهمة توليد المفتاح قبل تكوين التوقيع
 tasks.preBuild {
     dependsOn("generateDebugKeystore")
 }
