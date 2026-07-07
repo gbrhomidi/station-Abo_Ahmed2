@@ -125,6 +125,34 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
+    // CREATE ALL TABLES (المدمج لـ onCreate)
+    // ================================================================
+    private fun createAllTables(db: SQLiteDatabase) {
+        createCoreTables(db)
+        createSecurityTables(db)
+        createPartyTables(db)
+        createVehicleTables(db)
+        createProductTables(db)
+        createTankPumpTables(db)
+        createInventoryTables(db)
+        createSalesTables(db)
+        createFinanceTables(db)
+        createAccountingTables(db)
+        createHRTables(db)
+        createAssetTables(db)
+        createNotificationTables(db)
+        createLogTables(db)
+        createAdvancedTables(db)
+        createLedgerTables(db)
+        createPrintTables(db)
+        createEmployeeTable(db)
+        createBadDebtTable(db)
+        createCashDepositTable(db)
+        createSmsWhitelistTable(db)
+        createIndexes(db)
+    }
+
+    // ================================================================
     // 1. CORE TABLES (Companies, Stations, Currencies, Terminals)
     // ================================================================
     private fun createCoreTables(db: SQLiteDatabase) {
