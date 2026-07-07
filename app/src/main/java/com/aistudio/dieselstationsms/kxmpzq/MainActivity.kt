@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -42,13 +43,27 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * MainActivity - النشاط الرئيسي للتطبيق
+ * 
+ * الإصدار 4.0 - متوافق مع قاعدة البيانات V7 وواجهة الويب المتطورة
+ * 
+ * الميزات:
+ * - عرض واجهة ويب متكاملة (web_interface.html) عبر WebView
+ * - دعم المصادقة البيومترية (بصمة الإصبع / الوجه)
+ * - بدء خدمة الخادم المحلي SMSService
+ * - إدارة الأذونات المطلوبة
+ * - معالجة الروابط المخصصة (واتساب، فيسبوك، بريد)
+ * - دورة حياة محسنة وإدارة الذاكرة
+ * - واجهة JavaScript للتفاعل مع التطبيق
+ * - دعم مسح QR وباركود عبر مكتبة html5-qrcode
+ */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
-        private const val SERVICE_START_DELAY_MS = 1000L
-        private const val WEBVIEW_INIT_DELAY_MS = 500L
+        private const val SERVICE_START_DELAY_MS = 3000L
         private const val WEBVIEW_LOAD_DELAY_MS = 4000L
         private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 2000L
         private const val WEBVIEW_MAX_RETRY_DELAY_MS = 15000L
@@ -74,30 +89,35 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ✅ تحسين: try-catch حول enableEdgeToEdge
+        // معالجة enableEdgeToEdge مع try-catch لتجنب الأعطال
         try {
             enableEdgeToEdge()
         } catch (e: Exception) {
             Log.e(TAG, "enableEdgeToEdge failed: ${e.message}", e)
         }
 
+        // تفعيل تصحيح WebView في وضع التطوير
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
+                Log.d(TAG, "Debug mode enabled - WebView debugging active")
             } catch (e: Exception) {
                 Log.w(TAG, "WebView debugging enable failed: ${e.message}")
             }
-            Log.d(TAG, "Debug mode enabled")
         }
 
+        // تحميل مفتاح Gemini من ملف .env
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found")
+            Log.w(TAG, "GEMINI_API_KEY not found in .env - AI features disabled")
+        } else {
+            Log.d(TAG, "Gemini API key loaded successfully")
         }
 
+        // طلب الأذونات المطلوبة
         requestAllPermissions()
 
-        // بدء خدمة SMS
+        // بدء خدمة الخادم المحلي بعد تأخير
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -105,107 +125,29 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ تحسين: try-catch حول setContent
-        try {
-            setContent {
-                MyApplicationTheme {
-                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                        WebViewScreen(
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "setContent failed: ${e.message}", e)
-            Toast.makeText(this, "خطأ في تحميل الواجهة: ${e.message}", Toast.LENGTH_LONG).show()
-            // عرض واجهة بديلة بسيطة
-            setContent {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = androidx.compose.ui.Alignment.Center
-                ) {
-                    androidx.compose.material3.Text(
-                        text = "⚠️ تعذر تحميل الواجهة\n${e.message}",
-                        color = androidx.compose.ui.graphics.Color.Red,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        // تحميل واجهة Compose التي تحتوي على WebView
+        setContent {
+            MyApplicationTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    WebViewScreen(
+                        modifier = Modifier.padding(innerPadding)
                     )
                 }
             }
         }
 
-        // جدولة تحميل WebView بعد التأكد من تشغيل كل شيء
+        // بدء تحميل WebView بعد تأخير للتأكد من تشغيل الخادم
         lifecycleScope.launch {
-            delay(WEBVIEW_INIT_DELAY_MS)
-            initializeWebViewLoading()
-        }
-    }
-
-    private fun initializeWebViewLoading() {
-        if (isDestroyed.get()) return
-
-        handler.postDelayed({
-            if (isDestroyed.get()) return@postDelayed
-
-            val wv = webView
-            if (wv != null && !isDestroyed.get()) {
-                Log.d(TAG, "Initializing WebView URL load")
+            delay(WEBVIEW_LOAD_DELAY_MS)
+            if (!isDestroyed.get()) {
                 loadWebViewUrl()
-            } else {
-                Log.w(TAG, "WebView not ready yet, retrying...")
-                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    initializeWebViewLoading()
-                }
             }
-        }, WEBVIEW_LOAD_DELAY_MS)
-    }
-
-    private fun loadWebViewUrl() {
-        if (isDestroyed.get()) return
-
-        val wv = webView ?: run {
-            Log.w(TAG, "WebView is null, cannot load URL")
-            return
-        }
-
-        try {
-            if (wv.isAttachedToWindow) {
-                Log.d(TAG, "Loading URL: http://127.0.0.1:$SERVER_PORT/")
-                wv.loadUrl("http://127.0.0.1:$SERVER_PORT/")
-            } else {
-                Log.w(TAG, "WebView not attached to window yet")
-                retryLoadUrl()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading URL: ${e.message}", e)
-            retryLoadUrl()
         }
     }
 
-    private fun retryLoadUrl() {
-        if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
-            webViewRetryCount++
-            val delay = calculateRetryDelay(webViewRetryCount)
-            Log.d(TAG, "Retrying URL load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-
-            lifecycleScope.launch {
-                delay(delay)
-                if (!isDestroyed.get()) {
-                    loadWebViewUrl()
-                }
-            }
-        } else {
-            Log.e(TAG, "Max retries reached, showing error page")
-            showErrorPage()
-        }
-    }
-
-    private fun calculateRetryDelay(attempt: Int): Long {
-        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
-        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
-    }
-
+    /**
+     * تحميل مفتاح API من ملف .env في مجلد assets
+     */
     private fun loadEnvKey(key: String): String {
         return try {
             assets.open(".env").use { stream ->
@@ -227,15 +169,25 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * تشفير بسيط في الذاكرة (XOR باستخدام بصمة الجهاز)
+     */
     private fun encryptInMemory(value: String): String {
         val key = Build.FINGERPRINT.hashCode().toByte()
         return value.map { (it.code xor key.toInt()).toChar() }.joinToString("")
     }
 
+    /**
+     * فك التشفير عند الاستخدام
+     */
     private fun decryptInMemory(encrypted: String): String {
         val key = Build.FINGERPRINT.hashCode().toByte()
         return encrypted.map { (it.code xor key.toInt()).toChar() }.joinToString("")
     }
+
+    // ============================================================
+    //  إدارة الأذونات
+    // ============================================================
 
     private fun requestAllPermissions() {
         val permissions = mutableListOf<String>()
@@ -274,7 +226,10 @@ class MainActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    // ========== خدمة SMS ==========
+    // ============================================================
+    //  إدارة خدمة SMSService
+    // ============================================================
+
     private fun startSMSService() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Activity is destroyed, not starting service")
@@ -288,9 +243,12 @@ class MainActivity : AppCompatActivity() {
                 startService(intent)
             }
             Log.d(TAG, "SMSService started successfully")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting SMSService - missing permissions?", e)
+            Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء الخدمة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -304,7 +262,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== WebView مع FrameLayout Wrapper ==========
+    // ============================================================
+    //  إدارة WebView
+    // ============================================================
+
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
     fun WebViewScreen(modifier: Modifier = Modifier) {
@@ -333,6 +294,7 @@ class MainActivity : AppCompatActivity() {
                             FrameLayout.LayoutParams.MATCH_PARENT
                         )
 
+                        // تحسين الأداء باستخدام الطبقة المادية
                         setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
                         settings.apply {
@@ -348,6 +310,7 @@ class MainActivity : AppCompatActivity() {
                             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                            loadsImagesAutomatically = true
                         }
 
                         webViewClient = createWebViewClient()
@@ -371,18 +334,43 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "WebView created and added to FrameLayout")
                 }
             },
-            update = { }
+            update = { /* تحديث إذا لزم الأمر */ }
         )
     }
 
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (isDestroyed.get()) return
                 serverReady = true
                 webViewRetryCount = 0
                 Log.d(TAG, "WebView page finished loading: $url")
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val url = request?.url?.toString() ?: return false
+
+                // معالجة الروابط المخصصة (واتساب، فيسبوك، بريد)
+                if (handleCustomUrl(url)) {
+                    return true
+                }
+
+                // السماح للروابط العادية بالتحميل داخل WebView
+                return false
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                if (url == null) return false
+                if (handleCustomUrl(url)) {
+                    return true
+                }
+                return false
             }
 
             override fun onReceivedError(
@@ -401,7 +389,16 @@ class MainActivity : AppCompatActivity() {
                 serverReady = false
 
                 if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    retryLoadUrl()
+                    webViewRetryCount++
+                    val delay = calculateRetryDelay(webViewRetryCount)
+                    Log.d(TAG, "Retrying WebView in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+
+                    lifecycleScope.launch {
+                        delay(delay)
+                        if (!isDestroyed.get()) {
+                            loadWebViewUrl()
+                        }
+                    }
                 } else {
                     Log.e(TAG, "Max WebView retries reached")
                     showErrorPage()
@@ -422,7 +419,14 @@ class MainActivity : AppCompatActivity() {
                 serverReady = false
 
                 if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    retryLoadUrl()
+                    webViewRetryCount++
+                    val delay = calculateRetryDelay(webViewRetryCount)
+                    lifecycleScope.launch {
+                        delay(delay)
+                        if (!isDestroyed.get()) {
+                            loadWebViewUrl()
+                        }
+                    }
                 } else {
                     Log.e(TAG, "Max WebView retries reached")
                     showErrorPage()
@@ -434,6 +438,7 @@ class MainActivity : AppCompatActivity() {
                 handler: android.webkit.SslErrorHandler?,
                 error: android.net.http.SslError?
             ) {
+                // رفض الاتصالات غير الآمنة
                 handler?.cancel()
                 Log.e(TAG, "SSL Error: ${error?.toString()}")
             }
@@ -453,6 +458,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * تحميل URL في WebView مع معالجة الأخطاء
+     */
+    private fun loadWebViewUrl() {
+        if (isDestroyed.get()) return
+
+        val wv = webView ?: run {
+            Log.w(TAG, "WebView is null, cannot load URL")
+            return
+        }
+
+        try {
+            if (wv.isAttachedToWindow) {
+                Log.d(TAG, "Loading URL: http://127.0.0.1:$SERVER_PORT/")
+                wv.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+            } else {
+                Log.w(TAG, "WebView not attached to window yet, retrying...")
+                retryLoadUrl()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading URL: ${e.message}", e)
+            retryLoadUrl()
+        }
+    }
+
+    /**
+     * إعادة محاولة تحميل URL مع تأخير تصاعدي (exponential backoff)
+     */
+    private fun retryLoadUrl() {
+        if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
+            webViewRetryCount++
+            val delay = calculateRetryDelay(webViewRetryCount)
+            Log.d(TAG, "Retrying URL load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+
+            lifecycleScope.launch {
+                delay(delay)
+                if (!isDestroyed.get()) {
+                    loadWebViewUrl()
+                }
+            }
+        } else {
+            Log.e(TAG, "Max retries reached, showing error page")
+            showErrorPage()
+        }
+    }
+
+    /**
+     * حساب تأخير إعادة المحاولة باستخدام خوارزمية exponential backoff
+     */
+    private fun calculateRetryDelay(attempt: Int): Long {
+        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
+        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
+    }
+
+    /**
+     * عرض صفحة خطأ داخل WebView في حالة فشل الاتصال بالخادم
+     */
     private fun showErrorPage() {
         val wv = webView ?: return
         if (isDestroyed.get()) return
@@ -486,8 +548,55 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== Biometric ==========
+    /**
+     * معالجة الروابط المخصصة (واتساب، فيسبوك، بريد إلكتروني)
+     * @return true إذا تم معالجة الرابط، false إذا لم يتم
+     */
+    private fun handleCustomUrl(url: String): Boolean {
+        return when {
+            url.startsWith("whatsapp://") -> {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(intent)
+                    true
+                } catch (e: Exception) {
+                    Log.w(TAG, "WhatsApp not installed", e)
+                    Toast.makeText(this, "تطبيق واتساب غير مثبت", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            }
+            url.startsWith("fb://") || url.startsWith("facebook://") -> {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(intent)
+                    true
+                } catch (e: Exception) {
+                    Log.w(TAG, "Facebook not installed", e)
+                    Toast.makeText(this, "تطبيق فيسبوك غير مثبت", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            }
+            url.startsWith("mailto:") -> {
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(intent)
+                    true
+                } catch (e: Exception) {
+                    Log.w(TAG, "No email app found", e)
+                    Toast.makeText(this, "لا يوجد تطبيق بريد إلكتروني", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            }
+            else -> false
+        }
+    }
+
+    // ============================================================
+    //  المصادقة البيومترية (Biometric)
+    // ============================================================
+
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        // التحقق من وجود المكتبة
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
@@ -513,15 +622,19 @@ class MainActivity : AppCompatActivity() {
                         super.onAuthenticationSucceeded(result)
                         onSuccess()
                     }
+
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
                         onError("failed")
                     }
+
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
-                            androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> onError("cancelled")
+                            androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
+                                onError("cancelled")
+                            }
                             else -> onError(errString.toString())
                         }
                     }
@@ -542,7 +655,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== JavaScript Interface ==========
+    // ============================================================
+    //  JavaScript Interface
+    // ============================================================
+
     inner class WebAppInterface(
         private val context: Context,
         private val activity: MainActivity
@@ -594,6 +710,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * تنفيذ كود JavaScript بأمان
+     */
     private fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
@@ -606,21 +725,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ========== Lifecycle ==========
+    // ============================================================
+    //  دورة حياة النشاط (Lifecycle)
+    // ============================================================
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
         if (requestCode != PERMISSION_REQUEST_CODE) return
         if (grantResults.isEmpty()) {
             Log.w(TAG, "Permission result is empty")
             return
         }
+
         val denied = permissions.zip(grantResults.toList())
             .filter { it.second != PackageManager.PERMISSION_GRANTED }
             .map { it.first }
+
         if (denied.isNotEmpty()) {
             Log.w(TAG, "Denied permissions: $denied")
             val criticalPermissions = listOf(
@@ -628,6 +753,7 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.RECEIVE_SMS
             )
             val hasCriticalDenied = denied.any { it in criticalPermissions }
+
             if (hasCriticalDenied) {
                 Toast.makeText(
                     this,
@@ -642,8 +768,11 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "onDestroy called")
         isDestroyed.set(true)
         handler.removeCallbacksAndMessages(null)
+
+        // إيقاف الخدمة
         stopSMSService()
 
+        // تدمير WebView
         try {
             val wv = webView
             if (wv != null) {
@@ -657,11 +786,15 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    /**
+     * تدمير WebView بشكل آمن لمنع تسرب الذاكرة
+     */
     private fun destroyWebView(webView: WebView?) {
         if (webView == null) return
 
         try {
             (webView.parent as? ViewGroup)?.removeView(webView)
+
             webView.stopLoading()
             webView.loadUrl("about:blank")
             webView.clearHistory()
@@ -669,6 +802,7 @@ class MainActivity : AppCompatActivity() {
             webView.removeJavascriptInterface("AndroidInterface")
             webView.removeAllViews()
             webView.destroy()
+
             Log.d(TAG, "WebView destroyed successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error destroying WebView", e)
