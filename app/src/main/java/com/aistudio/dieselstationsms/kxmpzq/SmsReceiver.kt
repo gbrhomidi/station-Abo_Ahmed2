@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Telephony
 import android.telephony.SmsManager
-import android.telephony.SubscriptionManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import java.util.Locale
@@ -115,21 +114,23 @@ class SmsReceiver : BroadcastReceiver() {
         val cleanSender = normalizePhone(sender)
         var found = false
 
-        val customers = db.getCustomers()
-        for (i in 0 until customers.length()) {
-            val c = customers.getJSONObject(i)
-            val cPhone = normalizePhone(c.optString("phone", ""))
+        // استخدام getParties بدلاً من getCustomers
+        val parties = db.getParties()
+        for (i in 0 until parties.length()) {
+            val p = parties.getJSONObject(i)
+            val pPhone = normalizePhone(p.optString("phone", ""))
 
-            if (cPhone.isNotEmpty() && isPhoneMatch(cleanSender, cPhone)) {
-                val bal = c.optDouble("current_balance", 0.0)
-                val points = c.optInt("loyalty_points", 0)
-                val vip = c.optInt("vip_level", 0)
+            if (pPhone.isNotEmpty() && isPhoneMatch(cleanSender, pPhone)) {
+                val bal = p.optDouble("current_balance", 0.0)
+                val points = p.optInt("loyalty_points", 0)
+                // vip_level غير موجود في parties، نستخدم قيمة افتراضية 0
+                val vip = 0
                 val vipText = when (vip) {
                     3 -> "ذهبي"
                     2 -> "فضي"
                     else -> "عادي"
                 }
-                val name = c.optString("full_name", "عميلنا العزيز")
+                val name = p.optString("commercial_name", "عميلنا العزيز")
                 val reply = "مرحباً $name،\nالرصيد: $bal ريال\nالنقاط: $points\nالعضوية: $vipText"
 
                 sendReply(context, db, sender, reply)
