@@ -11,13 +11,13 @@ import org.json.JSONObject
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V7: دمج V6 القديم مع Schema V6 المتقدم (32 مجموعة جداول)
- * تاريخ التحديث: 2026-07-07
+ * الإصدار المدمج V7 - كامل مع جميع الجداول والدوال
+ * تم إصلاح أخطاء ContentValues.put وأنواع البيانات، وإضافة الدوال المفقودة
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
@@ -47,7 +47,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             val salt = storedSalt.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             return hashPassword(password, salt).first == storedHash
         }
+
+        private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     }
+
+    private val dbLock = ReentrantLock()
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
@@ -57,24 +61,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     override fun onCreate(db: SQLiteDatabase) {
         db.beginTransaction()
         try {
-            createCoreTables(db)
-            createSecurityTables(db)
-            createPartyTables(db)
-            createVehicleTables(db)
-            createProductTables(db)
-            createTankPumpTables(db)
-            createInventoryTables(db)
-            createSalesTables(db)
-            createFinanceTables(db)
-            createAccountingTables(db)
-            createHRTables(db)
-            createAssetTables(db)
-            createNotificationTables(db)
-            createLogTables(db)
-            createAdvancedTables(db)
-            createLedgerTables(db)
-            createPrintTables(db)
-            createIndexes(db)
+            createAllTables(db)
             insertInitialData(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V7 created successfully with full schema")
@@ -116,8 +103,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     private fun migrateV6ToV7(db: SQLiteDatabase) {
-        // Drop old simple tables if they exist (backup data first if needed)
-        // For production, you should migrate data. Here we assume fresh or managed migration.
         createCoreTables(db)
         createSecurityTables(db)
         createPartyTables(db)
@@ -4503,7 +4488,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // AUTHENTICATION
+    // 21. AUTHENTICATION
     // ================================================================
     fun authenticateUser(username: String, password: String): JSONObject? {
         val db = readableDatabase
@@ -4514,8 +4499,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use {
             if (it.moveToFirst()) {
                 val storedHash = it.getString(it.getColumnIndexOrThrow("password_hash"))
-                val storedSalt = it.getString(it.getColumnIndexOrThrow("password_hash")) // Using hash field for salt storage in new schema or separate
-                // Note: In new schema we use single password_hash field. Let's check if salt exists
+                val storedSalt = it.getString(it.getColumnIndexOrThrow("password_hash"))
                 val saltCol = it.getColumnIndex("password_salt")
                 val actualSalt = if (saltCol >= 0) it.getString(saltCol) else storedHash
                 if (verifyPassword(password, storedHash, actualSalt)) {
@@ -4565,7 +4549,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // PARTIES (CUSTOMERS / SUPPLIERS)
+    // 22. PARTIES (CUSTOMERS / SUPPLIERS)
     // ================================================================
     fun getParties(typeId: Int? = null): JSONArray {
         val arr = JSONArray()
@@ -4593,11 +4577,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
     fun addParty(partyTypeId: Int, commercialName: String, commercialNameAr: String?, phone: String?, creditLimit: Double): Long {
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
             put("party_code", "PTY-${System.currentTimeMillis()}")
             put("party_type_id", partyTypeId)
             put("commercial_name", commercialName)
-            put("commercial_name_ar", commercialNameAr)
+            if (commercialNameAr != null) put("commercial_name_ar", commercialNameAr)
+            if (phone != null) put("phone", phone)
             put("credit_limit", creditLimit)
             put("is_active", 1)
         }
@@ -4607,8 +4592,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     fun updateParty(id: Int, commercialName: String, commercialNameAr: String?, phone: String?, creditLimit: Double, status: String): Int {
         val cv = ContentValues().apply {
             put("commercial_name", commercialName)
-            put("commercial_name_ar", commercialNameAr)
-            put("phone", phone)
+            if (commercialNameAr != null) put("commercial_name_ar", commercialNameAr)
+            if (phone != null) put("phone", phone)
             put("credit_limit", creditLimit)
             put("status", status)
         }
@@ -4640,7 +4625,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // TANKS & PUMPS
+    // 23. TANKS & PUMPS
     // ================================================================
     fun getTanks(stationId: Int? = null): JSONArray {
         val arr = JSONArray()
@@ -4735,17 +4720,17 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // SHIFTS
+    // 24. SHIFTS
     // ================================================================
     fun openShift(stationId: Int, shiftType: String, cashierId: Int, openingCash: Double, openingBank: Double = 0.0): Long {
         val shiftCode = "SHF-${System.currentTimeMillis()}"
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
             put("shift_code", shiftCode)
             put("station_id", stationId)
             put("shift_date", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
             put("shift_type", shiftType)
-            put("start_time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+            put("start_time", DATE_FORMAT.format(Date()))
             put("cashier_id", cashierId)
             put("opening_cash", openingCash)
             put("opening_bank", openingBank)
@@ -4759,7 +4744,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.beginTransaction()
         try {
             val cv = ContentValues().apply {
-                put("end_time", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+                put("end_time", DATE_FORMAT.format(Date()))
                 put("closing_cash", closingCash)
                 put("closing_bank", closingBank)
                 put("total_sales", totalSales)
@@ -4818,7 +4803,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // SALES TRANSACTIONS
+    // 25. SALES TRANSACTIONS
     // ================================================================
     fun insertSaleTransaction(
         stationId: Int,
@@ -4846,14 +4831,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             val saleCode = "SALE-${System.currentTimeMillis()}"
             val invoiceNo = "INV-${System.currentTimeMillis()}"
             val cv = ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
+                put("uuid", UUID.randomUUID().toString())
                 put("sale_code", saleCode)
                 put("station_id", stationId)
                 put("shift_id", shiftId)
-                put("customer_party_id", customerPartyId)
-                put("fuel_type_id", fuelTypeId)
-                put("pump_id", pumpId)
-                put("nozzle_id", nozzleId)
+                if (customerPartyId != null) put("customer_party_id", customerPartyId)
+                if (fuelTypeId != null) put("fuel_type_id", fuelTypeId)
+                if (pumpId != null) put("pump_id", pumpId)
+                if (nozzleId != null) put("nozzle_id", nozzleId)
                 put("liters", liters)
                 put("price_per_liter", pricePerLiter)
                 put("fuel_subtotal", liters * pricePerLiter)
@@ -4864,14 +4849,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 put("net_amount", netAmount)
                 put("payment_method", paymentMethod)
                 put("payment_status", if (isCredit) "pending" else "paid")
-                put("paid_amount", if (isCredit) 0 else netAmount)
-                put("remaining_amount", if (isCredit) netAmount else 0)
+                put("paid_amount", if (isCredit) 0.0 else netAmount)
+                put("remaining_amount", if (isCredit) netAmount else 0.0)
                 put("is_credit", if (isCredit) 1 else 0)
-                put("due_date", if (isCredit) dueDate else null)
+                if (dueDate != null) put("due_date", dueDate)
                 put("invoice_number", invoiceNo)
                 put("cashier_id", cashierId)
                 put("status", "completed")
-                put("created_by", cashierId)
+                put("notes", notes)
             }
             val saleId = db.insert("sales_transactions", null, cv)
 
@@ -4885,8 +4870,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
             // Update shift totals
             db.execSQL(
-                "UPDATE shifts SET total_sales = total_sales + ?, total_fuel_sales = total_fuel_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ?",
-                arrayOf(netAmount, netAmount, liters, shiftId)
+                "UPDATE shifts SET total_sales = total_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ?",
+                arrayOf(netAmount, liters, shiftId)
             )
 
             // Update party balance if credit
@@ -4895,17 +4880,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                     "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
                     arrayOf(netAmount, netAmount, customerPartyId)
                 )
-                // Add to customer ledger
                 val ledgerCv = ContentValues().apply {
-                    put("uuid", java.util.UUID.randomUUID().toString())
+                    put("uuid", UUID.randomUUID().toString())
                     put("party_id", customerPartyId)
-                    put("transaction_date", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+                    put("transaction_date", DATE_FORMAT.format(Date()))
                     put("transaction_type", "sale_credit")
                     put("transaction_id", saleId.toInt())
                     put("reference_number", invoiceNo)
                     put("debit", netAmount)
-                    put("credit", 0)
-                    put("balance", getPartyBalance(customerPartyId) + netAmount)
+                    put("credit", 0.0)
+                    put("balance", getPartyBalance(customerPartyId))
                     put("description", "فاتورة بيع آجل: $invoiceNo")
                 }
                 db.insert("customer_ledger", null, ledgerCv)
@@ -4971,7 +4955,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // PAYMENTS
+    // 26. PAYMENTS
     // ================================================================
     fun processPayment(saleId: Int, customerPartyId: Int, amount: Double, paymentMethod: String, operator: String = "System", cashBoxId: Int? = null): Boolean {
         val db = writableDatabase
@@ -4979,7 +4963,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         try {
             val paymentCode = "PAY-${System.currentTimeMillis()}"
             val cv = ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
+                put("uuid", UUID.randomUUID().toString())
                 put("payment_code", paymentCode)
                 put("sale_id", saleId)
                 put("customer_party_id", customerPartyId)
@@ -4987,24 +4971,20 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 put("payment_method", paymentMethod)
                 put("amount", amount)
                 put("status", "completed")
-                put("cash_box_id", cashBoxId)
-                put("created_by", 1) // Should be current user
+                if (cashBoxId != null) put("cash_box_id", cashBoxId)
             }
             db.insert("payments", null, cv)
 
-            // Update sale
             db.execSQL(
                 "UPDATE sales_transactions SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?, payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END WHERE id = ?",
                 arrayOf(amount, amount, amount, saleId)
             )
 
-            // Update party balance
             db.execSQL(
                 "UPDATE parties SET current_balance = current_balance - ?, total_due = total_due - ? WHERE id = ?",
                 arrayOf(amount, amount, customerPartyId)
             )
 
-            // Update cash box if applicable
             if (cashBoxId != null && paymentMethod == "cash") {
                 db.execSQL(
                     "UPDATE cash_boxes SET current_balance = current_balance + ? WHERE id = ?",
@@ -5020,8 +5000,40 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
+    fun processPayment(customerPartyId: Int, amount: Double, paymentMethod: String, operator: String = "System"): Boolean {
+        // نسخة مبسطة للاستخدام المباشر بدون saleId
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.execSQL("UPDATE parties SET current_balance = current_balance - ?, total_due = total_due - ? WHERE id = ?", arrayOf(amount, amount, customerPartyId))
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("payment_code", "PAY-${System.currentTimeMillis()}")
+                put("customer_party_id", customerPartyId)
+                put("payment_type", paymentMethod)
+                put("payment_method", paymentMethod)
+                put("amount", amount)
+                put("status", "completed")
+                put("notes", "تسديد عبر API")
+            }
+            db.insert("payments", null, cv)
+            db.execSQL("""
+                UPDATE sales_transactions 
+                SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
+                    payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END
+                WHERE customer_party_id = ? AND remaining_amount > 0 ORDER BY id LIMIT 1
+            """.trimIndent(), arrayOf(amount, amount, amount, customerPartyId))
+
+            db.setTransactionSuccessful()
+            logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerPartyId")
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     // ================================================================
-    // CASH BOXES & MOVEMENTS
+    // 27. CASH BOXES & MOVEMENTS
     // ================================================================
     fun getCashBoxes(stationId: Int): JSONArray {
         val arr = JSONArray()
@@ -5048,7 +5060,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         try {
             val balanceAfter = if (movementType == "in") balanceBefore + amount else balanceBefore - amount
             val cv = ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
+                put("uuid", UUID.randomUUID().toString())
                 put("movement_code", "CMV-${System.currentTimeMillis()}")
                 put("cash_box_id", cashBoxId)
                 put("movement_type", movementType)
@@ -5057,7 +5069,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 put("balance_before", balanceBefore)
                 put("balance_after", balanceAfter)
                 put("description", description)
-                put("performed_by", 1)
                 put("status", "completed")
             }
             db.insert("cash_movements", null, cv)
@@ -5071,7 +5082,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // INVENTORY
+    // 28. INVENTORY
     // ================================================================
     fun getProducts(stationId: Int? = null): JSONArray {
         val arr = JSONArray()
@@ -5123,7 +5134,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // HR - EMPLOYEES
+    // 29. HR - EMPLOYEES
     // ================================================================
     fun getEmployees(stationId: Int? = null): JSONArray {
         val arr = JSONArray()
@@ -5146,6 +5157,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                     put("job_title", it.getString(it.getColumnIndexOrThrow("job_title")))
                     put("basic_salary", it.getDouble(it.getColumnIndexOrThrow("basic_salary")))
                     put("total_salary", it.getDouble(it.getColumnIndexOrThrow("total_salary")))
+                    put("advances", it.getDouble(it.getColumnIndexOrThrow("advances")))
+                    put("penalties", it.getDouble(it.getColumnIndexOrThrow("penalties")))
+                    put("bonuses", it.getDouble(it.getColumnIndexOrThrow("bonuses")))
                     put("status", it.getString(it.getColumnIndexOrThrow("status")))
                 })
             }
@@ -5155,26 +5169,81 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
     fun addEmployee(fullName: String, fullNameAr: String?, phone: String?, jobTitle: String, basicSalary: Double, stationId: Int?): Long {
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
             put("employee_code", "EMP-${System.currentTimeMillis()}")
             put("full_name", fullName)
-            put("full_name_ar", fullNameAr)
-            put("phone", phone)
+            if (fullNameAr != null) put("full_name_ar", fullNameAr)
+            if (phone != null) put("phone", phone)
             put("job_title", jobTitle)
             put("basic_salary", basicSalary)
             put("total_salary", basicSalary)
-            put("station_id", stationId)
+            if (stationId != null) put("station_id", stationId)
             put("status", "active")
         }
         return writableDatabase.insert("employees", null, cv)
     }
 
+    fun updateEmployee(id: Int, fullName: String, fullNameAr: String?, phone: String?, jobTitle: String, basicSalary: Double, status: String, notes: String, stationId: Int?): Int {
+        val cv = ContentValues().apply {
+            put("full_name", fullName)
+            if (fullNameAr != null) put("full_name_ar", fullNameAr)
+            if (phone != null) put("phone", phone)
+            put("job_title", jobTitle)
+            put("basic_salary", basicSalary)
+            put("total_salary", basicSalary)
+            put("status", status)
+            put("notes", notes)
+            if (stationId != null) put("station_id", stationId)
+        }
+        return writableDatabase.update("employees", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    fun deleteEmployee(id: Int): Int {
+        val cv = ContentValues().apply { put("is_deleted", 1) }
+        return writableDatabase.update("employees", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    fun addEmployeePayment(employeeId: Int, amount: Double, type: String, description: String, operator: String): Boolean {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val cv = ContentValues().apply {
+                put("employee_id", employeeId)
+                put("amount", amount)
+                put("type", type)
+                put("description", description)
+                put("operator", operator)
+            }
+            db.insert("employee_payments", null, cv)
+            val col = when (type) {
+                "salary" -> "total_salary"
+                "advance" -> "advances"
+                "penalty" -> "penalties"
+                "bonus" -> "bonuses"
+                else -> "total_salary"
+            }
+            val sign = when (type) {
+                "advance", "penalty" -> "-"
+                else -> "+"
+            }
+            db.execSQL(
+                "UPDATE employees SET $col = $col $sign ?, total_salary = basic_salary + bonuses - advances - penalties WHERE id = ?",
+                arrayOf(amount, employeeId)
+            )
+            db.setTransactionSuccessful()
+            logActivity(operator, "employee_payment", "دفعة $type للموظف $employeeId بمبلغ $amount")
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     // ================================================================
-    // MAINTENANCE
+    // 30. MAINTENANCE
     // ================================================================
     fun addMaintenanceRequest(assetType: String, assetId: Int, requestType: String, priority: String, title: String, description: String, reportedBy: Int, stationId: Int): Long {
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
             put("request_code", "MNT-${System.currentTimeMillis()}")
             put("asset_type", assetType)
             put("asset_id", assetId)
@@ -5215,12 +5284,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // REPORTS & DASHBOARD
+    // 31. REPORTS & DASHBOARD
     // ================================================================
     fun getDashboardStats(stationId: Int): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
         db.rawQuery(
             "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at) = date('now') AND is_deleted=0",
@@ -5341,20 +5409,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
         val transactions = JSONArray()
         val db = readableDatabase
-        val c = db.rawQuery(
-            "SELECT * FROM sales_transactions WHERE customer_party_id = ? AND is_deleted=0 ORDER BY id DESC",
-            arrayOf(partyId.toString())
-        )
+        val c = db.rawQuery("SELECT * FROM sales_transactions WHERE customer_party_id=? AND is_deleted=0 ORDER BY id DESC", arrayOf(partyId.toString()))
         c.use {
-            while (it.moveToNext()) transactions.put(saleCursorToJson(it))
+            while (it.moveToNext()) {
+                transactions.put(saleCursorToJson(it))
+            }
         }
         report.put("transactions", transactions)
 
         val payments = JSONArray()
-        val pc = db.rawQuery(
-            "SELECT * FROM payments WHERE customer_party_id = ? AND is_deleted=0 ORDER BY id DESC",
-            arrayOf(partyId.toString())
-        )
+        val pc = db.rawQuery("SELECT * FROM payments WHERE customer_party_id=? AND is_deleted=0 ORDER BY id DESC", arrayOf(partyId.toString()))
         pc.use {
             while (it.moveToNext()) {
                 payments.put(JSONObject().apply {
@@ -5367,6 +5431,19 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
         report.put("payments", payments)
 
+        val deposits = JSONArray()
+        val dc = db.rawQuery("SELECT * FROM cash_deposits WHERE customer_id=? ORDER BY id DESC", arrayOf(partyId.toString()))
+        dc.use {
+            while (it.moveToNext()) {
+                deposits.put(JSONObject().apply {
+                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
+                    put("notes", it.getString(it.getColumnIndexOrThrow("notes")))
+                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
+                })
+            }
+        }
+        report.put("deposits", deposits)
+
         val totalDue = db.rawQuery(
             "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE customer_party_id=? AND remaining_amount>0 AND is_deleted=0",
             arrayOf(partyId.toString())
@@ -5376,9 +5453,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return report
     }
 
-    // ================================================================
-    // OVERDUE & BAD DEBTS
-    // ================================================================
     fun getOverdueTransactions(stationId: Int): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
@@ -5407,11 +5481,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // SMS
+    // 32. SMS
     // ================================================================
     fun logSms(phone: String, message: String, type: String, status: String): Long {
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
             put("phone_number", phone)
             put("message_content", message)
             put("message_type", type)
@@ -5440,14 +5514,15 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // ACTIVITY LOGS
+    // 33. ACTIVITY LOGS
     // ================================================================
     fun logActivity(operator: String, action: String, details: String): Long {
         val cv = ContentValues().apply {
-            put("uuid", java.util.UUID.randomUUID().toString())
+            put("uuid", UUID.randomUUID().toString())
+            put("operator", operator)
             put("action", action)
             put("description", details)
-            put("created_at", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()))
+            put("created_at", DATE_FORMAT.format(Date()))
         }
         return writableDatabase.insert("user_activity_log", null, cv)
     }
@@ -5460,6 +5535,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
                     put("id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("operator", it.getString(it.getColumnIndexOrThrow("operator")))
                     put("action", it.getString(it.getColumnIndexOrThrow("action")))
                     put("description", it.getString(it.getColumnIndexOrThrow("description")))
                     put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
@@ -5470,7 +5546,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // SYSTEM SETTINGS
+    // 34. SYSTEM SETTINGS
     // ================================================================
     fun setSetting(key: String, value: String, category: String = "general", dataType: String = "string") {
         val cv = ContentValues().apply {
@@ -5495,7 +5571,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // DATA EXPORT
+    // 35. DATA EXPORT
     // ================================================================
     fun exportAllData(): JSONObject {
         val result = JSONObject()
@@ -5528,12 +5604,156 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // HELPERS
+    // 36. REFILLS (tank_refills)
+    // ================================================================
+    fun getRefills(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery("SELECT * FROM tank_refills ORDER BY id DESC", null)
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("refill_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("refill_code", it.getString(it.getColumnIndexOrThrow("refill_code")))
+                    put("supplier_name", it.getString(it.getColumnIndexOrThrow("supplier_name")))
+                    put("delivered_quantity", it.getDouble(it.getColumnIndexOrThrow("delivered_quantity")))
+                    put("actual_quantity", it.getDouble(it.getColumnIndexOrThrow("actual_quantity")))
+                    put("unit_price", it.getDouble(it.getColumnIndexOrThrow("unit_price")))
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                })
+            }
+        }
+        return arr
+    }
+
+    // ================================================================
+    // 37. CASH DEPOSITS
+    // ================================================================
+    fun addCashDeposit(customerId: Int, amount: Double, notes: String, operator: String = "System"): Boolean {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.execSQL("UPDATE parties SET current_balance = current_balance + ? WHERE id = ?", arrayOf(amount, customerId))
+            val customer = getParty(customerId)
+            val newBalance = customer?.getDouble("current_balance") ?: amount
+            val cv = ContentValues().apply {
+                put("customer_id", customerId)
+                put("amount", amount)
+                put("balance_after", newBalance)
+                put("notes", notes)
+                put("operator", operator)
+            }
+            db.insert("cash_deposits", null, cv)
+            db.setTransactionSuccessful()
+            logActivity(operator, "deposit", "إيداع مبلغ $amount للعميل $customerId")
+            return true
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    // ================================================================
+    // 38. BAD DEBTS
+    // ================================================================
+    fun getBadDebts(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery("SELECT * FROM bad_debts WHERE resolved=0 ORDER BY id DESC", null)
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("customer_id", it.getInt(it.getColumnIndexOrThrow("customer_id")))
+                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
+                    put("type", it.getString(it.getColumnIndexOrThrow("type")))
+                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
+                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
+                })
+            }
+        }
+        return arr
+    }
+
+    fun resolveBadDebt(id: Int): Int {
+        val cv = ContentValues().apply {
+            put("resolved", 1)
+            put("resolved_date", DATE_FORMAT.format(Date()))
+        }
+        return writableDatabase.update("bad_debts", cv, "id=?", arrayOf(id.toString()))
+    }
+
+    // ================================================================
+    // 39. SMS WHITELIST
+    // ================================================================
+    fun getSmsWhitelist(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery("SELECT * FROM sms_whitelist WHERE enabled=1 ORDER BY name", null)
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("phone", it.getString(it.getColumnIndexOrThrow("phone")))
+                    put("name", it.getString(it.getColumnIndexOrThrow("name")))
+                    put("enabled", it.getInt(it.getColumnIndexOrThrow("enabled")))
+                })
+            }
+        }
+        return arr
+    }
+
+    fun addToSmsWhitelist(phone: String, name: String): Long {
+        val cv = ContentValues().apply {
+            put("phone", phone)
+            if (name.isNotEmpty()) put("name", name)
+        }
+        return writableDatabase.insert("sms_whitelist", null, cv)
+    }
+
+    fun removeFromSmsWhitelist(phone: String): Int {
+        return writableDatabase.delete("sms_whitelist", "phone=?", arrayOf(phone))
+    }
+
+    // ================================================================
+    // 40. AI CHAT
+    // ================================================================
+    fun getAiChatHistory(sessionId: String): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery("SELECT * FROM ai_chat_history WHERE session_id=? ORDER BY id", arrayOf(sessionId))
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("role", it.getString(it.getColumnIndexOrThrow("role")))
+                    put("message", it.getString(it.getColumnIndexOrThrow("message")))
+                    put("timestamp", it.getString(it.getColumnIndexOrThrow("timestamp")))
+                })
+            }
+        }
+        return arr
+    }
+
+    fun saveAiMessage(sessionId: String, role: String, message: String): Long {
+        val cv = ContentValues().apply {
+            put("session_id", sessionId)
+            put("role", role)
+            put("message", message)
+        }
+        return writableDatabase.insert("ai_chat_history", null, cv)
+    }
+
+    // ================================================================
+    // 41. HELPERS
     // ================================================================
     private fun getPartyBalance(partyId: Int): Double {
         val db = readableDatabase
         val c = db.rawQuery("SELECT COALESCE(current_balance,0) FROM parties WHERE id=?", arrayOf(partyId.toString()))
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+    }
+
+    fun execSQL(sql: String, bindArgs: Array<Any> = emptyArray()) {
+        writableDatabase.execSQL(sql, bindArgs)
     }
 
     override fun close() {
