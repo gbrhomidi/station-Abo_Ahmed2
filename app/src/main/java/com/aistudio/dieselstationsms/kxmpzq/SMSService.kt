@@ -51,7 +51,7 @@ class SMSService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
-    // ========== مفاتيح API من BuildConfig (من Secrets) ==========
+    // ========== مفاتيح API من BuildConfig ==========
     private val geminiApiKey: String by lazy { BuildConfig.GEMINI_API_KEY }
     private val deepseekApiKey: String by lazy { BuildConfig.DEEPSEEK_API_KEY }
     private val grokApiKey: String by lazy { BuildConfig.GROK_API_KEY }
@@ -101,9 +101,8 @@ class SMSService : Service() {
     override fun onBind(intent: Intent): IBinder? = null
 
     // ============================================================
-    // الإشعارات (Foreground Service)
+    // الإشعارات
     // ============================================================
-
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -136,7 +135,6 @@ class SMSService : Service() {
     // ============================================================
     // بدء الخادم
     // ============================================================
-
     private fun startServer() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Service is destroyed, not starting server")
@@ -175,7 +173,6 @@ class SMSService : Service() {
     // ============================================================
     // النسخ الاحتياطي التلقائي
     // ============================================================
-
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
@@ -195,16 +192,14 @@ class SMSService : Service() {
     }
 
     // ============================================================
-    // خادم API (NanoHTTPD) – متكامل مع DatabaseHelper
+    // خادم API (NanoHTTPD)
     // ============================================================
-
     private inner class ApiServer(port: Int) : NanoHTTPD(port) {
 
         override fun serve(session: IHTTPSession): Response {
             val uri = session.uri ?: "/"
             val method = session.method ?: Method.GET
 
-            // رؤوس CORS
             val headers = mutableMapOf<String, String>()
             headers["Access-Control-Allow-Origin"] = "*"
             headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
@@ -219,12 +214,10 @@ class SMSService : Service() {
                 return res
             }
 
-            // خدمة الملفات الثابتة
             if (!uri.startsWith("/api")) {
                 return serveStaticFile(uri)
             }
 
-            // معالجة طلبات API
             val db = DatabaseHelper(this@SMSService)
             val responseJson = JSONObject()
             val params = session.parameters ?: mutableMapOf()
@@ -232,7 +225,7 @@ class SMSService : Service() {
 
             try {
                 when (action) {
-                    // ========== المصادقة ==========
+                    // ===== المصادقة =====
                     "login" -> {
                         val username = params["username"]?.firstOrNull() ?: ""
                         val password = params["password"]?.firstOrNull() ?: ""
@@ -247,7 +240,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== العملاء ==========
+                    // ===== العملاء (Parties) =====
                     "get_customers" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getParties())
@@ -300,7 +293,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== المبيعات ==========
+                    // ===== المبيعات =====
                     "execute_sale" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
@@ -312,7 +305,7 @@ class SMSService : Service() {
                         val isCredit = params["is_credit"]?.firstOrNull()?.toIntOrNull() == 1
                         val dueDate = params["due_date"]?.firstOrNull() ?: ""
                         val notes = params["notes"]?.firstOrNull() ?: ""
-                        val cashierId = 1 // مؤقت
+                        val cashierId = 1
 
                         if (customerId <= 0 || liters <= 0 || pricePerLiter <= 0) {
                             responseJson.put("success", false)
@@ -348,19 +341,16 @@ class SMSService : Service() {
                                 responseJson.put("error", "فشل إدراج البيع")
                             } else {
                                 db.logActivity("cashier_$cashierId", "sale", "بيع جديد: $liters لتر - $subtotal ريال")
-
-                                // إرسال SMS للعميل إذا كان لديه هاتف
                                 val customer = db.getParty(customerId)
                                 val phone = customer?.optString("phone", "")
                                 if (!phone.isNullOrEmpty() && isSmsEnabled(db)) {
                                     val msg = if (isCredit) {
-                                        "قيدنا عليكم: ${due.toInt()} ريال\nالتفاصيل: $liters لتر ديزل\nالرصيد الإجمالي: ..."
+                                        "قيدنا عليكم: ${due.toInt()} ريال\nالتفاصيل: $liters لتر ديزل"
                                     } else {
                                         "تم شراء $liters لتر ديزل بقيمة ${subtotal.toInt()} ريال\nشكراً لزيارتكم محطة أبو أحمد"
                                     }
                                     sendSMS(db, phone, msg, "sale_notification")
                                 }
-
                                 responseJson.put("success", true)
                                 responseJson.put("sale_id", saleId)
                                 responseJson.put("message", "تم البيع بنجاح")
@@ -369,7 +359,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== المدفوعات والإيداعات ==========
+                    // ===== المدفوعات =====
                     "make_payment" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
@@ -381,7 +371,6 @@ class SMSService : Service() {
                             responseJson.put("success", false)
                             responseJson.put("error", "بيانات غير صالحة")
                         } else {
-                            // نستخدم processPayment الموجود في DatabaseHelper (يأخذ customerId, amount, paymentMethod, operator)
                             val success = db.processPayment(customerId, amount, method, operator)
                             if (success) {
                                 db.logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId")
@@ -393,6 +382,8 @@ class SMSService : Service() {
                             }
                         }
                     }
+
+                    // ===== الإيداعات =====
                     "add_deposit" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
@@ -408,7 +399,7 @@ class SMSService : Service() {
                                 val customer = db.getParty(customerId)
                                 val phone = customer?.optString("phone", "")
                                 if (!phone.isNullOrEmpty() && isSmsEnabled(db)) {
-                                    val msg = "قيدنا لكم: ${amount.toInt()} ريال\nالتفاصيل: ${notes.ifEmpty { "إيداع نقدي" }}\nالرصيد الإجمالي: ..."
+                                    val msg = "قيدنا لكم: ${amount.toInt()} ريال\nالتفاصيل: ${notes.ifEmpty { "إيداع نقدي" }}"
                                     sendSMS(db, phone, msg, "deposit_notification")
                                 }
                                 responseJson.put("success", true)
@@ -420,7 +411,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== لوحة التحكم والتقارير ==========
+                    // ===== لوحة التحكم =====
                     "get_dashboard" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getDashboardStats(1))
@@ -443,6 +434,11 @@ class SMSService : Service() {
                         val from = params["from_date"]?.firstOrNull()
                         val to = params["to_date"]?.firstOrNull()
                         val report = db.getEodReport(1, from, to)
+                        // نضيف profit مؤقتاً (حساب بسيط)
+                        val profit = report.optDouble("total_sales", 0.0) - report.optDouble("total_payments", 0.0)
+                        report.put("profit", profit)
+                        report.put("revenue", report.optDouble("total_sales", 0.0))
+                        report.put("cost", report.optDouble("total_payments", 0.0))
                         responseJson.put("success", true)
                         responseJson.put("data", report)
                     }
@@ -451,16 +447,12 @@ class SMSService : Service() {
                         responseJson.put("data", db.exportAllData())
                     }
 
-                    // ========== المخزون والتعبئة ==========
+                    // ===== المخزون =====
                     "get_refills" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getRefills())
                     }
                     "add_refill" -> {
-                        // نستخدم دوال DatabaseHelper لإضافة تعبئة (في جدول tank_refills)
-                        // لكن DatabaseHelper لا يحتوي على دالة addRefill مباشرة، بل لدينا دوال لـ tank_refills؟
-                        // في DatabaseHelper يوجد دوال getRefills ولكن لا يوجد addRefill.
-                        // سنقوم بإضافة تعبئة يدوياً باستخدام ContentValues.
                         val supplier = params["supplier"]?.firstOrNull() ?: ""
                         val totalQty = params["total_qty"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
                         val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
@@ -476,8 +468,8 @@ class SMSService : Service() {
                             val cv = android.content.ContentValues().apply {
                                 put("uuid", UUID.randomUUID().toString())
                                 put("refill_code", "REF-${System.currentTimeMillis()}")
-                                put("tank_id", 1) // مؤقت
-                                put("supplier_id", 1)
+                                put("tank_id", 1)
+                                put("supplier_name", supplier)
                                 put("station_id", 1)
                                 put("fuel_type_id", fuelTypeId)
                                 put("delivered_quantity", totalQty)
@@ -486,7 +478,6 @@ class SMSService : Service() {
                                 put("status", "completed")
                             }
                             val id = dbWritable.insert("tank_refills", null, cv)
-                            // تحديث كمية الخزان
                             db.execSQL("UPDATE tanks SET current_quantity = current_quantity + ? WHERE id = 1", arrayOf(totalQty))
                             db.logActivity("System", "refill", "تعبئة جديدة: $totalQty لتر من $supplier")
                             responseJson.put("success", true)
@@ -494,7 +485,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الخزانات والمضخات ==========
+                    // ===== الخزانات والمضخات =====
                     "get_tanks" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getTanks(1))
@@ -534,7 +525,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الموظفين ==========
+                    // ===== الموظفين =====
                     "get_employees" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getEmployees(1))
@@ -592,7 +583,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الصيانة ==========
+                    // ===== الصيانة =====
                     "add_maintenance_request" -> {
                         val assetType = params["asset_type"]?.firstOrNull() ?: "pump"
                         val assetId = params["asset_id"]?.firstOrNull()?.toIntOrNull() ?: 0
@@ -600,8 +591,7 @@ class SMSService : Service() {
                         val priority = params["priority"]?.firstOrNull() ?: "medium"
                         val title = params["title"]?.firstOrNull() ?: ""
                         val description = params["description"]?.firstOrNull() ?: ""
-                        val reportedBy = 1 // مؤقت
-
+                        val reportedBy = 1
                         if (assetId <= 0 || requestType.isBlank() || title.isBlank() || description.isBlank()) {
                             responseJson.put("success", false)
                             responseJson.put("error", "بيانات غير صالحة")
@@ -627,7 +617,7 @@ class SMSService : Service() {
                             val cv = android.content.ContentValues().apply {
                                 put("status", status)
                                 if (status == "completed") {
-                                    put("completed_at", DATETIME_FORMAT.format(Date()))
+                                    put("created_at", DATETIME_FORMAT.format(Date()))
                                 }
                             }
                             dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
@@ -636,32 +626,19 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الديون ==========
+                    // ===== الديون =====
                     "get_debts" -> {
                         val type = params["type"]?.firstOrNull() ?: "all"
-                        val arr = JSONArray()
-                        val dbReadable = db.readableDatabase
-                        val sql = when (type) {
-                            "overdue" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='overdue' ORDER BY id DESC"
-                            "doubtful" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='doubtful' ORDER BY id DESC"
-                            "bad" -> "SELECT * FROM bad_debts WHERE resolved=0 AND type='bad' ORDER BY id DESC"
-                            else -> "SELECT * FROM bad_debts WHERE resolved=0 ORDER BY id DESC"
-                        }
-                        val cursor = dbReadable.rawQuery(sql, null)
-                        cursor.use {
-                            while (it.moveToNext()) {
-                                arr.put(JSONObject().apply {
-                                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                                    put("customer_party_id", it.getInt(it.getColumnIndexOrThrow("customer_id")))
-                                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
-                                    put("type", it.getString(it.getColumnIndexOrThrow("type")))
-                                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
-                                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
-                                })
+                        val debts = db.getBadDebts()
+                        val filtered = JSONArray()
+                        for (i in 0 until debts.length()) {
+                            val d = debts.getJSONObject(i)
+                            if (type == "all" || d.getString("type") == type) {
+                                filtered.put(d)
                             }
                         }
                         responseJson.put("success", true)
-                        responseJson.put("data", arr)
+                        responseJson.put("data", filtered)
                     }
                     "resolve_debt" -> {
                         val debtId = params["debt_id"]?.firstOrNull()?.toIntOrNull() ?: 0
@@ -674,7 +651,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الرسائل النصية (SMS) ==========
+                    // ===== الرسائل =====
                     "send_sms" -> {
                         val phone = params["phone"]?.firstOrNull() ?: ""
                         val message = params["message"]?.firstOrNull() ?: ""
@@ -708,7 +685,7 @@ class SMSService : Service() {
                         responseJson.put("data", db.getSmsLogs())
                     }
 
-                    // ========== القائمة البيضاء (Whitelist) ==========
+                    // ===== القائمة البيضاء =====
                     "get_whitelist" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getSmsWhitelist())
@@ -735,13 +712,13 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== سجل النشاطات ==========
+                    // ===== السجلات =====
                     "get_activity_logs" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getActivityLogs())
                     }
 
-                    // ========== الإعدادات ==========
+                    // ===== الإعدادات =====
                     "get_setting" -> {
                         val key = params["key"]?.firstOrNull() ?: ""
                         if (key.isBlank()) {
@@ -765,7 +742,7 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ========== الذكاء الاصطناعي ==========
+                    // ===== الذكاء الاصطناعي =====
                     "ai_chat" -> {
                         val message = params["message"]?.firstOrNull() ?: ""
                         val sessionId = params["session_id"]?.firstOrNull() ?: "default"
@@ -826,9 +803,8 @@ class SMSService : Service() {
         }
 
         // ============================================================
-        // خدمة الملفات الثابتة
+        // الملفات الثابتة
         // ============================================================
-
         private fun serveStaticFile(uri: String): Response {
             return try {
                 when {
@@ -855,11 +831,9 @@ class SMSService : Service() {
     }
 
     // ================================================================
-    // دوال الذكاء الاصطناعي (مع الاحتياط بين المفاتيح)
+    // الذكاء الاصطناعي (مع الاحتياط بين المفاتيح)
     // ================================================================
-
     private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
-        // قائمة المزودين مع مفاتيحهم من BuildConfig
         val providers = listOf(
             "gemini" to geminiApiKey,
             "deepseek" to deepseekApiKey,
@@ -879,7 +853,7 @@ class SMSService : Service() {
                     "chatgpt" -> callChatGPTAPI(prompt, apiKey)
                     else -> null
                 }
-                if (result != null && !result.contains("خطأ") && !result.contains("API key")) {
+                if (result != null && !result.contains("خطأ") && !result.contains("API key") && result.length > 10) {
                     return result
                 }
             } catch (e: Exception) {
@@ -1109,7 +1083,6 @@ class SMSService : Service() {
     // ================================================================
     // دوال الرسائل النصية (SMS)
     // ================================================================
-
     private fun isSmsEnabled(db: DatabaseHelper): Boolean {
         return db.getSetting("sms_enabled") != "0"
     }
