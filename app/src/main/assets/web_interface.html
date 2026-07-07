@@ -4,9 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1a3a5a">
-    <title>محطة ابو أحمد لمشتقات الديزل</title>
+    <title>محطة أبو أحمد لمشتقات الديزل – النظام المتكامل</title>
     <script src="html5-qrcode.min.js"></script>
     <style>
+        /* ============================
+           CSS Variables & Reset
+           ============================ */
         :root {
             --primary: #1a3a5a;
             --primary-light: #2a4a6f;
@@ -26,7 +29,6 @@
             --radius-sm: 8px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         [data-theme="dark"] {
             --bg: #0f1115;
             --card-bg: #1a1d24;
@@ -37,27 +39,25 @@
             --primary: #4da3ff;
             --primary-light: #3a8eef;
         }
-
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         html, body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
         body { padding-bottom: 80px; }
 
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
 
-        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
 
         .fade-in { animation: fadeIn 0.4s ease; }
         .slide-in { animation: slideIn 0.3s ease; }
 
-        /* Login Screen */
+        /* ============================
+           Login Screen
+           ============================ */
         .login-screen {
             position: fixed; inset: 0; z-index: 9999;
             background: linear-gradient(135deg, var(--primary) 0%, #0f1f3a 100%);
@@ -65,35 +65,19 @@
             padding: 24px; transition: var(--transition);
         }
         .login-screen.hidden { opacity: 0; pointer-events: none; }
-        .login-logo {
-            width: 100px; height: 100px; background: var(--secondary);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 40px; margin-bottom: 24px; box-shadow: 0 8px 32px rgba(212,175,55,0.3);
-            animation: pulse 2s infinite;
-        }
+        .login-logo { width: 100px; height: 100px; background: var(--secondary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 24px; box-shadow: 0 8px 32px rgba(212,175,55,0.3); animation: pulse 2s infinite; }
         .login-title { color: white; font-size: 24px; font-weight: bold; margin-bottom: 8px; text-align: center; }
         .login-subtitle { color: rgba(255,255,255,0.7); font-size: 14px; margin-bottom: 32px; text-align: center; }
         .login-form { width: 100%; max-width: 340px; }
         .input-group { margin-bottom: 16px; }
         .input-group label { display: block; color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 6px; font-weight: 600; }
-        .input-field {
-            width: 100%; padding: 14px 16px; border: 2px solid rgba(255,255,255,0.2);
-            border-radius: var(--radius-sm); background: rgba(255,255,255,0.1);
-            color: white; font-size: 15px; outline: none; transition: var(--transition);
-        }
+        .input-field { width: 100%; padding: 14px 16px; border: 2px solid rgba(255,255,255,0.2); border-radius: var(--radius-sm); background: rgba(255,255,255,0.1); color: white; font-size: 15px; outline: none; transition: var(--transition); }
         .input-field:focus { border-color: var(--secondary); background: rgba(255,255,255,0.15); }
         .input-field::placeholder { color: rgba(255,255,255,0.4); }
-        .btn {
-            width: 100%; padding: 14px; border: none; border-radius: var(--radius-sm);
-            font-size: 16px; font-weight: 700; cursor: pointer; transition: var(--transition);
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: var(--radius-sm); font-size: 16px; font-weight: 700; cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-primary { background: var(--secondary); color: var(--primary); }
         .btn-primary:hover { background: var(--secondary-light); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(212,175,55,0.4); }
-        .btn-biometric {
-            background: rgba(255,255,255,0.1); color: white; border: 2px solid rgba(255,255,255,0.2);
-            margin-top: 12px;
-        }
+        .btn-biometric { background: rgba(255,255,255,0.1); color: white; border: 2px solid rgba(255,255,255,0.2); margin-top: 12px; }
         .btn-biometric:hover { background: rgba(255,255,255,0.2); }
         .btn-small { padding: 8px 16px; font-size: 13px; width: auto; }
         .btn-danger { background: var(--danger); color: white; }
@@ -101,270 +85,144 @@
         .btn-info { background: var(--info); color: white; }
         .btn-warning { background: var(--warning); color: #000; }
         .btn-secondary { background: #6c757d; color: white; }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
 
-        /* App Container */
+        /* ============================
+           App Container
+           ============================ */
         .app-container { display: none; }
         .app-container.active { display: block; animation: fadeIn 0.3s ease; }
 
-        /* Header */
-        .app-header {
-            position: sticky; top: 0; z-index: 100;
-            background: var(--primary); color: white;
-            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
+        /* ============================
+           Header
+           ============================ */
+        .app-header { position: sticky; top: 0; z-index: 100; background: var(--primary); color: white; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .app-header h1 { font-size: 18px; margin: 0; font-weight: 700; }
         .header-actions { display: flex; gap: 12px; align-items: center; }
-        .icon-btn {
-            width: 36px; height: 36px; border-radius: 50%; border: none;
-            background: rgba(255,255,255,0.15); color: white; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 18px;
-            transition: var(--transition);
-        }
+        .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: rgba(255,255,255,0.15); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: var(--transition); }
         .icon-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.1); }
 
-        /* Cards & Sections */
-        .card {
-            background: var(--card-bg); border-radius: var(--radius);
-            padding: 20px; margin: 12px 16px;
-            box-shadow: var(--shadow); border: 1px solid var(--border);
-            transition: var(--transition);
-        }
+        /* ============================
+           Cards & Stats
+           ============================ */
+        .card { background: var(--card-bg); border-radius: var(--radius); padding: 20px; margin: 12px 16px; box-shadow: var(--shadow); border: 1px solid var(--border); transition: var(--transition); }
         .card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
         .card-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-        .card-title svg, .card-title .icon { width: 20px; height: 20px; }
-
-        /* Stats Grid */
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 12px 16px; }
-        .stat-card {
-            background: var(--card-bg); border-radius: var(--radius); padding: 16px;
-            box-shadow: var(--shadow); border: 1px solid var(--border); text-align: center;
-            position: relative; overflow: hidden; transition: var(--transition);
-        }
-        .stat-card::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-        }
+        .stat-card { background: var(--card-bg); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); border: 1px solid var(--border); text-align: center; position: relative; overflow: hidden; transition: var(--transition); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--primary), var(--secondary)); }
         .stat-card.danger::before { background: var(--danger); }
         .stat-card.success::before { background: var(--success); }
         .stat-card.warning::before { background: var(--warning); }
         .stat-value { font-size: 22px; font-weight: 800; color: var(--primary); margin: 8px 0; }
         .stat-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
-        .stat-change { font-size: 11px; margin-top: 4px; font-weight: 700; }
-        .stat-change.up { color: var(--success); }
-        .stat-change.down { color: var(--danger); }
 
-        /* Progress Bar */
-        .progress-container { margin: 8px 0; }
-        .progress-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
-        .progress-bar {
-            height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%; border-radius: 4px; transition: width 0.6s ease;
-            background: linear-gradient(90deg, var(--primary), var(--secondary));
-        }
-        .progress-fill.danger { background: var(--danger); }
-        .progress-fill.warning { background: var(--warning); }
-
-        /* Alerts */
-        .alert-banner {
-            background: linear-gradient(90deg, #fff3f3, #ffe0e0); border: 1px solid var(--danger);
-            border-radius: var(--radius-sm); padding: 12px 16px; margin: 12px 16px;
-            display: flex; align-items: center; gap: 12px; font-size: 13px; color: #721c24;
-            animation: fadeIn 0.3s ease;
-        }
-        [data-theme="dark"] .alert-banner { background: linear-gradient(90deg, #3a1c1c, #2a1515); color: #ffaaaa; }
-        .alert-banner .icon { font-size: 20px; }
-
-        /* Forms */
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; }
-        .form-control {
-            width: 100%; padding: 12px 14px; border: 2px solid var(--border);
-            border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text);
-            font-size: 15px; outline: none; transition: var(--transition); font-family: inherit;
-        }
-        .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,58,90,0.1); }
-        [data-theme="dark"] .form-control:focus { box-shadow: 0 0 0 3px rgba(77,163,255,0.1); }
-        select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 12px center; padding-left: 30px; }
-
-        /* Quick Actions */
+        /* ============================
+           Quick Actions
+           ============================ */
         .quick-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 16px; }
-        .quick-btn {
-            background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius-sm);
-            padding: 14px; text-align: center; cursor: pointer; transition: var(--transition);
-            display: flex; flex-direction: column; align-items: center; gap: 6px;
-            font-size: 13px; font-weight: 700; color: var(--text);
-        }
+        .quick-btn { background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius-sm); padding: 14px; text-align: center; cursor: pointer; transition: var(--transition); display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text); }
         .quick-btn:hover { border-color: var(--primary); background: rgba(26,58,90,0.05); transform: translateY(-2px); }
         .quick-btn .icon { font-size: 24px; }
 
-        /* Tables */
+        /* ============================
+           Tables
+           ============================ */
         .table-container { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
         .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-        .data-table th {
-            background: var(--primary); color: white; padding: 10px 12px;
-            font-weight: 700; text-align: right; white-space: nowrap;
-        }
+        .data-table th { background: var(--primary); color: white; padding: 10px 12px; font-weight: 700; text-align: right; white-space: nowrap; }
         .data-table th:first-child { border-radius: 0 var(--radius-sm) 0 0; }
         .data-table th:last-child { border-radius: var(--radius-sm) 0 0 0; }
         .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
         .data-table tr:hover td { background: rgba(26,58,90,0.03); }
         [data-theme="dark"] .data-table tr:hover td { background: rgba(255,255,255,0.03); }
 
-        /* Bottom Navigation */
-        .bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
-            background: var(--card-bg); border-top: 1px solid var(--border);
-            display: flex; justify-content: space-around; padding: 8px 0 12px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.08); backdrop-filter: blur(10px);
-        }
-        .nav-item {
-            flex: 1; display: flex; flex-direction: column; align-items: center;
-            gap: 4px; padding: 4px; cursor: pointer; border: none; background: none;
-            color: var(--text-secondary); font-size: 11px; font-weight: 700;
-            transition: var(--transition); position: relative;
-        }
+        /* ============================
+           Bottom Navigation
+           ============================ */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; background: var(--card-bg); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 8px 0 12px; box-shadow: 0 -4px 20px rgba(0,0,0,0.08); backdrop-filter: blur(10px); }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; cursor: pointer; border: none; background: none; color: var(--text-secondary); font-size: 11px; font-weight: 700; transition: var(--transition); position: relative; }
         .nav-item.active { color: var(--primary); }
-        .nav-item.active::before {
-            content: ''; position: absolute; top: -8px; width: 40px; height: 3px;
-            background: var(--primary); border-radius: 2px;
-        }
+        .nav-item.active::before { content: ''; position: absolute; top: -8px; width: 40px; height: 3px; background: var(--primary); border-radius: 2px; }
         .nav-item .icon { font-size: 22px; transition: var(--transition); }
         .nav-item:hover .icon { transform: scale(1.1); }
 
-        /* Screen Management */
+        /* ============================
+           Screens
+           ============================ */
         .screen { display: none; animation: fadeIn 0.3s ease; }
         .screen.active { display: block; }
 
-        /* Modal */
-        .modal-overlay {
-            position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center;
-            padding: 16px; opacity: 0; transition: opacity 0.3s ease;
-        }
+        /* ============================
+           Modals
+           ============================ */
+        .modal-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 16px; opacity: 0; transition: opacity 0.3s ease; }
         .modal-overlay.active { display: flex; opacity: 1; }
-        .modal {
-            background: var(--card-bg); border-radius: var(--radius); width: 100%; max-width: 480px;
-            max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            transform: scale(0.9); transition: transform 0.3s ease; border: 1px solid var(--border);
-        }
+        .modal { background: var(--card-bg); border-radius: var(--radius); width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); transform: scale(0.9); transition: transform 0.3s ease; border: 1px solid var(--border); }
         .modal-overlay.active .modal { transform: scale(1); }
-        .modal-header {
-            padding: 20px; border-bottom: 1px solid var(--border); display: flex;
-            align-items: center; justify-content: space-between;
-        }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
         .modal-title { font-size: 18px; font-weight: 800; color: var(--primary); margin: 0; }
-        .modal-close {
-            width: 32px; height: 32px; border-radius: 50%; border: none;
-            background: var(--border); color: var(--text); cursor: pointer;
-            display: flex; align-items: center; justify-content: center; font-size: 18px;
-            transition: var(--transition);
-        }
+        .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: var(--transition); }
         .modal-close:hover { background: var(--danger); color: white; }
         .modal-body { padding: 20px; }
-        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
-        .modal-footer .btn { flex: 1; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-wrap: wrap; }
+        .modal-footer .btn { flex: 1; min-width: 80px; }
 
-        /* QR Scanner */
-        .scanner-container {
-            position: relative; width: 100%; max-width: 400px; margin: 0 auto;
-            aspect-ratio: 1; border-radius: var(--radius); overflow: hidden;
-            background: #000; border: 3px solid var(--primary);
-        }
-        .scanner-overlay {
-            position: absolute; inset: 0; pointer-events: none;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .scanner-frame {
-            width: 70%; height: 70%; border: 2px solid var(--secondary);
-            border-radius: 16px; position: relative;
-        }
-        .scanner-line {
-            position: absolute; left: 0; right: 0; height: 2px;
-            background: var(--secondary); box-shadow: 0 0 8px var(--secondary);
-            animation: scan 2s linear infinite;
-        }
-        .scanner-corner {
-            position: absolute; width: 20px; height: 20px;
-            border-color: var(--secondary); border-style: solid;
-        }
-        .scanner-corner.tl { top: -2px; left: -2px; border-width: 4px 0 0 4px; }
-        .scanner-corner.tr { top: -2px; right: -2px; border-width: 4px 4px 0 0; }
-        .scanner-corner.bl { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; }
-        .scanner-corner.br { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; }
+        /* ============================
+           Forms
+           ============================ */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-control { width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text); font-size: 15px; outline: none; transition: var(--transition); font-family: inherit; }
+        .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,58,90,0.1); }
+        select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 12px center; padding-left: 30px; }
 
-        /* VIP Card */
-        .vip-card {
-            background: linear-gradient(135deg, #1a3a5a 0%, #0f1f3a 50%, #D4AF37 100%);
-            border-radius: var(--radius); padding: 24px; color: white;
-            position: relative; overflow: hidden; margin: 12px 16px;
-            box-shadow: 0 8px 32px rgba(26,58,90,0.3);
-        }
-        .vip-card::before {
-            content: ''; position: absolute; top: -50%; right: -50%;
-            width: 200%; height: 200%; background: radial-gradient(circle, rgba(212,175,55,0.1) 0%, transparent 70%);
-        }
-        .vip-level { display: inline-flex; align-items: center; gap: 6px;
-            background: rgba(212,175,55,0.2); border: 1px solid var(--secondary);
-            padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-        }
-        .vip-points { font-size: 32px; font-weight: 800; margin: 8px 0; }
-        .vip-name { font-size: 18px; font-weight: 700; }
-
-        /* Invoice / Receipt */
-        .invoice-preview {
-            background: white; color: #000; border-radius: var(--radius-sm);
-            padding: 24px; font-family: 'Courier New', monospace; font-size: 13px;
-            border: 2px dashed #ccc; max-width: 100%; overflow-x: auto;
-        }
+        /* ============================
+           Invoice Preview
+           ============================ */
+        .invoice-preview { background: white; color: #000; border-radius: var(--radius-sm); padding: 24px; font-family: 'Courier New', monospace; font-size: 13px; border: 2px dashed #ccc; max-width: 100%; overflow-x: auto; }
         .invoice-header { text-align: center; border-bottom: 2px solid #1a3a5a; padding-bottom: 12px; margin-bottom: 16px; }
         .invoice-header h2 { margin: 0; color: #1a3a5a; font-size: 20px; }
         .invoice-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dotted #ccc; }
         .invoice-total { font-size: 18px; font-weight: 800; border-top: 2px solid #1a3a5a; margin-top: 12px; padding-top: 12px; }
 
-        /* AI Chat */
+        /* ============================
+           Scanner
+           ============================ */
+        .scanner-container { position: relative; width: 100%; max-width: 400px; margin: 0 auto; aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; background: #000; border: 3px solid var(--primary); }
+        .scanner-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; }
+        .scanner-frame { width: 70%; height: 70%; border: 2px solid var(--secondary); border-radius: 16px; position: relative; }
+        .scanner-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--secondary); box-shadow: 0 0 8px var(--secondary); animation: scan 2s linear infinite; }
+        .scanner-corner { position: absolute; width: 20px; height: 20px; border-color: var(--secondary); border-style: solid; }
+        .scanner-corner.tl { top: -2px; left: -2px; border-width: 4px 0 0 4px; }
+        .scanner-corner.tr { top: -2px; right: -2px; border-width: 4px 4px 0 0; }
+        .scanner-corner.bl { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; }
+        .scanner-corner.br { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; }
+
+        /* ============================
+           Chat
+           ============================ */
         .chat-container { height: 400px; display: flex; flex-direction: column; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-        .chat-bubble {
-            max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14px;
-            line-height: 1.5; word-wrap: break-word;
-        }
+        .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
         .chat-bubble.user { align-self: flex-start; background: var(--primary); color: white; border-radius: 16px 16px 4px 16px; }
         .chat-bubble.ai { align-self: flex-end; background: var(--border); color: var(--text); border-radius: 16px 16px 16px 4px; }
         .chat-input-group { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
         .chat-input-group input { flex: 1; }
 
-        /* Charts */
-        .chart-container { height: 220px; position: relative; margin: 16px 0; }
-        .bar-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 180px; gap: 8px; padding: 0 8px; }
-        .bar-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-        .bar { width: 100%; border-radius: 6px 6px 0 0; background: linear-gradient(to top, var(--primary), var(--primary-light)); transition: height 0.6s ease; min-height: 4px; }
-        .bar-label { font-size: 10px; color: var(--text-secondary); font-weight: 700; transform: rotate(-30deg); white-space: nowrap; }
-        .bar-value { font-size: 11px; font-weight: 800; color: var(--primary); }
-
-        /* Print Styles */
-        @media print {
-            body * { visibility: hidden; }
-            .print-area, .print-area * { visibility: visible; }
-            .print-area { position: absolute; left: 0; top: 0; width: 100%; }
-            .no-print { display: none !important; }
-        }
-
-        /* Responsive */
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-            .quick-actions { grid-template-columns: repeat(4, 1fr); }
-        }
-
-        /* Utility */
+        /* ============================
+           Badges & Utilities
+           ============================ */
+        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-success { background: rgba(40,167,69,0.15); color: var(--success); }
+        .badge-danger { background: rgba(220,53,69,0.15); color: var(--danger); }
+        .badge-warning { background: rgba(255,193,7,0.15); color: #856404; }
+        .badge-primary { background: rgba(26,58,90,0.15); color: var(--primary); }
         .text-center { text-align: center; }
         .text-danger { color: var(--danger); }
         .text-success { color: var(--success); }
-        .text-warning { color: var(--warning); }
         .text-primary { color: var(--primary); }
-        .mb-0 { margin-bottom: 0; }
         .mb-1 { margin-bottom: 8px; }
         .mb-2 { margin-bottom: 16px; }
         .mt-1 { margin-top: 8px; }
@@ -374,49 +232,40 @@
         .gap-2 { gap: 16px; }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
-        .badge {
-            display: inline-flex; align-items: center; padding: 4px 10px;
-            border-radius: 20px; font-size: 11px; font-weight: 700;
-        }
-        .badge-success { background: rgba(40,167,69,0.15); color: var(--success); }
-        .badge-danger { background: rgba(220,53,69,0.15); color: var(--danger); }
-        .badge-warning { background: rgba(255,193,7,0.15); color: #856404; }
-        .badge-primary { background: rgba(26,58,90,0.15); color: var(--primary); }
 
-        /* Toggle Switch */
+        /* ============================
+           Toggle
+           ============================ */
         .toggle { position: relative; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
         .toggle input { display: none; }
-        .toggle-slider {
-            width: 48px; height: 26px; background: var(--border); border-radius: 13px;
-            position: relative; transition: var(--transition);
-        }
-        .toggle-slider::after {
-            content: ''; position: absolute; width: 22px; height: 22px;
-            background: white; border-radius: 50%; top: 2px; right: 2px;
-            transition: var(--transition); box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
+        .toggle-slider { width: 48px; height: 26px; background: var(--border); border-radius: 13px; position: relative; transition: var(--transition); }
+        .toggle-slider::after { content: ''; position: absolute; width: 22px; height: 22px; background: white; border-radius: 50%; top: 2px; right: 2px; transition: var(--transition); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .toggle input:checked + .toggle-slider { background: var(--success); }
         .toggle input:checked + .toggle-slider::after { right: 24px; }
 
-        /* Loading */
-        .loading {
-            display: inline-block; width: 20px; height: 20px;
-            border: 3px solid rgba(255,255,255,0.3); border-radius: 50%;
-            border-top-color: white; animation: spin 1s ease-in-out infinite;
-        }
+        /* ============================
+           Loading
+           ============================ */
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Toast */
+        /* ============================
+           Toast
+           ============================ */
         .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 8px; }
-        .toast {
-            background: var(--card-bg); color: var(--text); padding: 12px 20px;
-            border-radius: var(--radius-sm); box-shadow: var(--shadow); border: 1px solid var(--border);
-            font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px;
-            animation: fadeIn 0.3s ease; min-width: 280px; max-width: 90vw;
-        }
+        .toast { background: var(--card-bg); color: var(--text); padding: 12px 20px; border-radius: var(--radius-sm); box-shadow: var(--shadow); border: 1px solid var(--border); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: fadeIn 0.3s ease; min-width: 280px; max-width: 90vw; }
         .toast.success { border-right: 4px solid var(--success); }
         .toast.error { border-right: 4px solid var(--danger); }
         .toast.warning { border-right: 4px solid var(--warning); }
+
+        /* ============================
+           Responsive
+           ============================ */
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+            .quick-actions { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }
     </style>
 </head>
 <body>
@@ -445,7 +294,7 @@
             </button>
         </div>
         <div style="margin-top: 24px; text-align: center; color: rgba(255,255,255,0.5); font-size: 12px;">
-            الإصدار 2.0 Pro | محمي بتشفير AES-256
+            الإصدار 4.0 Pro | عملة: الريال اليمني
         </div>
     </div>
 
@@ -458,99 +307,65 @@
                 <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع">🌙</button>
                 <button class="icon-btn" onclick="showScreen('notifications')" title="التنبيهات">🔔</button>
                 <button class="icon-btn" onclick="showAboutModal()" title="عن التطبيق">ℹ️</button>
+                <button class="icon-btn" onclick="logout()" title="تسجيل الخروج">🚪</button>
             </div>
         </div>
 
-        <!-- DASHBOARD SCREEN -->
+        <!-- ========== DASHBOARD ========== -->
         <div class="screen active" id="screen-dashboard">
-            <!-- Stats Cards -->
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">💰 المبيعات اليوم</div>
-                    <div class="stat-value" id="dashSales">0</div>
-                    <div class="stat-change up">د.ع</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">⛽ اللترات المباعة</div>
-                    <div class="stat-value" id="dashLiters">0</div>
-                    <div class="stat-change up">لتر</div>
-                </div>
-                <div class="stat-card warning">
-                    <div class="stat-label">📦 المخزون المتبقي</div>
-                    <div class="stat-value" id="dashStock">0</div>
-                    <div class="stat-change" id="dashStockTrend">لتر</div>
-                </div>
-                <div class="stat-card danger">
-                    <div class="stat-label">💳 الديون المستحقة</div>
-                    <div class="stat-value" id="dashDue">0</div>
-                    <div class="stat-change down">د.ع</div>
-                </div>
+                <div class="stat-card"><div class="stat-label">💰 المبيعات اليوم</div><div class="stat-value" id="dashSales">0</div><div class="stat-change">ريال</div></div>
+                <div class="stat-card"><div class="stat-label">⛽ اللترات المباعة</div><div class="stat-value" id="dashLiters">0</div><div class="stat-change">لتر</div></div>
+                <div class="stat-card warning"><div class="stat-label">📦 المخزون المتبقي</div><div class="stat-value" id="dashStock">0</div><div class="stat-change">لتر</div></div>
+                <div class="stat-card danger"><div class="stat-label">💳 الديون المستحقة</div><div class="stat-value" id="dashDue">0</div><div class="stat-change">ريال</div></div>
             </div>
-
-            <!-- Alerts -->
             <div id="dashAlerts"></div>
-
-            <!-- Quick Actions -->
-            <div class="card">
-                <div class="card-title">⚡ إجراءات سريعة</div>
-                <div class="quick-actions">
-                    <div class="quick-btn" onclick="showScreen('sale')">
-                        <span class="icon">💵</span>
-                        <span>بيع جديد</span>
-                    </div>
-                    <div class="quick-btn" onclick="showScreen('payment')">
-                        <span class="icon">💳</span>
-                        <span>تسديد</span>
-                    </div>
-                    <div class="quick-btn" onclick="showScreen('qr')">
-                        <span class="icon">📷</span>
-                        <span>مسح QR</span>
-                    </div>
-                    <div class="quick-btn" onclick="showScreen('reports')">
-                        <span class="icon">📊</span>
-                        <span>التقارير</span>
-                    </div>
-                </div>
+            <div class="quick-actions">
+                <div class="quick-btn" onclick="showScreen('sale')"><span class="icon">💵</span><span>بيع جديد</span></div>
+                <div class="quick-btn" onclick="showScreen('payment')"><span class="icon">💳</span><span>تسديد</span></div>
+                <div class="quick-btn" onclick="showScreen('qr')"><span class="icon">📷</span><span>مسح QR</span></div>
+                <div class="quick-btn" onclick="showScreen('reports')"><span class="icon">📊</span><span>التقارير</span></div>
+                <div class="quick-btn" onclick="showScreen('customers')"><span class="icon">👥</span><span>العملاء</span></div>
+                <div class="quick-btn" onclick="showScreen('inventory')"><span class="icon">📦</span><span>المخزون</span></div>
+                <div class="quick-btn" onclick="showScreen('employees')"><span class="icon">👨‍💼</span><span>الموظفين</span></div>
+                <div class="quick-btn" onclick="showScreen('debts')"><span class="icon">📉</span><span>الديون</span></div>
+                <div class="quick-btn" onclick="showScreen('tanks')"><span class="icon">🛢️</span><span>الخزانات</span></div>
+                <div class="quick-btn" onclick="showScreen('maintenance')"><span class="icon">🔧</span><span>الصيانة</span></div>
+                <div class="quick-btn" onclick="showScreen('sms')"><span class="icon">📨</span><span>الرسائل</span></div>
+                <div class="quick-btn" onclick="showScreen('settings')"><span class="icon">⚙️</span><span>الإعدادات</span></div>
             </div>
-
-            <!-- Daily Sales Chart -->
             <div class="card">
                 <div class="card-title">📈 مبيعات الأيام الأخيرة</div>
-                <div class="chart-container">
-                    <div class="bar-chart" id="dailySalesChart"></div>
-                </div>
+                <div class="bar-chart" id="dailySalesChart" style="display:flex; align-items:flex-end; justify-content:space-around; height:180px; gap:8px; padding:0 8px;"></div>
             </div>
-
-            <!-- Inventory Progress -->
-            <div class="card">
-                <div class="card-title">📦 حالة المخزون</div>
-                <div id="inventoryProgress"></div>
-            </div>
-
-            <!-- AI Insight -->
-            <div class="card" style="background: linear-gradient(135deg, rgba(26,58,90,0.05), rgba(212,175,55,0.05));">
+            <div class="card" style="background:linear-gradient(135deg, rgba(26,58,90,0.05), rgba(212,175,55,0.05));">
                 <div class="card-title">🤖 توقعات الذكاء الاصطناعي</div>
-                <div id="aiInsight" style="font-size: 14px; line-height: 1.8; color: var(--text-secondary);">
-                    <div class="loading"></div> جاري التحليل...
-                </div>
+                <div id="aiInsight" style="font-size:14px; line-height:1.8; color:var(--text-secondary);">جاري التحليل...</div>
             </div>
         </div>
 
-        <!-- SALE SCREEN -->
+        <!-- ========== SALE ========== -->
         <div class="screen" id="screen-sale">
             <div class="card">
                 <div class="card-title">💵 تسجيل عملية بيع جديدة</div>
                 <form id="saleForm" onsubmit="executeSale(event)">
                     <div class="form-group">
                         <label>العميل</label>
-                        <select class="form-control" name="customer_id" id="saleCustomer" required>
+                        <select class="form-control" name="customer_party_id" id="saleCustomer" required>
                             <option value="">-- اختر العميل --</option>
+                        </select>
+                        <button type="button" class="btn btn-small btn-outline mt-1" onclick="showScreen('customers')" style="width:auto;">➕ عميل جديد</button>
+                    </div>
+                    <div class="form-group">
+                        <label>نوع الوقود / التعبئة</label>
+                        <select class="form-control" name="fuel_type_id" id="saleFuelType" required>
+                            <option value="">-- اختر الوقود --</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>التعبئة (المخزون)</label>
-                        <select class="form-control" name="refill_id" id="saleRefill" required onchange="updateSalePrice()">
-                            <option value="">-- اختر التعبئة --</option>
+                        <label>المضخة</label>
+                        <select class="form-control" name="pump_id" id="salePump" required>
+                            <option value="">-- اختر المضخة --</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -561,62 +376,70 @@
                             <button type="button" class="btn btn-small btn-secondary" onclick="setQty(1000)" style="flex:1;">1000</button>
                             <button type="button" class="btn btn-small btn-secondary" onclick="setQty(5000)" style="flex:1;">5000</button>
                         </div>
-                        <input type="number" class="form-control" name="quantity_liters" id="saleQty" value="100" min="1" required>
+                        <input type="number" class="form-control" name="liters" id="saleQty" value="100" min="1" required>
                     </div>
                     <div class="form-group">
-                        <label>سعر اللتر</label>
-                        <input type="number" class="form-control" name="unit_price" id="salePrice" value="950" required>
+                        <label>سعر اللتر (ريال)</label>
+                        <input type="number" class="form-control" name="price_per_liter" id="salePrice" value="500" required>
                     </div>
                     <div class="form-group">
-                        <label>المبلغ المدفوع (د.ع)</label>
+                        <label>المبلغ المدفوع (ريال)</label>
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
                             <button type="button" class="btn btn-small btn-secondary" onclick="setPaid(0)" style="flex:1;">0</button>
+                            <button type="button" class="btn btn-small btn-secondary" onclick="setPaid(25000)" style="flex:1;">25K</button>
                             <button type="button" class="btn btn-small btn-secondary" onclick="setPaid(50000)" style="flex:1;">50K</button>
-                            <button type="button" class="btn btn-small btn-secondary" onclick="setPaid(100000)" style="flex:1;">100K</button>
-                            <button type="button" class="btn btn-small btn-secondary" onclick="setPaidFull()" style="flex:1;">كامل</button>
+                            <button type="button" class="btn btn-small btn-success" onclick="setPaidFull()" style="flex:1;">كامل</button>
                         </div>
                         <input type="number" class="form-control" name="paid_amount" id="salePaid" value="0" required>
                     </div>
                     <div class="form-group">
-                        <label>نوع الدفع</label>
-                        <select class="form-control" name="payment_type" id="salePaymentType">
-                            <option value="نقداً">💵 نقداً</option>
-                            <option value="آجل">💳 آجل</option>
+                        <label>طريقة الدفع</label>
+                        <select class="form-control" name="payment_method" id="salePaymentMethod">
+                            <option value="cash">💵 نقداً</option>
+                            <option value="credit_card">💳 بطاقة</option>
+                            <option value="bank_transfer">🏦 تحويل</option>
+                            <option value="credit">📆 آجل</option>
+                            <option value="cheque">📄 شيك</option>
+                            <option value="mobile_money">📱 محفظة</option>
                         </select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="dueDateGroup" style="display:none;">
                         <label>تاريخ الاستحقاق</label>
-                        <input type="date" class="form-control" name="due_date" id="saleDueDate" required>
+                        <input type="date" class="form-control" name="due_date" id="saleDueDate">
                     </div>
-                    <div class="form-group" style="background: var(--bg); padding: 12px; border-radius: var(--radius-sm);">
+                    <div class="form-group" style="background:var(--bg); padding:12px; border-radius:var(--radius-sm);">
                         <div style="display:flex; justify-content:space-between; font-weight:700;">
                             <span>الإجمالي:</span>
-                            <span id="saleTotalPreview" style="color:var(--primary); font-size:18px;">0 د.ع</span>
+                            <span id="saleTotalPreview" style="color:var(--primary); font-size:18px;">0 ريال</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-top:4px; color:var(--text-secondary);">
                             <span>المتبقي:</span>
-                            <span id="saleDuePreview">0 د.ع</span>
+                            <span id="saleDuePreview">0 ريال</span>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">✅ تنفيذ البيع وإرسال SMS</button>
+                    <div class="form-group">
+                        <label>ملاحظات</label>
+                        <input type="text" class="form-control" name="notes" id="saleNotes" placeholder="اختياري">
+                    </div>
+                    <button type="submit" class="btn btn-primary">✅ تنفيذ البيع</button>
                     <button type="button" class="btn btn-info mt-1" onclick="previewInvoice()">🧾 معاينة الفاتورة</button>
                 </form>
             </div>
         </div>
 
-        <!-- PAYMENT SCREEN -->
+        <!-- ========== PAYMENT ========== -->
         <div class="screen" id="screen-payment">
             <div class="card">
                 <div class="card-title">💳 تسديد دفعة</div>
                 <form id="paymentForm" onsubmit="makePayment(event)">
                     <div class="form-group">
                         <label>العميل</label>
-                        <select class="form-control" name="customer_id" id="payCustomer" required>
+                        <select class="form-control" name="customer_party_id" id="payCustomer" required>
                             <option value="">-- اختر العميل --</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>المبلغ المسدد</label>
+                        <label>المبلغ المسدد (ريال)</label>
                         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
                             <button type="button" class="btn btn-small btn-secondary" onclick="setPayAmount(10000)" style="flex:1;">10K</button>
                             <button type="button" class="btn btn-small btn-secondary" onclick="setPayAmount(25000)" style="flex:1;">25K</button>
@@ -625,20 +448,53 @@
                         </div>
                         <input type="number" class="form-control" name="amount" id="payAmount" value="50000" required>
                     </div>
+                    <div class="form-group">
+                        <label>طريقة الدفع</label>
+                        <select class="form-control" name="payment_method" id="payMethod">
+                            <option value="cash">نقداً</option>
+                            <option value="bank_transfer">تحويل</option>
+                            <option value="cheque">شيك</option>
+                            <option value="credit_card">بطاقة</option>
+                            <option value="mobile_money">محفظة</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظات</label>
+                        <input type="text" class="form-control" name="notes" id="payNotes" placeholder="اختياري">
+                    </div>
                     <button type="submit" class="btn btn-success">✅ تأكيد التسديد</button>
                 </form>
             </div>
-
+            <div class="card">
+                <div class="card-title">💰 إيداع نقدي للعميل</div>
+                <form id="depositForm" onsubmit="makeDeposit(event)">
+                    <div class="form-group">
+                        <label>العميل</label>
+                        <select class="form-control" name="customer_party_id" id="depositCustomer" required>
+                            <option value="">-- اختر العميل --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>المبلغ المودع (ريال)</label>
+                        <input type="number" class="form-control" name="amount" id="depositAmount" value="10000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظات</label>
+                        <input type="text" class="form-control" name="notes" id="depositNotes" placeholder="اختياري">
+                    </div>
+                    <button type="submit" class="btn btn-warning">💰 تأكيد الإيداع</button>
+                </form>
+            </div>
             <div class="card">
                 <div class="card-title">📨 إرسال تنبيهات الديون</div>
                 <p style="font-size:13px; color:var(--text-secondary); margin-bottom:12px;">
-                    سيتم إرسال رسائل SMS لجميع العملاء المتأخرين عن السداد.
+                    سيتم إرسال رسائل SMS للعملاء المتأخرين (من القائمة البيضاء فقط).
                 </p>
-                <button class="btn btn-danger" onclick="sendOverdueSms()">🚨 إرسال التنبيهات الجماعية</button>
+                <button class="btn btn-danger" onclick="sendOverdueSms()">🚨 إرسال التنبيهات</button>
             </div>
         </div>
 
-        <!-- QR SCANNER SCREEN -->
+        <!-- ========== QR SCANNER ========== -->
         <div class="screen" id="screen-qr">
             <div class="card">
                 <div class="card-title">📷 ماسح الباركود / QR</div>
@@ -669,70 +525,99 @@
             </div>
         </div>
 
-        <!-- CUSTOMERS SCREEN -->
+        <!-- ========== CUSTOMERS ========== -->
         <div class="screen" id="screen-customers">
             <div class="card">
                 <div class="card-title">👥 إدارة العملاء</div>
-                <div class="form-group">
-                    <input type="text" class="form-control" id="customerSearch" placeholder="🔍 البحث بالاسم أو الهاتف..." oninput="filterCustomers()">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                    <input type="text" class="form-control" id="customerSearch" placeholder="🔍 بحث..." style="flex:1; min-width:120px;" oninput="filterCustomers()">
+                    <button class="btn btn-primary btn-small" onclick="showCustomerForm()" style="width:auto;">➕ إضافة</button>
                 </div>
                 <div id="customersList"></div>
             </div>
         </div>
 
-        <!-- REPORTS SCREEN -->
+        <!-- ========== INVENTORY ========== -->
+        <div class="screen" id="screen-inventory">
+            <div class="card">
+                <div class="card-title">📦 إدارة المخزون والتعبئة</div>
+                <button class="btn btn-primary btn-small mb-1" onclick="showRefillForm()" style="width:auto;">➕ تعبئة جديدة</button>
+                <div id="inventoryList"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">📊 حالة المخزون</div>
+                <div id="inventoryStatus"></div>
+            </div>
+        </div>
+
+        <!-- ========== EMPLOYEES ========== -->
+        <div class="screen" id="screen-employees">
+            <div class="card">
+                <div class="card-title">👨‍💼 إدارة الموظفين والرواتب</div>
+                <button class="btn btn-primary btn-small mb-1" onclick="showEmployeeForm()" style="width:auto;">➕ موظف جديد</button>
+                <div id="employeesList"></div>
+            </div>
+        </div>
+
+        <!-- ========== DEBTS ========== -->
+        <div class="screen" id="screen-debts">
+            <div class="card">
+                <div class="card-title">📉 إدارة الديون</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                    <button class="btn btn-danger btn-small" onclick="loadDebts('overdue')">🔴 متأخرة</button>
+                    <button class="btn btn-warning btn-small" onclick="loadDebts('doubtful')">🟡 مشكوك فيها</button>
+                    <button class="btn btn-secondary btn-small" onclick="loadDebts('bad')">⚫ معدومة</button>
+                    <button class="btn btn-info btn-small" onclick="loadDebts('all')">📋 الكل</button>
+                </div>
+                <div id="debtsList"></div>
+            </div>
+        </div>
+
+        <!-- ========== REPORTS ========== -->
         <div class="screen" id="screen-reports">
             <div class="card">
                 <div class="card-title">📊 التقارير والإحصائيات</div>
                 <div class="quick-actions">
-                    <div class="quick-btn" onclick="generateEodReport()">
-                        <span class="icon">📋</span>
-                        <span>تقرير اليوم</span>
-                    </div>
-                    <div class="quick-btn" onclick="exportData('json')">
-                        <span class="icon">💾</span>
-                        <span>تصدير JSON</span>
-                    </div>
-                    <div class="quick-btn" onclick="showScreen('activity')">
-                        <span class="icon">📝</span>
-                        <span>سجل النشاطات</span>
-                    </div>
-                    <div class="quick-btn" onclick="showScreen('sms')">
-                        <span class="icon">📨</span>
-                        <span>سجل SMS</span>
-                    </div>
+                    <div class="quick-btn" onclick="generateEodReport()"><span class="icon">📋</span><span>تقرير اليوم</span></div>
+                    <div class="quick-btn" onclick="showProfitReport()"><span class="icon">📈</span><span>الأرباح/الخسائر</span></div>
+                    <div class="quick-btn" onclick="exportData()"><span class="icon">💾</span><span>تصدير JSON</span></div>
+                    <div class="quick-btn" onclick="showScreen('activity')"><span class="icon">📝</span><span>سجل النشاطات</span></div>
+                    <div class="quick-btn" onclick="showScreen('sms')"><span class="icon">📨</span><span>سجل SMS</span></div>
+                    <div class="quick-btn" onclick="showScreen('settings')"><span class="icon">⚙️</span><span>الإعدادات</span></div>
                 </div>
             </div>
-
+            <div id="eodReportContainer"></div>
             <div class="card">
                 <div class="card-title">📈 المبيعات الشهرية</div>
-                <div class="chart-container">
-                    <div class="bar-chart" id="monthlySalesChart"></div>
-                </div>
+                <div class="bar-chart" id="monthlySalesChart" style="display:flex; align-items:flex-end; justify-content:space-around; height:180px; gap:8px; padding:0 8px;"></div>
             </div>
-
-            <div id="eodReportContainer"></div>
         </div>
 
-        <!-- ACTIVITY LOGS SCREEN -->
-        <div class="screen" id="screen-activity">
+        <!-- ========== TANKS & PUMPS ========== -->
+        <div class="screen" id="screen-tanks">
             <div class="card">
-                <div class="card-title">📝 سجل النشاطات والتدقيق</div>
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr><th>المشغل</th><th>الإجراء</th><th>التفاصيل</th><th>التاريخ</th></tr>
-                        </thead>
-                        <tbody id="activityLogsTable"></tbody>
-                    </table>
-                </div>
+                <div class="card-title">🛢️ الخزانات والمضخات</div>
+                <div id="tanksList"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">🔧 المضخات</div>
+                <div id="pumpsList"></div>
             </div>
         </div>
 
-        <!-- SMS LOGS SCREEN -->
+        <!-- ========== MAINTENANCE ========== -->
+        <div class="screen" id="screen-maintenance">
+            <div class="card">
+                <div class="card-title">🔧 طلبات الصيانة</div>
+                <button class="btn btn-primary btn-small mb-1" onclick="showMaintenanceForm()" style="width:auto;">➕ طلب جديد</button>
+                <div id="maintenanceList"></div>
+            </div>
+        </div>
+
+        <!-- ========== SMS ========== -->
         <div class="screen" id="screen-sms">
             <div class="card">
-                <div class="card-title">📨 سجل رسائل SMS</div>
+                <div class="card-title">📨 سجل الرسائل النصية</div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                     <input type="text" class="form-control" id="smsSearch" placeholder="بحث..." style="flex:1; min-width:120px;" oninput="filterSmsLogs()">
                     <select class="form-control" id="smsStatusFilter" style="flex:1; min-width:120px;" onchange="filterSmsLogs()">
@@ -740,236 +625,392 @@
                         <option value="sent">✅ تم الإرسال</option>
                         <option value="failed">❌ فشل</option>
                         <option value="received">📥 مستلم</option>
+                        <option value="blocked">🚫 محظور</option>
                     </select>
                 </div>
                 <div class="table-container">
                     <table class="data-table">
-                        <thead>
-                            <tr><th>الهاتف</th><th>الرسالة</th><th>النوع</th><th>الحالة</th><th>التاريخ</th></tr>
-                        </thead>
+                        <thead><tr><th>الهاتف</th><th>الرسالة</th><th>النوع</th><th>الحالة</th><th>التاريخ</th></tr></thead>
                         <tbody id="smsLogsTable"></tbody>
                     </table>
                 </div>
             </div>
+            <div class="card">
+                <div class="card-title">📋 قائمة السماح للرسائل (Whitelist)</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                    <input type="text" class="form-control" id="whitelistPhone" placeholder="رقم الهاتف" style="flex:1; min-width:100px;">
+                    <input type="text" class="form-control" id="whitelistName" placeholder="الاسم" style="flex:1; min-width:100px;">
+                    <button class="btn btn-success btn-small" onclick="addToWhitelist()" style="width:auto;">➕ إضافة</button>
+                </div>
+                <div id="whitelistTable"></div>
+            </div>
         </div>
 
-        <!-- SEARCH SCREEN -->
-        <div class="screen" id="screen-search">
+        <!-- ========== ACTIVITY LOGS ========== -->
+        <div class="screen" id="screen-activity">
             <div class="card">
-                <div class="card-title">🔍 البحث في السجل</div>
-                <div class="form-group">
-                    <input type="text" class="form-control" id="searchQuery" placeholder="اسم العميل، التاريخ، رقم الفاتورة...">
-                </div>
-                <button class="btn btn-primary" onclick="searchTransactions()">🔍 بحث</button>
-                <div class="table-container mt-2">
+                <div class="card-title">📝 سجل النشاطات</div>
+                <div class="table-container">
                     <table class="data-table">
-                        <thead>
-                            <tr><th>رقم العملية</th><th>العميل</th><th>الكمية</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>التاريخ</th></tr>
-                        </thead>
-                        <tbody id="searchResultsTable"></tbody>
+                        <thead><tr><th>المشغل</th><th>الإجراء</th><th>التفاصيل</th><th>التاريخ</th></tr></thead>
+                        <tbody id="activityLogsTable"></tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- SETTINGS SCREEN -->
+        <!-- ========== SETTINGS ========== -->
         <div class="screen" id="screen-settings">
             <div class="card">
                 <div class="card-title">⚙️ الإعدادات</div>
-
                 <div class="form-group">
-                    <label>تنبيه المخزون المنخفض (لتر)</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="number" class="form-control" id="thresholdInput" value="1000">
-                        <button class="btn btn-primary btn-small" onclick="saveThreshold()" style="width:auto;">حفظ</button>
-                    </div>
+                    <label>اسم المحطة</label>
+                    <input type="text" class="form-control" id="stationName" value="محطة أبو أحمد لمشتقات الديزل">
                 </div>
-
                 <div class="form-group">
-                    <label>نقاط الولاء لكل لتر</label>
-                    <input type="number" class="form-control" id="pointsPerLiter" value="1">
+                    <label>العملة</label>
+                    <input type="text" class="form-control" id="currencySetting" value="ريال يمني">
                 </div>
-
+                <div class="form-group">
+                    <label>حد التنبيه للمخزون المنخفض (لتر)</label>
+                    <input type="number" class="form-control" id="thresholdInput" value="1000">
+                </div>
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
-                    <span>🌙 الوضع الليلي</span>
-                    <label class="toggle">
-                        <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <span>🔐 تفعيل البصمة</span>
+                    <label class="toggle"><input type="checkbox" id="biometricToggle"><span class="toggle-slider"></span></label>
                 </div>
-
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
-                    <span>🔐 تسجيل الدخول بالبصمة</span>
-                    <label class="toggle">
-                        <input type="checkbox" id="biometricToggle">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <span>📨 تفعيل الرسائل النصية</span>
+                    <label class="toggle"><input type="checkbox" id="smsToggle" checked><span class="toggle-slider"></span></label>
                 </div>
-
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border);">
-                    <span>🤖 مساعد الذكاء الاصطناعي</span>
-                    <label class="toggle">
-                        <input type="checkbox" id="aiToggle" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
+                <div class="form-group mt-2">
+                    <label>مفتاح Gemini API</label>
+                    <input type="password" class="form-control" id="geminiKey" placeholder="أدخل المفتاح هنا...">
                 </div>
-
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 0;">
-                    <span>💾 النسخ الاحتياطي التلقائي</span>
-                    <label class="toggle">
-                        <input type="checkbox" id="autoBackupToggle" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
+                <div class="form-group">
+                    <label>مفتاح DeepSeek API</label>
+                    <input type="password" class="form-control" id="deepseekKey" placeholder="أدخل المفتاح هنا...">
                 </div>
-
-                <button class="btn btn-info mt-2" onclick="exportData('json')">💾 تصدير نسخة احتياطية</button>
+                <div class="form-group">
+                    <label>مفتاح Grok API</label>
+                    <input type="password" class="form-control" id="grokKey" placeholder="أدخل المفتاح هنا...">
+                </div>
+                <div class="form-group">
+                    <label>مفتاح Kimi API</label>
+                    <input type="password" class="form-control" id="kimiKey" placeholder="أدخل المفتاح هنا...">
+                </div>
+                <div class="form-group">
+                    <label>مفتاح ChatGPT API</label>
+                    <input type="password" class="form-control" id="chatgptKey" placeholder="أدخل المفتاح هنا...">
+                </div>
+                <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
                 <button class="btn btn-secondary mt-1" onclick="showAboutModal()">ℹ️ عن التطبيق</button>
             </div>
         </div>
 
-        <!-- AI CHAT SCREEN -->
+        <!-- ========== AI CHAT ========== -->
         <div class="screen" id="screen-ai">
             <div class="card" style="padding:0; overflow:hidden;">
-                <div class="card-title" style="padding:16px 20px; margin:0; border-bottom:1px solid var(--border);">
-                    🤖 مساعد أبو أحمد الذكي
-                </div>
+                <div class="card-title" style="padding:16px 20px; margin:0; border-bottom:1px solid var(--border);">🤖 مساعد أبو أحمد الذكي</div>
                 <div class="chat-container">
                     <div class="chat-messages" id="chatMessages">
-                        <div class="chat-bubble ai">مرحباً! أنا مساعد محطة أبو أحمد الذكي. كيف يمكنني مساعدتك اليوم؟</div>
+                        <div class="chat-bubble ai">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك اليوم؟</div>
                     </div>
                     <div class="chat-input-group">
-                        <input type="text" class="form-control" id="chatInput" placeholder="اكتب رسالتك هنا..." onkeypress="if(event.key==='Enter')sendAiMessage()">
+                        <input type="text" class="form-control" id="chatInput" placeholder="اكتب رسالتك..." onkeypress="if(event.key==='Enter')sendAiMessage()">
                         <button class="btn btn-primary btn-small" onclick="sendAiMessage()" style="width:auto; padding:12px 16px;">📤</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- NOTIFICATIONS SCREEN -->
+        <!-- ========== NOTIFICATIONS ========== -->
         <div class="screen" id="screen-notifications">
             <div class="card">
                 <div class="card-title">🔔 التنبيهات والإشعارات</div>
                 <div id="notificationsList"></div>
             </div>
         </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav no-print">
+            <button class="nav-item active" onclick="showScreen('dashboard')" data-screen="dashboard"><span class="icon">🏠</span><span>الرئيسية</span></button>
+            <button class="nav-item" onclick="showScreen('sale')" data-screen="sale"><span class="icon">💵</span><span>البيع</span></button>
+            <button class="nav-item" onclick="showScreen('customers')" data-screen="customers"><span class="icon">👥</span><span>العملاء</span></button>
+            <button class="nav-item" onclick="showScreen('ai')" data-screen="ai"><span class="icon">🤖</span><span>الذكاء</span></button>
+            <button class="nav-item" onclick="showScreen('settings')" data-screen="settings"><span class="icon">⚙️</span><span>الإعدادات</span></button>
+        </nav>
     </div>
 
-    <!-- Bottom Navigation -->
-    <nav class="bottom-nav no-print" id="bottomNav">
-        <button class="nav-item active" onclick="showScreen('dashboard')" data-screen="dashboard">
-            <span class="icon">🏠</span>
-            <span>الرئيسية</span>
-        </button>
-        <button class="nav-item" onclick="showScreen('sale')" data-screen="sale">
-            <span class="icon">💵</span>
-            <span>البيع</span>
-        </button>
-        <button class="nav-item" onclick="showScreen('customers')" data-screen="customers">
-            <span class="icon">👥</span>
-            <span>العملاء</span>
-        </button>
-        <button class="nav-item" onclick="showScreen('ai')" data-screen="ai">
-            <span class="icon">🤖</span>
-            <span>الذكاء</span>
-        </button>
-        <button class="nav-item" onclick="showScreen('settings')" data-screen="settings">
-            <span class="icon">⚙️</span>
-            <span>الإعدادات</span>
-        </button>
-    </nav>
-
-    <!-- ================= MODALS ================= -->
+    <!-- ==================== MODALS ==================== -->
 
     <!-- About Modal -->
     <div class="modal-overlay" id="aboutModal">
         <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">✨ عن التطبيق</h2>
-                <button class="modal-close" onclick="closeModal('aboutModal')">✕</button>
-            </div>
+            <div class="modal-header"><h2 class="modal-title">✨ عن التطبيق</h2><button class="modal-close" onclick="closeModal('aboutModal')">✕</button></div>
             <div class="modal-body" style="text-align:center;">
                 <div style="width:80px; height:80px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:40px; margin:0 auto 16px;">⛽</div>
-                <div style="font-size:20px; font-weight:800; color:var(--primary); margin-bottom:4px;">محطة ابو أحمد لمشتقات الديزل</div>
-                <div style="font-size:14px; color:var(--text-secondary); margin-bottom:16px;">الإصدار 2.0 Pro</div>
-
-                <div style="background:var(--bg); border-radius:var(--radius-sm); padding:16px; margin-bottom:16px;">
-                    <div style="font-weight:700; margin-bottom:8px;">👨‍💻 المطور</div>
+                <div style="font-size:20px; font-weight:800; color:var(--primary);">محطة أبو أحمد لمشتقات الديزل</div>
+                <div style="font-size:14px; color:var(--text-secondary);">الإصدار 4.0 Pro</div>
+                <div style="background:var(--bg); border-radius:var(--radius-sm); padding:16px; margin:16px 0;">
+                    <div style="font-weight:700;">👨‍💻 المطور</div>
                     <div style="font-size:15px; color:var(--text-secondary);">المهندس / جبر الحميدي</div>
                 </div>
-
-                <div style="font-weight:700; margin-bottom:12px;">📱 للتواصل المباشر</div>
                 <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-                    <a href="whatsapp://send?phone=00967781038203" class="btn btn-small btn-success" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/><path d="M14 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/><path d="M12 16a3 3 0 0 0 2.5-1.5"/></svg>
-                        واتساب
-                    </a>
-                    <a href="fb://profile/jbr.mhdy.alhmydy" class="btn btn-small btn-info" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 2h-3a4 4 0 0 0-4 4v3H8v4h3v8h4v-8h3l1-4h-4V6a1 1 0 0 1 1-1h3z"/></svg>
-                        فيسبوك
-                    </a>
-                    <a href="mailto:db7r01@gmail.com" class="btn btn-small btn-danger" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 6L12 13 2 6v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6z"/><path d="M22 6L12 13 2 6"/></svg>
-                        Gmail
-                    </a>
+                    <a href="whatsapp://send?phone=00967781038203" class="btn btn-small btn-success" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">📱 واتساب</a>
+                    <a href="fb://profile/jbr.mhdy.alhmydy" class="btn btn-small btn-info" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">📘 فيسبوك</a>
+                    <a href="mailto:db7r01@gmail.com" class="btn btn-small btn-danger" style="display:inline-flex; align-items:center; gap:6px; text-decoration:none; width:auto;">✉️ Gmail</a>
                 </div>
-
                 <div style="margin-top:16px; padding:12px; background:linear-gradient(135deg, rgba(26,58,90,0.05), rgba(212,175,55,0.05)); border-radius:var(--radius-sm); font-style:italic; font-size:13px; color:var(--text-secondary); line-height:1.8;">
                     تم تصميم هذا التطبيق خصيصاً لمحطة أبو أحمد لمشتقات الديزل.<br>
-                    حيث تم تصميمه وفق أعلى درجات الأمان والذكاء والدقة والسرعة.<br>
-                    متخطياً عند الاختبارات الأخطاء وعدم الدقة.
+                    جميع العمليات متكاملة مع قاعدة بيانات SQLite المتطورة V7 والذكاء الاصطناعي والرسائل النصية.
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal('aboutModal')">إغلاق</button>
+            <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('aboutModal')">إغلاق</button></div>
+        </div>
+    </div>
+
+    <!-- Customer Form Modal -->
+    <div class="modal-overlay" id="customerFormModal">
+        <div class="modal">
+            <div class="modal-header"><h2 class="modal-title" id="customerFormTitle">👤 إضافة عميل</h2><button class="modal-close" onclick="closeModal('customerFormModal')">✕</button></div>
+            <div class="modal-body">
+                <form id="customerForm" onsubmit="saveCustomer(event)">
+                    <input type="hidden" id="customerFormId">
+                    <div class="form-group">
+                        <label>الاسم التجاري *</label>
+                        <input type="text" class="form-control" id="customerFormName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف</label>
+                        <input type="text" class="form-control" id="customerFormPhone">
+                    </div>
+                    <div class="form-group">
+                        <label>حد الائتمان (ريال)</label>
+                        <input type="number" class="form-control" id="customerFormCredit" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>نوع العميل</label>
+                        <select class="form-control" id="customerFormType">
+                            <option value="1">فرد</option>
+                            <option value="2">شركة</option>
+                            <option value="4">نقل</option>
+                            <option value="5">مقاول</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger mt-1" onclick="deleteCustomerForm()" id="customerFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Invoice Preview Modal -->
+    <!-- Refill Form Modal -->
+    <div class="modal-overlay" id="refillFormModal">
+        <div class="modal">
+            <div class="modal-header"><h2 class="modal-title">📦 تعبئة جديدة</h2><button class="modal-close" onclick="closeModal('refillFormModal')">✕</button></div>
+            <div class="modal-body">
+                <form id="refillForm" onsubmit="saveRefill(event)">
+                    <div class="form-group">
+                        <label>المورد *</label>
+                        <input type="text" class="form-control" id="refillSupplier" required>
+                    </div>
+                    <div class="form-group">
+                        <label>الكمية الإجمالية (لتر) *</label>
+                        <input type="number" class="form-control" id="refillTotalQty" required>
+                    </div>
+                    <div class="form-group">
+                        <label>نوع الوقود</label>
+                        <select class="form-control" id="refillFuelType">
+                            <option value="1">ديزل</option>
+                            <option value="2">بنزين 95</option>
+                            <option value="3">بنزين 91</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>سعر البيع للتر (ريال) *</label>
+                        <input type="number" class="form-control" id="refillPrice" value="500" required>
+                    </div>
+                    <div class="form-group">
+                        <label>السماح بالبيع الآجل</label>
+                        <select class="form-control" id="refillAllowCredit">
+                            <option value="1">نعم</option>
+                            <option value="0">لا</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>حد التنبيه (لتر)</label>
+                        <input type="number" class="form-control" id="refillThreshold" value="1000">
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ التعبئة</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Form Modal -->
+    <div class="modal-overlay" id="employeeFormModal">
+        <div class="modal">
+            <div class="modal-header"><h2 class="modal-title" id="employeeFormTitle">👨‍💼 إضافة موظف</h2><button class="modal-close" onclick="closeModal('employeeFormModal')">✕</button></div>
+            <div class="modal-body">
+                <form id="employeeForm" onsubmit="saveEmployee(event)">
+                    <input type="hidden" id="employeeFormId">
+                    <div class="form-group">
+                        <label>الاسم الكامل *</label>
+                        <input type="text" class="form-control" id="employeeFormName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف</label>
+                        <input type="text" class="form-control" id="employeeFormPhone">
+                    </div>
+                    <div class="form-group">
+                        <label>المسمى الوظيفي</label>
+                        <input type="text" class="form-control" id="employeeFormPosition">
+                    </div>
+                    <div class="form-group">
+                        <label>الراتب الأساسي (ريال)</label>
+                        <input type="number" class="form-control" id="employeeFormSalary" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>الحالة</label>
+                        <select class="form-control" id="employeeFormActive">
+                            <option value="1">نشط</option>
+                            <option value="0">غير نشط</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>ملاحظات</label>
+                        <input type="text" class="form-control" id="employeeFormNotes">
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger mt-1" onclick="deleteEmployeeForm()" id="employeeFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Payment Modal -->
+    <div class="modal-overlay" id="employeePaymentModal">
+        <div class="modal">
+            <div class="modal-header"><h2 class="modal-title">💰 دفعة للموظف</h2><button class="modal-close" onclick="closeModal('employeePaymentModal')">✕</button></div>
+            <div class="modal-body">
+                <form id="employeePaymentForm" onsubmit="saveEmployeePayment(event)">
+                    <input type="hidden" id="empPaymentEmployeeId">
+                    <div class="form-group">
+                        <label>المبلغ (ريال)</label>
+                        <input type="number" class="form-control" id="empPaymentAmount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>النوع</label>
+                        <select class="form-control" id="empPaymentType">
+                            <option value="salary">راتب</option>
+                            <option value="advance">مسحوبية</option>
+                            <option value="penalty">جزاء</option>
+                            <option value="bonus">مكافأة</option>
+                            <option value="other">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>الوصف</label>
+                        <input type="text" class="form-control" id="empPaymentDesc">
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 إضافة الدفعة</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Account Modal -->
+    <div class="modal-overlay" id="customerAccountModal">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header"><h2 class="modal-title" id="accountCustomerName">📊 كشف حساب العميل</h2><button class="modal-close" onclick="closeModal('customerAccountModal')">✕</button></div>
+            <div class="modal-body">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                    <input type="date" class="form-control" id="accountFromDate" style="flex:1; min-width:120px;">
+                    <input type="date" class="form-control" id="accountToDate" style="flex:1; min-width:120px;">
+                    <button class="btn btn-primary btn-small" onclick="loadCustomerAccount()" style="width:auto;">🔍 عرض</button>
+                    <button class="btn btn-success btn-small" onclick="shareCustomerAccount()" style="width:auto;">📤 مشاركة</button>
+                    <button class="btn btn-info btn-small" onclick="sendCustomerSms()" style="width:auto;">📨 إرسال SMS</button>
+                </div>
+                <div id="accountDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profit Report Modal -->
+    <div class="modal-overlay" id="profitReportModal">
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header"><h2 class="modal-title">📈 تقرير الأرباح والخسائر</h2><button class="modal-close" onclick="closeModal('profitReportModal')">✕</button></div>
+            <div class="modal-body">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                    <input type="date" class="form-control" id="profitFromDate" style="flex:1; min-width:120px;">
+                    <input type="date" class="form-control" id="profitToDate" style="flex:1; min-width:120px;">
+                    <button class="btn btn-primary btn-small" onclick="loadProfitReport()" style="width:auto;">🔍 عرض</button>
+                </div>
+                <div id="profitDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maintenance Form Modal -->
+    <div class="modal-overlay" id="maintenanceFormModal">
+        <div class="modal">
+            <div class="modal-header"><h2 class="modal-title">🔧 طلب صيانة جديد</h2><button class="modal-close" onclick="closeModal('maintenanceFormModal')">✕</button></div>
+            <div class="modal-body">
+                <form id="maintenanceForm" onsubmit="saveMaintenanceRequest(event)">
+                    <div class="form-group">
+                        <label>نوع الأصل</label>
+                        <select class="form-control" id="maintAssetType">
+                            <option value="tank">خزان</option>
+                            <option value="pump">مضخة</option>
+                            <option value="nozzle">مسدس</option>
+                            <option value="generator">مولد</option>
+                            <option value="building">مبنى</option>
+                            <option value="fixed_asset">أصل ثابت</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>معرف الأصل</label>
+                        <input type="number" class="form-control" id="maintAssetId" placeholder="رقم الأصل" required>
+                    </div>
+                    <div class="form-group">
+                        <label>نوع الطلب</label>
+                        <input type="text" class="form-control" id="maintRequestType" placeholder="مثل: إصلاح، فحص..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>الأولوية</label>
+                        <select class="form-control" id="maintPriority">
+                            <option value="low">منخفضة</option>
+                            <option value="medium" selected>متوسطة</option>
+                            <option value="high">عالية</option>
+                            <option value="critical">حرجة</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>العنوان *</label>
+                        <input type="text" class="form-control" id="maintTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label>الوصف *</label>
+                        <textarea class="form-control" id="maintDescription" rows="3" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 إرسال الطلب</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invoice Modal -->
     <div class="modal-overlay" id="invoiceModal">
         <div class="modal" style="max-width:420px;">
-            <div class="modal-header">
-                <h2 class="modal-title">🧾 معاينة الفاتورة</h2>
-                <button class="modal-close" onclick="closeModal('invoiceModal')">✕</button>
-            </div>
+            <div class="modal-header"><h2 class="modal-title">🧾 معاينة الفاتورة</h2><button class="modal-close" onclick="closeModal('invoiceModal')">✕</button></div>
             <div class="modal-body">
-                <div class="invoice-preview print-area" id="invoicePreview">
-                    <!-- يتم ملؤه ديناميكياً -->
-                </div>
+                <div class="invoice-preview print-area" id="invoicePreview"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="printInvoice()">🖨️ طباعة</button>
                 <button class="btn btn-success" onclick="shareInvoice()">📤 مشاركة</button>
                 <button class="btn btn-secondary" onclick="closeModal('invoiceModal')">إغلاق</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Customer Profile Modal -->
-    <div class="modal-overlay" id="customerModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">👤 ملف العميل</h2>
-                <button class="modal-close" onclick="closeModal('customerModal')">✕</button>
-            </div>
-            <div class="modal-body" id="customerModalBody">
-                <!-- يتم ملؤه ديناميكياً -->
-            </div>
-        </div>
-    </div>
-
-    <!-- QR Result Modal -->
-    <div class="modal-overlay" id="qrModal">
-        <div class="modal" style="max-width:360px;">
-            <div class="modal-header">
-                <h2 class="modal-title">📷 نتيجة المسح</h2>
-                <button class="modal-close" onclick="closeModal('qrModal')">✕</button>
-            </div>
-            <div class="modal-body">
-                <div id="qrModalContent"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="closeModal('qrModal')">موافق</button>
             </div>
         </div>
     </div>
@@ -982,6 +1023,7 @@
         </div>
     </div>
 
+    <!-- ==================== JAVASCRIPT ==================== -->
     <script>
         // ============================================================
         //  API HELPER
@@ -990,16 +1032,12 @@
             const url = new URL('/api', window.location.origin);
             url.searchParams.append('action', action);
             Object.keys(params).forEach(key => {
-                if (params[key] !== null && params[key] !== undefined) {
+                if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
                     url.searchParams.append(key, params[key]);
                 }
             });
-
             try {
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
+                const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
             } catch (e) {
@@ -1032,7 +1070,6 @@
             const html = document.documentElement;
             const dark = html.getAttribute('data-theme') === 'dark';
             html.setAttribute('data-theme', dark ? 'light' : 'dark');
-            document.getElementById('darkModeToggle').checked = !dark;
             localStorage.setItem('darkMode', !dark);
         }
 
@@ -1041,7 +1078,8 @@
         // ============================================================
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById('screen-' + screenId).classList.add('active');
+            const el = document.getElementById('screen-' + screenId);
+            if (el) el.classList.add('active');
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             const navBtn = document.querySelector(`.nav-item[data-screen="${screenId}"]`);
             if (navBtn) navBtn.classList.add('active');
@@ -1073,7 +1111,15 @@
                     await loadDashboard();
                     await loadCustomers();
                     await loadSaleDropdowns();
-                    await loadPaymentCustomers();
+                    await loadPaymentAndDepositCustomers();
+                    await loadInventory();
+                    await loadEmployees();
+                    await loadActivityLogs();
+                    await loadSmsLogs();
+                    await loadWhitelist();
+                    await loadSettings();
+                    await loadTanksAndPumps();
+                    await loadMaintenance();
                     showToast('مرحباً بك!', 'success');
                 } else {
                     showToast(result.error || 'بيانات خاطئة', 'error');
@@ -1088,7 +1134,6 @@
         function handleBiometric() {
             if (window.AndroidInterface) {
                 window.AndroidInterface.requestBiometricAuth();
-                // النتيجة ستأتي عبر callback
             } else {
                 showToast('الميزة غير مدعومة في هذا المتصفح', 'warning');
             }
@@ -1100,25 +1145,18 @@
         async function loadDashboard() {
             try {
                 const result = await apiCall('get_dashboard');
-                if (result.success && result.data.length > 0) {
-                    const stats = result.data[0];
+                if (result.success) {
+                    const stats = result.data;
                     document.getElementById('dashSales').textContent = stats.total_sales?.toLocaleString() || 0;
                     document.getElementById('dashLiters').textContent = stats.total_liters?.toFixed(0) || 0;
                     document.getElementById('dashStock').textContent = stats.total_remaining?.toFixed(0) || 0;
                     document.getElementById('dashDue').textContent = stats.total_due?.toLocaleString() || 0;
-
                     displayAlerts(stats.inventory_alerts || []);
-                    displayInventoryProgress(stats);
                     await loadDailySalesChart();
-                    if (result.ai_insight) {
-                        document.getElementById('aiInsight').innerHTML = result.ai_insight;
-                    } else {
-                        document.getElementById('aiInsight').innerHTML = 'لا توجد توقعات متاحة حالياً.';
-                    }
+                    await loadMonthlySalesChart();
+                    await loadAIInsight();
                 }
-            } catch (e) {
-                console.error('Dashboard load error', e);
-            }
+            } catch (e) { console.error('Dashboard load error', e); }
         }
 
         function displayAlerts(alerts) {
@@ -1128,15 +1166,10 @@
             alerts.forEach(a => {
                 const div = document.createElement('div');
                 div.className = 'alert-banner';
-                div.innerHTML = `<span class="icon">⚠️</span><span>${a.message}</span>`;
+                div.style.cssText = 'background:linear-gradient(90deg, #fff3f3, #ffe0e0); border:1px solid var(--danger); border-radius:var(--radius-sm); padding:12px 16px; margin:12px 16px; display:flex; align-items:center; gap:12px; font-size:13px; color:#721c24;';
+                div.innerHTML = `<span style="font-size:20px;">⚠️</span><span>${a.message}</span>`;
                 container.appendChild(div);
             });
-        }
-
-        function displayInventoryProgress(stats) {
-            const container = document.getElementById('inventoryProgress');
-            container.innerHTML = '';
-            // يمكن عرض تقدم المخزون إن وجد
         }
 
         async function loadDailySalesChart() {
@@ -1149,14 +1182,17 @@
                     result.data.slice(0, 7).forEach(d => {
                         const item = document.createElement('div');
                         item.className = 'bar-item';
+                        item.style.cssText = 'flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;';
                         const bar = document.createElement('div');
                         bar.className = 'bar';
-                        bar.style.height = ((d.total_sales || 0) / max * 160) + 'px';
+                        bar.style.cssText = `width:100%; border-radius:6px 6px 0 0; background:linear-gradient(to top, var(--primary), var(--primary-light)); transition:height 0.6s ease; min-height:4px; height:${((d.total_sales||0)/max*160)}px;`;
                         const label = document.createElement('div');
                         label.className = 'bar-label';
+                        label.style.cssText = 'font-size:10px; color:var(--text-secondary); font-weight:700; transform:rotate(-30deg); white-space:nowrap;';
                         label.textContent = d.date || '';
                         const value = document.createElement('div');
                         value.className = 'bar-value';
+                        value.style.cssText = 'font-size:11px; font-weight:800; color:var(--primary);';
                         value.textContent = (d.total_sales || 0).toLocaleString();
                         item.appendChild(bar);
                         item.appendChild(value);
@@ -1164,13 +1200,55 @@
                         chart.appendChild(item);
                     });
                 }
+            } catch (e) { console.error('Chart load error', e); }
+        }
+
+        async function loadMonthlySalesChart() {
+            try {
+                const result = await apiCall('get_monthly_sales');
+                if (result.success && result.data.length > 0) {
+                    const chart = document.getElementById('monthlySalesChart');
+                    chart.innerHTML = '';
+                    const max = Math.max(...result.data.map(d => d.total_sales || 0)) || 1;
+                    result.data.slice(0, 12).forEach(d => {
+                        const item = document.createElement('div');
+                        item.className = 'bar-item';
+                        item.style.cssText = 'flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;';
+                        const bar = document.createElement('div');
+                        bar.className = 'bar';
+                        bar.style.cssText = `width:100%; border-radius:6px 6px 0 0; background:linear-gradient(to top, var(--secondary), var(--secondary-light)); transition:height 0.6s ease; min-height:4px; height:${((d.total_sales||0)/max*160)}px;`;
+                        const label = document.createElement('div');
+                        label.className = 'bar-label';
+                        label.style.cssText = 'font-size:10px; color:var(--text-secondary); font-weight:700; transform:rotate(-30deg); white-space:nowrap;';
+                        label.textContent = d.month || '';
+                        const value = document.createElement('div');
+                        value.className = 'bar-value';
+                        value.style.cssText = 'font-size:11px; font-weight:800; color:var(--secondary);';
+                        value.textContent = (d.total_sales || 0).toLocaleString();
+                        item.appendChild(bar);
+                        item.appendChild(value);
+                        item.appendChild(label);
+                        chart.appendChild(item);
+                    });
+                }
+            } catch (e) { console.error('Monthly chart error', e); }
+        }
+
+        async function loadAIInsight() {
+            try {
+                const result = await apiCall('get_ai_insight');
+                if (result.success && result.insight) {
+                    document.getElementById('aiInsight').innerHTML = result.insight;
+                } else {
+                    document.getElementById('aiInsight').innerHTML = 'لا توجد توقعات متاحة. تأكد من إعداد مفتاح Gemini.';
+                }
             } catch (e) {
-                console.error('Chart load error', e);
+                document.getElementById('aiInsight').innerHTML = 'فشل تحميل التوقعات';
             }
         }
 
         // ============================================================
-        //  CUSTOMERS
+        //  CUSTOMERS (CRUD)
         // ============================================================
         async function loadCustomers() {
             try {
@@ -1181,58 +1259,185 @@
                     result.data.forEach(c => {
                         const card = document.createElement('div');
                         card.className = 'card';
-                        card.style.margin = '8px 0';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
                         card.innerHTML = `
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                                 <div>
-                                    <strong>${c.full_name}</strong><br>
-                                    <small>${c.phone}</small>
+                                    <strong>${c.commercial_name}</strong><br>
+                                    <small>${c.phone || 'لا يوجد هاتف'}</small>
                                 </div>
                                 <div style="text-align:left;">
                                     <span class="badge ${c.status === 'active' ? 'badge-success' : 'badge-danger'}">${c.status}</span>
-                                    <span class="badge badge-primary">نقاط: ${c.loyalty_points}</span>
+                                    <span class="badge badge-primary">نقاط: ${c.loyalty_points || 0}</span>
                                 </div>
                             </div>
                             <div style="margin-top:8px; font-size:13px;">
-                                الرصيد: ${c.current_balance.toLocaleString()} ريال | الحد: ${c.credit_limit.toLocaleString()} ريال
+                                الرصيد: ${(c.current_balance || 0).toLocaleString()} ريال | الحد: ${(c.credit_limit || 0).toLocaleString()} ريال
                             </div>
-                            <div style="margin-top:6px;">
-                                <button class="btn btn-small btn-info" onclick="viewCustomer(${c.customer_id})">عرض الملف</button>
+                            <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-small btn-info" onclick="viewCustomerAccount(${c.party_id}, '${c.commercial_name}')">📊 كشف حساب</button>
+                                <button class="btn btn-small btn-primary" onclick="editCustomer(${c.party_id})">✏️ تعديل</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteCustomer(${c.party_id})">🗑️ حذف</button>
                             </div>
                         `;
                         list.appendChild(card);
                     });
                 }
-            } catch (e) {
-                console.error('Customers load error', e);
-            }
+            } catch (e) { console.error('Customers load error', e); }
         }
 
         function filterCustomers() {
-            // يمكن التصفية محلياً أو إعادة التحميل
+            const q = document.getElementById('customerSearch').value.toLowerCase();
+            document.querySelectorAll('#customersList .card').forEach(card => {
+                const text = card.innerText.toLowerCase();
+                card.style.display = text.includes(q) ? 'block' : 'none';
+            });
         }
 
-        async function viewCustomer(id) {
+        function showCustomerForm(data = null) {
+            const modal = document.getElementById('customerFormModal');
+            document.getElementById('customerFormId').value = data ? data.party_id : '';
+            document.getElementById('customerFormName').value = data ? data.commercial_name : '';
+            document.getElementById('customerFormPhone').value = data ? data.phone : '';
+            document.getElementById('customerFormCredit').value = data ? data.credit_limit : 0;
+            document.getElementById('customerFormType').value = data ? data.party_type_id : 1;
+            document.getElementById('customerFormTitle').textContent = data ? '✏️ تعديل عميل' : '👤 إضافة عميل';
+            document.getElementById('customerFormDelete').style.display = data ? 'inline-block' : 'none';
+            modal.classList.add('active');
+        }
+
+        async function saveCustomer(e) {
+            e.preventDefault();
+            const id = document.getElementById('customerFormId').value;
+            const name = document.getElementById('customerFormName').value;
+            const phone = document.getElementById('customerFormPhone').value;
+            const credit = document.getElementById('customerFormCredit').value;
+            const type = document.getElementById('customerFormType').value;
+
+            showLoading(true);
             try {
-                const result = await apiCall('get_customer_report', { customer_id: id });
+                const params = { commercial_name: name, phone, credit_limit: credit, party_type_id: type };
+                const action = id ? 'update_customer' : 'add_customer';
+                if (id) params.party_id = id;
+                const result = await apiCall(action, params);
                 if (result.success) {
-                    const data = result.data;
-                    const body = document.getElementById('customerModalBody');
-                    body.innerHTML = `
-                        <div><strong>الاسم:</strong> ${data.customer.full_name}</div>
-                        <div><strong>الهاتف:</strong> ${data.customer.phone}</div>
-                        <div><strong>الرصيد:</strong> ${data.customer.current_balance} ريال</div>
-                        <div><strong>نقاط الولاء:</strong> ${data.customer.loyalty_points}</div>
-                        <div><strong>المستوى:</strong> VIP ${data.customer.vip_level}</div>
-                        <hr>
-                        <div><strong>عدد المعاملات:</strong> ${data.transactions.length}</div>
-                        <div><strong>عدد المدفوعات:</strong> ${data.payments.length}</div>
-                    `;
-                    document.getElementById('customerModal').classList.add('active');
+                    showToast('تم حفظ العميل', 'success');
+                    closeModal('customerFormModal');
+                    await loadCustomers();
+                    await loadSaleDropdowns();
+                    await loadPaymentAndDepositCustomers();
+                } else {
+                    showToast(result.error || 'فشل الحفظ', 'error');
                 }
-            } catch (e) {
-                showToast('فشل تحميل الملف', 'error');
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function editCustomer(id) {
+            try {
+                const result = await apiCall('get_customers');
+                if (result.success) {
+                    const customer = result.data.find(c => c.party_id == id);
+                    if (customer) showCustomerForm(customer);
+                }
+            } catch (e) { showToast('فشل تحميل بيانات العميل', 'error'); }
+        }
+
+        async function deleteCustomer(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا العميل؟')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('delete_customer', { party_id: id });
+                if (result.success) {
+                    showToast('تم الحذف', 'success');
+                    await loadCustomers();
+                    await loadSaleDropdowns();
+                    await loadPaymentAndDepositCustomers();
+                } else {
+                    showToast(result.error || 'فشل الحذف', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteCustomerForm() {
+            const id = document.getElementById('customerFormId').value;
+            if (id) deleteCustomer(parseInt(id));
+        }
+
+        // ============================================================
+        //  CUSTOMER ACCOUNT
+        // ============================================================
+        let currentAccountCustomerId = 0;
+
+        function viewCustomerAccount(customerId, customerName) {
+            currentAccountCustomerId = customerId;
+            document.getElementById('accountCustomerName').textContent = `📊 كشف حساب العميل: ${customerName}`;
+            document.getElementById('accountFromDate').value = '';
+            document.getElementById('accountToDate').value = '';
+            document.getElementById('accountDetails').innerHTML = '<div class="text-center">اختر الفترة ثم اضغط عرض</div>';
+            document.getElementById('customerAccountModal').classList.add('active');
+            loadCustomerAccount();
+        }
+
+        async function loadCustomerAccount() {
+            const from = document.getElementById('accountFromDate').value;
+            const to = document.getElementById('accountToDate').value;
+            showLoading(true);
+            try {
+                const params = { party_id: currentAccountCustomerId };
+                if (from && to) { params.from_date = from; params.to_date = to; }
+                const result = await apiCall('get_customer_report', params);
+                if (result.success) {
+                    renderAccountDetails(result.data);
+                }
+            } catch (e) { showToast('فشل تحميل كشف الحساب', 'error'); }
+            showLoading(false);
+        }
+
+        function renderAccountDetails(data) {
+            const container = document.getElementById('accountDetails');
+            if (!data.transactions && !data.payments && !data.deposits) {
+                container.innerHTML = '<div class="text-center">لا توجد بيانات لهذه الفترة</div>';
+                return;
             }
+            let html = '<div class="table-container"><table class="data-table"><thead><tr><th>التاريخ</th><th>النوع</th><th>الكمية</th><th>المبلغ</th><th>الرصيد</th></tr></thead><tbody>';
+            const combined = [];
+            (data.transactions || []).forEach(t => combined.push({ date: t.created_at, type: 'بيع', qty: t.liters || 0, amount: t.net_amount || 0 }));
+            (data.payments || []).forEach(p => combined.push({ date: p.created_at, type: 'تسديد', qty: 0, amount: -p.amount || 0 }));
+            (data.deposits || []).forEach(d => combined.push({ date: d.date, type: 'إيداع', qty: 0, amount: d.amount || 0 }));
+            combined.sort((a,b) => (a.date < b.date ? 1 : -1));
+            let balance = data.party?.current_balance || 0;
+            combined.forEach(item => {
+                balance += item.amount;
+                html += `<tr><td>${item.date}</td><td>${item.type}</td><td>${item.qty}</td><td>${(item.amount || 0).toLocaleString()}</td><td>${balance.toLocaleString()}</td></tr>`;
+            });
+            html += `</tbody></table></div><div style="margin-top:12px; font-weight:700;">الرصيد النهائي: ${balance.toLocaleString()} ريال</div>`;
+            container.innerHTML = html;
+        }
+
+        function shareCustomerAccount() {
+            const content = document.getElementById('accountDetails').innerText;
+            if (navigator.share) {
+                navigator.share({ title: 'كشف حساب العميل', text: content }).catch(() => {});
+            } else {
+                showToast('المشاركة غير مدعومة في هذا المتصفح', 'warning');
+            }
+        }
+
+        async function sendCustomerSms() {
+            const phone = prompt('أدخل رقم الهاتف لإرسال الرسالة:');
+            if (!phone) return;
+            const msg = prompt('أدخل نص الرسالة:');
+            if (!msg) return;
+            try {
+                const result = await apiCall('send_sms', { phone, message: msg });
+                if (result.success) {
+                    showToast('تم الإرسال', 'success');
+                } else {
+                    showToast(result.error || 'فشل الإرسال', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
         }
 
         // ============================================================
@@ -1240,119 +1445,120 @@
         // ============================================================
         async function loadSaleDropdowns() {
             try {
-                const [custResult, refillResult] = await Promise.all([
+                const [custResult, fuelResult, pumpResult] = await Promise.all([
                     apiCall('get_customers'),
-                    apiCall('get_refills')
+                    apiCall('get_fuel_types'),
+                    apiCall('get_pumps')
                 ]);
                 if (custResult.success) {
                     const sel = document.getElementById('saleCustomer');
                     sel.innerHTML = '<option value="">-- اختر العميل --</option>';
                     custResult.data.forEach(c => {
                         const opt = document.createElement('option');
-                        opt.value = c.customer_id;
-                        opt.textContent = `${c.full_name} (${c.phone})`;
+                        opt.value = c.party_id;
+                        opt.textContent = `${c.commercial_name} (${c.phone || 'لا يوجد'})`;
                         sel.appendChild(opt);
                     });
                 }
-                if (refillResult.success) {
-                    const sel = document.getElementById('saleRefill');
-                    sel.innerHTML = '<option value="">-- اختر التعبئة --</option>';
-                    refillResult.data.forEach(r => {
+                if (fuelResult.success) {
+                    const sel = document.getElementById('saleFuelType');
+                    sel.innerHTML = '<option value="">-- اختر الوقود --</option>';
+                    fuelResult.data.forEach(f => {
                         const opt = document.createElement('option');
-                        opt.value = r.refill_id;
-                        opt.textContent = `${r.supplier_name} - ${r.remaining_quantity} لتر`;
-                        opt.dataset.price = r.sell_price_per_liter;
+                        opt.value = f.fuel_type_id;
+                        opt.textContent = f.fuel_name_ar || f.fuel_name;
                         sel.appendChild(opt);
                     });
                 }
-            } catch (e) {
-                console.error('Dropdown load error', e);
-            }
+                if (pumpResult.success) {
+                    const sel = document.getElementById('salePump');
+                    sel.innerHTML = '<option value="">-- اختر المضخة --</option>';
+                    pumpResult.data.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.pump_id;
+                        opt.textContent = p.pump_name || p.pump_code;
+                        sel.appendChild(opt);
+                    });
+                }
+            } catch (e) { console.error('Dropdown load error', e); }
         }
 
-        // ============================================================
-        //  PAYMENT CUSTOMERS
-        // ============================================================
-        async function loadPaymentCustomers() {
+        async function loadPaymentAndDepositCustomers() {
             try {
                 const result = await apiCall('get_customers');
                 if (result.success) {
-                    const sel = document.getElementById('payCustomer');
-                    sel.innerHTML = '<option value="">-- اختر العميل --</option>';
-                    result.data.forEach(c => {
-                        const opt = document.createElement('option');
-                        opt.value = c.customer_id;
-                        opt.textContent = `${c.full_name} (${c.phone})`;
-                        sel.appendChild(opt);
+                    ['payCustomer', 'depositCustomer'].forEach(id => {
+                        const sel = document.getElementById(id);
+                        if (!sel) return;
+                        sel.innerHTML = '<option value="">-- اختر العميل --</option>';
+                        result.data.forEach(c => {
+                            const opt = document.createElement('option');
+                            opt.value = c.party_id;
+                            opt.textContent = `${c.commercial_name} (${c.phone || ''})`;
+                            sel.appendChild(opt);
+                        });
                     });
                 }
-            } catch (e) {
-                console.error('Payment customers load error', e);
-            }
+            } catch (e) { console.error('Payment customers load error', e); }
         }
 
         // ============================================================
         //  SALE EXECUTION
         // ============================================================
-        function setQty(value) {
-            document.getElementById('saleQty').value = value;
-            updateSalePreview();
+        function toggleDueDate() {
+            const method = document.getElementById('salePaymentMethod').value;
+            document.getElementById('dueDateGroup').style.display = method === 'credit' ? 'block' : 'none';
         }
+        document.getElementById('salePaymentMethod').addEventListener('change', toggleDueDate);
 
-        function setPaid(value) {
-            document.getElementById('salePaid').value = value;
-            updateSalePreview();
-        }
-
+        function setQty(value) { document.getElementById('saleQty').value = value; updateSalePreview(); }
+        function setPaid(value) { document.getElementById('salePaid').value = value; updateSalePreview(); }
         function setPaidFull() {
-            const total = parseFloat(document.getElementById('saleTotalPreview').textContent) || 0;
+            const totalText = document.getElementById('saleTotalPreview').textContent;
+            const total = parseFloat(totalText.replace(/[^0-9.]/g, '')) || 0;
             document.getElementById('salePaid').value = total;
             updateSalePreview();
         }
-
-        function setPayAmount(value) {
-            document.getElementById('payAmount').value = value;
-        }
-
-        function updateSalePrice() {
-            const sel = document.getElementById('saleRefill');
-            const price = sel.options[sel.selectedIndex]?.dataset?.price || 950;
-            document.getElementById('salePrice').value = price;
-            updateSalePreview();
-        }
+        function setPayAmount(value) { document.getElementById('payAmount').value = value; }
 
         function updateSalePreview() {
             const qty = parseFloat(document.getElementById('saleQty').value) || 0;
             const price = parseFloat(document.getElementById('salePrice').value) || 0;
             const total = qty * price;
-            document.getElementById('saleTotalPreview').textContent = total.toLocaleString() + ' د.ع';
+            document.getElementById('saleTotalPreview').textContent = total.toLocaleString() + ' ريال';
             const paid = parseFloat(document.getElementById('salePaid').value) || 0;
-            document.getElementById('saleDuePreview').textContent = (total - paid).toLocaleString() + ' د.ع';
+            document.getElementById('saleDuePreview').textContent = (total - paid).toLocaleString() + ' ريال';
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            ['saleQty', 'salePrice', 'salePaid'].forEach(id => {
-                document.getElementById(id).addEventListener('input', updateSalePreview);
-            });
-            document.getElementById('saleRefill').addEventListener('change', updateSalePrice);
-            updateSalePreview();
+        ['saleQty', 'salePrice', 'salePaid'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateSalePreview);
         });
+        document.addEventListener('DOMContentLoaded', () => { updateSalePreview(); toggleDueDate(); });
 
-        async function executeSale(event) {
-            event.preventDefault();
+        async function executeSale(e) {
+            e.preventDefault();
             const form = document.getElementById('saleForm');
             const data = new FormData(form);
+            const paymentMethod = data.get('payment_method');
+            const isCredit = paymentMethod === 'credit';
+            const dueDate = isCredit ? data.get('due_date') : '';
             const params = {
-                customer_id: data.get('customer_id'),
-                refill_id: data.get('refill_id'),
-                quantity_liters: data.get('quantity_liters'),
-                unit_price: data.get('unit_price'),
+                customer_party_id: data.get('customer_party_id'),
+                fuel_type_id: data.get('fuel_type_id'),
+                pump_id: data.get('pump_id'),
+                liters: data.get('liters'),
+                price_per_liter: data.get('price_per_liter'),
                 paid_amount: data.get('paid_amount'),
-                payment_type: data.get('payment_type'),
-                due_date: data.get('due_date'),
-                operator: 'WebInterface'
+                payment_method: paymentMethod,
+                due_date: dueDate,
+                notes: data.get('notes') || '',
+                is_credit: isCredit ? 1 : 0,
+                shift_id: 1 // مؤقت
             };
-
+            if (!params.customer_party_id || !params.fuel_type_id || !params.pump_id || !params.liters) {
+                showToast('يرجى ملء جميع الحقول المطلوبة', 'warning');
+                return;
+            }
             showLoading(true);
             try {
                 const result = await apiCall('execute_sale', params);
@@ -1362,59 +1568,76 @@
                     updateSalePreview();
                     await loadDashboard();
                     await loadSaleDropdowns();
-                    if (result.invoice_number) {
-                        showToast(`رقم الفاتورة: ${result.invoice_number}`, 'success');
-                    }
+                    await loadInventory();
+                    await loadTanksAndPumps();
+                    if (result.invoice_number) showToast(`رقم الفاتورة: ${result.invoice_number}`, 'success');
                 } else {
                     showToast(result.error || 'فشل البيع', 'error');
                 }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            } finally {
-                showLoading(false);
-            }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
         //  PAYMENT
         // ============================================================
-        async function makePayment(event) {
-            event.preventDefault();
+        async function makePayment(e) {
+            e.preventDefault();
             const customerId = document.getElementById('payCustomer').value;
             const amount = document.getElementById('payAmount').value;
+            const method = document.getElementById('payMethod').value;
+            const notes = document.getElementById('payNotes').value || '';
             if (!customerId || !amount) {
                 showToast('يرجى تحديد العميل والمبلغ', 'warning');
                 return;
             }
-
             showLoading(true);
             try {
-                const result = await apiCall('make_payment', {
-                    customer_id: customerId,
-                    amount: amount,
-                    operator: 'WebInterface'
-                });
+                const result = await apiCall('make_payment', { customer_party_id: customerId, amount, payment_method: method, notes, operator: 'WebInterface' });
                 if (result.success) {
-                    showToast(result.message, 'success');
+                    showToast('تم التسديد بنجاح', 'success');
                     document.getElementById('paymentForm').reset();
                     await loadDashboard();
                     await loadCustomers();
                 } else {
                     showToast(result.error || 'فشل التسديد', 'error');
                 }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            } finally {
-                showLoading(false);
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  DEPOSIT
+        // ============================================================
+        async function makeDeposit(e) {
+            e.preventDefault();
+            const customerId = document.getElementById('depositCustomer').value;
+            const amount = document.getElementById('depositAmount').value;
+            const notes = document.getElementById('depositNotes').value || '';
+            if (!customerId || !amount) {
+                showToast('يرجى تحديد العميل والمبلغ', 'warning');
+                return;
             }
+            showLoading(true);
+            try {
+                const result = await apiCall('add_deposit', { customer_party_id: customerId, amount, notes, operator: 'WebInterface' });
+                if (result.success) {
+                    showToast('تم الإيداع بنجاح', 'success');
+                    document.getElementById('depositForm').reset();
+                    await loadDashboard();
+                    await loadCustomers();
+                } else {
+                    showToast(result.error || 'فشل الإيداع', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
         //  OVERDUE SMS
         // ============================================================
         async function sendOverdueSms() {
-            if (!confirm('سيتم إرسال رسائل تذكير لكل العملاء المتأخرين. هل تريد الاستمرار؟')) return;
-
+            if (!confirm('سيتم إرسال رسائل تذكير للعملاء المتأخرين (من القائمة البيضاء). هل تريد الاستمرار؟')) return;
             showLoading(true);
             try {
                 const result = await apiCall('send_overdue_sms');
@@ -1423,54 +1646,704 @@
                 } else {
                     showToast(result.message || 'فشل الإرسال', 'error');
                 }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            } finally {
-                showLoading(false);
-            }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
-        //  SEARCH
+        //  INVENTORY (Refills)
         // ============================================================
-        async function searchTransactions() {
-            const query = document.getElementById('searchQuery').value.trim();
-            if (!query) {
-                showToast('أدخل كلمة للبحث', 'warning');
+        async function loadInventory() {
+            try {
+                const result = await apiCall('get_refills');
+                if (result.success) {
+                    const list = document.getElementById('inventoryList');
+                    list.innerHTML = '';
+                    const statusDiv = document.getElementById('inventoryStatus');
+                    let totalRemaining = 0;
+                    result.data.forEach(r => {
+                        totalRemaining += r.remaining_quantity || 0;
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
+                        const remaining = r.remaining_quantity || 0;
+                        const threshold = r.alert_threshold || 1000;
+                        const color = remaining <= threshold ? 'var(--danger)' : 'var(--success)';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <div>
+                                    <strong>${r.supplier_name}</strong><br>
+                                    <small>التاريخ: ${r.refill_date}</small>
+                                </div>
+                                <div style="text-align:left;">
+                                    <span style="color:${color}; font-weight:700;">${remaining.toFixed(0)} لتر</span>
+                                    <span class="badge badge-primary">سعر: ${r.sell_price_per_liter || 0} ريال</span>
+                                </div>
+                            </div>
+                            <div class="progress-container" style="margin-top:8px;">
+                                <div class="progress-bar" style="height:8px; background:var(--border); border-radius:4px; overflow:hidden;">
+                                    <div class="progress-fill" style="height:100%; width:${(remaining / (r.quantity_liters || 1) * 100)}%; background:${color};"></div>
+                                </div>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                    statusDiv.innerHTML = `<div style="font-weight:700;">إجمالي المخزون المتبقي: ${totalRemaining.toFixed(0)} لتر</div>`;
+                }
+            } catch (e) { console.error('Inventory load error', e); }
+        }
+
+        function showRefillForm() {
+            document.getElementById('refillFormModal').classList.add('active');
+        }
+
+        async function saveRefill(e) {
+            e.preventDefault();
+            const supplier = document.getElementById('refillSupplier').value;
+            const totalQty = document.getElementById('refillTotalQty').value;
+            const fuelType = document.getElementById('refillFuelType').value;
+            const price = document.getElementById('refillPrice').value;
+            const allowCredit = document.getElementById('refillAllowCredit').value;
+            const threshold = document.getElementById('refillThreshold').value;
+            if (!supplier || !totalQty) {
+                showToast('يرجى ملء الحقول المطلوبة', 'warning');
                 return;
             }
-
+            showLoading(true);
             try {
-                const result = await apiCall('search_transactions', { query });
-                const tbody = document.getElementById('searchResultsTable');
-                tbody.innerHTML = '';
-                if (result.success && result.data.length > 0) {
-                    result.data.forEach(t => {
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${t.transaction_id}</td>
-                            <td>${t.customer_name || t.customer_id}</td>
-                            <td>${t.qty}</td>
-                            <td>${t.total.toLocaleString()}</td>
-                            <td>${t.paid.toLocaleString()}</td>
-                            <td>${t.due.toLocaleString()}</td>
-                            <td>${t.date}</td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
+                const result = await apiCall('add_refill', { supplier, total_qty: totalQty, fuel_type_id: fuelType, sell_price: price, allow_credit: allowCredit, alert_threshold: threshold });
+                if (result.success) {
+                    showToast('تمت إضافة التعبئة', 'success');
+                    closeModal('refillFormModal');
+                    document.getElementById('refillForm').reset();
+                    await loadInventory();
+                    await loadSaleDropdowns();
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد نتائج</td></tr>';
+                    showToast(result.error || 'فشل الإضافة', 'error');
                 }
-            } catch (e) {
-                console.error('Search error', e);
-            }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
-        //  INVOICE PREVIEW
+        //  EMPLOYEES (CRUD + Payments)
+        // ============================================================
+        async function loadEmployees() {
+            try {
+                const result = await apiCall('get_employees');
+                if (result.success) {
+                    const list = document.getElementById('employeesList');
+                    list.innerHTML = '';
+                    result.data.forEach(e => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <div>
+                                    <strong>${e.full_name}</strong><br>
+                                    <small>${e.job_title || 'لا يوجد'} | ${e.phone || ''}</small>
+                                </div>
+                                <div style="text-align:left;">
+                                    <span class="badge ${e.status === 'active' ? 'badge-success' : 'badge-danger'}">${e.status}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; font-size:13px; display:flex; gap:16px; flex-wrap:wrap;">
+                                <span>الراتب: ${e.basic_salary.toLocaleString()} ريال</span>
+                                <span style="font-weight:700;">الصافي: ${(e.total_salary || e.basic_salary).toLocaleString()} ريال</span>
+                            </div>
+                            <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-small btn-info" onclick="showEmployeePaymentForm(${e.id})">💰 دفعة</button>
+                                <button class="btn btn-small btn-primary" onclick="editEmployee(${e.id})">✏️ تعديل</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteEmployee(${e.id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+            } catch (e) { console.error('Employees load error', e); }
+        }
+
+        function showEmployeeForm(data = null) {
+            const modal = document.getElementById('employeeFormModal');
+            document.getElementById('employeeFormId').value = data ? data.id : '';
+            document.getElementById('employeeFormName').value = data ? data.full_name : '';
+            document.getElementById('employeeFormPhone').value = data ? data.phone : '';
+            document.getElementById('employeeFormPosition').value = data ? data.job_title : '';
+            document.getElementById('employeeFormSalary').value = data ? data.basic_salary : 0;
+            document.getElementById('employeeFormActive').value = data ? (data.status === 'active' ? 1 : 0) : 1;
+            document.getElementById('employeeFormNotes').value = data ? data.remarks : '';
+            document.getElementById('employeeFormTitle').textContent = data ? '✏️ تعديل موظف' : '👨‍💼 إضافة موظف';
+            document.getElementById('employeeFormDelete').style.display = data ? 'inline-block' : 'none';
+            modal.classList.add('active');
+        }
+
+        async function saveEmployee(e) {
+            e.preventDefault();
+            const id = document.getElementById('employeeFormId').value;
+            const name = document.getElementById('employeeFormName').value;
+            const phone = document.getElementById('employeeFormPhone').value;
+            const position = document.getElementById('employeeFormPosition').value;
+            const salary = document.getElementById('employeeFormSalary').value;
+            const active = document.getElementById('employeeFormActive').value;
+            const notes = document.getElementById('employeeFormNotes').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { full_name: name, phone, job_title: position, basic_salary: salary, status: active === '1' ? 'active' : 'inactive', notes };
+                const action = id ? 'update_employee' : 'add_employee';
+                if (id) params.employee_id = id;
+                const result = await apiCall(action, params);
+                if (result.success) {
+                    showToast('تم حفظ الموظف', 'success');
+                    closeModal('employeeFormModal');
+                    await loadEmployees();
+                } else {
+                    showToast(result.error || 'فشل الحفظ', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function editEmployee(id) {
+            try {
+                const result = await apiCall('get_employees');
+                if (result.success) {
+                    const emp = result.data.find(e => e.id == id);
+                    if (emp) showEmployeeForm(emp);
+                }
+            } catch (e) { showToast('فشل تحميل بيانات الموظف', 'error'); }
+        }
+
+        async function deleteEmployee(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الموظف؟')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('delete_employee', { employee_id: id });
+                if (result.success) {
+                    showToast('تم الحذف', 'success');
+                    await loadEmployees();
+                } else {
+                    showToast(result.error || 'فشل الحذف', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteEmployeeForm() {
+            const id = document.getElementById('employeeFormId').value;
+            if (id) deleteEmployee(parseInt(id));
+        }
+
+        function showEmployeePaymentForm(employeeId) {
+            document.getElementById('empPaymentEmployeeId').value = employeeId;
+            document.getElementById('employeePaymentModal').classList.add('active');
+        }
+
+        async function saveEmployeePayment(e) {
+            e.preventDefault();
+            const employeeId = document.getElementById('empPaymentEmployeeId').value;
+            const amount = document.getElementById('empPaymentAmount').value;
+            const type = document.getElementById('empPaymentType').value;
+            const desc = document.getElementById('empPaymentDesc').value || '';
+            if (!amount || amount <= 0) { showToast('المبلغ مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall('add_employee_payment', { employee_id: employeeId, amount, type, description: desc, operator: 'WebInterface' });
+                if (result.success) {
+                    showToast('تمت إضافة الدفعة', 'success');
+                    closeModal('employeePaymentModal');
+                    document.getElementById('employeePaymentForm').reset();
+                    await loadEmployees();
+                } else {
+                    showToast(result.error || 'فشل الإضافة', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  DEBTS
+        // ============================================================
+        async function loadDebts(type) {
+            showLoading(true);
+            try {
+                const result = await apiCall('get_debts', { type });
+                if (result.success) {
+                    const list = document.getElementById('debtsList');
+                    list.innerHTML = '';
+                    if (result.data.length === 0) {
+                        list.innerHTML = '<div class="text-center">لا توجد ديون من هذا النوع</div>';
+                    } else {
+                        const table = document.createElement('table');
+                        table.className = 'data-table';
+                        table.innerHTML = `<thead><tr><th>العميل</th><th>المبلغ</th><th>الوصف</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>`;
+                        result.data.forEach(d => {
+                            table.innerHTML += `<tr>
+                                <td>${d.customer_name || d.customer_party_id}</td>
+                                <td>${d.amount.toLocaleString()} ريال</td>
+                                <td>${d.description || ''}</td>
+                                <td>${d.date}</td>
+                                <td><button class="btn btn-small btn-success" onclick="resolveDebt(${d.id})">✔️ حل</button></td>
+                            </tr>`;
+                        });
+                        table.innerHTML += '</tbody></table>';
+                        list.appendChild(table);
+                    }
+                }
+            } catch (e) { showToast('فشل تحميل الديون', 'error'); }
+            showLoading(false);
+        }
+
+        async function resolveDebt(id) {
+            if (!confirm('تأكيد حل هذا الدين؟')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('resolve_debt', { debt_id: id });
+                if (result.success) {
+                    showToast('تم حل الدين', 'success');
+                    loadDebts('all');
+                } else {
+                    showToast(result.error || 'فشل', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  REPORTS
+        // ============================================================
+        async function generateEodReport() {
+            try {
+                const result = await apiCall('get_eod_report');
+                if (result.success) {
+                    const data = result.data;
+                    const container = document.getElementById('eodReportContainer');
+                    container.innerHTML = `
+                        <div class="card" style="background:var(--bg);">
+                            <div class="card-title">📋 تقرير نهاية اليوم</div>
+                            <div class="invoice-row"><span>إجمالي المبيعات</span><span>${(data.total_sales || 0).toLocaleString()} ريال</span></div>
+                            <div class="invoice-row"><span>اللترات المباعة</span><span>${(data.total_liters || 0).toFixed(0)} لتر</span></div>
+                            <div class="invoice-row"><span>عدد المعاملات</span><span>${data.total_transactions || 0}</span></div>
+                            <div class="invoice-row"><span>إجمالي المدفوعات</span><span>${(data.total_payments || 0).toLocaleString()} ريال</span></div>
+                            <div style="margin-top:8px; font-size:12px; color:var(--text-secondary);">التاريخ: ${data.report_date || ''}</div>
+                        </div>
+                    `;
+                }
+            } catch (e) { showToast('فشل تحميل التقرير', 'error'); }
+        }
+
+        function showProfitReport() {
+            document.getElementById('profitReportModal').classList.add('active');
+            loadProfitReport();
+        }
+
+        async function loadProfitReport() {
+            const from = document.getElementById('profitFromDate').value;
+            const to = document.getElementById('profitToDate').value;
+            if (!from || !to) {
+                document.getElementById('profitDetails').innerHTML = '<div class="text-center">يرجى اختيار الفترة</div>';
+                return;
+            }
+            showLoading(true);
+            try {
+                const result = await apiCall('get_profit_report', { from_date: from, to_date: to });
+                if (result.success) {
+                    const data = result.data;
+                    document.getElementById('profitDetails').innerHTML = `
+                        <div style="padding:12px;">
+                            <div class="invoice-row"><span>الإيرادات</span><span>${(data.revenue || 0).toLocaleString()} ريال</span></div>
+                            <div class="invoice-row"><span>التكاليف</span><span>${(data.cost || 0).toLocaleString()} ريال</span></div>
+                            <div class="invoice-row" style="font-weight:700; font-size:18px;">
+                                <span>الأرباح/الخسائر</span>
+                                <span style="color:${(data.profit || 0) >= 0 ? 'var(--success)' : 'var(--danger)'};">
+                                    ${(data.profit || 0).toLocaleString()} ريال
+                                </span>
+                            </div>
+                            <div style="margin-top:8px; font-size:12px; color:var(--text-secondary);">من ${from} إلى ${to}</div>
+                        </div>
+                    `;
+                }
+            } catch (e) { showToast('فشل تحميل التقرير', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  TANKS & PUMPS
+        // ============================================================
+        async function loadTanksAndPumps() {
+            try {
+                const [tanksResult, pumpsResult] = await Promise.all([
+                    apiCall('get_tanks'),
+                    apiCall('get_pumps')
+                ]);
+                if (tanksResult.success) {
+                    const list = document.getElementById('tanksList');
+                    list.innerHTML = '';
+                    tanksResult.data.forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <div><strong>${t.tank_name}</strong><br><small>${t.tank_code}</small></div>
+                                <div style="text-align:left;">
+                                    <span class="badge ${t.status === 'active' ? 'badge-success' : 'badge-danger'}">${t.status}</span>
+                                    <span class="badge badge-primary">${t.fuel_name || 'ديزل'}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px;">
+                                <div>الكمية: ${t.current_quantity.toFixed(0)} / ${t.capacity_liters.toFixed(0)} لتر</div>
+                                <div class="progress-bar" style="height:8px; background:var(--border); border-radius:4px; overflow:hidden;">
+                                    <div class="progress-fill" style="height:100%; width:${(t.current_quantity/t.capacity_liters*100)}%; background:var(--primary);"></div>
+                                </div>
+                            </div>
+                            <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-small btn-info" onclick="updateTankQty(${t.tank_id})">📊 تحديث الكمية</button>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+                if (pumpsResult.success) {
+                    const list = document.getElementById('pumpsList');
+                    list.innerHTML = '';
+                    pumpsResult.data.forEach(p => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <div><strong>${p.pump_name || p.pump_code}</strong><br><small>${p.pump_number}</small></div>
+                                <div style="text-align:left;">
+                                    <span class="badge ${p.status === 'active' ? 'badge-success' : 'badge-danger'}">${p.status}</span>
+                                    <span class="badge badge-primary">${p.tank_name || 'خزان'}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px;">
+                                <div>العداد: ${p.meter_current.toFixed(0)} لتر</div>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+            } catch (e) { console.error('Tanks/Pumps load error', e); }
+        }
+
+        async function updateTankQty(tankId) {
+            const newQty = prompt('أدخل الكمية الجديدة (لتر):');
+            if (newQty === null) return;
+            const qty = parseFloat(newQty);
+            if (isNaN(qty) || qty < 0) { showToast('كمية غير صالحة', 'error'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall('update_tank_quantity', { tank_id: tankId, quantity: qty });
+                if (result.success) {
+                    showToast('تم تحديث الكمية', 'success');
+                    await loadTanksAndPumps();
+                } else {
+                    showToast(result.error || 'فشل التحديث', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  MAINTENANCE
+        // ============================================================
+        async function loadMaintenance() {
+            try {
+                const result = await apiCall('get_maintenance_requests');
+                if (result.success) {
+                    const list = document.getElementById('maintenanceList');
+                    list.innerHTML = '';
+                    result.data.forEach(m => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'margin:8px 0; padding:16px;';
+                        const priorityColor = m.priority === 'critical' ? 'var(--danger)' : m.priority === 'high' ? 'var(--warning)' : 'var(--info)';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                <div><strong>${m.title}</strong><br><small>${m.request_code}</small></div>
+                                <div style="text-align:left;">
+                                    <span class="badge" style="background:${priorityColor}; color:white;">${m.priority}</span>
+                                    <span class="badge badge-primary">${m.status}</span>
+                                </div>
+                            </div>
+                            <div style="margin-top:8px; font-size:13px;">${m.description}</div>
+                            <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-small btn-success" onclick="updateMaintenanceStatus(${m.id}, 'in_progress')">▶️ بدء</button>
+                                <button class="btn btn-small btn-success" onclick="updateMaintenanceStatus(${m.id}, 'completed')">✅ إكمال</button>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                }
+            } catch (e) { console.error('Maintenance load error', e); }
+        }
+
+        function showMaintenanceForm() {
+            document.getElementById('maintenanceFormModal').classList.add('active');
+        }
+
+        async function saveMaintenanceRequest(e) {
+            e.preventDefault();
+            const assetType = document.getElementById('maintAssetType').value;
+            const assetId = document.getElementById('maintAssetId').value;
+            const requestType = document.getElementById('maintRequestType').value;
+            const priority = document.getElementById('maintPriority').value;
+            const title = document.getElementById('maintTitle').value;
+            const description = document.getElementById('maintDescription').value;
+            if (!assetId || !requestType || !title || !description) {
+                showToast('يرجى ملء جميع الحقول المطلوبة', 'warning');
+                return;
+            }
+            showLoading(true);
+            try {
+                const result = await apiCall('add_maintenance_request', { asset_type: assetType, asset_id: assetId, request_type: requestType, priority, title, description });
+                if (result.success) {
+                    showToast('تم إرسال الطلب', 'success');
+                    closeModal('maintenanceFormModal');
+                    document.getElementById('maintenanceForm').reset();
+                    await loadMaintenance();
+                } else {
+                    showToast(result.error || 'فشل الإرسال', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function updateMaintenanceStatus(id, status) {
+            showLoading(true);
+            try {
+                const result = await apiCall('update_maintenance_status', { request_id: id, status });
+                if (result.success) {
+                    showToast('تم تحديث الحالة', 'success');
+                    await loadMaintenance();
+                } else {
+                    showToast(result.error || 'فشل التحديث', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  SMS LOGS & WHITELIST
+        // ============================================================
+        async function loadSmsLogs() {
+            try {
+                const result = await apiCall('get_sms_logs');
+                if (result.success) {
+                    const tbody = document.getElementById('smsLogsTable');
+                    tbody.innerHTML = '';
+                    result.data.forEach(s => {
+                        const statusBadge = s.status === 'sent' ? 'badge-success' : s.status === 'failed' ? 'badge-danger' : 'badge-warning';
+                        tbody.innerHTML += `<tr><td>${s.phone_number}</td><td>${s.message_content.substring(0, 30)}${s.message_content.length > 30 ? '...' : ''}</td><td>${s.message_type}</td><td><span class="badge ${statusBadge}">${s.status}</span></td><td>${s.created_at}</td></tr>`;
+                    });
+                }
+            } catch (e) { console.error('SMS logs error', e); }
+        }
+
+        function filterSmsLogs() {
+            const q = document.getElementById('smsSearch').value.toLowerCase();
+            const filter = document.getElementById('smsStatusFilter').value;
+            const rows = document.querySelectorAll('#smsLogsTable tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const status = row.querySelector('.badge')?.innerText || '';
+                const match = text.includes(q) && (filter === '' || status === filter);
+                row.style.display = match ? '' : 'none';
+            });
+        }
+
+        async function loadWhitelist() {
+            try {
+                const result = await apiCall('get_whitelist');
+                if (result.success) {
+                    const div = document.getElementById('whitelistTable');
+                    div.innerHTML = '';
+                    if (result.data.length === 0) {
+                        div.innerHTML = '<div>لا توجد أرقام في القائمة البيضاء</div>';
+                        return;
+                    }
+                    const table = document.createElement('table');
+                    table.className = 'data-table';
+                    table.innerHTML = `<thead><tr><th>الاسم</th><th>الهاتف</th><th>إجراء</th></tr></thead><tbody>`;
+                    result.data.forEach(w => {
+                        table.innerHTML += `<tr><td>${w.name || ''}</td><td>${w.phone}</td><td><button class="btn btn-small btn-danger" onclick="removeFromWhitelist('${w.phone}')">🗑️ حذف</button></td></tr>`;
+                    });
+                    table.innerHTML += '</tbody></table>';
+                    div.appendChild(table);
+                }
+            } catch (e) { console.error('Whitelist error', e); }
+        }
+
+        async function addToWhitelist() {
+            const phone = document.getElementById('whitelistPhone').value.trim();
+            const name = document.getElementById('whitelistName').value.trim();
+            if (!phone) { showToast('رقم الهاتف مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall('add_whitelist', { phone, name });
+                if (result.success) {
+                    showToast('تمت الإضافة', 'success');
+                    document.getElementById('whitelistPhone').value = '';
+                    document.getElementById('whitelistName').value = '';
+                    await loadWhitelist();
+                } else {
+                    showToast(result.error || 'فشل الإضافة', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function removeFromWhitelist(phone) {
+            if (!confirm(`إزالة ${phone} من القائمة البيضاء؟`)) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('remove_whitelist', { phone });
+                if (result.success) {
+                    showToast('تمت الإزالة', 'success');
+                    await loadWhitelist();
+                } else {
+                    showToast(result.error || 'فشل', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  ACTIVITY LOGS
+        // ============================================================
+        async function loadActivityLogs() {
+            try {
+                const result = await apiCall('get_activity_logs');
+                if (result.success) {
+                    const tbody = document.getElementById('activityLogsTable');
+                    tbody.innerHTML = '';
+                    result.data.forEach(log => {
+                        tbody.innerHTML += `<tr><td>${log.operator || 'System'}</td><td>${log.action}</td><td>${log.description}</td><td>${log.created_at}</td></tr>`;
+                    });
+                }
+            } catch (e) { console.error('Activity logs error', e); }
+        }
+
+        // ============================================================
+        //  SETTINGS
+        // ============================================================
+        async function loadSettings() {
+            try {
+                const keys = ['station_name', 'currency', 'low_stock_threshold', 'gemini_api_key', 'deepseek_api_key', 'grok_api_key', 'kimi_api_key', 'chatgpt_api_key'];
+                for (const key of keys) {
+                    const result = await apiCall('get_setting', { key });
+                    if (result.success && result.value) {
+                        const el = document.getElementById(key);
+                        if (el) el.value = result.value;
+                    }
+                }
+            } catch (e) { console.error('Settings load error', e); }
+        }
+
+        async function saveSettings() {
+            const settings = {
+                station_name: document.getElementById('stationName').value,
+                currency: document.getElementById('currencySetting').value,
+                low_stock_threshold: document.getElementById('thresholdInput').value,
+                gemini_api_key: document.getElementById('geminiKey').value,
+                deepseek_api_key: document.getElementById('deepseekKey').value,
+                grok_api_key: document.getElementById('grokKey').value,
+                kimi_api_key: document.getElementById('kimiKey').value,
+                chatgpt_api_key: document.getElementById('chatgptKey').value
+            };
+            showLoading(true);
+            try {
+                for (const [key, value] of Object.entries(settings)) {
+                    await apiCall('set_setting', { key, value });
+                }
+                showToast('تم حفظ الإعدادات', 'success');
+            } catch (e) { showToast('فشل الحفظ', 'error'); }
+            showLoading(false);
+        }
+
+        // ============================================================
+        //  AI CHAT
+        // ============================================================
+        async function sendAiMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = '';
+            const container = document.getElementById('chatMessages');
+            const userBubble = document.createElement('div');
+            userBubble.className = 'chat-bubble user';
+            userBubble.textContent = message;
+            container.appendChild(userBubble);
+            showLoading(true);
+            try {
+                const result = await apiCall('ai_chat', { message, session_id: 'web' });
+                const aiBubble = document.createElement('div');
+                aiBubble.className = 'chat-bubble ai';
+                aiBubble.textContent = result.reply || 'عذراً، لم أستطع الرد.';
+                container.appendChild(aiBubble);
+            } catch (e) {
+                const errorBubble = document.createElement('div');
+                errorBubble.className = 'chat-bubble ai';
+                errorBubble.textContent = 'حدث خطأ في الاتصال بالذكاء الاصطناعي.';
+                container.appendChild(errorBubble);
+            }
+            showLoading(false);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ============================================================
+        //  QR SCANNER
+        // ============================================================
+        let qrScanner = null;
+
+        function startQrScanner() {
+            if (typeof Html5Qrcode === 'undefined') {
+                showToast('مكتبة QR غير متوفرة', 'error');
+                return;
+            }
+            const container = document.getElementById('qrReader');
+            try {
+                qrScanner = new Html5Qrcode('qrReader');
+                qrScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: 250 },
+                    onQrSuccess,
+                    onQrError
+                );
+            } catch (e) {
+                showToast('فشل تشغيل الكاميرا', 'error');
+            }
+        }
+
+        function onQrSuccess(decodedText) {
+            document.getElementById('qrResultText').textContent = decodedText;
+            document.getElementById('qrResult').style.display = 'block';
+            showToast('تم المسح بنجاح', 'success');
+            if (qrScanner) qrScanner.stop();
+        }
+
+        function onQrError(err) { /* تجاهل الأخطاء المتكررة */ }
+
+        function useQrResult() {
+            const text = document.getElementById('qrResultText').textContent;
+            if (text) {
+                showToast(`تم استخدام: ${text}`, 'info');
+            }
+        }
+
+        function clearQrResult() {
+            document.getElementById('qrResult').style.display = 'none';
+            if (qrScanner) qrScanner.start();
+        }
+
+        // ============================================================
+        //  INVOICE
         // ============================================================
         function previewInvoice() {
-            // محاكاة بيانات الفاتورة من نموذج البيع
             const customerName = document.getElementById('saleCustomer').options[document.getElementById('saleCustomer').selectedIndex]?.text || 'عميل';
             const qty = document.getElementById('saleQty').value || 0;
             const price = document.getElementById('salePrice').value || 0;
@@ -1491,71 +2364,27 @@
                 <div class="invoice-row"><span>المدفوع</span><span>${paid.toLocaleString()} ريال</span></div>
                 <div class="invoice-row"><span>المتبقي</span><span>${due.toLocaleString()} ريال</span></div>
                 <div class="invoice-total">الإجمالي: ${total.toLocaleString()} ريال</div>
-                <div style="margin-top:12px; text-align:center; font-size:11px; color:#999;">
-                    تاريخ: ${new Date().toLocaleDateString('ar-EG')}
-                </div>
+                <div style="margin-top:12px; text-align:center; font-size:11px; color:#999;">تاريخ: ${new Date().toLocaleDateString('ar-EG')}</div>
             `;
             document.getElementById('invoiceModal').classList.add('active');
         }
 
-        function printInvoice() {
-            window.print();
-        }
+        function printInvoice() { window.print(); }
 
         function shareInvoice() {
             const content = document.getElementById('invoicePreview').innerText;
             if (navigator.share) {
                 navigator.share({ title: 'فاتورة', text: content }).catch(() => {});
             } else {
-                showToast('مشاركة غير مدعومة', 'warning');
+                showToast('المشاركة غير مدعومة', 'warning');
             }
         }
 
         // ============================================================
-        //  QR SCANNER (placeholder)
+        //  EXPORT
         // ============================================================
-        function useQrResult() {
-            // تنفيذ استخدام نتيجة المسح
-        }
-
-        function clearQrResult() {
-            document.getElementById('qrResult').style.display = 'none';
-        }
-
-        // ============================================================
-        //  ACTIVITY & SMS LOGS (placeholders)
-        // ============================================================
-        function filterSmsLogs() {
-            // تنفيذ التصفية
-        }
-
-        // ============================================================
-        //  REPORTS / EXPORT
-        // ============================================================
-        async function generateEodReport() {
-            try {
-                const result = await apiCall('get_eod_report');
-                if (result.success) {
-                    const data = result.data;
-                    const container = document.getElementById('eodReportContainer');
-                    container.innerHTML = `
-                        <div class="card" style="background:var(--bg);">
-                            <div class="card-title">📋 تقرير نهاية اليوم</div>
-                            <div class="invoice-row"><span>إجمالي المبيعات</span><span>${data.total_sales_amount?.toLocaleString() || 0} ريال</span></div>
-                            <div class="invoice-row"><span>اللترات المباعة</span><span>${data.total_liters_sold || 0} لتر</span></div>
-                            <div class="invoice-row"><span>عدد المعاملات</span><span>${data.total_transactions || 0}</span></div>
-                            <div class="invoice-row"><span>إجمالي المدفوعات</span><span>${data.total_payments?.toLocaleString() || 0} ريال</span></div>
-                            <div class="invoice-row"><span>رسائل SMS</span><span>${data.total_sms_sent || 0}</span></div>
-                            <div style="margin-top:8px; font-size:12px; color:var(--text-secondary);">التاريخ: ${data.report_date || ''}</div>
-                        </div>
-                    `;
-                }
-            } catch (e) {
-                console.error('EOD report error', e);
-            }
-        }
-
-        async function exportData(format) {
+        async function exportData() {
+            showLoading(true);
             try {
                 const result = await apiCall('export_data');
                 if (result.success) {
@@ -1566,68 +2395,30 @@
                     a.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
                     a.click();
                     URL.revokeObjectURL(url);
-                    showToast('تم التصدير بنجاح', 'success');
+                    showToast('تم التصدير', 'success');
                 }
-            } catch (e) {
-                showToast('فشل التصدير', 'error');
-            }
+            } catch (e) { showToast('فشل التصدير', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
-        //  SETTINGS
+        //  LOGOUT
         // ============================================================
-        async function saveThreshold() {
-            const value = document.getElementById('thresholdInput').value;
-            try {
-                await apiCall('set_setting', { key: 'low_stock_threshold', value });
-                showToast('تم حفظ الإعداد', 'success');
-            } catch (e) {
-                showToast('فشل الحفظ', 'error');
+        function logout() {
+            if (confirm('تسجيل الخروج؟')) {
+                localStorage.clear();
+                location.reload();
             }
-        }
-
-        // ============================================================
-        //  AI CHAT
-        // ============================================================
-        async function sendAiMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            if (!message) return;
-            input.value = '';
-
-            const container = document.getElementById('chatMessages');
-            const userBubble = document.createElement('div');
-            userBubble.className = 'chat-bubble user';
-            userBubble.textContent = message;
-            container.appendChild(userBubble);
-
-            try {
-                const result = await apiCall('ai_chat', { message, session_id: 'web' });
-                const aiBubble = document.createElement('div');
-                aiBubble.className = 'chat-bubble ai';
-                aiBubble.textContent = result.reply || 'عذراً، لم أستطع الرد.';
-                container.appendChild(aiBubble);
-            } catch (e) {
-                const errorBubble = document.createElement('div');
-                errorBubble.className = 'chat-bubble ai';
-                errorBubble.textContent = 'حدث خطأ في الاتصال بالذكاء الاصطناعي.';
-                container.appendChild(errorBubble);
-            }
-            container.scrollTop = container.scrollHeight;
         }
 
         // ============================================================
         //  INIT
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
-            // استعادة الوضع الليلي
             const darkMode = localStorage.getItem('darkMode') === 'true';
             if (darkMode) {
                 document.documentElement.setAttribute('data-theme', 'dark');
-                document.getElementById('darkModeToggle').checked = true;
             }
-
-            // التحقق من وجود token
             const token = localStorage.getItem('authToken');
             if (token) {
                 document.getElementById('loginScreen').classList.add('hidden');
@@ -1635,9 +2426,32 @@
                 loadDashboard();
                 loadCustomers();
                 loadSaleDropdowns();
-                loadPaymentCustomers();
+                loadPaymentAndDepositCustomers();
+                loadInventory();
+                loadEmployees();
+                loadActivityLogs();
+                loadSmsLogs();
+                loadWhitelist();
+                loadSettings();
+                loadTanksAndPumps();
+                loadMaintenance();
+            }
+            setTimeout(() => {
+                if (document.getElementById('screen-qr').classList.contains('active')) {
+                    startQrScanner();
+                }
+            }, 1000);
+        });
+
+        // مراقبة ظهور شاشة QR لتشغيل الماسح
+        const observer = new MutationObserver(() => {
+            if (document.getElementById('screen-qr').classList.contains('active')) {
+                if (!qrScanner) startQrScanner();
+            } else {
+                if (qrScanner) { qrScanner.stop(); qrScanner = null; }
             }
         });
+        observer.observe(document.getElementById('screen-qr'), { attributes: true, attributeFilter: ['class'] });
     </script>
 </body>
 </html>
