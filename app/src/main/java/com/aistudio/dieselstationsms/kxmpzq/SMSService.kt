@@ -18,7 +18,6 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -51,7 +50,7 @@ class SMSService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
-    // ========== مفاتيح API من BuildConfig ==========
+    // مفاتيح API من BuildConfig
     private val geminiApiKey: String by lazy { BuildConfig.GEMINI_API_KEY }
     private val deepseekApiKey: String by lazy { BuildConfig.DEEPSEEK_API_KEY }
     private val grokApiKey: String by lazy { BuildConfig.GROK_API_KEY }
@@ -132,6 +131,18 @@ class SMSService : Service() {
         Log.d(TAG, "Foreground service started with notification")
     }
 
+    private fun updateNotification(text: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("⛽ محطة أبو أحمد")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm?.notify(NOTIFICATION_ID, notification)
+    }
+
     // ============================================================
     // بدء الخادم
     // ============================================================
@@ -156,18 +167,6 @@ class SMSService : Service() {
             }
         }
         Log.e(TAG, "Failed to start server after $MAX_PORT_RETRIES attempts")
-    }
-
-    private fun updateNotification(text: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("⛽ محطة أبو أحمد")
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
-        val nm = getSystemService(NotificationManager::class.java)
-        nm?.notify(NOTIFICATION_ID, notification)
     }
 
     // ============================================================
@@ -293,7 +292,19 @@ class SMSService : Service() {
                         }
                     }
 
+                    // ===== الموردين =====
+                    "get_suppliers" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getParties(6))
+                    }
+
                     // ===== المبيعات =====
+                    "get_sales" -> {
+                        val limit = params["limit"]?.firstOrNull()?.toIntOrNull() ?: 200
+                        val offset = params["offset"]?.firstOrNull()?.toIntOrNull() ?: 0
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getSalesTransactions(1, limit, offset))
+                    }
                     "execute_sale" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
@@ -411,10 +422,162 @@ class SMSService : Service() {
                         }
                     }
 
+                    // ===== المركبات والسائقين =====
+                    "get_vehicles" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT * FROM vehicles WHERE is_deleted = 0 ORDER BY plate_number",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("vehicle_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                                    put("vehicle_code", it.getString(it.getColumnIndexOrThrow("vehicle_code")))
+                                    put("plate_number", it.getString(it.getColumnIndexOrThrow("plate_number")))
+                                    put("brand", it.getString(it.getColumnIndexOrThrow("brand")))
+                                    put("model", it.getString(it.getColumnIndexOrThrow("model")))
+                                    put("tank_capacity", it.getDouble(it.getColumnIndexOrThrow("tank_capacity")))
+                                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                                    put("party_id", it.getInt(it.getColumnIndexOrThrow("party_id")))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+                    "get_drivers" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT * FROM drivers WHERE is_deleted = 0 ORDER BY full_name",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("driver_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                                    put("driver_code", it.getString(it.getColumnIndexOrThrow("driver_code")))
+                                    put("full_name", it.getString(it.getColumnIndexOrThrow("full_name")))
+                                    put("phone", it.getString(it.getColumnIndexOrThrow("phone")))
+                                    put("license_number", it.getString(it.getColumnIndexOrThrow("license_number")))
+                                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                                    put("vehicle_id", it.getInt(it.getColumnIndexOrThrow("vehicle_id")))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+
+                    // ===== المنتجات =====
+                    "get_products" -> {
+                        responseJson.put("success", true)
+                        responseJson.put("data", db.getProducts(1))
+                    }
+                    "get_product_categories" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT id, category_name FROM product_categories WHERE is_active = 1 AND is_deleted = 0 ORDER BY category_name",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("category_id", it.getInt(0))
+                                    put("category_name", it.getString(1))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+                    "get_inventory_movements" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT * FROM inventory_movements WHERE station_id = 1 AND is_deleted = 0 ORDER BY id DESC LIMIT 50",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("movement_code", it.getString(it.getColumnIndexOrThrow("movement_code")))
+                                    put("movement_type", it.getString(it.getColumnIndexOrThrow("movement_type")))
+                                    put("quantity_change", it.getDouble(it.getColumnIndexOrThrow("quantity_change")))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+
+                    // ===== الحسابات =====
+                    "get_accounts" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT account_code, account_name FROM accounts WHERE is_active = 1 AND is_deleted = 0 ORDER BY account_code",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("account_code", it.getString(0))
+                                    put("account_name", it.getString(1))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+                    "get_journal_entries" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT entry_number, description FROM journal_entries WHERE is_deleted = 0 ORDER BY id DESC LIMIT 20",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("entry_number", it.getString(0))
+                                    put("description", it.getString(1))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+
+                    // ===== الأصول =====
+                    "get_assets" -> {
+                        val arr = JSONArray()
+                        val cursor = db.readableDatabase.rawQuery(
+                            "SELECT * FROM fixed_assets WHERE station_id = 1 AND is_deleted = 0 ORDER BY asset_name",
+                            null
+                        )
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                arr.put(JSONObject().apply {
+                                    put("asset_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                                    put("asset_name", it.getString(it.getColumnIndexOrThrow("asset_name")))
+                                    put("asset_type", it.getString(it.getColumnIndexOrThrow("asset_type")))
+                                    put("current_value", it.getDouble(it.getColumnIndexOrThrow("current_value")))
+                                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                                })
+                            }
+                        }
+                        responseJson.put("success", true)
+                        responseJson.put("data", arr)
+                    }
+
                     // ===== لوحة التحكم =====
                     "get_dashboard" -> {
                         responseJson.put("success", true)
-                        responseJson.put("data", db.getDashboardStats(1))
+                        val stats = db.getDashboardStats(1)
+                        // إضافة بيانات إضافية من الدوال الجديدة
+                        stats.put("diesel_price", db.getDieselPrice())
+                        stats.put("gasoline_price", db.getGasolinePrice())
+                        stats.put("manager_phone", db.getManagerPhone() ?: "")
+                        stats.put("retention_days", db.getRetentionDays())
+                        responseJson.put("data", stats)
                     }
                     "get_daily_sales" -> {
                         responseJson.put("success", true)
@@ -434,7 +597,6 @@ class SMSService : Service() {
                         val from = params["from_date"]?.firstOrNull()
                         val to = params["to_date"]?.firstOrNull()
                         val report = db.getEodReport(1, from, to)
-                        // نضيف profit مؤقتاً (حساب بسيط)
                         val profit = report.optDouble("total_sales", 0.0) - report.optDouble("total_payments", 0.0)
                         report.put("profit", profit)
                         report.put("revenue", report.optDouble("total_sales", 0.0))
@@ -497,7 +659,7 @@ class SMSService : Service() {
                     "get_fuel_types" -> {
                         val arr = JSONArray()
                         val cursor = db.readableDatabase.rawQuery(
-                            "SELECT id, fuel_code, fuel_name, fuel_name_ar FROM fuel_types WHERE is_active=1",
+                            "SELECT id, fuel_code, fuel_name, fuel_name_ar, default_sale_price FROM fuel_types WHERE is_active=1 AND is_deleted=0",
                             null
                         )
                         cursor.use {
@@ -507,6 +669,7 @@ class SMSService : Service() {
                                     put("fuel_code", it.getString(1))
                                     put("fuel_name", it.getString(2))
                                     put("fuel_name_ar", it.getString(3))
+                                    put("default_sale_price", it.getDouble(4))
                                 })
                             }
                         }
@@ -617,7 +780,7 @@ class SMSService : Service() {
                             val cv = android.content.ContentValues().apply {
                                 put("status", status)
                                 if (status == "completed") {
-                                    put("created_at", DATETIME_FORMAT.format(Date()))
+                                    put("completed_at", DATETIME_FORMAT.format(Date()))
                                 }
                             }
                             dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
