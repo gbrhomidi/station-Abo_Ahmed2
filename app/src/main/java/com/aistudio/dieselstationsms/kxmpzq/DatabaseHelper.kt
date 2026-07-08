@@ -16,15 +16,19 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V7 - كامل مع جميع الجداول والدوال
- * تم إصلاح أخطاء ContentValues.put وأنواع البيانات، وإضافة الدوال المفقودة
+ * الإصدار المدمج V8 - متكامل بالكامل مع نظام الرسائل الذكي
+ *
+ * القاعدة الذهبية:
+ * - system_settings: للقيم الثابتة والعامة فقط
+ * - جميع القيم الديناميكية تُقرأ من جداولها المخصصة
+ * - (fuel_types, users, roles, drivers, sms_whitelist, parties, sales_transactions)
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        private const val VERSION = 7
+        private const val VERSION = 8
 
         private const val HASH_ITERATIONS = 10000
 
@@ -64,7 +68,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             createAllTables(db)
             insertInitialData(db)
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V7 created successfully with full schema")
+            Log.d(TAG, "Database V8 created successfully with full schema")
         } catch (e: Exception) {
             Log.e(TAG, "Error creating database: ${e.message}", e)
             throw e
@@ -80,6 +84,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 when (v) {
                     5 -> migrateV5ToV6(db)
                     6 -> migrateV6ToV7(db)
+                    7 -> migrateV7ToV8(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -122,6 +127,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         createPrintTables(db)
         createIndexes(db)
         insertInitialData(db)
+    }
+
+    private fun migrateV7ToV8(db: SQLiteDatabase) {
+        // V8: إضافة أي تغييرات جديدة في الهيكل
+        // حاليًا لا توجد تغييرات في الجداول، فقط إضافة دوال جديدة
+        Log.d(TAG, "Migration V7 to V8: Adding new helper functions")
     }
 
     // ================================================================
@@ -1841,7 +1852,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 9. FINANCE TABLES (Payments, Cash, Banks)
+    // 9. FINANCE TABLES
     // ================================================================
     private fun createFinanceTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -3053,7 +3064,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 15. ADVANCED TABLES (Workflow, Scheduled Jobs, Dashboard, etc.)
+    // 15. ADVANCED TABLES
     // ================================================================
     private fun createAdvancedTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -4111,12 +4122,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     // 19. INDEXES
     // ================================================================
     private fun createIndexes(db: SQLiteDatabase) {
-        // Core
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_companies_code ON companies(company_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stations_code ON stations(station_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stations_company ON stations(company_id)")
-
-        // Users
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
@@ -4126,15 +4134,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(is_active)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity_log(user_id)")
-
-        // Parties
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_code ON parties(party_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_tax ON parties(tax_number)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_type ON parties(party_type_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_party_contacts_party ON party_contacts(party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_party_addresses_party ON party_addresses(party_id)")
-
-        // Tanks & Pumps
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_code ON tanks(tank_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_station ON tanks(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_fuel ON tanks(fuel_type_id)")
@@ -4152,8 +4156,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_date ON meter_readings(reading_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_station ON meter_readings(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_entity ON calibration_records(entity_type, entity_id)")
-
-        // Products
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_code ON products(product_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)")
@@ -4162,8 +4164,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stock_alerts_product ON stock_alerts(product_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stock_alerts_resolved ON stock_alerts(is_resolved)")
-
-        // Sales
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_code ON sales_transactions(sale_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_invoice ON sales_transactions(invoice_number)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station ON sales_transactions(station_id)")
@@ -4174,8 +4174,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_code ON shifts(shift_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_station ON shifts(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)")
-
-        // Finance
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(account_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_accounts_type ON accounts(account_type)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_journal_entries_number ON journal_entries(entry_number)")
@@ -4187,37 +4185,27 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_sale ON payments(sale_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_receipts_number ON receipts(receipt_number)")
-
-        // HR
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_code ON employees(employee_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_station ON employees(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_employee ON attendance(employee_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(attendance_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_code ON payroll(payroll_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_items_payroll ON payroll_items(payroll_id)")
-
-        // Maintenance
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_code ON maintenance_requests(request_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_asset ON maintenance_requests(asset_type, asset_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_requests(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_hist_request ON maintenance_history(maintenance_request_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_schedule_asset ON maintenance_schedule(asset_type)")
-
-        // Notifications
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notification_queue_status ON notification_queue(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id)")
-
-        // Logs
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_table ON audit_logs(table_name)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(log_level)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sync_logs_device ON sync_logs(device_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_backup_status ON backup_history(status)")
-
-        // Advanced
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(setting_key)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_station_settings_station ON station_settings(station_id)")
@@ -4267,7 +4255,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     // 20. INITIAL DATA
     // ================================================================
     private fun insertInitialData(db: SQLiteDatabase) {
-        // Currencies
         db.execSQL("""
             INSERT OR IGNORE INTO currencies (id, uuid, currency_code, currency_name, currency_name_ar, symbol, symbol_position, decimal_places, is_default, is_active)
             VALUES 
@@ -4276,19 +4263,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'CUR-003-UUID', 'SAR', 'Saudi Riyal', 'الريال السعودي', 'ر.س', 'after', 2, 0, 1)
         """)
 
-        // Company
         db.execSQL("""
             INSERT OR IGNORE INTO companies (id, uuid, company_code, company_name, company_name_ar, tax_number, phone, email, country, city, status, is_head_office, default_currency_id)
             VALUES (1, 'COMP-001-UUID', 'COMP-001', 'Abu Ahmed Fuel Stations Group', 'مجموعة محطات ابو أحمد', 'TAX-123456789', '+967-777-000-000', 'info@abuahmed.com', 'Yemen', 'Sana''a', 'active', 1, 2)
         """)
 
-        // Station
         db.execSQL("""
             INSERT OR IGNORE INTO stations (id, uuid, station_code, station_name, station_name_ar, company_id, country, city, phone, email, license_number, tax_number, status, is_24_hours, station_type, default_currency_id)
             VALUES (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2)
         """)
 
-        // Roles
         db.execSQL("""
             INSERT OR IGNORE INTO roles (id, uuid, role_code, role_name, role_name_ar, level, is_system_role, is_active) VALUES
             (1, 'ROL-001-UUID', 'SUPER_ADMIN', 'Super Administrator', 'مدير النظام الأعلى', 1, 1, 1),
@@ -4300,7 +4284,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (7, 'ROL-007-UUID', 'ATTENDANT', 'Pump Attendant', 'مشغل المضخة', 5, 0, 1)
         """)
 
-        // Permissions
         db.execSQL("""
             INSERT OR IGNORE INTO permissions (id, uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action) VALUES
             (1, 'PER-001-UUID', 'users.create', 'Create Users', 'إنشاء مستخدمين', 'users', 'المستخدمين', 'create'),
@@ -4331,20 +4314,17 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
         """)
 
-        // Role Permissions for SUPER_ADMIN (role_id=1) - all permissions
         db.execSQL("""
             INSERT OR IGNORE INTO role_permissions (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
             SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
         """)
 
-        // Default Admin User (password: admin123)
         val (hash, salt) = hashPassword("admin123")
         db.execSQL("""
             INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
             VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-777-000-000', '$hash', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
 
-        // Fuel Types
         db.execSQL("""
             INSERT OR IGNORE INTO fuel_types (id, uuid, fuel_code, fuel_name, fuel_name_ar, density_standard, default_sale_price, default_purchase_price, tax_rate, vat_rate, is_active) VALUES
             (1, 'FT-001-UUID', 'DIESEL', 'Diesel', 'ديزل', 0.8200, 1800.00, 1700.00, 0, 0, 1),
@@ -4352,7 +4332,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'FT-003-UUID', 'PETROL_91', 'Petrol 91', 'بنزين 91', 0.7450, 1950.00, 1850.00, 0, 0, 1)
         """)
 
-        // Tanks
         db.execSQL("""
             INSERT OR IGNORE INTO tanks (id, uuid, tank_code, tank_name, tank_name_ar, station_id, fuel_type_id, capacity_liters, minimum_level, maximum_level, current_quantity, tank_shape, location, status) VALUES
             (1, 'TANK-001-UUID', 'TANK-001', 'Diesel Tank', 'خزان الديزل', 1, 1, 40000.00, 2000.00, 40000.00, 25000.00, 'cylindrical', 'underground', 'active'),
@@ -4360,7 +4339,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'TANK-003-UUID', 'TANK-003', 'Petrol 91 Tank', 'خزان البنزين 91', 1, 3, 35000.00, 1500.00, 35000.00, 22000.00, 'cylindrical', 'underground', 'active')
         """)
 
-        // Pumps
         db.execSQL("""
             INSERT OR IGNORE INTO pumps (id, uuid, pump_code, pump_number, pump_name, pump_name_ar, station_id, tank_id, serial_number, manufacturer, max_flow_rate, meter_start, meter_current, status) VALUES
             (1, 'PUMP-001-UUID', 'PUMP-001', '1', 'Pump 1 - Diesel', 'مضخة 1 - ديزل', 1, 1, 'SN-001-2024', 'Wayne', 45.00, 0.00, 15420.50, 'active'),
@@ -4369,7 +4347,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'PUMP-004-UUID', 'PUMP-004', '4', 'Pump 4 - Petrol 91', 'مضخة 4 - بنزين 91', 1, 3, 'SN-004-2024', 'Tokheim', 40.00, 0.00, 31500.25, 'active')
         """)
 
-        // Nozzles
         db.execSQL("""
             INSERT OR IGNORE INTO pump_nozzles (id, uuid, nozzle_code, nozzle_number, pump_id, fuel_type_id, meter_start, meter_current, status) VALUES
             (1, 'NZ-001-UUID', 'NZ-001-A', 'A', 1, 1, 0.00, 15420.50, 'active'),
@@ -4378,7 +4355,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'NZ-004-UUID', 'NZ-004-A', 'A', 4, 3, 0.00, 31500.25, 'active')
         """)
 
-        // Party Types
         db.execSQL("""
             INSERT OR IGNORE INTO party_types (id, uuid, type_code, type_name, type_name_ar, default_discount, default_credit_limit, payment_terms_days, is_active) VALUES
             (1, 'PT-001-UUID', 'INDIVIDUAL', 'Individual', 'فرد', 0, 0, 0, 1),
@@ -4389,14 +4365,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (6, 'PT-006-UUID', 'SUPPLIER', 'Supplier', 'مورد', 0, 2000000, 30, 1)
         """)
 
-        // Cash Boxes
         db.execSQL("""
             INSERT OR IGNORE INTO cash_boxes (id, uuid, box_code, box_name, box_name_ar, station_id, box_type, opening_balance, current_balance, currency_id, status) VALUES
             (1, 'CB-001-UUID', 'CB-001', 'Main Cash Box', 'الصندوق الرئيسي', 1, 'main', 50000.00, 50000.00, 2, 'active'),
             (2, 'CB-002-UUID', 'CB-002', 'Safe', 'الخزنة', 1, 'safe', 200000.00, 200000.00, 2, 'active')
         """)
 
-        // Accounts
         db.execSQL("""
             INSERT OR IGNORE INTO accounts (id, uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active) VALUES
             (1, 'ACC-001-UUID', '1', 'Assets', 'الأصول', 'asset', NULL, 'debit', 1, 1),
@@ -4423,7 +4397,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (22, 'ACC-022-UUID', '5104', 'Maintenance', 'الصيانة', 'expense', 'operating_expense', 'debit', 3, 1)
         """)
 
-        // Expense Categories
         db.execSQL("""
             INSERT OR IGNORE INTO expense_categories (id, uuid, category_code, category_name, category_name_ar, default_account_id, is_active) VALUES
             (1, 'EXC-001-UUID', 'EXC-001', 'Salaries', 'الرواتب', 19, 1),
@@ -4432,22 +4405,48 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'EXC-004-UUID', 'EXC-004', 'Rent', 'الإيجار', 20, 1)
         """)
 
-        // System Settings
         db.execSQL("""
             INSERT OR IGNORE INTO system_settings (id, uuid, setting_key, setting_value, category, data_type, description) VALUES
-            (1, 'SYS-001-UUID', 'VAT_PERCENTAGE', '0', 'tax', 'float', 'نسبة ضريبة القيمة المضافة'),
-            (2, 'SYS-002-UUID', 'DEFAULT_CURRENCY', '2', 'general', 'integer', 'معرف العملة الافتراضية (YER)'),
-            (3, 'SYS-003-UUID', 'ALLOW_NEGATIVE_STOCK', '0', 'inventory', 'boolean', 'السماح بالمخزون السالب'),
-            (4, 'SYS-004-UUID', 'MAX_DISCOUNT_PERCENT', '20', 'sales', 'integer', 'الحد الأقصى للخصم بالنسبة المئوية'),
-            (5, 'SYS-005-UUID', 'AUTO_BACKUP_ENABLED', '1', 'system', 'boolean', 'تفعيل النسخ الاحتياطي التلقائي'),
-            (6, 'SYS-006-UUID', 'AUTO_SYNC_ENABLED', '1', 'system', 'boolean', 'تفعيل المزامنة التلقائية'),
-            (7, 'SYS-007-UUID', 'SMS_GATEWAY', 'android_app', 'sms', 'string', 'نوع بوابة الرسائل القصيرة'),
-            (8, 'SYS-008-UUID', 'STATION_NAME', 'محطة ابو أحمد لمشتقات الديزل', 'general', 'string', 'اسم المحطة الرئيسي'),
-            (9, 'SYS-009-UUID', 'LOW_STOCK_THRESHOLD', '10', 'inventory', 'integer', 'حد المخزون المنخفض'),
-            (10, 'SYS-010-UUID', 'CREDIT_LIMIT_DEFAULT', '500000', 'finance', 'integer', 'حد الائتمان الافتراضي للعملاء')
+            ('SYS-001-UUID', 'VAT_PERCENTAGE', '0', 'tax', 'float', 'نسبة ضريبة القيمة المضافة'),
+            ('SYS-002-UUID', 'DEFAULT_CURRENCY', '2', 'general', 'integer', 'معرف العملة الافتراضية (YER)'),
+            ('SYS-003-UUID', 'ALLOW_NEGATIVE_STOCK', '0', 'inventory', 'boolean', 'السماح بالمخزون السالب'),
+            ('SYS-004-UUID', 'MAX_DISCOUNT_PERCENT', '20', 'sales', 'integer', 'الحد الأقصى للخصم بالنسبة المئوية'),
+            ('SYS-005-UUID', 'AUTO_BACKUP_ENABLED', '1', 'system', 'boolean', 'تفعيل النسخ الاحتياطي التلقائي'),
+            ('SYS-006-UUID', 'AUTO_SYNC_ENABLED', '1', 'system', 'boolean', 'تفعيل المزامنة التلقائية'),
+            ('SYS-007-UUID', 'SMS_GATEWAY', 'android_app', 'sms', 'string', 'نوع بوابة الرسائل القصيرة'),
+            ('SYS-008-UUID', 'STATION_NAME', 'محطة ابو أحمد لمشتقات الديزل', 'general', 'string', 'اسم المحطة الرئيسي'),
+            ('SYS-009-UUID', 'LOW_STOCK_THRESHOLD', '10', 'inventory', 'integer', 'حد المخزون المنخفض'),
+            ('SYS-010-UUID', 'CREDIT_LIMIT_DEFAULT', '500000', 'finance', 'integer', 'حد الائتمان الافتراضي للعملاء'),
+            ('SYS-011-UUID', 'retention_days', '90', 'system', 'integer', 'عدد أيام الاحتفاظ بالسجلات قبل الأرشفة'),
+            ('SYS-012-UUID', 'push_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات الفورية (Push)'),
+            ('SYS-013-UUID', 'email_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات عبر البريد الإلكتروني'),
+            ('SYS-014-UUID', 'backup_time', '02:00', 'system', 'string', 'وقت تشغيل النسخ الاحتياطي اليومي (HH:MM)'),
+            ('SYS-015-UUID', 'max_db_size_mb', '500', 'system', 'integer', 'الحد الأقصى لحجم قاعدة البيانات بالميجابايت'),
+            ('SYS-016-UUID', 'verbose_logging', '0', 'system', 'boolean', 'تفعيل التسجيل التفصيلي للأخطاء والأداء'),
+            ('SYS-017-UUID', 'offline_mode_enabled', '0', 'system', 'boolean', 'تفعيل وضع العمل بدون إنترنت'),
+            ('SYS-018-UUID', 'max_login_attempts', '5', 'security', 'integer', 'الحد الأقصى لمحاولات تسجيل الدخول الفاشلة قبل القفل'),
+            ('SYS-019-UUID', 'lockout_duration_minutes', '30', 'security', 'integer', 'مدة قفل الحساب بعد تجاوز المحاولات الفاشلة'),
+            ('SYS-020-UUID', 'two_factor_required', '0', 'security', 'boolean', 'إلزام جميع المستخدمين بتفعيل المصادقة الثنائية'),
+            ('SYS-021-UUID', 'min_password_length', '8', 'security', 'integer', 'الحد الأدنى لعدد أحرف كلمة المرور'),
+            ('SYS-022-UUID', 'password_expiry_days', '90', 'security', 'integer', 'عدد أيام صلاحية كلمة المرور قبل الإجبار على التغيير'),
+            ('SYS-023-UUID', 'gps_tracking_enabled', '1', 'sales', 'boolean', 'تسجيل إحداثيات GPS مع كل عملية بيع'),
+            ('SYS-024-UUID', 'tank_low_threshold_percent', '20', 'inventory', 'integer', 'نسبة التنبيه لانخفاض مستوى الوقود في الخزان'),
+            ('SYS-025-UUID', 'max_discount_without_approval', '10', 'sales', 'integer', 'الحد الأقصى للخصم بدون موافقة المشرف'),
+            ('SYS-026-UUID', 'auto_print_receipt', '1', 'pos', 'boolean', 'طباعة الإيصال تلقائياً بعد إتمام البيع'),
+            ('SYS-027-UUID', 'receipt_paper_width_mm', '80', 'pos', 'integer', 'عرض ورقة الإيصال بالمليمتر (58 أو 80)'),
+            ('SYS-028-UUID', 'receipt_qr_enabled', '1', 'pos', 'boolean', 'إظهار QR Code على إيصال البيع'),
+            ('SYS-029-UUID', 'receipt_footer_message', 'شكراً لزيارتكم محطة ابو أحمد', 'pos', 'string', 'الرسالة المطبوعة في تذييل الإيصال'),
+            ('SYS-030-UUID', 'auto_bank_transfer_enabled', '0', 'finance', 'boolean', 'تفعيل التحويل الآلي للمبالغ إلى الحساب البنكي'),
+            ('SYS-031-UUID', 'max_cash_in_box', '200000', 'finance', 'integer', 'الحد الأقصى للنقدية المسموح بها في الصندوق'),
+            ('SYS-032-UUID', 'smart_alerts_enabled', '1', 'notifications', 'boolean', 'تفعيل نظام التنبيهات الذكية'),
+            ('SYS-033-UUID', 'low_stock_check_interval_hours', '4', 'inventory', 'integer', 'فترة فحص المخزون المنخفض بالساعات'),
+            ('SYS-034-UUID', 'loyalty_program_enabled', '1', 'sales', 'boolean', 'تفعيل نظام نقاط الولاء للعملاء'),
+            ('SYS-035-UUID', 'loyalty_points_per_currency', '1', 'sales', 'float', 'عدد نقاط الولاء المكتسبة لكل 1 وحدة عملة'),
+            ('SYS-036-UUID', 'zatca_einvoicing_enabled', '0', 'sales', 'boolean', 'تفعيل الفوترة الإلكترونية المتكاملة مع ZATCA'),
+            ('SYS-037-UUID', 'station_tax_id', '', 'tax', 'string', 'الرقم الضريبي للمحطة للفوترة الإلكترونية'),
+            ('SYS-038-UUID', 'customer_rating_enabled', '0', 'crm', 'boolean', 'تفعيل نظام تقييم العملاء بعد كل عملية بيع')
         """)
 
-        // Station Settings
         db.execSQL("""
             INSERT OR IGNORE INTO station_settings (id, uuid, station_id, setting_key, setting_value, data_type, description) VALUES
             (1, 'SS-001-UUID', 1, 'receipt_width', '80', 'integer', 'عرض إيصال الطباعة'),
@@ -4457,7 +4456,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (5, 'SS-005-UUID', 1, 'tank_low_warning', '20', 'integer', 'نسبة التنبيه لانخفاض الخزان %')
         """)
 
-        // Notification Templates
         db.execSQL("""
             INSERT OR IGNORE INTO notification_templates (id, uuid, template_code, template_name, template_name_ar, channel, subject, body) VALUES
             (1, 'NT-001-UUID', 'WELCOME_SMS', 'Welcome SMS', 'رسالة ترحيب', 'sms', NULL, 'مرحباً {customer_name}، شكراً لزيارتكم محطة ابو أحمد.'),
@@ -4466,7 +4464,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'NT-004-UUID', 'TANK_LEVEL_ALERT', 'Tank Level Alert', 'تنبيه مستوى خزان', 'push', NULL, 'خزان {tank_name} أقل من الحد الأدنى، النسبة الحالية: {level_percent}%')
         """)
 
-        // KPI Definitions
         db.execSQL("""
             INSERT OR IGNORE INTO kpi_definitions (id, uuid, kpi_code, kpi_name, kpi_name_ar, category, description, formula, target_value, unit, frequency) VALUES
             (1, 'KPI-001-UUID', 'DAILY_SALES', 'Daily Sales', 'المبيعات اليومية', 'sales', 'إجمالي المبيعات اليومية', 'SUM(total_amount) FROM sales WHERE DATE(created_at) = CURDATE()', 500000, 'YER', 'daily'),
@@ -4475,7 +4472,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'KPI-004-UUID', 'PROFIT_MARGIN', 'Profit Margin', 'هامش الربح', 'financial', 'نسبة الربح الإجمالي', '(total_sales - total_cost) / total_sales * 100', 25, '%', 'monthly')
         """)
 
-        // Field Permissions (Cashier cannot see profit margin)
         db.execSQL("""
             INSERT OR IGNORE INTO field_permissions (id, uuid, role_id, table_name, field_name, can_view, can_edit) VALUES
             (1, 'FP-001-UUID', 4, 'sales_transactions', 'gross_amount', 0, 0),
@@ -4483,7 +4479,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'FP-003-UUID', 4, 'products', 'purchase_price', 0, 0)
         """)
 
-        // Approval Workflows
         db.execSQL("""
             INSERT OR IGNORE INTO approval_workflows (id, uuid, workflow_code, workflow_name, workflow_name_ar, entity_type, is_active) VALUES
             (1, 'WF-001-UUID', 'WF_SALES_APPROVAL', 'Large Sales Approval', 'موافقة المبيعات الكبيرة', 'sale', 1)
@@ -4494,19 +4489,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (2, 'AS-002-UUID', 1, 2, 'Manager Approval', 'موافقة المدير', 3)
         """)
 
-        // Scheduled Jobs
         db.execSQL("""
             INSERT OR IGNORE INTO scheduled_jobs (id, uuid, job_code, job_name, job_name_ar, job_class, schedule_type, cron_expression, enabled) VALUES
             (1, 'SJ-001-UUID', 'DAILY_BACKUP', 'Daily Database Backup', 'نسخ احتياطي يومي', 'BackupJob', 'cron', '0 2 * * *', 1)
         """)
 
-        // Printer Profiles
         db.execSQL("""
             INSERT OR IGNORE INTO printer_profiles (id, uuid, profile_code, profile_name, printer_type, connection_type, paper_width, is_default) VALUES
             (1, 'PP-001-UUID', 'PP_THERMAL_80', 'Thermal 80mm', 'thermal', 'usb', 80, 1)
         """)
 
-        // Receipt Templates
         db.execSQL("""
             INSERT OR IGNORE INTO receipt_templates (id, uuid, template_code, template_name, description, header, footer, is_default) VALUES
             (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي', 
@@ -4888,7 +4880,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             }
             val saleId = db.insert("sales_transactions", null, cv)
 
-            // Update tank quantity
             if (pumpId != null && fuelTypeId != null) {
                 db.execSQL(
                     "UPDATE tanks SET current_quantity = current_quantity - ? WHERE id = (SELECT tank_id FROM pumps WHERE id = ?)",
@@ -4896,13 +4887,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 )
             }
 
-            // Update shift totals
             db.execSQL(
                 "UPDATE shifts SET total_sales = total_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ?",
                 arrayOf(netAmount, liters, shiftId)
             )
 
-            // Update party balance if credit
             if (isCredit && customerPartyId != null) {
                 db.execSQL(
                     "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
@@ -5029,7 +5018,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     fun processPayment(customerPartyId: Int, amount: Double, paymentMethod: String, operator: String = "System"): Boolean {
-        // نسخة مبسطة للاستخدام المباشر بدون saleId
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -5786,5 +5774,335 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
     override fun close() {
         super.close()
+    }
+
+    // ================================================================
+    // 42. دوال SmsReceiver المتكاملة (V8)
+    // ================================================================
+
+    /**
+     * الحصول على سعر الديزل من جدول fuel_types
+     * @return سعر اللتر للديزل، أو 0.0 إذا لم يوجد
+     */
+    fun getDieselPrice(): Double {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = 'DIESEL' AND is_deleted = 0 LIMIT 1",
+            null
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    /**
+     * الحصول على سعر البنزين من جدول fuel_types
+     * @param fuelCode رمز الوقود (افتراضي: PETROL_95)
+     * @return سعر اللتر للبنزين، أو 0.0 إذا لم يوجد
+     */
+    fun getGasolinePrice(fuelCode: String = "PETROL_95"): Double {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(fuelCode)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    /**
+     * الحصول على رقم هاتف المدير من جدول users + roles
+     * @return رقم هاتف المدير، أو null إذا لم يوجد
+     */
+    fun getManagerPhone(): String? {
+        val db = readableDatabase
+        val cursor = db.rawQuery("""
+            SELECT u.phone FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
+              AND u.status = 'active' AND u.is_deleted = 0
+            ORDER BY r.level ASC LIMIT 1
+        """, null)
+        return cursor.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+    }
+
+    /**
+     * الحصول على قائمة أرقام هواتف السائقين النشطين من جدول drivers
+     * @return قائمة بأرقام الهواتف (phone و phone2)
+     */
+    fun getDriverPhones(): List<String> {
+        val phones = mutableListOf<String>()
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT phone, phone2 FROM drivers WHERE status = 'active' AND is_deleted = 0",
+            null
+        )
+        cursor.use {
+            while (it.moveToNext()) {
+                it.getString(0)?.let { p -> if (p.isNotBlank()) phones.add(p) }
+                it.getString(1)?.let { p -> if (p.isNotBlank()) phones.add(p) }
+            }
+        }
+        return phones.distinct()
+    }
+
+    /**
+     * الحصول على قائمة الأرقام الموثوقة من sms_whitelist
+     * @return قائمة بأرقام الهواتف المفعلة في القائمة البيضاء
+     */
+    fun getTrustedSmscList(): List<String> {
+        val phones = mutableListOf<String>()
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT phone FROM sms_whitelist WHERE enabled = 1 ORDER BY name",
+            null
+        )
+        cursor.use {
+            while (it.moveToNext()) phones.add(it.getString(0))
+        }
+        return phones
+    }
+
+    /**
+     * الحصول على رصيد العميل باستخدام رقم الهاتف
+     * @param phone رقم هاتف العميل
+     * @return الرصيد الحالي، أو 0.0 إذا لم يوجد
+     */
+    fun getCustomerBalanceByPhone(phone: String): Double {
+        val db = readableDatabase
+        val cursor = db.rawQuery("""
+            SELECT p.current_balance FROM parties p
+            WHERE p.phone = ? AND p.is_deleted = 0
+            LIMIT 1
+        """, arrayOf(phone))
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    /**
+     * الحصول على آخر طلب للعميل باستخدام رقم الهاتف
+     * @param phone رقم هاتف العميل
+     * @return JSONObject يحتوي على بيانات آخر طلب، أو null
+     */
+    fun getLastOrderByPhone(phone: String): JSONObject? {
+        val db = readableDatabase
+        val cursor = db.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT 1
+        """, arrayOf(phone))
+        return cursor.use {
+            if (it.moveToFirst()) {
+                JSONObject().apply {
+                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                    put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")) ?: "")
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                }
+            } else null
+        }
+    }
+
+    /**
+     * الحصول على تاريخ طلبات العميل باستخدام رقم الهاتف
+     * @param phone رقم هاتف العميل
+     * @param limit عدد الطلبات المطلوبة (حد أقصى 100)
+     * @return JSONArray يحتوي على تاريخ الطلبات
+     */
+    fun getOrderHistoryByPhone(phone: String, limit: Int): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val effectiveLimit = limit.coerceIn(1, 100)
+        val cursor = db.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT ?
+        """, arrayOf(phone, effectiveLimit.toString()))
+        cursor.use {
+            while (it.moveToNext()) {
+                val json = JSONObject()
+                json.put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type")))
+                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                json.put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
+                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                arr.put(json)
+            }
+        }
+        return arr
+    }
+
+    /**
+     * الحصول على طلب باستخدام رقم الطلب (orderId)
+     * @param orderId رقم الطلب (sale_code)
+     * @return JSONObject يحتوي على بيانات الطلب، أو null
+     */
+    fun getLastOrderByOrderId(orderId: String): JSONObject? {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT * FROM sales_transactions WHERE sale_code = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(orderId)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) {
+                JSONObject().apply {
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                }
+            } else null
+        }
+    }
+
+    /**
+     * تسجيل طلب توريد ديزل في قاعدة البيانات
+     * @param customerId رقم هاتف العميل
+     * @param customerName اسم العميل
+     * @param quantityLiters كمية اللترات
+     * @param quantityDabbas كمية الدباب
+     * @param location موقع التوصيل
+     * @param deliveryTime وقت التوصيل
+     * @param unitPrice سعر اللتر
+     * @param totalAmount المبلغ الإجمالي
+     * @param orderId رقم الطلب (sale_code)
+     * @return true إذا تم التسجيل بنجاح، false في حالة الخطأ
+     */
+    fun recordDieselDelivery(
+        customerId: String,
+        customerName: String,
+        quantityLiters: Double,
+        quantityDabbas: Double,
+        location: String,
+        deliveryTime: String,
+        unitPrice: Double,
+        totalAmount: Double,
+        orderId: String
+    ): Boolean {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // 1. البحث عن party_id
+            val partyId = getPartyIdByPhone(customerId)
+            if (partyId == null) {
+                Log.e(TAG, "Party not found for phone: $customerId")
+                return false
+            }
+
+            // 2. التحقق من الحدود
+            require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
+            require(unitPrice in 1.0..1000000.0) { "Invalid price" }
+            require(location.length in 3..200) { "Invalid location" }
+
+            // 3. إنشاء سجل المبيعات
+            val subtotal = quantityLiters * unitPrice
+            val saleId = insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+                customerPartyId = partyId,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = quantityLiters,
+                pricePerLiter = unitPrice,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = "credit",
+                isCredit = true,
+                dueDate = dateOnlyFormat.format(Date()),
+                cashierId = 1,
+                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
+            )
+
+            if (saleId <= 0) {
+                Log.e(TAG, "Failed to insert sale transaction")
+                return false
+            }
+
+            // 4. تحديث رصيد العميل
+            val currentBalance = getCustomerBalanceByPhone(customerId)
+            val newBalance = currentBalance + totalAmount
+            val values = ContentValues().apply {
+                put("current_balance", newBalance)
+                put("total_due", totalAmount)
+            }
+            db.update("parties", values, "id = ?", arrayOf(partyId.toString()))
+
+            db.setTransactionSuccessful()
+            logActivity("SmsReceiver", "delivery_recorded", "Order $orderId for ${quantityLiters}L")
+            return true
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recording delivery: ${e.message}", e)
+            return false
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /**
+     * الحصول على party_id باستخدام رقم الهاتف
+     * @param phone رقم الهاتف
+     * @return معرف العميل، أو null
+     */
+    fun getPartyIdByPhone(phone: String): Int? {
+        val db = readableDatabase
+        val cleanPhone = normalizePhone(phone)
+        val cursor = db.rawQuery(
+            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(cleanPhone)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+    }
+
+    /**
+     * الحصول على مدة الاحتفاظ بالبيانات من system_settings
+     * @return عدد الأيام، أو القيمة الافتراضية 90
+     */
+    fun getRetentionDays(): Int {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'retention_days' LIMIT 1",
+            null
+        )
+        val days = cursor.use {
+            if (it.moveToFirst()) {
+                it.getString(0).toIntOrNull() ?: 90
+            } else 90
+        }
+        return days.coerceIn(7, 365)
+    }
+
+    /**
+     * الحصول على إعداد من system_settings
+     * @param key مفتاح الإعداد
+     * @param defaultValue القيمة الافتراضية
+     * @return قيمة الإعداد، أو defaultValue
+     */
+    fun getSystemSetting(key: String, defaultValue: String = ""): String {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1",
+            arrayOf(key)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getString(0) else defaultValue
+        }
+    }
+
+    /**
+     * توحيد رقم الهاتف (إزالة الأحرف غير الرقمية)
+     */
+    private fun normalizePhone(phone: String): String {
+        return phone.replace("[^0-9]".toRegex(), "").takeLast(9)
     }
 }
