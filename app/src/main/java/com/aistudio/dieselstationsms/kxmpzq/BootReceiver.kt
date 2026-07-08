@@ -13,7 +13,8 @@ import android.util.Log
  * تلقائياً عند إقلاع الجهاز، لضمان استمرارية عمل الخادم المحلي
  * وإمكانية استقبال الرسائل النصية ومعالجتها.
  *
- * الإصدار 1.0 – متوافق مع جميع إصدارات Android
+ * الإصدار 1.1 – متوافق مع جميع إصدارات Android
+ * تم إصلاح مشكلة ACTION_QUICKBOOT_POWERON باستخدام النص الحرفي
  *
  * المتطلبات في AndroidManifest.xml:
  * <receiver
@@ -23,6 +24,7 @@ import android.util.Log
  *     <intent-filter>
  *         <action android:name="android.intent.action.BOOT_COMPLETED" />
  *         <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+ *         <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
  *     </intent-filter>
  * </receiver>
  *
@@ -33,6 +35,7 @@ class BootReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "BootReceiver"
+        private const val ACTION_QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
     }
 
     /**
@@ -46,22 +49,18 @@ class BootReceiver : BroadcastReceiver() {
 
         // التحقق من أن البث هو حدث إقلاع الجهاز
         if (action == Intent.ACTION_BOOT_COMPLETED ||
-            action == Intent.ACTION_QUICKBOOT_POWERON ||
+            action == ACTION_QUICKBOOT_POWERON ||
             action == Intent.ACTION_LOCKED_BOOT_COMPLETED) {
 
             Log.i(TAG, "Device boot completed, starting SMSService...")
 
             try {
-                // إنشاء Intent لبدء الخدمة
                 val serviceIntent = Intent(context, SMSService::class.java)
 
-                // بدء الخدمة حسب إصدار Android
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // Android 8.0+ يتطلب startForegroundService
                     context.startForegroundService(serviceIntent)
                     Log.d(TAG, "Foreground service started (Android 8+)")
                 } else {
-                    // الإصدارات الأقدم تستخدم startService العادي
                     context.startService(serviceIntent)
                     Log.d(TAG, "Service started (Android < 8)")
                 }
