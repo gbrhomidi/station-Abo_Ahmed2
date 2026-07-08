@@ -38,11 +38,12 @@ import kotlin.math.abs
  * 3. قراءة أرقام السائقين من جدول drivers
  * 4. قراءة قائمة SMSC الموثوقة من sms_whitelist
  * 5. جميع الدوال متكاملة مع DatabaseHelper الحالي
+ * 6. إصلاح الأخطاء: إضافة handleOrderCancel، scheduleDriverAlert، تصحيح customerId، حذف onDestroy
  */
-class SecureSmsReceiver : BroadcastReceiver() {
+class SmsReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val TAG = "SecureSmsReceiver"
+        private const val TAG = "SmsReceiver"
         private const val PREFS_NAME = "secure_sms_prefs"
         private const val AUDIT_LOG = "audit_log"
 
@@ -194,7 +195,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
                 processSingleMessage(context, db, sms)
             }
 
-            // تنظيف البيانات القديمة باستخدام الإعداد من system_settings
             val retentionDays = getRetentionDays(db)
             cleanupOldData(context, db, retentionDays)
 
@@ -701,6 +701,7 @@ class SecureSmsReceiver : BroadcastReceiver() {
         prefs.orderCount = prefs.orderCount + 1
         prefs.preferredTime = order.deliveryTime
 
+        // ═══ جدولة تنبيه السائق ═══
         scheduleDriverAlert(context, db, customer, order, orderId)
 
         val dabbasText = if (order.quantityDabbas > 0) {
@@ -749,6 +750,113 @@ class SecureSmsReceiver : BroadcastReceiver() {
         ctx.awaitingResponse = false
         ctx.pendingAction = ""
         activeOrders.remove(sender)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ دوال إلغاء الطلب وإلغاء الطلب (المفقودة سابقاً) ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * معالجة طلب إلغاء الطلب
+     */
+    private fun handleOrderCancel(
+        context: Context, db: DatabaseHelper, customer: CustomerInfo
+    ) {
+        val sender = customer.phone
+        val order = activeOrders.remove(sender)
+
+        if (order != null) {
+            sendReply(context, db, sender,
+                "❌ ${customer.commercialName}،\n" +
+                        "تم إلغاء الطلب.\n" +
+                        "نرحب بطلباتك في أي وقت.")
+
+            conversationContext[sender]?.let {
+                it.awaitingResponse = false
+                it.pendingAction = ""
+            }
+        } else {
+            sendReply(context, db, sender,
+                "📦 ${customer.commercialName}،\n" +
+                        "لا يوجد طلب نشط للإلغاء.")
+        }
+    }
+
+    /**
+     * جدولة تنبيه للسائق قبل 15 دقيقة من موعد التوصيل
+     */
+    private fun scheduleDriverAlert(
+        context: Context,
+        db: DatabaseHelper,
+        customer: CustomerInfo,
+        order: OrderDraft,
+        orderId: String
+    ) {
+        val delayMs = order.deliveryTimestamp - System.currentTimeMillis() - (15 * 60 * 1000)
+
+        if (delayMs <= 0) {
+            // الوقت قريب جداً - إرسال فوري
+            sendDriverAlert(context, db, customer, order, orderId)
+            return
+        }
+
+        // إلغاء أي تنبيه سابق
+        scheduledDriverAlerts[orderId]?.let { handler.removeCallbacks(it) }
+
+        val alertRunnable = Runnable {
+            sendDriverAlert(context, db, customer, order, orderId)
+        }
+
+        scheduledDriverAlerts[orderId] = alertRunnable
+        handler.postDelayed(alertRunnable, delayMs)
+
+        Log.d(TAG, "Driver alert scheduled for order $orderId in ${delayMs / 60000} minutes")
+    }
+
+    /**
+     * إرسال تنبيه السائق الفوري
+     */
+    private fun sendDriverAlert(
+        context: Context,
+        db: DatabaseHelper,
+        customer: CustomerInfo,
+        order: OrderDraft,
+        orderId: String
+    ) {
+        val driverPhone = getDriverPhone(db)
+        if (driverPhone == null) {
+            Log.e(TAG, "Driver phone not set, cannot send alert")
+            return
+        }
+
+        val dabbasText = if (order.quantityDabbas > 0) {
+            "${order.quantityDabbas.toInt()} دباب (${order.quantityLiters.toInt()} لتر)"
+        } else {
+            "${order.quantityLiters.toInt()} لتر"
+        }
+
+        sendReply(context, db, driverPhone,
+            "🚚 توريد ديزل\n" +
+                    "═══════════════════\n" +
+                    "رقم الطلب: $orderId\n" +
+                    "العميل: ${customer.commercialName}\n" +
+                    "الكمية: $dabbasText\n" +
+                    "الموقع: ${order.deliveryLocation}\n" +
+                    "الوقت: ${order.deliveryTime}\n" +
+                    "═══════════════════\n" +
+                    "⏰ يرجى التجهيز والتوصيل\n" +
+                    "📞 للاستفسار: ${customer.phone}")
+
+        db.logSms(driverPhone, "Driver alert for order $orderId", "driver_alert", "sent")
+        scheduledDriverAlerts.remove(orderId)
+    }
+
+    /**
+     * الحصول على رقم هاتف السائق من قاعدة البيانات (أول سائق نشط)
+     */
+    private fun getDriverPhone(db: DatabaseHelper): String? {
+        val phones = getDriverPhones(db)
+        return phones.firstOrNull()
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -825,31 +933,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
             }
         }
         return null
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تنبيهات تأخر السائق ═══
-    // ═══════════════════════════════════════════════════════════════
-    private fun monitorDriverDelay(context: Context, db: DatabaseHelper, order: OrderDraft, orderId: String) {
-        val delayThreshold = 30 * 60 * 1000L
-        handler.postDelayed({
-            val lastOrder = getLastOrderByOrderId(db, orderId)
-            if (lastOrder != null) {
-                val status = lastOrder.optString("status", "")
-                if (status != "delivered" && status != "confirmed") {
-                    val managerPhone = getManagerPhone(db)
-                    if (managerPhone != null) {
-                        notifyManager(context, db, managerPhone,
-                            "🚨 تأخر التوصيل!\n" +
-                                    "الطلب: $orderId\n" +
-                                    "العميل: ${order.customerId}\n" +
-                                    "الموقع: ${order.deliveryLocation}\n" +
-                                    "الوقت المحدد: ${order.deliveryTime}")
-                        logSecurityEvent(context, "DELIVERY_DELAY", order.customerId, "Order $orderId delayed")
-                    }
-                }
-            }
-        }, delayThreshold)
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1315,16 +1398,15 @@ class SecureSmsReceiver : BroadcastReceiver() {
                     "بجانب مدرسة الاتحاد\n" +
                     "الحميدة - العرش\n" +
                     "═══════════════════\n" +
-                    "🕐 6ص - 12ص (السبت-الخميس)\n" +
-                    "🕐 2م - 12ص (الجمعة)\n" +
+                    "🕐 24 ساعة طوال أيام الأسبوع\n" +
                     "🚨 طوارئ: 24 ساعة")
     }
 
     private fun handleWorkingHours(context: Context, db: DatabaseHelper, customer: CustomerInfo) {
         sendReply(context, db, customer.phone,
             "🕐 ${customer.commercialName}،\n" +
-                    "السبت-الخميس: 6ص - 12ص\n" +
-                    "الجمعة: 2م - 12ص\n" +
+                    "المحطة مفتوحة 24 ساعة\n" +
+                    "طوال أيام الأسبوع بما في ذلك الجمعة\n" +
                     "🚨 طوارئ: 24 ساعة")
     }
 
@@ -1565,7 +1647,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
     // ═══ قراءة الإعدادات من قاعدة البيانات (ديناميكية) ═══
     // ═══════════════════════════════════════════════════════════════
 
-    // 1. سعر الديزل من fuel_types
     private fun getDieselPrice(db: DatabaseHelper): Double {
         val cursor = db.readableDatabase.rawQuery(
             "SELECT default_sale_price FROM fuel_types WHERE fuel_code = 'DIESEL' AND is_deleted = 0 LIMIT 1",
@@ -1576,7 +1657,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 2. سعر البنزين من fuel_types
     private fun getGasolinePrice(db: DatabaseHelper, fuelCode: String = "PETROL_95"): Double {
         val cursor = db.readableDatabase.rawQuery(
             "SELECT default_sale_price FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 LIMIT 1",
@@ -1587,7 +1667,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 3. هاتف المدير من users + roles
     private fun getManagerPhone(db: DatabaseHelper): String? {
         val cursor = db.readableDatabase.rawQuery("""
             SELECT u.phone FROM users u
@@ -1601,7 +1680,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 4. هواتف السائقين من drivers
     private fun getDriverPhones(db: DatabaseHelper): List<String> {
         val phones = mutableListOf<String>()
         val cursor = db.readableDatabase.rawQuery(
@@ -1617,7 +1695,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         return phones.distinct()
     }
 
-    // 5. قائمة SMSC الموثوقة من sms_whitelist
     private fun getTrustedSmscList(db: DatabaseHelper): List<String> {
         val phones = mutableListOf<String>()
         val cursor = db.readableDatabase.rawQuery(
@@ -1630,12 +1707,10 @@ class SecureSmsReceiver : BroadcastReceiver() {
         return phones
     }
 
-    // 6. رصيد العميل بالهاتف (من parties عبر party_contacts)
     private fun getCustomerBalanceByPhone(db: DatabaseHelper, phone: String): Double {
         val cursor = db.readableDatabase.rawQuery("""
             SELECT p.current_balance FROM parties p
-            JOIN party_contacts pc ON p.id = pc.party_id
-            WHERE pc.phone = ? AND p.is_deleted = 0
+            WHERE p.phone = ? AND p.is_deleted = 0
             LIMIT 1
         """, arrayOf(phone))
         return cursor.use {
@@ -1643,13 +1718,11 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 7. آخر طلب للعميل (من sales_transactions)
     private fun getLastOrderByPhone(db: DatabaseHelper, phone: String): JSONObject? {
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
-            WHERE p.id = (SELECT party_id FROM parties WHERE phone = ? LIMIT 1)
-              AND s.is_deleted = 0
+            WHERE p.phone = ? AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT 1
         """, arrayOf(phone))
         return cursor.use {
@@ -1665,7 +1738,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 8. تاريخ طلبات العميل
     private fun getOrderHistoryByPhone(db: DatabaseHelper, phone: String, limit: Int): JSONArray {
         val arr = JSONArray()
         val cursor = db.readableDatabase.rawQuery("""
@@ -1687,7 +1759,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         return arr
     }
 
-    // 9. آخر طلب بواسطة orderId
     private fun getLastOrderByOrderId(db: DatabaseHelper, orderId: String): JSONObject? {
         val cursor = db.readableDatabase.rawQuery(
             "SELECT * FROM sales_transactions WHERE sale_code = ? AND is_deleted = 0 LIMIT 1",
@@ -1703,7 +1774,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // 10. تسجيل توريد ديزل في tank_refills
     private fun recordDieselDelivery(
         db: DatabaseHelper,
         customerId: String,
@@ -1717,10 +1787,8 @@ class SecureSmsReceiver : BroadcastReceiver() {
         orderId: String
     ): Boolean {
         try {
-            // الحصول على party_id من رقم الهاتف
             val partyId = getPartyIdByPhone(db, customerId) ?: return false
 
-            // التحقق من الحدود
             require(quantityLiters in 1.0..MAX_QUANTITY_LITERS) { "Invalid quantity" }
             require(unitPrice in 1.0..MAX_PRICE) { "Invalid price" }
             require(totalAmount in 0.0..MAX_PRICE * MAX_QUANTITY_LITERS) { "Invalid total" }
@@ -1728,7 +1796,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
 
             val subtotal = safeMultiply(quantityLiters, unitPrice)
 
-            // استخدام insertSaleTransaction الموجود
             val result = db.insertSaleTransaction(
                 stationId = 1,
                 shiftId = 1,
@@ -1752,7 +1819,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
 
             if (result <= 0) return false
 
-            // تحديث الرصيد باستخدام ContentValues (آمن)
             val currentBalance = getCustomerBalanceByPhone(db, customerId)
             val newBalance = currentBalance + totalAmount
             val values = ContentValues().apply {
@@ -1768,7 +1834,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // مساعد: استخراج party_id من الهاتف
     private fun getPartyIdByPhone(db: DatabaseHelper, phone: String): Int? {
         val cleanPhone = normalizePhone(phone)
         val cursor = db.readableDatabase.rawQuery(
@@ -1780,19 +1845,13 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ التحقق من SMSC (من sms_whitelist) ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun isTrustedSmsc(db: DatabaseHelper, smsc: String): Boolean {
         if (smsc.isEmpty()) return true
         val trusted = getTrustedSmscList(db)
-        if (trusted.isEmpty()) return true // إذا كانت القائمة فارغة، قبول الكل
+        if (trusted.isEmpty()) return true
         return trusted.any { smsc.contains(it) || it.contains(smsc) }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ حفظ واسترجاع Rate Limits (Persistent) ═══
-    // ═══════════════════════════════════════════════════════════════
     private lateinit var context: Context
 
     private fun getSecurePrefs(context: Context): SharedPreferences {
@@ -1846,9 +1905,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تنظيف البيانات القديمة ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun getRetentionDays(db: DatabaseHelper): Int {
         val cursor = db.readableDatabase.rawQuery(
             "SELECT setting_value FROM system_settings WHERE setting_key = 'retention_days' LIMIT 1",
@@ -1865,12 +1921,10 @@ class SecureSmsReceiver : BroadcastReceiver() {
             val cutoff = System.currentTimeMillis() - (retentionDays * 24L * 60 * 60 * 1000)
             val cutoffDate = dateFormat.format(Date(cutoff))
 
-            // حذف سجل التفاعلات القديم
             db.execSQL("DELETE FROM user_activity_log WHERE created_at < ?", arrayOf(cutoffDate))
             db.execSQL("DELETE FROM sms_logs WHERE created_at < ?", arrayOf(cutoffDate))
             db.execSQL("DELETE FROM customer_ledger WHERE transaction_date < ?", arrayOf(cutoffDate))
 
-            // أرشفة الطلبات القديمة (بدلاً من الحذف المباشر)
             db.execSQL("UPDATE sales_transactions SET archived = 1 WHERE created_at < ? AND status = 'delivered'", arrayOf(cutoffDate))
 
             Log.d(TAG, "Cleanup completed, retention days: $retentionDays")
@@ -1879,9 +1933,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ اختبارات الأمان الذاتية ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun runSecuritySelfTest(context: Context, db: DatabaseHelper) {
         try {
             val tests = listOf(
@@ -1910,9 +1961,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Audit Log ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun logSecurityEvent(context: Context, event: String, phone: String, details: String) {
         try {
             val prefs = getSecurePrefs(context)
@@ -1931,9 +1979,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ دوال إضافية من DatabaseHelper ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun findCustomer(db: DatabaseHelper, phone: String): CustomerInfo? {
         val cleanSender = normalizePhone(phone)
         val parties = db.getParties()
@@ -1958,13 +2003,9 @@ class SecureSmsReceiver : BroadcastReceiver() {
         return null
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ أدوات الإرسال والإشعارات ═══
-    // ═══════════════════════════════════════════════════════════════
     private fun notifyManager(context: Context, db: DatabaseHelper, managerPhone: String, message: String) {
         try {
             sendReply(context, db, managerPhone, message)
-            // إرسال Push Notification إذا كان مفعلاً من system_settings
             val pushEnabled = getSystemSetting(db, "push_notifications_enabled", "0") == "1"
             if (pushEnabled) {
                 sendPushNotificationIfEnabled(context, db, managerPhone, "تنبيه مدير", message)
@@ -1989,7 +2030,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
             val fcmToken = getSystemSetting(db, "fcm_token_$target", "")
             if (fcmToken.isNotEmpty()) {
                 Log.d(TAG, "Push notification would be sent to $target")
-                // هنا يتم إرسال الإشعار عبر FCM
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send push notification: ${e.message}")
@@ -2053,11 +2093,6 @@ class SecureSmsReceiver : BroadcastReceiver() {
     }
 
     // ================================================================
-    // طريقة إغلاق الموارد
+    // تم حذف override fun onDestroy() لأن BroadcastReceiver لا يحتوي عليها
     // ================================================================
-    override fun onDestroy() {
-        super.onDestroy()
-        scope.cancel()
-        handler.removeCallbacksAndMessages(null)
-    }
 }
