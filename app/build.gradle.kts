@@ -47,7 +47,6 @@ android {
         buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
     }
 
-    // ✅ تبسيط التوقيع: استخدام debug و release مع debug.keystore
     signingConfigs {
         // التوقيع الافتراضي للـ debug (موجود مسبقاً)
         // لا نحتاج لتعريفه، لكننا نستخدمه مباشرة
@@ -62,8 +61,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // ✅ استخدام توقيع debug للتوزيع التجريبي
-            // للتوزيع الرسمي، استخدم توقيعاً مخصصاً
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
@@ -160,9 +157,9 @@ dependencies {
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
 
-    // Coroutines
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.core)
+    // Coroutines (تم تثبيت الإصدار 1.7.3 كما هو مطلوب)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // WorkManager
     implementation(libs.androidx.work)
@@ -170,7 +167,7 @@ dependencies {
     // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // Security
+    // Security (تم تثبيت الإصدار المطلوب)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
@@ -211,6 +208,9 @@ configurations.all {
         force("com.squareup.okio:okio:3.0.0")
         force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
         force("androidx.core:core-ktx:1.15.0")
+        // تثبيت إصدارات كوروتينات لمنع أي تعارض
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     }
 }
 
