@@ -18,7 +18,7 @@ import java.util.concurrent.locks.ReentrantLock
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
  * الإصدار المدمج V8 - كامل مع جميع الجداول والدوال
  * تم إصلاح أخطاء ContentValues.put وأنواع البيانات، وإضافة الدوال المفقودة
- * 
+ *
  * التحديثات في V8:
  * - إضافة 28 إعداد نظام جديدة في system_settings
  * - إضافة دوال ديناميكية للقراءة من الجداول المخصصة بدلاً من system_settings
@@ -29,13 +29,21 @@ import java.util.concurrent.locks.ReentrantLock
  * - دوال مساعدة: searchParties, getCashMovements, checkLowStock, createStockAlert
  * - دوال مساعدة: getShiftSummary, getLatestMeterReadings, getAssetMaintenanceHistory
  * - دوال مساعدة: getUserNotifications, markNotificationRead, getUsersByRole, getUserPermissions
+ *
+ * تم إصلاح الأخطاء:
+ * - جعل VERSION public (const val) للوصول من MainActivity
+ * - إضافة dateOnlyFormat للتنسيق الصحيح
+ * - إصلاح موقع الدوال (نقلها خارج close())
+ * - إصلاح دوال العميل لاستخدام parties.phone بدلاً من party_contacts
+ * - إصلاح توقيع recordDieselDelivery ليتوافق مع SmsReceiver
+ * - إضافة دوال مفقودة: getPartyIdByPhone, getRetentionDays, getSystemSetting
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        private const val VERSION = 8
+        const val VERSION = 8  // جعلها public للوصول من MainActivity
 
         private const val HASH_ITERATIONS = 10000
 
@@ -60,6 +68,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
 
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        private val dateOnlyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     }
 
     private val dbLock = ReentrantLock()
@@ -75,7 +84,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             createAllTables(db)
             insertInitialData(db)
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V7 created successfully with full schema")
+            Log.d(TAG, "Database V8 created successfully with full schema")
         } catch (e: Exception) {
             Log.e(TAG, "Error creating database: ${e.message}", e)
             throw e
@@ -5831,7 +5840,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
 
     override fun close() {
         super.close()
-    
+    }
+
     // ================================================================
     // 42. DYNAMIC DATA HELPERS (بدلاً من system_settings)
     // ================================================================
@@ -5909,94 +5919,185 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     /**
-     * الحصول على رصيد العميل برقم الهاتف
+     * الحصول على رصيد العميل برقم الهاتف (من parties.phone مباشرة)
      */
     fun getCustomerBalanceByPhone(phone: String): Double {
         val db = readableDatabase
         val c = db.rawQuery("""
-            SELECT p.current_balance FROM parties p
-            JOIN party_contacts pc ON p.id = pc.party_id
-            WHERE pc.phone = ? AND p.is_deleted = 0
+            SELECT current_balance FROM parties
+            WHERE phone = ? AND is_deleted = 0
             LIMIT 1
         """.trimIndent(), arrayOf(phone))
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
     }
 
     /**
-     * الحصول على آخر طلب للعميل برقم الهاتف
+     * الحصول على آخر طلب للعميل برقم الهاتف (من parties.phone)
      */
     fun getLastOrderByPhone(phone: String): JSONObject? {
         val db = readableDatabase
         val c = db.rawQuery("""
             SELECT s.* FROM sales_transactions s
-            JOIN party_contacts pc ON s.customer_party_id = pc.party_id
-            WHERE pc.phone = ? AND s.is_deleted = 0
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT 1
         """.trimIndent(), arrayOf(phone))
-        return c.use { if (it.moveToFirst()) saleCursorToJson(it) else null }
+        return c.use {
+            if (it.moveToFirst()) {
+                val json = JSONObject()
+                json.put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                json.put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")) ?: "")
+                json.put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                json
+            } else null
+        }
     }
 
     /**
-     * الحصول على تاريخ طلبات العميل برقم الهاتف
+     * الحصول على تاريخ طلبات العميل برقم الهاتف (من parties.phone)
      */
     fun getOrderHistoryByPhone(phone: String, limit: Int = 50): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         val c = db.rawQuery("""
             SELECT s.* FROM sales_transactions s
-            JOIN party_contacts pc ON s.customer_party_id = pc.party_id
-            WHERE pc.phone = ? AND s.is_deleted = 0
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT ?
         """.trimIndent(), arrayOf(phone, limit.toString()))
-        c.use { while (it.moveToNext()) arr.put(saleCursorToJson(it)) }
+        c.use {
+            while (it.moveToNext()) {
+                val json = JSONObject()
+                json.put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                json.put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
+                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                arr.put(json)
+            }
+        }
         return arr
     }
 
     /**
-     * تسجيل توريد ديزل جديد (INSERT في tank_refills)
+     * الحصول على party_id باستخدام رقم الهاتف
+     */
+    fun getPartyIdByPhone(phone: String): Int? {
+        val db = readableDatabase
+        val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
+        val c = db.rawQuery(
+            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(cleanPhone)
+        )
+        return c.use { if (it.moveToFirst()) it.getInt(0) else null }
+    }
+
+    /**
+     * الحصول على مدة الاحتفاظ بالبيانات من system_settings
+     */
+    fun getRetentionDays(): Int {
+        val db = readableDatabase
+        val c = db.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'retention_days' LIMIT 1",
+            null
+        )
+        val days = c.use { if (it.moveToFirst()) it.getInt(0) else 90 }
+        return days.coerceIn(7, 365)
+    }
+
+    /**
+     * الحصول على إعداد من system_settings
+     */
+    fun getSystemSetting(key: String, defaultValue: String = ""): String {
+        val db = readableDatabase
+        val c = db.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1",
+            arrayOf(key)
+        )
+        return c.use { if (it.moveToFirst()) it.getString(0) else defaultValue }
+    }
+
+    /**
+     * تسجيل توريد ديزل جديد (متوافق مع SmsReceiver)
+     * @param customerId رقم هاتف العميل
+     * @param customerName اسم العميل (للتوثيق)
+     * @param quantityLiters كمية اللترات
+     * @param quantityDabbas كمية الدباب (للتوثيق)
+     * @param location موقع التوصيل
+     * @param deliveryTime وقت التوصيل
+     * @param unitPrice سعر اللتر
+     * @param totalAmount المبلغ الإجمالي
+     * @param orderId رقم الطلب (sale_code)
+     * @return true إذا تم التسجيل بنجاح
      */
     fun recordDieselDelivery(
-        tankId: Int,
-        supplierId: Int?,
-        stationId: Int,
-        deliveredQty: Double,
-        actualQty: Double,
+        customerId: String,
+        customerName: String,
+        quantityLiters: Double,
+        quantityDabbas: Double,
+        location: String,
+        deliveryTime: String,
         unitPrice: Double,
-        receivedBy: Int,
-        notes: String = ""
-    ): Long {
+        totalAmount: Double,
+        orderId: String
+    ): Boolean {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val totalAmount = deliveredQty * unitPrice
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("refill_code", "REF-${System.currentTimeMillis()}")
-                put("tank_id", tankId)
-                if (supplierId != null) put("supplier_id", supplierId)
-                put("station_id", stationId)
-                put("fuel_type_id", 1) // DIESEL
-                put("delivered_quantity", deliveredQty)
-                put("actual_quantity", actualQty)
-                put("unit_price", unitPrice)
-                put("total_amount", totalAmount)
-                put("net_amount", totalAmount)
-                put("received_by", receivedBy)
-                put("status", "completed")
-                put("arrival_date", DATE_FORMAT.format(Date()))
-                put("notes", notes)
+            val partyId = getPartyIdByPhone(customerId)
+            if (partyId == null) {
+                Log.e(TAG, "Party not found for phone: $customerId")
+                return false
             }
-            val refillId = db.insert("tank_refills", null, cv)
 
-            // تحديث كمية الخزان
-            db.execSQL(
-                "UPDATE tanks SET current_quantity = current_quantity + ? WHERE id = ?",
-                arrayOf(actualQty, tankId)
+            require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
+            require(unitPrice in 1.0..1000000.0) { "Invalid price" }
+            require(location.length in 3..200) { "Invalid location" }
+
+            val subtotal = quantityLiters * unitPrice
+            val saleId = insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+                customerPartyId = partyId,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = quantityLiters,
+                pricePerLiter = unitPrice,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = "credit",
+                isCredit = true,
+                dueDate = dateOnlyFormat.format(Date()),
+                cashierId = 1,
+                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
             )
 
+            if (saleId <= 0) {
+                Log.e(TAG, "Failed to insert sale transaction")
+                return false
+            }
+
+            // تحديث رصيد العميل
+            val currentBalance = getCustomerBalanceByPhone(customerId)
+            val newBalance = currentBalance + totalAmount
+            val values = ContentValues().apply {
+                put("current_balance", newBalance)
+                put("total_due", totalAmount)
+            }
+            db.update("parties", values, "id = ?", arrayOf(partyId.toString()))
+
             db.setTransactionSuccessful()
-            logActivity("user_$receivedBy", "refill", "توريد ديزل: $actualQty لتر للخزان $tankId")
-            return refillId
+            logActivity("SmsReceiver", "delivery_recorded", "Order $orderId for ${quantityLiters}L")
+            return true
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recording delivery: ${e.message}", e)
+            return false
         } finally {
             db.endTransaction()
         }
@@ -6413,5 +6514,4 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
         return arr
     }
-}
 }
