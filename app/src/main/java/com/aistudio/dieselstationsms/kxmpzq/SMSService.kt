@@ -18,6 +18,7 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -50,7 +51,6 @@ class SMSService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
-    // مفاتيح API من BuildConfig
     private val geminiApiKey: String by lazy { BuildConfig.GEMINI_API_KEY }
     private val deepseekApiKey: String by lazy { BuildConfig.DEEPSEEK_API_KEY }
     private val grokApiKey: String by lazy { BuildConfig.GROK_API_KEY }
@@ -99,9 +99,6 @@ class SMSService : Service() {
 
     override fun onBind(intent: Intent): IBinder? = null
 
-    // ============================================================
-    // الإشعارات
-    // ============================================================
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -131,21 +128,6 @@ class SMSService : Service() {
         Log.d(TAG, "Foreground service started with notification")
     }
 
-    private fun updateNotification(text: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("⛽ محطة أبو أحمد")
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
-        val nm = getSystemService(NotificationManager::class.java)
-        nm?.notify(NOTIFICATION_ID, notification)
-    }
-
-    // ============================================================
-    // بدء الخادم
-    // ============================================================
     private fun startServer() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Service is destroyed, not starting server")
@@ -169,9 +151,18 @@ class SMSService : Service() {
         Log.e(TAG, "Failed to start server after $MAX_PORT_RETRIES attempts")
     }
 
-    // ============================================================
-    // النسخ الاحتياطي التلقائي
-    // ============================================================
+    private fun updateNotification(text: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("⛽ محطة أبو أحمد")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm?.notify(NOTIFICATION_ID, notification)
+    }
+
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
@@ -190,9 +181,6 @@ class SMSService : Service() {
         }
     }
 
-    // ============================================================
-    // خادم API (NanoHTTPD)
-    // ============================================================
     private inner class ApiServer(port: Int) : NanoHTTPD(port) {
 
         override fun serve(session: IHTTPSession): Response {
@@ -224,7 +212,6 @@ class SMSService : Service() {
 
             try {
                 when (action) {
-                    // ===== المصادقة =====
                     "login" -> {
                         val username = params["username"]?.firstOrNull() ?: ""
                         val password = params["password"]?.firstOrNull() ?: ""
@@ -239,7 +226,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== العملاء (Parties) =====
                     "get_customers" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getParties())
@@ -292,13 +278,11 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الموردين =====
                     "get_suppliers" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getParties(6))
                     }
 
-                    // ===== المبيعات =====
                     "get_sales" -> {
                         val limit = params["limit"]?.firstOrNull()?.toIntOrNull() ?: 200
                         val offset = params["offset"]?.firstOrNull()?.toIntOrNull() ?: 0
@@ -370,7 +354,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== المدفوعات =====
                     "make_payment" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
@@ -394,7 +377,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الإيداعات =====
                     "add_deposit" -> {
                         val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
                         val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
@@ -422,7 +404,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== المركبات والسائقين =====
                     "get_vehicles" -> {
                         val arr = JSONArray()
                         val cursor = db.readableDatabase.rawQuery(
@@ -469,7 +450,6 @@ class SMSService : Service() {
                         responseJson.put("data", arr)
                     }
 
-                    // ===== المنتجات =====
                     "get_products" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getProducts(1))
@@ -510,7 +490,6 @@ class SMSService : Service() {
                         responseJson.put("data", arr)
                     }
 
-                    // ===== الحسابات =====
                     "get_accounts" -> {
                         val arr = JSONArray()
                         val cursor = db.readableDatabase.rawQuery(
@@ -546,7 +525,6 @@ class SMSService : Service() {
                         responseJson.put("data", arr)
                     }
 
-                    // ===== الأصول =====
                     "get_assets" -> {
                         val arr = JSONArray()
                         val cursor = db.readableDatabase.rawQuery(
@@ -568,11 +546,9 @@ class SMSService : Service() {
                         responseJson.put("data", arr)
                     }
 
-                    // ===== لوحة التحكم =====
                     "get_dashboard" -> {
                         responseJson.put("success", true)
                         val stats = db.getDashboardStats(1)
-                        // إضافة بيانات إضافية من الدوال الجديدة
                         stats.put("diesel_price", db.getDieselPrice())
                         stats.put("gasoline_price", db.getGasolinePrice())
                         stats.put("manager_phone", db.getManagerPhone() ?: "")
@@ -609,7 +585,6 @@ class SMSService : Service() {
                         responseJson.put("data", db.exportAllData())
                     }
 
-                    // ===== المخزون =====
                     "get_refills" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getRefills())
@@ -647,7 +622,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الخزانات والمضخات =====
                     "get_tanks" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getTanks(1))
@@ -688,7 +662,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الموظفين =====
                     "get_employees" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getEmployees(1))
@@ -746,7 +719,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الصيانة =====
                     "add_maintenance_request" -> {
                         val assetType = params["asset_type"]?.firstOrNull() ?: "pump"
                         val assetId = params["asset_id"]?.firstOrNull()?.toIntOrNull() ?: 0
@@ -789,7 +761,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الديون =====
                     "get_debts" -> {
                         val type = params["type"]?.firstOrNull() ?: "all"
                         val debts = db.getBadDebts()
@@ -814,7 +785,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الرسائل =====
                     "send_sms" -> {
                         val phone = params["phone"]?.firstOrNull() ?: ""
                         val message = params["message"]?.firstOrNull() ?: ""
@@ -848,7 +818,6 @@ class SMSService : Service() {
                         responseJson.put("data", db.getSmsLogs())
                     }
 
-                    // ===== القائمة البيضاء =====
                     "get_whitelist" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getSmsWhitelist())
@@ -875,13 +844,11 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== السجلات =====
                     "get_activity_logs" -> {
                         responseJson.put("success", true)
                         responseJson.put("data", db.getActivityLogs())
                     }
 
-                    // ===== الإعدادات =====
                     "get_setting" -> {
                         val key = params["key"]?.firstOrNull() ?: ""
                         if (key.isBlank()) {
@@ -905,7 +872,6 @@ class SMSService : Service() {
                         }
                     }
 
-                    // ===== الذكاء الاصطناعي =====
                     "ai_chat" -> {
                         val message = params["message"]?.firstOrNull() ?: ""
                         val sessionId = params["session_id"]?.firstOrNull() ?: "default"
@@ -965,9 +931,6 @@ class SMSService : Service() {
             return res
         }
 
-        // ============================================================
-        // الملفات الثابتة
-        // ============================================================
         private fun serveStaticFile(uri: String): Response {
             return try {
                 when {
@@ -993,9 +956,6 @@ class SMSService : Service() {
         }
     }
 
-    // ================================================================
-    // الذكاء الاصطناعي (مع الاحتياط بين المفاتيح)
-    // ================================================================
     private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
         val providers = listOf(
             "gemini" to geminiApiKey,
@@ -1243,9 +1203,6 @@ class SMSService : Service() {
         }
     }
 
-    // ================================================================
-    // دوال الرسائل النصية (SMS)
-    // ================================================================
     private fun isSmsEnabled(db: DatabaseHelper): Boolean {
         return db.getSetting("sms_enabled") != "0"
     }
