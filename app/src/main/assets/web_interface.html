@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>نظام أبو أحمد المتكامل V5</title>
+    <meta name="theme-color" content="#1a3a5a">
+    <title>نظام أبو أحمد المتكامل V5 – النسخة الكاملة</title>
     <!-- Font Awesome & Chart.js -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -46,9 +47,6 @@
         html, body { height: 100%; font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); }
         body { display: flex; overflow: hidden; }
 
-        /* ============================
-           Scrollbar
-           ============================ */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
@@ -154,7 +152,6 @@
         }
         .sidebar.collapsed ~ .main-content { margin-right: var(--sidebar-collapsed); }
 
-        /* Header */
         .app-header {
             height: var(--header-height);
             background: var(--card-bg);
@@ -180,10 +177,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
         .app-header .header-actions .icon-btn:hover { background: var(--border); transform: scale(1.05); }
 
-        /* Page Content */
         .page-content {
             flex: 1;
             overflow-y: auto;
@@ -372,6 +369,7 @@
         .badge-danger { background: rgba(220,53,69,0.15); color: var(--danger); }
         .badge-warning { background: rgba(255,193,7,0.15); color: #856404; }
         .badge-primary { background: rgba(26,58,90,0.15); color: var(--primary); }
+        .badge-secondary { background: rgba(108,117,125,0.15); color: #6c757d; }
         .text-center { text-align: center; }
         .mt-1 { margin-top: 8px; }
         .mb-1 { margin-bottom: 8px; }
@@ -380,6 +378,23 @@
         .items-center { align-items: center; }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
+
+        /* ============================
+           Chat
+           ============================ */
+        .chat-container { height: 400px; display: flex; flex-direction: column; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .chat-bubble.user { align-self: flex-start; background: var(--primary); color: white; border-radius: 16px 16px 4px 16px; }
+        .chat-bubble.ai { align-self: flex-end; background: var(--border); color: var(--text); border-radius: 16px 16px 16px 4px; }
+        .chat-input-group { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
 
         /* ============================
            Responsive
@@ -612,7 +627,7 @@
             </div>
 
             <!-- ==========================================================
-            PAGE: SUPPLIERS (موردين)
+            PAGE: SUPPLIERS
             ========================================================== -->
             <div class="page" id="page-suppliers">
                 <div class="card">
@@ -821,11 +836,11 @@
                     <div class="card-title" style="padding:16px 20px; margin:0; border-bottom:1px solid var(--border);">
                         <i class="fas fa-robot"></i> المساعد الذكي
                     </div>
-                    <div class="chat-container" style="height:400px; display:flex; flex-direction:column;">
-                        <div class="chat-messages" id="chatMessages" style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px;">
-                            <div class="chat-bubble ai" style="max-width:80%; padding:10px 14px; border-radius:16px; background:var(--border); align-self:flex-start;">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك؟</div>
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="chat-bubble ai">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك؟</div>
                         </div>
-                        <div class="chat-input-group" style="display:flex; gap:8px; padding:12px; border-top:1px solid var(--border);">
+                        <div class="chat-input-group">
                             <input type="text" class="form-control" id="chatInput" placeholder="اكتب رسالتك..." onkeypress="if(event.key==='Enter')sendAiMessage()">
                             <button class="btn btn-primary btn-sm" onclick="sendAiMessage()"><i class="fas fa-paper-plane"></i></button>
                         </div>
@@ -836,8 +851,9 @@
     </div>
 
     <!-- ============================
-    MODALS (نماذج منبثقة)
+    MODALS
     ============================ -->
+
     <!-- نموذج العميل -->
     <div class="modal-overlay" id="customerModal">
         <div class="modal">
@@ -853,6 +869,7 @@
                             <option value="1">فرد</option>
                             <option value="2">شركة</option>
                             <option value="4">نقل</option>
+                            <option value="5">مقاول</option>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-primary">💾 حفظ</button>
@@ -862,17 +879,192 @@
         </div>
     </div>
 
-    <!-- نماذج أخرى بنفس الهيكل (مورد، مركبة، سائق، منتج، موظف، أصل، صيانة، إلخ) -->
-    <!-- يمكن إضافتها بنفس الطريقة، وسأضعها مختصرة هنا لعدم التطويل -->
+    <!-- نموذج المورد -->
+    <div class="modal-overlay" id="supplierModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">🚚 إضافة مورد</span><button class="modal-close" onclick="closeModal('supplierModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="supplierForm" onsubmit="saveSupplier(event)">
+                    <input type="hidden" id="supplierFormId">
+                    <div class="form-group"><label>الاسم *</label><input type="text" class="form-control" id="supplierFormName" required></div>
+                    <div class="form-group"><label>الهاتف</label><input type="text" class="form-control" id="supplierFormPhone"></div>
+                    <div class="form-group"><label>حد الائتمان (ريال)</label><input type="number" class="form-control" id="supplierFormCredit" value="0"></div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteSupplierForm()" id="supplierFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج المركبة -->
+    <div class="modal-overlay" id="vehicleModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">🚗 إضافة مركبة</span><button class="modal-close" onclick="closeModal('vehicleModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="vehicleForm" onsubmit="saveVehicle(event)">
+                    <input type="hidden" id="vehicleFormId">
+                    <div class="form-group"><label>رقم اللوحة *</label><input type="text" class="form-control" id="vehicleFormPlate" required></div>
+                    <div class="form-group"><label>الماركة</label><input type="text" class="form-control" id="vehicleFormBrand"></div>
+                    <div class="form-group"><label>الموديل</label><input type="text" class="form-control" id="vehicleFormModel"></div>
+                    <div class="form-group"><label>السعة (لتر)</label><input type="number" class="form-control" id="vehicleFormCapacity" value="50"></div>
+                    <div class="form-group"><label>العميل المرتبط</label>
+                        <select class="form-control" id="vehicleFormParty"></select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteVehicleForm()" id="vehicleFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج السائق -->
+    <div class="modal-overlay" id="driverModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">🧑‍✈️ إضافة سائق</span><button class="modal-close" onclick="closeModal('driverModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="driverForm" onsubmit="saveDriver(event)">
+                    <input type="hidden" id="driverFormId">
+                    <div class="form-group"><label>الاسم الكامل *</label><input type="text" class="form-control" id="driverFormName" required></div>
+                    <div class="form-group"><label>الهاتف</label><input type="text" class="form-control" id="driverFormPhone"></div>
+                    <div class="form-group"><label>رقم الرخصة</label><input type="text" class="form-control" id="driverFormLicense"></div>
+                    <div class="form-group"><label>المركبة المرتبطة</label>
+                        <select class="form-control" id="driverFormVehicle"></select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteDriverForm()" id="driverFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج المنتج -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">📦 إضافة منتج</span><button class="modal-close" onclick="closeModal('productModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="productForm" onsubmit="saveProduct(event)">
+                    <input type="hidden" id="productFormId">
+                    <div class="form-group"><label>اسم المنتج *</label><input type="text" class="form-control" id="productFormName" required></div>
+                    <div class="form-group"><label>رمز المنتج</label><input type="text" class="form-control" id="productFormCode"></div>
+                    <div class="form-group"><label>سعر البيع (ريال)</label><input type="number" class="form-control" id="productFormSalePrice" value="0"></div>
+                    <div class="form-group"><label>سعر الشراء (ريال)</label><input type="number" class="form-control" id="productFormPurchasePrice" value="0"></div>
+                    <div class="form-group"><label>الكمية</label><input type="number" class="form-control" id="productFormQty" value="0"></div>
+                    <div class="form-group"><label>التصنيف</label>
+                        <select class="form-control" id="productFormCategory"></select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteProductForm()" id="productFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج الموظف -->
+    <div class="modal-overlay" id="employeeModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title" id="employeeModalTitle">👨‍💼 إضافة موظف</span><button class="modal-close" onclick="closeModal('employeeModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="employeeForm" onsubmit="saveEmployee(event)">
+                    <input type="hidden" id="employeeFormId">
+                    <div class="form-group"><label>الاسم الكامل *</label><input type="text" class="form-control" id="employeeFormName" required></div>
+                    <div class="form-group"><label>الهاتف</label><input type="text" class="form-control" id="employeeFormPhone"></div>
+                    <div class="form-group"><label>المسمى الوظيفي</label><input type="text" class="form-control" id="employeeFormJob"></div>
+                    <div class="form-group"><label>الراتب الأساسي (ريال)</label><input type="number" class="form-control" id="employeeFormSalary" value="0"></div>
+                    <div class="form-group"><label>الحالة</label>
+                        <select class="form-control" id="employeeFormStatus">
+                            <option value="active">نشط</option>
+                            <option value="inactive">غير نشط</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteEmployeeForm()" id="employeeFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج الأصل الثابت -->
+    <div class="modal-overlay" id="assetModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">🔧 إضافة أصل ثابت</span><button class="modal-close" onclick="closeModal('assetModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="assetForm" onsubmit="saveAsset(event)">
+                    <input type="hidden" id="assetFormId">
+                    <div class="form-group"><label>اسم الأصل *</label><input type="text" class="form-control" id="assetFormName" required></div>
+                    <div class="form-group"><label>النوع</label>
+                        <select class="form-control" id="assetFormType">
+                            <option value="tank">خزان</option>
+                            <option value="pump">مضخة</option>
+                            <option value="nozzle">مسدس</option>
+                            <option value="generator">مولد</option>
+                            <option value="building">مبنى</option>
+                            <option value="other">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>قيمة الشراء (ريال)</label><input type="number" class="form-control" id="assetFormCost" value="0"></div>
+                    <div class="form-group"><label>القيمة الحالية (ريال)</label><input type="number" class="form-control" id="assetFormCurrent" value="0"></div>
+                    <button type="submit" class="btn btn-primary">💾 حفظ</button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="deleteAssetForm()" id="assetFormDelete" style="display:none;">🗑️ حذف</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج طلب الصيانة -->
+    <div class="modal-overlay" id="maintenanceModal">
+        <div class="modal">
+            <div class="modal-header"><span class="modal-title">🔧 طلب صيانة جديد</span><button class="modal-close" onclick="closeModal('maintenanceModal')">&times;</button></div>
+            <div class="modal-body">
+                <form id="maintenanceForm" onsubmit="saveMaintenanceRequest(event)">
+                    <div class="form-group"><label>نوع الأصل</label>
+                        <select class="form-control" id="maintAssetType">
+                            <option value="tank">خزان</option>
+                            <option value="pump">مضخة</option>
+                            <option value="nozzle">مسدس</option>
+                            <option value="generator">مولد</option>
+                            <option value="fixed_asset">أصل ثابت</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>معرف الأصل</label><input type="number" class="form-control" id="maintAssetId" required></div>
+                    <div class="form-group"><label>نوع الطلب</label><input type="text" class="form-control" id="maintRequestType" required></div>
+                    <div class="form-group"><label>الأولوية</label>
+                        <select class="form-control" id="maintPriority">
+                            <option value="low">منخفضة</option>
+                            <option value="medium" selected>متوسطة</option>
+                            <option value="high">عالية</option>
+                            <option value="critical">حرجة</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label>العنوان *</label><input type="text" class="form-control" id="maintTitle" required></div>
+                    <div class="form-group"><label>الوصف *</label><textarea class="form-control" id="maintDescription" rows="3" required></textarea></div>
+                    <button type="submit" class="btn btn-primary">💾 إرسال الطلب</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- نموذج معاينة الفاتورة -->
+    <div class="modal-overlay" id="invoiceModal">
+        <div class="modal" style="max-width:420px;">
+            <div class="modal-header"><span class="modal-title">🧾 معاينة الفاتورة</span><button class="modal-close" onclick="closeModal('invoiceModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="invoice-preview" id="invoicePreview" style="background:white; color:#000; padding:20px; border-radius:10px; border:2px dashed #ccc; font-family:monospace;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="printInvoice()">🖨️ طباعة</button>
+                <button class="btn btn-secondary" onclick="closeModal('invoiceModal')">إغلاق</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ============================
     JAVASCRIPT
     ============================ -->
     <script>
         // ============================================================
-        //  GLOBALS & CONFIG
+        //  GLOBALS
         // ============================================================
-        // قراءة مفاتيح API من كائن secrets (يمكن تعيينه من الخادم أو من متغيرات البيئة)
+        // قراءة مفاتيح API من كائن secrets (يمكن تعيينه من الخادم)
         const secrets = window.secrets || {
             GEMINI_API_KEY: '',
             DEEPSEEK_API_KEY: '',
@@ -900,10 +1092,32 @@
         //  TOAST / LOADING
         // ============================================================
         function showToast(message, type = 'info') {
-            // يمكن استخدام مكتبة toastr أو تنفيذ بسيط
-            alert(message); // مؤقت
+            const container = document.getElementById('toastContainer') || (() => {
+                const div = document.createElement('div');
+                div.id = 'toastContainer';
+                div.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:8px;';
+                document.body.appendChild(div);
+                return div;
+            })();
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `background:var(--card-bg);color:var(--text);padding:12px 20px;border-radius:8px;box-shadow:var(--shadow);border-right:4px solid ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--warning)'};font-weight:600;`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
         }
-        function showLoading(show) { /* يمكن إضافة مؤشر تحميل */ }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay') || (() => {
+                const div = document.createElement('div');
+                div.id = 'loadingOverlay';
+                div.style.cssText = 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;';
+                div.innerHTML = '<div style="text-align:center;color:white;"><div class="loading" style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px;"></div><div style="font-size:16px;font-weight:700;">جاري المعالجة...</div></div>';
+                document.body.appendChild(div);
+                return div;
+            })();
+            overlay.style.display = show ? 'flex' : 'none';
+        }
 
         // ============================================================
         //  SIDEBAR / THEME
@@ -930,10 +1144,10 @@
             const navBtn = document.querySelector(`.sidebar-nav .nav-item[data-page="${pageId}"]`);
             if (navBtn) navBtn.classList.add('active');
             document.getElementById('pageTitle').textContent = navBtn ? navBtn.textContent.trim() : pageId;
-            // تحميل البيانات حسب الصفحة
             switch(pageId) {
                 case 'dashboard': loadDashboard(); break;
                 case 'sales': loadSales(); break;
+                case 'payments': loadPaymentCustomers(); break;
                 case 'customers': loadCustomers(); break;
                 case 'suppliers': loadSuppliers(); break;
                 case 'vehicles': loadVehicles(); break;
@@ -973,15 +1187,12 @@
                     document.getElementById('dashLiters').textContent = (d.total_liters || 0).toFixed(0);
                     document.getElementById('dashStock').textContent = (d.total_remaining || 0).toFixed(0);
                     document.getElementById('dashDue').textContent = (d.total_due || 0).toLocaleString();
-                    // تحديث الرسم البياني
                     loadDailyChart();
-                    // آخر المعاملات
                     const tbody = document.getElementById('recentSales');
                     tbody.innerHTML = '';
                     (d.recent_sales || []).forEach(s => {
-                        tbody.innerHTML += `<tr><td>${s.sale_code}</td><td>${s.customer_name || ''}</td><td>${s.net_amount.toLocaleString()}</td><td><span class="badge badge-success">${s.status}</span></td><td>${s.created_at}</td></tr>`;
+                        tbody.innerHTML += `<tr><td>${s.sale_code}</td><td>${s.customer_name || ''}</td><td>${s.net_amount.toLocaleString()}</td><td><span class="badge badge-${s.status === 'completed' ? 'success' : 'warning'}">${s.status}</span></td><td>${s.created_at}</td></tr>`;
                     });
-                    // AI Insight
                     document.getElementById('aiInsight').textContent = d.ai_insight || 'لا توجد توقعات.';
                 }
             } catch (e) { console.error('Dashboard error', e); }
@@ -1033,7 +1244,6 @@
                         tbody.innerHTML += `<tr><td>${s.sale_code}</td><td>${s.customer_name || ''}</td><td>${s.liters}</td><td>${s.net_amount.toLocaleString()}</td><td><span class="badge badge-${s.status === 'completed' ? 'success' : 'warning'}">${s.status}</span></td><td>${s.created_at}</td></tr>`;
                     });
                 }
-                // تحميل القوائم المنسدلة
                 const [custRes, fuelRes, pumpRes] = await Promise.all([
                     apiCall('get_customers'),
                     apiCall('get_fuel_types'),
@@ -1059,8 +1269,7 @@
 
         async function executeSale(e) {
             e.preventDefault();
-            const form = document.getElementById('saleForm');
-            const fd = new FormData(form);
+            const fd = new FormData(document.getElementById('saleForm'));
             const params = {
                 customer_party_id: fd.get('customer_party_id'),
                 fuel_type_id: fd.get('fuel_type_id'),
@@ -1081,7 +1290,7 @@
                 const res = await apiCall('execute_sale', params);
                 if (res.success) {
                     showToast('تم البيع بنجاح', 'success');
-                    form.reset();
+                    document.getElementById('saleForm').reset();
                     loadDashboard();
                     loadSales();
                 } else {
@@ -1218,7 +1427,7 @@
         }
 
         // ============================================================
-        //  SUPPLIERS (مشابه للعملاء ولكن party_type_id=6)
+        //  SUPPLIERS (نوع العميل 6)
         // ============================================================
         async function loadSuppliers() {
             try {
@@ -1229,28 +1438,238 @@
                     res.data.forEach(s => {
                         const card = document.createElement('div');
                         card.className = 'card';
-                        card.innerHTML = `<strong>${s.commercial_name}</strong> - ${s.phone || ''}`;
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${s.commercial_name}</strong> <small>${s.phone || ''}</small></div>
+                                <div><span class="badge badge-secondary">مورد</span></div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editSupplier(${s.party_id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteSupplier(${s.party_id})">🗑️ حذف</button>
+                            </div>
+                        `;
                         container.appendChild(card);
                     });
                 }
             } catch (e) { console.error('Suppliers error', e); }
         }
 
+        function showSupplierForm(data = null) {
+            document.getElementById('supplierFormId').value = data ? data.party_id : '';
+            document.getElementById('supplierFormName').value = data ? data.commercial_name : '';
+            document.getElementById('supplierFormPhone').value = data ? data.phone : '';
+            document.getElementById('supplierFormCredit').value = data ? data.credit_limit : 0;
+            document.getElementById('supplierFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('supplierModal');
+        }
+
+        async function saveSupplier(e) {
+            e.preventDefault();
+            const id = document.getElementById('supplierFormId').value;
+            const name = document.getElementById('supplierFormName').value;
+            const phone = document.getElementById('supplierFormPhone').value;
+            const credit = document.getElementById('supplierFormCredit').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { commercial_name: name, phone, credit_limit: credit, party_type_id: 6 };
+                const action = id ? 'update_customer' : 'add_customer';
+                if (id) params.party_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('supplierModal'); loadSuppliers(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editSupplier(id) {
+            const res = await apiCall('get_suppliers');
+            if (res.success) {
+                const s = res.data.find(x => x.party_id == id);
+                if (s) showSupplierForm(s);
+            }
+        }
+
+        async function deleteSupplier(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_customer', { party_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadSuppliers(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteSupplierForm() {
+            const id = document.getElementById('supplierFormId').value;
+            if (id) deleteSupplier(parseInt(id));
+        }
+
         // ============================================================
-        //  VEHICLES & DRIVERS (مختصر)
+        //  VEHICLES & DRIVERS
         // ============================================================
         async function loadVehicles() {
             try {
                 const [vRes, dRes] = await Promise.all([apiCall('get_vehicles'), apiCall('get_drivers')]);
                 if (vRes.success) {
                     const container = document.getElementById('vehiclesList');
-                    container.innerHTML = vRes.data.map(v => `<div class="card">${v.plate_number} - ${v.brand}</div>`).join('');
+                    container.innerHTML = '';
+                    vRes.data.forEach(v => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${v.plate_number}</strong> - ${v.brand || ''} ${v.model || ''}</div>
+                                <div><span class="badge badge-${v.status === 'active' ? 'success' : 'danger'}">${v.status}</span></div>
+                            </div>
+                            <div style="font-size:13px;">السعة: ${v.tank_capacity || 0} لتر</div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editVehicle(${v.vehicle_id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteVehicle(${v.vehicle_id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
                 if (dRes.success) {
                     const container = document.getElementById('driversList');
-                    container.innerHTML = dRes.data.map(d => `<div class="card">${d.full_name} - ${d.phone || ''}</div>`).join('');
+                    container.innerHTML = '';
+                    dRes.data.forEach(d => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${d.full_name}</strong> - ${d.phone || ''}</div>
+                                <div><span class="badge badge-${d.status === 'active' ? 'success' : 'danger'}">${d.status}</span></div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editDriver(${d.driver_id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteDriver(${d.driver_id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
+                }
+                // تحميل القوائم المنسدلة للنماذج
+                if (vRes.success) {
+                    fillSelect('vehicleFormParty', vRes.data, 'party_id', 'commercial_name');
+                    fillSelect('driverFormVehicle', vRes.data, 'vehicle_id', 'plate_number');
                 }
             } catch (e) { console.error('Vehicles error', e); }
+        }
+
+        function showVehicleForm(data = null) {
+            document.getElementById('vehicleFormId').value = data ? data.vehicle_id : '';
+            document.getElementById('vehicleFormPlate').value = data ? data.plate_number : '';
+            document.getElementById('vehicleFormBrand').value = data ? data.brand : '';
+            document.getElementById('vehicleFormModel').value = data ? data.model : '';
+            document.getElementById('vehicleFormCapacity').value = data ? data.tank_capacity : 50;
+            document.getElementById('vehicleFormParty').value = data ? data.party_id : '';
+            document.getElementById('vehicleFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('vehicleModal');
+        }
+
+        async function saveVehicle(e) {
+            e.preventDefault();
+            const id = document.getElementById('vehicleFormId').value;
+            const plate = document.getElementById('vehicleFormPlate').value;
+            const brand = document.getElementById('vehicleFormBrand').value;
+            const model = document.getElementById('vehicleFormModel').value;
+            const capacity = document.getElementById('vehicleFormCapacity').value;
+            const party = document.getElementById('vehicleFormParty').value;
+            if (!plate || !party) { showToast('رقم اللوحة والعميل مطلوبان', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { plate_number: plate, brand, model, tank_capacity: capacity, party_id: party };
+                const action = id ? 'update_vehicle' : 'add_vehicle';
+                if (id) params.vehicle_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('vehicleModal'); loadVehicles(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editVehicle(id) {
+            const res = await apiCall('get_vehicles');
+            if (res.success) {
+                const v = res.data.find(x => x.vehicle_id == id);
+                if (v) showVehicleForm(v);
+            }
+        }
+
+        async function deleteVehicle(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_vehicle', { vehicle_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadVehicles(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteVehicleForm() {
+            const id = document.getElementById('vehicleFormId').value;
+            if (id) deleteVehicle(parseInt(id));
+        }
+
+        function showDriverForm(data = null) {
+            document.getElementById('driverFormId').value = data ? data.driver_id : '';
+            document.getElementById('driverFormName').value = data ? data.full_name : '';
+            document.getElementById('driverFormPhone').value = data ? data.phone : '';
+            document.getElementById('driverFormLicense').value = data ? data.license_number : '';
+            document.getElementById('driverFormVehicle').value = data ? data.vehicle_id : '';
+            document.getElementById('driverFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('driverModal');
+        }
+
+        async function saveDriver(e) {
+            e.preventDefault();
+            const id = document.getElementById('driverFormId').value;
+            const name = document.getElementById('driverFormName').value;
+            const phone = document.getElementById('driverFormPhone').value;
+            const license = document.getElementById('driverFormLicense').value;
+            const vehicle = document.getElementById('driverFormVehicle').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { full_name: name, phone, license_number: license, vehicle_id: vehicle || null };
+                const action = id ? 'update_driver' : 'add_driver';
+                if (id) params.driver_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('driverModal'); loadVehicles(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editDriver(id) {
+            const res = await apiCall('get_drivers');
+            if (res.success) {
+                const d = res.data.find(x => x.driver_id == id);
+                if (d) showDriverForm(d);
+            }
+        }
+
+        async function deleteDriver(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_driver', { driver_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadVehicles(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteDriverForm() {
+            const id = document.getElementById('driverFormId').value;
+            if (id) deleteDriver(parseInt(id));
         }
 
         // ============================================================
@@ -1258,15 +1677,95 @@
         // ============================================================
         async function loadInventory() {
             try {
-                const res = await apiCall('get_products');
-                if (res.success) {
+                const [pRes, mRes] = await Promise.all([apiCall('get_products'), apiCall('get_inventory_movements')]);
+                if (pRes.success) {
                     const container = document.getElementById('productsList');
                     container.innerHTML = '';
-                    res.data.forEach(p => {
-                        container.innerHTML += `<div class="card">${p.product_name} - ${p.quantity} ${p.unit_name || ''} - ${p.sale_price} ريال</div>`;
+                    pRes.data.forEach(p => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${p.product_name}</strong> - ${p.quantity || 0} ${p.unit_name || ''}</div>
+                                <div>سعر البيع: ${p.sale_price} ريال</div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editProduct(${p.product_id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.product_id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
                     });
                 }
+                if (mRes.success) {
+                    const container = document.getElementById('inventoryMovements');
+                    container.innerHTML = mRes.data.map(m => `<div class="card" style="padding:12px;">${m.movement_code} - ${m.movement_type} - ${m.quantity_change}</div>`).join('');
+                }
+                // تحميل التصنيفات للقائمة المنسدلة
+                const catRes = await apiCall('get_product_categories');
+                if (catRes.success) {
+                    fillSelect('productFormCategory', catRes.data, 'category_id', 'category_name');
+                }
             } catch (e) { console.error('Inventory error', e); }
+        }
+
+        function showProductForm(data = null) {
+            document.getElementById('productFormId').value = data ? data.product_id : '';
+            document.getElementById('productFormName').value = data ? data.product_name : '';
+            document.getElementById('productFormCode').value = data ? data.product_code : '';
+            document.getElementById('productFormSalePrice').value = data ? data.sale_price : 0;
+            document.getElementById('productFormPurchasePrice').value = data ? data.purchase_price : 0;
+            document.getElementById('productFormQty').value = data ? data.quantity : 0;
+            document.getElementById('productFormCategory').value = data ? data.category_id : '';
+            document.getElementById('productFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('productModal');
+        }
+
+        async function saveProduct(e) {
+            e.preventDefault();
+            const id = document.getElementById('productFormId').value;
+            const name = document.getElementById('productFormName').value;
+            const code = document.getElementById('productFormCode').value;
+            const salePrice = document.getElementById('productFormSalePrice').value;
+            const purchasePrice = document.getElementById('productFormPurchasePrice').value;
+            const qty = document.getElementById('productFormQty').value;
+            const category = document.getElementById('productFormCategory').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { product_name: name, product_code: code, sale_price: salePrice, purchase_price: purchasePrice, quantity: qty, category_id: category };
+                const action = id ? 'update_product' : 'add_product';
+                if (id) params.product_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('productModal'); loadInventory(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editProduct(id) {
+            const res = await apiCall('get_products');
+            if (res.success) {
+                const p = res.data.find(x => x.product_id == id);
+                if (p) showProductForm(p);
+            }
+        }
+
+        async function deleteProduct(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_product', { product_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadInventory(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteProductForm() {
+            const id = document.getElementById('productFormId').value;
+            if (id) deleteProduct(parseInt(id));
         }
 
         // ============================================================
@@ -1277,17 +1776,59 @@
                 const [tRes, pRes] = await Promise.all([apiCall('get_tanks'), apiCall('get_pumps')]);
                 if (tRes.success) {
                     const container = document.getElementById('tanksList');
-                    container.innerHTML = tRes.data.map(t =>
-                        `<div class="card">${t.tank_name} - ${t.current_quantity}/${t.capacity_liters} لتر - <span class="badge badge-${t.status === 'active' ? 'success' : 'danger'}">${t.status}</span></div>`
-                    ).join('');
+                    container.innerHTML = '';
+                    tRes.data.forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${t.tank_name}</strong> - ${t.tank_code}</div>
+                                <div><span class="badge badge-${t.status === 'active' ? 'success' : 'danger'}">${t.status}</span></div>
+                            </div>
+                            <div>الكمية: ${t.current_quantity} / ${t.capacity_liters} لتر</div>
+                            <div class="progress-bar" style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:4px;">
+                                <div class="progress-fill" style="height:100%;width:${(t.current_quantity/t.capacity_liters*100)}%;background:var(--primary);"></div>
+                            </div>
+                            <div style="margin-top:8px;display:flex;gap:6px;">
+                                <button class="btn btn-sm btn-info" onclick="updateTankQty(${t.tank_id})">📊 تحديث الكمية</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
                 if (pRes.success) {
                     const container = document.getElementById('pumpsList');
-                    container.innerHTML = pRes.data.map(p =>
-                        `<div class="card">${p.pump_name} - العداد: ${p.meter_current} لتر</div>`
-                    ).join('');
+                    container.innerHTML = '';
+                    pRes.data.forEach(p => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${p.pump_name}</strong> - ${p.pump_code}</div>
+                                <div><span class="badge badge-${p.status === 'active' ? 'success' : 'danger'}">${p.status}</span></div>
+                            </div>
+                            <div>العداد: ${p.meter_current} لتر</div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
             } catch (e) { console.error('Tanks error', e); }
+        }
+
+        async function updateTankQty(tankId) {
+            const newQty = prompt('أدخل الكمية الجديدة (لتر):');
+            if (newQty === null) return;
+            const qty = parseFloat(newQty);
+            if (isNaN(qty) || qty < 0) { showToast('كمية غير صالحة', 'error'); return; }
+            showLoading(true);
+            try {
+                const res = await apiCall('update_tank_quantity', { tank_id: tankId, quantity: qty });
+                if (res.success) { showToast('تم التحديث', 'success'); loadTanks(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
@@ -1298,11 +1839,83 @@
                 const res = await apiCall('get_employees');
                 if (res.success) {
                     const container = document.getElementById('employeesList');
-                    container.innerHTML = res.data.map(e =>
-                        `<div class="card">${e.full_name} - ${e.job_title} - الراتب: ${e.basic_salary} ريال</div>`
-                    ).join('');
+                    container.innerHTML = '';
+                    res.data.forEach(e => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${e.full_name}</strong> - ${e.job_title || ''}</div>
+                                <div><span class="badge badge-${e.status === 'active' ? 'success' : 'danger'}">${e.status}</span></div>
+                            </div>
+                            <div style="font-size:13px;">الراتب: ${e.basic_salary} ريال</div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editEmployee(${e.id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteEmployee(${e.id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
             } catch (e) { console.error('Employees error', e); }
+        }
+
+        function showEmployeeForm(data = null) {
+            document.getElementById('employeeFormId').value = data ? data.id : '';
+            document.getElementById('employeeFormName').value = data ? data.full_name : '';
+            document.getElementById('employeeFormPhone').value = data ? data.phone : '';
+            document.getElementById('employeeFormJob').value = data ? data.job_title : '';
+            document.getElementById('employeeFormSalary').value = data ? data.basic_salary : 0;
+            document.getElementById('employeeFormStatus').value = data ? data.status : 'active';
+            document.getElementById('employeeModalTitle').textContent = data ? '✏️ تعديل موظف' : '👨‍💼 إضافة موظف';
+            document.getElementById('employeeFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('employeeModal');
+        }
+
+        async function saveEmployee(e) {
+            e.preventDefault();
+            const id = document.getElementById('employeeFormId').value;
+            const name = document.getElementById('employeeFormName').value;
+            const phone = document.getElementById('employeeFormPhone').value;
+            const job = document.getElementById('employeeFormJob').value;
+            const salary = document.getElementById('employeeFormSalary').value;
+            const status = document.getElementById('employeeFormStatus').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { full_name: name, phone, job_title: job, basic_salary: salary, status };
+                const action = id ? 'update_employee' : 'add_employee';
+                if (id) params.employee_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('employeeModal'); loadEmployees(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editEmployee(id) {
+            const res = await apiCall('get_employees');
+            if (res.success) {
+                const e = res.data.find(x => x.id == id);
+                if (e) showEmployeeForm(e);
+            }
+        }
+
+        async function deleteEmployee(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_employee', { employee_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadEmployees(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteEmployeeForm() {
+            const id = document.getElementById('employeeFormId').value;
+            if (id) deleteEmployee(parseInt(id));
         }
 
         // ============================================================
@@ -1310,12 +1923,14 @@
         // ============================================================
         async function loadAccounting() {
             try {
-                const res = await apiCall('get_accounts');
-                if (res.success) {
+                const [aRes, jRes] = await Promise.all([apiCall('get_accounts'), apiCall('get_journal_entries')]);
+                if (aRes.success) {
                     const container = document.getElementById('accountsList');
-                    container.innerHTML = res.data.map(a =>
-                        `<div class="card">${a.account_code} - ${a.account_name}</div>`
-                    ).join('');
+                    container.innerHTML = aRes.data.map(a => `<div class="card" style="padding:12px;">${a.account_code} - ${a.account_name}</div>`).join('');
+                }
+                if (jRes.success) {
+                    const container = document.getElementById('journalEntries');
+                    container.innerHTML = jRes.data.map(j => `<div class="card" style="padding:12px;">${j.entry_number} - ${j.description}</div>`).join('');
                 }
             } catch (e) { console.error('Accounting error', e); }
         }
@@ -1327,16 +1942,135 @@
             try {
                 const [aRes, mRes] = await Promise.all([apiCall('get_assets'), apiCall('get_maintenance_requests')]);
                 if (aRes.success) {
-                    document.getElementById('assetsList').innerHTML = aRes.data.map(a =>
-                        `<div class="card">${a.asset_name} - القيمة: ${a.current_value} ريال</div>`
-                    ).join('');
+                    const container = document.getElementById('assetsList');
+                    container.innerHTML = '';
+                    aRes.data.forEach(a => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${a.asset_name}</strong> - ${a.asset_type}</div>
+                                <div>القيمة: ${a.current_value} ريال</div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-primary" onclick="editAsset(${a.asset_id})">✏️ تعديل</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAsset(${a.asset_id})">🗑️ حذف</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
                 if (mRes.success) {
-                    document.getElementById('maintenanceList').innerHTML = mRes.data.map(m =>
-                        `<div class="card">${m.title} - ${m.status}</div>`
-                    ).join('');
+                    const container = document.getElementById('maintenanceList');
+                    container.innerHTML = '';
+                    mRes.data.forEach(m => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.style.cssText = 'padding:16px; margin-bottom:12px;';
+                        card.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
+                                <div><strong>${m.title}</strong> - ${m.request_code}</div>
+                                <div><span class="badge badge-${m.priority === 'critical' ? 'danger' : 'warning'}">${m.priority}</span> <span class="badge badge-primary">${m.status}</span></div>
+                            </div>
+                            <div style="margin-top:8px; display:flex; gap:6px;">
+                                <button class="btn btn-sm btn-success" onclick="updateMaintenanceStatus(${m.id}, 'in_progress')">▶️ بدء</button>
+                                <button class="btn btn-sm btn-success" onclick="updateMaintenanceStatus(${m.id}, 'completed')">✅ إكمال</button>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
                 }
             } catch (e) { console.error('Assets error', e); }
+        }
+
+        function showAssetForm(data = null) {
+            document.getElementById('assetFormId').value = data ? data.asset_id : '';
+            document.getElementById('assetFormName').value = data ? data.asset_name : '';
+            document.getElementById('assetFormType').value = data ? data.asset_type : 'other';
+            document.getElementById('assetFormCost').value = data ? data.purchase_cost : 0;
+            document.getElementById('assetFormCurrent').value = data ? data.current_value : 0;
+            document.getElementById('assetFormDelete').style.display = data ? 'inline-block' : 'none';
+            openModal('assetModal');
+        }
+
+        async function saveAsset(e) {
+            e.preventDefault();
+            const id = document.getElementById('assetFormId').value;
+            const name = document.getElementById('assetFormName').value;
+            const type = document.getElementById('assetFormType').value;
+            const cost = document.getElementById('assetFormCost').value;
+            const current = document.getElementById('assetFormCurrent').value;
+            if (!name) { showToast('الاسم مطلوب', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { asset_name: name, asset_type: type, purchase_cost: cost, current_value: current };
+                const action = id ? 'update_asset' : 'add_asset';
+                if (id) params.asset_id = id;
+                const res = await apiCall(action, params);
+                if (res.success) { showToast('تم الحفظ', 'success'); closeModal('assetModal'); loadAssets(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function editAsset(id) {
+            const res = await apiCall('get_assets');
+            if (res.success) {
+                const a = res.data.find(x => x.asset_id == id);
+                if (a) showAssetForm(a);
+            }
+        }
+
+        async function deleteAsset(id) {
+            if (!confirm('تأكيد الحذف؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('delete_asset', { asset_id: id });
+                if (res.success) { showToast('تم الحذف', 'success'); loadAssets(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteAssetForm() {
+            const id = document.getElementById('assetFormId').value;
+            if (id) deleteAsset(parseInt(id));
+        }
+
+        function showMaintenanceForm() {
+            openModal('maintenanceModal');
+        }
+
+        async function saveMaintenanceRequest(e) {
+            e.preventDefault();
+            const assetType = document.getElementById('maintAssetType').value;
+            const assetId = document.getElementById('maintAssetId').value;
+            const requestType = document.getElementById('maintRequestType').value;
+            const priority = document.getElementById('maintPriority').value;
+            const title = document.getElementById('maintTitle').value;
+            const description = document.getElementById('maintDescription').value;
+            if (!assetId || !requestType || !title || !description) {
+                showToast('يرجى ملء جميع الحقول', 'warning');
+                return;
+            }
+            showLoading(true);
+            try {
+                const res = await apiCall('add_maintenance_request', { asset_type: assetType, asset_id: assetId, request_type: requestType, priority, title, description });
+                if (res.success) { showToast('تم إرسال الطلب', 'success'); closeModal('maintenanceModal'); document.getElementById('maintenanceForm').reset(); loadAssets(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function updateMaintenanceStatus(id, status) {
+            showLoading(true);
+            try {
+                const res = await apiCall('update_maintenance_status', { request_id: id, status });
+                if (res.success) { showToast('تم التحديث', 'success'); loadAssets(); }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
         }
 
         // ============================================================
@@ -1360,9 +2094,14 @@
                 const res = await apiCall('get_whitelist');
                 if (res.success) {
                     const container = document.getElementById('whitelistTable');
-                    container.innerHTML = res.data.map(w =>
-                        `<div class="card" style="padding:8px 12px;">${w.name} - ${w.phone}</div>`
-                    ).join('');
+                    container.innerHTML = '';
+                    res.data.forEach(w => {
+                        const div = document.createElement('div');
+                        div.className = 'card';
+                        div.style.cssText = 'padding:8px 12px; margin-bottom:8px; display:flex; justify-content:space-between;';
+                        div.innerHTML = `<span>${w.name} - ${w.phone}</span><button class="btn btn-sm btn-danger" onclick="removeFromWhitelist('${w.phone}')">🗑️</button>`;
+                        container.appendChild(div);
+                    });
                 }
             } catch (e) { console.error('Whitelist error', e); }
         }
@@ -1374,7 +2113,18 @@
             showLoading(true);
             try {
                 const res = await apiCall('add_whitelist', { phone, name });
-                if (res.success) { showToast('تمت الإضافة', 'success'); loadWhitelist(); }
+                if (res.success) { showToast('تمت الإضافة', 'success'); loadWhitelist(); document.getElementById('whitelistPhone').value = ''; document.getElementById('whitelistName').value = ''; }
+                else showToast(res.error || 'فشل', 'error');
+            } catch (e) { showToast('خطأ', 'error'); }
+            showLoading(false);
+        }
+
+        async function removeFromWhitelist(phone) {
+            if (!confirm('إزالة الرقم؟')) return;
+            showLoading(true);
+            try {
+                const res = await apiCall('remove_whitelist', { phone });
+                if (res.success) { showToast('تمت الإزالة', 'success'); loadWhitelist(); }
                 else showToast(res.error || 'فشل', 'error');
             } catch (e) { showToast('خطأ', 'error'); }
             showLoading(false);
@@ -1441,13 +2191,13 @@
             if (!msg) return;
             input.value = '';
             const container = document.getElementById('chatMessages');
-            container.innerHTML += `<div class="chat-bubble user" style="align-self:flex-start;background:var(--primary);color:white;padding:10px 14px;border-radius:16px 16px 4px 16px;max-width:80%;">${msg}</div>`;
+            container.innerHTML += `<div class="chat-bubble user">${msg}</div>`;
             showLoading(true);
             try {
                 const res = await apiCall('ai_chat', { message: msg, session_id: 'web' });
-                container.innerHTML += `<div class="chat-bubble ai" style="align-self:flex-end;background:var(--border);padding:10px 14px;border-radius:16px 16px 16px 4px;max-width:80%;">${res.reply || 'عذراً، لم أستطع الرد'}</div>`;
+                container.innerHTML += `<div class="chat-bubble ai">${res.reply || 'عذراً، لم أستطع الرد'}</div>`;
             } catch (e) {
-                container.innerHTML += `<div class="chat-bubble ai" style="align-self:flex-end;background:var(--border);padding:10px 14px;border-radius:16px 16px 16px 4px;max-width:80%;">حدث خطأ في الاتصال</div>`;
+                container.innerHTML += `<div class="chat-bubble ai">حدث خطأ في الاتصال</div>`;
             }
             showLoading(false);
             container.scrollTop = container.scrollHeight;
@@ -1462,6 +2212,29 @@
                 const container = document.getElementById('reportContainer');
                 container.innerHTML = `<div class="card">${JSON.stringify(res.data, null, 2)}</div>`;
             }
+        }
+
+        function showProfitReport() {
+            const from = prompt('أدخل تاريخ البداية (YYYY-MM-DD):');
+            const to = prompt('أدخل تاريخ النهاية (YYYY-MM-DD):');
+            if (!from || !to) return;
+            showLoading(true);
+            apiCall('get_profit_report', { from_date: from, to_date: to }).then(res => {
+                if (res.success) {
+                    const d = res.data;
+                    document.getElementById('reportContainer').innerHTML = `
+                        <div class="card">
+                            <div class="invoice-row"><span>الإيرادات</span><span>${d.revenue.toLocaleString()} ريال</span></div>
+                            <div class="invoice-row"><span>التكاليف</span><span>${d.cost.toLocaleString()} ريال</span></div>
+                            <div class="invoice-row" style="font-weight:700;font-size:18px;">
+                                <span>الأرباح/الخسائر</span>
+                                <span style="color:${d.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${d.profit.toLocaleString()} ريال</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                showLoading(false);
+            }).catch(() => showLoading(false));
         }
 
         async function exportData() {
@@ -1479,6 +2252,37 @@
         }
 
         // ============================================================
+        //  INVOICE PREVIEW
+        // ============================================================
+        function previewInvoice() {
+            const customer = document.getElementById('saleCustomer').options[document.getElementById('saleCustomer').selectedIndex]?.text || 'عميل';
+            const qty = document.getElementById('saleQty').value || 0;
+            const price = document.getElementById('salePrice').value || 0;
+            const total = qty * price;
+            const paid = document.getElementById('salePaid').value || 0;
+            const due = total - paid;
+            const preview = document.getElementById('invoicePreview');
+            preview.innerHTML = `
+                <div style="text-align:center;border-bottom:2px solid #1a3a5a;padding-bottom:12px;margin-bottom:16px;">
+                    <h2>محطة أبو أحمد</h2>
+                    <div>لمشتقات الديزل</div>
+                    <div style="font-size:11px;">الفاتورة رقم: ${Date.now().toString().slice(-6)}</div>
+                </div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>العميل</span><span>${customer}</span></div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>الكمية (لتر)</span><span>${qty}</span></div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>سعر اللتر</span><span>${price} ريال</span></div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>الإجمالي</span><span>${total.toLocaleString()} ريال</span></div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>المدفوع</span><span>${paid.toLocaleString()} ريال</span></div>
+                <div class="invoice-row" style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dotted #ccc;"><span>المتبقي</span><span>${due.toLocaleString()} ريال</span></div>
+                <div class="invoice-total" style="font-size:18px;font-weight:800;border-top:2px solid #1a3a5a;margin-top:12px;padding-top:12px;text-align:center;">الإجمالي: ${total.toLocaleString()} ريال</div>
+                <div style="text-align:center;font-size:11px;color:#999;margin-top:12px;">تاريخ: ${new Date().toLocaleDateString('ar-EG')}</div>
+            `;
+            openModal('invoiceModal');
+        }
+
+        function printInvoice() { window.print(); }
+
+        // ============================================================
         //  LOGOUT
         // ============================================================
         function logout() {
@@ -1494,10 +2298,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             const dark = localStorage.getItem('darkMode') === 'true';
             if (dark) document.documentElement.setAttribute('data-theme', 'dark');
-            // عرض لوحة التحكم أولاً
             showPage('dashboard');
             loadPaymentCustomers();
         });
     </script>
 </body>
-    </html>
+</html>
