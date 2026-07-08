@@ -93,12 +93,18 @@ class MainActivity : AppCompatActivity() {
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
+    // مرجع لقاعدة البيانات للاستخدام المباشر في JavaScript Interface
+    private lateinit var dbHelper: DatabaseHelper
+
     // ============================================================
     //  دورة حياة النشاط
     // ============================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // تهيئة قاعدة البيانات
+        dbHelper = DatabaseHelper(this)
 
         // تفعيل تصحيح WebView في وضع التطوير (لـ chrome://inspect)
         if (isDebugMode) {
@@ -325,8 +331,6 @@ class MainActivity : AppCompatActivity() {
                             setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                             loadsImagesAutomatically = true
-                            // 🔥 إصلاح: السماح بـ JavaScript للاتصال بالـ API
-                            javaScriptEnabled = true
                         }
 
                         webViewClient = createWebViewClient()
@@ -671,13 +675,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    //  واجهة JavaScript (Bridge)
+    //  واجهة JavaScript (Bridge) – مع دالة تسجيل الدخول المباشرة
     // ============================================================
 
     inner class WebAppInterface(
         private val context: Context,
         private val activity: MainActivity
     ) {
+        /**
+         * دالة تسجيل الدخول المباشرة – تتجاوز HTTP API وتستخدم DatabaseHelper مباشرةً
+         * @param username اسم المستخدم
+         * @param password كلمة المرور
+         * @return JSON string يحتوي على {success, user, token}
+         */
+        @JavascriptInterface
+        fun login(username: String, password: String): String {
+            Log.d(TAG, "login() called with username: $username")
+            try {
+                val authResult = dbHelper.authenticateUser(username, password)
+                if (authResult != null) {
+                    val token = java.util.UUID.randomUUID().toString()
+                    val response = JSONObject().apply {
+                        put("success", true)
+                        put("user", authResult)
+                        put("token", token)
+                    }
+                    // تسجيل النشاط
+                    dbHelper.logActivity(username, "login", "تسجيل دخول ناجح عبر WebInterface")
+                    return response.toString()
+                } else {
+                    val response = JSONObject().apply {
+                        put("success", false)
+                        put("error", "بيانات خاطئة")
+                    }
+                    return response.toString()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Login error", e)
+                val response = JSONObject().apply {
+                    put("success", false)
+                    put("error", "خطأ داخلي: ${e.message}")
+                }
+                return response.toString()
+            }
+        }
+
         @JavascriptInterface
         fun requestBiometricAuth(): String {
             activity.runOnUiThread {
@@ -798,6 +840,9 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
         }
+
+        // إغلاق قاعدة البيانات
+        dbHelper.close()
 
         super.onDestroy()
     }
