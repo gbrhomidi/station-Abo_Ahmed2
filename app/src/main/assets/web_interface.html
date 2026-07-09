@@ -1114,7 +1114,7 @@
         }
 
         // ============================================================
-        //  LOGIN (مُصلح بالكامل)
+        //  LOGIN (مُصلح بالكامل ومعزز بمعالجة الاستجابة)
         // ============================================================
         async function handleLogin(event) {
             // منع السلوك الافتراضي للنموذج
@@ -1122,23 +1122,39 @@
                 event.preventDefault();
             }
 
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
             const btn = document.getElementById('loginBtn');
             const btnText = document.getElementById('loginBtnText');
+
+            // التحقق من صحة المدخلات
+            if (!username || !password) {
+                showToast('يرجى إدخال اسم المستخدم وكلمة المرور', 'warning');
+                return;
+            }
 
             // تعطيل الزر لمنع النقر المتكرر
             btn.disabled = true;
             btnText.innerHTML = '<div style="width:18px;height:18px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>';
 
             try {
+                // استدعاء API لتسجيل الدخول
                 const result = await apiCall('login', { username, password });
+
+                // معالجة الاستجابة كما هو مطلوب: التحقق من success
                 if (result.success) {
-                    localStorage.setItem('authToken', result.token);
-                    localStorage.setItem('user', JSON.stringify(result.user));
+                    // نجاح تسجيل الدخول: تخزين التوكن ومعلومات المستخدم
+                    if (result.token) {
+                        localStorage.setItem('authToken', result.token);
+                    }
+                    if (result.user) {
+                        localStorage.setItem('user', JSON.stringify(result.user));
+                    }
+                    // إخفاء شاشة تسجيل الدخول وإظهار التطبيق
                     document.getElementById('loginScreen').classList.add('hidden');
                     document.getElementById('appContainer').classList.add('active');
-                    // تحميل البيانات بعد تسجيل الدخول
+
+                    // تحميل جميع البيانات الأساسية
                     await loadDashboard();
                     await loadCustomers();
                     await loadSaleDropdowns();
@@ -1151,14 +1167,29 @@
                     await loadSettings();
                     await loadTanksAndPumps();
                     await loadMaintenance();
-                    showToast('مرحباً بك!', 'success');
+
+                    // عرض رسالة ترحيب
+                    const userName = result.user?.full_name || username;
+                    showToast(`مرحباً بك ${userName}!`, 'success');
                 } else {
-                    showToast(result.error || 'بيانات خاطئة', 'error');
+                    // فشل تسجيل الدخول: عرض رسالة الخطأ من الخادم أو رسالة افتراضية
+                    const errorMsg = result.error || 'بيانات الدخول غير صحيحة. يرجى المحاولة مرة أخرى.';
+                    showToast('فشل تسجيل الدخول: ' + errorMsg, 'error');
+
+                    // إعادة تمكين الزر بعد الفشل
+                    btn.disabled = false;
+                    btnText.textContent = 'تسجيل الدخول';
                 }
             } catch (e) {
-                showToast('فشل الاتصال بالخادم', 'error');
-                console.error(e);
+                // خطأ في الاتصال أو معالجة غير متوقعة
+                console.error('Login error:', e);
+                showToast('تعذر الاتصال بالخادم. تأكد من تشغيل الخادم.', 'error');
+                // إعادة تمكين الزر
+                btn.disabled = false;
+                btnText.textContent = 'تسجيل الدخول';
             } finally {
+                // في حالة النجاح، الزر سيختفي مع الشاشة، لكننا نعيد تمكينه هنا احتياطياً
+                // (لن يؤثر لأن الزر سيكون غير مرئي)
                 btn.disabled = false;
                 btnText.textContent = 'تسجيل الدخول';
             }
