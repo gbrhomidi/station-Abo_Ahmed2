@@ -21,7 +21,6 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
-import java.net.ServerSocket
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
@@ -32,11 +31,10 @@ class SMSService : Service() {
 
     companion object {
         private const val TAG = "SMSService"
+        private const val PORT = 8080
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "sms_service_channel"
         private const val BACKUP_WORK_NAME = "auto_backup_work"
-        private const val MAX_PORT_RETRIES = 10
-        private const val BASE_PORT = 8080
         private const val SMS_DELAY_MS = 1000L
         private const val MAX_SMS_LENGTH = 1600
         private const val PHONE_REGEX = "^[+]?[0-9]{10,14}$"
@@ -44,9 +42,6 @@ class SMSService : Service() {
 
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         private val DATETIME_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-
-        var actualPort = BASE_PORT
-            private set
     }
 
     private var server: ApiServer? = null
@@ -68,7 +63,7 @@ class SMSService : Service() {
             try {
                 setupNotificationChannel()
                 startForegroundService()
-                startServerWithRetry()
+                startServer()
                 scheduleAutoBackup()
                 Log.d(TAG, "Service initialization completed successfully")
             } catch (e: Exception) {
@@ -81,7 +76,7 @@ class SMSService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand called, startId=$startId")
         if (!isDestroyed.get() && (server == null || !server!!.isAlive)) {
-            serviceScope.launch { startServerWithRetry() }
+            serviceScope.launch { startServer() }
         }
         return START_STICKY
     }
@@ -102,9 +97,6 @@ class SMSService : Service() {
 
     override fun onBind(intent: Intent): IBinder? = null
 
-    // ============================================================
-    // الإشعارات
-    // ============================================================
     private fun setupNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -123,7 +115,7 @@ class SMSService : Service() {
     private fun startForegroundService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
-            .setContentText("الخادم المحلي يعمل على المنفذ $actualPort...")
+            .setContentText("الخادم المحلي يعمل على المنفذ $PORT...")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -146,53 +138,24 @@ class SMSService : Service() {
         nm?.notify(NOTIFICATION_ID, notification)
     }
 
-    // ============================================================
-    // بدء الخادم مع إعادة المحاولة على منافذ مختلفة
-    // ============================================================
-    private suspend fun startServerWithRetry() {
+    private fun startServer() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Service is destroyed, not starting server")
             return
         }
 
-        var port = BASE_PORT
-        var attempts = 0
-        while (attempts < MAX_PORT_RETRIES && !isDestroyed.get()) {
-            try {
-                if (isPortAvailable(port)) {
-                    server?.stop()
-                    server = ApiServer(port)
-                    server?.start()
-                    actualPort = port
-                    Log.d(TAG, "Server started successfully at port $actualPort")
-                    updateNotification("الخادم المحلي يعمل على المنفذ $actualPort")
-                    return
-                } else {
-                    Log.w(TAG, "Port $port is busy, trying next...")
-                }
-            } catch (e: IOException) {
-                Log.w(TAG, "Failed to start on port $port: ${e.message}")
-            }
-            port++
-            attempts++
-            delay(500)
-        }
-        Log.e(TAG, "Failed to start server after $MAX_PORT_RETRIES attempts")
-        updateNotification("فشل بدء الخادم بعد $MAX_PORT_RETRIES محاولة")
-    }
-
-    private fun isPortAvailable(port: Int): Boolean {
-        return try {
-            ServerSocket(port).use { it.close() }
-            true
+        try {
+            server?.stop()
+            server = ApiServer(PORT)
+            server?.start()
+            Log.d(TAG, "Server started successfully at port $PORT")
+            updateNotification("الخادم المحلي يعمل على المنفذ $PORT")
         } catch (e: IOException) {
-            false
+            Log.e(TAG, "Failed to start server on port $PORT: ${e.message}", e)
+            updateNotification("فشل بدء الخادم على المنفذ $PORT")
         }
     }
 
-    // ============================================================
-    // النسخ الاحتياطي التلقائي
-    // ============================================================
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
@@ -211,9 +174,6 @@ class SMSService : Service() {
         }
     }
 
-    // ============================================================
-    // خادم API (NanoHTTPD)
-    // ============================================================
     private inner class ApiServer(port: Int) : NanoHTTPD(port) {
 
         override fun serve(session: IHTTPSession): Response {
@@ -235,7 +195,7 @@ class SMSService : Service() {
             }
 
             if (!uri.startsWith("/api")) {
-                return serveStaticFile(uri)
+                return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
             }
 
             val db = DatabaseHelper(this@SMSService)
@@ -963,38 +923,8 @@ class SMSService : Service() {
             headers.forEach { (k, v) -> res.addHeader(k, v) }
             return res
         }
-
-        // ============================================================
-        // الملفات الثابتة
-        // ============================================================
-        private fun serveStaticFile(uri: String): Response {
-            return try {
-                when {
-                    uri == "/" || uri == "/index.html" -> {
-                        val stream = assets.open("web_interface.html")
-                        newChunkedResponse(Response.Status.OK, "text/html; charset=utf-8", stream)
-                    }
-                    uri == "/html5-qrcode.min.js" -> {
-                        try {
-                            val stream = assets.open("html5-qrcode.min.js")
-                            newChunkedResponse(Response.Status.OK, "application/javascript", stream)
-                        } catch (e: Exception) {
-                            newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "404 Not Found")
-                        }
-                    }
-                    else -> {
-                        newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "404 Not Found")
-                    }
-                }
-            } catch (e: Exception) {
-                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error: ${e.message}")
-            }
-        }
     }
 
-    // ================================================================
-    // الذكاء الاصطناعي
-    // ================================================================
     private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
         val providers = listOf(
             "gemini" to geminiApiKey,
@@ -1242,9 +1172,6 @@ class SMSService : Service() {
         }
     }
 
-    // ================================================================
-    // دوال الرسائل النصية
-    // ================================================================
     private fun isSmsEnabled(db: DatabaseHelper): Boolean {
         return db.getSetting("sms_enabled") != "0"
     }
