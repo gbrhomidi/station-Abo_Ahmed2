@@ -16,9 +16,13 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V8 - كامل مع جميع الجداول والدوال
+ * الإصدار المدمج V9 - كامل مع جميع الجداول والدوال
  * تم إصلاح أخطاء ContentValues.put وأنواع البيانات، وإضافة الدوال المفقودة
  *
+ * التحديثات في V9:
+ * - إضافة عمود password_salt إلى جدول users
+ * - تصحيح دالة authenticateUser لقراءة password_salt بشكل صحيح
+ * - تحديث المستخدمين الافتراضيين لتخزين salt
  * التحديثات في V8:
  * - إضافة 28 إعداد نظام جديدة في system_settings
  * - إضافة دوال ديناميكية للقراءة من الجداول المخصصة بدلاً من system_settings
@@ -45,7 +49,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        const val VERSION = 8  // جعلها public للوصول من MainActivity
+        const val VERSION = 9  // جعلها public للوصول من MainActivity
 
         private const val HASH_ITERATIONS = 10000
 
@@ -103,6 +107,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                     5 -> migrateV5ToV6(db)
                     6 -> migrateV6ToV7(db)
                     7 -> migrateV7ToV8(db)
+                    8 -> migrateV8ToV9(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -150,6 +155,20 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     private fun migrateV7ToV8(db: SQLiteDatabase) {
         // إضافة الإعدادات الجديدة فقط (الجداول موجودة بالفعل)
         insertInitialData(db)
+    }
+
+    private fun migrateV8ToV9(db: SQLiteDatabase) {
+        // إضافة عمود password_salt إلى جدول users
+        try {
+            db.execSQL("ALTER TABLE users ADD COLUMN password_salt VARCHAR(255)")
+        } catch (e: Exception) {
+            Log.w(TAG, "password_salt column may already exist: ${e.message}")
+        }
+        // تحديث المستخدمين الافتراضيين بقيم salt
+        val (hashAdmin, saltAdmin) = hashPassword("admin123")
+        db.execSQL("UPDATE users SET password_hash = '$hashAdmin', password_salt = '$saltAdmin' WHERE username = 'admin'")
+        val (hashKhalil, saltKhalil) = hashPassword("123321")
+        db.execSQL("UPDATE users SET password_hash = '$hashKhalil', password_salt = '$saltKhalil' WHERE username = 'خليل أحمد'")
     }
 
     // ================================================================
@@ -507,6 +526,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 email VARCHAR(100) UNIQUE,
                 phone VARCHAR(20) UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
+                password_salt VARCHAR(255),
                 full_name VARCHAR(200) NOT NULL,
                 full_name_ar VARCHAR(200),
                 display_name VARCHAR(100),
@@ -4368,15 +4388,15 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         // Default Admin User (password: admin123)
         val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("""
-            INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
-            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
+            INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
+            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', '$saltAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
 
         // ===== إدراج المستخدم الافتراضي الجديد (خليل أحمد - SUPER_ADMIN) =====
         val (hashKhalil, saltKhalil) = hashPassword("123321")
         db.execSQL("""
-            INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
-            VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
+            INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
+            VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', '$saltKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
         // =================================================================
 
@@ -4591,10 +4611,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use {
             if (it.moveToFirst()) {
                 val storedHash = it.getString(it.getColumnIndexOrThrow("password_hash"))
-                val storedSalt = it.getString(it.getColumnIndexOrThrow("password_hash"))
-                val saltCol = it.getColumnIndex("password_salt")
-                val actualSalt = if (saltCol >= 0) it.getString(saltCol) else storedHash
-                if (verifyPassword(password, storedHash, actualSalt)) {
+                val storedSalt = it.getString(it.getColumnIndexOrThrow("password_salt"))
+                if (verifyPassword(password, storedHash, storedSalt)) {
                     val o = JSONObject()
                     o.put("user_id", it.getInt(it.getColumnIndexOrThrow("id")))
                     o.put("username", it.getString(it.getColumnIndexOrThrow("username")))
