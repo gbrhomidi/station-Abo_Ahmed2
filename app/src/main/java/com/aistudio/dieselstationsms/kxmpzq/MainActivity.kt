@@ -41,26 +41,21 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * MainActivity - النشاط الرئيسي لتطبيق محطة أبو أحمد لمشتقات الديزل
  *
- * الإصدار 4.0 – متوافق مع:
- * - قاعدة البيانات V8 (DatabaseHelper المتكامل مع نظام Parties والدوال الديناميكية)
- * - خدمة الخادم المحلي SMSService المحدثة (قراءة المفاتيح من BuildConfig)
- * - واجهة ويب متطورة (web_interface.html) مع دعم AI المتعدد
- * - نظام مصادقة بيومترية محسّن
+ * الإصدار 4.1 – مُحسَّن مع معالجة اتصال الخادم المحلي
  *
- * الميزات:
- * - عرض واجهة ويب متكاملة عبر WebView
- * - دعم المصادقة البيومترية (بصمة / وجه)
- * - بدء خدمة الخادم المحلي (SMSService) تلقائياً
- * - إدارة الأذونات المطلوبة للتشغيل
- * - معالجة الروابط المخصصة (واتساب، فيسبوك، بريد)
- * - دورة حياة محسنة وإدارة ذاكرة
- * - واجهة JavaScript للتفاعل مع التطبيق
- * - دعم مسح QR وباركود عبر مكتبة html5-qrcode (تُحمَّل من assets)
+ * التحسينات الجديدة:
+ * - زيادة وقت انتظار الخادم قبل تحميل WebView (من 4 ثوانٍ إلى 7 ثوانٍ)
+ * - إضافة فحص دوري لجاهزية الخادم قبل تحميل WebView
+ * - إعادة محاولة الاتصال تلقائياً عند فشل الاتصال
+ * - عرض صفحة تحميل بدلاً من صفحة الخطأ الفورية
+ * - تحسين معالجة الأخطاء ومنع التحديث المستمر للصفحة
  */
 class MainActivity : AppCompatActivity() {
 
@@ -68,11 +63,11 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val SERVICE_START_DELAY_MS = 3000L
-        private const val WEBVIEW_LOAD_DELAY_MS = 4000L
-        private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 2000L
-        private const val WEBVIEW_MAX_RETRY_DELAY_MS = 15000L
-        private const val MAX_WEBVIEW_RETRIES = 3
+        private const val WEBVIEW_LOAD_DELAY_MS = 7000L  // زيادة الوقت لانتظار الخادم
+        private const val SERVER_CHECK_INTERVAL_MS = 1000L
+        private const val MAX_SERVER_CHECKS = 10
         private const val SERVER_PORT = 8080
+        private const val MAX_WEBVIEW_RETRIES = 3
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
         private const val BIOMETRIC_SUBTITLE = "استخدم بصمة الإصبع أو الوجه للدخول"
@@ -87,10 +82,13 @@ class MainActivity : AppCompatActivity() {
     private var geminiApiKey: String = ""
     private var serverReady = false
     private var webViewRetryCount = 0
+    private var serverCheckCount = 0
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
     private var isErrorPageShown = false
+    private var isFirstLoad = true
+    private var isLoadingPageShown = false
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -130,6 +128,7 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
+        // بدء خدمة الخادم المحلي
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -137,6 +136,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // عرض واجهة Compose مع WebView
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -147,12 +147,51 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // انتظار الخادم ثم تحميل WebView
         lifecycleScope.launch {
-            delay(WEBVIEW_LOAD_DELAY_MS)
-            if (!isDestroyed.get()) {
-                loadWebViewUrl()
+            // انتظار الخادم مع فحص دوري
+            val serverReady = waitForServer()
+            if (serverReady) {
+                Log.d(TAG, "Server is ready, loading WebView...")
+                delay(WEBVIEW_LOAD_DELAY_MS)
+                if (!isDestroyed.get()) {
+                    loadWebViewUrl()
+                }
+            } else {
+                Log.e(TAG, "Server not ready after max checks, showing error page")
+                if (!isDestroyed.get()) {
+                    showErrorPage()
+                }
             }
         }
+    }
+
+    // ============================================================
+    //  فحص جاهزية الخادم
+    // ============================================================
+
+    private suspend fun waitForServer(): Boolean {
+        var attempts = 0
+        while (attempts < MAX_SERVER_CHECKS && !isDestroyed.get()) {
+            try {
+                val url = URL("http://127.0.0.1:$SERVER_PORT/")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 1000
+                connection.readTimeout = 1000
+                connection.requestMethod = "HEAD"
+                val responseCode = connection.responseCode
+                connection.disconnect()
+                if (responseCode > 0) {
+                    Log.d(TAG, "Server is up (attempt ${attempts + 1})")
+                    return true
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Server not ready yet (attempt ${attempts + 1}): ${e.message}")
+            }
+            attempts++
+            delay(SERVER_CHECK_INTERVAL_MS)
+        }
+        return false
     }
 
     // ============================================================
@@ -356,6 +395,7 @@ class MainActivity : AppCompatActivity() {
                 serverReady = true
                 webViewRetryCount = 0
                 isErrorPageShown = false
+                isLoadingPageShown = false
                 Log.d(TAG, "WebView page finished loading: $url")
             }
 
@@ -394,8 +434,19 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
                 serverReady = false
 
-                // عرض صفحة الخطأ مباشرة دون إعادة محاولة تلقائية لمنع التحديث المستمر
-                showErrorPage()
+                // إذا كانت هذه هي المحاولة الأولى ولا تظهر صفحة الخطأ، حاول مرة أخرى
+                if (!isErrorPageShown && !isLoadingPageShown && webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                    webViewRetryCount++
+                    val delay = 2000L * webViewRetryCount
+                    Log.d(TAG, "Retrying WebView load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+                    handler.postDelayed({
+                        if (!isDestroyed.get() && !isErrorPageShown) {
+                            loadWebViewUrl()
+                        }
+                    }, delay)
+                } else if (!isErrorPageShown) {
+                    showErrorPage()
+                }
             }
 
             @Deprecated("Deprecated in Java")
@@ -411,8 +462,18 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
                 serverReady = false
 
-                // عرض صفحة الخطأ مباشرة دون إعادة محاولة تلقائية
-                showErrorPage()
+                if (!isErrorPageShown && !isLoadingPageShown && webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                    webViewRetryCount++
+                    val delay = 2000L * webViewRetryCount
+                    Log.d(TAG, "Retrying WebView load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
+                    handler.postDelayed({
+                        if (!isDestroyed.get() && !isErrorPageShown) {
+                            loadWebViewUrl()
+                        }
+                    }, delay)
+                } else if (!isErrorPageShown) {
+                    showErrorPage()
+                }
             }
 
             override fun onReceivedSslError(
@@ -433,7 +494,6 @@ class MainActivity : AppCompatActivity() {
                 if (!isDestroyed.get()) {
                     webView = null
                     isWebViewInitialized = false
-                    // محاولة إعادة إنشاء WebView بعد فترة قصيرة
                     handler.postDelayed({
                         if (!isDestroyed.get()) {
                             recreateWebView()
@@ -448,7 +508,6 @@ class MainActivity : AppCompatActivity() {
     private fun recreateWebView() {
         if (isDestroyed.get()) return
         Log.d(TAG, "Recreating WebView...")
-        // إعادة تحميل الواجهة
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -458,22 +517,23 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        // محاولة تحميل URL بعد إعادة الإنشاء
         handler.postDelayed({
             if (!isDestroyed.get()) {
+                isErrorPageShown = false
+                webViewRetryCount = 0
                 loadWebViewUrl()
             }
-        }, 1500)
+        }, 2000)
     }
 
     // ============================================================
-    //  تحميل WebView URL (مُعدل لمنع التحديث المستمر)
+    //  تحميل WebView URL
     // ============================================================
 
     private fun loadWebViewUrl() {
         if (isDestroyed.get()) return
 
-        // إذا كانت صفحة الخطأ معروضة، لا نحاول التحميل مرة أخرى
+        // إذا كانت صفحة الخطأ معروضة ولا توجد محاولات إعادة متبقية
         if (isErrorPageShown) {
             Log.d(TAG, "Error page is shown, skipping load")
             return
@@ -486,49 +546,120 @@ class MainActivity : AppCompatActivity() {
 
         try {
             if (wv.isAttachedToWindow) {
+                // عرض صفحة تحميل مؤقتة
+                if (!isLoadingPageShown) {
+                    showLoadingPage()
+                }
                 Log.d(TAG, "Loading URL: http://127.0.0.1:$SERVER_PORT/")
                 wv.loadUrl("http://127.0.0.1:$SERVER_PORT/")
             } else {
                 Log.w(TAG, "WebView not attached to window yet, retrying...")
-                retryLoadUrl()
+                handler.postDelayed({
+                    if (!isDestroyed.get() && !isErrorPageShown) {
+                        loadWebViewUrl()
+                    }
+                }, 1000)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading URL: ${e.message}", e)
-            // في حالة الخطأ، نعرض صفحة الخطأ مباشرة
-            showErrorPage()
-        }
-    }
-
-    private fun retryLoadUrl() {
-        if (isErrorPageShown) {
-            Log.d(TAG, "Error page is shown, not retrying")
-            return
-        }
-
-        if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
-            webViewRetryCount++
-            val delay = calculateRetryDelay(webViewRetryCount)
-            Log.d(TAG, "Retrying URL load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-
-            lifecycleScope.launch {
-                delay(delay)
-                if (!isDestroyed.get() && !isErrorPageShown) {
-                    loadWebViewUrl()
-                }
+            if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                webViewRetryCount++
+                handler.postDelayed({
+                    if (!isDestroyed.get() && !isErrorPageShown) {
+                        loadWebViewUrl()
+                    }
+                }, 2000L * webViewRetryCount)
+            } else {
+                showErrorPage()
             }
-        } else {
-            Log.e(TAG, "Max retries reached, showing error page")
-            showErrorPage()
         }
-    }
-
-    private fun calculateRetryDelay(attempt: Int): Long {
-        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1))
-        return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
     }
 
     // ============================================================
-    //  عرض صفحة الخطأ (داخل WebView)
+    //  عرض صفحة التحميل المؤقتة
+    // ============================================================
+
+    private fun showLoadingPage() {
+        if (isDestroyed.get() || isLoadingPageShown) return
+        isLoadingPageShown = true
+
+        val wv = webView ?: return
+        val loadingHtml = """
+            <html dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>جاري التحميل...</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, sans-serif;
+                        text-align: center;
+                        padding: 50px 20px;
+                        background: #f5f5f5;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                    }
+                    .loader-box {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 16px;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                        max-width: 350px;
+                        margin: 0 auto;
+                    }
+                    .spinner {
+                        width: 50px;
+                        height: 50px;
+                        border: 4px solid #e0e0e0;
+                        border-top-color: #1a3a5a;
+                        border-radius: 50%;
+                        animation: spin 1s linear infinite;
+                        margin: 0 auto 20px;
+                    }
+                    @keyframes spin {
+                        to { transform: rotate(360deg); }
+                    }
+                    h2 {
+                        color: #1a3a5a;
+                        font-size: 20px;
+                        margin-bottom: 8px;
+                    }
+                    p {
+                        color: #666;
+                        font-size: 14px;
+                    }
+                    .sub-text {
+                        font-size: 12px;
+                        color: #999;
+                        margin-top: 12px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="loader-box">
+                    <div class="spinner"></div>
+                    <h2>⛽ محطة أبو أحمد</h2>
+                    <p>جاري تحميل النظام...</p>
+                    <p class="sub-text">يرجى الانتظار قليلاً</p>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        try {
+            wv.loadDataWithBaseURL(null, loadingHtml, "text/html", "UTF-8", null)
+            Log.d(TAG, "Loading page shown")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load loading page: ${e.message}")
+            isLoadingPageShown = false
+        }
+    }
+
+    // ============================================================
+    //  عرض صفحة الخطأ
     // ============================================================
 
     private fun showErrorPage() {
@@ -539,6 +670,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         isErrorPageShown = true
+        isLoadingPageShown = false
         val wv = webView ?: run {
             Log.w(TAG, "WebView is null, cannot show error page")
             return
@@ -592,7 +724,7 @@ class MainActivity : AppCompatActivity() {
                         padding: 12px 24px;
                         border-radius: 8px;
                         cursor: pointer;
-                        margin-top: 20px;
+                        margin-top: 16px;
                         font-size: 16px;
                         transition: background 0.3s;
                     }
@@ -604,6 +736,13 @@ class MainActivity : AppCompatActivity() {
                         color: #999;
                         margin-top: 12px;
                     }
+                    .hint {
+                        font-size: 12px;
+                        color: #1976d2;
+                        margin-top: 8px;
+                        cursor: pointer;
+                        text-decoration: underline;
+                    }
                 </style>
             </head>
             <body>
@@ -613,6 +752,7 @@ class MainActivity : AppCompatActivity() {
                     <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
                     <p class="sub-text">تأكد من تشغيل خدمة الخادم</p>
                     <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
+                    <p class="hint" onclick="window.location.href='http://127.0.0.1:8080/'">محاولة الاتصال مباشرة</p>
                 </div>
             </body>
             </html>
@@ -915,16 +1055,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // إذا كانت صفحة الخطأ معروضة ولا يوجد اتصال، نحاول إعادة التحميل مرة واحدة
+
+        // إذا كانت صفحة الخطأ معروضة، نحاول إعادة الاتصال
         if (!isDestroyed.get() && isErrorPageShown) {
-            // ننتظر قليلاً ثم نحاول التحميل مرة واحدة
+            // نعيد تعيين علم صفحة الخطأ ونحاول مرة واحدة
             handler.postDelayed({
                 if (!isDestroyed.get() && isErrorPageShown) {
+                    Log.d(TAG, "Attempting to reconnect from error page...")
                     isErrorPageShown = false
+                    isLoadingPageShown = false
                     webViewRetryCount = 0
                     loadWebViewUrl()
                 }
-            }, 2000)
+            }, 3000)
         }
 
         if (!isDestroyed.get() && webView != null) {
