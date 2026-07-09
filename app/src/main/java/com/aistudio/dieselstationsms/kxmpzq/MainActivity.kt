@@ -41,8 +41,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
@@ -51,9 +49,6 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val SERVICE_START_DELAY_MS = 2000L
-        private const val SERVER_CHECK_INTERVAL_MS = 1000L
-        private const val MAX_SERVER_CHECKS = 15
-        private const val MAX_WEBVIEW_RETRIES = 3
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
         private const val BIOMETRIC_SUBTITLE = "استخدم بصمة الإصبع أو الوجه للدخول"
@@ -63,7 +58,6 @@ class MainActivity : AppCompatActivity() {
     private var webView: WebView? = null
     private var geminiApiKey: String = ""
     private var serverReady = false
-    private var webViewRetryCount = 0
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
@@ -120,80 +114,35 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        lifecycleScope.launch {
-            val port = waitForServer()
-            if (port > 0) {
-                Log.d(TAG, "Server is ready at port $port, loading WebView...")
-                delay(500)
-                if (!isDestroyed.get()) {
-                    loadWebViewUrl(port)
-                }
-            } else {
-                Log.e(TAG, "Server not ready after max checks, showing error page")
-                if (!isDestroyed.get()) {
-                    showErrorPage()
-                }
+        handler.postDelayed({
+            if (!isDestroyed.get()) {
+                loadWebViewFromAssets()
             }
-        }
+        }, 1500)
     }
 
-    private suspend fun waitForServer(): Int {
-        var attempts = 0
-        val port = SMSService.actualPort
-        while (attempts < MAX_SERVER_CHECKS && !isDestroyed.get()) {
-            try {
-                val url = URL("http://127.0.0.1:$port/")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 1000
-                connection.readTimeout = 1000
-                connection.requestMethod = "HEAD"
-                val responseCode = connection.responseCode
-                connection.disconnect()
-                if (responseCode > 0) {
-                    Log.d(TAG, "Server is up on port $port (attempt ${attempts + 1})")
-                    return port
-                }
-            } catch (e: Exception) {
-                Log.d(TAG, "Server not ready yet (attempt ${attempts + 1}): ${e.message}")
-            }
-            attempts++
-            delay(SERVER_CHECK_INTERVAL_MS)
-        }
-        return -1
-    }
-
-    private fun loadWebViewUrl(port: Int) {
+    private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
         val wv = webView ?: run {
-            Log.w(TAG, "WebView is null, cannot load URL")
+            Log.w(TAG, "WebView is null, cannot load from assets")
             return
         }
 
         try {
             if (wv.isAttachedToWindow) {
-                val url = "http://127.0.0.1:$port/"
-                Log.d(TAG, "Loading URL: $url")
-                wv.loadUrl(url)
+                Log.d(TAG, "Loading web_interface.html from assets")
+                wv.loadUrl("file:///android_asset/web_interface.html")
             } else {
-                Log.w(TAG, "WebView not attached to window yet, retrying...")
+                Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
                     if (!isDestroyed.get()) {
-                        loadWebViewUrl(port)
+                        loadWebViewFromAssets()
                     }
                 }, 500)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading URL: ${e.message}", e)
-            if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                webViewRetryCount++
-                handler.postDelayed({
-                    if (!isDestroyed.get()) {
-                        loadWebViewUrl(port)
-                    }
-                }, 2000L * webViewRetryCount)
-            } else {
-                showErrorPage()
-            }
+            Log.e(TAG, "Error loading from assets: ${e.message}", e)
+            showErrorPage()
         }
     }
 
@@ -207,7 +156,7 @@ class MainActivity : AppCompatActivity() {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>خطأ في الاتصال</title>
+                <title>خطأ</title>
                 <style>
                     body { font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
                     .error-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
@@ -216,15 +165,13 @@ class MainActivity : AppCompatActivity() {
                     .icon { font-size: 48px; margin-bottom: 16px; display: block; }
                     .btn-retry { background: #1976d2; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-top: 16px; font-size: 16px; transition: background 0.3s; }
                     .btn-retry:hover { background: #1565c0; }
-                    .sub-text { font-size: 12px; color: #999; margin-top: 12px; }
                 </style>
             </head>
             <body>
                 <div class="error-box">
                     <span class="icon">⚠️</span>
-                    <h1>تعذر الاتصال بالخادم المحلي</h1>
-                    <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
-                    <p class="sub-text">تأكد من تشغيل خدمة الخادم</p>
+                    <h1>حدث خطأ في تحميل الواجهة</h1>
+                    <p>يرجى إعادة المحاولة</p>
                     <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
                 </div>
             </body>
@@ -239,9 +186,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ============================================================
-    // باقي الدوال
-    // ============================================================
     private fun loadEnvKey(key: String): String {
         return try {
             assets.open(".env").use { stream ->
@@ -367,10 +311,10 @@ class MainActivity : AppCompatActivity() {
                             setSupportZoom(true)
                             builtInZoomControls = true
                             displayZoomControls = false
-                            allowFileAccess = false
-                            allowContentAccess = false
+                            allowFileAccess = true
+                            allowContentAccess = true
                             javaScriptCanOpenWindowsAutomatically = false
-                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                             loadsImagesAutomatically = true
@@ -410,7 +354,6 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 if (isDestroyed.get()) return
                 serverReady = true
-                webViewRetryCount = 0
                 isErrorPageShown = false
                 Log.d(TAG, "WebView page finished loading: $url")
             }
@@ -443,7 +386,6 @@ class MainActivity : AppCompatActivity() {
                 super.onReceivedError(view, request, error)
                 if (isDestroyed.get()) return
                 Log.w(TAG, "WebView error: ${error?.description}")
-                showErrorPage()
             }
 
             @Deprecated("Deprecated in Java")
@@ -456,7 +398,6 @@ class MainActivity : AppCompatActivity() {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
-                showErrorPage()
             }
 
             override fun onReceivedSslError(
@@ -503,9 +444,7 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({
             if (!isDestroyed.get()) {
                 isErrorPageShown = false
-                webViewRetryCount = 0
-                val port = SMSService.actualPort
-                loadWebViewUrl(port)
+                loadWebViewFromAssets()
             }
         }, 2000)
     }
@@ -783,28 +722,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!isDestroyed.get() && isErrorPageShown) {
-            handler.postDelayed({
-                if (!isDestroyed.get() && isErrorPageShown) {
-                    Log.d(TAG, "Attempting to reconnect from error page...")
-                    isErrorPageShown = false
-                    webViewRetryCount = 0
-                    val port = SMSService.actualPort
-                    loadWebViewUrl(port)
-                }
-            }, 3000)
-        }
-
         if (!isDestroyed.get() && webView != null) {
             if (!webView!!.isAttachedToWindow) {
                 Log.w(TAG, "WebView not attached, reloading...")
-                lifecycleScope.launch {
-                    delay(500)
+                handler.postDelayed({
                     if (!isDestroyed.get()) {
-                        val port = SMSService.actualPort
-                        loadWebViewUrl(port)
+                        loadWebViewFromAssets()
                     }
-                }
+                }, 500)
             }
         }
     }
