@@ -1045,41 +1045,27 @@
     <!-- ==================== JAVASCRIPT ==================== -->
     <script>
         // ============================================================
-        //  منع إعادة التحميل التلقائي للصفحة
-        //  إزالة أي setInterval أو setTimeout قد يسبب تحديث مستمر
+        //  API HELPER (الاتصال بالخادم عبر المسار المطلق)
         // ============================================================
-        (function() {
-            // حفظ جميع المؤقتات وإلغائها (نحتفظ فقط بالمؤقتات الضرورية التي سنضيفها لاحقاً)
-            var highestId = setTimeout(function(){}, 0);
-            for (var i = 0; i < highestId; i++) {
-                clearTimeout(i);
-                clearInterval(i);
+        async function apiCall(action, params = {}) {
+            const baseUrl = 'http://127.0.0.1:8080/api';
+            const url = new URL(baseUrl);
+            url.searchParams.append('action', action);
+            Object.keys(params).forEach(key => {
+                if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+                    url.searchParams.append(key, params[key]);
+                }
+            });
+            try {
+                const response = await fetch(url.toString(), { method: 'GET', headers: { 'Accept': 'application/json' } });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (e) {
+                console.error('API Error:', e);
+                showToast('خطأ في الاتصال بالخادم', 'error');
+                throw e;
             }
-            // إعادة تعيين المؤقتات الأساسية (سنضيفها لاحقاً في الأماكن المناسبة)
-        })();
-
-// ============================================================
-//  API HELPER (الاتصال بالخادم عبر المسار المطلق)
-// ============================================================
-async function apiCall(action, params = {}) {
-    const baseUrl = 'http://127.0.0.1:8080/api';
-    const url = new URL(baseUrl);
-    url.searchParams.append('action', action);
-    Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-            url.searchParams.append(key, params[key]);
         }
-    });
-    try {
-        const response = await fetch(url.toString(), { method: 'GET', headers: { 'Accept': 'application/json' } });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.json();
-    } catch (e) {
-        console.error('API Error:', e);
-        showToast('خطأ في الاتصال بالخادم', 'error');
-        throw e;
-    }
-}
 
         // ============================================================
         //  TOAST & LOADING
