@@ -37,6 +37,8 @@ import java.util.concurrent.locks.ReentrantLock
  * - إصلاح دوال العميل لاستخدام parties.phone بدلاً من party_contacts
  * - إصلاح توقيع recordDieselDelivery ليتوافق مع SmsReceiver
  * - إضافة دوال مفقودة: getPartyIdByPhone, getRetentionDays, getSystemSetting
+ *
+ * التعديل الأخير: إضافة مستخدم افتراضي "خليل أحمد" في دالة onCreate
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
@@ -83,8 +85,20 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         try {
             createAllTables(db)
             insertInitialData(db)
+
+            // ===== إدراج المستخدم الافتراضي الجديد "خليل أحمد" =====
+            // يتم التشفير بنفس طريقة insertInitialData للحفاظ على التوافق
+            val (hashedPassword, salt) = hashPassword("123456")
+            // نقوم بتخزين التجزئة والملح (الملح غير مستخدم حالياً في الجدول ولكن نحتفظ به للتوافق)
+            // نستخدم INSERT OR IGNORE لتجنب التكرار إذا كان المستخدم موجوداً مسبقاً
+            db.execSQL(
+                "INSERT OR IGNORE INTO users (username, password_hash, full_name, role_id) VALUES (?, ?, ?, ?)",
+                arrayOf("خليل أحمد", hashedPassword, "المدير العام", 1)
+            )
+            Log.d(TAG, "تم إدراج المستخدم الافتراضي 'خليل أحمد' (role_id=1) بنجاح")
+
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V8 created successfully with full schema")
+            Log.d(TAG, "Database V8 created successfully with full schema and default user 'خليل أحمد'")
         } catch (e: Exception) {
             Log.e(TAG, "Error creating database: ${e.message}", e)
             throw e
@@ -4363,7 +4377,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
         """)
 
-        // Default Admin User (password: admin123)
+        // Default Admin User (password: admin123) - يتم إدراج المستخدم الافتراضي الأساسي
         val (hash, salt) = hashPassword("admin123")
         db.execSQL("""
             INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
