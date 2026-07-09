@@ -38,7 +38,7 @@ import java.util.concurrent.locks.ReentrantLock
  * - إصلاح توقيع recordDieselDelivery ليتوافق مع SmsReceiver
  * - إضافة دوال مفقودة: getPartyIdByPhone, getRetentionDays, getSystemSetting
  *
- * التعديل الأخير: إضافة مستخدم افتراضي "خليل أحمد" في دالة onCreate
+ * التعديل الجديد: إضافة مستخدم افتراضي "خليل أحمد" بصلاحية SUPER_ADMIN
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
@@ -85,20 +85,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         try {
             createAllTables(db)
             insertInitialData(db)
-
-            // ===== إدراج المستخدم الافتراضي الجديد "خليل أحمد" =====
-            // يتم التشفير بنفس طريقة insertInitialData للحفاظ على التوافق
-            val (hashedPassword, salt) = hashPassword("123456")
-            // نقوم بتخزين التجزئة والملح (الملح غير مستخدم حالياً في الجدول ولكن نحتفظ به للتوافق)
-            // نستخدم INSERT OR IGNORE لتجنب التكرار إذا كان المستخدم موجوداً مسبقاً
-            db.execSQL(
-                "INSERT OR IGNORE INTO users (username, password_hash, full_name, role_id) VALUES (?, ?, ?, ?)",
-                arrayOf("خليل أحمد", hashedPassword, "المدير العام", 1)
-            )
-            Log.d(TAG, "تم إدراج المستخدم الافتراضي 'خليل أحمد' (role_id=1) بنجاح")
-
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V8 created successfully with full schema and default user 'خليل أحمد'")
+            Log.d(TAG, "Database V8 created successfully with full schema")
         } catch (e: Exception) {
             Log.e(TAG, "Error creating database: ${e.message}", e)
             throw e
@@ -4304,7 +4292,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 20. INITIAL DATA
+    // 20. INITIAL DATA (بما في ذلك المستخدم الافتراضي "خليل أحمد")
     // ================================================================
     private fun insertInitialData(db: SQLiteDatabase) {
         // Currencies
@@ -4377,12 +4365,20 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
         """)
 
-        // Default Admin User (password: admin123) - يتم إدراج المستخدم الافتراضي الأساسي
-        val (hash, salt) = hashPassword("admin123")
+        // Default Admin User (password: admin123)
+        val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("""
             INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
-            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-777-000-000', '$hash', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
+            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
+
+        // ===== إدراج المستخدم الافتراضي الجديد (خليل أحمد - SUPER_ADMIN) =====
+        val (hashKhalil, saltKhalil) = hashPassword("123321")
+        db.execSQL("""
+            INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
+            VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
+        """)
+        // =================================================================
 
         // Fuel Types
         db.execSQL("""
