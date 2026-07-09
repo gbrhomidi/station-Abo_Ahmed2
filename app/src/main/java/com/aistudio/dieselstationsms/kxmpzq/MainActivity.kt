@@ -61,7 +61,6 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - دورة حياة محسنة وإدارة ذاكرة
  * - واجهة JavaScript للتفاعل مع التطبيق
  * - دعم مسح QR وباركود عبر مكتبة html5-qrcode (تُحمَّل من assets)
- * - إعادة محاولة تحميل WebView تلقائياً عند فشل الاتصال
  */
 class MainActivity : AppCompatActivity() {
 
@@ -72,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         private const val WEBVIEW_LOAD_DELAY_MS = 4000L
         private const val WEBVIEW_INITIAL_RETRY_DELAY_MS = 2000L
         private const val WEBVIEW_MAX_RETRY_DELAY_MS = 15000L
-        private const val MAX_WEBVIEW_RETRIES = 10
+        private const val MAX_WEBVIEW_RETRIES = 3
         private const val SERVER_PORT = 8080
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
@@ -91,6 +90,7 @@ class MainActivity : AppCompatActivity() {
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
+    private var isErrorPageShown = false
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -355,6 +355,7 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed.get()) return
                 serverReady = true
                 webViewRetryCount = 0
+                isErrorPageShown = false
                 Log.d(TAG, "WebView page finished loading: $url")
             }
 
@@ -393,21 +394,8 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
                 serverReady = false
 
-                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    val delay = calculateRetryDelay(webViewRetryCount)
-                    Log.d(TAG, "Retrying WebView in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-
-                    lifecycleScope.launch {
-                        delay(delay)
-                        if (!isDestroyed.get()) {
-                            loadWebViewUrl()
-                        }
-                    }
-                } else {
-                    Log.e(TAG, "Max WebView retries reached")
-                    showErrorPage()
-                }
+                // عرض صفحة الخطأ مباشرة دون إعادة محاولة تلقائية لمنع التحديث المستمر
+                showErrorPage()
             }
 
             @Deprecated("Deprecated in Java")
@@ -423,19 +411,8 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
                 serverReady = false
 
-                if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    val delay = calculateRetryDelay(webViewRetryCount)
-                    lifecycleScope.launch {
-                        delay(delay)
-                        if (!isDestroyed.get()) {
-                            loadWebViewUrl()
-                        }
-                    }
-                } else {
-                    Log.e(TAG, "Max WebView retries reached")
-                    showErrorPage()
-                }
+                // عرض صفحة الخطأ مباشرة دون إعادة محاولة تلقائية
+                showErrorPage()
             }
 
             override fun onReceivedSslError(
@@ -456,18 +433,51 @@ class MainActivity : AppCompatActivity() {
                 if (!isDestroyed.get()) {
                     webView = null
                     isWebViewInitialized = false
+                    // محاولة إعادة إنشاء WebView بعد فترة قصيرة
+                    handler.postDelayed({
+                        if (!isDestroyed.get()) {
+                            recreateWebView()
+                        }
+                    }, 3000)
                 }
                 return true
             }
         }
     }
 
+    private fun recreateWebView() {
+        if (isDestroyed.get()) return
+        Log.d(TAG, "Recreating WebView...")
+        // إعادة تحميل الواجهة
+        setContent {
+            MyApplicationTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    WebViewScreen(
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+            }
+        }
+        // محاولة تحميل URL بعد إعادة الإنشاء
+        handler.postDelayed({
+            if (!isDestroyed.get()) {
+                loadWebViewUrl()
+            }
+        }, 1500)
+    }
+
     // ============================================================
-    //  تحميل WebView URL
+    //  تحميل WebView URL (مُعدل لمنع التحديث المستمر)
     // ============================================================
 
     private fun loadWebViewUrl() {
         if (isDestroyed.get()) return
+
+        // إذا كانت صفحة الخطأ معروضة، لا نحاول التحميل مرة أخرى
+        if (isErrorPageShown) {
+            Log.d(TAG, "Error page is shown, skipping load")
+            return
+        }
 
         val wv = webView ?: run {
             Log.w(TAG, "WebView is null, cannot load URL")
@@ -484,11 +494,17 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading URL: ${e.message}", e)
-            retryLoadUrl()
+            // في حالة الخطأ، نعرض صفحة الخطأ مباشرة
+            showErrorPage()
         }
     }
 
     private fun retryLoadUrl() {
+        if (isErrorPageShown) {
+            Log.d(TAG, "Error page is shown, not retrying")
+            return
+        }
+
         if (webViewRetryCount < MAX_WEBVIEW_RETRIES && !isDestroyed.get()) {
             webViewRetryCount++
             val delay = calculateRetryDelay(webViewRetryCount)
@@ -496,7 +512,7 @@ class MainActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 delay(delay)
-                if (!isDestroyed.get()) {
+                if (!isDestroyed.get() && !isErrorPageShown) {
                     loadWebViewUrl()
                 }
             }
@@ -507,39 +523,96 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun calculateRetryDelay(attempt: Int): Long {
-        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1 shl (attempt - 1))
+        val delay = WEBVIEW_INITIAL_RETRY_DELAY_MS * (1L shl (attempt - 1))
         return minOf(delay, WEBVIEW_MAX_RETRY_DELAY_MS)
     }
 
     // ============================================================
-    //  عرض صفحة الخطأ
+    //  عرض صفحة الخطأ (داخل WebView)
     // ============================================================
 
     private fun showErrorPage() {
-        val wv = webView ?: return
         if (isDestroyed.get()) return
+        if (isErrorPageShown) {
+            Log.d(TAG, "Error page already shown")
+            return
+        }
+
+        isErrorPageShown = true
+        val wv = webView ?: run {
+            Log.w(TAG, "WebView is null, cannot show error page")
+            return
+        }
 
         val errorHtml = """
             <html dir="rtl">
-            <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; margin: 0; }
-                .error-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
-                h1 { color: #d32f2f; font-size: 24px; margin-bottom: 12px; }
-                p { color: #666; line-height: 1.6; margin: 8px 0; }
-                button { background: #1976d2; color: white; border: none; padding: 12px 24px;
-                        border-radius: 8px; cursor: pointer; margin-top: 20px; font-size: 16px;
-                        transition: background 0.3s; }
-                button:hover { background: #1565c0; }
-                .icon { font-size: 48px; margin-bottom: 16px; }
-            </style></head>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>خطأ في الاتصال</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', Tahoma, sans-serif;
+                        text-align: center;
+                        padding: 50px 20px;
+                        background: #f5f5f5;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        min-height: 100vh;
+                    }
+                    .error-box {
+                        background: white;
+                        padding: 30px;
+                        border-radius: 16px;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+                        max-width: 400px;
+                        margin: 0 auto;
+                    }
+                    h1 {
+                        color: #d32f2f;
+                        font-size: 24px;
+                        margin-bottom: 12px;
+                    }
+                    p {
+                        color: #666;
+                        line-height: 1.6;
+                        margin: 8px 0;
+                    }
+                    .icon {
+                        font-size: 48px;
+                        margin-bottom: 16px;
+                        display: block;
+                    }
+                    .btn-retry {
+                        background: #1976d2;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        margin-top: 20px;
+                        font-size: 16px;
+                        transition: background 0.3s;
+                    }
+                    .btn-retry:hover {
+                        background: #1565c0;
+                    }
+                    .sub-text {
+                        font-size: 12px;
+                        color: #999;
+                        margin-top: 12px;
+                    }
+                </style>
+            </head>
             <body>
                 <div class="error-box">
-                    <div class="icon">⚠️</div>
+                    <span class="icon">⚠️</span>
                     <h1>تعذر الاتصال بالخادم المحلي</h1>
                     <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
-                    <p style="font-size:12px; color:#999;">تأكد من تشغيل خدمة الخادم</p>
-                    <button onclick="location.reload()">🔄 إعادة المحاولة</button>
+                    <p class="sub-text">تأكد من تشغيل خدمة الخادم</p>
+                    <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
                 </div>
             </body>
             </html>
@@ -547,6 +620,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+            Log.d(TAG, "Error page loaded successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load error page: ${e.message}")
         }
@@ -841,12 +915,26 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // إذا كانت صفحة الخطأ معروضة ولا يوجد اتصال، نحاول إعادة التحميل مرة واحدة
+        if (!isDestroyed.get() && isErrorPageShown) {
+            // ننتظر قليلاً ثم نحاول التحميل مرة واحدة
+            handler.postDelayed({
+                if (!isDestroyed.get() && isErrorPageShown) {
+                    isErrorPageShown = false
+                    webViewRetryCount = 0
+                    loadWebViewUrl()
+                }
+            }, 2000)
+        }
+
         if (!isDestroyed.get() && webView != null) {
             if (!webView!!.isAttachedToWindow) {
                 Log.w(TAG, "WebView not attached, reloading...")
                 lifecycleScope.launch {
                     delay(500)
-                    loadWebViewUrl()
+                    if (!isDestroyed.get()) {
+                        loadWebViewUrl()
+                    }
                 }
             }
         }
