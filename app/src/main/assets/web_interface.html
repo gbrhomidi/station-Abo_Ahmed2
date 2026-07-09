@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1a3a5a">
     <title>محطة أبو أحمد – النظام المتكامل</title>
-    <!-- Font Awesome 6 (مجاني) -->
+    <!-- Font Awesome 6 (CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         /* ============================
@@ -67,6 +67,8 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
 
         .fade-in { animation: fadeIn 0.4s ease; }
         .slide-in { animation: slideIn 0.3s ease; }
@@ -121,7 +123,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             min-height: 56px;
         }
-        .app-header h1 { font-size: 16px; margin: 0; font-weight: 700; }
+        .app-header h1 { font-size: 16px; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 6px; }
         .header-actions { display: flex; gap: 10px; align-items: center; }
         .icon-btn {
             width: 34px; height: 34px; border-radius: 50%; border: none;
@@ -314,18 +316,44 @@
             .card { padding: 20px 24px; }
         }
         @media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }
+
+        .toast-container { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:3000; display:flex; flex-direction:column; gap:6px; width:90%; max-width:400px; }
+        .toast { background:var(--card-bg); color:var(--text); padding:10px 16px; border-radius:var(--radius-sm); box-shadow:var(--shadow); border:1px solid var(--border); font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; animation:fadeIn 0.3s ease; }
+        .toast.success { border-right:4px solid var(--success); }
+        .toast.error { border-right:4px solid var(--danger); }
+        .toast.warning { border-right:4px solid var(--warning); }
+        .toggle { position:relative; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+        .toggle input { display:none; }
+        .toggle-slider { width:40px; height:22px; background:var(--border); border-radius:11px; position:relative; transition:var(--transition); }
+        .toggle-slider::after { content:''; position:absolute; width:18px; height:18px; background:white; border-radius:50%; top:2px; right:2px; transition:var(--transition); box-shadow:0 2px 4px rgba(0,0,0,0.2); }
+        .toggle input:checked + .toggle-slider { background:var(--success); }
+        .toggle input:checked + .toggle-slider::after { right:20px; }
+        .scanner-container { width:100%; max-width:400px; margin:0 auto; aspect-ratio:1; border-radius:var(--radius); overflow:hidden; background:#000; border:3px solid var(--primary); position:relative; }
+        .scanner-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+        .scanner-frame { width:70%; height:70%; border:2px solid var(--secondary); border-radius:16px; position:relative; }
+        .scanner-line { position:absolute; left:0; right:0; height:2px; background:var(--secondary); box-shadow:0 0 8px var(--secondary); animation:scan 2s linear infinite; }
+        .scanner-corner { position:absolute; width:20px; height:20px; border-color:var(--secondary); border-style:solid; }
+        .scanner-corner.tl { top:-2px; left:-2px; border-width:4px 0 0 4px; }
+        .scanner-corner.tr { top:-2px; right:-2px; border-width:4px 4px 0 0; }
+        .scanner-corner.bl { bottom:-2px; left:-2px; border-width:0 0 4px 4px; }
+        .scanner-corner.br { bottom:-2px; right:-2px; border-width:0 4px 4px 0; }
+        .loading { display:inline-block; width:40px; height:40px; border:4px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 12px; }
+        .modal-overlay#loadingOverlay { background:rgba(0,0,0,0.5); }
+        .modal-overlay#loadingOverlay .modal { background:transparent; box-shadow:none; border:none; display:flex; align-items:center; justify-content:center; }
+        .modal-overlay#loadingOverlay .modal-body { color:white; text-align:center; font-size:15px; font-weight:700; }
+        .invoice-preview { background:white; color:#000; border-radius:var(--radius-sm); padding:16px; font-family:'Courier New',monospace; font-size:12px; border:2px dashed #ccc; overflow-x:auto; }
     </style>
 </head>
 <body>
     <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:3000;display:flex;flex-direction:column;gap:6px;width:90%;max-width:400px;"></div>
+    <div class="toast-container" id="toastContainer"></div>
 
     <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
         <div class="login-logo"><i class="fas fa-gas-pump"></i></div>
         <div class="login-title">محطة أبو أحمد</div>
         <div class="login-subtitle">نظام إدارة مشتقات الديزل المتطور</div>
-        <div class="login-form">
+        <div class="login-form" id="loginForm">
             <div class="input-group">
                 <label>اسم المستخدم</label>
                 <input type="text" class="input-field" id="loginUsername" placeholder="admin" value="admin">
@@ -334,10 +362,10 @@
                 <label>كلمة المرور</label>
                 <input type="password" class="input-field" id="loginPassword" placeholder="••••••" value="admin123">
             </div>
-            <button class="btn btn-primary" onclick="handleLogin()">
+            <button type="button" class="btn btn-primary" id="loginBtn">
                 <span id="loginBtnText">تسجيل الدخول</span>
             </button>
-            <button class="btn btn-biometric" onclick="handleBiometric()" id="biometricBtn" style="display:none;">
+            <button type="button" class="btn btn-biometric" onclick="handleBiometric()" id="biometricBtn" style="display:none;">
                 <i class="fas fa-fingerprint"></i> دخول بالبصمة
             </button>
         </div>
@@ -350,7 +378,7 @@
     <div class="app-container" id="appContainer">
         <!-- Header -->
         <div class="app-header">
-            <h1><i class="fas fa-gas-pump" style="margin-left:6px;"></i> أبو أحمد</h1>
+            <h1><i class="fas fa-gas-pump"></i> أبو أحمد</h1>
             <div class="header-actions">
                 <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع"><i class="fas fa-moon"></i></button>
                 <button class="icon-btn" onclick="showScreen('notifications')" title="التنبيهات"><i class="fas fa-bell"></i></button>
@@ -546,14 +574,14 @@
         <div class="screen" id="screen-qr">
             <div class="card">
                 <div class="card-title"><i class="fas fa-qrcode"></i> ماسح الباركود / QR</div>
-                <div id="qrReader" style="width:100%; max-width:400px; margin:0 auto; aspect-ratio:1; border-radius:var(--radius); overflow:hidden; background:#000; border:3px solid var(--primary); position:relative;">
-                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-                        <div style="width:70%;height:70%;border:2px solid var(--secondary);border-radius:16px;position:relative;">
-                            <div style="position:absolute;width:20px;height:20px;border-color:var(--secondary);border-style:solid;border-width:4px 0 0 4px;top:-2px;left:-2px;"></div>
-                            <div style="position:absolute;width:20px;height:20px;border-color:var(--secondary);border-style:solid;border-width:4px 4px 0 0;top:-2px;right:-2px;"></div>
-                            <div style="position:absolute;width:20px;height:20px;border-color:var(--secondary);border-style:solid;border-width:0 0 4px 4px;bottom:-2px;left:-2px;"></div>
-                            <div style="position:absolute;width:20px;height:20px;border-color:var(--secondary);border-style:solid;border-width:0 4px 4px 0;bottom:-2px;right:-2px;"></div>
-                            <div style="position:absolute;left:0;right:0;height:2px;background:var(--secondary);box-shadow:0 0 8px var(--secondary);animation:scan 2s linear infinite;"></div>
+                <div class="scanner-container" id="qrReader">
+                    <div class="scanner-overlay">
+                        <div class="scanner-frame">
+                            <div class="scanner-corner tl"></div>
+                            <div class="scanner-corner tr"></div>
+                            <div class="scanner-corner bl"></div>
+                            <div class="scanner-corner br"></div>
+                            <div class="scanner-line"></div>
                         </div>
                     </div>
                 </div>
@@ -994,7 +1022,7 @@
         <div class="modal" style="max-width:380px;">
             <div class="modal-header"><h2 class="modal-title"><i class="fas fa-receipt"></i> معاينة الفاتورة</h2><button class="modal-close" onclick="closeModal('invoiceModal')">✕</button></div>
             <div class="modal-body">
-                <div class="invoice-preview print-area" id="invoicePreview" style="background:white;color:#000;border-radius:var(--radius-sm);padding:16px;font-family:'Courier New',monospace;font-size:12px;border:2px dashed #ccc;overflow-x:auto;"></div>
+                <div class="invoice-preview print-area" id="invoicePreview"></div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" onclick="printInvoice()"><i class="fas fa-print"></i> طباعة</button>
@@ -1005,30 +1033,31 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div class="modal-overlay" id="loadingOverlay" style="background:rgba(0,0,0,0.5);">
-        <div style="text-align:center; color:white;">
-            <div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px;"></div>
-            <div style="font-size:15px; font-weight:700;">جاري المعالجة...</div>
+    <div class="modal-overlay" id="loadingOverlay">
+        <div class="modal" style="background:transparent; box-shadow:none; border:none; max-width:200px; max-height:200px; transform:none;">
+            <div class="modal-body" style="color:white; text-align:center; padding:20px;">
+                <div class="loading"></div>
+                <div style="font-size:15px; font-weight:700;">جاري المعالجة...</div>
+            </div>
         </div>
     </div>
 
-    <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-        .toggle { position:relative; display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
-        .toggle input { display:none; }
-        .toggle-slider { width:40px; height:22px; background:var(--border); border-radius:11px; position:relative; transition:var(--transition); }
-        .toggle-slider::after { content:''; position:absolute; width:18px; height:18px; background:white; border-radius:50%; top:2px; right:2px; transition:var(--transition); box-shadow:0 2px 4px rgba(0,0,0,0.2); }
-        .toggle input:checked + .toggle-slider { background:var(--success); }
-        .toggle input:checked + .toggle-slider::after { right:20px; }
-        .toast { background:var(--card-bg);color:var(--text);padding:10px 16px;border-radius:var(--radius-sm);box-shadow:var(--shadow);border:1px solid var(--border);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;animation:fadeIn 0.3s ease; }
-        .toast.success { border-right:4px solid var(--success); }
-        .toast.error { border-right:4px solid var(--danger); }
-        .toast.warning { border-right:4px solid var(--warning); }
-    </style>
-
     <!-- ==================== JAVASCRIPT ==================== -->
     <script>
+        // ============================================================
+        //  منع إعادة التحميل التلقائي للصفحة
+        //  إزالة أي setInterval أو setTimeout قد يسبب تحديث مستمر
+        // ============================================================
+        (function() {
+            // حفظ جميع المؤقتات وإلغائها (نحتفظ فقط بالمؤقتات الضرورية التي سنضيفها لاحقاً)
+            var highestId = setTimeout(function(){}, 0);
+            for (var i = 0; i < highestId; i++) {
+                clearTimeout(i);
+                clearInterval(i);
+            }
+            // إعادة تعيين المؤقتات الأساسية (سنضيفها لاحقاً في الأماكن المناسبة)
+        })();
+
         // ============================================================
         //  API HELPER
         // ============================================================
@@ -1098,12 +1127,22 @@
         }
 
         // ============================================================
-        //  LOGIN
+        //  LOGIN (مُصلح بالكامل)
         // ============================================================
-        async function handleLogin() {
+        async function handleLogin(event) {
+            // منع السلوك الافتراضي للنموذج
+            if (event && event.preventDefault) {
+                event.preventDefault();
+            }
+
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
-            document.getElementById('loginBtnText').innerHTML = '<div style="width:18px;height:18px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>';
+            const btn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('loginBtnText');
+
+            // تعطيل الزر لمنع النقر المتكرر
+            btn.disabled = true;
+            btnText.innerHTML = '<div style="width:18px;height:18px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>';
 
             try {
                 const result = await apiCall('login', { username, password });
@@ -1112,6 +1151,7 @@
                     localStorage.setItem('user', JSON.stringify(result.user));
                     document.getElementById('loginScreen').classList.add('hidden');
                     document.getElementById('appContainer').classList.add('active');
+                    // تحميل البيانات بعد تسجيل الدخول
                     await loadDashboard();
                     await loadCustomers();
                     await loadSaleDropdowns();
@@ -1129,9 +1169,11 @@
                     showToast(result.error || 'بيانات خاطئة', 'error');
                 }
             } catch (e) {
-                showToast('فشل الاتصال', 'error');
+                showToast('فشل الاتصال بالخادم', 'error');
+                console.error(e);
             } finally {
-                document.getElementById('loginBtnText').textContent = 'تسجيل الدخول';
+                btn.disabled = false;
+                btnText.textContent = 'تسجيل الدخول';
             }
         }
 
@@ -1142,6 +1184,42 @@
                 showToast('الميزة غير مدعومة في هذا المتصفح', 'warning');
             }
         }
+
+        // ربط زر تسجيل الدخول والنموذج بشكل صحيح
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginBtn = document.getElementById('loginBtn');
+            const loginForm = document.getElementById('loginForm');
+
+            if (loginBtn) {
+                loginBtn.addEventListener('click', handleLogin);
+            }
+            if (loginForm) {
+                loginForm.addEventListener('submit', handleLogin);
+            }
+
+            // التحقق من وجود توكن لتسجيل الدخول التلقائي
+            const darkMode = localStorage.getItem('darkMode') === 'true';
+            if (darkMode) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('appContainer').classList.add('active');
+                loadDashboard();
+                loadCustomers();
+                loadSaleDropdowns();
+                loadPaymentAndDepositCustomers();
+                loadInventory();
+                loadEmployees();
+                loadActivityLogs();
+                loadSmsLogs();
+                loadWhitelist();
+                loadSettings();
+                loadTanksAndPumps();
+                loadMaintenance();
+            }
+        });
 
         // ============================================================
         //  DASHBOARD
@@ -1549,7 +1627,7 @@
                 due_date: dueDate,
                 notes: data.get('notes') || '',
                 is_credit: isCredit ? 1 : 0,
-                shift_id: 1 // مؤقت
+                shift_id: 1
             };
             if (!params.customer_party_id || !params.fuel_type_id || !params.pump_id || !params.liters) {
                 showToast('يرجى ملء جميع الحقول المطلوبة', 'warning');
@@ -1918,10 +1996,10 @@
                     container.innerHTML = `
                         <div class="card" style="background:var(--bg);">
                             <div class="card-title"><i class="fas fa-file-alt"></i> تقرير نهاية اليوم</div>
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>إجمالي المبيعات</span><span>${(data.total_sales || 0).toLocaleString()} ريال</span></div>
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>اللترات المباعة</span><span>${(data.total_liters || 0).toFixed(0)} لتر</span></div>
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>عدد المعاملات</span><span>${data.total_transactions || 0}</span></div>
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>إجمالي المدفوعات</span><span>${(data.total_payments || 0).toLocaleString()} ريال</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>إجمالي المبيعات</span><span>${(data.total_sales || 0).toLocaleString()} ريال</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>اللترات المباعة</span><span>${(data.total_liters || 0).toFixed(0)} لتر</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>عدد المعاملات</span><span>${data.total_transactions || 0}</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>إجمالي المدفوعات</span><span>${(data.total_payments || 0).toLocaleString()} ريال</span></div>
                             <div style="margin-top:6px; font-size:11px; color:var(--text-secondary);">التاريخ: ${data.report_date || ''}</div>
                         </div>
                     `;
@@ -1948,9 +2026,9 @@
                     const data = result.data;
                     document.getElementById('profitDetails').innerHTML = `
                         <div style="padding:10px;">
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>الإيرادات</span><span>${(data.revenue || 0).toLocaleString()} ريال</span></div>
-                            <div class="invoice-row" style="display:flex;justify-content:space-between;padding:4px 0;"><span>التكاليف</span><span>${(data.cost || 0).toLocaleString()} ريال</span></div>
-                            <div class="invoice-row" style="font-weight:700; font-size:16px; padding:8px 0 4px;">
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>الإيرادات</span><span>${(data.revenue || 0).toLocaleString()} ريال</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:4px 0;"><span>التكاليف</span><span>${(data.cost || 0).toLocaleString()} ريال</span></div>
+                            <div style="font-weight:700; font-size:16px; padding:8px 0 4px; display:flex;justify-content:space-between;">
                                 <span>الأرباح/الخسائر</span>
                                 <span style="color:${(data.profit || 0) >= 0 ? 'var(--success)' : 'var(--danger)'};">
                                     ${(data.profit || 0).toLocaleString()} ريال
@@ -2408,9 +2486,10 @@
         }
 
         // ============================================================
-        //  INIT
+        //  INIT (بدون أي مؤقتات غير ضرورية)
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
+            // التحقق من وجود توكن لتسجيل الدخول التلقائي
             const darkMode = localStorage.getItem('darkMode') === 'true';
             if (darkMode) {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -2432,14 +2511,13 @@
                 loadTanksAndPumps();
                 loadMaintenance();
             }
+
+            // تشغيل QR Scanner إذا كانت الشاشة ظاهرة
             setTimeout(() => {
                 if (document.getElementById('screen-qr').classList.contains('active')) {
                     startQrScanner();
                 }
             }, 1000);
-
-            // منع إعادة تحميل الصفحة بشكل متكرر (إزالة أي setInterval غير ضروري)
-            // إذا كان هناك أي كود يقوم بـ location.reload() بشكل دوري، سنقوم بإيقافه هنا
         });
 
         // مراقبة ظهور شاشة QR لتشغيل الماسح
