@@ -45,28 +45,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * MainActivity - النشاط الرئيسي لتطبيق محطة أبو أحمد لمشتقات الديزل
- *
- * الإصدار 4.1 – مُحسَّن مع معالجة اتصال الخادم المحلي
- *
- * التحسينات الجديدة:
- * - زيادة وقت انتظار الخادم قبل تحميل WebView (من 4 ثوانٍ إلى 7 ثوانٍ)
- * - إضافة فحص دوري لجاهزية الخادم قبل تحميل WebView
- * - إعادة محاولة الاتصال تلقائياً عند فشل الاتصال
- * - عرض صفحة تحميل بدلاً من صفحة الخطأ الفورية
- * - تحسين معالجة الأخطاء ومنع التحديث المستمر للصفحة
- */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
-        private const val SERVICE_START_DELAY_MS = 3000L
-        private const val WEBVIEW_LOAD_DELAY_MS = 7000L  // زيادة الوقت لانتظار الخادم
+        private const val SERVICE_START_DELAY_MS = 2000L
         private const val SERVER_CHECK_INTERVAL_MS = 1000L
-        private const val MAX_SERVER_CHECKS = 10
-        private const val SERVER_PORT = 8080
+        private const val MAX_SERVER_CHECKS = 15
         private const val MAX_WEBVIEW_RETRIES = 3
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
@@ -74,30 +60,19 @@ class MainActivity : AppCompatActivity() {
         private const val BIOMETRIC_CANCEL = "إلغاء"
     }
 
-    // ============================================================
-    //  متغيرات الحالة
-    // ============================================================
-
     private var webView: WebView? = null
     private var geminiApiKey: String = ""
     private var serverReady = false
     private var webViewRetryCount = 0
-    private var serverCheckCount = 0
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
     private var isErrorPageShown = false
-    private var isFirstLoad = true
-    private var isLoadingPageShown = false
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     private lateinit var dbHelper: DatabaseHelper
-
-    // ============================================================
-    //  دورة حياة النشاط
-    // ============================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,7 +103,6 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
-        // بدء خدمة الخادم المحلي
         lifecycleScope.launch {
             delay(SERVICE_START_DELAY_MS)
             if (!isDestroyed.get()) {
@@ -136,7 +110,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // عرض واجهة Compose مع WebView
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -147,15 +120,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // انتظار الخادم ثم تحميل WebView
         lifecycleScope.launch {
-            // انتظار الخادم مع فحص دوري
-            val serverReady = waitForServer()
-            if (serverReady) {
-                Log.d(TAG, "Server is ready, loading WebView...")
-                delay(WEBVIEW_LOAD_DELAY_MS)
+            val port = waitForServer()
+            if (port > 0) {
+                Log.d(TAG, "Server is ready at port $port, loading WebView...")
+                delay(500)
                 if (!isDestroyed.get()) {
-                    loadWebViewUrl()
+                    loadWebViewUrl(port)
                 }
             } else {
                 Log.e(TAG, "Server not ready after max checks, showing error page")
@@ -166,15 +137,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ============================================================
-    //  فحص جاهزية الخادم
-    // ============================================================
-
-    private suspend fun waitForServer(): Boolean {
+    private suspend fun waitForServer(): Int {
         var attempts = 0
+        val port = SMSService.actualPort
         while (attempts < MAX_SERVER_CHECKS && !isDestroyed.get()) {
             try {
-                val url = URL("http://127.0.0.1:$SERVER_PORT/")
+                val url = URL("http://127.0.0.1:$port/")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 1000
                 connection.readTimeout = 1000
@@ -182,8 +150,8 @@ class MainActivity : AppCompatActivity() {
                 val responseCode = connection.responseCode
                 connection.disconnect()
                 if (responseCode > 0) {
-                    Log.d(TAG, "Server is up (attempt ${attempts + 1})")
-                    return true
+                    Log.d(TAG, "Server is up on port $port (attempt ${attempts + 1})")
+                    return port
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Server not ready yet (attempt ${attempts + 1}): ${e.message}")
@@ -191,13 +159,89 @@ class MainActivity : AppCompatActivity() {
             attempts++
             delay(SERVER_CHECK_INTERVAL_MS)
         }
-        return false
+        return -1
+    }
+
+    private fun loadWebViewUrl(port: Int) {
+        if (isDestroyed.get()) return
+        val wv = webView ?: run {
+            Log.w(TAG, "WebView is null, cannot load URL")
+            return
+        }
+
+        try {
+            if (wv.isAttachedToWindow) {
+                val url = "http://127.0.0.1:$port/"
+                Log.d(TAG, "Loading URL: $url")
+                wv.loadUrl(url)
+            } else {
+                Log.w(TAG, "WebView not attached to window yet, retrying...")
+                handler.postDelayed({
+                    if (!isDestroyed.get()) {
+                        loadWebViewUrl(port)
+                    }
+                }, 500)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading URL: ${e.message}", e)
+            if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
+                webViewRetryCount++
+                handler.postDelayed({
+                    if (!isDestroyed.get()) {
+                        loadWebViewUrl(port)
+                    }
+                }, 2000L * webViewRetryCount)
+            } else {
+                showErrorPage()
+            }
+        }
+    }
+
+    private fun showErrorPage() {
+        if (isDestroyed.get() || isErrorPageShown) return
+        isErrorPageShown = true
+        val wv = webView ?: return
+
+        val errorHtml = """
+            <html dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>خطأ في الاتصال</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, sans-serif; text-align: center; padding: 50px 20px; background: #f5f5f5; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                    .error-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+                    h1 { color: #d32f2f; font-size: 24px; margin-bottom: 12px; }
+                    p { color: #666; line-height: 1.6; margin: 8px 0; }
+                    .icon { font-size: 48px; margin-bottom: 16px; display: block; }
+                    .btn-retry { background: #1976d2; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-top: 16px; font-size: 16px; transition: background 0.3s; }
+                    .btn-retry:hover { background: #1565c0; }
+                    .sub-text { font-size: 12px; color: #999; margin-top: 12px; }
+                </style>
+            </head>
+            <body>
+                <div class="error-box">
+                    <span class="icon">⚠️</span>
+                    <h1>تعذر الاتصال بالخادم المحلي</h1>
+                    <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
+                    <p class="sub-text">تأكد من تشغيل خدمة الخادم</p>
+                    <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+
+        try {
+            wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
+            Log.d(TAG, "Error page loaded")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load error page: ${e.message}")
+        }
     }
 
     // ============================================================
-    //  إدارة مفتاح Gemini
+    // باقي الدوال
     // ============================================================
-
     private fun loadEnvKey(key: String): String {
         return try {
             assets.open(".env").use { stream ->
@@ -223,15 +267,6 @@ class MainActivity : AppCompatActivity() {
         val key = Build.FINGERPRINT.hashCode().toByte()
         return value.map { (it.code xor key.toInt()).toChar() }.joinToString("")
     }
-
-    private fun decryptInMemory(encrypted: String): String {
-        val key = Build.FINGERPRINT.hashCode().toByte()
-        return encrypted.map { (it.code xor key.toInt()).toChar() }.joinToString("")
-    }
-
-    // ============================================================
-    //  إدارة الأذونات
-    // ============================================================
 
     private fun requestAllPermissions() {
         val permissions = mutableListOf<String>()
@@ -273,10 +308,6 @@ class MainActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
     }
 
-    // ============================================================
-    //  إدارة خدمة SMSService
-    // ============================================================
-
     private fun startSMSService() {
         if (isDestroyed.get()) {
             Log.w(TAG, "Activity is destroyed, not starting service")
@@ -298,20 +329,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
         }
     }
-
-    private fun stopSMSService() {
-        try {
-            val intent = Intent(this, SMSService::class.java)
-            stopService(intent)
-            Log.d(TAG, "SMSService stopped")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error stopping SMSService", e)
-        }
-    }
-
-    // ============================================================
-    //  إدارة WebView
-    // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
@@ -395,7 +412,6 @@ class MainActivity : AppCompatActivity() {
                 serverReady = true
                 webViewRetryCount = 0
                 isErrorPageShown = false
-                isLoadingPageShown = false
                 Log.d(TAG, "WebView page finished loading: $url")
             }
 
@@ -426,27 +442,8 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (isDestroyed.get()) return
-
-                val errorCode = error?.errorCode ?: -1
-                val description = error?.description?.toString() ?: "Unknown error"
-                val failingUrl = request?.url?.toString() ?: "unknown"
-
-                Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
-                serverReady = false
-
-                // إذا كانت هذه هي المحاولة الأولى ولا تظهر صفحة الخطأ، حاول مرة أخرى
-                if (!isErrorPageShown && !isLoadingPageShown && webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    val delay = 2000L * webViewRetryCount
-                    Log.d(TAG, "Retrying WebView load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-                    handler.postDelayed({
-                        if (!isDestroyed.get() && !isErrorPageShown) {
-                            loadWebViewUrl()
-                        }
-                    }, delay)
-                } else if (!isErrorPageShown) {
-                    showErrorPage()
-                }
+                Log.w(TAG, "WebView error: ${error?.description}")
+                showErrorPage()
             }
 
             @Deprecated("Deprecated in Java")
@@ -458,22 +455,8 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
-
                 Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
-                serverReady = false
-
-                if (!isErrorPageShown && !isLoadingPageShown && webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                    webViewRetryCount++
-                    val delay = 2000L * webViewRetryCount
-                    Log.d(TAG, "Retrying WebView load in ${delay}ms (attempt $webViewRetryCount/$MAX_WEBVIEW_RETRIES)")
-                    handler.postDelayed({
-                        if (!isDestroyed.get() && !isErrorPageShown) {
-                            loadWebViewUrl()
-                        }
-                    }, delay)
-                } else if (!isErrorPageShown) {
-                    showErrorPage()
-                }
+                showErrorPage()
             }
 
             override fun onReceivedSslError(
@@ -521,254 +504,11 @@ class MainActivity : AppCompatActivity() {
             if (!isDestroyed.get()) {
                 isErrorPageShown = false
                 webViewRetryCount = 0
-                loadWebViewUrl()
+                val port = SMSService.actualPort
+                loadWebViewUrl(port)
             }
         }, 2000)
     }
-
-    // ============================================================
-    //  تحميل WebView URL
-    // ============================================================
-
-    private fun loadWebViewUrl() {
-        if (isDestroyed.get()) return
-
-        // إذا كانت صفحة الخطأ معروضة ولا توجد محاولات إعادة متبقية
-        if (isErrorPageShown) {
-            Log.d(TAG, "Error page is shown, skipping load")
-            return
-        }
-
-        val wv = webView ?: run {
-            Log.w(TAG, "WebView is null, cannot load URL")
-            return
-        }
-
-        try {
-            if (wv.isAttachedToWindow) {
-                // عرض صفحة تحميل مؤقتة
-                if (!isLoadingPageShown) {
-                    showLoadingPage()
-                }
-                Log.d(TAG, "Loading URL: http://127.0.0.1:$SERVER_PORT/")
-                wv.loadUrl("http://127.0.0.1:$SERVER_PORT/")
-            } else {
-                Log.w(TAG, "WebView not attached to window yet, retrying...")
-                handler.postDelayed({
-                    if (!isDestroyed.get() && !isErrorPageShown) {
-                        loadWebViewUrl()
-                    }
-                }, 1000)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading URL: ${e.message}", e)
-            if (webViewRetryCount < MAX_WEBVIEW_RETRIES) {
-                webViewRetryCount++
-                handler.postDelayed({
-                    if (!isDestroyed.get() && !isErrorPageShown) {
-                        loadWebViewUrl()
-                    }
-                }, 2000L * webViewRetryCount)
-            } else {
-                showErrorPage()
-            }
-        }
-    }
-
-    // ============================================================
-    //  عرض صفحة التحميل المؤقتة
-    // ============================================================
-
-    private fun showLoadingPage() {
-        if (isDestroyed.get() || isLoadingPageShown) return
-        isLoadingPageShown = true
-
-        val wv = webView ?: return
-        val loadingHtml = """
-            <html dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>جاري التحميل...</title>
-                <style>
-                    body {
-                        font-family: 'Segoe UI', Tahoma, sans-serif;
-                        text-align: center;
-                        padding: 50px 20px;
-                        background: #f5f5f5;
-                        margin: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                    }
-                    .loader-box {
-                        background: white;
-                        padding: 40px;
-                        border-radius: 16px;
-                        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                        max-width: 350px;
-                        margin: 0 auto;
-                    }
-                    .spinner {
-                        width: 50px;
-                        height: 50px;
-                        border: 4px solid #e0e0e0;
-                        border-top-color: #1a3a5a;
-                        border-radius: 50%;
-                        animation: spin 1s linear infinite;
-                        margin: 0 auto 20px;
-                    }
-                    @keyframes spin {
-                        to { transform: rotate(360deg); }
-                    }
-                    h2 {
-                        color: #1a3a5a;
-                        font-size: 20px;
-                        margin-bottom: 8px;
-                    }
-                    p {
-                        color: #666;
-                        font-size: 14px;
-                    }
-                    .sub-text {
-                        font-size: 12px;
-                        color: #999;
-                        margin-top: 12px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="loader-box">
-                    <div class="spinner"></div>
-                    <h2>⛽ محطة أبو أحمد</h2>
-                    <p>جاري تحميل النظام...</p>
-                    <p class="sub-text">يرجى الانتظار قليلاً</p>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-
-        try {
-            wv.loadDataWithBaseURL(null, loadingHtml, "text/html", "UTF-8", null)
-            Log.d(TAG, "Loading page shown")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load loading page: ${e.message}")
-            isLoadingPageShown = false
-        }
-    }
-
-    // ============================================================
-    //  عرض صفحة الخطأ
-    // ============================================================
-
-    private fun showErrorPage() {
-        if (isDestroyed.get()) return
-        if (isErrorPageShown) {
-            Log.d(TAG, "Error page already shown")
-            return
-        }
-
-        isErrorPageShown = true
-        isLoadingPageShown = false
-        val wv = webView ?: run {
-            Log.w(TAG, "WebView is null, cannot show error page")
-            return
-        }
-
-        val errorHtml = """
-            <html dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>خطأ في الاتصال</title>
-                <style>
-                    body {
-                        font-family: 'Segoe UI', Tahoma, sans-serif;
-                        text-align: center;
-                        padding: 50px 20px;
-                        background: #f5f5f5;
-                        margin: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                    }
-                    .error-box {
-                        background: white;
-                        padding: 30px;
-                        border-radius: 16px;
-                        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                        max-width: 400px;
-                        margin: 0 auto;
-                    }
-                    h1 {
-                        color: #d32f2f;
-                        font-size: 24px;
-                        margin-bottom: 12px;
-                    }
-                    p {
-                        color: #666;
-                        line-height: 1.6;
-                        margin: 8px 0;
-                    }
-                    .icon {
-                        font-size: 48px;
-                        margin-bottom: 16px;
-                        display: block;
-                    }
-                    .btn-retry {
-                        background: #1976d2;
-                        color: white;
-                        border: none;
-                        padding: 12px 24px;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        margin-top: 16px;
-                        font-size: 16px;
-                        transition: background 0.3s;
-                    }
-                    .btn-retry:hover {
-                        background: #1565c0;
-                    }
-                    .sub-text {
-                        font-size: 12px;
-                        color: #999;
-                        margin-top: 12px;
-                    }
-                    .hint {
-                        font-size: 12px;
-                        color: #1976d2;
-                        margin-top: 8px;
-                        cursor: pointer;
-                        text-decoration: underline;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="error-box">
-                    <span class="icon">⚠️</span>
-                    <h1>تعذر الاتصال بالخادم المحلي</h1>
-                    <p>يرجى التحقق من اتصالك والمحاولة مرة أخرى</p>
-                    <p class="sub-text">تأكد من تشغيل خدمة الخادم</p>
-                    <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
-                    <p class="hint" onclick="window.location.href='http://127.0.0.1:8080/'">محاولة الاتصال مباشرة</p>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-
-        try {
-            wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
-            Log.d(TAG, "Error page loaded successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to load error page: ${e.message}")
-        }
-    }
-
-    // ============================================================
-    //  معالجة الروابط المخصصة
-    // ============================================================
 
     private fun handleCustomUrl(url: String): Boolean {
         return when {
@@ -829,10 +569,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ============================================================
-    //  المصادقة البيومترية
-    // ============================================================
-
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
@@ -891,10 +627,6 @@ class MainActivity : AppCompatActivity() {
             onError("unsupported")
         }
     }
-
-    // ============================================================
-    //  واجهة JavaScript (Bridge)
-    // ============================================================
 
     inner class WebAppInterface(
         private val context: Context,
@@ -1014,10 +746,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ============================================================
-    //  دورة حياة النشاط
-    // ============================================================
-
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -1055,17 +783,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-
-        // إذا كانت صفحة الخطأ معروضة، نحاول إعادة الاتصال
         if (!isDestroyed.get() && isErrorPageShown) {
-            // نعيد تعيين علم صفحة الخطأ ونحاول مرة واحدة
             handler.postDelayed({
                 if (!isDestroyed.get() && isErrorPageShown) {
                     Log.d(TAG, "Attempting to reconnect from error page...")
                     isErrorPageShown = false
-                    isLoadingPageShown = false
                     webViewRetryCount = 0
-                    loadWebViewUrl()
+                    val port = SMSService.actualPort
+                    loadWebViewUrl(port)
                 }
             }, 3000)
         }
@@ -1076,7 +801,8 @@ class MainActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     delay(500)
                     if (!isDestroyed.get()) {
-                        loadWebViewUrl()
+                        val port = SMSService.actualPort
+                        loadWebViewUrl(port)
                     }
                 }
             }
@@ -1121,6 +847,16 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "WebView destroyed successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error destroying WebView", e)
+        }
+    }
+
+    private fun stopSMSService() {
+        try {
+            val intent = Intent(this, SMSService::class.java)
+            stopService(intent)
+            Log.d(TAG, "SMSService stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping SMSService", e)
         }
     }
 }
