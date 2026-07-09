@@ -1048,6 +1048,32 @@
         //  API HELPER (الاتصال بالخادم عبر المسار المطلق)
         // ============================================================
         async function apiCall(action, params = {}) {
+            // ─── الحل الجذري: استخدام AndroidInterface للتسجيل المحلي ───
+            if (action === 'login' && window.AndroidInterface && window.AndroidInterface.login) {
+                try {
+                    const raw = window.AndroidInterface.login(params.username || '', params.password || '');
+                    const result = JSON.parse(raw);
+                    // توحيد تنسيق الاستجابة مع ما تتوقعه handleLogin
+                    if (result.success) {
+                        return {
+                            success: true,
+                            token: result.token,
+                            user: result.user
+                        };
+                    } else {
+                        return {
+                            success: false,
+                            error: result.error || 'بيانات الدخول غير صحيحة'
+                        };
+                    }
+                } catch (e) {
+                    console.error('AndroidInterface login error:', e);
+                    showToast('خطأ في الاتصال بالنظام المحلي', 'error');
+                    throw e;
+                }
+            }
+
+            // ─── للباقي: الاتصال بالخادم الخارجي إن وجد ───
             const baseUrl = 'http://127.0.0.1:8080/api';
             const url = new URL(baseUrl);
             url.searchParams.append('action', action);
