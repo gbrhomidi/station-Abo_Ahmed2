@@ -1058,27 +1058,28 @@
             // إعادة تعيين المؤقتات الأساسية (سنضيفها لاحقاً في الأماكن المناسبة)
         })();
 
-        // ============================================================
-        //  API HELPER
-        // ============================================================
-        async function apiCall(action, params = {}) {
-            const url = new URL('/api', window.location.origin);
-            url.searchParams.append('action', action);
-            Object.keys(params).forEach(key => {
-                if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-                    url.searchParams.append(key, params[key]);
-                }
-            });
-            try {
-                const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
-            } catch (e) {
-                console.error('API Error:', e);
-                showToast('خطأ في الاتصال بالخادم', 'error');
-                throw e;
-            }
+// ============================================================
+//  API HELPER (الاتصال بالخادم عبر المسار المطلق)
+// ============================================================
+async function apiCall(action, params = {}) {
+    const baseUrl = 'http://127.0.0.1:8080/api';
+    const url = new URL(baseUrl);
+    url.searchParams.append('action', action);
+    Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+            url.searchParams.append(key, params[key]);
         }
+    });
+    try {
+        const response = await fetch(url.toString(), { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    } catch (e) {
+        console.error('API Error:', e);
+        showToast('خطأ في الاتصال بالخادم', 'error');
+        throw e;
+    }
+}
 
         // ============================================================
         //  TOAST & LOADING
