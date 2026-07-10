@@ -49,7 +49,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        const val VERSION = 9  // جعلها public للوصول من MainActivity
+        const val VERSION = 10  // جعلها public للوصول من MainActivity
 
         private const val HASH_ITERATIONS = 10000
 
@@ -7313,3 +7313,4 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             dbLock.unlock()
         }
     }
+}
