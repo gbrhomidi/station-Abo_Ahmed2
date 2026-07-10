@@ -6542,8 +6542,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
         return arr
     }
-}
-
     // ========== MISSING CRUD FUNCTIONS - ADD THESE TO DatabaseHelper.kt ==========
 
     // ----- INSERT PARTY (was missing) -----
