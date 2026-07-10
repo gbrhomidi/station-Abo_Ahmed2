@@ -12,19 +12,19 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class GeminiAIHelper(private val context: Context) {
-    
+
     companion object {
         private const val TAG = "GeminiAIHelper"
     }
-    
+
     private var generativeModel: GenerativeModel? = null
     private val chatHistory = mutableListOf<com.google.ai.client.generativeai.type.Content>()
-    
+
     fun initialize(apiKey: String) {
         try {
             val harassmentSafety = SafetySetting(HarmCategory.HARASSMENT, BlockThreshold.ONLY_HIGH)
             val hateSpeechSafety = SafetySetting(HarmCategory.HATE_SPEECH, BlockThreshold.ONLY_HIGH)
-            
+
             generativeModel = GenerativeModel(
                 modelName = "gemini-1.5-flash",
                 apiKey = apiKey,
@@ -35,13 +35,12 @@ class GeminiAIHelper(private val context: Context) {
             Log.e(TAG, "Failed to initialize Gemini AI", e)
         }
     }
-    
+
     suspend fun sendMessage(message: String): String {
         return withContext(Dispatchers.IO) {
             try {
                 val model = generativeModel ?: return@withContext "خطأ: نموذج الذكاء الاصطناعي غير مهيأ"
-                
-                // Add context about the diesel station
+
                 val stationContext = """
                     أنت مساعد ذكي لمحطة وقود (ديزل). ساعد المستخدم في:
                     - إدارة المخزون والمبيعات
@@ -49,27 +48,22 @@ class GeminiAIHelper(private val context: Context) {
                     - حسابات الورديات والموظفين
                     - التقارير المالية
                     - الإجابة على استفسارات عامة
-                    
+
                     سؤال المستخدم: $message
                 """.trimIndent()
-                
-                val chat = model.startChat(
-                    history = chatHistory
-                )
-                
+
+                val chat = model.startChat(history = chatHistory)
                 val response = chat.sendMessage(stationContext)
                 val text = response.text ?: "لم أتمكن من فهم طلبك"
-                
-                // Save to history
+
                 chatHistory.add(content("user") { text(message) })
                 chatHistory.add(content("model") { text(text) })
-                
-                // Keep history limited
+
                 if (chatHistory.size > 20) {
                     chatHistory.removeAt(0)
                     chatHistory.removeAt(0)
                 }
-                
+
                 text
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending message to AI", e)
@@ -77,18 +71,11 @@ class GeminiAIHelper(private val context: Context) {
             }
         }
     }
-    
+
     fun sendMessageSync(message: String): String {
-        return try {
-            // For synchronous calls from WebView interface
-            // Note: This should ideally be called from a coroutine
-            "يرجى استخدام sendToAI للحصول على استجابة فورية"
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in sync message", e)
-            "خطأ: ${e.message}"
-        }
+        return "يرجى استخدام sendToAI للحصول على استجابة فورية"
     }
-    
+
     fun clearHistory() {
         chatHistory.clear()
     }
