@@ -2,6 +2,8 @@ package com.aistudio.dieselstationsms.kxmpzq
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -33,11 +35,15 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -49,6 +55,8 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MainActivity"
         private const val PERMISSION_REQUEST_CODE = 1001
         private const val SERVICE_START_DELAY_MS = 2000L
+        private const val CHANNEL_ID = "station_sms_channel"
+        private const val CHANNEL_NAME = "Station SMS Service"
 
         private const val BIOMETRIC_TITLE = "المصادقة البيومترية"
         private const val BIOMETRIC_SUBTITLE = "استخدم بصمة الإصبع أو الوجه للدخول"
@@ -67,16 +75,20 @@ class MainActivity : AppCompatActivity() {
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     private lateinit var dbHelper: DatabaseHelper
+    private lateinit var geminiHelper: GeminiAIHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         dbHelper = DatabaseHelper(this)
+        geminiHelper = GeminiAIHelper(this)
+
+        createNotificationChannel()
 
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
-                Log.d(TAG, "Debug mode enabled – WebView debugging active")
+                Log.d(TAG, "Debug mode enabled")
             } catch (e: Exception) {
                 Log.w(TAG, "WebView debugging enable failed: ${e.message}")
             }
@@ -90,9 +102,10 @@ class MainActivity : AppCompatActivity() {
 
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isEmpty()) {
-            Log.w(TAG, "GEMINI_API_KEY not found in .env – AI features may be limited")
+            Log.w(TAG, "GEMINI_API_KEY not found in .env")
         } else {
             Log.d(TAG, "Gemini API key loaded successfully")
+            geminiHelper.initialize(geminiApiKey)
         }
 
         requestAllPermissions()
@@ -119,6 +132,21 @@ class MainActivity : AppCompatActivity() {
                 loadWebViewFromAssets()
             }
         }, 1500)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "قناة إشعارات خدمة الرسائل النصية"
+                setShowBadge(false)
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 
     private fun loadWebViewFromAssets() {
@@ -195,7 +223,7 @@ class MainActivity : AppCompatActivity() {
                         if (trimmed.startsWith("$key=")) {
                             val value = trimmed.substringAfter("=").trim()
                             if (value.isNotEmpty() && value != "YOUR_GEMINI_API_KEY_HERE") {
-                                encryptInMemory(value)
+                                value
                             } else null
                         } else null
                     }.firstOrNull() ?: ""
@@ -205,11 +233,6 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "Could not load .env key $key: ${e.message}")
             ""
         }
-    }
-
-    private fun encryptInMemory(value: String): String {
-        val key = Build.FINGERPRINT.hashCode().toByte()
-        return value.map { (it.code xor key.toInt()).toChar() }.joinToString("")
     }
 
     private fun requestAllPermissions() {
@@ -307,7 +330,7 @@ class MainActivity : AppCompatActivity() {
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
-                            databaseEnabled = false
+                            databaseEnabled = true
                             setSupportZoom(true)
                             builtInZoomControls = true
                             displayZoomControls = false
@@ -343,7 +366,7 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "WebView created and added to FrameLayout")
                 }
             },
-            update = { /* لا حاجة للتحديث هنا */ }
+            update = { }
         )
     }
 
@@ -567,15 +590,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ================================================================
+    // WEB APP INTERFACE - COMPLETE CRUD BRIDGE
+    // ================================================================
     inner class WebAppInterface(
         private val context: Context,
         private val activity: MainActivity
     ) {
 
+        // ========== AUTHENTICATION ==========
         @JavascriptInterface
         fun login(username: String, password: String): String {
             Log.d(TAG, "login() called with username: $username")
-            try {
+            return try {
                 val authResult = dbHelper.authenticateUser(username, password)
                 if (authResult != null) {
                     val token = java.util.UUID.randomUUID().toString()
@@ -585,21 +612,19 @@ class MainActivity : AppCompatActivity() {
                         put("token", token)
                     }
                     dbHelper.logActivity(username, "login", "تسجيل دخول ناجح عبر WebInterface")
-                    return response.toString()
+                    response.toString()
                 } else {
-                    val response = JSONObject().apply {
+                    JSONObject().apply {
                         put("success", false)
                         put("error", "بيانات خاطئة")
-                    }
-                    return response.toString()
+                    }.toString()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Login error", e)
-                val response = JSONObject().apply {
+                JSONObject().apply {
                     put("success", false)
                     put("error", "خطأ داخلي: ${e.message}")
-                }
-                return response.toString()
+                }.toString()
             }
         }
 
@@ -626,11 +651,1180 @@ class MainActivity : AppCompatActivity() {
             return "requested"
         }
 
+        // ========== GEMINI AI ==========
         @JavascriptInterface
         fun getGeminiApiKey(): String {
             return if (geminiApiKey.isNotEmpty()) "configured" else "not_configured"
         }
 
+        @JavascriptInterface
+        fun sendToAI(message: String): String {
+            return try {
+                if (geminiApiKey.isEmpty()) {
+                    return JSONObject().apply {
+                        put("success", false)
+                        put("error", "مفتاح Gemini API غير مُهيأ")
+                    }.toString()
+                }
+
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val response = geminiHelper.sendMessage(message)
+                        withContext(Dispatchers.Main) {
+                            val result = JSONObject().apply {
+                                put("success", true)
+                                put("response", response)
+                            }
+                            safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            val result = JSONObject().apply {
+                                put("success", false)
+                                put("error", e.message)
+                            }
+                            safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        }
+                    }
+                }
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("status", "processing")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "AI send error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getAIResponse(message: String): String {
+            return try {
+                if (geminiApiKey.isEmpty()) {
+                    return JSONObject().apply {
+                        put("success", false)
+                        put("error", "مفتاح Gemini API غير مُهيأ")
+                    }.toString()
+                }
+
+                val response = geminiHelper.sendMessageSync(message)
+                JSONObject().apply {
+                    put("success", true)
+                    put("response", response)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "AI response error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== PARTIES (CUSTOMERS/SUPPLIERS/DRIVERS) ==========
+        @JavascriptInterface
+        fun addParty(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.insertParty(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تمت الإضافة بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addParty error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun updateParty(id: Long, jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val rows = dbHelper.updateParty(id, data)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                    put("message", if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "updateParty error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteParty(id: Long): String {
+            return try {
+                val rows = dbHelper.deleteParty(id)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                    put("message", if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteParty error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun archiveParty(id: Long): String {
+            return try {
+                val rows = dbHelper.archiveParty(id)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                    put("message", if (rows > 0) "تم الأرشفة بنجاح" else "لم يتم العثور على السجل")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "archiveParty error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getParties(type: String?): String {
+            return try {
+                val parties = dbHelper.getParties(type)
+                parties.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getParties error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomers(): String {
+            return getParties("customer")
+        }
+
+        @JavascriptInterface
+        fun getSuppliers(): String {
+            return getParties("supplier")
+        }
+
+        @JavascriptInterface
+        fun getDrivers(): String {
+            return getParties("driver")
+        }
+
+        @JavascriptInterface
+        fun searchParties(query: String): String {
+            return try {
+                val results = dbHelper.searchParties(query)
+                results.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "searchParties error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getPartyById(id: Long): String {
+            return try {
+                val party = dbHelper.getPartyById(id)
+                party?.toString() ?: JSONObject().apply {
+                    put("success", false)
+                    put("error", "العميل غير موجود")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getPartyById error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== ORDERS ==========
+        @JavascriptInterface
+        fun addOrder(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addOrder(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الطلب بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addOrder error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getOrders(status: String?): String {
+            return try {
+                val orders = dbHelper.getOrders(status)
+                orders.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getOrders error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getPendingOrders(): String {
+            return getOrders("pending")
+        }
+
+        // ========== DELIVERIES ==========
+        @JavascriptInterface
+        fun addDelivery(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addDelivery(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة التسليم بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addDelivery error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getDeliveries(): String {
+            return try {
+                val deliveries = dbHelper.getDeliveries()
+                deliveries.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getDeliveries error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getTodayDeliveries(): String {
+            return try {
+                val deliveries = dbHelper.getTodayDeliveries()
+                deliveries.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTodayDeliveries error", e)
+                "[]"
+            }
+        }
+
+        // ========== SALES ==========
+        @JavascriptInterface
+        fun addSale(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addFuelSale(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة البيع بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addSale error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getSales(): String {
+            return try {
+                val sales = dbHelper.getSales()
+                sales.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSales error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getTodaySales(): String {
+            return try {
+                val sales = dbHelper.getTodaySales()
+                sales.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTodaySales error", e)
+                "[]"
+            }
+        }
+
+        // ========== CASH MOVEMENTS ==========
+        @JavascriptInterface
+        fun addCashMovement(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addCashMovement(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الحركة المالية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addCashMovement error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getCashMovements(): String {
+            return try {
+                val movements = dbHelper.getCashMovements()
+                movements.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCashMovements error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getTodayCash(): String {
+            return try {
+                val cash = dbHelper.getTodayCash()
+                cash.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTodayCash error", e)
+                "[]"
+            }
+        }
+
+        // ========== METER READINGS ==========
+        @JavascriptInterface
+        fun addMeterReading(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addMeterReading(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة قراءة العداد بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addMeterReading error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getMeterReadings(): String {
+            return try {
+                val readings = dbHelper.getMeterReadings()
+                readings.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getMeterReadings error", e)
+                "[]"
+            }
+        }
+
+        // ========== TANK READINGS ==========
+        @JavascriptInterface
+        fun addTankReading(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addTankReading(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة قراءة الخزان بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addTankReading error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getTankReadings(): String {
+            return try {
+                val readings = dbHelper.getTankReadings()
+                readings.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTankReadings error", e)
+                "[]"
+            }
+        }
+
+        // ========== STOCK MOVEMENTS ==========
+        @JavascriptInterface
+        fun addStockMovement(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addStockMovement(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة حركة المخزون بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addStockMovement error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getStockMovements(): String {
+            return try {
+                val movements = dbHelper.getStockMovements()
+                movements.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getStockMovements error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getLowStockItems(): String {
+            return try {
+                val items = dbHelper.getLowStockItems()
+                items.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getLowStockItems error", e)
+                "[]"
+            }
+        }
+
+        // ========== ASSETS ==========
+        @JavascriptInterface
+        fun addAsset(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addAsset(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الأصل بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addAsset error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getAssets(): String {
+            return try {
+                val assets = dbHelper.getAssets()
+                assets.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getAssets error", e)
+                "[]"
+            }
+        }
+
+        // ========== USERS ==========
+        @JavascriptInterface
+        fun addUser(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addUser(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة المستخدم بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addUser error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getUsers(): String {
+            return try {
+                val users = dbHelper.getUsers()
+                users.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getUsers error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getUsersByRole(role: String): String {
+            return try {
+                val users = dbHelper.getUsersByRole(role)
+                users.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getUsersByRole error", e)
+                "[]"
+            }
+        }
+
+        // ========== EMPLOYEES ==========
+        @JavascriptInterface
+        fun addEmployee(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addEmployee(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الموظف بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addEmployee error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getEmployees(): String {
+            return try {
+                val employees = dbHelper.getEmployees()
+                employees.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getEmployees error", e)
+                "[]"
+            }
+        }
+
+        // ========== SHIFTS ==========
+        @JavascriptInterface
+        fun startShift(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.startShift(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم بدء الوردية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "startShift error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun endShift(id: Long, jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val rows = dbHelper.endShift(id, data)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                    put("message", if (rows > 0) "تم إنهاء الوردية بنجاح" else "لم يتم العثور على الوردية")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "endShift error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getCurrentShift(): String {
+            return try {
+                val shift = dbHelper.getCurrentShift()
+                shift?.toString() ?: JSONObject().apply {
+                    put("success", false)
+                    put("error", "لا توجد وردية نشطة")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCurrentShift error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getShifts(): String {
+            return try {
+                val shifts = dbHelper.getShifts()
+                shifts.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getShifts error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun addShiftSale(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addShiftSale(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة بيع الوردية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addShiftSale error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun addShiftDelivery(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addShiftDelivery(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة تسليم الوردية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addShiftDelivery error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun addShiftExpense(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addShiftExpense(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة مصروف الوردية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addShiftExpense error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getShiftReport(shiftId: Long): String {
+            return try {
+                val report = dbHelper.getShiftReport(shiftId)
+                report.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getShiftReport error", e)
+                "[]"
+            }
+        }
+
+        // ========== NOTIFICATIONS ==========
+        @JavascriptInterface
+        fun addNotification(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addNotification(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الإشعار بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addNotification error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getNotifications(): String {
+            return try {
+                val notifications = dbHelper.getNotifications()
+                notifications.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getNotifications error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getUnreadNotificationsCount(): Int {
+            return try {
+                dbHelper.getUnreadNotificationsCount()
+            } catch (e: Exception) {
+                Log.e(TAG, "getUnreadNotificationsCount error", e)
+                0
+            }
+        }
+
+        @JavascriptInterface
+        fun markNotificationRead(id: Long): String {
+            return try {
+                val rows = dbHelper.markNotificationRead(id)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "markNotificationRead error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== SMS MESSAGES ==========
+        @JavascriptInterface
+        fun addSmsMessage(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addSmsMessage(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الرسالة بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addSmsMessage error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsMessages(): String {
+            return try {
+                val messages = dbHelper.getSmsMessages()
+                messages.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSmsMessages error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsMessagesByPhone(phone: String): String {
+            return try {
+                val messages = dbHelper.getSmsMessagesByPhone(phone)
+                messages.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSmsMessagesByPhone error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsMessagesByStatus(status: String): String {
+            return try {
+                val messages = dbHelper.getSmsMessagesByStatus(status)
+                messages.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSmsMessagesByStatus error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun updateSmsStatus(id: Long, status: String): String {
+            return try {
+                val rows = dbHelper.updateSmsStatus(id, status)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "updateSmsStatus error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsStats(): String {
+            return try {
+                val stats = dbHelper.getSmsStats()
+                stats.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSmsStats error", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsTemplates(): String {
+            return try {
+                val templates = dbHelper.getSmsTemplates()
+                templates.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSmsTemplates error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun addSmsTemplate(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addSmsTemplate(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة القالب بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addSmsTemplate error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun updateSmsTemplate(id: Long, jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val rows = dbHelper.updateSmsTemplate(id, data)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "updateSmsTemplate error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteSmsTemplate(id: Long): String {
+            return try {
+                val rows = dbHelper.deleteSmsTemplate(id)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteSmsTemplate error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== SETTINGS ==========
+        @JavascriptInterface
+        fun addSetting(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addSetting(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة الإعداد بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addSetting error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteSetting(key: String): String {
+            return try {
+                val rows = dbHelper.deleteSetting(key)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteSetting error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== DASHBOARD & REPORTS ==========
+        @JavascriptInterface
+        fun getDashboardStats(): String {
+            return try {
+                val stats = dbHelper.getDashboardStats()
+                stats.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getDashboardStats error", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun getOverduePayments(): String {
+            return try {
+                val payments = dbHelper.getOverduePayments()
+                payments.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getOverduePayments error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getActiveAlerts(): String {
+            return try {
+                val alerts = dbHelper.getActiveAlerts()
+                alerts.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getActiveAlerts error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getRecentActivity(limit: Int): String {
+            return try {
+                val activity = dbHelper.getRecentActivity(limit)
+                activity.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getRecentActivity error", e)
+                "[]"
+            }
+        }
+
+        // ========== PRODUCTS & FUEL ==========
+        @JavascriptInterface
+        fun getProducts(): String {
+            return try {
+                val products = dbHelper.getProducts()
+                products.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getProducts error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getFuelTypes(): String {
+            return try {
+                val types = dbHelper.getFuelTypes()
+                types.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getFuelTypes error", e)
+                "[]"
+            }
+        }
+
+        // ========== VEHICLES ==========
+        @JavascriptInterface
+        fun getVehicles(): String {
+            return try {
+                val vehicles = dbHelper.getVehicles()
+                vehicles.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getVehicles error", e)
+                "[]"
+            }
+        }
+
+        // ========== TANKS & PUMPS ==========
+        @JavascriptInterface
+        fun getTanks(): String {
+            return try {
+                val tanks = dbHelper.getTanks()
+                tanks.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTanks error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getPumps(): String {
+            return try {
+                val pumps = dbHelper.getPumps()
+                pumps.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getPumps error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getTankStats(): String {
+            return try {
+                val stats = dbHelper.getTankStats()
+                stats.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTankStats error", e)
+                "{}"
+            }
+        }
+
+        // ========== BACKUP & EXPORT ==========
+        @JavascriptInterface
+        fun backupDatabase(): String {
+            return try {
+                val path = dbHelper.backupDatabase()
+                JSONObject().apply {
+                    put("success", true)
+                    put("path", path)
+                    put("message", "تم إنشاء النسخة الاحتياطية بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "backupDatabase error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreDatabase(path: String): String {
+            return try {
+                val success = dbHelper.restoreDatabase(path)
+                JSONObject().apply {
+                    put("success", success)
+                    put("message", if (success) "تم الاستعادة بنجاح" else "فشل الاستعادة")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "restoreDatabase error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun exportToCSV(tableName: String): String {
+            return try {
+                val path = dbHelper.exportToCSV(tableName)
+                JSONObject().apply {
+                    put("success", true)
+                    put("path", path)
+                    put("message", "تم التصدير بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "exportToCSV error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun importFromCSV(tableName: String, path: String): String {
+            return try {
+                val count = dbHelper.importFromCSV(tableName, path)
+                JSONObject().apply {
+                    put("success", true)
+                    put("count", count)
+                    put("message", "تم استيراد $count سجل بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "importFromCSV error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getDatabaseSize(): Long {
+            return try {
+                dbHelper.getDatabaseSize()
+            } catch (e: Exception) {
+                Log.e(TAG, "getDatabaseSize error", e)
+                0L
+            }
+        }
+
+        @JavascriptInterface
+        fun getTableCounts(): String {
+            return try {
+                val counts = dbHelper.getTableCounts()
+                counts.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTableCounts error", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun vacuumDatabase(): String {
+            return try {
+                dbHelper.vacuumDatabase()
+                JSONObject().apply {
+                    put("success", true)
+                    put("message", "تم تحسين قاعدة البيانات بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "vacuumDatabase error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        // ========== UTILITY ==========
         @JavascriptInterface
         fun showToast(message: String) {
             if (isDestroyed.get()) return
@@ -654,8 +1848,9 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val json = JSONObject().apply {
                     put("version", DatabaseHelper.VERSION)
-                    put("tables_count", 42)
+                    put("tables_count", dbHelper.getTableCounts().length())
                     put("is_encrypted", false)
+                    put("size_bytes", dbHelper.getDatabaseSize())
                 }
                 json.toString()
             } catch (e: Exception) {
@@ -666,9 +1861,213 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getCustomerCount(): Int {
             return try {
-                dbHelper.getParties().length()
+                dbHelper.getParties("customer").length()
             } catch (e: Exception) {
                 0
+            }
+        }
+
+        @JavascriptInterface
+        fun getSalesByFuelType(): String {
+            return try {
+                val sales = dbHelper.getSalesByFuelType()
+                sales.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getSalesByFuelType error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getLatestMeterReadings(): String {
+            return try {
+                val readings = dbHelper.getLatestMeterReadings()
+                readings.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getLatestMeterReadings error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getAssetMaintenanceHistory(assetId: Long): String {
+            return try {
+                val history = dbHelper.getAssetMaintenanceHistory(assetId)
+                history.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getAssetMaintenanceHistory error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getUserNotifications(userId: Long): String {
+            return try {
+                val notifications = dbHelper.getUserNotifications(userId)
+                notifications.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getUserNotifications error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getUserPermissions(userId: Long): String {
+            return try {
+                val permissions = dbHelper.getUserPermissions(userId)
+                permissions.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getUserPermissions error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun checkLowStock(): String {
+            return try {
+                val items = dbHelper.checkLowStock()
+                items.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "checkLowStock error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun createStockAlert(productId: Long, threshold: Double): String {
+            return try {
+                val id = dbHelper.createStockAlert(productId, threshold)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إنشاء التنبيه بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "createStockAlert error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getAllSettingsMap(): String {
+            return try {
+                val settings = dbHelper.getAllSettingsMap()
+                settings.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getAllSettingsMap error", e)
+                "{}"
+            }
+        }
+
+        @JavascriptInterface
+        fun getDieselPrice(): Double {
+            return try {
+                dbHelper.getDieselPrice()
+            } catch (e: Exception) {
+                Log.e(TAG, "getDieselPrice error", e)
+                0.0
+            }
+        }
+
+        @JavascriptInterface
+        fun getGasolinePrice(): Double {
+            return try {
+                dbHelper.getGasolinePrice()
+            } catch (e: Exception) {
+                Log.e(TAG, "getGasolinePrice error", e)
+                0.0
+            }
+        }
+
+        @JavascriptInterface
+        fun getManagerPhone(): String {
+            return try {
+                dbHelper.getManagerPhone()
+            } catch (e: Exception) {
+                Log.e(TAG, "getManagerPhone error", e)
+                ""
+            }
+        }
+
+        @JavascriptInterface
+        fun getDriverPhones(): String {
+            return try {
+                val phones = dbHelper.getDriverPhones()
+                phones.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getDriverPhones error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getTrustedSmscList(): String {
+            return try {
+                val list = dbHelper.getTrustedSmscList()
+                list.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getTrustedSmscList error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomerBalanceByPhone(phone: String): Double {
+            return try {
+                dbHelper.getCustomerBalanceByPhone(phone)
+            } catch (e: Exception) {
+                Log.e(TAG, "getCustomerBalanceByPhone error", e)
+                0.0
+            }
+        }
+
+        @JavascriptInterface
+        fun getLastOrderByPhone(phone: String): String {
+            return try {
+                val order = dbHelper.getLastOrderByPhone(phone)
+                order?.toString() ?: JSONObject().apply {
+                    put("success", false)
+                    put("error", "لا توجد طلبات")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getLastOrderByPhone error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getOrderHistoryByPhone(phone: String): String {
+            return try {
+                val history = dbHelper.getOrderHistoryByPhone(phone)
+                history.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getOrderHistoryByPhone error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun recordDieselDelivery(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.recordDieselDelivery(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم تسجيل التسليم بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "recordDieselDelivery error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
             }
         }
     }
@@ -713,9 +2112,15 @@ class MainActivity : AppCompatActivity() {
             if (hasCriticalDenied) {
                 Toast.makeText(
                     this,
-                    "بعض الأذونات الأساسية مرفوضة. قد لا تعمل بعض الميزات.",
+                    "بعض الأذونات الأساسية مفقودة. قد لا تعمل بعض الميزات.",
                     Toast.LENGTH_LONG
                 ).show()
+            }
+        } else {
+            // All permissions granted, restart SMS service
+            lifecycleScope.launch {
+                delay(500)
+                startSMSService()
             }
         }
     }
