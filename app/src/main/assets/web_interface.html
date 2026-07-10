@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#1a3a5a">
     <title>محطة أبو أحمد – النظام المتكامل</title>
-    <!-- Font Awesome 6 (CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         /* ============================
@@ -29,7 +28,7 @@
             --radius: 16px;
             --radius-sm: 8px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --bottom-nav-height: 64px;
+            --header-height: 56px;
         }
         [data-theme="dark"] {
             --bg: #0f1115;
@@ -57,7 +56,7 @@
             min-height: 100vh;
         }
         body {
-            padding-bottom: calc(var(--bottom-nav-height) + 16px);
+            padding-bottom: 16px;
         }
 
         ::-webkit-scrollbar { width: 4px; }
@@ -69,6 +68,7 @@
         @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+        @keyframes slideRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
         .fade-in { animation: fadeIn 0.4s ease; }
         .slide-in { animation: slideIn 0.3s ease; }
@@ -118,13 +118,22 @@
         .app-header {
             position: sticky; top: 0; z-index: 100;
             background: var(--primary); color: white;
-            padding: 12px 16px;
+            padding: 0 16px;
             display: flex; align-items: center; justify-content: space-between;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            min-height: 56px;
+            min-height: var(--header-height);
+            height: var(--header-height);
         }
-        .app-header h1 { font-size: 16px; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 6px; }
-        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .app-header .header-left {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .app-header h1 {
+            font-size: 16px; margin: 0; font-weight: 700;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .app-header .header-actions {
+            display: flex; gap: 6px; align-items: center;
+        }
         .icon-btn {
             width: 34px; height: 34px; border-radius: 50%; border: none;
             background: rgba(255,255,255,0.15); color: white;
@@ -132,9 +141,119 @@
             font-size: 16px; transition: var(--transition);
         }
         .icon-btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.1); }
+        .menu-toggle {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 0.4rem 0.7rem;
+            border-radius: 10px;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .menu-toggle:hover { background: rgba(255,255,255,0.4); transform: scale(1.05); }
 
         /* ============================
-           Cards & Stats
+           Sidebar (القائمة الجانبية) - مستوردة من main.html مع تعديلات
+           ============================ */
+        .sidebar {
+            position: fixed;
+            top: var(--header-height);
+            right: -280px;
+            width: 260px;
+            height: calc(100% - var(--header-height));
+            background: var(--card-bg);
+            padding: 0.8rem 0.5rem;
+            overflow-y: auto;
+            transition: right 0.3s ease;
+            z-index: 1001;
+            box-shadow: -2px 0 15px rgba(0,0,0,0.2);
+            border-radius: 0 0 0 10px;
+        }
+        .sidebar.open { right: 0; }
+        .sidebar ul { list-style: none; padding: 0; margin: 0; }
+        .sidebar ul li {
+            padding: 0.6rem 1rem;
+            margin-bottom: 0.3rem;
+            background: linear-gradient(to left, var(--primary), var(--primary-light));
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: var(--transition);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .sidebar ul li i { font-size: 1.1rem; width: 1.8rem; text-align: center; }
+        .sidebar ul li:hover { transform: translateX(-5px); background: var(--primary); }
+        .sidebar ul li:active { transform: scale(0.97); }
+        .sidebar ul li.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            cursor: not-allowed;
+            background: linear-gradient(to left, #666, #888);
+        }
+
+        /* ============================
+           Submenu Panel (القوائم الفرعية المنبثقة)
+           ============================ */
+        .submenu-panel {
+            position: fixed;
+            background: var(--card-bg);
+            padding: 0.8rem;
+            z-index: 1004;
+            display: none;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            border: 1px solid var(--border);
+            min-width: 160px;
+            max-width: 220px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .submenu-panel.show { display: block; animation: slideRight 0.25s ease; }
+        .submenu-panel h4 {
+            font-size: 0.95rem;
+            margin: 0 0 0.5rem 0;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 0.3rem;
+            text-align: center;
+        }
+        .submenu-panel ul { list-style: none; padding: 0; margin: 0; }
+        .submenu-panel ul li {
+            background: linear-gradient(to left, var(--primary), var(--primary-light));
+            color: white;
+            padding: 0.5rem 0.8rem;
+            margin: 0.3rem 0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .submenu-panel ul li:hover { transform: translateX(-4px); background: var(--primary); }
+        .submenu-panel ul li.disabled { opacity: 0.5; pointer-events: none; background: #888; }
+
+        /* ============================
+           Overlay
+           ============================ */
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.3);
+            backdrop-filter: blur(2px);
+            display: none;
+            z-index: 998;
+        }
+        .overlay.show { display: block; animation: fadeIn 0.25s; }
+
+        /* ============================
+           بقية الأنماط الأصلية للواجهة
            ============================ */
         .card {
             background: var(--card-bg);
@@ -146,7 +265,31 @@
             transition: var(--transition);
         }
         .card:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
-        .card-title { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .back-btn {
+            background: var(--border);
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            color: var(--text);
+            transition: var(--transition);
+        }
+        .card-title .back-btn:hover { background: var(--primary); color: white; }
+
         .stats-grid {
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
             margin: 10px 12px;
@@ -164,9 +307,6 @@
         .stat-value { font-size: 20px; font-weight: 800; color: var(--primary); margin: 4px 0; }
         .stat-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
 
-        /* ============================
-           Quick Actions
-           ============================ */
         .quick-actions {
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
             margin: 10px 12px;
@@ -181,9 +321,6 @@
         .quick-btn:hover { border-color: var(--primary); background: rgba(26,58,90,0.05); transform: translateY(-2px); }
         .quick-btn .icon { font-size: 20px; }
 
-        /* ============================
-           Tables
-           ============================ */
         .table-container { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
         .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
         .data-table th { background: var(--primary); color: white; padding: 8px 10px; font-weight: 700; text-align: right; white-space: nowrap; }
@@ -193,44 +330,11 @@
         .data-table tr:hover td { background: rgba(26,58,90,0.03); }
         [data-theme="dark"] .data-table tr:hover td { background: rgba(255,255,255,0.03); }
 
-        /* ============================
-           Bottom Navigation
-           ============================ */
-        .bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            z-index: 1000;
-            background: var(--card-bg);
-            border-top: 1px solid var(--border);
-            display: flex; justify-content: space-around;
-            padding: 4px 0 8px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
-            backdrop-filter: blur(10px);
-            height: var(--bottom-nav-height);
-        }
-        .nav-item {
-            flex: 1; display: flex; flex-direction: column; align-items: center;
-            gap: 2px; padding: 4px; cursor: pointer; border: none;
-            background: none; color: var(--text-secondary);
-            font-size: 10px; font-weight: 700; transition: var(--transition);
-            position: relative;
-        }
-        .nav-item.active { color: var(--primary); }
-        .nav-item.active::before {
-            content: ''; position: absolute; top: -6px;
-            width: 30px; height: 3px; background: var(--primary);
-            border-radius: 2px;
-        }
-        .nav-item .icon { font-size: 20px; transition: var(--transition); }
-        .nav-item:hover .icon { transform: scale(1.1); }
-
-        /* ============================
-           Screens
-           ============================ */
         .screen { display: none; animation: fadeIn 0.3s ease; }
         .screen.active { display: block; }
 
         /* ============================
-           Modals
+           باقي الأنماط (modals, forms, chat, scanner, etc.)
            ============================ */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 2000;
@@ -248,45 +352,42 @@
         }
         .modal-overlay.active .modal { transform: scale(1); }
         .modal-header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-        .modal-title { font-size: 17px; font-weight: 800; color: var(--primary); margin: 0; }
+        .modal-title { font-size: 17px; font-weight: 800; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+        .modal-title .back-btn {
+            background: var(--border);
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text);
+            transition: var(--transition);
+        }
+        .modal-title .back-btn:hover { background: var(--primary); color: white; }
         .modal-close { width: 30px; height: 30px; border-radius: 50%; border: none; background: var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: var(--transition); }
         .modal-close:hover { background: var(--danger); color: white; }
         .modal-body { padding: 16px; }
         .modal-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
         .modal-footer .btn { flex: 1; min-width: 70px; }
 
-        /* ============================
-           Forms
-           ============================ */
         .form-group { margin-bottom: 14px; }
         .form-group label { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
-        .form-control {
-            width: 100%; padding: 10px 12px;
-            border: 2px solid var(--border); border-radius: var(--radius-sm);
-            background: var(--card-bg); color: var(--text);
-            font-size: 14px; outline: none; transition: var(--transition);
-            font-family: inherit;
-        }
+        .form-control { width: 100%; padding: 10px 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); background: var(--card-bg); color: var(--text); font-size: 14px; outline: none; transition: var(--transition); font-family: inherit; }
         .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,58,90,0.1); }
         select.form-control { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 12px center; padding-left: 30px; }
 
-        /* ============================
-           Chat
-           ============================ */
         .chat-container { height: 300px; display: flex; flex-direction: column; }
         .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-        .chat-bubble {
-            max-width: 85%; padding: 8px 12px; border-radius: 14px;
-            font-size: 13px; line-height: 1.5; word-wrap: break-word;
-        }
+        .chat-bubble { max-width: 85%; padding: 8px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; word-wrap: break-word; }
         .chat-bubble.user { align-self: flex-start; background: var(--primary); color: white; border-radius: 14px 14px 4px 14px; }
         .chat-bubble.ai { align-self: flex-end; background: var(--border); color: var(--text); border-radius: 14px 14px 14px 4px; }
         .chat-input-group { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border); }
         .chat-input-group input { flex: 1; }
 
-        /* ============================
-           Badges & Utilities
-           ============================ */
         .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
         .badge-success { background: rgba(40,167,69,0.15); color: var(--success); }
         .badge-danger { background: rgba(220,53,69,0.15); color: var(--danger); }
@@ -305,17 +406,6 @@
         .gap-2 { gap: 12px; }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
-
-        /* ============================
-           Responsive
-           ============================ */
-        @media (min-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-            .quick-actions { grid-template-columns: repeat(4, 1fr); }
-            .chat-container { height: 400px; }
-            .card { padding: 20px 24px; }
-        }
-        @media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }
 
         .toast-container { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:3000; display:flex; flex-direction:column; gap:6px; width:90%; max-width:400px; }
         .toast { background:var(--card-bg); color:var(--text); padding:10px 16px; border-radius:var(--radius-sm); box-shadow:var(--shadow); border:1px solid var(--border); font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; animation:fadeIn 0.3s ease; }
@@ -338,10 +428,33 @@
         .scanner-corner.bl { bottom:-2px; left:-2px; border-width:0 0 4px 4px; }
         .scanner-corner.br { bottom:-2px; right:-2px; border-width:0 4px 4px 0; }
         .loading { display:inline-block; width:40px; height:40px; border:4px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 12px; }
-        .modal-overlay#loadingOverlay { background:rgba(0,0,0,0.5); }
-        .modal-overlay#loadingOverlay .modal { background:transparent; box-shadow:none; border:none; display:flex; align-items:center; justify-content:center; }
-        .modal-overlay#loadingOverlay .modal-body { color:white; text-align:center; font-size:15px; font-weight:700; }
+
         .invoice-preview { background:white; color:#000; border-radius:var(--radius-sm); padding:16px; font-family:'Courier New',monospace; font-size:12px; border:2px dashed #ccc; overflow-x:auto; }
+
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+            .quick-actions { grid-template-columns: repeat(4, 1fr); }
+            .chat-container { height: 400px; }
+            .card { padding: 20px 24px; }
+            .sidebar { width: 220px; right: -240px; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { width: 200px; right: -220px; }
+        }
+        @media (max-width: 480px) {
+            .sidebar { width: 180px; right: -200px; }
+            .sidebar ul li { font-size: 0.8rem; padding: 0.5rem 0.7rem; }
+            .submenu-panel { min-width: 140px; max-width: 180px; }
+        }
+        @media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 100%; } .no-print { display: none !important; } }
+
+        .sidebar::-webkit-scrollbar, .submenu-panel::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar::-webkit-scrollbar-thumb, .submenu-panel::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 2px;
+        }
     </style>
 </head>
 <body>
@@ -378,7 +491,10 @@
     <div class="app-container" id="appContainer">
         <!-- Header -->
         <div class="app-header">
-            <h1><i class="fas fa-gas-pump"></i> أبو أحمد</h1>
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                <h1><i class="fas fa-gas-pump"></i> أبو أحمد</h1>
+            </div>
             <div class="header-actions">
                 <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع"><i class="fas fa-moon"></i></button>
                 <button class="icon-btn" onclick="showScreen('notifications')" title="التنبيهات"><i class="fas fa-bell"></i></button>
@@ -387,7 +503,60 @@
             </div>
         </div>
 
-        <!-- ========== DASHBOARD ========== -->
+        <!-- Overlay -->
+        <div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <ul>
+                <li onclick="showSubmenu(event, 'الرئيسية', ['لوحة التحكم', 'الإحصائيات السريعة'])">
+                    <i class="fas fa-home"></i> الرئيسية
+                </li>
+                <li onclick="showSubmenu(event, 'المبيعات', ['الطلبات', 'الفواتير', 'الورديات', 'نقاط البيع', 'المبيعات اليومية'])">
+                    <i class="fas fa-shopping-cart"></i> المبيعات
+                </li>
+                <li onclick="showSubmenu(event, 'المخزون', ['المنتجات', 'فئات المنتجات', 'وحدات القياس', 'الخزانات', 'المضخات', 'الحركات المخزنية', 'الجرد', 'تنبيهات المخزون'])">
+                    <i class="fas fa-boxes"></i> المخزون
+                </li>
+                <li onclick="showSubmenu(event, 'العملاء والموردين', ['العملاء', 'الموردين', 'جهات الاتصال', 'العناوين'])">
+                    <i class="fas fa-users"></i> العملاء والموردين
+                </li>
+                <li onclick="showSubmenu(event, 'المركبات والسائقين', ['المركبات', 'السائقين', 'تتبع المركبات', 'صيانة المركبات'])">
+                    <i class="fas fa-truck"></i> المركبات
+                </li>
+                <li onclick="showSubmenu(event, 'المالية', ['المدفوعات', 'الصناديق', 'الحسابات البنكية', 'المقبوضات', 'حركات الصندوق'])">
+                    <i class="fas fa-money-bill-wave"></i> المالية
+                </li>
+                <li onclick="showSubmenu(event, 'المحاسبة', ['شجرة الحسابات', 'القيود اليومية', 'الميزانية', 'المصروفات', 'فئات المصروفات'])">
+                    <i class="fas fa-calculator"></i> المحاسبة
+                </li>
+                <li onclick="showSubmenu(event, 'الموارد البشرية', ['الموظفين', 'الحضور', 'الرواتب', 'صرف الرواتب'])">
+                    <i class="fas fa-user-tie"></i> الموارد البشرية
+                </li>
+                <li onclick="showSubmenu(event, 'الأصول والصيانة', ['الأصول الثابتة', 'طلبات الصيانة', 'جداول الصيانة', 'قطع الغيار'])">
+                    <i class="fas fa-wrench"></i> الأصول والصيانة
+                </li>
+                <li onclick="showSubmenu(event, 'الإعدادات', ['المستخدمين', 'الأدوار', 'الصلاحيات', 'إعدادات النظام', 'إعدادات المحطة', 'العملات'])">
+                    <i class="fas fa-cog"></i> الإعدادات
+                </li>
+                <li onclick="showSubmenu(event, 'السجلات والتقارير', ['سجل النشاط', 'سجل النظام', 'تقارير المبيعات', 'تقارير المخزون', 'تقارير مالية'])">
+                    <i class="fas fa-chart-bar"></i> السجلات والتقارير
+                </li>
+                <li onclick="showSubmenu(event, 'النظام', ['النسخ الاحتياطي', 'المزامنة', 'سجلات المزامنة', 'الأرشفة'])">
+                    <i class="fas fa-server"></i> النظام
+                </li>
+            </ul>
+        </div>
+
+        <!-- Submenu Panel -->
+        <div class="submenu-panel" id="submenuPanel">
+            <h4 id="submenuTitle"></h4>
+            <ul id="submenuItems"></ul>
+        </div>
+
+        <!-- ========== الشاشات ========== -->
+
+        <!-- DASHBOARD -->
         <div class="screen active" id="screen-dashboard">
             <div class="stats-grid">
                 <div class="stat-card"><div class="stat-label">💰 المبيعات اليوم</div><div class="stat-value" id="dashSales">0</div><div class="stat-change">ريال</div></div>
@@ -420,10 +589,13 @@
             </div>
         </div>
 
-        <!-- ========== SALE ========== -->
+        <!-- SALE -->
         <div class="screen" id="screen-sale">
             <div class="card">
-                <div class="card-title"><i class="fas fa-plus-circle"></i> تسجيل عملية بيع جديدة</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-plus-circle"></i> تسجيل عملية بيع جديدة
+                </div>
                 <form id="saleForm" onsubmit="executeSale(event)">
                     <div class="form-group">
                         <label>العميل</label>
@@ -503,10 +675,13 @@
             </div>
         </div>
 
-        <!-- ========== PAYMENT ========== -->
+        <!-- PAYMENT -->
         <div class="screen" id="screen-payment">
             <div class="card">
-                <div class="card-title"><i class="fas fa-hand-holding-usd"></i> تسديد دفعة</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-hand-holding-usd"></i> تسديد دفعة
+                </div>
                 <form id="paymentForm" onsubmit="makePayment(event)">
                     <div class="form-group">
                         <label>العميل</label>
@@ -542,7 +717,10 @@
                 </form>
             </div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-plus-circle"></i> إيداع نقدي للعميل</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-plus-circle"></i> إيداع نقدي للعميل
+                </div>
                 <form id="depositForm" onsubmit="makeDeposit(event)">
                     <div class="form-group">
                         <label>العميل</label>
@@ -562,7 +740,10 @@
                 </form>
             </div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-bell"></i> إرسال تنبيهات الديون</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-bell"></i> إرسال تنبيهات الديون
+                </div>
                 <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
                     سيتم إرسال رسائل SMS للعملاء المتأخرين (من القائمة البيضاء فقط).
                 </p>
@@ -570,10 +751,13 @@
             </div>
         </div>
 
-        <!-- ========== QR SCANNER ========== -->
+        <!-- QR -->
         <div class="screen" id="screen-qr">
             <div class="card">
-                <div class="card-title"><i class="fas fa-qrcode"></i> ماسح الباركود / QR</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-qrcode"></i> ماسح الباركود / QR
+                </div>
                 <div class="scanner-container" id="qrReader">
                     <div class="scanner-overlay">
                         <div class="scanner-frame">
@@ -601,10 +785,13 @@
             </div>
         </div>
 
-        <!-- ========== CUSTOMERS ========== -->
+        <!-- CUSTOMERS -->
         <div class="screen" id="screen-customers">
             <div class="card">
-                <div class="card-title"><i class="fas fa-users"></i> إدارة العملاء</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-users"></i> إدارة العملاء
+                </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                     <input type="text" class="form-control" id="customerSearch" placeholder="🔍 بحث..." style="flex:1; min-width:100px;" oninput="filterCustomers()">
                     <button class="btn btn-primary btn-small" onclick="showCustomerForm()" style="width:auto;"><i class="fas fa-plus"></i> إضافة</button>
@@ -613,32 +800,44 @@
             </div>
         </div>
 
-        <!-- ========== INVENTORY ========== -->
+        <!-- INVENTORY -->
         <div class="screen" id="screen-inventory">
             <div class="card">
-                <div class="card-title"><i class="fas fa-boxes"></i> إدارة المخزون والتعبئة</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-boxes"></i> إدارة المخزون والتعبئة
+                </div>
                 <button class="btn btn-primary btn-small mb-1" onclick="showRefillForm()" style="width:auto;"><i class="fas fa-plus"></i> تعبئة جديدة</button>
                 <div id="inventoryList"></div>
             </div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-chart-simple"></i> حالة المخزون</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-chart-simple"></i> حالة المخزون
+                </div>
                 <div id="inventoryStatus"></div>
             </div>
         </div>
 
-        <!-- ========== EMPLOYEES ========== -->
+        <!-- EMPLOYEES -->
         <div class="screen" id="screen-employees">
             <div class="card">
-                <div class="card-title"><i class="fas fa-user-tie"></i> إدارة الموظفين والرواتب</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-user-tie"></i> إدارة الموظفين والرواتب
+                </div>
                 <button class="btn btn-primary btn-small mb-1" onclick="showEmployeeForm()" style="width:auto;"><i class="fas fa-plus"></i> موظف جديد</button>
                 <div id="employeesList"></div>
             </div>
         </div>
 
-        <!-- ========== DEBTS ========== -->
+        <!-- DEBTS -->
         <div class="screen" id="screen-debts">
             <div class="card">
-                <div class="card-title"><i class="fas fa-file-invoice-dollar"></i> إدارة الديون</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-file-invoice-dollar"></i> إدارة الديون
+                </div>
                 <div style="display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px;">
                     <button class="btn btn-danger btn-small" onclick="loadDebts('overdue')">🔴 متأخرة</button>
                     <button class="btn btn-warning btn-small" onclick="loadDebts('doubtful')">🟡 مشكوك فيها</button>
@@ -649,10 +848,13 @@
             </div>
         </div>
 
-        <!-- ========== REPORTS ========== -->
+        <!-- REPORTS -->
         <div class="screen" id="screen-reports">
             <div class="card">
-                <div class="card-title"><i class="fas fa-chart-bar"></i> التقارير والإحصائيات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-chart-bar"></i> التقارير والإحصائيات
+                </div>
                 <div class="quick-actions">
                     <div class="quick-btn" onclick="generateEodReport()"><span class="icon"><i class="fas fa-file-alt"></i></span><span>تقرير اليوم</span></div>
                     <div class="quick-btn" onclick="showProfitReport()"><span class="icon"><i class="fas fa-chart-pie"></i></span><span>الأرباح/الخسائر</span></div>
@@ -664,36 +866,51 @@
             </div>
             <div id="eodReportContainer"></div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-chart-line"></i> المبيعات الشهرية</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-chart-line"></i> المبيعات الشهرية
+                </div>
                 <div class="bar-chart" id="monthlySalesChart" style="display:flex; align-items:flex-end; justify-content:space-around; height:140px; gap:6px; padding:0 4px;"></div>
             </div>
         </div>
 
-        <!-- ========== TANKS & PUMPS ========== -->
+        <!-- TANKS & PUMPS -->
         <div class="screen" id="screen-tanks">
             <div class="card">
-                <div class="card-title"><i class="fas fa-oil-can"></i> الخزانات والمضخات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-oil-can"></i> الخزانات والمضخات
+                </div>
                 <div id="tanksList"></div>
             </div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-faucet"></i> المضخات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-faucet"></i> المضخات
+                </div>
                 <div id="pumpsList"></div>
             </div>
         </div>
 
-        <!-- ========== MAINTENANCE ========== -->
+        <!-- MAINTENANCE -->
         <div class="screen" id="screen-maintenance">
             <div class="card">
-                <div class="card-title"><i class="fas fa-tools"></i> طلبات الصيانة</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-tools"></i> طلبات الصيانة
+                </div>
                 <button class="btn btn-primary btn-small mb-1" onclick="showMaintenanceForm()" style="width:auto;"><i class="fas fa-plus"></i> طلب جديد</button>
                 <div id="maintenanceList"></div>
             </div>
         </div>
 
-        <!-- ========== SMS ========== -->
+        <!-- SMS -->
         <div class="screen" id="screen-sms">
             <div class="card">
-                <div class="card-title"><i class="fas fa-sms"></i> سجل الرسائل النصية</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-sms"></i> سجل الرسائل النصية
+                </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                     <input type="text" class="form-control" id="smsSearch" placeholder="بحث..." style="flex:1; min-width:100px;" oninput="filterSmsLogs()">
                     <select class="form-control" id="smsStatusFilter" style="flex:1; min-width:100px;" onchange="filterSmsLogs()">
@@ -712,7 +929,10 @@
                 </div>
             </div>
             <div class="card">
-                <div class="card-title"><i class="fas fa-list"></i> قائمة السماح للرسائل (Whitelist)</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-list"></i> قائمة السماح للرسائل (Whitelist)
+                </div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
                     <input type="text" class="form-control" id="whitelistPhone" placeholder="رقم الهاتف" style="flex:1; min-width:80px;">
                     <input type="text" class="form-control" id="whitelistName" placeholder="الاسم" style="flex:1; min-width:80px;">
@@ -722,10 +942,13 @@
             </div>
         </div>
 
-        <!-- ========== ACTIVITY LOGS ========== -->
+        <!-- ACTIVITY -->
         <div class="screen" id="screen-activity">
             <div class="card">
-                <div class="card-title"><i class="fas fa-history"></i> سجل النشاطات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-history"></i> سجل النشاطات
+                </div>
                 <div class="table-container">
                     <table class="data-table">
                         <thead><tr><th>المشغل</th><th>الإجراء</th><th>التفاصيل</th><th>التاريخ</th></tr></thead>
@@ -735,10 +958,13 @@
             </div>
         </div>
 
-        <!-- ========== SETTINGS ========== -->
+        <!-- SETTINGS -->
         <div class="screen" id="screen-settings">
             <div class="card">
-                <div class="card-title"><i class="fas fa-cog"></i> الإعدادات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-cog"></i> الإعدادات
+                </div>
                 <div class="form-group">
                     <label>اسم المحطة</label>
                     <input type="text" class="form-control" id="stationName" value="محطة أبو أحمد لمشتقات الديزل">
@@ -784,10 +1010,11 @@
             </div>
         </div>
 
-        <!-- ========== AI CHAT ========== -->
+        <!-- AI CHAT -->
         <div class="screen" id="screen-ai">
             <div class="card" style="padding:0; overflow:hidden;">
                 <div class="card-title" style="padding:12px 16px; margin:0; border-bottom:1px solid var(--border);">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
                     <i class="fas fa-robot"></i> مساعد أبو أحمد الذكي
                 </div>
                 <div class="chat-container">
@@ -802,269 +1029,309 @@
             </div>
         </div>
 
-        <!-- ========== NOTIFICATIONS ========== -->
+        <!-- NOTIFICATIONS -->
         <div class="screen" id="screen-notifications">
             <div class="card">
-                <div class="card-title"><i class="fas fa-bell"></i> التنبيهات والإشعارات</div>
+                <div class="card-title">
+                    <button class="back-btn" onclick="showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                    <i class="fas fa-bell"></i> التنبيهات والإشعارات
+                </div>
                 <div id="notificationsList"></div>
             </div>
         </div>
 
-        <!-- Bottom Navigation -->
-        <nav class="bottom-nav no-print">
-            <button class="nav-item active" onclick="showScreen('dashboard')" data-screen="dashboard"><span class="icon"><i class="fas fa-home"></i></span><span>الرئيسية</span></button>
-            <button class="nav-item" onclick="showScreen('sale')" data-screen="sale"><span class="icon"><i class="fas fa-cart-plus"></i></span><span>البيع</span></button>
-            <button class="nav-item" onclick="showScreen('customers')" data-screen="customers"><span class="icon"><i class="fas fa-users"></i></span><span>العملاء</span></button>
-            <button class="nav-item" onclick="showScreen('ai')" data-screen="ai"><span class="icon"><i class="fas fa-robot"></i></span><span>الذكاء</span></button>
-            <button class="nav-item" onclick="showScreen('settings')" data-screen="settings"><span class="icon"><i class="fas fa-cog"></i></span><span>الإعدادات</span></button>
-        </nav>
-    </div>
+        <!-- ==================== MODALS ==================== -->
 
-    <!-- ==================== MODALS ==================== -->
-
-    <!-- About Modal -->
-    <div class="modal-overlay" id="aboutModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-info-circle"></i> عن التطبيق</h2><button class="modal-close" onclick="closeModal('aboutModal')">✕</button></div>
-            <div class="modal-body" style="text-align:center;">
-                <div style="width:70px; height:70px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:32px; margin:0 auto 12px;"><i class="fas fa-gas-pump"></i></div>
-                <div style="font-size:18px; font-weight:800; color:var(--primary);">محطة أبو أحمد لمشتقات الديزل</div>
-                <div style="font-size:13px; color:var(--text-secondary);">الإصدار 4.0 Pro</div>
-                <div style="background:var(--bg); border-radius:var(--radius-sm); padding:12px; margin:12px 0;">
-                    <div style="font-weight:700;">👨‍💻 المطور</div>
-                    <div style="font-size:14px; color:var(--text-secondary);">المهندس / جبر الحميدي</div>
+        <!-- About Modal -->
+        <div class="modal-overlay" id="aboutModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('aboutModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-info-circle"></i> عن التطبيق
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('aboutModal')">✕</button>
                 </div>
-                <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-                    <a href="whatsapp://send?phone=00967781038203" class="btn btn-small btn-success" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fab fa-whatsapp"></i> واتساب</a>
-                    <a href="fb://profile/jbr.mhdy.alhmydy" class="btn btn-small btn-info" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fab fa-facebook"></i> فيسبوك</a>
-                    <a href="mailto:db7r01@gmail.com" class="btn btn-small btn-danger" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fas fa-envelope"></i> Gmail</a>
+                <div class="modal-body" style="text-align:center;">
+                    <div style="width:70px; height:70px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:32px; margin:0 auto 12px;"><i class="fas fa-gas-pump"></i></div>
+                    <div style="font-size:18px; font-weight:800; color:var(--primary);">محطة أبو أحمد لمشتقات الديزل</div>
+                    <div style="font-size:13px; color:var(--text-secondary);">الإصدار 4.0 Pro</div>
+                    <div style="background:var(--bg); border-radius:var(--radius-sm); padding:12px; margin:12px 0;">
+                        <div style="font-weight:700;">👨‍💻 المطور</div>
+                        <div style="font-size:14px; color:var(--text-secondary);">المهندس / جبر الحميدي</div>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+                        <a href="whatsapp://send?phone=00967781038203" class="btn btn-small btn-success" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fab fa-whatsapp"></i> واتساب</a>
+                        <a href="fb://profile/jbr.mhdy.alhmydy" class="btn btn-small btn-info" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fab fa-facebook"></i> فيسبوك</a>
+                        <a href="mailto:db7r01@gmail.com" class="btn btn-small btn-danger" style="display:inline-flex; align-items:center; gap:4px; text-decoration:none; width:auto;"><i class="fas fa-envelope"></i> Gmail</a>
+                    </div>
+                    <div style="margin-top:12px; padding:10px; background:linear-gradient(135deg, rgba(26,58,90,0.05), rgba(212,175,55,0.05)); border-radius:var(--radius-sm); font-style:italic; font-size:12px; color:var(--text-secondary); line-height:1.6;">
+                        تم تصميم هذا التطبيق خصيصاً لمحطة أبو أحمد لمشتقات الديزل.<br>
+                        جميع العمليات متكاملة مع قاعدة بيانات SQLite المتطورة V8 والذكاء الاصطناعي والرسائل النصية.
+                    </div>
                 </div>
-                <div style="margin-top:12px; padding:10px; background:linear-gradient(135deg, rgba(26,58,90,0.05), rgba(212,175,55,0.05)); border-radius:var(--radius-sm); font-style:italic; font-size:12px; color:var(--text-secondary); line-height:1.6;">
-                    تم تصميم هذا التطبيق خصيصاً لمحطة أبو أحمد لمشتقات الديزل.<br>
-                    جميع العمليات متكاملة مع قاعدة بيانات SQLite المتطورة V8 والذكاء الاصطناعي والرسائل النصية.
+                <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('aboutModal')">إغلاق</button></div>
+            </div>
+        </div>
+
+        <!-- Customer Form Modal -->
+        <div class="modal-overlay" id="customerFormModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="customerFormTitle">
+                        <button class="back-btn" onclick="closeModal('customerFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-user-plus"></i> إضافة عميل
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('customerFormModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <form id="customerForm" onsubmit="saveCustomer(event)">
+                        <input type="hidden" id="customerFormId">
+                        <div class="form-group"><label>الاسم التجاري *</label><input type="text" class="form-control" id="customerFormName" required></div>
+                        <div class="form-group"><label>رقم الهاتف</label><input type="text" class="form-control" id="customerFormPhone"></div>
+                        <div class="form-group"><label>حد الائتمان (ريال)</label><input type="number" class="form-control" id="customerFormCredit" value="0"></div>
+                        <div class="form-group"><label>نوع العميل</label>
+                            <select class="form-control" id="customerFormType">
+                                <option value="1">فرد</option>
+                                <option value="2">شركة</option>
+                                <option value="4">نقل</option>
+                                <option value="5">مقاول</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
+                        <button type="button" class="btn btn-danger mt-1" onclick="deleteCustomerForm()" id="customerFormDelete" style="display:none;"><i class="fas fa-trash"></i> حذف</button>
+                    </form>
                 </div>
             </div>
-            <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('aboutModal')">إغلاق</button></div>
         </div>
-    </div>
 
-    <!-- Customer Form Modal -->
-    <div class="modal-overlay" id="customerFormModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title" id="customerFormTitle"><i class="fas fa-user-plus"></i> إضافة عميل</h2><button class="modal-close" onclick="closeModal('customerFormModal')">✕</button></div>
-            <div class="modal-body">
-                <form id="customerForm" onsubmit="saveCustomer(event)">
-                    <input type="hidden" id="customerFormId">
-                    <div class="form-group"><label>الاسم التجاري *</label><input type="text" class="form-control" id="customerFormName" required></div>
-                    <div class="form-group"><label>رقم الهاتف</label><input type="text" class="form-control" id="customerFormPhone"></div>
-                    <div class="form-group"><label>حد الائتمان (ريال)</label><input type="number" class="form-control" id="customerFormCredit" value="0"></div>
-                    <div class="form-group"><label>نوع العميل</label>
-                        <select class="form-control" id="customerFormType">
-                            <option value="1">فرد</option>
-                            <option value="2">شركة</option>
-                            <option value="4">نقل</option>
-                            <option value="5">مقاول</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
-                    <button type="button" class="btn btn-danger mt-1" onclick="deleteCustomerForm()" id="customerFormDelete" style="display:none;"><i class="fas fa-trash"></i> حذف</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Refill Form Modal -->
-    <div class="modal-overlay" id="refillFormModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-fill-drip"></i> تعبئة جديدة</h2><button class="modal-close" onclick="closeModal('refillFormModal')">✕</button></div>
-            <div class="modal-body">
-                <form id="refillForm" onsubmit="saveRefill(event)">
-                    <div class="form-group"><label>المورد *</label><input type="text" class="form-control" id="refillSupplier" required></div>
-                    <div class="form-group"><label>الكمية الإجمالية (لتر) *</label><input type="number" class="form-control" id="refillTotalQty" required></div>
-                    <div class="form-group"><label>نوع الوقود</label>
-                        <select class="form-control" id="refillFuelType">
-                            <option value="1">ديزل</option>
-                            <option value="2">بنزين 95</option>
-                            <option value="3">بنزين 91</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>سعر البيع للتر (ريال) *</label><input type="number" class="form-control" id="refillPrice" value="500" required></div>
-                    <div class="form-group"><label>السماح بالبيع الآجل</label>
-                        <select class="form-control" id="refillAllowCredit">
-                            <option value="1">نعم</option>
-                            <option value="0">لا</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>حد التنبيه (لتر)</label><input type="number" class="form-control" id="refillThreshold" value="1000"></div>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ التعبئة</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Employee Form Modal -->
-    <div class="modal-overlay" id="employeeFormModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title" id="employeeFormTitle"><i class="fas fa-user-plus"></i> إضافة موظف</h2><button class="modal-close" onclick="closeModal('employeeFormModal')">✕</button></div>
-            <div class="modal-body">
-                <form id="employeeForm" onsubmit="saveEmployee(event)">
-                    <input type="hidden" id="employeeFormId">
-                    <div class="form-group"><label>الاسم الكامل *</label><input type="text" class="form-control" id="employeeFormName" required></div>
-                    <div class="form-group"><label>رقم الهاتف</label><input type="text" class="form-control" id="employeeFormPhone"></div>
-                    <div class="form-group"><label>المسمى الوظيفي</label><input type="text" class="form-control" id="employeeFormPosition"></div>
-                    <div class="form-group"><label>الراتب الأساسي (ريال)</label><input type="number" class="form-control" id="employeeFormSalary" value="0"></div>
-                    <div class="form-group"><label>الحالة</label>
-                        <select class="form-control" id="employeeFormActive">
-                            <option value="1">نشط</option>
-                            <option value="0">غير نشط</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>ملاحظات</label><input type="text" class="form-control" id="employeeFormNotes"></div>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
-                    <button type="button" class="btn btn-danger mt-1" onclick="deleteEmployeeForm()" id="employeeFormDelete" style="display:none;"><i class="fas fa-trash"></i> حذف</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Employee Payment Modal -->
-    <div class="modal-overlay" id="employeePaymentModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-money-bill"></i> دفعة للموظف</h2><button class="modal-close" onclick="closeModal('employeePaymentModal')">✕</button></div>
-            <div class="modal-body">
-                <form id="employeePaymentForm" onsubmit="saveEmployeePayment(event)">
-                    <input type="hidden" id="empPaymentEmployeeId">
-                    <div class="form-group"><label>المبلغ (ريال)</label><input type="number" class="form-control" id="empPaymentAmount" required></div>
-                    <div class="form-group"><label>النوع</label>
-                        <select class="form-control" id="empPaymentType">
-                            <option value="salary">راتب</option>
-                            <option value="advance">مسحوبية</option>
-                            <option value="penalty">جزاء</option>
-                            <option value="bonus">مكافأة</option>
-                            <option value="other">أخرى</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>الوصف</label><input type="text" class="form-control" id="empPaymentDesc"></div>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> إضافة الدفعة</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Customer Account Modal -->
-    <div class="modal-overlay" id="customerAccountModal">
-        <div class="modal" style="max-width:600px;">
-            <div class="modal-header"><h2 class="modal-title" id="accountCustomerName"><i class="fas fa-file-invoice"></i> كشف حساب العميل</h2><button class="modal-close" onclick="closeModal('customerAccountModal')">✕</button></div>
-            <div class="modal-body">
-                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-                    <input type="date" class="form-control" id="accountFromDate" style="flex:1; min-width:100px;">
-                    <input type="date" class="form-control" id="accountToDate" style="flex:1; min-width:100px;">
-                    <button class="btn btn-primary btn-small" onclick="loadCustomerAccount()" style="width:auto;"><i class="fas fa-search"></i> عرض</button>
-                    <button class="btn btn-success btn-small" onclick="shareCustomerAccount()" style="width:auto;"><i class="fas fa-share"></i> مشاركة</button>
-                    <button class="btn btn-info btn-small" onclick="sendCustomerSms()" style="width:auto;"><i class="fas fa-sms"></i> إرسال SMS</button>
+        <!-- Refill Form Modal -->
+        <div class="modal-overlay" id="refillFormModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('refillFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-fill-drip"></i> تعبئة جديدة
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('refillFormModal')">✕</button>
                 </div>
-                <div id="accountDetails"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Profit Report Modal -->
-    <div class="modal-overlay" id="profitReportModal">
-        <div class="modal" style="max-width:600px;">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-chart-pie"></i> تقرير الأرباح والخسائر</h2><button class="modal-close" onclick="closeModal('profitReportModal')">✕</button></div>
-            <div class="modal-body">
-                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
-                    <input type="date" class="form-control" id="profitFromDate" style="flex:1; min-width:100px;">
-                    <input type="date" class="form-control" id="profitToDate" style="flex:1; min-width:100px;">
-                    <button class="btn btn-primary btn-small" onclick="loadProfitReport()" style="width:auto;"><i class="fas fa-search"></i> عرض</button>
+                <div class="modal-body">
+                    <form id="refillForm" onsubmit="saveRefill(event)">
+                        <div class="form-group"><label>المورد *</label><input type="text" class="form-control" id="refillSupplier" required></div>
+                        <div class="form-group"><label>الكمية الإجمالية (لتر) *</label><input type="number" class="form-control" id="refillTotalQty" required></div>
+                        <div class="form-group"><label>نوع الوقود</label>
+                            <select class="form-control" id="refillFuelType">
+                                <option value="1">ديزل</option>
+                                <option value="2">بنزين 95</option>
+                                <option value="3">بنزين 91</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>سعر البيع للتر (ريال) *</label><input type="number" class="form-control" id="refillPrice" value="500" required></div>
+                        <div class="form-group"><label>السماح بالبيع الآجل</label>
+                            <select class="form-control" id="refillAllowCredit">
+                                <option value="1">نعم</option>
+                                <option value="0">لا</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>حد التنبيه (لتر)</label><input type="number" class="form-control" id="refillThreshold" value="1000"></div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ التعبئة</button>
+                    </form>
                 </div>
-                <div id="profitDetails"></div>
             </div>
         </div>
-    </div>
 
-    <!-- Maintenance Form Modal -->
-    <div class="modal-overlay" id="maintenanceFormModal">
-        <div class="modal">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-tools"></i> طلب صيانة جديد</h2><button class="modal-close" onclick="closeModal('maintenanceFormModal')">✕</button></div>
-            <div class="modal-body">
-                <form id="maintenanceForm" onsubmit="saveMaintenanceRequest(event)">
-                    <div class="form-group"><label>نوع الأصل</label>
-                        <select class="form-control" id="maintAssetType">
-                            <option value="tank">خزان</option>
-                            <option value="pump">مضخة</option>
-                            <option value="nozzle">مسدس</option>
-                            <option value="generator">مولد</option>
-                            <option value="building">مبنى</option>
-                            <option value="fixed_asset">أصل ثابت</option>
-                        </select>
+        <!-- Employee Form Modal -->
+        <div class="modal-overlay" id="employeeFormModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="employeeFormTitle">
+                        <button class="back-btn" onclick="closeModal('employeeFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-user-plus"></i> إضافة موظف
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('employeeFormModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <form id="employeeForm" onsubmit="saveEmployee(event)">
+                        <input type="hidden" id="employeeFormId">
+                        <div class="form-group"><label>الاسم الكامل *</label><input type="text" class="form-control" id="employeeFormName" required></div>
+                        <div class="form-group"><label>رقم الهاتف</label><input type="text" class="form-control" id="employeeFormPhone"></div>
+                        <div class="form-group"><label>المسمى الوظيفي</label><input type="text" class="form-control" id="employeeFormPosition"></div>
+                        <div class="form-group"><label>الراتب الأساسي (ريال)</label><input type="number" class="form-control" id="employeeFormSalary" value="0"></div>
+                        <div class="form-group"><label>الحالة</label>
+                            <select class="form-control" id="employeeFormActive">
+                                <option value="1">نشط</option>
+                                <option value="0">غير نشط</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>ملاحظات</label><input type="text" class="form-control" id="employeeFormNotes"></div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> حفظ</button>
+                        <button type="button" class="btn btn-danger mt-1" onclick="deleteEmployeeForm()" id="employeeFormDelete" style="display:none;"><i class="fas fa-trash"></i> حذف</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Employee Payment Modal -->
+        <div class="modal-overlay" id="employeePaymentModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('employeePaymentModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-money-bill"></i> دفعة للموظف
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('employeePaymentModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <form id="employeePaymentForm" onsubmit="saveEmployeePayment(event)">
+                        <input type="hidden" id="empPaymentEmployeeId">
+                        <div class="form-group"><label>المبلغ (ريال)</label><input type="number" class="form-control" id="empPaymentAmount" required></div>
+                        <div class="form-group"><label>النوع</label>
+                            <select class="form-control" id="empPaymentType">
+                                <option value="salary">راتب</option>
+                                <option value="advance">مسحوبية</option>
+                                <option value="penalty">جزاء</option>
+                                <option value="bonus">مكافأة</option>
+                                <option value="other">أخرى</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>الوصف</label><input type="text" class="form-control" id="empPaymentDesc"></div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> إضافة الدفعة</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Account Modal -->
+        <div class="modal-overlay" id="customerAccountModal">
+            <div class="modal" style="max-width:600px;">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="accountCustomerName">
+                        <button class="back-btn" onclick="closeModal('customerAccountModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-file-invoice"></i> كشف حساب العميل
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('customerAccountModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                        <input type="date" class="form-control" id="accountFromDate" style="flex:1; min-width:100px;">
+                        <input type="date" class="form-control" id="accountToDate" style="flex:1; min-width:100px;">
+                        <button class="btn btn-primary btn-small" onclick="loadCustomerAccount()" style="width:auto;"><i class="fas fa-search"></i> عرض</button>
+                        <button class="btn btn-success btn-small" onclick="shareCustomerAccount()" style="width:auto;"><i class="fas fa-share"></i> مشاركة</button>
+                        <button class="btn btn-info btn-small" onclick="sendCustomerSms()" style="width:auto;"><i class="fas fa-sms"></i> إرسال SMS</button>
                     </div>
-                    <div class="form-group"><label>معرف الأصل</label><input type="number" class="form-control" id="maintAssetId" placeholder="رقم الأصل" required></div>
-                    <div class="form-group"><label>نوع الطلب</label><input type="text" class="form-control" id="maintRequestType" placeholder="مثل: إصلاح، فحص..." required></div>
-                    <div class="form-group"><label>الأولوية</label>
-                        <select class="form-control" id="maintPriority">
-                            <option value="low">منخفضة</option>
-                            <option value="medium" selected>متوسطة</option>
-                            <option value="high">عالية</option>
-                            <option value="critical">حرجة</option>
-                        </select>
+                    <div id="accountDetails"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profit Report Modal -->
+        <div class="modal-overlay" id="profitReportModal">
+            <div class="modal" style="max-width:600px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('profitReportModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-chart-pie"></i> تقرير الأرباح والخسائر
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('profitReportModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+                        <input type="date" class="form-control" id="profitFromDate" style="flex:1; min-width:100px;">
+                        <input type="date" class="form-control" id="profitToDate" style="flex:1; min-width:100px;">
+                        <button class="btn btn-primary btn-small" onclick="loadProfitReport()" style="width:auto;"><i class="fas fa-search"></i> عرض</button>
                     </div>
-                    <div class="form-group"><label>العنوان *</label><input type="text" class="form-control" id="maintTitle" required></div>
-                    <div class="form-group"><label>الوصف *</label><textarea class="form-control" id="maintDescription" rows="3" required></textarea></div>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> إرسال الطلب</button>
-                </form>
+                    <div id="profitDetails"></div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Invoice Modal -->
-    <div class="modal-overlay" id="invoiceModal">
-        <div class="modal" style="max-width:380px;">
-            <div class="modal-header"><h2 class="modal-title"><i class="fas fa-receipt"></i> معاينة الفاتورة</h2><button class="modal-close" onclick="closeModal('invoiceModal')">✕</button></div>
-            <div class="modal-body">
-                <div class="invoice-preview print-area" id="invoicePreview"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" onclick="printInvoice()"><i class="fas fa-print"></i> طباعة</button>
-                <button class="btn btn-success" onclick="shareInvoice()"><i class="fas fa-share"></i> مشاركة</button>
-                <button class="btn btn-secondary" onclick="closeModal('invoiceModal')">إغلاق</button>
+        <!-- Maintenance Form Modal -->
+        <div class="modal-overlay" id="maintenanceFormModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('maintenanceFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-tools"></i> طلب صيانة جديد
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('maintenanceFormModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <form id="maintenanceForm" onsubmit="saveMaintenanceRequest(event)">
+                        <div class="form-group"><label>نوع الأصل</label>
+                            <select class="form-control" id="maintAssetType">
+                                <option value="tank">خزان</option>
+                                <option value="pump">مضخة</option>
+                                <option value="nozzle">مسدس</option>
+                                <option value="generator">مولد</option>
+                                <option value="building">مبنى</option>
+                                <option value="fixed_asset">أصل ثابت</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>معرف الأصل</label><input type="number" class="form-control" id="maintAssetId" placeholder="رقم الأصل" required></div>
+                        <div class="form-group"><label>نوع الطلب</label><input type="text" class="form-control" id="maintRequestType" placeholder="مثل: إصلاح، فحص..." required></div>
+                        <div class="form-group"><label>الأولوية</label>
+                            <select class="form-control" id="maintPriority">
+                                <option value="low">منخفضة</option>
+                                <option value="medium" selected>متوسطة</option>
+                                <option value="high">عالية</option>
+                                <option value="critical">حرجة</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>العنوان *</label><input type="text" class="form-control" id="maintTitle" required></div>
+                        <div class="form-group"><label>الوصف *</label><textarea class="form-control" id="maintDescription" rows="3" required></textarea></div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> إرسال الطلب</button>
+                    </form>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Loading Overlay -->
-    <div class="modal-overlay" id="loadingOverlay">
-        <div class="modal" style="background:transparent; box-shadow:none; border:none; max-width:200px; max-height:200px; transform:none;">
-            <div class="modal-body" style="color:white; text-align:center; padding:20px;">
-                <div class="loading"></div>
-                <div style="font-size:15px; font-weight:700;">جاري المعالجة...</div>
+        <!-- Invoice Modal -->
+        <div class="modal-overlay" id="invoiceModal">
+            <div class="modal" style="max-width:380px;">
+                <div class="modal-header">
+                    <h2 class="modal-title">
+                        <button class="back-btn" onclick="closeModal('invoiceModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                        <i class="fas fa-receipt"></i> معاينة الفاتورة
+                    </h2>
+                    <button class="modal-close" onclick="closeModal('invoiceModal')">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="invoice-preview print-area" id="invoicePreview"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="printInvoice()"><i class="fas fa-print"></i> طباعة</button>
+                    <button class="btn btn-success" onclick="shareInvoice()"><i class="fas fa-share"></i> مشاركة</button>
+                    <button class="btn btn-secondary" onclick="closeModal('invoiceModal')">إغلاق</button>
+                </div>
             </div>
         </div>
-    </div>
+
+        <!-- Loading Overlay -->
+        <div class="modal-overlay" id="loadingOverlay">
+            <div class="modal" style="background:transparent; box-shadow:none; border:none; max-width:200px; max-height:200px; transform:none;">
+                <div class="modal-body" style="color:white; text-align:center; padding:20px;">
+                    <div class="loading"></div>
+                    <div style="font-size:15px; font-weight:700;">جاري المعالجة...</div>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- نهاية app-container -->
 
     <!-- ==================== JAVASCRIPT ==================== -->
     <script>
         // ============================================================
-        //  API HELPER (الاتصال بالخادم عبر المسار المطلق)
+        //  API HELPER
         // ============================================================
         async function apiCall(action, params = {}) {
-            // ─── الحل الجذري: استخدام AndroidInterface للتسجيل المحلي ───
             if (action === 'login' && window.AndroidInterface && window.AndroidInterface.login) {
                 try {
                     const raw = window.AndroidInterface.login(params.username || '', params.password || '');
                     const result = JSON.parse(raw);
-                    // توحيد تنسيق الاستجابة مع ما تتوقعه handleLogin
                     if (result.success) {
-                        return {
-                            success: true,
-                            token: result.token,
-                            user: result.user
-                        };
+                        return { success: true, token: result.token, user: result.user };
                     } else {
-                        return {
-                            success: false,
-                            error: result.error || 'بيانات الدخول غير صحيحة'
-                        };
+                        return { success: false, error: result.error || 'بيانات الدخول غير صحيحة' };
                     }
                 } catch (e) {
                     console.error('AndroidInterface login error:', e);
@@ -1073,7 +1340,6 @@
                 }
             }
 
-            // ─── للباقي: الاتصال بالخادم الخارجي إن وجد ───
             const baseUrl = 'http://127.0.0.1:8080/api';
             const url = new URL(baseUrl);
             url.searchParams.append('action', action);
@@ -1126,9 +1392,8 @@
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             const el = document.getElementById('screen-' + screenId);
             if (el) el.classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            const navBtn = document.querySelector(`.nav-item[data-screen="${screenId}"]`);
-            if (navBtn) navBtn.classList.add('active');
+            // إغلاق القائمة الجانبية عند التنقل
+            closeAll();
         }
 
         function closeModal(id) {
@@ -1140,47 +1405,163 @@
         }
 
         // ============================================================
-        //  LOGIN (مُصلح بالكامل ومعزز بمعالجة الاستجابة)
+        //  دوال القائمة الجانبية (مستوردة من main.html مع تعديلات)
+        // ============================================================
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+            closeSubmenu();
+        }
+
+        function closeSubmenu() {
+            document.getElementById('submenuPanel').classList.remove('show');
+        }
+
+        function closeAll() {
+            document.getElementById('sidebar').classList.remove('open');
+            closeSubmenu();
+            document.getElementById('overlay').classList.remove('show');
+        }
+
+        function showSubmenu(event, title, items) {
+            event.stopPropagation();
+            const panel = document.getElementById('submenuPanel');
+            const titleEl = document.getElementById('submenuTitle');
+            const itemsEl = document.getElementById('submenuItems');
+
+            titleEl.textContent = title;
+            itemsEl.innerHTML = '';
+
+            const screenMap = {
+                'لوحة التحكم': 'dashboard',
+                'الإحصائيات السريعة': 'dashboard',
+                'الطلبات': 'sale',
+                'الفواتير': 'sale',
+                'الورديات': 'sale',
+                'نقاط البيع': 'sale',
+                'المبيعات اليومية': 'reports',
+                'المنتجات': 'inventory',
+                'فئات المنتجات': 'inventory',
+                'وحدات القياس': 'inventory',
+                'الخزانات': 'tanks',
+                'المضخات': 'tanks',
+                'الحركات المخزنية': 'inventory',
+                'الجرد': 'inventory',
+                'تنبيهات المخزون': 'inventory',
+                'العملاء': 'customers',
+                'الموردين': 'customers',
+                'جهات الاتصال': 'customers',
+                'العناوين': 'customers',
+                'المركبات': 'tanks',
+                'السائقين': 'employees',
+                'تتبع المركبات': 'tanks',
+                'صيانة المركبات': 'maintenance',
+                'المدفوعات': 'payment',
+                'الصناديق': 'payment',
+                'الحسابات البنكية': 'settings',
+                'المقبوضات': 'payment',
+                'حركات الصندوق': 'payment',
+                'شجرة الحسابات': 'settings',
+                'القيود اليومية': 'reports',
+                'الميزانية': 'reports',
+                'المصروفات': 'payment',
+                'فئات المصروفات': 'settings',
+                'الموظفين': 'employees',
+                'الحضور': 'employees',
+                'الرواتب': 'employees',
+                'صرف الرواتب': 'employees',
+                'الأصول الثابتة': 'maintenance',
+                'طلبات الصيانة': 'maintenance',
+                'جداول الصيانة': 'maintenance',
+                'قطع الغيار': 'inventory',
+                'المستخدمين': 'settings',
+                'الأدوار': 'settings',
+                'الصلاحيات': 'settings',
+                'إعدادات النظام': 'settings',
+                'إعدادات المحطة': 'settings',
+                'العملات': 'settings',
+                'سجل النشاط': 'activity',
+                'سجل النظام': 'activity',
+                'تقارير المبيعات': 'reports',
+                'تقارير المخزون': 'reports',
+                'تقارير مالية': 'reports',
+                'النسخ الاحتياطي': 'settings',
+                'المزامنة': 'settings',
+                'سجلات المزامنة': 'activity',
+                'الأرشفة': 'settings'
+            };
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.innerHTML = `<i class="fas fa-angle-left"></i> ${item}`;
+                const targetScreen = screenMap[item] || 'dashboard';
+                li.onclick = function(e) {
+                    e.stopPropagation();
+                    showScreen(targetScreen);
+                    closeAll();
+                };
+                itemsEl.appendChild(li);
+            });
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            const panelWidth = 200;
+            let topPos = rect.top;
+            if (topPos + panel.offsetHeight > window.innerHeight) {
+                topPos = window.innerHeight - panel.offsetHeight - 10;
+            }
+            if (topPos < 10) topPos = 10;
+
+            let rightPos = window.innerWidth - rect.right + rect.width + 8;
+            if (rightPos + panelWidth > window.innerWidth) {
+                rightPos = 10;
+            }
+            panel.style.top = topPos + 'px';
+            panel.style.right = rightPos + 'px';
+
+            panel.classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+
+        // إغلاق القوائم عند النقر خارجها (مطبق من main.html)
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const panel = document.getElementById('submenuPanel');
+            if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('.menu-toggle')) {
+                closeAll();
+            }
+            if (panel.classList.contains('show') && !panel.contains(e.target) && !e.target.closest('.sidebar ul li')) {
+                closeAll();
+            }
+        });
+        document.getElementById('submenuPanel').addEventListener('click', function(e) { e.stopPropagation(); });
+        document.getElementById('sidebar').addEventListener('click', function(e) { e.stopPropagation(); });
+
+        // ============================================================
+        //  LOGIN
         // ============================================================
         async function handleLogin(event) {
-            // منع السلوك الافتراضي للنموذج
-            if (event && event.preventDefault) {
-                event.preventDefault();
-            }
-
+            if (event && event.preventDefault) { event.preventDefault(); }
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
             const btn = document.getElementById('loginBtn');
             const btnText = document.getElementById('loginBtnText');
 
-            // التحقق من صحة المدخلات
             if (!username || !password) {
                 showToast('يرجى إدخال اسم المستخدم وكلمة المرور', 'warning');
                 return;
             }
-
-            // تعطيل الزر لمنع النقر المتكرر
             btn.disabled = true;
             btnText.innerHTML = '<div style="width:18px;height:18px;border:3px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto;"></div>';
 
             try {
-                // استدعاء API لتسجيل الدخول
                 const result = await apiCall('login', { username, password });
-
-                // معالجة الاستجابة كما هو مطلوب: التحقق من success
                 if (result.success) {
-                    // نجاح تسجيل الدخول: تخزين التوكن ومعلومات المستخدم
-                    if (result.token) {
-                        localStorage.setItem('authToken', result.token);
-                    }
-                    if (result.user) {
-                        localStorage.setItem('user', JSON.stringify(result.user));
-                    }
-                    // إخفاء شاشة تسجيل الدخول وإظهار التطبيق
+                    if (result.token) localStorage.setItem('authToken', result.token);
+                    if (result.user) localStorage.setItem('user', JSON.stringify(result.user));
                     document.getElementById('loginScreen').classList.add('hidden');
                     document.getElementById('appContainer').classList.add('active');
-
-                    // تحميل جميع البيانات الأساسية
                     await loadDashboard();
                     await loadCustomers();
                     await loadSaleDropdowns();
@@ -1193,29 +1574,20 @@
                     await loadSettings();
                     await loadTanksAndPumps();
                     await loadMaintenance();
-
-                    // عرض رسالة ترحيب
                     const userName = result.user?.full_name || username;
                     showToast(`مرحباً بك ${userName}!`, 'success');
                 } else {
-                    // فشل تسجيل الدخول: عرض رسالة الخطأ من الخادم أو رسالة افتراضية
-                    const errorMsg = result.error || 'بيانات الدخول غير صحيحة. يرجى المحاولة مرة أخرى.';
+                    const errorMsg = result.error || 'بيانات الدخول غير صحيحة.';
                     showToast('فشل تسجيل الدخول: ' + errorMsg, 'error');
-
-                    // إعادة تمكين الزر بعد الفشل
                     btn.disabled = false;
                     btnText.textContent = 'تسجيل الدخول';
                 }
             } catch (e) {
-                // خطأ في الاتصال أو معالجة غير متوقعة
                 console.error('Login error:', e);
-                showToast('تعذر الاتصال بالخادم. تأكد من تشغيل الخادم.', 'error');
-                // إعادة تمكين الزر
+                showToast('تعذر الاتصال بالخادم.', 'error');
                 btn.disabled = false;
                 btnText.textContent = 'تسجيل الدخول';
             } finally {
-                // في حالة النجاح، الزر سيختفي مع الشاشة، لكننا نعيد تمكينه هنا احتياطياً
-                // (لن يؤثر لأن الزر سيكون غير مرئي)
                 btn.disabled = false;
                 btnText.textContent = 'تسجيل الدخول';
             }
@@ -1229,23 +1601,15 @@
             }
         }
 
-        // ربط زر تسجيل الدخول والنموذج بشكل صحيح
         document.addEventListener('DOMContentLoaded', function() {
             const loginBtn = document.getElementById('loginBtn');
             const loginForm = document.getElementById('loginForm');
+            if (loginBtn) loginBtn.addEventListener('click', handleLogin);
+            if (loginForm) loginForm.addEventListener('submit', handleLogin);
 
-            if (loginBtn) {
-                loginBtn.addEventListener('click', handleLogin);
-            }
-            if (loginForm) {
-                loginForm.addEventListener('submit', handleLogin);
-            }
-
-            // التحقق من وجود توكن لتسجيل الدخول التلقائي
             const darkMode = localStorage.getItem('darkMode') === 'true';
-            if (darkMode) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+            if (darkMode) document.documentElement.setAttribute('data-theme', 'dark');
+
             const token = localStorage.getItem('authToken');
             if (token) {
                 document.getElementById('loginScreen').classList.add('hidden');
@@ -1263,6 +1627,13 @@
                 loadTanksAndPumps();
                 loadMaintenance();
             }
+
+            // تشغيل QR scanner إذا كانت الشاشة ظاهرة
+            setTimeout(() => {
+                if (document.getElementById('screen-qr').classList.contains('active')) {
+                    startQrScanner();
+                }
+            }, 1000);
         });
 
         // ============================================================
@@ -1366,7 +1737,7 @@
         }
 
         // ============================================================
-        //  CUSTOMERS (CRUD)
+        //  CUSTOMERS (CRUD) - حقيقي 100%
         // ============================================================
         async function loadCustomers() {
             try {
@@ -1419,7 +1790,10 @@
             document.getElementById('customerFormPhone').value = data ? data.phone : '';
             document.getElementById('customerFormCredit').value = data ? data.credit_limit : 0;
             document.getElementById('customerFormType').value = data ? data.party_type_id : 1;
-            document.getElementById('customerFormTitle').textContent = data ? '✏️ تعديل عميل' : '👤 إضافة عميل';
+            document.getElementById('customerFormTitle').innerHTML = `
+                <button class="back-btn" onclick="closeModal('customerFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                <i class="fas fa-user-plus"></i> ${data ? 'تعديل عميل' : 'إضافة عميل'}
+            `;
             document.getElementById('customerFormDelete').style.display = data ? 'inline-block' : 'none';
             modal.classList.add('active');
         }
@@ -1490,7 +1864,10 @@
 
         function viewCustomerAccount(customerId, customerName) {
             currentAccountCustomerId = customerId;
-            document.getElementById('accountCustomerName').textContent = `📊 كشف حساب العميل: ${customerName}`;
+            document.getElementById('accountCustomerName').innerHTML = `
+                <button class="back-btn" onclick="closeModal('customerAccountModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                <i class="fas fa-file-invoice"></i> كشف حساب العميل: ${customerName}
+            `;
             document.getElementById('accountFromDate').value = '';
             document.getElementById('accountToDate').value = '';
             document.getElementById('accountDetails').innerHTML = '<div class="text-center">اختر الفترة ثم اضغط عرض</div>';
@@ -1891,7 +2268,10 @@
             document.getElementById('employeeFormSalary').value = data ? data.basic_salary : 0;
             document.getElementById('employeeFormActive').value = data ? (data.status === 'active' ? 1 : 0) : 1;
             document.getElementById('employeeFormNotes').value = data ? data.remarks : '';
-            document.getElementById('employeeFormTitle').textContent = data ? '✏️ تعديل موظف' : '👨‍💼 إضافة موظف';
+            document.getElementById('employeeFormTitle').innerHTML = `
+                <button class="back-btn" onclick="closeModal('employeeFormModal'); showScreen('dashboard')"><i class="fas fa-arrow-right"></i></button>
+                <i class="fas fa-user-plus"></i> ${data ? 'تعديل موظف' : 'إضافة موظف'}
+            `;
             document.getElementById('employeeFormDelete').style.display = data ? 'inline-block' : 'none';
             modal.classList.add('active');
         }
@@ -2530,10 +2910,9 @@
         }
 
         // ============================================================
-        //  INIT (بدون أي مؤقتات غير ضرورية)
+        //  INIT & QR OBSERVER
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
-            // التحقق من وجود توكن لتسجيل الدخول التلقائي
             const darkMode = localStorage.getItem('darkMode') === 'true';
             if (darkMode) {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -2556,7 +2935,6 @@
                 loadMaintenance();
             }
 
-            // تشغيل QR Scanner إذا كانت الشاشة ظاهرة
             setTimeout(() => {
                 if (document.getElementById('screen-qr').classList.contains('active')) {
                     startQrScanner();
@@ -2564,7 +2942,6 @@
             }, 1000);
         });
 
-        // مراقبة ظهور شاشة QR لتشغيل الماسح
         const observer = new MutationObserver(() => {
             if (document.getElementById('screen-qr').classList.contains('active')) {
                 if (!qrScanner) startQrScanner();
