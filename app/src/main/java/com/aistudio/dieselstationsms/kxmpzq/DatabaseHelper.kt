@@ -6543,3 +6543,775 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return arr
     }
 }
+
+    // ========== MISSING CRUD FUNCTIONS - ADD THESE TO DatabaseHelper.kt ==========
+
+    // ----- INSERT PARTY (was missing) -----
+    fun insertParty(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("party_type", data.optString("party_type", "customer"))
+                put("party_code", data.optString("party_code", ""))
+                put("party_name", data.optString("party_name", ""))
+                put("party_name_ar", data.optString("party_name_ar", ""))
+                put("phone", data.optString("phone", ""))
+                put("phone2", data.optString("phone2", ""))
+                put("email", data.optString("email", ""))
+                put("address", data.optString("address", ""))
+                put("city", data.optString("city", ""))
+                put("region", data.optString("region", ""))
+                put("tax_number", data.optString("tax_number", ""))
+                put("commercial_register", data.optString("commercial_register", ""))
+                put("credit_limit", data.optDouble("credit_limit", 0.0))
+                put("balance", data.optDouble("balance", 0.0))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("parties", null, values)
+            if (id > 0) logActivity("system", "insert_party", "إضافة طرف: ${data.optString("party_name")}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- ORDERS -----
+    fun addOrder(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("party_id", data.optLong("party_id", 0))
+                put("order_type", data.optString("order_type", "sale"))
+                put("order_date", data.optString("order_date", getCurrentDate()))
+                put("delivery_date", data.optString("delivery_date", ""))
+                put("status", data.optString("status", "pending"))
+                put("total_amount", data.optDouble("total_amount", 0.0))
+                put("paid_amount", data.optDouble("paid_amount", 0.0))
+                put("notes", data.optString("notes", ""))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("orders", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getOrders(status: String?): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val selection = if (status != null) "status = ?" else null
+            val selectionArgs = if (status != null) arrayOf(status) else null
+            val cursor = db.query("orders", null, selection, selectionArgs, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- DELIVERIES -----
+    fun addDelivery(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("order_id", data.optLong("order_id", 0))
+                put("party_id", data.optLong("party_id", 0))
+                put("vehicle_id", data.optLong("vehicle_id", 0))
+                put("driver_id", data.optLong("driver_id", 0))
+                put("delivery_date", data.optString("delivery_date", getCurrentDate()))
+                put("quantity", data.optDouble("quantity", 0.0))
+                put("fuel_type", data.optString("fuel_type", "diesel"))
+                put("price_per_liter", data.optDouble("price_per_liter", 0.0))
+                put("total_amount", data.optDouble("total_amount", 0.0))
+                put("status", data.optString("status", "delivered"))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("deliveries", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getDeliveries(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("deliveries", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTodayDeliveries(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val cursor = db.query("deliveries", null, "delivery_date = ?", arrayOf(today), null, null, null)
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- FUEL SALES -----
+    fun addFuelSale(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("shift_id", data.optLong("shift_id", 0))
+                put("pump_id", data.optLong("pump_id", 0))
+                put("fuel_type_id", data.optLong("fuel_type_id", 0))
+                put("quantity", data.optDouble("quantity", 0.0))
+                put("price_per_liter", data.optDouble("price_per_liter", 0.0))
+                put("total_amount", data.optDouble("total_amount", 0.0))
+                put("payment_method", data.optString("payment_method", "cash"))
+                put("customer_id", data.optLong("customer_id", 0))
+                put("vehicle_plate", data.optString("vehicle_plate", ""))
+                put("sale_date", data.optString("sale_date", getCurrentDate()))
+                put("sale_time", data.optString("sale_time", getCurrentTime()))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("fuel_sales", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTodaySales(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val cursor = db.query("fuel_sales", null, "sale_date = ?", arrayOf(today), null, null, null)
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- METER READINGS -----
+    fun addMeterReading(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("pump_id", data.optLong("pump_id", 0))
+                put("shift_id", data.optLong("shift_id", 0))
+                put("reading_type", data.optString("reading_type", "start"))
+                put("mechanical_reading", data.optDouble("mechanical_reading", 0.0))
+                put("electronic_reading", data.optDouble("electronic_reading", 0.0))
+                put("temperature", data.optDouble("temperature", 0.0))
+                put("density", data.optDouble("density", 0.0))
+                put("reading_date", data.optString("reading_date", getCurrentDate()))
+                put("reading_time", data.optString("reading_time", getCurrentTime()))
+                put("notes", data.optString("notes", ""))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("meter_readings", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getMeterReadings(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("meter_readings", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- TANK READINGS -----
+    fun addTankReading(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("tank_id", data.optLong("tank_id", 0))
+                put("shift_id", data.optLong("shift_id", 0))
+                put("reading_type", data.optString("reading_type", "dip"))
+                put("fuel_level", data.optDouble("fuel_level", 0.0))
+                put("fuel_volume", data.optDouble("fuel_volume", 0.0))
+                put("temperature", data.optDouble("temperature", 0.0))
+                put("water_level", data.optDouble("water_level", 0.0))
+                put("reading_date", data.optString("reading_date", getCurrentDate()))
+                put("reading_time", data.optString("reading_time", getCurrentTime()))
+                put("notes", data.optString("notes", ""))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("tank_readings", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTankReadings(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("tank_readings", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- STOCK MOVEMENTS -----
+    fun addStockMovement(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("product_id", data.optLong("product_id", 0))
+                put("movement_type", data.optString("movement_type", "in"))
+                put("quantity", data.optDouble("quantity", 0.0))
+                put("unit_cost", data.optDouble("unit_cost", 0.0))
+                put("total_cost", data.optDouble("total_cost", 0.0))
+                put("reference_type", data.optString("reference_type", ""))
+                put("reference_id", data.optLong("reference_id", 0))
+                put("movement_date", data.optString("movement_date", getCurrentDate()))
+                put("notes", data.optString("notes", ""))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("stock_movements", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getStockMovements(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("stock_movements", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getLowStockItems(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.rawQuery(
+                "SELECT p.*, s.current_quantity FROM products p " +
+                "LEFT JOIN stock s ON p.id = s.product_id " +
+                "WHERE s.current_quantity <= p.min_stock_level OR s.current_quantity IS NULL",
+                null
+            )
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- ASSETS -----
+    fun addAsset(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("asset_code", data.optString("asset_code", ""))
+                put("asset_name", data.optString("asset_name", ""))
+                put("asset_type", data.optString("asset_type", ""))
+                put("asset_category", data.optString("asset_category", ""))
+                put("purchase_date", data.optString("purchase_date", ""))
+                put("purchase_cost", data.optDouble("purchase_cost", 0.0))
+                put("current_value", data.optDouble("current_value", 0.0))
+                put("depreciation_rate", data.optDouble("depreciation_rate", 0.0))
+                put("location", data.optString("location", ""))
+                put("status", data.optString("status", "active"))
+                put("maintenance_date", data.optString("maintenance_date", ""))
+                put("next_maintenance", data.optString("next_maintenance", ""))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("assets", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- USERS -----
+    fun addUser(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("username", data.optString("username", ""))
+                put("password_hash", data.optString("password_hash", ""))
+                put("full_name", data.optString("full_name", ""))
+                put("email", data.optString("email", ""))
+                put("phone", data.optString("phone", ""))
+                put("role", data.optString("role", "user"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("last_login", data.optString("last_login", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("users", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- SHIFTS -----
+    fun startShift(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("shift_number", data.optString("shift_number", ""))
+                put("employee_id", data.optLong("employee_id", 0))
+                put("start_date", data.optString("start_date", getCurrentDate()))
+                put("start_time", data.optString("start_time", getCurrentTime()))
+                put("starting_cash", data.optDouble("starting_cash", 0.0))
+                put("status", "active")
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shifts", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun endShift(id: Long, data: org.json.JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("end_date", data.optString("end_date", getCurrentDate()))
+                put("end_time", data.optString("end_time", getCurrentTime()))
+                put("ending_cash", data.optDouble("ending_cash", 0.0))
+                put("total_sales", data.optDouble("total_sales", 0.0))
+                put("total_deliveries", data.optDouble("total_deliveries", 0.0))
+                put("total_expenses", data.optDouble("total_expenses", 0.0))
+                put("status", "closed")
+                put("notes", data.optString("notes", ""))
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("shifts", values, "id = ?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getCurrentShift(): org.json.JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("shifts", null, "status = ?", arrayOf("active"), null, null, "created_at DESC", "1")
+            if (cursor.moveToFirst()) {
+                cursorToJsonObject(cursor)
+            } else null
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftSale(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("shift_id", data.optLong("shift_id", 0))
+                put("sale_id", data.optLong("sale_id", 0))
+                put("amount", data.optDouble("amount", 0.0))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_sales", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftDelivery(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("shift_id", data.optLong("shift_id", 0))
+                put("delivery_id", data.optLong("delivery_id", 0))
+                put("amount", data.optDouble("amount", 0.0))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_deliveries", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftExpense(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("shift_id", data.optLong("shift_id", 0))
+                put("expense_type", data.optString("expense_type", ""))
+                put("amount", data.optDouble("amount", 0.0))
+                put("description", data.optString("description", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_expenses", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- NOTIFICATIONS -----
+    fun addNotification(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("user_id", data.optLong("user_id", 0))
+                put("notification_type", data.optString("notification_type", "info"))
+                put("title", data.optString("title", ""))
+                put("message", data.optString("message", ""))
+                put("is_read", 0)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("notifications", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getNotifications(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("notifications", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUnreadNotificationsCount(): Int {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0", null)
+            val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            cursor.close()
+            count
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- SMS MESSAGES -----
+    fun addSmsMessage(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("uuid", java.util.UUID.randomUUID().toString())
+                put("phone_number", data.optString("phone_number", ""))
+                put("message_body", data.optString("message_body", ""))
+                put("message_type", data.optString("message_type", "incoming"))
+                put("status", data.optString("status", "pending"))
+                put("party_id", data.optLong("party_id", 0))
+                put("sent_at", data.optString("sent_at", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("sms_messages", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessages(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("sms_messages", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByPhone(phone: String): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("sms_messages", null, "phone_number = ?", arrayOf(phone), null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByStatus(status: String): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("sms_messages", null, "status = ?", arrayOf(status), null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsStatus(id: Long, status: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("status", status)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_messages", values, "id = ?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsStats(): org.json.JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val stats = org.json.JSONObject()
+            val cursorTotal = db.rawQuery("SELECT COUNT(*) FROM sms_messages", null)
+            stats.put("total", if (cursorTotal.moveToFirst()) cursorTotal.getInt(0) else 0)
+            cursorTotal.close()
+
+            val cursorSent = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'sent'", null)
+            stats.put("sent", if (cursorSent.moveToFirst()) cursorSent.getInt(0) else 0)
+            cursorSent.close()
+
+            val cursorPending = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'pending'", null)
+            stats.put("pending", if (cursorPending.moveToFirst()) cursorPending.getInt(0) else 0)
+            cursorPending.close()
+
+            stats
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsTemplates(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query("sms_templates", null, null, null, null, null, "created_at DESC")
+            cursorToJsonArray(cursor)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addSmsTemplate(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("sms_templates", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsTemplate(id: Long, data: org.json.JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_templates", values, "id = ?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSmsTemplate(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("sms_templates", "id = ?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- SETTINGS -----
+    fun addSetting(data: org.json.JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("setting_key", data.optString("setting_key", ""))
+                put("setting_value", data.optString("setting_value", ""))
+                put("setting_type", data.optString("setting_type", "string"))
+                put("description", data.optString("description", ""))
+                put("is_editable", if (data.optBoolean("is_editable", true)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("settings", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSetting(key: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("settings", "setting_key = ?", arrayOf(key))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ----- BACKUP & EXPORT -----
+    fun backupDatabase(): String {
+        dbLock.lock()
+        return try {
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            val backupDir = java.io.File(context.getExternalFilesDir(null), "backups")
+            if (!backupDir.exists()) backupDir.mkdirs()
+            val backupFile = java.io.File(backupDir, "backup_${System.currentTimeMillis()}.db")
+            dbFile.copyTo(backupFile, overwrite = true)
+            backupFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun restoreDatabase(path: String): Boolean {
+        dbLock.lock()
+        return try {
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            val backupFile = java.io.File(path)
+            if (backupFile.exists()) {
+                backupFile.copyTo(dbFile, overwrite = true)
+                true
+            } else false
+        } catch (e: Exception) {
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun exportToCSV(tableName: String): String {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query(tableName, null, null, null, null, null, null)
+            val csv = StringBuilder()
+            val columns = cursor.columnNames
+            csv.append(columns.joinToString(",")).append("
+")
+            while (cursor.moveToNext()) {
+                val row = columns.map { col ->
+                    val idx = cursor.getColumnIndex(col)
+                    when (cursor.getType(idx)) {
+                        android.database.Cursor.FIELD_TYPE_STRING -> ""${cursor.getString(idx)?.replace(""", """") ?: ""}""
+                        android.database.Cursor.FIELD_TYPE_INTEGER -> cursor.getInt(idx).toString()
+                        android.database.Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(idx).toString()
+                        else -> ""
+                    }
+                }
+                csv.append(row.joinToString(",")).append("
+")
+            }
+            cursor.close()
+
+            val exportDir = java.io.File(context.getExternalFilesDir(null), "exports")
+            if (!exportDir.exists()) exportDir.mkdirs()
+            val exportFile = java.io.File(exportDir, "${tableName}_${System.currentTimeMillis()}.csv")
+            exportFile.writeText(csv.toString())
+            exportFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun importFromCSV(tableName: String, path: String): Int {
+        return 0 // Implementation depends on CSV structure
+    }
+
+    fun getDatabaseSize(): Long {
+        return try {
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            dbFile.length()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    fun getTableCounts(): org.json.JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val tables = listOf("parties", "orders", "deliveries", "fuel_sales", "meter_readings", 
+                              "tank_readings", "stock_movements", "assets", "users", "employees", 
+                              "shifts", "notifications", "sms_messages")
+            val result = org.json.JSONArray()
+            tables.forEach { table ->
+                val cursor = db.rawQuery("SELECT COUNT(*) FROM $table", null)
+                val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                cursor.close()
+                val obj = org.json.JSONObject()
+                obj.put("table", table)
+                obj.put("count", count)
+                result.put(obj)
+            }
+            result
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun vacuumDatabase() {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.execSQL("VACUUM")
+        } finally {
+            dbLock.unlock()
+        }
+    }
