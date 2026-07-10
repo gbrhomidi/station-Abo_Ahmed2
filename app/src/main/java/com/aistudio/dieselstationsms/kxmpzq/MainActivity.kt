@@ -35,7 +35,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
@@ -725,7 +724,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== PARTIES (CUSTOMERS/SUPPLIERS/DRIVERS) ==========
+        // ========== PARTIES ==========
         @JavascriptInterface
         fun addParty(jsonData: String): String {
             return try {
@@ -812,19 +811,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun getCustomers(): String {
-            return getParties("customer")
-        }
+        fun getCustomers(): String = getParties("customer")
 
         @JavascriptInterface
-        fun getSuppliers(): String {
-            return getParties("supplier")
-        }
+        fun getSuppliers(): String = getParties("supplier")
 
         @JavascriptInterface
-        fun getDrivers(): String {
-            return getParties("driver")
-        }
+        fun getDrivers(): String = getParties("driver")
 
         @JavascriptInterface
         fun searchParties(query: String): String {
@@ -886,9 +879,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun getPendingOrders(): String {
-            return getOrders("pending")
-        }
+        fun getPendingOrders(): String = getOrders("pending")
 
         // ========== DELIVERIES ==========
         @JavascriptInterface
@@ -1854,7 +1845,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 json.toString()
             } catch (e: Exception) {
-                "{\"error\":\"${e.message}\"}"
+                "{"error":"${e.message}"}"
             }
         }
 
@@ -2117,7 +2108,6 @@ class MainActivity : AppCompatActivity() {
                 ).show()
             }
         } else {
-            // All permissions granted, restart SMS service
             lifecycleScope.launch {
                 delay(500)
                 startSMSService()
