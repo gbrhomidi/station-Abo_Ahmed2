@@ -1,6 +1,8 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
@@ -98,6 +100,9 @@ class MyApplication : Application() {
         // تهيئة معالج الأعطال العالمي
         setupCrashHandler()
 
+        // تهيئة قنوات الإشعارات
+        createNotificationChannels()
+
         // تهيئة EncryptedSharedPreferences مسبقاً
         try {
             getEncryptedPreferences()
@@ -107,6 +112,29 @@ class MyApplication : Application() {
         }
 
         Log.d(TAG, "Application initialized successfully")
+    }
+
+    /**
+     * إنشاء قنوات الإشعارات المطلوبة
+     */
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val channel = NotificationChannel(
+                    "station_sms_channel",
+                    "Station SMS Service",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "قناة إشعارات خدمة الرسائل النصية"
+                    setShowBadge(false)
+                }
+                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                manager.createNotificationChannel(channel)
+                Log.d(TAG, "Notification channel created")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create notification channel", e)
+            }
+        }
     }
 
     /**
