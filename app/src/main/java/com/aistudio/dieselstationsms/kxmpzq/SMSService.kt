@@ -1,5 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
+import android.app.Notification
+import android.app.PendingIntent
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
