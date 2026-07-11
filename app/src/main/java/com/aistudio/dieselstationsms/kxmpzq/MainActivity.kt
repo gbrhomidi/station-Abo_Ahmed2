@@ -82,6 +82,12 @@ class MainActivity : AppCompatActivity() {
         dbHelper = DatabaseHelper(this)
         geminiHelper = GeminiAIHelper(this)
 
+        // تهيئة Gemini AI
+        geminiApiKey = loadEnvKey("GEMINI_API_KEY")
+        if (geminiApiKey.isNotEmpty()) {
+            geminiHelper.initialize(geminiApiKey)
+        }
+
         createNotificationChannel()
 
         if (isDebugMode) {
@@ -709,7 +715,6 @@ class MainActivity : AppCompatActivity() {
                         put("error", "مفتاح Gemini API غير مُهيأ")
                     }.toString()
                 }
-
                 val response = geminiHelper.sendMessageSync(message)
                 JSONObject().apply {
                     put("success", true)
