@@ -180,6 +180,9 @@ dependencies {
     // QR Code Scanning (ZXing)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
+    // Gemini AI
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
