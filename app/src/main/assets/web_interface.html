@@ -1490,7 +1490,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: SALES (جداول sales_transactions, sale_items, receipts)
+            PAGE: SALES
             ============================================================ -->
             <div class="page" id="page-sales">
                 <div class="page-header">
@@ -1546,7 +1546,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: CUSTOMERS (جدول parties)
+            PAGE: CUSTOMERS
             ============================================================ -->
             <div class="page" id="page-customers">
                 <div class="page-header">
@@ -1591,7 +1591,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: PRODUCTS (جداول products, fuel_types, product_categories, units)
+            PAGE: PRODUCTS
             ============================================================ -->
             <div class="page" id="page-products">
                 <div class="page-header">
@@ -1638,7 +1638,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: EMPLOYEES (جدول employees)
+            PAGE: EMPLOYEES
             ============================================================ -->
             <div class="page" id="page-employees">
                 <div class="page-header">
@@ -1679,7 +1679,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: TANKS (جداول tanks, pumps, tank_level_log)
+            PAGE: TANKS
             ============================================================ -->
             <div class="page" id="page-tanks">
                 <div class="page-header">
@@ -1715,7 +1715,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: USERS (جدول users + roles)
+            PAGE: USERS
             ============================================================ -->
             <div class="page" id="page-users">
                 <div class="page-header">
@@ -1753,7 +1753,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: ROLES (جدول roles + role_permissions)
+            PAGE: ROLES
             ============================================================ -->
             <div class="page" id="page-roles">
                 <div class="page-header">
@@ -1790,7 +1790,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: PAYMENTS (جداول payments, cash_movements)
+            PAGE: PAYMENTS
             ============================================================ -->
             <div class="page" id="page-payments">
                 <div class="page-header">
@@ -1826,7 +1826,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: NOTIFICATIONS (جدول notifications)
+            PAGE: NOTIFICATIONS
             ============================================================ -->
             <div class="page" id="page-notifications">
                 <div class="page-header">
@@ -1843,7 +1843,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: SHIFTS (جدول shifts)
+            PAGE: SHIFTS
             ============================================================ -->
             <div class="page" id="page-shifts">
                 <div class="page-header">
@@ -1881,7 +1881,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: MAINTENANCE (جدول maintenance_requests)
+            PAGE: MAINTENANCE
             ============================================================ -->
             <div class="page" id="page-maintenance">
                 <div class="page-header">
@@ -1917,7 +1917,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: SMS (جدول sms_logs + sms_whitelist)
+            PAGE: SMS
             ============================================================ -->
             <div class="page" id="page-sms">
                 <div class="page-header">
@@ -1987,7 +1987,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: REPORTS (تقارير متنوعة)
+            PAGE: REPORTS
             ============================================================ -->
             <div class="page" id="page-reports">
                 <div class="page-header">
@@ -2011,7 +2011,7 @@
             </div>
 
             <!-- ============================================================
-            PAGE: SETTINGS (إعدادات النظام)
+            PAGE: SETTINGS
             ============================================================ -->
             <div class="page" id="page-settings">
                 <div class="page-header">
@@ -2353,6 +2353,10 @@
         let authToken = localStorage.getItem('authToken') || null;
         let currentUser = null;
 
+        // الكشف عن وجود AndroidInterface
+        const androidInterface = window.AndroidInterface;
+        const useAndroidInterface = typeof androidInterface !== 'undefined' && androidInterface !== null;
+
         // ============================================================
         // UTILITY FUNCTIONS
         // ============================================================
@@ -2389,7 +2393,7 @@
         }
 
         // ============================================================
-        // API CALL
+        // API CALL (للعمليات الأخرى، يستخدم HTTP)
         // ============================================================
         async function apiCall(action, params = {}) {
             const url = new URL(API_BASE);
@@ -2414,6 +2418,93 @@
         }
 
         // ============================================================
+        // LOGIN – يستخدم AndroidInterface أولاً ثم HTTP كبديل
+        // ============================================================
+        async function handleLogin(e) {
+            if (e) e.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const btn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('loginBtnText');
+
+            if (!username || !password) {
+                showToast('يرجى إدخال اسم المستخدم وكلمة المرور', 'warning');
+                return;
+            }
+
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="spinner spinner-sm" style="border-top-color:white;"></span>';
+
+            try {
+                let result = null;
+
+                // ====== 1. محاولة استخدام AndroidInterface أولاً ======
+                if (useAndroidInterface) {
+                    try {
+                        const response = androidInterface.login(username, password);
+                        result = JSON.parse(response);
+                        console.log('AndroidInterface login response:', result);
+                    } catch (e) {
+                        console.warn('AndroidInterface login failed, falling back to HTTP:', e);
+                        result = null;
+                    }
+                }
+
+                // ====== 2. إذا فشل AndroidInterface أو لم يكن موجوداً، استخدم HTTP ======
+                if (!result || !result.success) {
+                    try {
+                        result = await apiCall('login', { username, password });
+                    } catch (e) {
+                        showToast('خطأ في الاتصال بالخادم', 'error');
+                        btn.disabled = false;
+                        btnText.textContent = 'تسجيل الدخول';
+                        return;
+                    }
+                }
+
+                // ====== 3. معالجة النتيجة ======
+                if (result && result.success) {
+                    if (result.token) localStorage.setItem('authToken', result.token);
+                    if (result.user) localStorage.setItem('user', JSON.stringify(result.user));
+                    authToken = result.token || null;
+                    currentUser = result.user || null;
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('appContainer').classList.add('active');
+                    renderSidebar();
+                    showPage('dashboard');
+                    showToast('مرحباً بك!', 'success');
+                } else {
+                    const errorMsg = result?.error || 'بيانات الدخول غير صحيحة. حاول مرة أخرى.';
+                    showToast('فشل تسجيل الدخول: ' + errorMsg, 'error');
+                    btn.disabled = false;
+                    btnText.textContent = 'تسجيل الدخول';
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                showToast('حدث خطأ غير متوقع', 'error');
+                btn.disabled = false;
+                btnText.textContent = 'تسجيل الدخول';
+            }
+        }
+
+        function handleBiometric() {
+            showToast('ميزة البصمة غير مدعومة في هذا المتصفح', 'warning');
+        }
+
+        function logout() {
+            if (confirm('تسجيل الخروج؟')) {
+                localStorage.clear();
+                authToken = null;
+                currentUser = null;
+                document.getElementById('appContainer').classList.remove('active');
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('loginBtn').disabled = false;
+                document.getElementById('loginBtnText').textContent = 'تسجيل الدخول';
+                showToast('تم تسجيل الخروج', 'info');
+            }
+        }
+
+        // ============================================================
         // THEME
         // ============================================================
         function toggleTheme() {
@@ -2429,7 +2520,7 @@
         })();
 
         // ============================================================
-        // SIDEBAR – بناء القائمة الجانبية مع شاشات فريدة لكل عنصر فرعي
+        // SIDEBAR – بناء القائمة الجانبية
         // ============================================================
         const sidebarNavData = [{
             id: 'dashboard',
@@ -2513,7 +2604,6 @@
             children: ['عام', 'مفاتيح API']
         }];
 
-        // خريطة ربط عناصر القائمة الفرعية بالشاشات الفريدة
         const subPageMap = {
             'سجل المبيعات': 'sales',
             'مبيعة جديدة': 'sales',
@@ -2643,7 +2733,6 @@
             const target = document.getElementById('page-' + pageId);
             if (target) target.classList.add('active');
 
-            // تحديث القائمة الجانبية
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             const items = document.querySelectorAll('.nav-item');
             items.forEach(item => {
@@ -2696,6 +2785,7 @@
                     loadNotifications();
                     break;
                 case 'reports':
+                    generateEodReport();
                     loadMonthlyChart();
                     break;
                 case 'settings':
@@ -2703,64 +2793,6 @@
                     break;
                 case 'ai':
                     break;
-            }
-        }
-
-        // ============================================================
-        // LOGIN
-        // ============================================================
-        async function handleLogin(e) {
-            if (e) e.preventDefault();
-            const username = document.getElementById('loginUsername').value.trim();
-            const password = document.getElementById('loginPassword').value.trim();
-            const btn = document.getElementById('loginBtn');
-            const btnText = document.getElementById('loginBtnText');
-
-            if (!username || !password) {
-                showToast('يرجى إدخال اسم المستخدم وكلمة المرور', 'warning');
-                return;
-            }
-
-            btn.disabled = true;
-            btnText.innerHTML = '<span class="spinner spinner-sm" style="border-top-color:white;"></span>';
-
-            try {
-                const result = await apiCall('login', { username, password });
-                if (result.success) {
-                    if (result.token) localStorage.setItem('authToken', result.token);
-                    if (result.user) localStorage.setItem('user', JSON.stringify(result.user));
-                    authToken = result.token || null;
-                    currentUser = result.user || null;
-                    document.getElementById('loginScreen').classList.add('hidden');
-                    document.getElementById('appContainer').classList.add('active');
-                    renderSidebar();
-                    showPage('dashboard');
-                    showToast('مرحباً بك!', 'success');
-                } else {
-                    showToast('فشل تسجيل الدخول: ' + (result.error || 'بيانات غير صحيحة'), 'error');
-                    btn.disabled = false;
-                    btnText.textContent = 'تسجيل الدخول';
-                }
-            } catch (err) {
-                showToast('خطأ في الاتصال بالخادم', 'error');
-                btn.disabled = false;
-                btnText.textContent = 'تسجيل الدخول';
-            }
-        }
-
-        function handleBiometric() {
-            showToast('ميزة البصمة غير مدعومة في هذا المتصفح', 'warning');
-        }
-
-        function logout() {
-            if (confirm('تسجيل الخروج؟')) {
-                localStorage.clear();
-                authToken = null;
-                currentUser = null;
-                document.getElementById('appContainer').classList.remove('active');
-                document.getElementById('loginScreen').classList.remove('hidden');
-                document.getElementById('loginBtn').disabled = false;
-                document.getElementById('loginBtnText').textContent = 'تسجيل الدخول';
             }
         }
 
@@ -2827,7 +2859,7 @@
         }
 
         // ============================================================
-        // SALES (جميع حقول sales_transactions)
+        // SALES
         // ============================================================
         let salesData = [];
 
@@ -3053,7 +3085,7 @@
         }
 
         // ============================================================
-        // CUSTOMERS (جميع حقول parties)
+        // CUSTOMERS
         // ============================================================
         let customersData = [];
 
@@ -3172,7 +3204,7 @@
         }
 
         // ============================================================
-        // PRODUCTS (جميع حقول products)
+        // PRODUCTS
         // ============================================================
         let productsData = [];
 
@@ -3183,7 +3215,6 @@
                 if (result.success) {
                     productsData = result.data || [];
                     renderProductsTable(productsData);
-                    // fill fuel type and category dropdowns
                     const fuelResult = await apiCall('get_fuel_types');
                     const catResult = await apiCall('get_categories');
                     const fuelSel = document.getElementById('productFormFuelType');
@@ -3334,7 +3365,7 @@
         }
 
         // ============================================================
-        // EMPLOYEES (جميع حقول employees)
+        // EMPLOYEES
         // ============================================================
         let employeesData = [];
 
@@ -3458,7 +3489,7 @@
         }
 
         // ============================================================
-        // TANKS (جميع حقول tanks)
+        // TANKS
         // ============================================================
         async function loadTanks() {
             showLoading(true);
@@ -3545,7 +3576,7 @@
         function editPump(id) { showToast('تعديل المضخة #' + id + ' - قيد التطوير', 'info'); }
 
         // ============================================================
-        // USERS (جميع حقول users)
+        // USERS
         // ============================================================
         let usersData = [];
 
@@ -3556,7 +3587,6 @@
                 if (result.success) {
                     usersData = result.data || [];
                     renderUsersTable(usersData);
-                    // fill role dropdown
                     const roleResult = await apiCall('get_roles');
                     const roleSel = document.getElementById('userFormRole');
                     if (roleResult.success) {
@@ -3672,7 +3702,7 @@
         }
 
         // ============================================================
-        // ROLES (جميع حقول roles)
+        // ROLES
         // ============================================================
         let rolesData = [];
 
@@ -3780,7 +3810,7 @@
         }
 
         // ============================================================
-        // PAYMENTS (جميع حقول payments)
+        // PAYMENTS
         // ============================================================
         async function loadPayments() {
             showLoading(true);
@@ -3917,7 +3947,7 @@
         }
 
         // ============================================================
-        // SHIFTS (جميع حقول shifts)
+        // SHIFTS
         // ============================================================
         async function loadShifts() {
             showLoading(true);
@@ -3952,7 +3982,6 @@
         }
 
         function openShiftModal() {
-            // load cashiers
             apiCall('get_cashiers').then(res => {
                 const sel = document.getElementById('shiftCashier');
                 if (res.success) {
@@ -4016,7 +4045,7 @@
         }
 
         // ============================================================
-        // MAINTENANCE (جميع حقول maintenance_requests)
+        // MAINTENANCE
         // ============================================================
         async function loadMaintenance() {
             showLoading(true);
@@ -4116,7 +4145,7 @@
         }
 
         // ============================================================
-        // SMS (sms_logs + whitelist)
+        // SMS
         // ============================================================
         let smsData = [];
 
