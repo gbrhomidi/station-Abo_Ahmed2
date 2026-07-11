@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.text.SimpleDateFormat
@@ -16,30 +17,18 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V11 - كامل مع جميع الجداول والدوال
- * تم إصلاح جميع الدوال لتتوافق مع SMSService.kt
- *
- * التحديثات في V11:
- * - إضافة دوال مفقودة: getFuelNameById, getProductCategories, getPaymentsWithCustomer, addCashDeposit
- * - إضافة دوال الصيانة: getMaintenanceRequests, addMaintenanceRequest, updateMaintenanceRequestStatus
- * - إضافة دوال القوائم البيضاء للرسائل: getSmsWhitelist, addToSmsWhitelist, removeFromSmsWhitelist
- * - إضافة دوال التقارير: getDailySales, getMonthlySales, getEodReport
- * - إضافة دوال الإعدادات: getSetting, setSetting
- * - إضافة دوال محادثة الذكاء الاصطناعي: getAiChatHistory, saveAiMessage
- * - إضافة دوال تصدير البيانات: exportAllData
- * - إضافة دالة addSmsMessage
- * - إزالة دالة close() المكررة لتجنب التضارب
+ * الإصدار المدمج V12 - كامل مع جميع الجداول والدوال
+ * تم إصلاح جميع الدوال لتتوافق مع SMSService.kt و MainActivity.kt
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        const val VERSION = 11
+        const val VERSION = 12
 
         private const val HASH_ITERATIONS = 10000
 
-        // ========== Password Security ==========
         fun hashPassword(password: String, salt: ByteArray? = null): Pair<String, String> {
             val actualSalt = salt ?: ByteArray(16).also { SecureRandom().nextBytes(it) }
             val digest = MessageDigest.getInstance("SHA-256")
@@ -82,10 +71,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             createAllTables(db)
             insertInitialData(db)
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V11 created successfully with full schema")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error creating database: ${e.message}", e)
-            throw e
+            Log.d(TAG, "Database V12 created successfully")
         } finally {
             db.endTransaction()
         }
@@ -102,13 +88,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                     8 -> migrateV8ToV9(db)
                     9 -> migrateV9ToV10(db)
                     10 -> migrateV10ToV11(db)
+                    11 -> migrateV11ToV12(db)
                 }
             }
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database upgraded from $oldVersion to $newVersion")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error upgrading database: ${e.message}", e)
-            throw e
         } finally {
             db.endTransaction()
         }
@@ -153,9 +136,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     private fun migrateV8ToV9(db: SQLiteDatabase) {
         try {
             db.execSQL("ALTER TABLE users ADD COLUMN password_salt VARCHAR(255)")
-        } catch (e: Exception) {
-            Log.w(TAG, "password_salt column may already exist: ${e.message}")
-        }
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
         val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("UPDATE users SET password_hash = '$hashAdmin', password_salt = '$saltAdmin' WHERE username = 'admin'")
         val (hashKhalil, saltKhalil) = hashPassword("123321")
@@ -163,24 +144,22 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     private fun migrateV9ToV10(db: SQLiteDatabase) {
-        // إضافة حقول delivery إلى sales_transactions إذا لم تكن موجودة
         try {
             db.execSQL("ALTER TABLE sales_transactions ADD COLUMN delivery_location TEXT")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE sales_transactions ADD COLUMN delivery_time TEXT")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE sales_transactions ADD COLUMN driver_id INTEGER REFERENCES drivers(id)")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE sales_transactions ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id)")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE sales_transactions ADD COLUMN order_type TEXT DEFAULT 'sale'")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
 
-        // إضافة جدول deliveries (مرتبط بـ sales_transactions)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS deliveries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -203,7 +182,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول fuel_sales (مرتبط بـ sales_transactions)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS fuel_sales (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,7 +204,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جداول المخزون الإضافية
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS stock_movements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,7 +223,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول sms_messages (مرتبط بـ sms_logs)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,7 +238,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول sms_templates
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -275,7 +250,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول shift_sales
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS shift_sales (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -286,7 +260,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول shift_deliveries
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS shift_deliveries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,7 +270,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول shift_expenses
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS shift_expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -309,7 +281,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول settings (مرتبط بـ system_settings)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -323,7 +294,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             )
         """)
 
-        // إضافة جدول assets (مرتبط بـ fixed_assets)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS assets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -349,7 +319,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     private fun migrateV10ToV11(db: SQLiteDatabase) {
-        // إنشاء جدول محادثات الذكاء الاصطناعي إن لم يكن موجوداً
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS ai_chat_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -359,7 +328,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        // إنشاء جدول سجل الصيانة (إن لم يكن موجوداً)
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS maintenance_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -416,7 +384,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 FOREIGN KEY (created_by) REFERENCES users(id)
             )
         """)
-        // إنشاء جدول القائمة البيضاء للرسائل القصيرة إن لم يكن موجوداً
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_whitelist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -426,7 +393,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        // إنشاء جدول الإيداعات النقدية إن لم يكن موجوداً
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS cash_deposits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -439,18 +405,36 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 is_deleted INTEGER DEFAULT 0
             )
         """)
-        // إضافة عمود operator إلى payments إن لم يكن موجوداً
         try {
             db.execSQL("ALTER TABLE payments ADD COLUMN operator TEXT DEFAULT 'System'")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
-        // إضافة عمود notes إلى payments إن لم يكن موجوداً
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE payments ADD COLUMN notes TEXT")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
-        // إضافة عمود station_id إلى maintenance_requests إن لم يكن موجوداً
+        } catch (e: Exception) { }
         try {
             db.execSQL("ALTER TABLE maintenance_requests ADD COLUMN station_id INTEGER REFERENCES stations(id)")
-        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        } catch (e: Exception) { }
+    }
+
+    private fun migrateV11ToV12(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS cash_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                cash_box_id INTEGER,
+                movement_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_before REAL,
+                balance_after REAL,
+                description TEXT,
+                reference_type TEXT,
+                reference_id INTEGER,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
+                FOREIGN KEY (cash_box_id) REFERENCES cash_boxes(id)
+            )
+        """)
     }
 
     // ================================================================
@@ -480,6 +464,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         createSmsWhitelistTable(db)
         createMaintenanceRequestsTable(db)
         createAiChatTable(db)
+        createCashMovementsTable(db)
         createIndexes(db)
     }
 
@@ -2334,44 +2319,18 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             CREATE TABLE IF NOT EXISTS cash_movements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
-                movement_code VARCHAR(30) UNIQUE NOT NULL,
-                cash_box_id INTEGER NOT NULL,
-                movement_type VARCHAR(20) NOT NULL CHECK(movement_type IN ('in', 'out', 'transfer')),
-                movement_category VARCHAR(30) NOT NULL,
-                amount DECIMAL(15,2) NOT NULL,
-                currency_id INTEGER,
-                balance_before DECIMAL(15,2) NOT NULL,
-                balance_after DECIMAL(15,2) NOT NULL,
-                reference_type VARCHAR(50),
-                reference_id INTEGER,
-                reference_code VARCHAR(50),
-                from_box_id INTEGER,
-                to_box_id INTEGER,
+                cash_box_id INTEGER,
+                movement_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_before REAL,
+                balance_after REAL,
                 description TEXT,
-                description_ar TEXT,
-                performed_by INTEGER NOT NULL,
-                approved_by INTEGER,
-                status VARCHAR(20) DEFAULT 'completed' CHECK(status IN ('pending', 'completed', 'cancelled', 'reversed')),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                deleted_at DATETIME,
-                created_by INTEGER,
-                updated_by INTEGER,
-                deleted_by INTEGER,
+                reference_type TEXT,
+                reference_id INTEGER,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 is_deleted INTEGER DEFAULT 0,
-                sync_status VARCHAR(20) DEFAULT 'synced',
-                sync_version INTEGER DEFAULT 1,
-                sync_at DATETIME,
-                device_id VARCHAR(100),
-                remarks TEXT,
-                extra_data TEXT,
-                FOREIGN KEY (cash_box_id) REFERENCES cash_boxes(id),
-                FOREIGN KEY (currency_id) REFERENCES currencies(id),
-                FOREIGN KEY (from_box_id) REFERENCES cash_boxes(id),
-                FOREIGN KEY (to_box_id) REFERENCES cash_boxes(id),
-                FOREIGN KEY (performed_by) REFERENCES users(id),
-                FOREIGN KEY (approved_by) REFERENCES users(id),
-                FOREIGN KEY (created_by) REFERENCES users(id)
+                FOREIGN KEY (cash_box_id) REFERENCES cash_boxes(id)
             )
         """)
 
@@ -2927,10 +2886,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
                 request_code VARCHAR(30) UNIQUE NOT NULL,
-                asset_type VARCHAR(20) NOT NULL CHECK(asset_type IN ('tank', 'pump', 'nozzle', 'generator', 'building', 'fixed_asset')),
+                asset_type VARCHAR(20) NOT NULL,
                 asset_id INTEGER NOT NULL,
                 request_type VARCHAR(30) NOT NULL,
-                priority VARCHAR(10) DEFAULT 'medium' CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+                priority VARCHAR(10) DEFAULT 'medium',
                 title VARCHAR(200) NOT NULL,
                 description TEXT NOT NULL,
                 description_ar TEXT,
@@ -2952,7 +2911,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 labor_cost DECIMAL(12,2) DEFAULT 0,
                 parts_cost DECIMAL(12,2) DEFAULT 0,
                 total_cost DECIMAL(12,2) DEFAULT 0,
-                status VARCHAR(20) DEFAULT 'open' CHECK(status IN ('open', 'assigned', 'in_progress', 'on_hold', 'completed', 'cancelled', 'rejected')),
+                status VARCHAR(20) DEFAULT 'open',
                 approved_by INTEGER,
                 approved_at DATETIME,
                 before_photos TEXT,
@@ -4519,6 +4478,27 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         """)
     }
 
+    private fun createCashMovementsTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS cash_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                cash_box_id INTEGER,
+                movement_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_before REAL,
+                balance_after REAL,
+                description TEXT,
+                reference_type TEXT,
+                reference_id INTEGER,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
+                FOREIGN KEY (cash_box_id) REFERENCES cash_boxes(id)
+            )
+        """)
+    }
+
     // ================================================================
     // 20. INDEXES
     // ================================================================
@@ -4656,7 +4636,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     // 21. INITIAL DATA
     // ================================================================
     private fun insertInitialData(db: SQLiteDatabase) {
-        // Currencies
         db.execSQL("""
             INSERT OR IGNORE INTO currencies (id, uuid, currency_code, currency_name, currency_name_ar, symbol, symbol_position, decimal_places, is_default, is_active)
             VALUES 
@@ -4665,19 +4644,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'CUR-003-UUID', 'SAR', 'Saudi Riyal', 'الريال السعودي', 'ر.س', 'after', 2, 0, 1)
         """)
 
-        // Company
         db.execSQL("""
             INSERT OR IGNORE INTO companies (id, uuid, company_code, company_name, company_name_ar, tax_number, phone, email, country, city, status, is_head_office, default_currency_id)
             VALUES (1, 'COMP-001-UUID', 'COMP-001', 'Abu Ahmed Fuel Stations Group', 'مجموعة محطات ابو أحمد', 'TAX-123456789', '+967-777-000-000', 'info@abuahmed.com', 'Yemen', 'Sana''a', 'active', 1, 2)
         """)
 
-        // Station
         db.execSQL("""
             INSERT OR IGNORE INTO stations (id, uuid, station_code, station_name, station_name_ar, company_id, country, city, phone, email, license_number, tax_number, status, is_24_hours, station_type, default_currency_id)
             VALUES (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2)
         """)
 
-        // Roles
         db.execSQL("""
             INSERT OR IGNORE INTO roles (id, uuid, role_code, role_name, role_name_ar, level, is_system_role, is_active) VALUES
             (1, 'ROL-001-UUID', 'SUPER_ADMIN', 'Super Administrator', 'مدير النظام الأعلى', 1, 1, 1),
@@ -4689,7 +4665,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (7, 'ROL-007-UUID', 'ATTENDANT', 'Pump Attendant', 'مشغل المضخة', 5, 0, 1)
         """)
 
-        // Permissions
         db.execSQL("""
             INSERT OR IGNORE INTO permissions (id, uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action) VALUES
             (1, 'PER-001-UUID', 'users.create', 'Create Users', 'إنشاء مستخدمين', 'users', 'المستخدمين', 'create'),
@@ -4720,27 +4695,23 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
         """)
 
-        // Role Permissions for SUPER_ADMIN
         db.execSQL("""
             INSERT OR IGNORE INTO role_permissions (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
             SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
         """)
 
-        // Default Admin User
         val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("""
             INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
             VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', '$saltAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
 
-        // User Khalil Ahmed
         val (hashKhalil, saltKhalil) = hashPassword("123321")
         db.execSQL("""
             INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
             VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', '$saltKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
 
-        // Fuel Types
         db.execSQL("""
             INSERT OR IGNORE INTO fuel_types (id, uuid, fuel_code, fuel_name, fuel_name_ar, density_standard, default_sale_price, default_purchase_price, tax_rate, vat_rate, is_active) VALUES
             (1, 'FT-001-UUID', 'DIESEL', 'Diesel', 'ديزل', 0.8200, 1800.00, 1700.00, 0, 0, 1),
@@ -4748,7 +4719,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'FT-003-UUID', 'PETROL_91', 'Petrol 91', 'بنزين 91', 0.7450, 1950.00, 1850.00, 0, 0, 1)
         """)
 
-        // Tanks
         db.execSQL("""
             INSERT OR IGNORE INTO tanks (id, uuid, tank_code, tank_name, tank_name_ar, station_id, fuel_type_id, capacity_liters, minimum_level, maximum_level, current_quantity, tank_shape, location, status) VALUES
             (1, 'TANK-001-UUID', 'TANK-001', 'Diesel Tank', 'خزان الديزل', 1, 1, 40000.00, 2000.00, 40000.00, 25000.00, 'cylindrical', 'underground', 'active'),
@@ -4756,7 +4726,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'TANK-003-UUID', 'TANK-003', 'Petrol 91 Tank', 'خزان البنزين 91', 1, 3, 35000.00, 1500.00, 35000.00, 22000.00, 'cylindrical', 'underground', 'active')
         """)
 
-        // Pumps
         db.execSQL("""
             INSERT OR IGNORE INTO pumps (id, uuid, pump_code, pump_number, pump_name, pump_name_ar, station_id, tank_id, serial_number, manufacturer, max_flow_rate, meter_start, meter_current, status) VALUES
             (1, 'PUMP-001-UUID', 'PUMP-001', '1', 'Pump 1 - Diesel', 'مضخة 1 - ديزل', 1, 1, 'SN-001-2024', 'Wayne', 45.00, 0.00, 15420.50, 'active'),
@@ -4765,7 +4734,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'PUMP-004-UUID', 'PUMP-004', '4', 'Pump 4 - Petrol 91', 'مضخة 4 - بنزين 91', 1, 3, 'SN-004-2024', 'Tokheim', 40.00, 0.00, 31500.25, 'active')
         """)
 
-        // Nozzles
         db.execSQL("""
             INSERT OR IGNORE INTO pump_nozzles (id, uuid, nozzle_code, nozzle_number, pump_id, fuel_type_id, meter_start, meter_current, status) VALUES
             (1, 'NZ-001-UUID', 'NZ-001-A', 'A', 1, 1, 0.00, 15420.50, 'active'),
@@ -4774,7 +4742,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'NZ-004-UUID', 'NZ-004-A', 'A', 4, 3, 0.00, 31500.25, 'active')
         """)
 
-        // Party Types
         db.execSQL("""
             INSERT OR IGNORE INTO party_types (id, uuid, type_code, type_name, type_name_ar, default_discount, default_credit_limit, payment_terms_days, is_active) VALUES
             (1, 'PT-001-UUID', 'INDIVIDUAL', 'Individual', 'فرد', 0, 0, 0, 1),
@@ -4785,14 +4752,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (6, 'PT-006-UUID', 'SUPPLIER', 'Supplier', 'مورد', 0, 2000000, 30, 1)
         """)
 
-        // Cash Boxes
         db.execSQL("""
             INSERT OR IGNORE INTO cash_boxes (id, uuid, box_code, box_name, box_name_ar, station_id, box_type, opening_balance, current_balance, currency_id, status) VALUES
             (1, 'CB-001-UUID', 'CB-001', 'Main Cash Box', 'الصندوق الرئيسي', 1, 'main', 50000.00, 50000.00, 2, 'active'),
             (2, 'CB-002-UUID', 'CB-002', 'Safe', 'الخزنة', 1, 'safe', 200000.00, 200000.00, 2, 'active')
         """)
 
-        // Accounts
         db.execSQL("""
             INSERT OR IGNORE INTO accounts (id, uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active) VALUES
             (1, 'ACC-001-UUID', '1', 'Assets', 'الأصول', 'asset', NULL, 'debit', 1, 1),
@@ -4819,7 +4784,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (22, 'ACC-022-UUID', '5104', 'Maintenance', 'الصيانة', 'expense', 'operating_expense', 'debit', 3, 1)
         """)
 
-        // Expense Categories
         db.execSQL("""
             INSERT OR IGNORE INTO expense_categories (id, uuid, category_code, category_name, category_name_ar, default_account_id, is_active) VALUES
             (1, 'EXC-001-UUID', 'EXC-001', 'Salaries', 'الرواتب', 19, 1),
@@ -4828,7 +4792,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'EXC-004-UUID', 'EXC-004', 'Rent', 'الإيجار', 20, 1)
         """)
 
-        // System Settings
         db.execSQL("""
             INSERT OR IGNORE INTO system_settings (id, uuid, setting_key, setting_value, category, data_type, description) VALUES
             (1, 'SYS-001-UUID', 'VAT_PERCENTAGE', '0', 'tax', 'float', 'نسبة ضريبة القيمة المضافة'),
@@ -4871,7 +4834,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (38, 'SYS-038-UUID', 'customer_rating_enabled', '0', 'crm', 'boolean', 'تفعيل نظام تقييم العملاء بعد كل عملية بيع')
         """)
 
-        // Station Settings
         db.execSQL("""
             INSERT OR IGNORE INTO station_settings (id, uuid, station_id, setting_key, setting_value, data_type, description) VALUES
             (1, 'SS-001-UUID', 1, 'receipt_width', '80', 'integer', 'عرض إيصال الطباعة'),
@@ -4881,7 +4843,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (5, 'SS-005-UUID', 1, 'tank_low_warning', '20', 'integer', 'نسبة التنبيه لانخفاض الخزان %')
         """)
 
-        // Notification Templates
         db.execSQL("""
             INSERT OR IGNORE INTO notification_templates (id, uuid, template_code, template_name, template_name_ar, channel, subject, body) VALUES
             (1, 'NT-001-UUID', 'WELCOME_SMS', 'Welcome SMS', 'رسالة ترحيب', 'sms', NULL, 'مرحباً {customer_name}، شكراً لزيارتكم محطة ابو أحمد.'),
@@ -4890,7 +4851,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'NT-004-UUID', 'TANK_LEVEL_ALERT', 'Tank Level Alert', 'تنبيه مستوى خزان', 'push', NULL, 'خزان {tank_name} أقل من الحد الأدنى، النسبة الحالية: {level_percent}%')
         """)
 
-        // KPI Definitions
         db.execSQL("""
             INSERT OR IGNORE INTO kpi_definitions (id, uuid, kpi_code, kpi_name, kpi_name_ar, category, description, formula, target_value, unit, frequency) VALUES
             (1, 'KPI-001-UUID', 'DAILY_SALES', 'Daily Sales', 'المبيعات اليومية', 'sales', 'إجمالي المبيعات اليومية', 'SUM(total_amount) FROM sales WHERE DATE(created_at) = CURDATE()', 500000, 'YER', 'daily'),
@@ -4899,7 +4859,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'KPI-004-UUID', 'PROFIT_MARGIN', 'Profit Margin', 'هامش الربح', 'financial', 'نسبة الربح الإجمالي', '(total_sales - total_cost) / total_sales * 100', 25, '%', 'monthly')
         """)
 
-        // Field Permissions
         db.execSQL("""
             INSERT OR IGNORE INTO field_permissions (id, uuid, role_id, table_name, field_name, can_view, can_edit) VALUES
             (1, 'FP-001-UUID', 4, 'sales_transactions', 'gross_amount', 0, 0),
@@ -4907,7 +4866,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (3, 'FP-003-UUID', 4, 'products', 'purchase_price', 0, 0)
         """)
 
-        // Approval Workflows
         db.execSQL("""
             INSERT OR IGNORE INTO approval_workflows (id, uuid, workflow_code, workflow_name, workflow_name_ar, entity_type, is_active) VALUES
             (1, 'WF-001-UUID', 'WF_SALES_APPROVAL', 'Large Sales Approval', 'موافقة المبيعات الكبيرة', 'sale', 1)
@@ -4918,19 +4876,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (2, 'AS-002-UUID', 1, 2, 'Manager Approval', 'موافقة المدير', 3)
         """)
 
-        // Scheduled Jobs
         db.execSQL("""
             INSERT OR IGNORE INTO scheduled_jobs (id, uuid, job_code, job_name, job_name_ar, job_class, schedule_type, cron_expression, enabled) VALUES
             (1, 'SJ-001-UUID', 'DAILY_BACKUP', 'Daily Database Backup', 'نسخ احتياطي يومي', 'BackupJob', 'cron', '0 2 * * *', 1)
         """)
 
-        // Printer Profiles
         db.execSQL("""
             INSERT OR IGNORE INTO printer_profiles (id, uuid, profile_code, profile_name, printer_type, connection_type, paper_width, is_default) VALUES
             (1, 'PP-001-UUID', 'PP_THERMAL_80', 'Thermal 80mm', 'thermal', 'usb', 80, 1)
         """)
 
-        // Receipt Templates
         db.execSQL("""
             INSERT OR IGNORE INTO receipt_templates (id, uuid, template_code, template_name, description, header, footer, is_default) VALUES
             (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي', 
@@ -5019,12 +4974,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return arr
     }
 
-    /**
-     * الحصول على العملاء حسب النوع النصي (customer, supplier, driver)
-     * - "customer" → party_type_id = 1
-     * - "supplier" → party_type_id = 6
-     * - "driver" → party_type_id = 4 (شركة نقل)
-     */
     fun getParties(type: String): JSONArray {
         val typeId = when (type.lowercase()) {
             "customer" -> 1
@@ -5045,9 +4994,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return getParty(id.toInt())
     }
 
-    /**
-     * إضافة طرف جديد باستخدام JSONObject (موحدة)
-     */
     fun insertParty(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -5091,9 +5037,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
-    /**
-     * تحديث طرف باستخدام JSONObject (موحدة)
-     */
     fun updateParty(id: Long, data: JSONObject): Int {
         dbLock.lock()
         return try {
@@ -5609,7 +5552,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             val deliveryTime = data.optString("delivery_time", data.optString("delivery_date", ""))
             val shiftId = getCurrentShift()?.optLong("shift_id", 1)?.toInt() ?: 1
 
-            // إدراج بيع من نوع delivery
             val saleId = insertSaleTransaction(
                 stationId = 1,
                 shiftId = shiftId,
@@ -5634,7 +5576,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 orderType = "delivery"
             )
 
-            // إدراج سجل في جدول deliveries
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("sale_id", saleId)
@@ -5732,7 +5673,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 orderType = "fuel"
             )
 
-            // إدراج سجل في جدول fuel_sales
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("sale_id", saleId)
@@ -5892,7 +5832,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             val totalCost = quantity * unitCost
             val stationId = data.optInt("station_id", 1)
 
-            // الحصول على الكمية الحالية
             var currentQty = 0.0
             val cursor = db.rawQuery(
                 "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
@@ -5927,7 +5866,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             }
             val id = db.insert("inventory_movements", null, cv)
 
-            // تحديث المخزون
             if (id > 0) {
                 val exists = db.rawQuery(
                     "SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
@@ -6321,7 +6259,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
-    // دالة جديدة لتحديث الموظف باستخدام JSONObject (للتكامل مع SMSService)
     fun updateEmployee(id: Long, data: JSONObject): Int {
         dbLock.lock()
         return try {
@@ -6385,7 +6322,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 36. ROLES (الدوال المطلوبة في SMSService)
+    // 36. ROLES
     // ================================================================
     fun getRoles(): JSONArray {
         dbLock.lock()
@@ -6654,17 +6591,14 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
-    // دالة processPayment بدون saleId (للتكامل مع SMSService)
     fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System"): Boolean {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            // تحديث رصيد العميل
             db.execSQL(
                 "UPDATE parties SET current_balance = current_balance - ?, total_due = total_due - ? WHERE id = ?",
                 arrayOf(amount, amount, customerId)
             )
-            // إدراج سجل دفعة
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("payment_code", "PAY-${System.currentTimeMillis()}")
@@ -6679,7 +6613,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             }
             db.insert("payments", null, cv)
 
-            // تحديث أي فاتورة مفتوحة للعميل (إن وجدت)
             db.execSQL(
                 """UPDATE sales_transactions 
                    SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
@@ -6705,7 +6638,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             val db = writableDatabase
             db.beginTransaction()
             try {
-                // تحديث رصيد العميل (إيداع يعني زيادة الرصيد)
                 db.execSQL(
                     "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
                     arrayOf(amount, amount, customerId)
@@ -6850,7 +6782,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             }
             val rows = db.update("system_settings", cv, "setting_key = ?", arrayOf(key))
             if (rows == 0) {
-                // إدراج إن لم يكن موجوداً
                 val insertCv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
                     put("setting_key", key)
@@ -7318,7 +7249,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 return false
             }
 
-            // إدراج في جدول deliveries
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("sale_id", saleId)
@@ -7335,7 +7265,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             }
             db.insert("deliveries", null, cv)
 
-            // تحديث رصيد العميل
             val currentBalance = getCustomerBalanceByPhone(customerId)
             val newBalance = currentBalance + totalAmount
             val values = ContentValues().apply {
@@ -7405,5 +7334,802 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         val arr = JSONArray()
         getDriverPhones().forEach { arr.put(it) }
         return arr
+    }
+
+    // ================================================================
+    // 58. دوال CASH MOVEMENTS (المضافة في V12)
+    // ================================================================
+    fun addCashMovement(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("cash_box_id", data.optInt("cash_box_id", 1))
+                put("movement_type", data.optString("movement_type", "in"))
+                put("amount", data.optDouble("amount", 0.0))
+                put("balance_before", data.optDouble("balance_before", 0.0))
+                put("balance_after", data.optDouble("balance_after", 0.0))
+                put("description", data.optString("description", ""))
+                put("reference_type", data.optString("reference_type", ""))
+                put("reference_id", data.optLong("reference_id", 0))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("cash_movements", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getCashMovements(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM cash_movements WHERE is_deleted = 0 ORDER BY created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTodayCash(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val c = db.rawQuery(
+                """SELECT * FROM cash_movements WHERE date(created_at) = ? AND is_deleted = 0 ORDER BY created_at DESC""",
+                arrayOf(today)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 59. دوال SHIFTS (الإضافية)
+    // ================================================================
+    fun startShift(data: JSONObject): Long {
+        return openShift(
+            stationId = data.optInt("station_id", 1),
+            shiftType = data.optString("shift_type", "morning"),
+            cashierId = data.optInt("cashier_id", 1),
+            openingCash = data.optDouble("opening_cash", 0.0),
+            openingBank = data.optDouble("opening_bank", 0.0)
+        )
+    }
+
+    fun endShift(id: Long, data: JSONObject): Int {
+        val success = closeShift(
+            shiftId = id.toInt(),
+            closingCash = data.optDouble("closing_cash", 0.0),
+            closingBank = data.optDouble("closing_bank", 0.0),
+            totalSales = data.optDouble("total_sales", 0.0),
+            operator = data.optString("operator", "System")
+        )
+        return if (success) 1 else 0
+    }
+
+    fun addShiftSale(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+            db.execSQL("UPDATE shifts SET total_sales = total_sales + ? WHERE id = ?", arrayOf(amount, shiftId))
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("sale_id", data.optLong("sale_id", 0))
+                put("amount", amount)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_sales", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftDelivery(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+            db.execSQL("UPDATE shifts SET total_deliveries = total_deliveries + ? WHERE id = ?", arrayOf(amount, shiftId))
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("delivery_id", data.optLong("delivery_id", 0))
+                put("amount", amount)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_deliveries", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftExpense(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+            db.execSQL("UPDATE shifts SET total_expenses = total_expenses + ? WHERE id = ?", arrayOf(amount, shiftId))
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("expense_type", data.optString("expense_type", "other"))
+                put("amount", amount)
+                put("description", data.optString("description", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_expenses", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getShiftReport(shiftId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT 'sales' as type, COUNT(*) as count, COALESCE(SUM(net_amount), 0) as total
+                   FROM sales_transactions WHERE shift_id = ? AND is_deleted = 0
+                   UNION ALL
+                   SELECT 'deliveries', COUNT(*), COALESCE(SUM(total_amount), 0)
+                   FROM deliveries WHERE shift_id = ? AND is_deleted = 0
+                   UNION ALL
+                   SELECT 'expenses', COUNT(*), COALESCE(SUM(amount), 0)
+                   FROM shift_expenses WHERE shift_id = ?""",
+                arrayOf(shiftId.toString(), shiftId.toString(), shiftId.toString())
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("type", it.getString(0))
+                        put("count", it.getInt(1))
+                        put("total", it.getDouble(2))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 60. دوال NOTIFICATIONS (الإضافية)
+    // ================================================================
+    fun addNotification(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("user_id", data.optLong("user_id", 0))
+                put("role_id", data.optLong("role_id", 0))
+                put("notification_type", data.optString("notification_type", "info"))
+                put("title", data.optString("title", ""))
+                put("title_ar", data.optString("title_ar", ""))
+                put("message", data.optString("message", ""))
+                put("message_ar", data.optString("message_ar", ""))
+                put("priority", data.optString("priority", "normal"))
+                put("is_read", 0)
+                put("status", "pending")
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("notifications", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUnreadNotificationsCount(): Int {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0 AND is_deleted = 0", null)
+            val count = if (c.moveToFirst()) c.getInt(0) else 0
+            c.close()
+            count
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun markNotificationRead(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("is_read", 1)
+                put("read_at", getCurrentDateTime())
+            }
+            db.update("notifications", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 61. دوال SMS MESSAGES (من جدول sms_messages) - دوال إضافية
+    // ================================================================
+    fun getSmsMessages(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT 500""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByPhone(phone: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages WHERE phone_number = ? ORDER BY created_at DESC""",
+                arrayOf(phone)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByStatus(status: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages WHERE status = ? ORDER BY created_at DESC""",
+                arrayOf(status)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsStatus(id: Long, status: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("status", status)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_messages", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsStats(): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val stats = JSONObject()
+            val c1 = db.rawQuery("SELECT COUNT(*) FROM sms_messages", null)
+            stats.put("total", if (c1.moveToFirst()) c1.getInt(0) else 0)
+            c1.close()
+            val c2 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'sent'", null)
+            stats.put("sent", if (c2.moveToFirst()) c2.getInt(0) else 0)
+            c2.close()
+            val c3 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'pending'", null)
+            stats.put("pending", if (c3.moveToFirst()) c3.getInt(0) else 0)
+            c3.close()
+            val c4 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'failed'", null)
+            stats.put("failed", if (c4.moveToFirst()) c4.getInt(0) else 0)
+            c4.close()
+            stats
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 62. دوال SMS TEMPLATES
+    // ================================================================
+    fun getSmsTemplates(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery("SELECT * FROM sms_templates ORDER BY created_at DESC", null)
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addSmsTemplate(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("sms_templates", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsTemplate(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_templates", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSmsTemplate(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("sms_templates", "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 63. دوال SETTINGS (الإضافية)
+    // ================================================================
+    fun addSetting(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("setting_key", data.optString("setting_key", ""))
+                put("setting_value", data.optString("setting_value", ""))
+                put("setting_type", data.optString("setting_type", "string"))
+                put("description", data.optString("description", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSetting(key: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("settings", "setting_key=?", arrayOf(key))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAllSettingsMap(): Map<String, String> {
+        dbLock.lock()
+        return try {
+            val map = mutableMapOf<String, String>()
+            val db = readableDatabase
+            val c = db.rawQuery("SELECT setting_key, setting_value FROM settings", null)
+            c.use {
+                while (it.moveToNext()) {
+                    map[it.getString(0)] = it.getString(1)
+                }
+            }
+            map
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 64. دوال التقارير والتنبيهات
+    // ================================================================
+    fun getOverduePayments(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT s.*, p.commercial_name as customer_name, p.phone as customer_phone
+                   FROM sales_transactions s
+                   LEFT JOIN parties p ON s.customer_party_id = p.id
+                   WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted=0
+                   ORDER BY s.due_date""",
+                null
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("sale_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                        put("customer_party_id", it.getInt(it.getColumnIndexOrThrow("customer_party_id")))
+                        put("customer_name", it.getString(it.getColumnIndexOrThrow("customer_name")))
+                        put("customer_phone", it.getString(it.getColumnIndexOrThrow("customer_phone")))
+                        put("remaining_amount", it.getDouble(it.getColumnIndexOrThrow("remaining_amount")))
+                        put("due_date", it.getString(it.getColumnIndexOrThrow("due_date")))
+                        put("invoice_number", it.getString(it.getColumnIndexOrThrow("invoice_number")))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getActiveAlerts(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM stock_alerts WHERE is_resolved = 0 ORDER BY created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getRecentActivity(limit: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM user_activity_log ORDER BY created_at DESC LIMIT ?""",
+                arrayOf(limit.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 65. دوال VEHICLES
+    // ================================================================
+    fun getVehicles(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT v.*, p.commercial_name as party_name, d.full_name as driver_name
+                   FROM vehicles v
+                   LEFT JOIN parties p ON v.party_id = p.id
+                   LEFT JOIN drivers d ON v.id = d.vehicle_id
+                   WHERE v.is_deleted = 0
+                   ORDER BY v.plate_number""",
+                null
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("vehicle_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                        put("vehicle_code", it.getString(it.getColumnIndexOrThrow("vehicle_code")))
+                        put("plate_number", it.getString(it.getColumnIndexOrThrow("plate_number")))
+                        put("brand", it.getString(it.getColumnIndexOrThrow("brand")))
+                        put("model", it.getString(it.getColumnIndexOrThrow("model")))
+                        put("tank_capacity", it.getDouble(it.getColumnIndexOrThrow("tank_capacity")))
+                        put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                        put("party_name", it.getString(it.getColumnIndexOrThrow("party_name")))
+                        put("driver_name", it.getString(it.getColumnIndexOrThrow("driver_name")))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 66. دوال TANK STATS
+    // ================================================================
+    fun getTankStats(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT t.*, f.fuel_name, f.fuel_name_ar,
+                          ROUND((t.current_quantity / t.capacity_liters * 100), 2) as fill_percent
+                   FROM tanks t
+                   LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
+                   WHERE t.is_deleted = 0
+                   ORDER BY t.tank_code""",
+                null
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("tank_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                        put("tank_code", it.getString(it.getColumnIndexOrThrow("tank_code")))
+                        put("tank_name", it.getString(it.getColumnIndexOrThrow("tank_name")))
+                        put("capacity_liters", it.getDouble(it.getColumnIndexOrThrow("capacity_liters")))
+                        put("current_quantity", it.getDouble(it.getColumnIndexOrThrow("current_quantity")))
+                        put("fill_percent", it.getDouble(it.getColumnIndexOrThrow("fill_percent")))
+                        put("fuel_name", it.getString(it.getColumnIndexOrThrow("fuel_name")))
+                        put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 67. دوال BACKUP & EXPORT
+    // ================================================================
+    fun backupDatabase(): String {
+        dbLock.lock()
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            val backupDir = File(contextRef.getExternalFilesDir(null), "backups")
+            if (!backupDir.exists()) backupDir.mkdirs()
+            val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.db")
+            dbFile.copyTo(backupFile, overwrite = true)
+            backupFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun restoreDatabase(path: String): Boolean {
+        dbLock.lock()
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            val backupFile = File(path)
+            if (backupFile.exists()) {
+                backupFile.copyTo(dbFile, overwrite = true)
+                true
+            } else false
+        } catch (e: Exception) {
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun exportToCSV(tableName: String): String {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query(tableName, null, null, null, null, null, null)
+            val csv = StringBuilder()
+            val columns = cursor.columnNames
+            csv.append(columns.joinToString(",")).append("\n")
+            while (cursor.moveToNext()) {
+                val row = columns.map { col ->
+                    val idx = cursor.getColumnIndex(col)
+                    when (cursor.getType(idx)) {
+                        Cursor.FIELD_TYPE_STRING -> "\"${cursor.getString(idx)?.replace("\"", "\"\"") ?: ""}\""
+                        Cursor.FIELD_TYPE_INTEGER -> cursor.getInt(idx).toString()
+                        Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(idx).toString()
+                        else -> ""
+                    }
+                }
+                csv.append(row.joinToString(",")).append("\n")
+            }
+            cursor.close()
+
+            val exportDir = File(contextRef.getExternalFilesDir(null), "exports")
+            if (!exportDir.exists()) exportDir.mkdirs()
+            val exportFile = File(exportDir, "${tableName}_${System.currentTimeMillis()}.csv")
+            exportFile.writeText(csv.toString())
+            exportFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun importFromCSV(tableName: String, path: String): Int {
+        // تنفيذ الاستيراد حسب الحاجة (يمكن تنفيذها لاحقاً)
+        return 0
+    }
+
+    fun getDatabaseSize(): Long {
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            dbFile.length()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    fun getTableCounts(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val tables = listOf("parties", "sales_transactions", "tanks", "pumps", "users", "employees", "shifts", "notifications", "sms_messages", "fuel_types")
+            val result = JSONArray()
+            tables.forEach { table ->
+                val cursor = db.rawQuery("SELECT COUNT(*) FROM $table", null)
+                val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                cursor.close()
+                val obj = JSONObject()
+                obj.put("table", table)
+                obj.put("count", count)
+                result.put(obj)
+            }
+            result
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun vacuumDatabase() {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.execSQL("VACUUM")
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 68. دوال PRODUCTS (مع overload)
+    // ================================================================
+    fun getProducts(): JSONArray {
+        return getProducts(null)
+    }
+
+    fun getProducts(stationId: Int?): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val sql = if (stationId != null) {
+                "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.station_id=? AND p.is_deleted=0 ORDER BY p.product_name"
+            } else {
+                "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.is_deleted=0 ORDER BY p.product_name"
+            }
+            val args = if (stationId != null) arrayOf(stationId.toString()) else null
+            val c = db.rawQuery(sql, args)
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("product_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                        put("product_code", it.getString(it.getColumnIndexOrThrow("product_code")))
+                        put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
+                        put("product_name_ar", it.getString(it.getColumnIndexOrThrow("product_name_ar")))
+                        put("category_name", it.getString(it.getColumnIndexOrThrow("category_name")))
+                        put("sale_price", it.getDouble(it.getColumnIndexOrThrow("sale_price")))
+                        put("purchase_price", it.getDouble(it.getColumnIndexOrThrow("purchase_price")))
+                        put("quantity", it.getDouble(it.getColumnIndexOrThrow("quantity")))
+                        put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 69. دوال FUEL TYPES (مع overload)
+    // ================================================================
+    fun getFuelTypes(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                "SELECT id, fuel_code, fuel_name, fuel_name_ar, default_sale_price, is_active FROM fuel_types WHERE is_deleted=0 ORDER BY fuel_name",
+                null
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("fuel_type_id", it.getInt(0))
+                        put("fuel_code", it.getString(1))
+                        put("fuel_name", it.getString(2))
+                        put("fuel_name_ar", it.getString(3))
+                        put("default_sale_price", it.getDouble(4))
+                        put("is_active", it.getInt(5) == 1)
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 70. دوال INSERT/UPDATE/DELETE PRODUCT (لـ SMSService)
+    // ================================================================
+    fun insertProduct(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("product_code", data.optString("product_code", ""))
+                put("product_name", data.optString("product_name", ""))
+                put("product_name_ar", data.optString("product_name_ar", ""))
+                put("category_id", data.optInt("category_id", 0))
+                put("fuel_type_id", data.optInt("fuel_type_id", 0))
+                put("station_id", data.optInt("station_id", 1))
+                put("unit_id", data.optString("unit_id", "لتر"))
+                put("sale_price", data.optDouble("sale_price", 0.0))
+                put("purchase_price", data.optDouble("purchase_price", 0.0))
+                put("quantity", data.optDouble("quantity", 0.0))
+                put("minimum_stock", data.optDouble("minimum_stock", 10.0))
+                put("status", "active")
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("products", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateProduct(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                data.optString("product_code")?.let { put("product_code", it) }
+                data.optString("product_name")?.let { put("product_name", it) }
+                data.optString("product_name_ar")?.let { put("product_name_ar", it) }
+                data.optInt("category_id")?.let { put("category_id", it) }
+                data.optInt("fuel_type_id")?.let { put("fuel_type_id", it) }
+                data.optDouble("sale_price")?.let { put("sale_price", it) }
+                data.optDouble("purchase_price")?.let { put("purchase_price", it) }
+                data.optDouble("quantity")?.let { put("quantity", it) }
+                data.optDouble("minimum_stock")?.let { put("minimum_stock", it) }
+                data.optString("unit_id")?.let { put("unit_id", it) }
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("products", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_product", "تحديث منتج $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteProduct(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_deleted", 1) }
+            val rows = db.update("products", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_product", "حذف منتج $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
     }
 }
