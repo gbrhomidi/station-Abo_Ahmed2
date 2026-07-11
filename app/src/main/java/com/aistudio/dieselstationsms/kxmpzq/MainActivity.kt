@@ -803,10 +803,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // ========== التعديل الأساسي لحل المشكلة ==========
         @JavascriptInterface
         fun getParties(type: String?): String {
             return try {
-                val parties = dbHelper.getParties(type)
+                // تحويل String? إلى String غير nullable باستخدام ?: ""
+                val parties = dbHelper.getParties(type ?: "")
                 parties.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getParties error", e)
@@ -1823,7 +1825,6 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun showToast(message: String) {
             if (isDestroyed.get()) return
-            // تأكد من أن الرسالة ليست null
             val safeMessage = message ?: " "
             Toast.makeText(context, safeMessage, Toast.LENGTH_SHORT).show()
         }
@@ -1971,7 +1972,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // تم إصلاح السطر 810: تغيير نوع الإرجاع إلى String غير nullable
         @JavascriptInterface
         fun getGasolinePrice(): String {
             return try {
@@ -2056,7 +2056,6 @@ class MainActivity : AppCompatActivity() {
         fun recordDieselDelivery(jsonData: String): String {
             return try {
                 val data = JSONObject(jsonData)
-                // استخراج المعاملات من JSONObject مع قيم افتراضية لمنع الـ null
                 val customerId = data.optString("customerId", "")
                 val customerName = data.optString("customerName", "")
                 val quantityLiters = data.optDouble("quantityLiters", 0.0)
