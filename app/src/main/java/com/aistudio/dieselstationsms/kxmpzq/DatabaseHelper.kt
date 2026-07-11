@@ -27,12 +27,8 @@ import java.util.concurrent.locks.ReentrantLock
  * - إضافة دوال الإعدادات: getSetting, setSetting
  * - إضافة دوال محادثة الذكاء الاصطناعي: getAiChatHistory, saveAiMessage
  * - إضافة دوال تصدير البيانات: exportAllData
- * - إضافة دالة getPaymentsWithCustomer
- * - تعديل processPayment بإضافة overload بدون saleId
- * - تعديل updateEmployee لدعم JSONObject
- * - إضافة دالة addRole (مرادفة لـ insertRole)
- * - إضافة دالة addCashDeposit
- * - إضافة دالة getSetting و setSetting
+ * - إضافة دالة addSmsMessage
+ * - إزالة دالة close() المكررة لتجنب التضارب
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
@@ -4453,7 +4449,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     // 19. ADDITIONAL TABLES FOR V11
     // ================================================================
     private fun createMaintenanceRequestsTable(db: SQLiteDatabase) {
-        // تم إنشاؤه في migrateV10ToV11، ولكن للتأكد نضعه هنا أيضاً
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS maintenance_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -4528,12 +4523,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     // 20. INDEXES
     // ================================================================
     private fun createIndexes(db: SQLiteDatabase) {
-        // Core
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_companies_code ON companies(company_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stations_code ON stations(station_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stations_company ON stations(company_id)")
-
-        // Users
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
@@ -4543,15 +4535,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(is_active)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_activity_user ON user_activity_log(user_id)")
-
-        // Parties
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_code ON parties(party_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_tax ON parties(tax_number)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_type ON parties(party_type_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_party_contacts_party ON party_contacts(party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_party_addresses_party ON party_addresses(party_id)")
-
-        // Tanks & Pumps
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_code ON tanks(tank_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_station ON tanks(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_fuel ON tanks(fuel_type_id)")
@@ -4569,8 +4557,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_date ON meter_readings(reading_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_station ON meter_readings(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_entity ON calibration_records(entity_type, entity_id)")
-
-        // Products
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_code ON products(product_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)")
@@ -4579,8 +4565,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product ON inventory_movements(product_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stock_alerts_product ON stock_alerts(product_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stock_alerts_resolved ON stock_alerts(is_resolved)")
-
-        // Sales
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_code ON sales_transactions(sale_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_invoice ON sales_transactions(invoice_number)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station ON sales_transactions(station_id)")
@@ -4591,8 +4575,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_code ON shifts(shift_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_station ON shifts(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)")
-
-        // Finance
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(account_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_accounts_type ON accounts(account_type)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_journal_entries_number ON journal_entries(entry_number)")
@@ -4604,37 +4586,27 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_sale ON payments(sale_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_party_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_receipts_number ON receipts(receipt_number)")
-
-        // HR
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_code ON employees(employee_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_station ON employees(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_employee ON attendance(employee_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(attendance_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_code ON payroll(payroll_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_items_payroll ON payroll_items(payroll_id)")
-
-        // Maintenance
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_code ON maintenance_requests(request_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_asset ON maintenance_requests(asset_type, asset_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance_requests(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_hist_request ON maintenance_history(maintenance_request_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_maintenance_schedule_asset ON maintenance_schedule(asset_type)")
-
-        // Notifications
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notification_queue_status ON notification_queue(status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id)")
-
-        // Logs
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_table ON audit_logs(table_name)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(log_level)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sync_logs_device ON sync_logs(device_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_backup_status ON backup_history(status)")
-
-        // Advanced
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_settings_key ON system_settings(setting_key)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_system_settings_category ON system_settings(category)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_station_settings_station ON station_settings(station_id)")
@@ -6638,7 +6610,31 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 40. PAYMENTS (مع العميل)
+    // 40. SMS MESSAGES (جدول sms_messages)
+    // ================================================================
+    fun addSmsMessage(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("phone_number", data.optString("phone_number", ""))
+                put("message_body", data.optString("message_body", ""))
+                put("message_type", data.optString("message_type", "incoming"))
+                put("status", data.optString("status", "pending"))
+                put("party_id", data.optLong("party_id", 0))
+                put("sent_at", data.optString("sent_at", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("sms_messages", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 41. PAYMENTS (مع العميل)
     // ================================================================
     fun getPaymentsWithCustomer(): JSONArray {
         dbLock.lock()
@@ -6701,7 +6697,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 41. CASH DEPOSITS
+    // 42. CASH DEPOSITS
     // ================================================================
     fun addCashDeposit(customerId: Int, amount: Double, notes: String, operator: String = "System"): Boolean {
         dbLock.lock()
@@ -6735,7 +6731,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 42. REPORTS
+    // 43. REPORTS
     // ================================================================
     fun getDailySales(stationId: Int, date: String? = null): JSONArray {
         dbLock.lock()
@@ -6829,7 +6825,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 43. SETTINGS (get/set)
+    // 44. SETTINGS (get/set)
     // ================================================================
     fun getSetting(key: String): String {
         dbLock.lock()
@@ -6873,7 +6869,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 44. AI CHAT HISTORY
+    // 45. AI CHAT HISTORY
     // ================================================================
     fun getAiChatHistory(sessionId: String): JSONArray {
         dbLock.lock()
@@ -6906,7 +6902,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 45. EXPORT ALL DATA
+    // 46. EXPORT ALL DATA
     // ================================================================
     fun exportAllData(): JSONObject {
         dbLock.lock()
@@ -6930,7 +6926,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 46. GET PRODUCT CATEGORIES
+    // 47. GET PRODUCT CATEGORIES
     // ================================================================
     fun getProductCategories(): JSONArray {
         dbLock.lock()
@@ -6944,7 +6940,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 47. GET FUEL NAME BY ID
+    // 48. GET FUEL NAME BY ID
     // ================================================================
     fun getFuelNameById(fuelTypeId: Int): String? {
         dbLock.lock()
@@ -6960,7 +6956,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 48. GET DIESEL PRICE, GASOLINE PRICE, MANAGER PHONE, RETENTION DAYS
+    // 49. GET DIESEL PRICE, GASOLINE PRICE, MANAGER PHONE, RETENTION DAYS
     // ================================================================
     fun getDieselPrice(): Double {
         dbLock.lock()
@@ -7030,7 +7026,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 49. NOTIFICATIONS
+    // 50. NOTIFICATIONS
     // ================================================================
     fun getNotifications(): JSONArray {
         dbLock.lock()
@@ -7047,7 +7043,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 50. DASHBOARD STATS
+    // 51. DASHBOARD STATS
     // ================================================================
     fun getDashboardStats(stationId: Int): JSONObject {
         val stats = JSONObject()
@@ -7093,7 +7089,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 51. LOG ACTIVITY (overloads)
+    // 52. LOG ACTIVITY (overloads)
     // ================================================================
     fun logActivity(operator: String, action: String, description: String): Long {
         dbLock.lock()
@@ -7113,7 +7109,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 52. HELPERS
+    // 53. HELPERS
     // ================================================================
     private fun getPartyBalance(partyId: Int): Double {
         val db = readableDatabase
@@ -7161,12 +7157,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         writableDatabase.execSQL(sql, bindArgs)
     }
 
-    override fun close() {
-        super.close()
-    }
-
     // ================================================================
-    // 53. DYNAMIC DATA HELPERS (من SmsReceiver)
+    // 54. DYNAMIC DATA HELPERS (من SmsReceiver)
     // ================================================================
     fun getDriverPhones(): List<String> {
         val phones = mutableListOf<String>()
@@ -7365,7 +7357,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 54. SALES BY FUEL TYPE
+    // 55. SALES BY FUEL TYPE
     // ================================================================
     fun getSalesByFuelType(): JSONArray {
         val arr = JSONArray()
@@ -7396,7 +7388,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 55. GET CUSTOMER COUNT
+    // 56. GET CUSTOMER COUNT
     // ================================================================
     fun getCustomerCount(): Int {
         val db = readableDatabase
@@ -7407,18 +7399,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 56. GET DRIVER PHONES (للتكامل مع SmsReceiver)
+    // 57. GET DRIVER PHONES (للتكامل مع SmsReceiver)
     // ================================================================
     fun getDriverPhonesList(): JSONArray {
         val arr = JSONArray()
         getDriverPhones().forEach { arr.put(it) }
         return arr
-    }
-
-    // ================================================================
-    // 57. OVERRIDE close
-    // ================================================================
-    override fun close() {
-        super.close()
     }
 }
