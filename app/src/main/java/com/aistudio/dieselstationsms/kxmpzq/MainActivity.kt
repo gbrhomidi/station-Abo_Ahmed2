@@ -1850,7 +1850,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 json.toString()
             } catch (e: Exception) {
-                "{"error":"${e.message}"}"
+                JSONObject().apply {
+                    put("error", e.message ?: "Unknown error")
+                }.toString()
             }
         }
 
