@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
-    <title>محطة أبو أحمد – النظام المتكامل V7</title>
+    <title>محطة أبو أحمد – النظام المتكامل V8</title>
     <!-- Font Awesome 6 (CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <!-- Google Fonts -->
@@ -56,8 +56,7 @@
             margin: 0;
             padding: 0;
         }
-        html,
-        body {
+        html, body {
             margin: 0;
             padding: 0;
             font-family: var(--font-family);
@@ -67,21 +66,11 @@
             min-height: 100vh;
             direction: rtl;
         }
-        body {
-            padding-bottom: 0;
-        }
+        body { padding-bottom: 0; }
 
-        ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--primary);
-            border-radius: 2px;
-        }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 2px; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(12px); }
@@ -212,38 +201,16 @@
             cursor: not-allowed;
             transform: none;
         }
-        .btn-danger {
-            background: var(--danger);
-        }
-        .btn-danger:hover {
-            background: #c82333;
-        }
-        .btn-success {
-            background: var(--success);
-        }
-        .btn-success:hover {
-            background: #218838;
-        }
-        .btn-info {
-            background: var(--info);
-        }
-        .btn-info:hover {
-            background: #138496;
-        }
-        .btn-warning {
-            background: var(--warning);
-            color: #000;
-        }
-        .btn-warning:hover {
-            background: #e0a800;
-        }
-        .btn-secondary {
-            background: var(--text-secondary);
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: #c82333; }
+        .btn-success { background: var(--success); }
+        .btn-success:hover { background: #218838; }
+        .btn-info { background: var(--info); }
+        .btn-info:hover { background: #138496; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-warning:hover { background: #e0a800; }
+        .btn-secondary { background: var(--text-secondary); color: white; }
+        .btn-secondary:hover { background: #5a6268; }
         .btn-outline {
             background: transparent;
             border: 2px solid var(--primary);
@@ -253,19 +220,9 @@
             background: var(--primary);
             color: white;
         }
-        .btn-small {
-            padding: 4px 12px;
-            font-size: 12px;
-            gap: 4px;
-        }
-        .btn-sm {
-            padding: 6px 14px;
-            font-size: 13px;
-        }
-        .btn-block {
-            width: 100%;
-            justify-content: center;
-        }
+        .btn-small { padding: 4px 12px; font-size: 12px; gap: 4px; }
+        .btn-sm { padding: 6px 14px; font-size: 13px; }
+        .btn-block { width: 100%; justify-content: center; }
         .btn-biometric {
             background: rgba(255, 255, 255, 0.1);
             color: white;
@@ -279,12 +236,8 @@
         /* ============================================================
            APP CONTAINER
            ============================================================ */
-        .app-container {
-            display: none;
-        }
-        .app-container.active {
-            display: block;
-        }
+        .app-container { display: none; }
+        .app-container.active { display: block; }
 
         /* ============================================================
            HEADER
@@ -374,7 +327,7 @@
         }
 
         /* ============================================================
-           SIDEBAR - تحسين القائمة الجانبية مع Submenu
+           SIDEBAR - مع Submenu/Cascading
            ============================================================ */
         .sidebar-overlay {
             position: fixed;
@@ -384,9 +337,7 @@
             z-index: 98;
             display: none;
         }
-        .sidebar-overlay.active {
-            display: block;
-        }
+        .sidebar-overlay.active { display: block; }
 
         .sidebar {
             position: fixed;
@@ -455,15 +406,10 @@
             overflow-y: auto;
             padding: 8px 0 20px;
         }
-        .sidebar-nav::-webkit-scrollbar {
-            width: 3px;
-        }
-        .sidebar-nav::-webkit-scrollbar-thumb {
-            background: var(--border);
-            border-radius: 2px;
-        }
+        .sidebar-nav::-webkit-scrollbar { width: 3px; }
+        .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-        /* ===== عناصر القائمة الرئيسية ===== */
+        /* عناصر القائمة الرئيسية */
         .sidebar-nav .nav-item-wrapper {
             position: relative;
         }
@@ -517,7 +463,7 @@
             transform: rotate(180deg);
         }
 
-        /* ===== القوائم الفرعية (Cascading) ===== */
+        /* القوائم الفرعية - Cascading */
         .sidebar-nav .submenu-container {
             position: relative;
         }
@@ -575,18 +521,10 @@
                 transform: translateX(0);
                 border-left: 1px solid var(--border);
             }
-            .sidebar-overlay {
-                display: none !important;
-            }
-            .main-content {
-                margin-right: var(--sidebar-width);
-            }
-            .menu-toggle {
-                display: none;
-            }
-            .sidebar-close {
-                display: none;
-            }
+            .sidebar-overlay { display: none !important; }
+            .main-content { margin-right: var(--sidebar-width); }
+            .menu-toggle { display: none; }
+            .sidebar-close { display: none; }
             .sidebar-nav .submenu-container .submenu {
                 right: var(--sidebar-width);
             }
@@ -617,15 +555,13 @@
         }
 
         /* ============================================================
-           PAGES / SCREENS
+           PAGES
            ============================================================ */
         .page {
             display: none;
             animation: fadeIn 0.3s ease;
         }
-        .page.active {
-            display: block;
-        }
+        .page.active { display: block; }
 
         .page-header {
             margin-bottom: 20px;
@@ -690,9 +626,7 @@
             margin-bottom: 16px;
         }
         @media (min-width: 640px) {
-            .stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
         }
         .stat-card {
             background: var(--card-bg);
@@ -732,14 +666,10 @@
             margin-bottom: 16px;
         }
         @media (min-width: 480px) {
-            .quick-actions {
-                grid-template-columns: repeat(4, 1fr);
-            }
+            .quick-actions { grid-template-columns: repeat(4, 1fr); }
         }
         @media (min-width: 768px) {
-            .quick-actions {
-                grid-template-columns: repeat(6, 1fr);
-            }
+            .quick-actions { grid-template-columns: repeat(6, 1fr); }
         }
         .quick-btn {
             background: var(--card-bg);
@@ -763,12 +693,10 @@
             background: rgba(30, 64, 175, 0.04);
             transform: translateY(-2px);
         }
-        .quick-btn .qicon {
-            font-size: 22px;
-        }
+        .quick-btn .qicon { font-size: 22px; }
 
         /* ============================================================
-           TABLES - محسنة لعرض جميع الأعمدة
+           TABLES
            ============================================================ */
         .table-wrap {
             overflow-x: auto;
@@ -887,9 +815,7 @@
             color: var(--text-secondary);
             opacity: 0.6;
         }
-        select.form-control {
-            appearance: auto;
-        }
+        select.form-control { appearance: auto; }
         textarea.form-control {
             resize: vertical;
             min-height: 80px;
@@ -900,9 +826,7 @@
             gap: 12px;
         }
         @media (max-width: 480px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
+            .form-row { grid-template-columns: 1fr; }
         }
 
         /* ============================================================
@@ -976,9 +900,7 @@
             background: var(--danger);
             color: white;
         }
-        .modal-body {
-            padding: 20px;
-        }
+        .modal-body { padding: 20px; }
         .modal-footer {
             padding: 12px 20px;
             border-top: 1px solid var(--border);
@@ -1044,7 +966,6 @@
             height: 18px;
             border-width: 2px;
         }
-
         .loading-overlay {
             position: fixed;
             inset: 0;
@@ -1055,9 +976,7 @@
             justify-content: center;
             backdrop-filter: blur(2px);
         }
-        .loading-overlay.active {
-            display: flex;
-        }
+        .loading-overlay.active { display: flex; }
         .loading-overlay .loading-box {
             background: var(--card-bg);
             padding: 30px 40px;
@@ -1140,34 +1059,6 @@
         .notification-item .notif-time { font-size: 11px; color: var(--text-secondary); }
 
         /* ============================================================
-           INVOICE PREVIEW
-           ============================================================ */
-        .invoice-preview {
-            background: white;
-            color: #000;
-            padding: 16px;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-size: 12px;
-            border: 2px dashed #ccc;
-            overflow-x: auto;
-            direction: ltr;
-        }
-        .invoice-preview .inv-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 3px 0;
-            border-bottom: 1px dotted #ddd;
-        }
-        .invoice-preview .inv-total {
-            font-size: 16px;
-            font-weight: 800;
-            border-top: 2px solid #1a3a5a;
-            padding-top: 8px;
-            margin-top: 8px;
-        }
-
-        /* ============================================================
            REPORTS
            ============================================================ */
         .report-card {
@@ -1192,6 +1083,55 @@
         .report-stat:last-child { border-bottom: none; }
         .report-stat .label { color: var(--text-secondary); }
         .report-stat .value { font-weight: 600; }
+
+        /* ============================================================
+           CHAT
+           ============================================================ */
+        .chat-container {
+            height: 340px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--bg);
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 8px 14px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+        .chat-bubble.user {
+            align-self: flex-start;
+            background: var(--primary);
+            color: white;
+            border-radius: 14px 14px 4px 14px;
+        }
+        .chat-bubble.ai {
+            align-self: flex-end;
+            background: var(--border);
+            color: var(--text);
+            border-radius: 14px 14px 14px 4px;
+        }
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+            padding: 10px 12px;
+            border-top: 1px solid var(--border);
+            background: var(--card-bg);
+        }
+        .chat-input-row input { flex: 1; }
     </style>
 </head>
 <body>
@@ -1217,7 +1157,7 @@
     <div class="login-screen" id="loginScreen">
         <div class="login-logo"><i class="fas fa-gas-pump"></i></div>
         <div class="login-title">محطة أبو أحمد</div>
-        <div class="login-subtitle">نظام إدارة مشتقات الديزل المتطور V7</div>
+        <div class="login-subtitle">نظام إدارة مشتقات الديزل المتطور V8</div>
         <div class="login-form" id="loginForm">
             <div class="input-group">
                 <label>اسم المستخدم</label>
@@ -1235,7 +1175,7 @@
             </button>
         </div>
         <div style="margin-top:24px; text-align:center; color:rgba(255,255,255,0.4); font-size:11px;">
-            الإصدار 7.0 | عملة: الريال اليمني
+            الإصدار 8.0 | عملة: الريال اليمني
         </div>
     </div>
 
@@ -1278,16 +1218,14 @@
                 </div>
                 <button class="sidebar-close" onclick="toggleSidebar()"><i class="fas fa-times"></i></button>
             </div>
-            <nav class="sidebar-nav" id="sidebarNav">
-                <!-- سيتم إنشاء القائمة عبر JavaScript -->
-            </nav>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
         </aside>
 
         <!-- MAIN CONTENT -->
         <main class="main-content" id="mainContent">
 
             <!-- ===== PAGE: DASHBOARD ===== -->
-            <div class="page active" id="page-dashboard">
+            <div class="page" id="page-dashboard">
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-home" style="color:var(--primary);"></i> لوحة التحكم</h2>
@@ -1297,16 +1235,13 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="stats-grid" id="dashStats">
                     <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">المبيعات اليوم</div><div class="stat-value" id="dashSales">0</div></div>
                     <div class="stat-card"><div class="stat-icon">⛽</div><div class="stat-label">اللترات المباعة</div><div class="stat-value" id="dashLiters">0</div></div>
                     <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-label">المخزون المتبقي</div><div class="stat-value" id="dashStock">0</div></div>
                     <div class="stat-card"><div class="stat-icon">💳</div><div class="stat-label">الديون المستحقة</div><div class="stat-value" id="dashDue">0</div></div>
                 </div>
-
                 <div id="dashAlerts"></div>
-
                 <div class="quick-actions">
                     <div class="quick-btn" onclick="showPage('sales')"><span class="qicon"><i class="fas fa-cart-plus"></i></span>بيع جديد</div>
                     <div class="quick-btn" onclick="showPage('payments')"><span class="qicon"><i class="fas fa-hand-holding-usd"></i></span>تسديد</div>
@@ -1317,12 +1252,10 @@
                     <div class="quick-btn" onclick="showPage('reports')"><span class="qicon"><i class="fas fa-chart-bar"></i></span>التقارير</div>
                     <div class="quick-btn" onclick="showPage('settings')"><span class="qicon"><i class="fas fa-cog"></i></span>الإعدادات</div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-chart-line card-icon"></i> مبيعات الأيام الأخيرة</div>
                     <div id="dailyChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
                 </div>
-
                 <div class="card" style="background:linear-gradient(135deg, rgba(30,64,175,0.04), rgba(212,175,55,0.04));">
                     <div class="card-title"><i class="fas fa-robot card-icon"></i> توقعات الذكاء الاصطناعي</div>
                     <div id="aiInsight" style="font-size:14px; line-height:1.7; color:var(--text-secondary);">جاري التحليل...</div>
@@ -1341,7 +1274,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadSales()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                         <div style="flex:1; min-width:150px; position:relative;">
@@ -1352,20 +1284,11 @@
                     </div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>#</th><th>العميل</th><th>الوقود</th><th>الكمية (لتر)</th><th>السعر/لتر</th>
-                                    <th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>طريقة الدفع</th>
-                                    <th>التاريخ</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="salesTableBody">
-                                <tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>#</th><th>العميل</th><th>الوقود</th><th>الكمية (لتر)</th><th>السعر/لتر</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>طريقة الدفع</th><th>التاريخ</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="salesTableBody"><tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
-
                 <div class="stats-grid">
                     <div class="stat-card"><div class="stat-label">إجمالي المبيعات</div><div class="stat-value" id="salesTotal">0</div></div>
                     <div class="stat-card"><div class="stat-label">إجمالي اللترات</div><div class="stat-value" id="salesTotalLiters">0</div></div>
@@ -1386,7 +1309,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                         <div style="flex:1; min-width:150px; position:relative;">
@@ -1396,16 +1318,8 @@
                     </div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>الاسم التجاري</th><th>الاسم القانوني</th><th>رقم الهاتف</th>
-                                    <th>الهاتف 2</th><th>البريد الإلكتروني</th><th>الرصيد الحالي</th>
-                                    <th>الحد الائتماني</th><th>المدينة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="customersTableBody">
-                                <tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>الرمز</th><th>الاسم التجاري</th><th>الاسم القانوني</th><th>رقم الهاتف</th><th>الهاتف 2</th><th>البريد الإلكتروني</th><th>الرصيد الحالي</th><th>الحد الائتماني</th><th>المدينة</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="customersTableBody"><tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1423,7 +1337,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadProducts()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                         <div style="flex:1; min-width:150px; position:relative;">
@@ -1433,16 +1346,8 @@
                     </div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>الاسم</th><th>الاسم بالعربية</th><th>نوع الوقود</th>
-                                    <th>الفئة</th><th>سعر البيع</th><th>سعر الشراء</th>
-                                    <th>الكمية</th><th>الحد الأدنى</th><th>الوحدة</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="productsTableBody">
-                                <tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>الرمز</th><th>الاسم</th><th>الاسم بالعربية</th><th>نوع الوقود</th><th>الفئة</th><th>سعر البيع</th><th>سعر الشراء</th><th>الكمية</th><th>الحد الأدنى</th><th>الوحدة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="productsTableBody"><tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1460,21 +1365,11 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadEmployees()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>الاسم الكامل</th><th>الاسم بالعربية</th><th>المنصب</th>
-                                    <th>القسم</th><th>الهاتف</th><th>الهاتف 2</th>
-                                    <th>الراتب الأساسي</th><th>البدلات</th><th>الخصومات</th>
-                                    <th>صافي الراتب</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="employeesTableBody">
-                                <tr><td colspan="13" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>الرمز</th><th>الاسم الكامل</th><th>الاسم بالعربية</th><th>المنصب</th><th>القسم</th><th>الهاتف</th><th>الهاتف 2</th><th>الراتب الأساسي</th><th>البدلات</th><th>الخصومات</th><th>صافي الراتب</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="employeesTableBody"><tr><td colspan="13" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1491,20 +1386,12 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadTanks()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div id="tanksGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;"></div>
-
                 <div class="card mt-2">
                     <div class="card-title"><i class="fas fa-faucet card-icon"></i> المضخات</div>
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>الاسم</th><th>الرقم</th>
-                                    <th>الخزان المتصل</th><th>العداد الحالي</th>
-                                    <th>نوع الوقود</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>الرمز</th><th>الاسم</th><th>الرقم</th><th>الخزان المتصل</th><th>العداد الحالي</th><th>نوع الوقود</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
                             <tbody id="pumpsTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
@@ -1523,20 +1410,11 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الهاتف</th>
-                                    <th>الاسم الكامل</th><th>الاسم بالعربية</th><th>الدور</th>
-                                    <th>المحطة</th><th>الحالة</th><th>آخر تسجيل</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="usersTableBody">
-                                <tr><td colspan="10" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الهاتف</th><th>الاسم الكامل</th><th>الاسم بالعربية</th><th>الدور</th><th>المحطة</th><th>الحالة</th><th>آخر تسجيل</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="usersTableBody"><tr><td colspan="10" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1554,19 +1432,11 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadRoles()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>اسم الدور</th><th>اسم الدور (عربي)</th>
-                                    <th>الوصف</th><th>المستوى</th><th>نظامي</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rolesTableBody">
-                                <tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>الرمز</th><th>اسم الدور</th><th>اسم الدور (عربي)</th><th>الوصف</th><th>المستوى</th><th>نظامي</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="rolesTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -1585,17 +1455,10 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadPayments()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th>
-                                    <th>رقم الشيك/التحويل</th><th>المشغل</th>
-                                    <th>الحالة</th><th>التاريخ</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك/التحويل</th><th>المشغل</th><th>الحالة</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
                             <tbody id="paymentsTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
@@ -1613,7 +1476,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadNotifications()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div id="notificationsContainer"></div>
             </div>
 
@@ -1629,18 +1491,10 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadShifts()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>النوع</th><th>التاريخ</th>
-                                    <th>وقت البدء</th><th>وقت الانتهاء</th>
-                                    <th>المدير</th><th>أمين الصندوق</th>
-                                    <th>إجمالي المبيعات</th><th>الحالة</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>الرمز</th><th>النوع</th><th>التاريخ</th><th>وقت البدء</th><th>وقت الانتهاء</th><th>المدير</th><th>أمين الصندوق</th><th>إجمالي المبيعات</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
                             <tbody id="shiftsTableBody"><tr><td colspan="10" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
@@ -1659,17 +1513,10 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadMaintenance()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th><th>العنوان</th><th>نوع الأصل</th>
-                                    <th>معرف الأصل</th><th>الأولوية</th>
-                                    <th>الحالة</th><th>تاريخ الإبلاغ</th><th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>الرمز</th><th>العنوان</th><th>نوع الأصل</th><th>معرف الأصل</th><th>الأولوية</th><th>الحالة</th><th>تاريخ الإبلاغ</th><th>الإجراءات</th></tr></thead>
                             <tbody id="maintenanceTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
@@ -1687,7 +1534,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadSmsLogs()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                         <div style="flex:1; min-width:120px; position:relative;">
@@ -1708,7 +1554,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-list card-icon"></i> قائمة السماح (Whitelist)</div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
@@ -1728,13 +1573,12 @@
                         <p>اسأل المساعد عن أي شيء</p>
                     </div>
                 </div>
-
                 <div class="card" style="padding:0; overflow:hidden;">
-                    <div class="chat-container" style="height:340px; display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;">
-                        <div class="chat-messages" id="chatMessages" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; background:var(--bg);">
-                            <div class="chat-bubble ai" style="max-width:80%; padding:8px 14px; border-radius:14px; font-size:14px; line-height:1.6; word-wrap:break-word; align-self:flex-end; background:var(--border); color:var(--text); border-radius:14px 14px 14px 4px;">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك اليوم؟</div>
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="chat-bubble ai">مرحباً! أنا مساعد محطة أبو أحمد. كيف يمكنني مساعدتك اليوم؟</div>
                         </div>
-                        <div class="chat-input-row" style="display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); background:var(--card-bg);">
+                        <div class="chat-input-row">
                             <input type="text" class="form-control" id="chatInput" placeholder="اكتب رسالتك..." onkeypress="if(event.key==='Enter') sendAiMessage()">
                             <button class="btn btn-primary btn-sm" onclick="sendAiMessage()"><i class="fas fa-paper-plane"></i></button>
                         </div>
@@ -1757,14 +1601,11 @@
                         <button class="btn btn-secondary btn-sm" onclick="exportAllData()"><i class="fas fa-download"></i> تصدير</button>
                     </div>
                 </div>
-
                 <div id="reportContainer"></div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-chart-line card-icon"></i> المبيعات الشهرية</div>
                     <div id="monthlyChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-chart-pie card-icon"></i> توزيع المبيعات حسب نوع الوقود</div>
                     <div id="fuelSalesChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
@@ -1779,7 +1620,6 @@
                         <p>إدارة إعدادات النظام والمفاتيح</p>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-building card-icon"></i> معلومات المحطة</div>
                     <div class="form-group"><label>اسم المحطة</label><input type="text" class="form-control" id="settingStationName" value="محطة أبو أحمد لمشتقات الديزل"></div>
@@ -1788,7 +1628,6 @@
                     <div class="form-group"><label>حد التنبيه للمخزون (لتر)</label><input type="number" class="form-control" id="settingThreshold" value="1000"></div>
                     <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-key card-icon"></i> مفاتيح API</div>
                     <div class="form-group"><label>Gemini API</label><input type="password" class="form-control" id="settingGemini" placeholder="مفتاح Gemini"></div>
@@ -1812,7 +1651,7 @@
             <div class="modal-body" style="text-align:center;">
                 <div style="width:70px; height:70px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 12px; color:white;"><i class="fas fa-gas-pump"></i></div>
                 <h3 style="font-family:var(--font-heading); color:var(--text);">محطة أبو أحمد لمشتقات الديزل</h3>
-                <p class="text-muted">الإصدار 7.0 Pro</p>
+                <p class="text-muted">الإصدار 8.0 Pro</p>
                 <div style="background:var(--bg); border-radius:var(--radius-sm); padding:12px; margin:12px 0;">
                     <div style="font-weight:700;">👨‍💻 المطور</div>
                     <div style="color:var(--text-secondary);">المهندس / جبر الحميدي</div>
@@ -2218,6 +2057,8 @@
     const androidInterface = window.AndroidInterface;
     const useAndroidInterface = typeof androidInterface !== 'undefined' && androidInterface !== null;
 
+    console.log('AndroidInterface available:', useAndroidInterface);
+
     // ============================================================
     // UTILITY FUNCTIONS
     // ============================================================
@@ -2246,220 +2087,72 @@
     // API CALL – استخدام AndroidInterface كلما أمكن
     // ============================================================
     async function apiCall(action, params = {}) {
-        // إذا كان AndroidInterface متاحاً، استخدمه بدلاً من HTTP
+        console.log('apiCall:', action, params);
+
+        // إذا كان AndroidInterface متاحاً، استخدمه
         if (useAndroidInterface) {
             try {
-                // بناء كائن params كـ JSON
+                // بناء كائن params كـ JSON للدوال التي تتطلب JSON
                 const paramsObj = {};
                 for (const [key, value] of Object.entries(params)) {
                     if (value !== null && value !== undefined && value !== '') {
                         paramsObj[key] = value;
                     }
                 }
-                // استدعاء الدالة المطلوبة عبر AndroidInterface
+
                 let result = null;
+
+                // ===== دوال المصادقة =====
                 if (action === 'login') {
                     result = androidInterface.login(params.username || '', params.password || '');
-                } else if (action === 'get_customers') {
+                }
+
+                // ===== دوال العملاء =====
+                else if (action === 'get_customers') {
                     result = androidInterface.getCustomers();
                 } else if (action === 'add_customer') {
-                    result = androidInterface.addParty(JSON.stringify({
+                    const data = {
                         commercial_name: params.commercial_name || '',
+                        legal_name: params.legal_name || '',
+                        commercial_name_ar: params.commercial_name_ar || '',
                         phone: params.phone || '',
+                        phone2: params.phone2 || '',
+                        email: params.email || '',
+                        city: params.city || '',
                         credit_limit: params.credit_limit || 0,
+                        current_balance: params.current_balance || 0,
                         party_type_id: params.party_type_id || 1,
-                        email: params.email || '',
-                        city: params.city || '',
-                        notes: params.notes || ''
-                    }));
+                        status: params.status || 'active',
+                        notes: params.notes || '',
+                        party_code: params.party_code || ''
+                    };
+                    result = androidInterface.addParty(JSON.stringify(data));
                 } else if (action === 'update_customer') {
-                    result = androidInterface.updateParty(parseInt(params.party_id), JSON.stringify({
+                    const data = {
                         commercial_name: params.commercial_name || '',
+                        legal_name: params.legal_name || '',
+                        commercial_name_ar: params.commercial_name_ar || '',
                         phone: params.phone || '',
-                        credit_limit: params.credit_limit || 0,
+                        phone2: params.phone2 || '',
                         email: params.email || '',
                         city: params.city || '',
-                        notes: params.notes || ''
-                    }));
+                        credit_limit: params.credit_limit || 0,
+                        current_balance: params.current_balance || 0,
+                        party_type_id: params.party_type_id || 1,
+                        status: params.status || 'active',
+                        notes: params.notes || '',
+                        party_code: params.party_code || ''
+                    };
+                    result = androidInterface.updateParty(parseInt(params.party_id), JSON.stringify(data));
                 } else if (action === 'delete_customer') {
                     result = androidInterface.deleteParty(parseInt(params.party_id));
-                } else if (action === 'get_sales') {
+                }
+
+                // ===== دوال المبيعات =====
+                else if (action === 'get_sales') {
                     result = androidInterface.getSales();
-                } else if (action === 'get_products') {
-                    result = androidInterface.getProducts();
-                } else if (action === 'add_product') {
-                    result = androidInterface.addProduct(JSON.stringify({
-                        product_code: params.product_code || '',
-                        product_name: params.product_name || '',
-                        fuel_type_id: params.fuel_type_id || '',
-                        category_id: params.category_id || '',
-                        sale_price: params.sale_price || 0,
-                        purchase_price: params.purchase_price || 0,
-                        quantity: params.quantity || 0,
-                        minimum_stock: params.minimum_stock || 10,
-                        unit_id: params.unit_id || 'لتر'
-                    }));
-                } else if (action === 'update_product') {
-                    result = androidInterface.updateProduct(parseInt(params.product_id), JSON.stringify({
-                        product_name: params.product_name || '',
-                        fuel_type_id: params.fuel_type_id || '',
-                        category_id: params.category_id || '',
-                        sale_price: params.sale_price || 0,
-                        purchase_price: params.purchase_price || 0,
-                        quantity: params.quantity || 0,
-                        minimum_stock: params.minimum_stock || 10,
-                        unit_id: params.unit_id || 'لتر'
-                    }));
-                } else if (action === 'delete_product') {
-                    result = androidInterface.deleteProduct(parseInt(params.product_id));
-                } else if (action === 'get_employees') {
-                    result = androidInterface.getEmployees();
-                } else if (action === 'add_employee') {
-                    result = androidInterface.addEmployee(JSON.stringify({
-                        employee_code: params.employee_code || '',
-                        full_name: params.full_name || '',
-                        phone: params.phone || '',
-                        job_title: params.job_title || '',
-                        department: params.department || '',
-                        basic_salary: params.basic_salary || 0,
-                        status: params.status || 'active',
-                        notes: params.notes || ''
-                    }));
-                } else if (action === 'update_employee') {
-                    result = androidInterface.updateEmployee(parseInt(params.employee_id), JSON.stringify({
-                        full_name: params.full_name || '',
-                        phone: params.phone || '',
-                        job_title: params.job_title || '',
-                        department: params.department || '',
-                        basic_salary: params.basic_salary || 0,
-                        status: params.status || 'active',
-                        notes: params.notes || ''
-                    }));
-                } else if (action === 'delete_employee') {
-                    result = androidInterface.deleteEmployee(parseInt(params.employee_id));
-                } else if (action === 'get_users') {
-                    result = androidInterface.getUsers();
-                } else if (action === 'add_user') {
-                    result = androidInterface.addUser(JSON.stringify({
-                        username: params.username || '',
-                        password: params.password || '',
-                        email: params.email || '',
-                        phone: params.phone || '',
-                        full_name: params.full_name || '',
-                        role_id: params.role_id || 4,
-                        status: params.status || 'active'
-                    }));
-                } else if (action === 'update_user') {
-                    result = androidInterface.updateUser(parseInt(params.user_id), JSON.stringify({
-                        full_name: params.full_name || '',
-                        email: params.email || '',
-                        phone: params.phone || '',
-                        role_id: params.role_id || '',
-                        status: params.status || 'active'
-                    }));
-                } else if (action === 'delete_user') {
-                    result = androidInterface.deleteUser(parseInt(params.user_id));
-                } else if (action === 'get_roles') {
-                    result = androidInterface.getRoles();
-                } else if (action === 'add_role') {
-                    result = androidInterface.addRole(JSON.stringify({
-                        role_code: params.role_code || '',
-                        role_name: params.role_name || '',
-                        description: params.description || '',
-                        level: params.level || 1,
-                        is_system_role: params.is_system_role || 0
-                    }));
-                } else if (action === 'update_role') {
-                    result = androidInterface.updateRole(parseInt(params.role_id), JSON.stringify({
-                        role_name: params.role_name || '',
-                        description: params.description || '',
-                        level: params.level || 1,
-                        is_system_role: params.is_system_role || 0
-                    }));
-                } else if (action === 'delete_role') {
-                    result = androidInterface.deleteRole(parseInt(params.role_id));
-                } else if (action === 'get_shifts') {
-                    result = androidInterface.getShifts();
-                } else if (action === 'add_shift') {
-                    result = androidInterface.startShift(JSON.stringify({
-                        shift_type: params.shift_type || 'morning',
-                        shift_date: params.shift_date || '',
-                        start_time: params.start_time || '',
-                        cashier_id: params.cashier_id || 1,
-                        opening_cash: params.opening_cash || 0
-                    }));
-                } else if (action === 'delete_shift') {
-                    result = androidInterface.deleteShift(parseInt(params.shift_id));
-                } else if (action === 'get_payments') {
-                    result = androidInterface.getPayments();
-                } else if (action === 'make_payment') {
-                    result = androidInterface.makePayment(JSON.stringify({
-                        customer_party_id: params.customer_party_id || '',
-                        amount: params.amount || 0,
-                        payment_method: params.payment_method || 'cash',
-                        cheque_number: params.cheque_number || '',
-                        transfer_reference: params.transfer_reference || '',
-                        notes: params.notes || '',
-                        operator: params.operator || 'System'
-                    }));
-                } else if (action === 'add_deposit') {
-                    result = androidInterface.addDeposit(JSON.stringify({
-                        customer_party_id: params.customer_party_id || '',
-                        amount: params.amount || 0,
-                        notes: params.notes || '',
-                        operator: params.operator || 'System'
-                    }));
-                } else if (action === 'delete_payment') {
-                    result = androidInterface.deletePayment(parseInt(params.payment_id));
-                } else if (action === 'get_tanks') {
-                    result = androidInterface.getTanks();
-                } else if (action === 'get_pumps') {
-                    result = androidInterface.getPumps();
-                } else if (action === 'update_tank_quantity') {
-                    result = androidInterface.updateTankQuantity(parseInt(params.tank_id), parseFloat(params.quantity));
-                } else if (action === 'get_maintenance_requests') {
-                    result = androidInterface.getMaintenanceRequests();
-                } else if (action === 'add_maintenance_request') {
-                    result = androidInterface.addMaintenanceRequest(JSON.stringify({
-                        asset_type: params.asset_type || 'tank',
-                        asset_id: params.asset_id || 0,
-                        request_type: params.request_type || '',
-                        priority: params.priority || 'medium',
-                        title: params.title || '',
-                        description: params.description || ''
-                    }));
-                } else if (action === 'update_maintenance_status') {
-                    result = androidInterface.updateMaintenanceStatus(parseInt(params.request_id), params.status || '');
-                } else if (action === 'delete_maintenance') {
-                    result = androidInterface.deleteMaintenance(parseInt(params.request_id));
-                } else if (action === 'get_notifications') {
-                    result = androidInterface.getNotifications();
-                } else if (action === 'get_sms_logs') {
-                    result = androidInterface.getSmsLogs();
-                } else if (action === 'get_whitelist') {
-                    result = androidInterface.getWhitelist();
-                } else if (action === 'add_whitelist') {
-                    result = androidInterface.addWhitelist(JSON.stringify({
-                        phone: params.phone || '',
-                        name: params.name || ''
-                    }));
-                } else if (action === 'remove_whitelist') {
-                    result = androidInterface.removeWhitelist(JSON.stringify({ phone: params.phone || '' }));
-                } else if (action === 'get_dashboard') {
-                    result = androidInterface.getDashboardStats();
-                } else if (action === 'get_cashiers') {
-                    result = androidInterface.getUsersByRole('CASHIER');
-                } else if (action === 'get_fuel_types') {
-                    result = androidInterface.getFuelTypes();
-                } else if (action === 'get_categories') {
-                    result = androidInterface.getCategories();
-                } else if (action === 'get_settings') {
-                    result = androidInterface.getAllSettingsMap();
-                } else if (action === 'set_setting') {
-                    result = androidInterface.setSetting(params.key || '', params.value || '');
                 } else if (action === 'execute_sale') {
-                    // sale via AndroidInterface - we need to construct the JSON
-                    const saleData = {
+                    const data = {
                         customer_party_id: params.customer_party_id || '',
                         fuel_type_id: params.fuel_type_id || '',
                         pump_id: params.pump_id || '',
@@ -2472,30 +2165,279 @@
                         notes: params.notes || '',
                         shift_id: params.shift_id || 1
                     };
-                    result = androidInterface.addSale(JSON.stringify(saleData));
+                    result = androidInterface.addSale(JSON.stringify(data));
                 } else if (action === 'delete_sale') {
                     result = androidInterface.deleteSale(parseInt(params.sale_id));
+                }
+
+                // ===== دوال المنتجات =====
+                else if (action === 'get_products') {
+                    result = androidInterface.getProducts();
+                } else if (action === 'add_product') {
+                    const data = {
+                        product_code: params.product_code || '',
+                        product_name: params.product_name || '',
+                        product_name_ar: params.product_name_ar || '',
+                        fuel_type_id: params.fuel_type_id || '',
+                        category_id: params.category_id || '',
+                        sale_price: params.sale_price || 0,
+                        purchase_price: params.purchase_price || 0,
+                        quantity: params.quantity || 0,
+                        minimum_stock: params.minimum_stock || 10,
+                        unit_id: params.unit_id || 'لتر'
+                    };
+                    result = androidInterface.addProduct(JSON.stringify(data));
+                } else if (action === 'update_product') {
+                    const data = {
+                        product_name: params.product_name || '',
+                        product_name_ar: params.product_name_ar || '',
+                        fuel_type_id: params.fuel_type_id || '',
+                        category_id: params.category_id || '',
+                        sale_price: params.sale_price || 0,
+                        purchase_price: params.purchase_price || 0,
+                        quantity: params.quantity || 0,
+                        minimum_stock: params.minimum_stock || 10,
+                        unit_id: params.unit_id || 'لتر'
+                    };
+                    result = androidInterface.updateProduct(parseInt(params.product_id), JSON.stringify(data));
+                } else if (action === 'delete_product') {
+                    result = androidInterface.deleteProduct(parseInt(params.product_id));
+                }
+
+                // ===== دوال الموظفين =====
+                else if (action === 'get_employees') {
+                    result = androidInterface.getEmployees();
+                } else if (action === 'add_employee') {
+                    const data = {
+                        employee_code: params.employee_code || '',
+                        full_name: params.full_name || '',
+                        full_name_ar: params.full_name_ar || '',
+                        phone: params.phone || '',
+                        phone2: params.phone2 || '',
+                        email: params.email || '',
+                        job_title: params.job_title || '',
+                        department: params.department || '',
+                        basic_salary: params.basic_salary || 0,
+                        allowances: params.allowances || 0,
+                        status: params.status || 'active',
+                        notes: params.notes || ''
+                    };
+                    result = androidInterface.addEmployee(JSON.stringify(data));
+                } else if (action === 'update_employee') {
+                    const data = {
+                        full_name: params.full_name || '',
+                        full_name_ar: params.full_name_ar || '',
+                        phone: params.phone || '',
+                        phone2: params.phone2 || '',
+                        email: params.email || '',
+                        job_title: params.job_title || '',
+                        department: params.department || '',
+                        basic_salary: params.basic_salary || 0,
+                        allowances: params.allowances || 0,
+                        status: params.status || 'active',
+                        notes: params.notes || ''
+                    };
+                    result = androidInterface.updateEmployee(parseInt(params.employee_id), JSON.stringify(data));
+                } else if (action === 'delete_employee') {
+                    result = androidInterface.deleteEmployee(parseInt(params.employee_id));
+                }
+
+                // ===== دوال المستخدمين =====
+                else if (action === 'get_users') {
+                    result = androidInterface.getUsers();
+                } else if (action === 'add_user') {
+                    const data = {
+                        username: params.username || '',
+                        password: params.password || '',
+                        email: params.email || '',
+                        phone: params.phone || '',
+                        full_name: params.full_name || '',
+                        full_name_ar: params.full_name_ar || '',
+                        role_id: params.role_id || 4,
+                        status: params.status || 'active'
+                    };
+                    result = androidInterface.addUser(JSON.stringify(data));
+                } else if (action === 'update_user') {
+                    const data = {
+                        full_name: params.full_name || '',
+                        full_name_ar: params.full_name_ar || '',
+                        email: params.email || '',
+                        phone: params.phone || '',
+                        role_id: params.role_id || '',
+                        status: params.status || 'active'
+                    };
+                    result = androidInterface.updateUser(parseInt(params.user_id), JSON.stringify(data));
+                } else if (action === 'delete_user') {
+                    result = androidInterface.deleteUser(parseInt(params.user_id));
+                }
+
+                // ===== دوال الأدوار =====
+                else if (action === 'get_roles') {
+                    result = androidInterface.getRoles();
+                } else if (action === 'add_role') {
+                    const data = {
+                        role_code: params.role_code || '',
+                        role_name: params.role_name || '',
+                        role_name_ar: params.role_name_ar || '',
+                        description: params.description || '',
+                        level: params.level || 1,
+                        is_system_role: params.is_system_role || 0
+                    };
+                    result = androidInterface.addRole(JSON.stringify(data));
+                } else if (action === 'update_role') {
+                    const data = {
+                        role_name: params.role_name || '',
+                        role_name_ar: params.role_name_ar || '',
+                        description: params.description || '',
+                        level: params.level || 1,
+                        is_system_role: params.is_system_role || 0
+                    };
+                    result = androidInterface.updateRole(parseInt(params.role_id), JSON.stringify(data));
+                } else if (action === 'delete_role') {
+                    result = androidInterface.deleteRole(parseInt(params.role_id));
+                }
+
+                // ===== دوال الورديات =====
+                else if (action === 'get_shifts') {
+                    result = androidInterface.getShifts();
+                } else if (action === 'add_shift') {
+                    const data = {
+                        shift_type: params.shift_type || 'morning',
+                        shift_date: params.shift_date || '',
+                        start_time: params.start_time || '',
+                        cashier_id: params.cashier_id || 1,
+                        opening_cash: params.opening_cash || 0
+                    };
+                    result = androidInterface.startShift(JSON.stringify(data));
+                } else if (action === 'delete_shift') {
+                    result = androidInterface.deleteShift(parseInt(params.shift_id));
+                }
+
+                // ===== دوال المدفوعات =====
+                else if (action === 'get_payments') {
+                    result = androidInterface.getPayments();
+                } else if (action === 'make_payment') {
+                    const data = {
+                        customer_party_id: params.customer_party_id || '',
+                        amount: params.amount || 0,
+                        payment_method: params.payment_method || 'cash',
+                        cheque_number: params.cheque_number || '',
+                        transfer_reference: params.transfer_reference || '',
+                        notes: params.notes || '',
+                        operator: params.operator || 'System'
+                    };
+                    result = androidInterface.makePayment(JSON.stringify(data));
+                } else if (action === 'add_deposit') {
+                    const data = {
+                        customer_party_id: params.customer_party_id || '',
+                        amount: params.amount || 0,
+                        notes: params.notes || '',
+                        operator: params.operator || 'System'
+                    };
+                    result = androidInterface.addDeposit(JSON.stringify(data));
+                } else if (action === 'delete_payment') {
+                    result = androidInterface.deletePayment(parseInt(params.payment_id));
+                }
+
+                // ===== دوال الخزانات والمضخات =====
+                else if (action === 'get_tanks') {
+                    result = androidInterface.getTanks();
+                } else if (action === 'get_pumps') {
+                    result = androidInterface.getPumps();
+                } else if (action === 'update_tank_quantity') {
+                    result = androidInterface.updateTankQuantity(parseInt(params.tank_id), parseFloat(params.quantity));
+                }
+
+                // ===== دوال الصيانة =====
+                else if (action === 'get_maintenance_requests') {
+                    result = androidInterface.getMaintenanceRequests();
+                } else if (action === 'add_maintenance_request') {
+                    const data = {
+                        asset_type: params.asset_type || 'tank',
+                        asset_id: params.asset_id || 0,
+                        request_type: params.request_type || '',
+                        priority: params.priority || 'medium',
+                        title: params.title || '',
+                        description: params.description || ''
+                    };
+                    result = androidInterface.addMaintenanceRequest(JSON.stringify(data));
+                } else if (action === 'update_maintenance_status') {
+                    result = androidInterface.updateMaintenanceStatus(parseInt(params.request_id), params.status || '');
+                } else if (action === 'delete_maintenance') {
+                    result = androidInterface.deleteMaintenance(parseInt(params.request_id));
+                }
+
+                // ===== دوال الإشعارات =====
+                else if (action === 'get_notifications') {
+                    result = androidInterface.getNotifications();
+                }
+
+                // ===== دوال الرسائل النصية =====
+                else if (action === 'get_sms_logs') {
+                    result = androidInterface.getSmsLogs();
+                } else if (action === 'get_whitelist') {
+                    result = androidInterface.getWhitelist();
+                } else if (action === 'add_whitelist') {
+                    const data = { phone: params.phone || '', name: params.name || '' };
+                    result = androidInterface.addWhitelist(JSON.stringify(data));
+                } else if (action === 'remove_whitelist') {
+                    const data = { phone: params.phone || '' };
+                    result = androidInterface.removeWhitelist(JSON.stringify(data));
+                }
+
+                // ===== دوال لوحة التحكم =====
+                else if (action === 'get_dashboard') {
+                    result = androidInterface.getDashboardStats();
+                }
+
+                // ===== دوال أخرى =====
+                else if (action === 'get_cashiers') {
+                    result = androidInterface.getUsersByRole('CASHIER');
+                } else if (action === 'get_fuel_types') {
+                    result = androidInterface.getFuelTypes();
+                } else if (action === 'get_categories') {
+                    result = androidInterface.getCategories();
+                } else if (action === 'get_setting') {
+                    result = androidInterface.getSetting(params.key || '');
+                } else if (action === 'set_setting') {
+                    result = androidInterface.setSetting(params.key || '', params.value || '');
                 } else if (action === 'export_data') {
                     result = androidInterface.exportAllData();
                 } else if (action === 'get_daily_sales') {
                     result = androidInterface.getTodaySales();
                 } else if (action === 'get_monthly_sales') {
-                    // محاكاة البيانات الشهرية
                     result = androidInterface.getMonthlySales();
                 } else if (action === 'get_eod_report') {
                     result = androidInterface.getEodReport();
                 } else if (action === 'get_profit_report') {
-                    result = androidInterface.getProfitReport();
+                    result = androidInterface.getProfitReport(params.from_date || '', params.to_date || '');
+                } else if (action === 'get_inventory_report') {
+                    result = androidInterface.getInventoryReport();
+                } else if (action === 'get_overdue_report') {
+                    result = androidInterface.getOverdueReport();
+                } else if (action === 'get_fuel_sales') {
+                    result = androidInterface.getFuelSales();
                 } else if (action === 'ai_chat') {
                     result = androidInterface.sendToAI(params.message || '');
                 } else if (action === 'get_ai_insight') {
                     result = androidInterface.getAIInsight();
-                } else {
-                    // إذا كانت الدالة غير معروفة، حاول HTTP
+                }
+
+                // ===== دوال الأصول =====
+                else if (action === 'get_assets') {
+                    result = androidInterface.getAssets();
+                } else if (action === 'add_asset') {
+                    result = androidInterface.addAsset(JSON.stringify(params));
+                }
+
+                // ===== دوال أخرى =====
+                else {
+                    // محاولة استخدام HTTP كبديل
                     return fallbackHttpCall(action, params);
                 }
 
                 // معالجة النتيجة
+                console.log('AndroidInterface result:', result);
                 let parsedResult;
                 if (typeof result === 'string') {
                     try {
@@ -2530,7 +2472,6 @@
         return fallbackHttpCall(action, params);
     }
 
-    // ===== HTTP fallback =====
     async function fallbackHttpCall(action, params = {}) {
         const url = new URL(API_BASE);
         url.searchParams.append('action', action);
@@ -2574,7 +2515,7 @@
         btnText.innerHTML = '<span class="spinner spinner-sm" style="border-top-color:white;"></span>';
 
         try {
-            let result = await apiCall('login', { username, password });
+            const result = await apiCall('login', { username, password });
 
             if (result && result.success) {
                 if (result.token) localStorage.setItem('authToken', result.token);
@@ -2643,7 +2584,7 @@
     })();
 
     // ============================================================
-    // SIDEBAR – بناء القائمة الجانبية مع Submenu/Cascading
+    // SIDEBAR – مع Submenu/Cascading
     // ============================================================
     const sidebarNavData = [
         { id: 'dashboard', label: 'لوحة التحكم', icon: 'fa-home', children: [] },
@@ -2692,37 +2633,63 @@
 
         sidebarNavData.forEach(item => {
             const wrapper = document.createElement('div');
-            wrapper.className = 'nav-item-wrapper';
+            wrapper.className = 'nav-item-wrapper submenu-container';
 
             const btn = document.createElement('button');
             btn.className = `nav-item ${activePage === item.id ? 'active' : ''}`;
+            btn.setAttribute('data-page', item.id);
             btn.innerHTML = `
                 <span class="nav-icon"><i class="fas ${item.icon}"></i></span>
                 <span class="nav-label">${item.label}</span>
                 ${item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
             `;
-            btn.onmouseenter = (e) => {
-                if (item.children.length && window.innerWidth >= 992) {
-                    showSubmenu(e.target, item, wrapper);
-                }
-            };
-            btn.onmouseleave = () => {
-                if (window.innerWidth >= 992) {
+
+            // عرض القائمة الفرعية عند تمرير الماوس (للكمبيوتر)
+            if (item.children.length && window.innerWidth >= 992) {
+                btn.addEventListener('mouseenter', function(e) {
+                    showSubmenu(this, item, wrapper);
+                });
+                btn.addEventListener('mouseleave', function() {
                     setTimeout(() => { hideSubmenu(); }, 300);
-                }
-            };
-            btn.onclick = (e) => {
+                });
+            }
+
+            // عند النقر (للموبايل وللكمبيوتر)
+            btn.addEventListener('click', function(e) {
                 if (window.innerWidth < 992) {
                     // على الموبايل: تبديل القائمة الفرعية
                     const sub = wrapper.querySelector('.submenu');
                     if (sub) {
-                        sub.classList.toggle('open');
+                        const isOpen = sub.classList.contains('open');
+                        // إغلاق جميع القوائم الفرعية الأخرى
+                        document.querySelectorAll('.submenu.open').forEach(el => {
+                            if (el !== sub) el.classList.remove('open');
+                        });
+                        if (isOpen) {
+                            sub.classList.remove('open');
+                        } else {
+                            sub.classList.add('open');
+                            // تحديد موقع القائمة على الموبايل
+                            sub.style.position = 'fixed';
+                            sub.style.right = '0';
+                            sub.style.top = 'auto';
+                            sub.style.bottom = '0';
+                            sub.style.width = '100%';
+                            sub.style.maxHeight = '50vh';
+                            sub.style.borderRadius = '12px 12px 0 0';
+                        }
                     }
-                } else if (!item.children.length) {
-                    showPage(item.id);
-                    toggleSidebar(false);
+                } else {
+                    // على الكمبيوتر: إذا كان هناك أطفال، عرض القائمة الفرعية
+                    if (item.children.length) {
+                        showSubmenu(this, item, wrapper);
+                    } else {
+                        showPage(item.id);
+                        toggleSidebar(false);
+                    }
                 }
-            };
+            });
+
             wrapper.appendChild(btn);
 
             if (item.children.length) {
@@ -2736,30 +2703,17 @@
                     subBtn.className = 'sub-item';
                     const targetPage = subPageMap[child] || item.id;
                     subBtn.innerHTML = `<span class="sub-icon"><i class="fas fa-angle-left"></i></span> ${child}`;
-                    subBtn.onclick = (e) => {
+                    subBtn.addEventListener('click', function(e) {
                         e.stopPropagation();
                         showPage(targetPage);
                         toggleSidebar(false);
                         hideSubmenu();
-                    };
+                        // إغلاق القوائم الفرعية على الموبايل
+                        document.querySelectorAll('.submenu.open').forEach(el => el.classList.remove('open'));
+                    });
                     sub.appendChild(subBtn);
                 });
                 wrapper.appendChild(sub);
-
-                // على الموبايل: القائمة الفرعية تظهر عند النقر
-                btn.addEventListener('click', function(e) {
-                    if (window.innerWidth < 992) {
-                        e.stopPropagation();
-                        const sub = wrapper.querySelector('.submenu');
-                        if (sub) {
-                            sub.classList.toggle('open');
-                            // إغلاق القوائم الفرعية الأخرى
-                            document.querySelectorAll('.submenu.open').forEach(el => {
-                                if (el !== sub) el.classList.remove('open');
-                            });
-                        }
-                    }
-                });
             }
 
             nav.appendChild(wrapper);
@@ -2773,16 +2727,34 @@
         // إخفاء القائمة السابقة
         hideSubmenu();
 
-        // تحديد موقع القائمة الفرعية
+        if (window.innerWidth < 992) {
+            // على الموبايل: تظهر في الأسفل
+            sub.style.position = 'fixed';
+            sub.style.right = '0';
+            sub.style.top = 'auto';
+            sub.style.bottom = '0';
+            sub.style.width = '100%';
+            sub.style.maxHeight = '50vh';
+            sub.style.borderRadius = '12px 12px 0 0';
+            sub.style.border = '1px solid var(--border)';
+            sub.style.borderBottom = 'none';
+            sub.classList.add('open');
+            activeSubmenu = sub;
+            return;
+        }
+
+        // على الكمبيوتر: بجانب العنصر
         const rect = trigger.getBoundingClientRect();
         const sidebar = document.getElementById('sidebar');
         const sidebarRect = sidebar.getBoundingClientRect();
 
-        // حساب الموقع: بجانب العنصر
         sub.style.position = 'fixed';
         sub.style.right = (sidebarRect.right) + 'px';
         sub.style.top = Math.max(10, rect.top - 10) + 'px';
         sub.style.width = '220px';
+        sub.style.border = '1px solid var(--border)';
+        sub.style.borderRadius = '6px';
+        sub.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
 
         // ضبط إذا كانت القائمة قريبة من الأسفل
         if (rect.bottom + 200 > window.innerHeight) {
@@ -2839,9 +2811,15 @@
     // PAGE NAVIGATION
     // ============================================================
     function showPage(pageId) {
+        console.log('showPage:', pageId);
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         const target = document.getElementById('page-' + pageId);
-        if (target) target.classList.add('active');
+        if (target) {
+            target.classList.add('active');
+        } else {
+            showToast('الصفحة غير موجودة', 'error');
+            return;
+        }
 
         // تحديث القائمة النشطة
         document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -3032,7 +3010,7 @@
             ]);
             const selCust = document.getElementById('saleCustomer');
             selCust.innerHTML = '<option value="">-- اختر العميل --</option>';
-            if (cust.success) cust.data.forEach(c => {
+            if (cust.success && cust.data) cust.data.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.party_id;
                 opt.textContent = c.commercial_name + (c.phone ? ` (${c.phone})` : '');
@@ -3041,7 +3019,7 @@
 
             const selFuel = document.getElementById('saleFuelType');
             selFuel.innerHTML = '<option value="">-- اختر الوقود --</option>';
-            if (fuel.success) fuel.data.forEach(f => {
+            if (fuel.success && fuel.data) fuel.data.forEach(f => {
                 const opt = document.createElement('option');
                 opt.value = f.fuel_type_id;
                 opt.textContent = f.fuel_name_ar || f.fuel_name;
@@ -3050,7 +3028,7 @@
 
             const selPump = document.getElementById('salePump');
             selPump.innerHTML = '<option value="">-- اختر المضخة --</option>';
-            if (pump.success) pump.data.forEach(p => {
+            if (pump.success && pump.data) pump.data.forEach(p => {
                 const opt = document.createElement('option');
                 opt.value = p.pump_id;
                 opt.textContent = p.pump_name || p.pump_code;
@@ -3284,8 +3262,8 @@
             const action = id ? 'update_customer' : 'add_customer';
             if (id) params.party_id = id;
             const result = await apiCall(action, params);
-            if (result.success) {
-                showToast('تم حفظ العميل', 'success');
+            if (result.success && result.id) {
+                showToast('تم حفظ العميل بنجاح', 'success');
                 closeModal('customerModal');
                 loadCustomers();
                 loadSaleDropdowns();
@@ -3333,7 +3311,7 @@
                 const catResult = await apiCall('get_categories');
                 const fuelSel = document.getElementById('productFormFuelType');
                 const catSel = document.getElementById('productFormCategory');
-                if (fuelResult.success) {
+                if (fuelResult.success && fuelResult.data) {
                     fuelSel.innerHTML = '<option value="">-- اختر --</option>';
                     fuelResult.data.forEach(f => {
                         const opt = document.createElement('option');
@@ -3342,7 +3320,7 @@
                         fuelSel.appendChild(opt);
                     });
                 }
-                if (catResult.success) {
+                if (catResult.success && catResult.data) {
                     catSel.innerHTML = '<option value="">-- اختر --</option>';
                     catResult.data.forEach(c => {
                         const opt = document.createElement('option');
@@ -3453,8 +3431,8 @@
             const action = id ? 'update_product' : 'add_product';
             if (id) params.product_id = id;
             const result = await apiCall(action, params);
-            if (result.success) {
-                showToast('تم حفظ المنتج', 'success');
+            if (result.success && result.id) {
+                showToast('تم حفظ المنتج بنجاح', 'success');
                 closeModal('productModal');
                 loadProducts();
             } else {
@@ -3596,8 +3574,8 @@
             const action = id ? 'update_employee' : 'add_employee';
             if (id) params.employee_id = id;
             const result = await apiCall(action, params);
-            if (result.success) {
-                showToast('تم حفظ الموظف', 'success');
+            if (result.success && result.id) {
+                showToast('تم حفظ الموظف بنجاح', 'success');
                 closeModal('employeeModal');
                 loadEmployees();
             } else {
@@ -3732,7 +3710,7 @@
                 // تحميل قائمة الأدوار
                 const roleResult = await apiCall('get_roles');
                 const roleSel = document.getElementById('userFormRole');
-                if (roleResult.success) {
+                if (roleResult.success && roleResult.data) {
                     roleSel.innerHTML = '<option value="">-- اختر --</option>';
                     roleResult.data.forEach(r => {
                         const opt = document.createElement('option');
@@ -3827,8 +3805,8 @@
             const action = id ? 'update_user' : 'add_user';
             if (id) params.user_id = id;
             const result = await apiCall(action, params);
-            if (result.success) {
-                showToast('تم حفظ المستخدم', 'success');
+            if (result.success && result.id) {
+                showToast('تم حفظ المستخدم بنجاح', 'success');
                 closeModal('userModal');
                 loadUsers();
             } else {
@@ -3947,8 +3925,8 @@
             const action = id ? 'update_role' : 'add_role';
             if (id) params.role_id = id;
             const result = await apiCall(action, params);
-            if (result.success) {
-                showToast('تم حفظ الدور', 'success');
+            if (result.success && result.id) {
+                showToast('تم حفظ الدور بنجاح', 'success');
                 closeModal('roleModal');
                 loadRoles();
             } else {
@@ -4026,7 +4004,7 @@
         try {
             const result = await apiCall('get_customers');
             const sel = document.getElementById(selectId);
-            if (sel && result.success) {
+            if (sel && result.success && result.data) {
                 sel.innerHTML = '<option value="">-- اختر العميل --</option>';
                 result.data.forEach(c => {
                     const opt = document.createElement('option');
@@ -4154,7 +4132,7 @@
     function openShiftModal() {
         apiCall('get_cashiers').then(res => {
             const sel = document.getElementById('shiftCashier');
-            if (res.success) {
+            if (res.success && res.data) {
                 sel.innerHTML = '<option value="">-- اختر --</option>';
                 res.data.forEach(u => {
                     const opt = document.createElement('option');
