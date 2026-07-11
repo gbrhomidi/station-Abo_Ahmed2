@@ -261,6 +261,21 @@ class SmsReceiver : BroadcastReceiver() {
             logSecurityEvent(context, "PROCESSING_ERROR", sender, "ErrorID: $errorId")
             safeSendReply(context, db, sender, "عذراً ${customer.commercialName}، حدث خطأ. رمز: $errorId")
         }
+
+        // ═══ 7. حفظ الرسالة في قاعدة البيانات ═══
+        try {
+            val data = JSONObject().apply {
+                put("phone_number", sender)
+                put("message_body", rawBody)
+                put("message_type", "incoming")
+                put("status", "received")
+                put("processed_at", System.currentTimeMillis())
+            }
+            db.addSmsMessage(data)
+            Log.d(TAG, "SMS saved to database from $sender")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving SMS to database", e)
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
