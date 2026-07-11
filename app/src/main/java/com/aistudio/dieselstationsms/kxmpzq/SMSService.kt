@@ -56,12 +56,12 @@ class SMSService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "onCreate called")
+        Log.d(TAG, "SMSService onCreate")
+        createNotificationChannel()
         isDestroyed.set(false)
 
         serviceScope.launch {
             try {
-                setupNotificationChannel()
                 startForegroundService()
                 startServer()
                 scheduleAutoBackup()
@@ -73,12 +73,47 @@ class SMSService : Service() {
         }
     }
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Station SMS Service",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "خدمة مراقبة الرسائل النصية"
+                setShowBadge(false)
+            }
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand called, startId=$startId")
+        Log.d(TAG, "SMSService onStartCommand")
+        startForeground(NOTIFICATION_ID, buildNotification())
         if (!isDestroyed.get() && (server == null || !server!!.isAlive)) {
             serviceScope.launch { startServer() }
         }
         return START_STICKY
+    }
+
+    private fun buildNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("محطة أبو أحمد")
+            .setContentText("خدمة الرسائل النصية نشطة")
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setOngoing(true)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
     }
 
     override fun onDestroy() {
@@ -96,21 +131,6 @@ class SMSService : Service() {
     }
 
     override fun onBind(intent: Intent): IBinder? = null
-
-    private fun setupNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "خدمة المحطة",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "قناة إشعارات خدمة الخادم المحلي لمحطة أبو أحمد"
-                setShowBadge(false)
-            }
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
-        }
-    }
 
     private fun startForegroundService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
