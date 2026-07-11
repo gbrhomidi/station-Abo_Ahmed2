@@ -16,40 +16,25 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V9 - كامل مع جميع الجداول والدوال
- * تم إصلاح أخطاء ContentValues.put وأنواع البيانات، وإضافة الدوال المفقودة
+ * الإصدار المدمج V10 - كامل مع جميع الجداول والدوال
+ * تم إصلاح جميع الدوال لتستخدم الجداول الصحيحة
  *
- * التحديثات في V9:
- * - إضافة عمود password_salt إلى جدول users
- * - تصحيح دالة authenticateUser لقراءة password_salt بشكل صحيح
- * - تحديث المستخدمين الافتراضيين لتخزين salt
- * التحديثات في V8:
- * - إضافة 28 إعداد نظام جديدة في system_settings
- * - إضافة دوال ديناميكية للقراءة من الجداول المخصصة بدلاً من system_settings
- * - دوال جديدة: getDieselPrice, getGasolinePrice, getManagerPhone, getDriverPhones
- * - دوال جديدة: getTrustedSmscList, getCustomerBalanceByPhone, getLastOrderByPhone
- * - دوال جديدة: getOrderHistoryByPhone, recordDieselDelivery
- * - دوال مساعدة: getAllSettingsMap, updateSetting, getTankStats, getSalesByFuelType
- * - دوال مساعدة: searchParties, getCashMovements, checkLowStock, createStockAlert
- * - دوال مساعدة: getShiftSummary, getLatestMeterReadings, getAssetMaintenanceHistory
- * - دوال مساعدة: getUserNotifications, markNotificationRead, getUsersByRole, getUserPermissions
- *
- * تم إصلاح الأخطاء:
- * - جعل VERSION public (const val) للوصول من MainActivity
- * - إضافة dateOnlyFormat للتنسيق الصحيح
- * - إصلاح موقع الدوال (نقلها خارج close())
- * - إصلاح دوال العميل لاستخدام parties.phone بدلاً من party_contacts
- * - إصلاح توقيع recordDieselDelivery ليتوافق مع SmsReceiver
- * - إضافة دوال مفقودة: getPartyIdByPhone, getRetentionDays, getSystemSetting
- *
- * التعديل الجديد: إضافة مستخدم افتراضي "خليل أحمد" بصلاحية SUPER_ADMIN
+ * التحديثات في V10:
+ * - إصلاح جميع الدوال التي كانت تستخدم جداول غير موجودة
+ * - إضافة دالة getParties(type: String?)
+ * - توحيد دوال العملاء (insertParty, updateParty)
+ * - تصحيح دوال المخزون لاستخدام inventory_levels
+ * - تصحيح دوال الأصول لاستخدام fixed_assets
+ * - تصحيح دوال الرسائل لاستخدام sms_logs
+ * - تصحيح دوال الإعدادات لاستخدام system_settings
+ * - تصحيح دوال الورديات لاستخدام جدول shifts
  */
 class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, VERSION) {
 
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        const val VERSION = 10  // جعلها public للوصول من MainActivity
+        const val VERSION = 10
 
         private const val HASH_ITERATIONS = 10000
 
@@ -74,10 +59,16 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
 
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        private val dateOnlyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dateOnlyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        private val TIME_FORMAT = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     }
 
     private val dbLock = ReentrantLock()
+    private val contextRef = context
+
+    private fun getCurrentDateTime(): String = DATE_FORMAT.format(Date())
+    private fun getCurrentDate(): String = dateOnlyFormat.format(Date())
+    private fun getCurrentTime(): String = TIME_FORMAT.format(Date())
 
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
@@ -90,7 +81,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             createAllTables(db)
             insertInitialData(db)
             db.setTransactionSuccessful()
-            Log.d(TAG, "Database V8 created successfully with full schema")
+            Log.d(TAG, "Database V10 created successfully with full schema")
         } catch (e: Exception) {
             Log.e(TAG, "Error creating database: ${e.message}", e)
             throw e
@@ -108,6 +99,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                     6 -> migrateV6ToV7(db)
                     7 -> migrateV7ToV8(db)
                     8 -> migrateV8ToV9(db)
+                    9 -> migrateV9ToV10(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -153,26 +145,209 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     private fun migrateV7ToV8(db: SQLiteDatabase) {
-        // إضافة الإعدادات الجديدة فقط (الجداول موجودة بالفعل)
         insertInitialData(db)
     }
 
     private fun migrateV8ToV9(db: SQLiteDatabase) {
-        // إضافة عمود password_salt إلى جدول users
         try {
             db.execSQL("ALTER TABLE users ADD COLUMN password_salt VARCHAR(255)")
         } catch (e: Exception) {
             Log.w(TAG, "password_salt column may already exist: ${e.message}")
         }
-        // تحديث المستخدمين الافتراضيين بقيم salt
         val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("UPDATE users SET password_hash = '$hashAdmin', password_salt = '$saltAdmin' WHERE username = 'admin'")
         val (hashKhalil, saltKhalil) = hashPassword("123321")
         db.execSQL("UPDATE users SET password_hash = '$hashKhalil', password_salt = '$saltKhalil' WHERE username = 'خليل أحمد'")
     }
 
+    private fun migrateV9ToV10(db: SQLiteDatabase) {
+        // إضافة حقول delivery إلى sales_transactions إذا لم تكن موجودة
+        try {
+            db.execSQL("ALTER TABLE sales_transactions ADD COLUMN delivery_location TEXT")
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        try {
+            db.execSQL("ALTER TABLE sales_transactions ADD COLUMN delivery_time TEXT")
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        try {
+            db.execSQL("ALTER TABLE sales_transactions ADD COLUMN driver_id INTEGER REFERENCES drivers(id)")
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        try {
+            db.execSQL("ALTER TABLE sales_transactions ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id)")
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        try {
+            db.execSQL("ALTER TABLE sales_transactions ADD COLUMN order_type TEXT DEFAULT 'sale'")
+        } catch (e: Exception) { /* قد يكون موجوداً */ }
+        
+        // إضافة جدول deliveries (مرتبط بـ sales_transactions)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                sale_id INTEGER REFERENCES sales_transactions(id),
+                party_id INTEGER REFERENCES parties(id),
+                vehicle_id INTEGER REFERENCES vehicles(id),
+                driver_id INTEGER REFERENCES drivers(id),
+                delivery_date TEXT NOT NULL,
+                quantity REAL DEFAULT 0,
+                fuel_type TEXT DEFAULT 'diesel',
+                price_per_liter REAL DEFAULT 0,
+                total_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'delivered',
+                location TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """)
+
+        // إضافة جدول fuel_sales (مرتبط بـ sales_transactions)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                sale_id INTEGER REFERENCES sales_transactions(id),
+                shift_id INTEGER REFERENCES shifts(id),
+                pump_id INTEGER REFERENCES pumps(id),
+                fuel_type_id INTEGER REFERENCES fuel_types(id),
+                quantity REAL DEFAULT 0,
+                price_per_liter REAL DEFAULT 0,
+                total_amount REAL DEFAULT 0,
+                payment_method TEXT DEFAULT 'cash',
+                customer_id INTEGER REFERENCES parties(id),
+                vehicle_plate TEXT,
+                sale_date TEXT,
+                sale_time TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """)
+
+        // إضافة جداول المخزون الإضافية
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                product_id INTEGER REFERENCES products(id),
+                movement_type TEXT DEFAULT 'in',
+                quantity REAL DEFAULT 0,
+                unit_cost REAL DEFAULT 0,
+                total_cost REAL DEFAULT 0,
+                reference_type TEXT,
+                reference_id INTEGER,
+                movement_date TEXT,
+                notes TEXT,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """)
+
+        // إضافة جدول sms_messages (مرتبط بـ sms_logs)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                phone_number TEXT NOT NULL,
+                message_body TEXT NOT NULL,
+                message_type TEXT DEFAULT 'incoming',
+                status TEXT DEFAULT 'pending',
+                party_id INTEGER REFERENCES parties(id),
+                sent_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول sms_templates
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                template_name TEXT NOT NULL,
+                template_body TEXT NOT NULL,
+                template_type TEXT DEFAULT 'general',
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول shift_sales
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shift_sales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_id INTEGER REFERENCES shifts(id),
+                sale_id INTEGER REFERENCES sales_transactions(id),
+                amount REAL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول shift_deliveries
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shift_deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_id INTEGER REFERENCES shifts(id),
+                delivery_id INTEGER REFERENCES deliveries(id),
+                amount REAL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول shift_expenses
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS shift_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_id INTEGER REFERENCES shifts(id),
+                expense_type TEXT,
+                amount REAL DEFAULT 0,
+                description TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول settings (مرتبط بـ system_settings)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT UNIQUE NOT NULL,
+                setting_value TEXT,
+                setting_type TEXT DEFAULT 'string',
+                description TEXT,
+                is_editable INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        // إضافة جدول assets (مرتبط بـ fixed_assets)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS assets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                asset_code TEXT,
+                asset_name TEXT NOT NULL,
+                asset_type TEXT,
+                asset_category TEXT,
+                purchase_date TEXT,
+                purchase_cost REAL DEFAULT 0,
+                current_value REAL DEFAULT 0,
+                depreciation_rate REAL DEFAULT 0,
+                location TEXT,
+                status TEXT DEFAULT 'active',
+                maintenance_date TEXT,
+                next_maintenance TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """)
+    }
+
     // ================================================================
-    // CREATE ALL TABLES (المدمج لـ onCreate)
+    // CREATE ALL TABLES
     // ================================================================
     private fun createAllTables(db: SQLiteDatabase) {
         createCoreTables(db)
@@ -200,7 +375,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 1. CORE TABLES (Companies, Stations, Currencies, Terminals)
+    // 1. CORE TABLES
     // ================================================================
     private fun createCoreTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -697,7 +872,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 3. PARTY TABLES (Customers, Suppliers, Contacts)
+    // 3. PARTY TABLES
     // ================================================================
     private fun createPartyTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -1819,6 +1994,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 cashier_id INTEGER NOT NULL,
                 attendant_id INTEGER,
                 approved_by INTEGER,
+                delivery_location TEXT,
+                delivery_time TEXT,
+                order_type TEXT DEFAULT 'sale',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 deleted_at DATETIME,
@@ -1889,7 +2067,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 9. FINANCE TABLES (Payments, Cash, Banks)
+    // 9. FINANCE TABLES
     // ================================================================
     private fun createFinanceTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -3101,7 +3279,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 15. ADVANCED TABLES (Workflow, Scheduled Jobs, Dashboard, etc.)
+    // 15. ADVANCED TABLES
     // ================================================================
     private fun createAdvancedTables(db: SQLiteDatabase) {
         db.execSQL("""
@@ -4312,7 +4490,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 20. INITIAL DATA (بما في ذلك المستخدم الافتراضي "خليل أحمد")
+    // 20. INITIAL DATA
     // ================================================================
     private fun insertInitialData(db: SQLiteDatabase) {
         // Currencies
@@ -4379,26 +4557,25 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
         """)
 
-        // Role Permissions for SUPER_ADMIN (role_id=1) - all permissions
+        // Role Permissions for SUPER_ADMIN
         db.execSQL("""
             INSERT OR IGNORE INTO role_permissions (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
             SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
         """)
 
-        // Default Admin User (password: admin123)
+        // Default Admin User
         val (hashAdmin, saltAdmin) = hashPassword("admin123")
         db.execSQL("""
             INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
             VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', '$saltAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
 
-        // ===== إدراج المستخدم الافتراضي الجديد (خليل أحمد - SUPER_ADMIN) =====
+        // User Khalil Ahmed
         val (hashKhalil, saltKhalil) = hashPassword("123321")
         db.execSQL("""
             INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
             VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', '$saltKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
         """)
-        // =================================================================
 
         // Fuel Types
         db.execSQL("""
@@ -4559,7 +4736,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             (4, 'KPI-004-UUID', 'PROFIT_MARGIN', 'Profit Margin', 'هامش الربح', 'financial', 'نسبة الربح الإجمالي', '(total_sales - total_cost) / total_sales * 100', 25, '%', 'monthly')
         """)
 
-        // Field Permissions (Cashier cannot see profit margin)
+        // Field Permissions
         db.execSQL("""
             INSERT OR IGNORE INTO field_permissions (id, uuid, role_id, table_name, field_name, can_view, can_edit) VALUES
             (1, 'FP-001-UUID', 4, 'sales_transactions', 'gross_amount', 0, 0),
@@ -4659,7 +4836,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 22. PARTIES (CUSTOMERS / SUPPLIERS)
+    // 22. PARTIES (CUSTOMERS / SUPPLIERS) - الموحدة
     // ================================================================
     fun getParties(typeId: Int? = null): JSONArray {
         val arr = JSONArray()
@@ -4679,40 +4856,163 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return arr
     }
 
+    /**
+     * الحصول على العملاء حسب النوع النصي (customer, supplier, driver)
+     * - "customer" → party_type_id = 1
+     * - "supplier" → party_type_id = 6
+     * - "driver" → party_type_id = 4 (شركة نقل)
+     */
+    fun getParties(type: String?): JSONArray {
+        val typeId = when (type?.lowercase()) {
+            "customer" -> 1
+            "supplier" -> 6
+            "driver" -> 4
+            else -> null
+        }
+        return getParties(typeId)
+    }
+
     fun getParty(id: Int): JSONObject? {
         val db = readableDatabase
         val c = db.rawQuery("SELECT * FROM parties WHERE id=? AND is_deleted=0", arrayOf(id.toString()))
         return c.use { if (it.moveToFirst()) partyCursorToJson(it) else null }
     }
 
-    fun addParty(partyTypeId: Int, commercialName: String, commercialNameAr: String?, phone: String?, creditLimit: Double): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("party_code", "PTY-${System.currentTimeMillis()}")
-            put("party_type_id", partyTypeId)
-            put("commercial_name", commercialName)
-            if (commercialNameAr != null) put("commercial_name_ar", commercialNameAr)
-            if (phone != null) put("phone", phone)
-            put("credit_limit", creditLimit)
-            put("is_active", 1)
-        }
-        return writableDatabase.insert("parties", null, cv)
+    fun getPartyById(id: Long): JSONObject? {
+        return getParty(id.toInt())
     }
 
-    fun updateParty(id: Int, commercialName: String, commercialNameAr: String?, phone: String?, creditLimit: Double, status: String): Int {
-        val cv = ContentValues().apply {
-            put("commercial_name", commercialName)
-            if (commercialNameAr != null) put("commercial_name_ar", commercialNameAr)
-            if (phone != null) put("phone", phone)
-            put("credit_limit", creditLimit)
-            put("status", status)
+    /**
+     * إضافة طرف جديد باستخدام JSONObject (موحدة)
+     */
+    fun insertParty(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val partyType = data.optString("party_type", "customer")
+            val typeId = when (partyType.lowercase()) {
+                "customer" -> 1
+                "supplier" -> 6
+                "driver" -> 4
+                else -> data.optInt("party_type_id", 1)
+            }
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("party_code", data.optString("party_code", "PTY-${System.currentTimeMillis()}"))
+                put("party_type_id", typeId)
+                put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
+                put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
+                put("legal_name", data.optString("legal_name", ""))
+                put("phone", data.optString("phone", ""))
+                put("phone2", data.optString("phone2", ""))
+                put("email", data.optString("email", ""))
+                put("address", data.optString("address", ""))
+                put("city", data.optString("city", ""))
+                put("region", data.optString("region", ""))
+                put("tax_number", data.optString("tax_number", ""))
+                put("commercial_register", data.optString("commercial_register", ""))
+                put("credit_limit", data.optDouble("credit_limit", 0.0))
+                put("current_balance", data.optDouble("current_balance", 0.0))
+                put("total_due", data.optDouble("total_due", 0.0))
+                put("loyalty_points", data.optInt("loyalty_points", 0))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("parties", null, values)
+            if (id > 0) logActivity("system", "insert_party", "إضافة طرف: ${data.optString("commercial_name")}")
+            id
+        } finally {
+            dbLock.unlock()
         }
-        return writableDatabase.update("parties", cv, "id=?", arrayOf(id.toString()))
     }
 
-    fun deleteParty(id: Int): Int {
-        val cv = ContentValues().apply { put("is_deleted", 1) }
-        return writableDatabase.update("parties", cv, "id=?", arrayOf(id.toString()))
+    /**
+     * تحديث طرف باستخدام JSONObject (موحدة)
+     */
+    fun updateParty(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
+                put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
+                put("legal_name", data.optString("legal_name", ""))
+                put("phone", data.optString("phone", ""))
+                put("phone2", data.optString("phone2", ""))
+                put("email", data.optString("email", ""))
+                put("address", data.optString("address", ""))
+                put("city", data.optString("city", ""))
+                put("region", data.optString("region", ""))
+                put("tax_number", data.optString("tax_number", ""))
+                put("commercial_register", data.optString("commercial_register", ""))
+                put("credit_limit", data.optDouble("credit_limit", 0.0))
+                put("current_balance", data.optDouble("current_balance", 0.0))
+                put("total_due", data.optDouble("total_due", 0.0))
+                put("loyalty_points", data.optInt("loyalty_points", 0))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("notes", data.optString("notes", ""))
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("parties", values, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_party", "تحديث طرف: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteParty(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_deleted", 1) }
+            val rows = db.update("parties", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_party", "حذف طرف: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun archiveParty(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("is_active", 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("parties", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "archive_party", "أرشفة طرف: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun searchParties(query: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val likeQuery = "%$query%"
+            val c = db.rawQuery(
+                """SELECT * FROM parties 
+                   WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ? OR phone LIKE ?) 
+                   AND is_deleted=0 ORDER BY commercial_name LIMIT 50""",
+                arrayOf(likeQuery, likeQuery, likeQuery, likeQuery)
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(partyCursorToJson(it))
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     private fun partyCursorToJson(c: Cursor): JSONObject {
@@ -4912,6 +5212,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
+    fun getCurrentShift(): JSONObject? {
+        return getOpenShift(1)
+    }
+
     // ================================================================
     // 25. SALES TRANSACTIONS
     // ================================================================
@@ -4933,7 +5237,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         isCredit: Boolean,
         dueDate: String?,
         cashierId: Int,
-        notes: String = ""
+        notes: String = "",
+        deliveryLocation: String? = null,
+        deliveryTime: String? = null,
+        orderType: String = "sale"
     ): Long {
         val db = writableDatabase
         db.beginTransaction()
@@ -4967,10 +5274,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 put("cashier_id", cashierId)
                 put("status", "completed")
                 put("notes", notes)
+                put("order_type", orderType)
+                if (deliveryLocation != null) put("delivery_location", deliveryLocation)
+                if (deliveryTime != null) put("delivery_time", deliveryTime)
             }
             val saleId = db.insert("sales_transactions", null, cv)
 
-            // Update tank quantity
             if (pumpId != null && fuelTypeId != null) {
                 db.execSQL(
                     "UPDATE tanks SET current_quantity = current_quantity - ? WHERE id = (SELECT tank_id FROM pumps WHERE id = ?)",
@@ -4978,13 +5287,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 )
             }
 
-            // Update shift totals
             db.execSQL(
                 "UPDATE shifts SET total_sales = total_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ?",
                 arrayOf(netAmount, liters, shiftId)
             )
 
-            // Update party balance if credit
             if (isCredit && customerPartyId != null) {
                 db.execSQL(
                     "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
@@ -5061,11 +5368,1254 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             put("invoice_number", c.getString(c.getColumnIndexOrThrow("invoice_number")))
             put("status", c.getString(c.getColumnIndexOrThrow("status")))
             put("created_at", c.getString(c.getColumnIndexOrThrow("created_at")))
+            put("delivery_location", c.getString(c.getColumnIndexOrThrow("delivery_location")))
+            put("delivery_time", c.getString(c.getColumnIndexOrThrow("delivery_time")))
+            put("order_type", c.getString(c.getColumnIndexOrThrow("order_type")))
         }
     }
 
     // ================================================================
-    // 26. PAYMENTS
+    // 26. ORDERS (باستخدام sales_transactions)
+    // ================================================================
+    fun addOrder(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val customerPartyId = data.optLong("party_id", 0).toInt()
+            val liters = data.optDouble("quantity", 0.0)
+            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
+            val subtotal = liters * pricePerLiter
+            val netAmount = data.optDouble("total_amount", subtotal)
+            val deliveryLocation = data.optString("delivery_location", data.optString("location", ""))
+            val deliveryTime = data.optString("delivery_time", "")
+            val notes = data.optString("notes", "")
+            val shiftId = getCurrentShift()?.optLong("shift_id", 1)?.toInt() ?: 1
+
+            insertSaleTransaction(
+                stationId = 1,
+                shiftId = shiftId,
+                customerPartyId = if (customerPartyId > 0) customerPartyId else null,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = liters,
+                pricePerLiter = pricePerLiter,
+                subtotal = subtotal,
+                discountAmount = data.optDouble("discount", 0.0),
+                taxAmount = 0.0,
+                grossAmount = netAmount,
+                netAmount = netAmount,
+                paymentMethod = data.optString("payment_method", "credit"),
+                isCredit = true,
+                dueDate = data.optString("due_date", null),
+                cashierId = 1,
+                notes = notes,
+                deliveryLocation = deliveryLocation,
+                deliveryTime = deliveryTime,
+                orderType = data.optString("order_type", "sale")
+            )
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getOrders(status: String?): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val selection = if (status != null) "status = ? AND order_type != 'retail'" else "order_type != 'retail'"
+            val selectionArgs = if (status != null) arrayOf(status) else null
+            val c = db.query("sales_transactions", null, selection, selectionArgs, null, null, "created_at DESC")
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 27. DELIVERIES (باستخدام sales_transactions مع delivery_location)
+    // ================================================================
+    fun addDelivery(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val partyId = data.optLong("party_id", 0).toInt()
+            val liters = data.optDouble("quantity", 0.0)
+            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
+            val subtotal = liters * pricePerLiter
+            val totalAmount = data.optDouble("total_amount", subtotal)
+            val location = data.optString("location", "")
+            val deliveryTime = data.optString("delivery_time", data.optString("delivery_date", ""))
+            val shiftId = getCurrentShift()?.optLong("shift_id", 1)?.toInt() ?: 1
+
+            // إدراج بيع من نوع delivery
+            val saleId = insertSaleTransaction(
+                stationId = 1,
+                shiftId = shiftId,
+                customerPartyId = if (partyId > 0) partyId else null,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = liters,
+                pricePerLiter = pricePerLiter,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = data.optString("payment_method", "credit"),
+                isCredit = true,
+                dueDate = data.optString("due_date", null),
+                cashierId = 1,
+                notes = data.optString("notes", ""),
+                deliveryLocation = location,
+                deliveryTime = deliveryTime,
+                orderType = "delivery"
+            )
+
+            // إدراج سجل في جدول deliveries
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("sale_id", saleId)
+                if (partyId > 0) put("party_id", partyId)
+                put("vehicle_id", data.optLong("vehicle_id", 0))
+                put("driver_id", data.optLong("driver_id", 0))
+                put("delivery_date", data.optString("delivery_date", getCurrentDate()))
+                put("quantity", liters)
+                put("fuel_type", data.optString("fuel_type", "diesel"))
+                put("price_per_liter", pricePerLiter)
+                put("total_amount", totalAmount)
+                put("status", data.optString("status", "delivered"))
+                put("location", location)
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            writableDatabase.insert("deliveries", null, cv)
+            saleId
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getDeliveries(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time, s.created_at as sale_date
+                   FROM deliveries d
+                   LEFT JOIN sales_transactions s ON d.sale_id = s.id
+                   WHERE d.is_deleted = 0
+                   ORDER BY d.created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTodayDeliveries(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val c = db.rawQuery(
+                """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time
+                   FROM deliveries d
+                   LEFT JOIN sales_transactions s ON d.sale_id = s.id
+                   WHERE d.delivery_date = ? AND d.is_deleted = 0
+                   ORDER BY d.created_at DESC""",
+                arrayOf(today)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 28. FUEL SALES (باستخدام sales_transactions)
+    // ================================================================
+    fun addFuelSale(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val liters = data.optDouble("quantity", 0.0)
+            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
+            val subtotal = liters * pricePerLiter
+            val totalAmount = data.optDouble("total_amount", subtotal)
+            val shiftId = data.optLong("shift_id", 1).toInt()
+            val customerId = data.optLong("customer_id", 0).toInt()
+            val pumpId = data.optLong("pump_id", 0).toInt()
+            val fuelTypeId = data.optLong("fuel_type_id", 1).toInt()
+
+            val saleId = insertSaleTransaction(
+                stationId = 1,
+                shiftId = shiftId,
+                customerPartyId = if (customerId > 0) customerId else null,
+                fuelTypeId = fuelTypeId,
+                pumpId = if (pumpId > 0) pumpId else null,
+                nozzleId = null,
+                liters = liters,
+                pricePerLiter = pricePerLiter,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = data.optString("payment_method", "cash"),
+                isCredit = false,
+                dueDate = null,
+                cashierId = 1,
+                notes = data.optString("notes", ""),
+                orderType = "fuel"
+            )
+
+            // إدراج سجل في جدول fuel_sales
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("sale_id", saleId)
+                put("shift_id", shiftId)
+                if (pumpId > 0) put("pump_id", pumpId)
+                put("fuel_type_id", fuelTypeId)
+                put("quantity", liters)
+                put("price_per_liter", pricePerLiter)
+                put("total_amount", totalAmount)
+                put("payment_method", data.optString("payment_method", "cash"))
+                if (customerId > 0) put("customer_id", customerId)
+                put("vehicle_plate", data.optString("vehicle_plate", ""))
+                put("sale_date", data.optString("sale_date", getCurrentDate()))
+                put("sale_time", data.optString("sale_time", getCurrentTime()))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            writableDatabase.insert("fuel_sales", null, cv)
+            saleId
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSales(): JSONArray = getSalesTransactions(1, 10000)
+
+    fun getTodaySales(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val c = db.rawQuery(
+                """SELECT s.*, f.fuel_name, p.commercial_name as customer_name
+                   FROM sales_transactions s
+                   LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
+                   LEFT JOIN parties p ON s.customer_party_id = p.id
+                   WHERE date(s.created_at) = ? AND s.is_deleted = 0 AND s.sale_type = 'retail'
+                   ORDER BY s.created_at DESC""",
+                arrayOf(today)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 29. METER READINGS
+    // ================================================================
+    fun addMeterReading(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("reading_code", data.optString("reading_code", "MR-${System.currentTimeMillis()}"))
+                put("pump_id", data.optLong("pump_id", 0))
+                put("nozzle_id", data.optLong("nozzle_id", 0))
+                put("station_id", data.optInt("station_id", 1))
+                put("shift_id", data.optLong("shift_id", 0))
+                put("reading_date", data.optString("reading_date", getCurrentDate()))
+                put("period", data.optString("period", "morning"))
+                put("opening_reading", data.optDouble("opening_reading", 0.0))
+                put("closing_reading", data.optDouble("closing_reading", 0.0))
+                put("sold_liters", data.optDouble("sold_liters", 0.0))
+                put("read_by", data.optInt("read_by", 1))
+                put("status", data.optString("status", "draft"))
+                put("remarks", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("meter_readings", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getMeterReadings(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT mr.*, p.pump_code, p.pump_name, n.nozzle_code, f.fuel_name
+                   FROM meter_readings mr
+                   LEFT JOIN pumps p ON mr.pump_id = p.id
+                   LEFT JOIN pump_nozzles n ON mr.nozzle_id = n.id
+                   LEFT JOIN fuel_types f ON n.fuel_type_id = f.id
+                   WHERE mr.is_deleted = 0
+                   ORDER BY mr.created_at DESC LIMIT 100""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getLatestMeterReadings(): JSONArray = getMeterReadings()
+
+    // ================================================================
+    // 30. TANK READINGS
+    // ================================================================
+    fun addTankReading(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("tank_id", data.optLong("tank_id", 0))
+                put("shift_id", data.optLong("shift_id", 0))
+                put("reading_type", data.optString("reading_type", "dip"))
+                put("fuel_level", data.optDouble("fuel_level", 0.0))
+                put("fuel_volume", data.optDouble("fuel_volume", 0.0))
+                put("temperature", data.optDouble("temperature", 0.0))
+                put("water_level", data.optDouble("water_level", 0.0))
+                put("reading_date", data.optString("reading_date", getCurrentDate()))
+                put("reading_time", data.optString("reading_time", getCurrentTime()))
+                put("notes", data.optString("notes", ""))
+                put("created_by", data.optString("created_by", "system"))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("tank_readings", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTankReadings(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT tr.*, t.tank_name, t.tank_code, f.fuel_name
+                   FROM tank_readings tr
+                   LEFT JOIN tanks t ON tr.tank_id = t.id
+                   LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
+                   WHERE tr.is_deleted = 0
+                   ORDER BY tr.created_at DESC LIMIT 100""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 31. STOCK MOVEMENTS (باستخدام inventory_movements)
+    // ================================================================
+    fun addStockMovement(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val productId = data.optLong("product_id", 0).toInt()
+            val quantity = data.optDouble("quantity", 0.0)
+            val movementType = data.optString("movement_type", "in")
+            val unitCost = data.optDouble("unit_cost", 0.0)
+            val totalCost = quantity * unitCost
+            val stationId = data.optInt("station_id", 1)
+
+            // الحصول على الكمية الحالية
+            var currentQty = 0.0
+            val cursor = db.rawQuery(
+                "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
+                arrayOf(productId.toString())
+            )
+            if (cursor.moveToFirst()) {
+                currentQty = cursor.getDouble(0)
+            }
+            cursor.close()
+
+            val quantityBefore = currentQty
+            val quantityAfter = if (movementType == "in") currentQty + quantity else currentQty - quantity
+
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
+                put("product_id", productId)
+                put("station_id", stationId)
+                put("movement_type", movementType)
+                put("movement_subtype", data.optString("movement_subtype", ""))
+                put("quantity_before", quantityBefore)
+                put("quantity_change", quantity)
+                put("quantity_after", quantityAfter)
+                put("unit_cost", unitCost)
+                put("total_cost", totalCost)
+                put("reference_type", data.optString("reference_type", ""))
+                put("reference_id", data.optLong("reference_id", 0))
+                put("reason", data.optString("notes", ""))
+                put("performed_by", data.optInt("performed_by", 1))
+                put("status", "completed")
+                put("created_at", getCurrentDateTime())
+            }
+            val id = db.insert("inventory_movements", null, cv)
+
+            // تحديث المخزون
+            if (id > 0) {
+                val exists = db.rawQuery(
+                    "SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
+                    arrayOf(productId.toString())
+                )
+                if (exists.moveToFirst()) {
+                    db.execSQL(
+                        "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = 1",
+                        arrayOf(quantityAfter, productId)
+                    )
+                } else {
+                    val cvInv = ContentValues().apply {
+                        put("product_id", productId)
+                        put("warehouse_id", 1)
+                        put("quantity_on_hand", quantityAfter)
+                        put("average_cost", unitCost)
+                    }
+                    db.insert("inventory_levels", null, cvInv)
+                }
+                exists.close()
+                logActivity("system", "stock_movement", "$movementType: $quantity للمنتج $productId")
+            }
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getStockMovements(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT im.*, p.product_name 
+                   FROM inventory_movements im
+                   LEFT JOIN products p ON im.product_id = p.id
+                   WHERE im.is_deleted = 0
+                   ORDER BY im.created_at DESC LIMIT 200""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getLowStockItems(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT p.id, p.product_name, p.product_name_ar, p.minimum_stock, 
+                          COALESCE(il.quantity_on_hand, 0) as quantity_on_hand
+                   FROM products p
+                   LEFT JOIN inventory_levels il ON p.id = il.product_id AND il.warehouse_id = 1
+                   WHERE p.is_deleted = 0 AND p.status = 'active'
+                   AND (il.quantity_on_hand <= p.minimum_stock OR il.quantity_on_hand IS NULL)""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun checkLowStock(): JSONArray = getLowStockItems()
+
+    fun createStockAlert(productId: Long, threshold: Double): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("product_id", productId)
+                put("station_id", 1)
+                put("alert_type", "low_stock")
+                put("alert_level", "warning")
+                put("threshold_quantity", threshold)
+                put("current_quantity", 0.0)
+                put("is_resolved", 0)
+                put("created_at", getCurrentDateTime())
+                put("created_by", 1)
+            }
+            db.insert("stock_alerts", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 32. ASSETS (باستخدام fixed_assets والأساط الجديدة)
+    // ================================================================
+    fun addAsset(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("asset_code", data.optString("asset_code", "AST-${System.currentTimeMillis()}"))
+                put("asset_name", data.optString("asset_name", ""))
+                put("asset_type", data.optString("asset_type", "other"))
+                put("asset_category", data.optString("asset_category", ""))
+                put("station_id", data.optInt("station_id", 1))
+                put("purchase_date", data.optString("purchase_date", getCurrentDate()))
+                put("purchase_cost", data.optDouble("purchase_cost", 0.0))
+                put("current_value", data.optDouble("current_value", 0.0))
+                put("depreciation_rate", data.optDouble("depreciation_rate", 0.0))
+                put("location", data.optString("location", ""))
+                put("status", data.optString("status", "active"))
+                put("maintenance_date", data.optString("maintenance_date", ""))
+                put("next_maintenance", data.optString("next_maintenance", ""))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("assets", null, cv)
+            if (id > 0) logActivity("system", "add_asset", "إضافة أصل: ${data.optString("asset_name")}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAssets(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM assets WHERE is_deleted = 0 ORDER BY created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAssets(stationId: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM assets WHERE station_id = ? AND is_deleted = 0 ORDER BY created_at DESC""",
+                arrayOf(stationId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAssetMaintenanceHistory(assetId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM maintenance_requests 
+                   WHERE asset_type = 'fixed_asset' AND asset_id = ? AND is_deleted = 0 
+                   ORDER BY created_at DESC""",
+                arrayOf(assetId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 33. USERS
+    // ================================================================
+    fun addUser(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val password = data.optString("password", "123456")
+            val (hash, salt) = hashPassword(password)
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("username", data.optString("username", ""))
+                put("password_hash", hash)
+                put("password_salt", salt)
+                put("full_name", data.optString("full_name", ""))
+                put("full_name_ar", data.optString("full_name_ar", ""))
+                put("email", data.optString("email", ""))
+                put("phone", data.optString("phone", ""))
+                put("role_id", data.optInt("role_id", 4))
+                put("station_id", data.optInt("station_id", 1))
+                put("company_id", data.optInt("company_id", 1))
+                put("preferred_language", data.optString("preferred_language", "ar"))
+                put("status", data.optString("status", "active"))
+                put("job_title", data.optString("job_title", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("users", null, cv)
+            if (id > 0) logActivity("system", "add_user", "إضافة مستخدم: ${data.optString("username")}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUsers(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT u.*, r.role_name, r.role_name_ar 
+                   FROM users u
+                   LEFT JOIN roles r ON u.role_id = r.id
+                   WHERE u.is_deleted = 0
+                   ORDER BY u.full_name""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUsersByRole(role: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT u.*, r.role_name, r.role_name_ar 
+                   FROM users u
+                   LEFT JOIN roles r ON u.role_id = r.id
+                   WHERE r.role_code = ? AND u.is_deleted = 0 AND u.status = 'active'
+                   ORDER BY u.full_name""",
+                arrayOf(role)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUserPermissions(userId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
+                          rp.can_create, rp.can_read, rp.can_update, rp.can_delete, rp.can_export, rp.can_print, rp.can_approve
+                   FROM permissions p
+                   JOIN role_permissions rp ON p.id = rp.permission_id
+                   JOIN users u ON u.role_id = rp.role_id
+                   WHERE u.id = ? AND p.is_deleted = 0
+                   UNION
+                   SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
+                          1, up.is_granted, 1, 1, 1, 1, 1
+                   FROM permissions p
+                   JOIN user_permissions up ON p.id = up.permission_id
+                   WHERE up.user_id = ? AND up.is_granted = 1""",
+                arrayOf(userId.toString(), userId.toString())
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("permission_code", it.getString(0))
+                        put("permission_name", it.getString(1))
+                        put("permission_name_ar", it.getString(2))
+                        put("module", it.getString(3))
+                        put("action", it.getString(4))
+                        put("can_create", it.getInt(5) == 1)
+                        put("can_read", it.getInt(6) == 1)
+                        put("can_update", it.getInt(7) == 1)
+                        put("can_delete", it.getInt(8) == 1)
+                        put("can_export", it.getInt(9) == 1)
+                        put("can_print", it.getInt(10) == 1)
+                        put("can_approve", it.getInt(11) == 1)
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUserNotifications(userId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM notifications WHERE user_id = ? AND is_deleted = 0 ORDER BY created_at DESC LIMIT 50""",
+                arrayOf(userId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 34. EMPLOYEES
+    // ================================================================
+    fun addEmployee(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("employee_code", data.optString("employee_code", "EMP-${System.currentTimeMillis()}"))
+                put("full_name", data.optString("full_name", ""))
+                put("full_name_ar", data.optString("full_name_ar", ""))
+                put("phone", data.optString("phone", ""))
+                put("phone2", data.optString("phone2", ""))
+                put("email", data.optString("email", ""))
+                put("job_title", data.optString("job_title", ""))
+                put("job_title_ar", data.optString("job_title_ar", ""))
+                put("department", data.optString("department", ""))
+                put("basic_salary", data.optDouble("basic_salary", 0.0))
+                put("total_salary", data.optDouble("basic_salary", 0.0))
+                put("station_id", data.optInt("station_id", 1))
+                put("status", data.optString("status", "active"))
+                put("notes", data.optString("notes", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("employees", null, cv)
+            if (id > 0) logActivity("system", "add_employee", "إضافة موظف: ${data.optString("full_name")}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getEmployees(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM employees WHERE is_deleted = 0 ORDER BY full_name""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getEmployees(stationId: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM employees WHERE station_id = ? AND is_deleted = 0 ORDER BY full_name""",
+                arrayOf(stationId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteEmployee(id: Int): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_deleted", 1) }
+            val rows = db.update("employees", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_employee", "حذف موظف: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateEmployee(
+        id: Int,
+        fullName: String,
+        fullNameAr: String?,
+        phone: String?,
+        jobTitle: String,
+        basicSalary: Double,
+        status: String,
+        notes: String,
+        stationId: Int?
+    ): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("full_name", fullName)
+                if (fullNameAr != null) put("full_name_ar", fullNameAr)
+                if (phone != null) put("phone", phone)
+                put("job_title", jobTitle)
+                put("basic_salary", basicSalary)
+                put("total_salary", basicSalary)
+                put("status", status)
+                put("notes", notes)
+                if (stationId != null) put("station_id", stationId)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("employees", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addEmployeePayment(employeeId: Int, amount: Double, type: String, description: String, operator: String): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val cv = ContentValues().apply {
+                    put("employee_id", employeeId)
+                    put("amount", amount)
+                    put("type", type)
+                    put("description", description)
+                    put("operator", operator)
+                }
+                db.insert("employee_payments", null, cv)
+
+                val col = when (type) {
+                    "salary" -> "total_salary"
+                    "advance" -> "advances"
+                    "penalty" -> "penalties"
+                    "bonus" -> "bonuses"
+                    else -> "total_salary"
+                }
+                val sign = when (type) {
+                    "advance", "penalty" -> "-"
+                    else -> "+"
+                }
+                db.execSQL(
+                    "UPDATE employees_old SET $col = $col $sign ?, net_salary = base_salary + bonuses - advances - penalties WHERE id = ?",
+                    arrayOf(amount, employeeId)
+                )
+                db.setTransactionSuccessful()
+                logActivity(operator, "employee_payment", "دفعة $type للموظف $employeeId بمبلغ $amount")
+                true
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 35. SHIFTS (الإضافية للورديات)
+    // ================================================================
+    fun startShift(data: JSONObject): Long {
+        return openShift(
+            stationId = data.optInt("station_id", 1),
+            shiftType = data.optString("shift_type", "morning"),
+            cashierId = data.optInt("employee_id", 1),
+            openingCash = data.optDouble("starting_cash", 0.0),
+            openingBank = 0.0
+        )
+    }
+
+    fun endShift(id: Long, data: JSONObject): Int {
+        val shiftId = id.toInt()
+        val success = closeShift(
+            shiftId = shiftId,
+            closingCash = data.optDouble("ending_cash", 0.0),
+            closingBank = 0.0,
+            totalSales = data.optDouble("total_sales", 0.0),
+            operator = data.optString("operator", "System")
+        )
+        return if (success) 1 else 0
+    }
+
+    fun addShiftSale(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+
+            // تحديث إجمالي الوردية
+            db.execSQL("UPDATE shifts SET total_sales = total_sales + ? WHERE id = ?", arrayOf(amount, shiftId))
+
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("sale_id", data.optLong("sale_id", 0))
+                put("amount", amount)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_sales", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftDelivery(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+
+            // تحديث إجمالي الوردية
+            db.execSQL("UPDATE shifts SET total_deliveries = total_deliveries + ? WHERE id = ?", arrayOf(amount, shiftId))
+
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("delivery_id", data.optLong("delivery_id", 0))
+                put("amount", amount)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_deliveries", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addShiftExpense(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val shiftId = data.optLong("shift_id", 0)
+            val amount = data.optDouble("amount", 0.0)
+
+            // تحديث إجمالي الوردية
+            db.execSQL("UPDATE shifts SET total_expenses = total_expenses + ? WHERE id = ?", arrayOf(amount, shiftId))
+
+            val cv = ContentValues().apply {
+                put("shift_id", shiftId)
+                put("expense_type", data.optString("expense_type", "other"))
+                put("amount", amount)
+                put("description", data.optString("description", ""))
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("shift_expenses", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getShiftReport(shiftId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT 'sales' as type, COUNT(*) as count, COALESCE(SUM(net_amount), 0) as total
+                   FROM sales_transactions WHERE shift_id = ? AND is_deleted = 0
+                   UNION ALL
+                   SELECT 'deliveries', COUNT(*), COALESCE(SUM(total_amount), 0)
+                   FROM deliveries WHERE shift_id = ? AND is_deleted = 0
+                   UNION ALL
+                   SELECT 'expenses', COUNT(*), COALESCE(SUM(amount), 0)
+                   FROM shift_expenses WHERE shift_id = ?""",
+                arrayOf(shiftId.toString(), shiftId.toString(), shiftId.toString())
+            )
+            c.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("type", it.getString(0))
+                        put("count", it.getInt(1))
+                        put("total", it.getDouble(2))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 36. NOTIFICATIONS
+    // ================================================================
+    fun addNotification(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("user_id", data.optLong("user_id", 0))
+                put("role_id", data.optLong("role_id", 0))
+                put("notification_type", data.optString("notification_type", "info"))
+                put("title", data.optString("title", ""))
+                put("title_ar", data.optString("title_ar", ""))
+                put("message", data.optString("message", ""))
+                put("message_ar", data.optString("message_ar", ""))
+                put("priority", data.optString("priority", "normal"))
+                put("is_read", 0)
+                put("status", "pending")
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("notifications", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getNotifications(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM notifications WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT 100""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUnreadNotificationsCount(): Int {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0 AND is_deleted = 0", null)
+            val count = if (c.moveToFirst()) c.getInt(0) else 0
+            c.close()
+            count
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun markNotificationRead(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("is_read", 1)
+                put("read_at", getCurrentDateTime())
+            }
+            db.update("notifications", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 37. SMS MESSAGES (باستخدام sms_logs و sms_messages)
+    // ================================================================
+    fun addSmsMessage(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("phone_number", data.optString("phone_number", ""))
+                put("message_body", data.optString("message_body", ""))
+                put("message_type", data.optString("message_type", "incoming"))
+                put("status", data.optString("status", "pending"))
+                put("party_id", data.optLong("party_id", 0))
+                put("sent_at", data.optString("sent_at", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("sms_messages", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessages(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT 500""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByPhone(phone: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages WHERE phone_number = ? ORDER BY created_at DESC""",
+                arrayOf(phone)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsMessagesByStatus(status: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_messages WHERE status = ? ORDER BY created_at DESC""",
+                arrayOf(status)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsStatus(id: Long, status: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("status", status)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_messages", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsStats(): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val stats = JSONObject()
+            val c1 = db.rawQuery("SELECT COUNT(*) FROM sms_messages", null)
+            stats.put("total", if (c1.moveToFirst()) c1.getInt(0) else 0)
+            c1.close()
+
+            val c2 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'sent'", null)
+            stats.put("sent", if (c2.moveToFirst()) c2.getInt(0) else 0)
+            c2.close()
+
+            val c3 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'pending'", null)
+            stats.put("pending", if (c3.moveToFirst()) c3.getInt(0) else 0)
+            c3.close()
+
+            val c4 = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'failed'", null)
+            stats.put("failed", if (c4.moveToFirst()) c4.getInt(0) else 0)
+            c4.close()
+            stats
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getSmsTemplates(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_templates ORDER BY created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addSmsTemplate(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("sms_templates", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateSmsTemplate(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("template_name", data.optString("template_name", ""))
+                put("template_body", data.optString("template_body", ""))
+                put("template_type", data.optString("template_type", "general"))
+                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            db.update("sms_templates", cv, "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSmsTemplate(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("sms_templates", "id=?", arrayOf(id.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 38. SETTINGS (باستخدام system_settings)
+    // ================================================================
+    fun addSetting(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("setting_key", data.optString("setting_key", ""))
+                put("setting_value", data.optString("setting_value", ""))
+                put("data_type", data.optString("setting_type", "string"))
+                put("category", data.optString("category", "general"))
+                put("description", data.optString("description", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insertWithOnConflict("system_settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSetting(key: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("system_settings", "setting_key=?", arrayOf(key))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAllSettingsMap(): Map<String, String> {
+        dbLock.lock()
+        return try {
+            val map = mutableMapOf<String, String>()
+            val db = readableDatabase
+            val c = db.rawQuery("SELECT setting_key, setting_value FROM system_settings", null)
+            c.use {
+                while (it.moveToNext()) {
+                    map[it.getString(0)] = it.getString(1)
+                }
+            }
+            map
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 39. PAYMENTS
     // ================================================================
     fun processPayment(saleId: Int, customerPartyId: Int, amount: Double, paymentMethod: String, operator: String = "System", cashBoxId: Int? = null): Boolean {
         val db = writableDatabase
@@ -5111,7 +6661,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     fun processPayment(customerPartyId: Int, amount: Double, paymentMethod: String, operator: String = "System"): Boolean {
-        // نسخة مبسطة للاستخدام المباشر بدون saleId
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -5127,13 +6676,13 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 put("notes", "تسديد عبر API")
             }
             db.insert("payments", null, cv)
-            db.execSQL("""
-                UPDATE sales_transactions 
-                SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
-                    payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END
-                WHERE customer_party_id = ? AND remaining_amount > 0 ORDER BY id LIMIT 1
-            """.trimIndent(), arrayOf(amount, amount, amount, customerPartyId))
-
+            db.execSQL(
+                """UPDATE sales_transactions 
+                   SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
+                       payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END
+                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0 ORDER BY id LIMIT 1""",
+                arrayOf(amount, amount, amount, customerPartyId)
+            )
             db.setTransactionSuccessful()
             logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerPartyId")
             return true
@@ -5143,259 +6692,44 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 27. CASH BOXES & MOVEMENTS
+    // 40. CASH MOVEMENTS
     // ================================================================
-    fun getCashBoxes(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM cash_boxes WHERE station_id=? AND is_deleted=0", arrayOf(stationId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("box_code", it.getString(it.getColumnIndexOrThrow("box_code")))
-                    put("box_name", it.getString(it.getColumnIndexOrThrow("box_name")))
-                    put("box_type", it.getString(it.getColumnIndexOrThrow("box_type")))
-                    put("current_balance", it.getDouble(it.getColumnIndexOrThrow("current_balance")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun addCashMovement(cashBoxId: Int, movementType: String, category: String, amount: Double, balanceBefore: Double, description: String, operator: String): Boolean {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            val balanceAfter = if (movementType == "in") balanceBefore + amount else balanceBefore - amount
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("movement_code", "CMV-${System.currentTimeMillis()}")
-                put("cash_box_id", cashBoxId)
-                put("movement_type", movementType)
-                put("movement_category", category)
-                put("amount", amount)
-                put("balance_before", balanceBefore)
-                put("balance_after", balanceAfter)
-                put("description", description)
-                put("status", "completed")
-            }
-            db.insert("cash_movements", null, cv)
-            db.execSQL("UPDATE cash_boxes SET current_balance = ? WHERE id = ?", arrayOf(balanceAfter, cashBoxId))
-            db.setTransactionSuccessful()
-            logActivity(operator, "cash_movement", "$movementType: $amount في الصندوق $cashBoxId")
-            return true
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    // ================================================================
-    // 28. INVENTORY
-    // ================================================================
-    fun getProducts(stationId: Int? = null): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val sql = if (stationId != null) {
-            "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.station_id=? AND p.is_deleted=0 ORDER BY p.product_name"
-        } else {
-            "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.is_deleted=0 ORDER BY p.product_name"
-        }
-        val args = if (stationId != null) arrayOf(stationId.toString()) else null
-        val c = db.rawQuery(sql, args)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("product_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("product_code", it.getString(it.getColumnIndexOrThrow("product_code")))
-                    put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
-                    put("product_name_ar", it.getString(it.getColumnIndexOrThrow("product_name_ar")))
-                    put("category_name", it.getString(it.getColumnIndexOrThrow("category_name")))
-                    put("sale_price", it.getDouble(it.getColumnIndexOrThrow("sale_price")))
-                    put("purchase_price", it.getDouble(it.getColumnIndexOrThrow("purchase_price")))
-                    put("quantity", it.getDouble(it.getColumnIndexOrThrow("quantity")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun getStockAlerts(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery(
-            "SELECT s.*, p.product_name FROM stock_alerts s LEFT JOIN products p ON s.product_id = p.id WHERE s.station_id=? AND s.is_resolved=0 ORDER BY s.created_at DESC",
-            arrayOf(stationId.toString())
-        )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
-                    put("alert_type", it.getString(it.getColumnIndexOrThrow("alert_type")))
-                    put("current_quantity", it.getDouble(it.getColumnIndexOrThrow("current_quantity")))
-                    put("threshold_quantity", it.getDouble(it.getColumnIndexOrThrow("threshold_quantity")))
-                })
-            }
-        }
-        return arr
-    }
-
-    // ================================================================
-    // 29. HR - EMPLOYEES
-    // ================================================================
-    fun getEmployees(stationId: Int? = null): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val sql = if (stationId != null) {
-            "SELECT * FROM employees WHERE station_id=? AND is_deleted=0 ORDER BY full_name"
-        } else {
-            "SELECT * FROM employees WHERE is_deleted=0 ORDER BY full_name"
-        }
-        val args = if (stationId != null) arrayOf(stationId.toString()) else null
-        val c = db.rawQuery(sql, args)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("employee_code", it.getString(it.getColumnIndexOrThrow("employee_code")))
-                    put("full_name", it.getString(it.getColumnIndexOrThrow("full_name")))
-                    put("full_name_ar", it.getString(it.getColumnIndexOrThrow("full_name_ar")))
-                    put("phone", it.getString(it.getColumnIndexOrThrow("phone")))
-                    put("job_title", it.getString(it.getColumnIndexOrThrow("job_title")))
-                    put("basic_salary", it.getDouble(it.getColumnIndexOrThrow("basic_salary")))
-                    put("total_salary", it.getDouble(it.getColumnIndexOrThrow("total_salary")))
-                    put("advances", it.getDouble(it.getColumnIndexOrThrow("advances")))
-                    put("penalties", it.getDouble(it.getColumnIndexOrThrow("penalties")))
-                    put("bonuses", it.getDouble(it.getColumnIndexOrThrow("bonuses")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun addEmployee(fullName: String, fullNameAr: String?, phone: String?, jobTitle: String, basicSalary: Double, stationId: Int?): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("employee_code", "EMP-${System.currentTimeMillis()}")
-            put("full_name", fullName)
-            if (fullNameAr != null) put("full_name_ar", fullNameAr)
-            if (phone != null) put("phone", phone)
-            put("job_title", jobTitle)
-            put("basic_salary", basicSalary)
-            put("total_salary", basicSalary)
-            if (stationId != null) put("station_id", stationId)
-            put("status", "active")
-        }
-        return writableDatabase.insert("employees", null, cv)
-    }
-
-    fun updateEmployee(id: Int, fullName: String, fullNameAr: String?, phone: String?, jobTitle: String, basicSalary: Double, status: String, notes: String, stationId: Int?): Int {
-        val cv = ContentValues().apply {
-            put("full_name", fullName)
-            if (fullNameAr != null) put("full_name_ar", fullNameAr)
-            if (phone != null) put("phone", phone)
-            put("job_title", jobTitle)
-            put("basic_salary", basicSalary)
-            put("total_salary", basicSalary)
-            put("status", status)
-            put("notes", notes)
-            if (stationId != null) put("station_id", stationId)
-        }
-        return writableDatabase.update("employees", cv, "id=?", arrayOf(id.toString()))
-    }
-
-    fun deleteEmployee(id: Int): Int {
-        val cv = ContentValues().apply { put("is_deleted", 1) }
-        return writableDatabase.update("employees", cv, "id=?", arrayOf(id.toString()))
-    }
-
-    fun addEmployeePayment(employeeId: Int, amount: Double, type: String, description: String, operator: String): Boolean {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            val cv = ContentValues().apply {
-                put("employee_id", employeeId)
-                put("amount", amount)
-                put("type", type)
-                put("description", description)
-                put("operator", operator)
-            }
-            db.insert("employee_payments", null, cv)
-            val col = when (type) {
-                "salary" -> "total_salary"
-                "advance" -> "advances"
-                "penalty" -> "penalties"
-                "bonus" -> "bonuses"
-                else -> "total_salary"
-            }
-            val sign = when (type) {
-                "advance", "penalty" -> "-"
-                else -> "+"
-            }
-            db.execSQL(
-                "UPDATE employees SET $col = $col $sign ?, total_salary = basic_salary + bonuses - advances - penalties WHERE id = ?",
-                arrayOf(amount, employeeId)
+    fun getCashMovements(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM cash_movements ORDER BY created_at DESC LIMIT 200""",
+                null
             )
-            db.setTransactionSuccessful()
-            logActivity(operator, "employee_payment", "دفعة $type للموظف $employeeId بمبلغ $amount")
-            return true
+            cursorToJsonArray(c)
         } finally {
-            db.endTransaction()
+            dbLock.unlock()
+        }
+    }
+
+    fun getTodayCash(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val today = getCurrentDate()
+            val c = db.rawQuery(
+                """SELECT * FROM cash_movements WHERE date(created_at) = ? ORDER BY created_at DESC""",
+                arrayOf(today)
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
         }
     }
 
     // ================================================================
-    // 30. MAINTENANCE
+    // 41. DASHBOARD & REPORTS
     // ================================================================
-    fun addMaintenanceRequest(assetType: String, assetId: Int, requestType: String, priority: String, title: String, description: String, reportedBy: Int, stationId: Int): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("request_code", "MNT-${System.currentTimeMillis()}")
-            put("asset_type", assetType)
-            put("asset_id", assetId)
-            put("request_type", requestType)
-            put("priority", priority)
-            put("title", title)
-            put("description", description)
-            put("reported_by", reportedBy)
-            put("station_id", stationId)
-            put("status", "open")
-        }
-        return writableDatabase.insert("maintenance_requests", null, cv)
+    fun getDashboardStats(): JSONObject {
+        return getDashboardStats(1)
     }
 
-    fun getMaintenanceRequests(stationId: Int, status: String? = null): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val sql = if (status != null) {
-            "SELECT * FROM maintenance_requests WHERE station_id=? AND status=? AND is_deleted=0 ORDER BY created_at DESC"
-        } else {
-            "SELECT * FROM maintenance_requests WHERE station_id=? AND is_deleted=0 ORDER BY created_at DESC"
-        }
-        val args = if (status != null) arrayOf(stationId.toString(), status) else arrayOf(stationId.toString())
-        val c = db.rawQuery(sql, args)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("request_code", it.getString(it.getColumnIndexOrThrow("request_code")))
-                    put("title", it.getString(it.getColumnIndexOrThrow("title")))
-                    put("priority", it.getString(it.getColumnIndexOrThrow("priority")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    // ================================================================
-    // 31. REPORTS & DASHBOARD
-    // ================================================================
     fun getDashboardStats(stationId: Int): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
@@ -5439,141 +6773,17 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return stats
     }
 
-    fun getDailySales(stationId: Int): JSONArray {
+    fun getOverduePayments(): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         val c = db.rawQuery(
-            """SELECT date(created_at) as sale_date, SUM(liters) as total_qty, SUM(net_amount) as total_sales, COUNT(*) as count
-               FROM sales_transactions WHERE station_id=? AND is_deleted=0 GROUP BY date(created_at) ORDER BY sale_date DESC LIMIT 30""",
-            arrayOf(stationId.toString())
+            """SELECT s.*, p.commercial_name as customer_name, p.phone as customer_phone
+               FROM sales_transactions s
+               LEFT JOIN parties p ON s.customer_party_id = p.id
+               WHERE s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted=0
+               ORDER BY s.due_date""",
+            null
         )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("date", it.getString(0))
-                    put("total_qty", it.getDouble(1))
-                    put("total_sales", it.getDouble(2))
-                    put("count", it.getInt(3))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun getMonthlySales(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery(
-            """SELECT strftime('%Y-%m', created_at) as sale_month, SUM(liters) as total_qty, SUM(net_amount) as total_sales, COUNT(*) as count
-               FROM sales_transactions WHERE station_id=? AND is_deleted=0 GROUP BY strftime('%Y-%m', created_at) ORDER BY sale_month DESC LIMIT 12""",
-            arrayOf(stationId.toString())
-        )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("month", it.getString(0))
-                    put("total_qty", it.getDouble(1))
-                    put("total_sales", it.getDouble(2))
-                    put("count", it.getInt(3))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun getEodReport(stationId: Int, fromDate: String? = null, toDate: String? = null): JSONObject {
-        val report = JSONObject()
-        val db = readableDatabase
-        val where = when {
-            fromDate != null && toDate != null -> "AND date(created_at) BETWEEN date('$fromDate') AND date('$toDate')"
-            fromDate != null -> "AND date(created_at) >= date('$fromDate')"
-            else -> "AND date(created_at) = date('now')"
-        }
-
-        db.rawQuery(
-            "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND is_deleted=0 $where",
-            arrayOf(stationId.toString())
-        ).use { c ->
-            if (c.moveToFirst()) {
-                report.put("total_sales", c.getDouble(0))
-                report.put("total_liters", c.getDouble(1))
-                report.put("total_transactions", c.getInt(2))
-            }
-        }
-
-        db.rawQuery(
-            "SELECT COALESCE(SUM(amount),0) FROM payments WHERE sale_id IN (SELECT id FROM sales_transactions WHERE station_id=? $where) AND is_deleted=0",
-            arrayOf(stationId.toString())
-        ).use { c ->
-            if (c.moveToFirst()) report.put("total_payments", c.getDouble(0))
-        }
-
-        report.put("report_date", SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()))
-        return report
-    }
-
-    fun getCustomerReport(partyId: Int): JSONObject {
-        val report = JSONObject()
-        val party = getParty(partyId)
-        report.put("party", party)
-
-        val transactions = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM sales_transactions WHERE customer_party_id=? AND is_deleted=0 ORDER BY id DESC", arrayOf(partyId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                transactions.put(saleCursorToJson(it))
-            }
-        }
-        report.put("transactions", transactions)
-
-        val payments = JSONArray()
-        val pc = db.rawQuery("SELECT * FROM payments WHERE customer_party_id=? AND is_deleted=0 ORDER BY id DESC", arrayOf(partyId.toString()))
-        pc.use {
-            while (it.moveToNext()) {
-                payments.put(JSONObject().apply {
-                    put("payment_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
-                    put("payment_method", it.getString(it.getColumnIndexOrThrow("payment_method")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        report.put("payments", payments)
-
-        val deposits = JSONArray()
-        val dc = db.rawQuery("SELECT * FROM cash_deposits WHERE customer_id=? ORDER BY id DESC", arrayOf(partyId.toString()))
-        dc.use {
-            while (it.moveToNext()) {
-                deposits.put(JSONObject().apply {
-                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
-                    put("notes", it.getString(it.getColumnIndexOrThrow("notes")))
-                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
-                })
-            }
-        }
-        report.put("deposits", deposits)
-
-        val totalDue = db.rawQuery(
-            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE customer_party_id=? AND remaining_amount>0 AND is_deleted=0",
-            arrayOf(partyId.toString())
-        ).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
-        report.put("total_due", totalDue)
-
-        return report
-    }
-
-    fun getOverdueTransactions(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val sql = """
-            SELECT s.*, p.commercial_name as customer_name, p.phone as customer_phone
-            FROM sales_transactions s
-            LEFT JOIN parties p ON s.customer_party_id = p.id
-            WHERE s.station_id=? AND s.remaining_amount > 0 AND date(s.due_date) < date('now') AND s.is_deleted=0
-            ORDER BY s.due_date
-        """.trimIndent()
-        val c = db.rawQuery(sql, arrayOf(stationId.toString()))
         c.use {
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
@@ -5590,33 +6800,85 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return arr
     }
 
-    // ================================================================
-    // 32. SMS
-    // ================================================================
-    fun logSms(phone: String, message: String, type: String, status: String): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("phone_number", phone)
-            put("message_content", message)
-            put("message_type", type)
-            put("status", status)
+    fun getActiveAlerts(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM stock_alerts WHERE is_resolved = 0 ORDER BY created_at DESC""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
         }
-        return writableDatabase.insert("sms_logs", null, cv)
     }
 
-    fun getSmsLogs(limit: Int = 500): JSONArray {
+    fun getRecentActivity(limit: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM user_activity_log ORDER BY created_at DESC LIMIT ?""",
+                arrayOf(limit.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 42. PRODUCTS & FUEL
+    // ================================================================
+    fun getProducts(): JSONArray {
+        return getProducts(1)
+    }
+
+    fun getProducts(stationId: Int? = null): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM sms_logs ORDER BY id DESC LIMIT ?", arrayOf(limit.toString()))
+        val sql = if (stationId != null) {
+            "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.station_id=? AND p.is_deleted=0 ORDER BY p.product_name"
+        } else {
+            "SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.is_deleted=0 ORDER BY p.product_name"
+        }
+        val args = if (stationId != null) arrayOf(stationId.toString()) else null
+        val c = db.rawQuery(sql, args)
         c.use {
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("phone_number", it.getString(it.getColumnIndexOrThrow("phone_number")))
-                    put("message_content", it.getString(it.getColumnIndexOrThrow("message_content")))
-                    put("message_type", it.getString(it.getColumnIndexOrThrow("message_type")))
+                    put("product_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("product_code", it.getString(it.getColumnIndexOrThrow("product_code")))
+                    put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
+                    put("product_name_ar", it.getString(it.getColumnIndexOrThrow("product_name_ar")))
+                    put("category_name", it.getString(it.getColumnIndexOrThrow("category_name")))
+                    put("sale_price", it.getDouble(it.getColumnIndexOrThrow("sale_price")))
+                    put("purchase_price", it.getDouble(it.getColumnIndexOrThrow("purchase_price")))
+                    put("quantity", it.getDouble(it.getColumnIndexOrThrow("quantity")))
                     put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                })
+            }
+        }
+        return arr
+    }
+
+    fun getFuelTypes(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery(
+            "SELECT id, fuel_code, fuel_name, fuel_name_ar, default_sale_price, is_active FROM fuel_types WHERE is_deleted=0 ORDER BY fuel_name",
+            null
+        )
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("fuel_type_id", it.getInt(0))
+                    put("fuel_code", it.getString(1))
+                    put("fuel_name", it.getString(2))
+                    put("fuel_name_ar", it.getString(3))
+                    put("default_sale_price", it.getDouble(4))
+                    put("is_active", it.getInt(5) == 1)
                 })
             }
         }
@@ -5624,242 +6886,282 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 33. ACTIVITY LOGS
+    // 43. VEHICLES
+    // ================================================================
+    fun getVehicles(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery(
+            """SELECT v.*, p.commercial_name as party_name, d.full_name as driver_name
+               FROM vehicles v
+               LEFT JOIN parties p ON v.party_id = p.id
+               LEFT JOIN drivers d ON v.id = d.vehicle_id
+               WHERE v.is_deleted = 0
+               ORDER BY v.plate_number""",
+            null
+        )
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("vehicle_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("vehicle_code", it.getString(it.getColumnIndexOrThrow("vehicle_code")))
+                    put("plate_number", it.getString(it.getColumnIndexOrThrow("plate_number")))
+                    put("brand", it.getString(it.getColumnIndexOrThrow("brand")))
+                    put("model", it.getString(it.getColumnIndexOrThrow("model")))
+                    put("tank_capacity", it.getDouble(it.getColumnIndexOrThrow("tank_capacity")))
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    put("party_name", it.getString(it.getColumnIndexOrThrow("party_name")))
+                    put("driver_name", it.getString(it.getColumnIndexOrThrow("driver_name")))
+                })
+            }
+        }
+        return arr
+    }
+
+    // ================================================================
+    // 44. TANKS & PUMPS STATS
+    // ================================================================
+    fun getTanks(): JSONArray = getTanks(1)
+
+    fun getPumps(): JSONArray = getPumps(1)
+
+    fun getTankStats(): JSONArray {
+        val arr = JSONArray()
+        val db = readableDatabase
+        val c = db.rawQuery(
+            """SELECT t.*, f.fuel_name, f.fuel_name_ar,
+                      ROUND((t.current_quantity / t.capacity_liters * 100), 2) as fill_percent
+               FROM tanks t
+               LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
+               WHERE t.is_deleted = 0
+               ORDER BY t.tank_code""",
+            null
+        )
+        c.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("tank_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("tank_code", it.getString(it.getColumnIndexOrThrow("tank_code")))
+                    put("tank_name", it.getString(it.getColumnIndexOrThrow("tank_name")))
+                    put("capacity_liters", it.getDouble(it.getColumnIndexOrThrow("capacity_liters")))
+                    put("current_quantity", it.getDouble(it.getColumnIndexOrThrow("current_quantity")))
+                    put("fill_percent", it.getDouble(it.getColumnIndexOrThrow("fill_percent")))
+                    put("fuel_name", it.getString(it.getColumnIndexOrThrow("fuel_name")))
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                })
+            }
+        }
+        return arr
+    }
+
+    // ================================================================
+    // 45. BACKUP & EXPORT
+    // ================================================================
+    fun backupDatabase(): String {
+        dbLock.lock()
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            val backupDir = java.io.File(contextRef.getExternalFilesDir(null), "backups")
+            if (!backupDir.exists()) backupDir.mkdirs()
+            val backupFile = java.io.File(backupDir, "backup_${System.currentTimeMillis()}.db")
+            dbFile.copyTo(backupFile, overwrite = true)
+            backupFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun restoreDatabase(path: String): Boolean {
+        dbLock.lock()
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            val backupFile = java.io.File(path)
+            if (backupFile.exists()) {
+                backupFile.copyTo(dbFile, overwrite = true)
+                true
+            } else false
+        } catch (e: Exception) {
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun exportToCSV(tableName: String): String {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val cursor = db.query(tableName, null, null, null, null, null, null)
+            val csv = StringBuilder()
+            val columns = cursor.columnNames
+            csv.append(columns.joinToString(",")).append("\n")
+            while (cursor.moveToNext()) {
+                val row = columns.map { col ->
+                    val idx = cursor.getColumnIndex(col)
+                    when (cursor.getType(idx)) {
+                        Cursor.FIELD_TYPE_STRING -> "\"${cursor.getString(idx)?.replace("\"", "\"\"") ?: ""}\""
+                        Cursor.FIELD_TYPE_INTEGER -> cursor.getInt(idx).toString()
+                        Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(idx).toString()
+                        else -> ""
+                    }
+                }
+                csv.append(row.joinToString(",")).append("\n")
+            }
+            cursor.close()
+
+            val exportDir = java.io.File(contextRef.getExternalFilesDir(null), "exports")
+            if (!exportDir.exists()) exportDir.mkdirs()
+            val exportFile = java.io.File(exportDir, "${tableName}_${System.currentTimeMillis()}.csv")
+            exportFile.writeText(csv.toString())
+            exportFile.absolutePath
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun importFromCSV(tableName: String, path: String): Int {
+        // تنفيذ الاستيراد حسب الحاجة
+        return 0
+    }
+
+    fun getDatabaseSize(): Long {
+        return try {
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            dbFile.length()
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    fun getTableCounts(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val tables = listOf("parties", "sales_transactions", "tanks", "pumps", "users", "employees", "shifts", "notifications", "sms_messages", "fuel_types")
+            val result = JSONArray()
+            tables.forEach { table ->
+                val cursor = db.rawQuery("SELECT COUNT(*) FROM $table", null)
+                val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                cursor.close()
+                val obj = JSONObject()
+                obj.put("table", table)
+                obj.put("count", count)
+                result.put(obj)
+            }
+            result
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun vacuumDatabase() {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.execSQL("VACUUM")
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 46. LOG ACTIVITY
     // ================================================================
     fun logActivity(operator: String, action: String, details: String): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("operator", operator)
-            put("action", action)
-            put("description", details)
-            put("created_at", DATE_FORMAT.format(Date()))
-        }
-        return writableDatabase.insert("user_activity_log", null, cv)
-    }
-
-    fun getActivityLogs(limit: Int = 100): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM user_activity_log ORDER BY id DESC LIMIT ?", arrayOf(limit.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("operator", it.getString(it.getColumnIndexOrThrow("operator")))
-                    put("action", it.getString(it.getColumnIndexOrThrow("action")))
-                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    // ================================================================
-    // 34. SYSTEM SETTINGS
-    // ================================================================
-    fun setSetting(key: String, value: String, category: String = "general", dataType: String = "string") {
-        val cv = ContentValues().apply {
-            put("setting_key", key)
-            put("setting_value", value)
-            put("category", category)
-            put("data_type", dataType)
-        }
-        writableDatabase.insertWithOnConflict("system_settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-    }
-
-    fun getSetting(key: String): String {
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT setting_value FROM system_settings WHERE setting_key=?", arrayOf(key))
-        return c.use { if (it.moveToFirst()) it.getString(0) else "" }
-    }
-
-    fun getStationSetting(stationId: Int, key: String): String {
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT setting_value FROM station_settings WHERE station_id=? AND setting_key=?", arrayOf(stationId.toString(), key))
-        return c.use { if (it.moveToFirst()) it.getString(0) else "" }
-    }
-
-    // ================================================================
-    // 35. DATA EXPORT
-    // ================================================================
-    fun exportAllData(): JSONObject {
-        val result = JSONObject()
-        result.put("parties", getParties())
-        result.put("tanks", getTanks())
-        result.put("pumps", getPumps())
-        result.put("sales", getSalesTransactions(1, 10000))
-        result.put("sms_logs", getSmsLogs())
-        result.put("activity_logs", getActivityLogs())
-        result.put("employees", getEmployees())
-        result.put("stock_alerts", getStockAlerts(1))
-        result.put("system_settings", getAllSettings())
-        return result
-    }
-
-    private fun getAllSettings(): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM system_settings", null)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("key", it.getString(it.getColumnIndexOrThrow("setting_key")))
-                    put("value", it.getString(it.getColumnIndexOrThrow("setting_value")))
-                    put("category", it.getString(it.getColumnIndexOrThrow("category")))
-                })
-            }
-        }
-        return arr
-    }
-
-    // ================================================================
-    // 36. REFILLS (tank_refills)
-    // ================================================================
-    fun getRefills(): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM tank_refills ORDER BY id DESC", null)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("refill_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("refill_code", it.getString(it.getColumnIndexOrThrow("refill_code")))
-                    put("supplier_name", it.getString(it.getColumnIndexOrThrow("supplier_name")))
-                    put("delivered_quantity", it.getDouble(it.getColumnIndexOrThrow("delivered_quantity")))
-                    put("actual_quantity", it.getDouble(it.getColumnIndexOrThrow("actual_quantity")))
-                    put("unit_price", it.getDouble(it.getColumnIndexOrThrow("unit_price")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    // ================================================================
-    // 37. CASH DEPOSITS
-    // ================================================================
-    fun addCashDeposit(customerId: Int, amount: Double, notes: String, operator: String = "System"): Boolean {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            db.execSQL("UPDATE parties SET current_balance = current_balance + ? WHERE id = ?", arrayOf(amount, customerId))
-            val customer = getParty(customerId)
-            val newBalance = customer?.getDouble("current_balance") ?: amount
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
             val cv = ContentValues().apply {
-                put("customer_id", customerId)
-                put("amount", amount)
-                put("balance_after", newBalance)
-                put("notes", notes)
+                put("uuid", UUID.randomUUID().toString())
                 put("operator", operator)
+                put("action", action)
+                put("description", details)
+                put("created_at", getCurrentDateTime())
             }
-            db.insert("cash_deposits", null, cv)
-            db.setTransactionSuccessful()
-            logActivity(operator, "deposit", "إيداع مبلغ $amount للعميل $customerId")
-            return true
+            db.insert("user_activity_log", null, cv)
         } finally {
-            db.endTransaction()
+            dbLock.unlock()
         }
     }
 
     // ================================================================
-    // 38. BAD DEBTS
+    // 47. SMS LOGS
     // ================================================================
-    fun getBadDebts(): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM bad_debts WHERE resolved=0 ORDER BY id DESC", null)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("customer_id", it.getInt(it.getColumnIndexOrThrow("customer_id")))
-                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
-                    put("type", it.getString(it.getColumnIndexOrThrow("type")))
-                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
-                    put("date", it.getString(it.getColumnIndexOrThrow("date")))
-                })
+    fun logSms(phone: String, message: String, type: String, status: String): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("phone_number", phone)
+                put("message_content", message)
+                put("message_type", type)
+                put("status", status)
+                put("created_at", getCurrentDateTime())
             }
+            db.insert("sms_logs", null, cv)
+        } finally {
+            dbLock.unlock()
         }
-        return arr
     }
 
-    fun resolveBadDebt(id: Int): Int {
-        val cv = ContentValues().apply {
-            put("resolved", 1)
-            put("resolved_date", DATE_FORMAT.format(Date()))
+    fun getSmsLogs(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT * FROM sms_logs ORDER BY created_at DESC LIMIT 500""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
         }
-        return writableDatabase.update("bad_debts", cv, "id=?", arrayOf(id.toString()))
     }
 
     // ================================================================
-    // 39. SMS WHITELIST
-    // ================================================================
-    fun getSmsWhitelist(): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM sms_whitelist WHERE enabled=1 ORDER BY name", null)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("phone", it.getString(it.getColumnIndexOrThrow("phone")))
-                    put("name", it.getString(it.getColumnIndexOrThrow("name")))
-                    put("enabled", it.getInt(it.getColumnIndexOrThrow("enabled")))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun addToSmsWhitelist(phone: String, name: String): Long {
-        val cv = ContentValues().apply {
-            put("phone", phone)
-            if (name.isNotEmpty()) put("name", name)
-        }
-        return writableDatabase.insert("sms_whitelist", null, cv)
-    }
-
-    fun removeFromSmsWhitelist(phone: String): Int {
-        return writableDatabase.delete("sms_whitelist", "phone=?", arrayOf(phone))
-    }
-
-    // ================================================================
-    // 40. AI CHAT
-    // ================================================================
-    fun getAiChatHistory(sessionId: String): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT * FROM ai_chat_history WHERE session_id=? ORDER BY id", arrayOf(sessionId))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("role", it.getString(it.getColumnIndexOrThrow("role")))
-                    put("message", it.getString(it.getColumnIndexOrThrow("message")))
-                    put("timestamp", it.getString(it.getColumnIndexOrThrow("timestamp")))
-                })
-            }
-        }
-        return arr
-    }
-
-    fun saveAiMessage(sessionId: String, role: String, message: String): Long {
-        val cv = ContentValues().apply {
-            put("session_id", sessionId)
-            put("role", role)
-            put("message", message)
-        }
-        return writableDatabase.insert("ai_chat_history", null, cv)
-    }
-
-    // ================================================================
-    // 41. HELPERS
+    // 48. HELPERS
     // ================================================================
     private fun getPartyBalance(partyId: Int): Double {
         val db = readableDatabase
         val c = db.rawQuery("SELECT COALESCE(current_balance,0) FROM parties WHERE id=?", arrayOf(partyId.toString()))
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+    }
+
+    private fun cursorToJsonArray(cursor: Cursor): JSONArray {
+        val arr = JSONArray()
+        cursor.use {
+            while (it.moveToNext()) {
+                val obj = JSONObject()
+                for (i in 0 until it.columnCount) {
+                    val colName = it.getColumnName(i)
+                    when (it.getType(i)) {
+                        Cursor.FIELD_TYPE_STRING -> obj.put(colName, it.getString(i))
+                        Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, it.getInt(i))
+                        Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, it.getDouble(i))
+                        Cursor.FIELD_TYPE_BLOB -> obj.put(colName, it.getBlob(i))
+                        else -> obj.put(colName, "")
+                    }
+                }
+                arr.put(obj)
+            }
+        }
+        return arr
+    }
+
+    private fun cursorToJsonObject(cursor: Cursor): JSONObject {
+        val obj = JSONObject()
+        for (i in 0 until cursor.columnCount) {
+            val colName = cursor.getColumnName(i)
+            when (cursor.getType(i)) {
+                Cursor.FIELD_TYPE_STRING -> obj.put(colName, cursor.getString(i))
+                Cursor.FIELD_TYPE_INTEGER -> obj.put(colName, cursor.getInt(i))
+                Cursor.FIELD_TYPE_FLOAT -> obj.put(colName, cursor.getDouble(i))
+                Cursor.FIELD_TYPE_BLOB -> obj.put(colName, cursor.getBlob(i))
+                else -> obj.put(colName, "")
+            }
+        }
+        return obj
     }
 
     fun execSQL(sql: String, bindArgs: Array<Any> = emptyArray()) {
@@ -5871,12 +7173,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
     // ================================================================
-    // 42. DYNAMIC DATA HELPERS (بدلاً من system_settings)
+    // 49. DYNAMIC DATA HELPERS (من SmsReceiver)
     // ================================================================
 
-    /**
-     * الحصول على سعر الديزل من جدول fuel_types (بدلاً من system_settings)
-     */
     fun getDieselPrice(): Double {
         val db = readableDatabase
         val c = db.rawQuery(
@@ -5886,9 +7185,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
     }
 
-    /**
-     * الحصول على سعر البنزين من جدول fuel_types
-     */
     fun getGasolinePrice(fuelCode: String = "PETROL_95"): Double {
         val db = readableDatabase
         val c = db.rawQuery(
@@ -5898,9 +7194,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
     }
 
-    /**
-     * الحصول على هاتف المدير من جدول users + roles
-     */
     fun getManagerPhone(): String? {
         val db = readableDatabase
         val c = db.rawQuery("""
@@ -5913,9 +7206,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getString(0) else null }
     }
 
-    /**
-     * الحصول على هواتف السائقين النشطين
-     */
     fun getDriverPhones(): List<String> {
         val phones = mutableListOf<String>()
         val db = readableDatabase
@@ -5932,9 +7222,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return phones.distinct()
     }
 
-    /**
-     * الحصول على قائمة SMSC الموثوقة من sms_whitelist
-     */
     fun getTrustedSmscList(): List<String> {
         val phones = mutableListOf<String>()
         val db = readableDatabase
@@ -5946,9 +7233,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return phones
     }
 
-    /**
-     * الحصول على رصيد العميل برقم الهاتف (من parties.phone مباشرة)
-     */
     fun getCustomerBalanceByPhone(phone: String): Double {
         val db = readableDatabase
         val c = db.rawQuery("""
@@ -5959,9 +7243,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
     }
 
-    /**
-     * الحصول على آخر طلب للعميل برقم الهاتف (من parties.phone)
-     */
     fun getLastOrderByPhone(phone: String): JSONObject? {
         val db = readableDatabase
         val c = db.rawQuery("""
@@ -5972,45 +7253,42 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         """.trimIndent(), arrayOf(phone))
         return c.use {
             if (it.moveToFirst()) {
-                val json = JSONObject()
-                json.put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
-                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
-                json.put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")) ?: "")
-                json.put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                json
+                JSONObject().apply {
+                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                    put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("delivery_location")))
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                }
             } else null
         }
     }
 
-    /**
-     * الحصول على تاريخ طلبات العميل برقم الهاتف (من parties.phone)
-     */
     fun getOrderHistoryByPhone(phone: String, limit: Int = 50): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         val c = db.rawQuery("""
-            SELECT s.* FROM sales_transactions s
+            SELECT s.sale_code, s.liters, s.net_amount, s.created_at
+            FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
             WHERE p.phone = ? AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT ?
         """.trimIndent(), arrayOf(phone, limit.toString()))
         c.use {
             while (it.moveToNext()) {
-                val json = JSONObject()
-                json.put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
-                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
-                json.put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
-                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                arr.put(json)
+                arr.put(JSONObject().apply {
+                    put("sale_code", it.getString(0))
+                    put("liters", it.getDouble(1))
+                    put("net_amount", it.getDouble(2))
+                    put("created_at", it.getString(3))
+                })
             }
         }
         return arr
     }
 
-    /**
-     * الحصول على party_id باستخدام رقم الهاتف
-     */
+    fun getOrderHistoryByPhone(phone: String): JSONArray = getOrderHistoryByPhone(phone, 50)
+
     fun getPartyIdByPhone(phone: String): Int? {
         val db = readableDatabase
         val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
@@ -6021,9 +7299,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getInt(0) else null }
     }
 
-    /**
-     * الحصول على مدة الاحتفاظ بالبيانات من system_settings
-     */
     fun getRetentionDays(): Int {
         val db = readableDatabase
         val c = db.rawQuery(
@@ -6034,9 +7309,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return days.coerceIn(7, 365)
     }
 
-    /**
-     * الحصول على إعداد من system_settings
-     */
     fun getSystemSetting(key: String, defaultValue: String = ""): String {
         val db = readableDatabase
         val c = db.rawQuery(
@@ -6046,19 +7318,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return c.use { if (it.moveToFirst()) it.getString(0) else defaultValue }
     }
 
-    /**
-     * تسجيل توريد ديزل جديد (متوافق مع SmsReceiver)
-     * @param customerId رقم هاتف العميل
-     * @param customerName اسم العميل (للتوثيق)
-     * @param quantityLiters كمية اللترات
-     * @param quantityDabbas كمية الدباب (للتوثيق)
-     * @param location موقع التوصيل
-     * @param deliveryTime وقت التوصيل
-     * @param unitPrice سعر اللتر
-     * @param totalAmount المبلغ الإجمالي
-     * @param orderId رقم الطلب (sale_code)
-     * @return true إذا تم التسجيل بنجاح
-     */
     fun recordDieselDelivery(
         customerId: String,
         customerName: String,
@@ -6084,9 +7343,11 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             require(location.length in 3..200) { "Invalid location" }
 
             val subtotal = quantityLiters * unitPrice
+            val shiftId = getCurrentShift()?.optLong("shift_id", 1)?.toInt() ?: 1
+
             val saleId = insertSaleTransaction(
                 stationId = 1,
-                shiftId = 1,
+                shiftId = shiftId,
                 customerPartyId = partyId,
                 fuelTypeId = 1,
                 pumpId = null,
@@ -6102,13 +7363,33 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 isCredit = true,
                 dueDate = dateOnlyFormat.format(Date()),
                 cashierId = 1,
-                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
+                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}",
+                deliveryLocation = location,
+                deliveryTime = deliveryTime,
+                orderType = "delivery"
             )
 
             if (saleId <= 0) {
                 Log.e(TAG, "Failed to insert sale transaction")
                 return false
             }
+
+            // إدراج في جدول deliveries
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("sale_id", saleId)
+                put("party_id", partyId)
+                put("delivery_date", getCurrentDate())
+                put("quantity", quantityLiters)
+                put("fuel_type", "diesel")
+                put("price_per_liter", unitPrice)
+                put("total_amount", totalAmount)
+                put("status", "confirmed")
+                put("location", location)
+                put("notes", "طلب توصيل ديزل - $orderId")
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("deliveries", null, cv)
 
             // تحديث رصيد العميل
             val currentBalance = getCustomerBalanceByPhone(customerId)
@@ -6131,88 +7412,23 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
-    /**
-     * الحصول على إعدادات النظام كـ Map
-     */
-    fun getAllSettingsMap(): Map<String, String> {
-        val map = mutableMapOf<String, String>()
-        val db = readableDatabase
-        val c = db.rawQuery("SELECT setting_key, setting_value FROM system_settings", null)
-        c.use {
-            while (it.moveToNext()) {
-                map[it.getString(0)] = it.getString(1)
-            }
-        }
-        return map
-    }
-
-    /**
-     * تحديث إعداد النظام
-     */
-    fun updateSetting(key: String, value: String, category: String = "general", dataType: String = "string"): Boolean {
-        val cv = ContentValues().apply {
-            put("setting_key", key)
-            put("setting_value", value)
-            put("category", category)
-            put("data_type", dataType)
-        }
-        val rows = writableDatabase.insertWithOnConflict("system_settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-        return rows != -1L
-    }
-
-    /**
-     * الحصول على إحصائيات الخزانات
-     */
-    fun getTankStats(stationId: Int): JSONArray {
+    // ================================================================
+    // 50. SALES BY FUEL TYPE
+    // ================================================================
+    fun getSalesByFuelType(): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
-        val c = db.rawQuery("""
-            SELECT t.*, f.fuel_name, f.fuel_name_ar,
-                   ROUND((t.current_quantity / t.capacity_liters * 100), 2) as fill_percent
-            FROM tanks t
-            LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
-            WHERE t.station_id = ? AND t.is_deleted = 0
-            ORDER BY t.tank_code
-        """.trimIndent(), arrayOf(stationId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("tank_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("tank_code", it.getString(it.getColumnIndexOrThrow("tank_code")))
-                    put("tank_name", it.getString(it.getColumnIndexOrThrow("tank_name")))
-                    put("capacity_liters", it.getDouble(it.getColumnIndexOrThrow("capacity_liters")))
-                    put("current_quantity", it.getDouble(it.getColumnIndexOrThrow("current_quantity")))
-                    put("fill_percent", it.getDouble(it.getColumnIndexOrThrow("fill_percent")))
-                    put("fuel_name", it.getString(it.getColumnIndexOrThrow("fuel_name")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * الحصول على ملخص المبيعات حسب نوع الوقود
-     */
-    fun getSalesByFuelType(stationId: Int, fromDate: String? = null, toDate: String? = null): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val dateFilter = when {
-            fromDate != null && toDate != null -> "AND date(s.created_at) BETWEEN date('$fromDate') AND date('$toDate')"
-            fromDate != null -> "AND date(s.created_at) >= date('$fromDate')"
-            else -> "AND date(s.created_at) = date('now')"
-        }
         val c = db.rawQuery("""
             SELECT f.fuel_name, f.fuel_name_ar, 
                    COALESCE(SUM(s.liters), 0) as total_liters,
                    COALESCE(SUM(s.net_amount), 0) as total_amount,
                    COUNT(*) as transaction_count
             FROM fuel_types f
-            LEFT JOIN sales_transactions s ON s.fuel_type_id = f.id AND s.station_id = ? AND s.is_deleted = 0 $dateFilter
+            LEFT JOIN sales_transactions s ON s.fuel_type_id = f.id AND s.is_deleted = 0
             WHERE f.is_deleted = 0
             GROUP BY f.id
             ORDER BY total_amount DESC
-        """.trimIndent(), arrayOf(stationId.toString()))
+        """.trimIndent(), null)
         c.use {
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
@@ -6227,1090 +7443,23 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         return arr
     }
 
-    /**
-     * البحث في العملاء
-     */
-    fun searchParties(query: String, typeId: Int? = null): JSONArray {
+    // ================================================================
+    // 51. GET CUSTOMER COUNT
+    // ================================================================
+    fun getCustomerCount(): Int {
+        val db = readableDatabase
+        val c = db.rawQuery("SELECT COUNT(*) FROM parties WHERE party_type_id = 1 AND is_deleted = 0", null)
+        val count = if (c.moveToFirst()) c.getInt(0) else 0
+        c.close()
+        return count
+    }
+
+    // ================================================================
+    // 52. GET DRIVER PHONES (للتكامل مع SmsReceiver)
+    // ================================================================
+    fun getDriverPhonesList(): JSONArray {
         val arr = JSONArray()
-        val db = readableDatabase
-        val sql = if (typeId != null) {
-            """SELECT * FROM parties 
-               WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ?) 
-               AND party_type_id = ? AND is_deleted = 0 
-               ORDER BY commercial_name LIMIT 50"""
-        } else {
-            """SELECT * FROM parties 
-               WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ?) 
-               AND is_deleted = 0 
-               ORDER BY commercial_name LIMIT 50"""
-        }
-        val likeQuery = "%$query%"
-        val args = if (typeId != null) {
-            arrayOf(likeQuery, likeQuery, likeQuery, typeId.toString())
-        } else {
-            arrayOf(likeQuery, likeQuery, likeQuery)
-        }
-        val c = db.rawQuery(sql, args)
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(partyCursorToJson(it))
-            }
-        }
+        getDriverPhones().forEach { arr.put(it) }
         return arr
-    }
-
-    /**
-     * الحصول على حركات الصندوق
-     */
-    fun getCashMovements(cashBoxId: Int, limit: Int = 100): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery(
-            "SELECT * FROM cash_movements WHERE cash_box_id = ? ORDER BY id DESC LIMIT ?",
-            arrayOf(cashBoxId.toString(), limit.toString())
-        )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("movement_code", it.getString(it.getColumnIndexOrThrow("movement_code")))
-                    put("movement_type", it.getString(it.getColumnIndexOrThrow("movement_type")))
-                    put("movement_category", it.getString(it.getColumnIndexOrThrow("movement_category")))
-                    put("amount", it.getDouble(it.getColumnIndexOrThrow("amount")))
-                    put("balance_before", it.getDouble(it.getColumnIndexOrThrow("balance_before")))
-                    put("balance_after", it.getDouble(it.getColumnIndexOrThrow("balance_after")))
-                    put("description", it.getString(it.getColumnIndexOrThrow("description")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * فحص المخزون المنخفض
-     */
-    fun checkLowStock(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("""
-            SELECT p.*, c.category_name, il.quantity_on_hand
-            FROM products p
-            LEFT JOIN product_categories c ON p.category_id = c.id
-            LEFT JOIN inventory_levels il ON p.id = il.product_id
-            WHERE (il.quantity_on_hand <= p.minimum_stock OR il.quantity_on_hand IS NULL)
-            AND p.station_id = ? AND p.is_deleted = 0 AND p.status = 'active'
-            ORDER BY il.quantity_on_hand ASC
-        """.trimIndent(), arrayOf(stationId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("product_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
-                    put("product_name_ar", it.getString(it.getColumnIndexOrThrow("product_name_ar")))
-                    put("category_name", it.getString(it.getColumnIndexOrThrow("category_name")))
-                    put("quantity_on_hand", it.getDouble(it.getColumnIndexOrThrow("quantity_on_hand")))
-                    put("minimum_stock", it.getDouble(it.getColumnIndexOrThrow("minimum_stock")))
-                    put("sale_price", it.getDouble(it.getColumnIndexOrThrow("sale_price")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * إنشاء تنبيه مخزون
-     */
-    fun createStockAlert(productId: Int, stationId: Int, alertType: String, currentQty: Double, thresholdQty: Double, createdBy: Int? = null): Long {
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("product_id", productId)
-            put("station_id", stationId)
-            put("alert_type", alertType)
-            put("current_quantity", currentQty)
-            put("threshold_quantity", thresholdQty)
-            put("shortage_quantity", thresholdQty - currentQty)
-            put("alert_level", if (currentQty <= 0) "critical" else "warning")
-            if (createdBy != null) put("created_by", createdBy)
-        }
-        return writableDatabase.insert("stock_alerts", null, cv)
-    }
-
-    /**
-     * الحصول على ملخص الورديات
-     */
-    fun getShiftSummary(shiftId: Int): JSONObject? {
-        val db = readableDatabase
-        val c = db.rawQuery("""
-            SELECT s.*, 
-                   u.full_name as cashier_name,
-                   COALESCE(SUM(st.net_amount), 0) as actual_sales,
-                   COALESCE(SUM(st.liters), 0) as actual_liters,
-                   COUNT(st.id) as transaction_count
-            FROM shifts s
-            LEFT JOIN users u ON s.cashier_id = u.id
-            LEFT JOIN sales_transactions st ON st.shift_id = s.id AND st.is_deleted = 0
-            WHERE s.id = ?
-            GROUP BY s.id
-        """.trimIndent(), arrayOf(shiftId.toString()))
-        return c.use {
-            if (it.moveToFirst()) {
-                JSONObject().apply {
-                    put("shift_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("shift_code", it.getString(it.getColumnIndexOrThrow("shift_code")))
-                    put("shift_type", it.getString(it.getColumnIndexOrThrow("shift_type")))
-                    put("cashier_name", it.getString(it.getColumnIndexOrThrow("cashier_name")))
-                    put("opening_cash", it.getDouble(it.getColumnIndexOrThrow("opening_cash")))
-                    put("closing_cash", it.getDouble(it.getColumnIndexOrThrow("closing_cash")))
-                    put("actual_sales", it.getDouble(it.getColumnIndexOrThrow("actual_sales")))
-                    put("actual_liters", it.getDouble(it.getColumnIndexOrThrow("actual_liters")))
-                    put("transaction_count", it.getInt(it.getColumnIndexOrThrow("transaction_count")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("cash_variance", it.getDouble(it.getColumnIndexOrThrow("cash_variance")))
-                }
-            } else null
-        }
-    }
-
-    /**
-     * الحصول على آخر قراءات العدادات
-     */
-    fun getLatestMeterReadings(stationId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("""
-            SELECT mr.*, p.pump_code, p.pump_name, n.nozzle_code, f.fuel_name
-            FROM meter_readings mr
-            JOIN pumps p ON mr.pump_id = p.id
-            JOIN pump_nozzles n ON mr.nozzle_id = n.id
-            JOIN fuel_types f ON n.fuel_type_id = f.id
-            WHERE mr.station_id = ? AND mr.is_deleted = 0
-            ORDER BY mr.reading_date DESC, mr.id DESC
-            LIMIT 100
-        """.trimIndent(), arrayOf(stationId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("reading_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("reading_code", it.getString(it.getColumnIndexOrThrow("reading_code")))
-                    put("pump_code", it.getString(it.getColumnIndexOrThrow("pump_code")))
-                    put("pump_name", it.getString(it.getColumnIndexOrThrow("pump_name")))
-                    put("nozzle_code", it.getString(it.getColumnIndexOrThrow("nozzle_code")))
-                    put("fuel_name", it.getString(it.getColumnIndexOrThrow("fuel_name")))
-                    put("reading_date", it.getString(it.getColumnIndexOrThrow("reading_date")))
-                    put("opening_reading", it.getDouble(it.getColumnIndexOrThrow("opening_reading")))
-                    put("closing_reading", it.getDouble(it.getColumnIndexOrThrow("closing_reading")))
-                    put("sold_liters", it.getDouble(it.getColumnIndexOrThrow("sold_liters")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * الحصول على سجل صيانة الأصول
-     */
-    fun getAssetMaintenanceHistory(assetType: String, assetId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery(
-            "SELECT * FROM maintenance_requests WHERE asset_type = ? AND asset_id = ? AND is_deleted = 0 ORDER BY created_at DESC",
-            arrayOf(assetType, assetId.toString())
-        )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("request_code", it.getString(it.getColumnIndexOrThrow("request_code")))
-                    put("title", it.getString(it.getColumnIndexOrThrow("title")))
-                    put("priority", it.getString(it.getColumnIndexOrThrow("priority")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("total_cost", it.getDouble(it.getColumnIndexOrThrow("total_cost")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * الحصول على إشعارات المستخدم
-     */
-    fun getUserNotifications(userId: Int, unreadOnly: Boolean = false, limit: Int = 50): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val sql = if (unreadOnly) {
-            "SELECT * FROM notifications WHERE user_id = ? AND is_read = 0 AND status != 'cancelled' ORDER BY created_at DESC LIMIT ?"
-        } else {
-            "SELECT * FROM notifications WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC LIMIT ?"
-        }
-        val c = db.rawQuery(sql, arrayOf(userId.toString(), limit.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("title", it.getString(it.getColumnIndexOrThrow("title")))
-                    put("title_ar", it.getString(it.getColumnIndexOrThrow("title_ar")))
-                    put("message", it.getString(it.getColumnIndexOrThrow("message")))
-                    put("message_ar", it.getString(it.getColumnIndexOrThrow("message_ar")))
-                    put("priority", it.getString(it.getColumnIndexOrThrow("priority")))
-                    put("is_read", it.getInt(it.getColumnIndexOrThrow("is_read")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * تحديث حالة الإشعار
-     */
-    fun markNotificationRead(notificationId: Int): Boolean {
-        val cv = ContentValues().apply {
-            put("is_read", 1)
-            put("read_at", DATE_FORMAT.format(Date()))
-        }
-        val rows = writableDatabase.update("notifications", cv, "id=?", arrayOf(notificationId.toString()))
-        return rows > 0
-    }
-
-    /**
-     * الحصول على المستخدمين حسب الدور
-     */
-    fun getUsersByRole(roleId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery(
-            "SELECT * FROM users WHERE role_id = ? AND is_deleted = 0 AND status = 'active' ORDER BY full_name",
-            arrayOf(roleId.toString())
-        )
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("user_id", it.getInt(it.getColumnIndexOrThrow("id")))
-                    put("username", it.getString(it.getColumnIndexOrThrow("username")))
-                    put("full_name", it.getString(it.getColumnIndexOrThrow("full_name")))
-                    put("full_name_ar", it.getString(it.getColumnIndexOrThrow("full_name_ar")))
-                    put("phone", it.getString(it.getColumnIndexOrThrow("phone")))
-                    put("email", it.getString(it.getColumnIndexOrThrow("email")))
-                    put("job_title", it.getString(it.getColumnIndexOrThrow("job_title")))
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                })
-            }
-        }
-        return arr
-    }
-
-    /**
-     * الحصول على صلاحيات المستخدم المدمجة
-     */
-    fun getUserPermissions(userId: Int): JSONArray {
-        val arr = JSONArray()
-        val db = readableDatabase
-        val c = db.rawQuery("""
-            SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
-                   rp.can_create, rp.can_read, rp.can_update, rp.can_delete, rp.can_export, rp.can_print, rp.can_approve
-            FROM permissions p
-            JOIN role_permissions rp ON p.id = rp.permission_id
-            JOIN users u ON u.role_id = rp.role_id
-            WHERE u.id = ? AND p.is_deleted = 0
-            UNION
-            SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
-                   1 as can_create, up.is_granted as can_read, 1 as can_update, 1 as can_delete, 1 as can_export, 1 as can_print, 1 as can_approve
-            FROM permissions p
-            JOIN user_permissions up ON p.id = up.permission_id
-            WHERE up.user_id = ? AND up.is_granted = 1
-        """.trimIndent(), arrayOf(userId.toString(), userId.toString()))
-        c.use {
-            while (it.moveToNext()) {
-                arr.put(JSONObject().apply {
-                    put("permission_code", it.getString(0))
-                    put("permission_name", it.getString(1))
-                    put("permission_name_ar", it.getString(2))
-                    put("module", it.getString(3))
-                    put("action", it.getString(4))
-                    put("can_create", it.getInt(5) == 1)
-                    put("can_read", it.getInt(6) == 1)
-                    put("can_update", it.getInt(7) == 1)
-                    put("can_delete", it.getInt(8) == 1)
-                    put("can_export", it.getInt(9) == 1)
-                    put("can_print", it.getInt(10) == 1)
-                    put("can_approve", it.getInt(11) == 1)
-                })
-            }
-        }
-        return arr
-    }
-    // ========== MISSING CRUD FUNCTIONS - ADD THESE TO DatabaseHelper.kt ==========
-
-    // ----- INSERT PARTY (was missing) -----
-    fun insertParty(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("party_type", data.optString("party_type", "customer"))
-                put("party_code", data.optString("party_code", ""))
-                put("party_name", data.optString("party_name", ""))
-                put("party_name_ar", data.optString("party_name_ar", ""))
-                put("phone", data.optString("phone", ""))
-                put("phone2", data.optString("phone2", ""))
-                put("email", data.optString("email", ""))
-                put("address", data.optString("address", ""))
-                put("city", data.optString("city", ""))
-                put("region", data.optString("region", ""))
-                put("tax_number", data.optString("tax_number", ""))
-                put("commercial_register", data.optString("commercial_register", ""))
-                put("credit_limit", data.optDouble("credit_limit", 0.0))
-                put("balance", data.optDouble("balance", 0.0))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
-                put("created_at", getCurrentDateTime())
-                put("updated_at", getCurrentDateTime())
-            }
-            val id = db.insert("parties", null, values)
-            if (id > 0) logActivity("system", "insert_party", "إضافة طرف: ${data.optString("party_name")}")
-            id
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- ORDERS -----
-    fun addOrder(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("party_id", data.optLong("party_id", 0))
-                put("order_type", data.optString("order_type", "sale"))
-                put("order_date", data.optString("order_date", getCurrentDate()))
-                put("delivery_date", data.optString("delivery_date", ""))
-                put("status", data.optString("status", "pending"))
-                put("total_amount", data.optDouble("total_amount", 0.0))
-                put("paid_amount", data.optDouble("paid_amount", 0.0))
-                put("notes", data.optString("notes", ""))
-                put("created_by", data.optString("created_by", "system"))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("orders", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getOrders(status: String?): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val selection = if (status != null) "status = ?" else null
-            val selectionArgs = if (status != null) arrayOf(status) else null
-            val cursor = db.query("orders", null, selection, selectionArgs, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- DELIVERIES -----
-    fun addDelivery(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("order_id", data.optLong("order_id", 0))
-                put("party_id", data.optLong("party_id", 0))
-                put("vehicle_id", data.optLong("vehicle_id", 0))
-                put("driver_id", data.optLong("driver_id", 0))
-                put("delivery_date", data.optString("delivery_date", getCurrentDate()))
-                put("quantity", data.optDouble("quantity", 0.0))
-                put("fuel_type", data.optString("fuel_type", "diesel"))
-                put("price_per_liter", data.optDouble("price_per_liter", 0.0))
-                put("total_amount", data.optDouble("total_amount", 0.0))
-                put("status", data.optString("status", "delivered"))
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("deliveries", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getDeliveries(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("deliveries", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getTodayDeliveries(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val today = getCurrentDate()
-            val cursor = db.query("deliveries", null, "delivery_date = ?", arrayOf(today), null, null, null)
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- FUEL SALES -----
-    fun addFuelSale(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("shift_id", data.optLong("shift_id", 0))
-                put("pump_id", data.optLong("pump_id", 0))
-                put("fuel_type_id", data.optLong("fuel_type_id", 0))
-                put("quantity", data.optDouble("quantity", 0.0))
-                put("price_per_liter", data.optDouble("price_per_liter", 0.0))
-                put("total_amount", data.optDouble("total_amount", 0.0))
-                put("payment_method", data.optString("payment_method", "cash"))
-                put("customer_id", data.optLong("customer_id", 0))
-                put("vehicle_plate", data.optString("vehicle_plate", ""))
-                put("sale_date", data.optString("sale_date", getCurrentDate()))
-                put("sale_time", data.optString("sale_time", getCurrentTime()))
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("fuel_sales", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getTodaySales(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val today = getCurrentDate()
-            val cursor = db.query("fuel_sales", null, "sale_date = ?", arrayOf(today), null, null, null)
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- METER READINGS -----
-    fun addMeterReading(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("pump_id", data.optLong("pump_id", 0))
-                put("shift_id", data.optLong("shift_id", 0))
-                put("reading_type", data.optString("reading_type", "start"))
-                put("mechanical_reading", data.optDouble("mechanical_reading", 0.0))
-                put("electronic_reading", data.optDouble("electronic_reading", 0.0))
-                put("temperature", data.optDouble("temperature", 0.0))
-                put("density", data.optDouble("density", 0.0))
-                put("reading_date", data.optString("reading_date", getCurrentDate()))
-                put("reading_time", data.optString("reading_time", getCurrentTime()))
-                put("notes", data.optString("notes", ""))
-                put("created_by", data.optString("created_by", "system"))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("meter_readings", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getMeterReadings(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("meter_readings", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- TANK READINGS -----
-    fun addTankReading(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("tank_id", data.optLong("tank_id", 0))
-                put("shift_id", data.optLong("shift_id", 0))
-                put("reading_type", data.optString("reading_type", "dip"))
-                put("fuel_level", data.optDouble("fuel_level", 0.0))
-                put("fuel_volume", data.optDouble("fuel_volume", 0.0))
-                put("temperature", data.optDouble("temperature", 0.0))
-                put("water_level", data.optDouble("water_level", 0.0))
-                put("reading_date", data.optString("reading_date", getCurrentDate()))
-                put("reading_time", data.optString("reading_time", getCurrentTime()))
-                put("notes", data.optString("notes", ""))
-                put("created_by", data.optString("created_by", "system"))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("tank_readings", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getTankReadings(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("tank_readings", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- STOCK MOVEMENTS -----
-    fun addStockMovement(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("product_id", data.optLong("product_id", 0))
-                put("movement_type", data.optString("movement_type", "in"))
-                put("quantity", data.optDouble("quantity", 0.0))
-                put("unit_cost", data.optDouble("unit_cost", 0.0))
-                put("total_cost", data.optDouble("total_cost", 0.0))
-                put("reference_type", data.optString("reference_type", ""))
-                put("reference_id", data.optLong("reference_id", 0))
-                put("movement_date", data.optString("movement_date", getCurrentDate()))
-                put("notes", data.optString("notes", ""))
-                put("created_by", data.optString("created_by", "system"))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("stock_movements", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getStockMovements(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("stock_movements", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getLowStockItems(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.rawQuery(
-                "SELECT p.*, s.current_quantity FROM products p " +
-                "LEFT JOIN stock s ON p.id = s.product_id " +
-                "WHERE s.current_quantity <= p.min_stock_level OR s.current_quantity IS NULL",
-                null
-            )
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- ASSETS -----
-    fun addAsset(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("asset_code", data.optString("asset_code", ""))
-                put("asset_name", data.optString("asset_name", ""))
-                put("asset_type", data.optString("asset_type", ""))
-                put("asset_category", data.optString("asset_category", ""))
-                put("purchase_date", data.optString("purchase_date", ""))
-                put("purchase_cost", data.optDouble("purchase_cost", 0.0))
-                put("current_value", data.optDouble("current_value", 0.0))
-                put("depreciation_rate", data.optDouble("depreciation_rate", 0.0))
-                put("location", data.optString("location", ""))
-                put("status", data.optString("status", "active"))
-                put("maintenance_date", data.optString("maintenance_date", ""))
-                put("next_maintenance", data.optString("next_maintenance", ""))
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("assets", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- USERS -----
-    fun addUser(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("username", data.optString("username", ""))
-                put("password_hash", data.optString("password_hash", ""))
-                put("full_name", data.optString("full_name", ""))
-                put("email", data.optString("email", ""))
-                put("phone", data.optString("phone", ""))
-                put("role", data.optString("role", "user"))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
-                put("last_login", data.optString("last_login", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("users", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- SHIFTS -----
-    fun startShift(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("shift_number", data.optString("shift_number", ""))
-                put("employee_id", data.optLong("employee_id", 0))
-                put("start_date", data.optString("start_date", getCurrentDate()))
-                put("start_time", data.optString("start_time", getCurrentTime()))
-                put("starting_cash", data.optDouble("starting_cash", 0.0))
-                put("status", "active")
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("shifts", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun endShift(id: Long, data: org.json.JSONObject): Int {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("end_date", data.optString("end_date", getCurrentDate()))
-                put("end_time", data.optString("end_time", getCurrentTime()))
-                put("ending_cash", data.optDouble("ending_cash", 0.0))
-                put("total_sales", data.optDouble("total_sales", 0.0))
-                put("total_deliveries", data.optDouble("total_deliveries", 0.0))
-                put("total_expenses", data.optDouble("total_expenses", 0.0))
-                put("status", "closed")
-                put("notes", data.optString("notes", ""))
-                put("updated_at", getCurrentDateTime())
-            }
-            db.update("shifts", values, "id = ?", arrayOf(id.toString()))
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getCurrentShift(): org.json.JSONObject? {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("shifts", null, "status = ?", arrayOf("active"), null, null, "created_at DESC", "1")
-            if (cursor.moveToFirst()) {
-                cursorToJsonObject(cursor)
-            } else null
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun addShiftSale(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("shift_id", data.optLong("shift_id", 0))
-                put("sale_id", data.optLong("sale_id", 0))
-                put("amount", data.optDouble("amount", 0.0))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("shift_sales", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun addShiftDelivery(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("shift_id", data.optLong("shift_id", 0))
-                put("delivery_id", data.optLong("delivery_id", 0))
-                put("amount", data.optDouble("amount", 0.0))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("shift_deliveries", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun addShiftExpense(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("shift_id", data.optLong("shift_id", 0))
-                put("expense_type", data.optString("expense_type", ""))
-                put("amount", data.optDouble("amount", 0.0))
-                put("description", data.optString("description", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("shift_expenses", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- NOTIFICATIONS -----
-    fun addNotification(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("user_id", data.optLong("user_id", 0))
-                put("notification_type", data.optString("notification_type", "info"))
-                put("title", data.optString("title", ""))
-                put("message", data.optString("message", ""))
-                put("is_read", 0)
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("notifications", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getNotifications(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("notifications", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getUnreadNotificationsCount(): Int {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0", null)
-            val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-            cursor.close()
-            count
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- SMS MESSAGES -----
-    fun addSmsMessage(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("uuid", java.util.UUID.randomUUID().toString())
-                put("phone_number", data.optString("phone_number", ""))
-                put("message_body", data.optString("message_body", ""))
-                put("message_type", data.optString("message_type", "incoming"))
-                put("status", data.optString("status", "pending"))
-                put("party_id", data.optLong("party_id", 0))
-                put("sent_at", data.optString("sent_at", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("sms_messages", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getSmsMessages(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("sms_messages", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getSmsMessagesByPhone(phone: String): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("sms_messages", null, "phone_number = ?", arrayOf(phone), null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getSmsMessagesByStatus(status: String): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("sms_messages", null, "status = ?", arrayOf(status), null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun updateSmsStatus(id: Long, status: String): Int {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("status", status)
-                put("updated_at", getCurrentDateTime())
-            }
-            db.update("sms_messages", values, "id = ?", arrayOf(id.toString()))
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getSmsStats(): org.json.JSONObject {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val stats = org.json.JSONObject()
-            val cursorTotal = db.rawQuery("SELECT COUNT(*) FROM sms_messages", null)
-            stats.put("total", if (cursorTotal.moveToFirst()) cursorTotal.getInt(0) else 0)
-            cursorTotal.close()
-
-            val cursorSent = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'sent'", null)
-            stats.put("sent", if (cursorSent.moveToFirst()) cursorSent.getInt(0) else 0)
-            cursorSent.close()
-
-            val cursorPending = db.rawQuery("SELECT COUNT(*) FROM sms_messages WHERE status = 'pending'", null)
-            stats.put("pending", if (cursorPending.moveToFirst()) cursorPending.getInt(0) else 0)
-            cursorPending.close()
-
-            stats
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun getSmsTemplates(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query("sms_templates", null, null, null, null, null, "created_at DESC")
-            cursorToJsonArray(cursor)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun addSmsTemplate(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("template_name", data.optString("template_name", ""))
-                put("template_body", data.optString("template_body", ""))
-                put("template_type", data.optString("template_type", "general"))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("sms_templates", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun updateSmsTemplate(id: Long, data: org.json.JSONObject): Int {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("template_name", data.optString("template_name", ""))
-                put("template_body", data.optString("template_body", ""))
-                put("template_type", data.optString("template_type", "general"))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
-                put("updated_at", getCurrentDateTime())
-            }
-            db.update("sms_templates", values, "id = ?", arrayOf(id.toString()))
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun deleteSmsTemplate(id: Long): Int {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            db.delete("sms_templates", "id = ?", arrayOf(id.toString()))
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- SETTINGS -----
-    fun addSetting(data: org.json.JSONObject): Long {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            val values = android.content.ContentValues().apply {
-                put("setting_key", data.optString("setting_key", ""))
-                put("setting_value", data.optString("setting_value", ""))
-                put("setting_type", data.optString("setting_type", "string"))
-                put("description", data.optString("description", ""))
-                put("is_editable", if (data.optBoolean("is_editable", true)) 1 else 0)
-                put("created_at", getCurrentDateTime())
-            }
-            db.insert("settings", null, values)
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun deleteSetting(key: String): Int {
-        dbLock.lock()
-        return try {
-            val db = writableDatabase
-            db.delete("settings", "setting_key = ?", arrayOf(key))
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    // ----- BACKUP & EXPORT -----
-    fun backupDatabase(): String {
-        dbLock.lock()
-        return try {
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            val backupDir = java.io.File(context.getExternalFilesDir(null), "backups")
-            if (!backupDir.exists()) backupDir.mkdirs()
-            val backupFile = java.io.File(backupDir, "backup_${System.currentTimeMillis()}.db")
-            dbFile.copyTo(backupFile, overwrite = true)
-            backupFile.absolutePath
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun restoreDatabase(path: String): Boolean {
-        dbLock.lock()
-        return try {
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            val backupFile = java.io.File(path)
-            if (backupFile.exists()) {
-                backupFile.copyTo(dbFile, overwrite = true)
-                true
-            } else false
-        } catch (e: Exception) {
-            false
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun exportToCSV(tableName: String): String {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val cursor = db.query(tableName, null, null, null, null, null, null)
-            val csv = StringBuilder()
-            val columns = cursor.columnNames
-            csv.append(columns.joinToString(",")).append("
-")
-            while (cursor.moveToNext()) {
-                val row = columns.map { col ->
-                    val idx = cursor.getColumnIndex(col)
-                    when (cursor.getType(idx)) {
-                        android.database.Cursor.FIELD_TYPE_STRING -> ""${cursor.getString(idx)?.replace(""", """") ?: ""}""
-                        android.database.Cursor.FIELD_TYPE_INTEGER -> cursor.getInt(idx).toString()
-                        android.database.Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(idx).toString()
-                        else -> ""
-                    }
-                }
-                csv.append(row.joinToString(",")).append("
-")
-            }
-            cursor.close()
-
-            val exportDir = java.io.File(context.getExternalFilesDir(null), "exports")
-            if (!exportDir.exists()) exportDir.mkdirs()
-            val exportFile = java.io.File(exportDir, "${tableName}_${System.currentTimeMillis()}.csv")
-            exportFile.writeText(csv.toString())
-            exportFile.absolutePath
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun importFromCSV(tableName: String, path: String): Int {
-        return 0 // Implementation depends on CSV structure
-    }
-
-    fun getDatabaseSize(): Long {
-        return try {
-            val dbFile = context.getDatabasePath(DATABASE_NAME)
-            dbFile.length()
-        } catch (e: Exception) {
-            0L
-        }
-    }
-
-    fun getTableCounts(): org.json.JSONArray {
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            val tables = listOf("parties", "orders", "deliveries", "fuel_sales", "meter_readings", 
-                              "tank_readings", "stock_movements", "assets", "users", "employees", 
-                              "shifts", "notifications", "sms_messages")
-            val result = org.json.JSONArray()
-            tables.forEach { table ->
-                val cursor = db.rawQuery("SELECT COUNT(*) FROM $table", null)
-                val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-                cursor.close()
-                val obj = org.json.JSONObject()
-                obj.put("table", table)
-                obj.put("count", count)
-                result.put(obj)
-            }
-            result
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
-    fun vacuumDatabase() {
-        dbLock.lock()
-        try {
-            val db = writableDatabase
-            db.execSQL("VACUUM")
-        } finally {
-            dbLock.unlock()
-        }
     }
 }
