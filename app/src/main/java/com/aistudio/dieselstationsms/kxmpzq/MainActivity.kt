@@ -82,7 +82,6 @@ class MainActivity : AppCompatActivity() {
         dbHelper = DatabaseHelper(this)
         geminiHelper = GeminiAIHelper(this)
 
-        // تهيئة Gemini AI
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
         if (geminiApiKey.isNotEmpty()) {
             geminiHelper.initialize(geminiApiKey)
@@ -1824,7 +1823,9 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun showToast(message: String) {
             if (isDestroyed.get()) return
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            // تأكد من أن الرسالة ليست null
+            val safeMessage = message ?: " "
+            Toast.makeText(context, safeMessage, Toast.LENGTH_SHORT).show()
         }
 
         @JavascriptInterface
@@ -1970,10 +1971,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // تم إصلاح السطر 810: تغيير نوع الإرجاع إلى String غير nullable
         @JavascriptInterface
-        fun getGasolinePrice(): String? {
+        fun getGasolinePrice(): String {
             return try {
-                // نعيد القيمة كـ String لتجنب مشاكل النوع في JavaScript
                 dbHelper.getGasolinePrice().toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getGasolinePrice error", e)
@@ -2055,8 +2056,8 @@ class MainActivity : AppCompatActivity() {
         fun recordDieselDelivery(jsonData: String): String {
             return try {
                 val data = JSONObject(jsonData)
-                // استخراج المعاملات من JSONObject لأن الدالة في DatabaseHelper تأخذ معاملات منفصلة
-                val customerId = data.getString("customerId")
+                // استخراج المعاملات من JSONObject مع قيم افتراضية لمنع الـ null
+                val customerId = data.optString("customerId", "")
                 val customerName = data.optString("customerName", "")
                 val quantityLiters = data.optDouble("quantityLiters", 0.0)
                 val quantityDabbas = data.optDouble("quantityDabbas", 0.0)
