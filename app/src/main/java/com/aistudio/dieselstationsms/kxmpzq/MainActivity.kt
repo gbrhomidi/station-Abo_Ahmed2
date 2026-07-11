@@ -1279,7 +1279,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getShifts(): String {
             return try {
-                val shifts = dbHelper.getShifts()
+                val shifts = dbHelper.getShifts(1)  // تمرير stationId = 1
                 shifts.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getShifts error", e)
@@ -1600,7 +1600,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getDashboardStats(): String {
             return try {
-                val stats = dbHelper.getDashboardStats()
+                val stats = dbHelper.getDashboardStats(1)  // تمرير stationId = 1
                 stats.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getDashboardStats error", e)
@@ -1971,19 +1971,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun getGasolinePrice(): Double {
+        fun getGasolinePrice(): String? {
             return try {
-                dbHelper.getGasolinePrice()
+                // نعيد القيمة كـ String لتجنب مشاكل النوع في JavaScript
+                dbHelper.getGasolinePrice().toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getGasolinePrice error", e)
-                0.0
+                "0.0"
             }
         }
 
         @JavascriptInterface
         fun getManagerPhone(): String {
             return try {
-                dbHelper.getManagerPhone()
+                dbHelper.getManagerPhone() ?: ""
             } catch (e: Exception) {
                 Log.e(TAG, "getManagerPhone error", e)
                 ""
@@ -2054,11 +2055,31 @@ class MainActivity : AppCompatActivity() {
         fun recordDieselDelivery(jsonData: String): String {
             return try {
                 val data = JSONObject(jsonData)
-                val id = dbHelper.recordDieselDelivery(data)
+                // استخراج المعاملات من JSONObject لأن الدالة في DatabaseHelper تأخذ معاملات منفصلة
+                val customerId = data.getString("customerId")
+                val customerName = data.optString("customerName", "")
+                val quantityLiters = data.optDouble("quantityLiters", 0.0)
+                val quantityDabbas = data.optDouble("quantityDabbas", 0.0)
+                val location = data.optString("location", "")
+                val deliveryTime = data.optString("deliveryTime", "")
+                val unitPrice = data.optDouble("unitPrice", 0.0)
+                val totalAmount = data.optDouble("totalAmount", 0.0)
+                val orderId = data.optString("orderId", "")
+
+                val success = dbHelper.recordDieselDelivery(
+                    customerId,
+                    customerName,
+                    quantityLiters,
+                    quantityDabbas,
+                    location,
+                    deliveryTime,
+                    unitPrice,
+                    totalAmount,
+                    orderId
+                )
                 JSONObject().apply {
-                    put("success", true)
-                    put("id", id)
-                    put("message", "تم تسجيل التسليم بنجاح")
+                    put("success", success)
+                    put("message", if (success) "تم تسجيل التسليم بنجاح" else "فشل تسجيل التسليم")
                 }.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "recordDieselDelivery error", e)
