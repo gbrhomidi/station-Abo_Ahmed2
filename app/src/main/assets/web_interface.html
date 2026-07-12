@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
-    <title>محطة أبو أحمد – النظام المتكامل V6</title>
+    <title>محطة أبو أحمد – النظام المتكامل V7</title>
     <!-- Font Awesome 6 (CDN) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <!-- Google Fonts -->
@@ -38,7 +38,6 @@
             --font-heading: 'Poppins', sans-serif;
             --font-mono: 'IBM Plex Mono', monospace;
 
-            /* ===== القائمة الرئيسية ===== */
             --main-color: #1976d2;
             --main-color-dark: #004ba0;
             --header-bg: #0066cc;
@@ -64,7 +63,6 @@
             --primary: #4da3ff;
             --primary-light: #3a8eef;
             --primary-dark: #1e3a8a;
-
             --bg-color: #121212;
             --text-color: #e0e0e0;
             --card-bg: #1e1e1e;
@@ -94,37 +92,22 @@
             cursor: default;
         }
 
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.05);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--main-color);
-            border-radius: 3px;
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+        ::-webkit-scrollbar-thumb { background: var(--main-color); border-radius: 3px; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes slideInRight {
-            from { opacity: 0; transform: translateX(20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        @keyframes ripple {
-            from { transform: scale(0); opacity: 0.5; }
-            to { transform: scale(4); opacity: 0; }
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes ripple { from { transform: scale(0); opacity: 0.5; } to { transform: scale(4); opacity: 0; } }
+        @keyframes shutdownBubbleEntry { 0% { transform: translateY(100px) scale(0.5); opacity: 0; } 70% { transform: translateY(-10px) scale(1.1); } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes shutdownPulse { 0% { box-shadow: 0 0 0 0 rgba(142,68,173,0.7); } 70% { box-shadow: 0 0 0 15px rgba(142,68,173,0); } 100% { box-shadow: 0 0 0 0 rgba(142,68,173,0); } }
+        @keyframes shutdownWave { 0% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 0; } 100% { transform: scale(1); opacity: 0; } }
+        @keyframes chatBubbleEntry { 0% { transform: translateY(100px) scale(0.5); opacity: 0; } 70% { transform: translateY(-10px) scale(1.1); } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+        @keyframes chatPulse { 0% { box-shadow: 0 0 0 0 rgba(37,211,102,0.7); } 70% { box-shadow: 0 0 0 15px rgba(37,211,102,0); } 100% { box-shadow: 0 0 0 0 rgba(37,211,102,0); } }
+        @keyframes chatWave { 0% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.5); opacity: 0; } 100% { transform: scale(1); opacity: 0; } }
+        @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-50px); } to { opacity: 1; transform: translateY(0); } }
 
         .fade-in { animation: fadeIn 0.35s ease; }
         .slide-in { animation: slideInRight 0.3s ease; }
@@ -154,7 +137,7 @@
             justify-content: center;
             font-size: 32px;
             margin-bottom: 20px;
-            box-shadow: 0 8px 32px rgba(212, 175, 55, 0.3);
+            box-shadow: 0 8px 32px rgba(212,175,55,0.3);
             animation: pulse 2s infinite;
             color: var(--primary-dark);
         }
@@ -277,7 +260,7 @@
         .menu-toggle:hover { background: var(--border); }
 
         /* ============================================================
-           SIDEBAR - القائمة الرئيسية (بدون قوائم فرعية مدمجة)
+           SIDEBAR - القائمة الرئيسية
            ============================================================ */
         .sidebar-overlay {
             position: fixed;
@@ -308,18 +291,12 @@
             backface-visibility: hidden;
             contain: layout style paint;
         }
-        .sidebar.open {
-            transform: translateX(0);
-        }
+        .sidebar.open { transform: translateX(0); }
         .sidebar.pinned {
             transform: translateX(0);
             box-shadow: -4px 0 25px rgba(0, 0, 0, 0.15);
         }
-        @media (min-width: 1024px) {
-            .sidebar.pinned {
-                transform: translateX(0);
-            }
-        }
+        @media (min-width: 1024px) { .sidebar.pinned { transform: translateX(0); } }
 
         .sidebar-header {
             padding: 12px 10px;
@@ -348,11 +325,7 @@
             font-size: 13px;
             color: var(--text);
         }
-        .sidebar-header .header-actions-side {
-            display: flex;
-            gap: 2px;
-            align-items: center;
-        }
+        .sidebar-header .header-actions-side { display: flex; gap: 2px; align-items: center; }
         .sidebar-header .header-actions-side button {
             background: none;
             border: none;
@@ -366,7 +339,6 @@
         .sidebar-header .header-actions-side button:hover { background: var(--border); color: var(--text); }
         .sidebar-header .header-actions-side button.pinned { color: var(--gold-color); transform: rotate(-45deg); }
 
-        /* شريط البحث */
         .sidebar-search {
             padding: 6px 8px;
             border-bottom: 1px solid var(--border);
@@ -418,20 +390,9 @@
             font-family: var(--font-family);
             will-change: transform;
         }
-        .sidebar-nav .nav-item:hover {
-            background: var(--main-color-dark);
-            transform: scale(1.05);
-        }
-        .sidebar-nav .nav-item:active {
-            transform: scale(0.95);
-            background: var(--gold-color);
-            color: #333;
-            font-weight: bold;
-        }
-        .sidebar-nav .nav-item.active {
-            border-right: 3px solid var(--gold-color);
-            box-shadow: 0 0 15px rgba(25, 118, 210, 0.3);
-        }
+        .sidebar-nav .nav-item:hover { background: var(--main-color-dark); transform: scale(1.05); }
+        .sidebar-nav .nav-item:active { transform: scale(0.95); background: var(--gold-color); color: #333; font-weight: bold; }
+        .sidebar-nav .nav-item.active { border-right: 3px solid var(--gold-color); box-shadow: 0 0 15px rgba(25,118,210,0.3); }
         .sidebar-nav .nav-item .nav-icon { font-size: 0.9rem; width: 20px; text-align: center; flex-shrink: 0; }
         .sidebar-nav .nav-item .nav-label { flex: 1; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .sidebar-nav .nav-item .nav-arrow { font-size: 10px; transition: transform 0.3s; }
@@ -451,7 +412,7 @@
         }
 
         /* ============================================================
-           SUBMENU PANEL (مودال القوائم الفرعية) - جديد
+           SUBMENU PANEL (مودال القوائم الفرعية)
            ============================================================ */
         .submenu-panel {
             position: fixed;
@@ -468,9 +429,7 @@
             max-width: 220px;
             animation: slideInRight 0.3s ease;
         }
-        .submenu-panel.show {
-            display: block;
-        }
+        .submenu-panel.show { display: block; }
         .submenu-panel h4 {
             font-size: 1rem;
             margin: 0.5rem 0;
@@ -479,11 +438,7 @@
             border-bottom: 2px solid var(--main-color);
             padding-bottom: 8px;
         }
-        .submenu-panel ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
+        .submenu-panel ul { list-style: none; padding: 0; margin: 0; }
         .submenu-panel ul li {
             background: linear-gradient(to left, var(--main-color), var(--main-color-dark));
             color: white;
@@ -496,15 +451,8 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.15);
             text-align: right;
         }
-        .submenu-panel ul li:hover:not(.disabled) {
-            transform: translateX(-5px);
-            background: var(--main-color-dark);
-        }
-        .submenu-panel ul li:active:not(.disabled) {
-            transform: scale(0.98);
-            background: var(--gold-color);
-            color: #333;
-        }
+        .submenu-panel ul li:hover:not(.disabled) { transform: translateX(-5px); background: var(--main-color-dark); }
+        .submenu-panel ul li:active:not(.disabled) { transform: scale(0.98); background: var(--gold-color); color: #333; }
         .submenu-panel ul li.disabled {
             opacity: 0.5;
             pointer-events: none;
@@ -512,22 +460,15 @@
             background: linear-gradient(to left, #666, #888);
         }
 
-        /* Overlay للقوائم الفرعية */
         .overlay {
             position: fixed;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
+            top: 0; right: 0; bottom: 0; left: 0;
             background: rgba(0,0,0,0.3);
             display: none;
             z-index: 998;
             backdrop-filter: blur(3px);
         }
-        .overlay.show {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
+        .overlay.show { display: block; animation: fadeIn 0.3s ease; }
 
         /* ============================================================
            MAIN CONTENT
@@ -539,10 +480,7 @@
             min-height: calc(100vh - var(--header-height));
         }
         @media (min-width: 992px) {
-            .sidebar {
-                transform: translateX(0);
-                border-left: 1px solid var(--border);
-            }
+            .sidebar { transform: translateX(0); border-left: 1px solid var(--border); }
             .sidebar-overlay { display: none !important; }
             .main-content { margin-right: var(--sidebar-width); }
             .menu-toggle { display: none; }
@@ -577,7 +515,6 @@
         .page-header .header-left p { color: var(--text-secondary); font-size: 14px; margin: 0; }
         .page-header .page-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-        /* Breadcrumbs */
         .breadcrumb {
             font-size: 0.8rem;
             color: var(--text-secondary);
@@ -754,7 +691,7 @@
         @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
 
         /* ============================================================
-           MODALS (للشاشات الأخرى)
+           MODALS
            ============================================================ */
         .modal-overlay {
             position: fixed;
@@ -907,11 +844,7 @@
             .form-row { grid-template-columns: 1fr; }
             .table-wrap table { font-size: 12px; }
             .table-wrap table th, .table-wrap table td { padding: 6px 8px; }
-            .submenu-panel {
-                min-width: 140px;
-                max-width: 180px;
-                font-size: 0.85rem;
-            }
+            .submenu-panel { min-width: 140px; max-width: 180px; font-size: 0.85rem; }
         }
         @media (max-width: 480px) {
             .sidebar { width: 120px; }
@@ -921,15 +854,8 @@
             .stat-card .stat-value { font-size: 17px; }
             .app-header .header-brand h1 { font-size: 14px; }
             .app-header .header-brand small { font-size: 10px; }
-            .submenu-panel {
-                min-width: 120px;
-                max-width: 160px;
-                padding: 0.5rem 0.3rem;
-            }
-            .submenu-panel ul li {
-                padding: 8px 10px;
-                font-size: 0.8rem;
-            }
+            .submenu-panel { min-width: 120px; max-width: 160px; padding: 0.5rem 0.3rem; }
+            .submenu-panel ul li { padding: 8px 10px; font-size: 0.8rem; }
         }
 
         /* ============================================================
@@ -996,18 +922,8 @@
             line-height: 1.6;
             word-wrap: break-word;
         }
-        .chat-bubble.user {
-            align-self: flex-start;
-            background: var(--primary);
-            color: white;
-            border-radius: 14px 14px 4px 14px;
-        }
-        .chat-bubble.ai {
-            align-self: flex-end;
-            background: var(--border);
-            color: var(--text);
-            border-radius: 14px 14px 14px 4px;
-        }
+        .chat-bubble.user { align-self: flex-start; background: var(--primary); color: white; border-radius: 14px 14px 4px 14px; }
+        .chat-bubble.ai { align-self: flex-end; background: var(--border); color: var(--text); border-radius: 14px 14px 14px 4px; }
         .chat-input-row {
             display: flex;
             gap: 8px;
@@ -1031,23 +947,6 @@
             align-items: center;
         }
         .notification-item .notif-time { font-size: 11px; color: var(--text-secondary); }
-
-        /* ============================================================
-           INVOICE PREVIEW
-           ============================================================ */
-        .invoice-preview {
-            background: white;
-            color: #000;
-            padding: 16px;
-            border-radius: var(--radius-sm);
-            font-family: var(--font-mono);
-            font-size: 12px;
-            border: 2px dashed #ccc;
-            overflow-x: auto;
-            direction: ltr;
-        }
-        .invoice-preview .inv-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #ddd; }
-        .invoice-preview .inv-total { font-size: 16px; font-weight: 800; border-top: 2px solid #1a3a5a; padding-top: 8px; margin-top: 8px; }
 
         /* ============================================================
            SHUTDOWN BUBBLE & CHAT BUBBLE
@@ -1084,21 +983,6 @@
             opacity: 0.5;
             animation: shutdownWave 4s infinite;
         }
-        @keyframes shutdownBubbleEntry {
-            0% { transform: translateY(100px) scale(0.5); opacity: 0; }
-            70% { transform: translateY(-10px) scale(1.1); }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
-        }
-        @keyframes shutdownPulse {
-            0% { box-shadow: 0 0 0 0 rgba(142,68,173,0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(142,68,173,0); }
-            100% { box-shadow: 0 0 0 0 rgba(142,68,173,0); }
-        }
-        @keyframes shutdownWave {
-            0% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.5); opacity: 0; }
-            100% { transform: scale(1); opacity: 0; }
-        }
 
         .chat-bubble-float {
             position: fixed;
@@ -1132,21 +1016,6 @@
             opacity: 0.5;
             animation: chatWave 4s infinite;
         }
-        @keyframes chatBubbleEntry {
-            0% { transform: translateY(100px) scale(0.5); opacity: 0; }
-            70% { transform: translateY(-10px) scale(1.1); }
-            100% { transform: translateY(0) scale(1); opacity: 1; }
-        }
-        @keyframes chatPulse {
-            0% { box-shadow: 0 0 0 0 rgba(37,211,102,0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(37,211,102,0); }
-            100% { box-shadow: 0 0 0 0 rgba(37,211,102,0); }
-        }
-        @keyframes chatWave {
-            0% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.5); opacity: 0; }
-            100% { transform: scale(1); opacity: 0; }
-        }
 
         .shutdown-confirm-modal {
             display: none;
@@ -1167,10 +1036,6 @@
             max-width: 400px;
             width: 90%;
             animation: modalFadeIn 0.3s;
-        }
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: translateY(-50px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         .shutdown-confirm-buttons { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
         .shutdown-confirm-button {
@@ -1219,7 +1084,7 @@
     <div class="login-screen" id="loginScreen">
         <div class="login-logo"><i class="fas fa-gas-pump"></i></div>
         <div class="login-title">محطة أبو أحمد</div>
-        <div class="login-subtitle">نظام إدارة مشتقات الديزل المتطور V6</div>
+        <div class="login-subtitle">نظام إدارة مشتقات الديزل المتطور V7</div>
         <div class="login-form" id="loginForm">
             <div class="input-group">
                 <label>اسم المستخدم</label>
@@ -1237,7 +1102,7 @@
             </button>
         </div>
         <div style="margin-top:24px; text-align:center; color:rgba(255,255,255,0.4); font-size:11px;">
-            الإصدار 6.0 | عملة: الريال اليمني
+            الإصدار 7.0 | عملة: الريال اليمني
         </div>
     </div>
 
@@ -1271,7 +1136,7 @@
         <!-- SIDEBAR OVERLAY -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-        <!-- SIDEBAR - القائمة الرئيسية (بدون قوائم فرعية مدمجة) -->
+        <!-- SIDEBAR -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -1283,356 +1148,64 @@
                     <button onclick="closeSidebar()" class="sidebar-close" title="إغلاق"><i class="fas fa-times"></i></button>
                 </div>
             </div>
-
-            <!-- شريط البحث -->
             <div class="sidebar-search">
                 <input type="text" id="sidebarSearch" placeholder="بحث..." oninput="filterSidebar(event)" />
             </div>
-
-            <nav class="sidebar-nav" id="sidebarNav">
-                <!-- سيتم إنشاء القائمة عبر JavaScript -->
-            </nav>
+            <nav class="sidebar-nav" id="sidebarNav"></nav>
         </aside>
 
-        <!-- ============================================================
-        SUBMENU PANEL (مودال القوائم الفرعية)
-        ============================================================ -->
+        <!-- SUBMENU PANEL -->
         <div class="submenu-panel" id="submenuPanel">
             <h4 id="submenuTitle"></h4>
             <ul id="submenuItems"></ul>
         </div>
-
-        <!-- Overlay للقوائم الفرعية -->
         <div class="overlay" id="overlay" onclick="closePanels()"></div>
 
         <!-- MAIN CONTENT -->
         <main class="main-content" id="mainContent">
 
-            <!-- ============================================================
-            PAGE: DASHBOARD
-            ============================================================ -->
+            <!-- =========================== PAGE: DASHBOARD =========================== -->
             <div class="page active" id="page-dashboard">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">لوحة التحكم</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">لوحة التحكم</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-home" style="color:var(--primary);"></i> لوحة التحكم</h2>
-                        <p>مرحباً بك في نظام إدارة محطة أبو أحمد المتكامل</p>
+                        <p>نظرة عامة سريعة على أداء المحطة</p>
                     </div>
                     <div class="page-actions">
                         <button class="btn btn-secondary btn-sm" onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="stats-grid" id="dashStats">
-                    <div class="stat-card">
-                        <div class="stat-icon">💰</div>
-                        <div class="stat-label">المبيعات اليوم</div>
-                        <div class="stat-value" id="dashSales">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">⛽</div>
-                        <div class="stat-label">اللترات المباعة</div>
-                        <div class="stat-value" id="dashLiters">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📦</div>
-                        <div class="stat-label">المخزون المتبقي</div>
-                        <div class="stat-value" id="dashStock">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">💳</div>
-                        <div class="stat-label">الديون المستحقة</div>
-                        <div class="stat-value" id="dashDue">0</div>
-                    </div>
+                    <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-label">المبيعات اليوم</div><div class="stat-value" id="dashSales">0</div></div>
+                    <div class="stat-card"><div class="stat-icon">⛽</div><div class="stat-label">اللترات المباعة</div><div class="stat-value" id="dashLiters">0</div></div>
+                    <div class="stat-card"><div class="stat-icon">📦</div><div class="stat-label">المخزون المتبقي</div><div class="stat-value" id="dashStock">0</div></div>
+                    <div class="stat-card"><div class="stat-icon">💳</div><div class="stat-label">الديون المستحقة</div><div class="stat-value" id="dashDue">0</div></div>
                 </div>
-
                 <div id="dashAlerts"></div>
-
                 <div class="quick-actions">
-                    <div class="quick-btn" onclick="showPage('sales')"><span class="qicon"><i class="fas fa-cart-plus"></i></span>بيع جديد</div>
+                    <div class="quick-btn" onclick="showPage('sales')"><span class="qicon"><i class="fas fa-cart-plus"></i></span>نقطة البيع</div>
                     <div class="quick-btn" onclick="showPage('payments')"><span class="qicon"><i class="fas fa-hand-holding-usd"></i></span>تسديد</div>
                     <div class="quick-btn" onclick="showPage('customers')"><span class="qicon"><i class="fas fa-users"></i></span>العملاء</div>
                     <div class="quick-btn" onclick="showPage('products')"><span class="qicon"><i class="fas fa-boxes"></i></span>المنتجات</div>
-                    <div class="quick-btn" onclick="showPage('employees')"><span class="qicon"><i class="fas fa-user-tie"></i></span>الموظفين</div>
                     <div class="quick-btn" onclick="showPage('tanks')"><span class="qicon"><i class="fas fa-oil-can"></i></span>الخزانات</div>
                     <div class="quick-btn" onclick="showPage('reports')"><span class="qicon"><i class="fas fa-chart-bar"></i></span>التقارير</div>
                     <div class="quick-btn" onclick="showPage('settings')"><span class="qicon"><i class="fas fa-cog"></i></span>الإعدادات</div>
+                    <div class="quick-btn" onclick="showPage('ai')"><span class="qicon"><i class="fas fa-robot"></i></span>المساعد الذكي</div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-chart-line card-icon"></i> مبيعات الأيام الأخيرة</div>
                     <div id="dailyChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
                 </div>
-
                 <div class="card" style="background:linear-gradient(135deg, rgba(30,64,175,0.04), rgba(212,175,55,0.04));">
                     <div class="card-title"><i class="fas fa-robot card-icon"></i> توقعات الذكاء الاصطناعي</div>
                     <div id="aiInsight" style="font-size:14px; line-height:1.7; color:var(--text-secondary);">جاري التحليل...</div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: SALES
-            ============================================================ -->
-            <div class="page" id="page-sales">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">المبيعات</span>
-                </div>
-                <div class="page-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-shopping-cart" style="color:var(--primary);"></i> إدارة المبيعات</h2>
-                        <p>تسجيل ومتابعة جميع عمليات البيع</p>
-                    </div>
-                    <div class="page-actions">
-                        <button class="btn btn-primary btn-sm" onclick="openSaleModal()"><i class="fas fa-plus"></i> مبيعة جديدة</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadSales()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-                        <div style="flex:1; min-width:150px; position:relative;">
-                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
-                            <input type="text" class="form-control" id="salesSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterSalesTable()">
-                        </div>
-                        <button class="btn btn-success btn-sm" onclick="exportSalesCSV()"><i class="fas fa-file-export"></i> تصدير</button>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>العميل</th>
-                                    <th>الوقود</th>
-                                    <th>الكمية (لتر)</th>
-                                    <th>السعر/لتر</th>
-                                    <th>الإجمالي</th>
-                                    <th>المدفوع</th>
-                                    <th>المتبقي</th>
-                                    <th>طريقة الدفع</th>
-                                    <th>التاريخ</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="salesTableBody">
-                                <tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-label">إجمالي المبيعات</div><div class="stat-value" id="salesTotal">0</div></div>
-                    <div class="stat-card"><div class="stat-label">إجمالي اللترات</div><div class="stat-value" id="salesTotalLiters">0</div></div>
-                    <div class="stat-card"><div class="stat-label">عدد المبيعات</div><div class="stat-value" id="salesCount">0</div></div>
-                    <div class="stat-card"><div class="stat-label">مبيعات اليوم</div><div class="stat-value" id="salesToday">0</div></div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-            PAGE: CUSTOMERS
-            ============================================================ -->
-            <div class="page" id="page-customers">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">العملاء</span>
-                </div>
-                <div class="page-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-users" style="color:var(--primary);"></i> إدارة العملاء</h2>
-                        <p>إدارة بيانات العملاء (الأطراف)</p>
-                    </div>
-                    <div class="page-actions">
-                        <button class="btn btn-primary btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> عميل جديد</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-                        <div style="flex:1; min-width:150px; position:relative;">
-                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
-                            <input type="text" class="form-control" id="customerSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterCustomersTable()">
-                        </div>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>الاسم التجاري</th>
-                                    <th>رقم الهاتف</th>
-                                    <th>البريد الإلكتروني</th>
-                                    <th>الرصيد الحالي</th>
-                                    <th>الحد الائتماني</th>
-                                    <th>النوع</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="customersTableBody">
-                                <tr><td colspan="9" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-            PAGE: PRODUCTS
-            ============================================================ -->
-            <div class="page" id="page-products">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">المنتجات</span>
-                </div>
-                <div class="page-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-boxes" style="color:var(--primary);"></i> إدارة المنتجات والوقود</h2>
-                        <p>إدارة المنتجات وأنواع الوقود والفئات</p>
-                    </div>
-                    <div class="page-actions">
-                        <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> منتج جديد</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadProducts()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-                        <div style="flex:1; min-width:150px; position:relative;">
-                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
-                            <input type="text" class="form-control" id="productSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterProductsTable()">
-                        </div>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>الاسم</th>
-                                    <th>النوع</th>
-                                    <th>الفئة</th>
-                                    <th>سعر البيع</th>
-                                    <th>سعر الشراء</th>
-                                    <th>الكمية</th>
-                                    <th>الحد الأدنى</th>
-                                    <th>الوحدة</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="productsTableBody">
-                                <tr><td colspan="11" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-            PAGE: EMPLOYEES
-            ============================================================ -->
-            <div class="page" id="page-employees">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الموظفين</span>
-                </div>
-                <div class="page-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-user-tie" style="color:var(--primary);"></i> إدارة الموظفين</h2>
-                        <p>إدارة بيانات الموظفين والرواتب</p>
-                    </div>
-                    <div class="page-actions">
-                        <button class="btn btn-primary btn-sm" onclick="openEmployeeModal()"><i class="fas fa-plus"></i> موظف جديد</button>
-                        <button class="btn btn-secondary btn-sm" onclick="loadEmployees()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>الاسم الكامل</th>
-                                    <th>المنصب</th>
-                                    <th>القسم</th>
-                                    <th>الهاتف</th>
-                                    <th>الراتب الأساسي</th>
-                                    <th>البدلات</th>
-                                    <th>الخصومات</th>
-                                    <th>صافي الراتب</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="employeesTableBody">
-                                <tr><td colspan="11" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-            PAGE: TANKS
-            ============================================================ -->
-            <div class="page" id="page-tanks">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الخزانات والمضخات</span>
-                </div>
-                <div class="page-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-oil-can" style="color:var(--primary);"></i> الخزانات والمضخات</h2>
-                        <p>مراقبة حالة الخزانات والمضخات</p>
-                    </div>
-                    <div class="page-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="loadTanks()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    </div>
-                </div>
-
-                <div id="tanksGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;"></div>
-
-                <div class="card mt-2">
-                    <div class="card-title"><i class="fas fa-faucet card-icon"></i> المضخات</div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>الاسم</th>
-                                    <th>الخزان المتصل</th>
-                                    <th>العداد الحالي</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pumpsTableBody"><tr><td colspan="6" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================================================
-            PAGE: USERS
-            ============================================================ -->
+            <!-- =========================== PAGE: USERS =========================== -->
             <div class="page" id="page-users">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">المستخدمين</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة المستخدمين</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-user-cog" style="color:var(--primary);"></i> إدارة المستخدمين</h2>
@@ -1643,42 +1216,22 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadUsers()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>اسم المستخدم</th>
-                                    <th>البريد الإلكتروني</th>
-                                    <th>الهاتف</th>
-                                    <th>الاسم الكامل</th>
-                                    <th>الدور</th>
-                                    <th>الحالة</th>
-                                    <th>آخر تسجيل</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="usersTableBody">
-                                <tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>اسم المستخدم</th><th>البريد الإلكتروني</th><th>الهاتف</th><th>الاسم الكامل</th><th>الدور</th><th>الحالة</th><th>آخر تسجيل</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="usersTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: ROLES
-            ============================================================ -->
+            <!-- =========================== PAGE: ROLES =========================== -->
             <div class="page" id="page-roles">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الأدوار والصلاحيات</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الأدوار والصلاحيات</span></div>
                 <div class="page-header">
                     <div class="header-left">
-                        <h2><i class="fas fa-user-shield" style="color:var(--primary);"></i> إدارة الأدوار والصلاحيات</h2>
+                        <h2><i class="fas fa-user-shield" style="color:var(--primary);"></i> الأدوار والصلاحيات</h2>
                         <p>إدارة أدوار المستخدمين وصلاحياتهم</p>
                     </div>
                     <div class="page-actions">
@@ -1686,38 +1239,124 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadRoles()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>اسم الدور</th>
-                                    <th>الوصف</th>
-                                    <th>المستوى</th>
-                                    <th>نظامي</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rolesTableBody">
-                                <tr><td colspan="7" class="text-center text-muted">جاري التحميل...</td></tr>
-                            </tbody>
+                            <thead><tr><th>الرمز</th><th>اسم الدور</th><th>الوصف</th><th>المستوى</th><th>نظامي</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="rolesTableBody"><tr><td colspan="7" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: PAYMENTS
-            ============================================================ -->
-            <div class="page" id="page-payments">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">المدفوعات</span>
+            <!-- =========================== PAGE: CUSTOMERS =========================== -->
+            <div class="page" id="page-customers">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة العملاء</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-users" style="color:var(--primary);"></i> إدارة العملاء</h2>
+                        <p>إدارة بيانات العملاء (الأطراف)</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> عميل جديد</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
                 </div>
+                <div class="card">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                        <div style="flex:1; min-width:150px; position:relative;">
+                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
+                            <input type="text" class="form-control" id="customerSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterCustomersTable()">
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>الرمز</th><th>الاسم التجاري</th><th>رقم الهاتف</th><th>البريد الإلكتروني</th><th>الرصيد الحالي</th><th>الحد الائتماني</th><th>النوع</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="customersTableBody"><tr><td colspan="9" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: PRODUCTS =========================== -->
+            <div class="page" id="page-products">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة المنتجات</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-boxes" style="color:var(--primary);"></i> إدارة المنتجات والوقود</h2>
+                        <p>إدارة المنتجات وأنواع الوقود والفئات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> منتج جديد</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadProducts()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                        <div style="flex:1; min-width:150px; position:relative;">
+                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
+                            <input type="text" class="form-control" id="productSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterProductsTable()">
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>الرمز</th><th>الاسم</th><th>النوع</th><th>الفئة</th><th>سعر البيع</th><th>سعر الشراء</th><th>الكمية</th><th>الحد الأدنى</th><th>الوحدة</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="productsTableBody"><tr><td colspan="11" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: TANKS =========================== -->
+            <div class="page" id="page-tanks">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة الخزانات والمضخات</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-oil-can" style="color:var(--primary);"></i> الخزانات والمضخات</h2>
+                        <p>مراقبة حالة الخزانات والمضخات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="loadTanks()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div id="tanksGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;"></div>
+                <div class="card mt-2">
+                    <div class="card-title"><i class="fas fa-faucet card-icon"></i> المضخات</div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>الرمز</th><th>الاسم</th><th>الخزان المتصل</th><th>العداد الحالي</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="pumpsTableBody"><tr><td colspan="6" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: EMPLOYEES =========================== -->
+            <div class="page" id="page-employees">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة الموظفين</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-user-tie" style="color:var(--primary);"></i> إدارة الموظفين</h2>
+                        <p>إدارة بيانات الموظفين والرواتب</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openEmployeeModal()"><i class="fas fa-plus"></i> موظف جديد</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadEmployees()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>الرمز</th><th>الاسم الكامل</th><th>المنصب</th><th>القسم</th><th>الهاتف</th><th>الراتب الأساسي</th><th>البدلات</th><th>الخصومات</th><th>صافي الراتب</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="employeesTableBody"><tr><td colspan="11" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: PAYMENTS =========================== -->
+            <div class="page" id="page-payments">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة المدفوعات</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-hand-holding-usd" style="color:var(--primary);"></i> المدفوعات والتسديدات</h2>
@@ -1729,58 +1368,55 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadPayments()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>العميل</th>
-                                    <th>المبلغ</th>
-                                    <th>طريقة الدفع</th>
-                                    <th>رقم الشيك/التحويل</th>
-                                    <th>الحالة</th>
-                                    <th>التاريخ</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>العميل</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك/التحويل</th><th>الحالة</th><th>التاريخ</th><th>الإجراءات</th></tr></thead>
                             <tbody id="paymentsTableBody"><tr><td colspan="7" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: NOTIFICATIONS
-            ============================================================ -->
-            <div class="page" id="page-notifications">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">التنبيهات</span>
-                </div>
+            <!-- =========================== PAGE: SALES =========================== -->
+            <div class="page" id="page-sales">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">نقطة البيع (POS)</span></div>
                 <div class="page-header">
                     <div class="header-left">
-                        <h2><i class="fas fa-bell" style="color:var(--primary);"></i> التنبيهات والإشعارات</h2>
-                        <p>آخر التنبيهات والإشعارات</p>
+                        <h2><i class="fas fa-shopping-cart" style="color:var(--primary);"></i> نقطة البيع (POS)</h2>
+                        <p>تسجيل ومتابعة جميع عمليات البيع</p>
                     </div>
                     <div class="page-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="loadNotifications()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                        <button class="btn btn-primary btn-sm" onclick="openSaleModal()"><i class="fas fa-plus"></i> مبيعة جديدة</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadSales()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
-                <div id="notificationsContainer"></div>
+                <div class="card">
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                        <div style="flex:1; min-width:150px; position:relative;">
+                            <i class="fas fa-search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary);"></i>
+                            <input type="text" class="form-control" id="salesSearch" placeholder="بحث..." style="padding-right:36px;" oninput="filterSalesTable()">
+                        </div>
+                        <button class="btn btn-success btn-sm" onclick="exportSalesCSV()"><i class="fas fa-file-export"></i> تصدير</button>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>#</th><th>العميل</th><th>الوقود</th><th>الكمية (لتر)</th><th>السعر/لتر</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th><th>طريقة الدفع</th><th>التاريخ</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody id="salesTableBody"><tr><td colspan="12" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">إجمالي المبيعات</div><div class="stat-value" id="salesTotal">0</div></div>
+                    <div class="stat-card"><div class="stat-label">إجمالي اللترات</div><div class="stat-value" id="salesTotalLiters">0</div></div>
+                    <div class="stat-card"><div class="stat-label">عدد المبيعات</div><div class="stat-value" id="salesCount">0</div></div>
+                    <div class="stat-card"><div class="stat-label">مبيعات اليوم</div><div class="stat-value" id="salesToday">0</div></div>
+                </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: SHIFTS
-            ============================================================ -->
+            <!-- =========================== PAGE: SHIFTS =========================== -->
             <div class="page" id="page-shifts">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الورديات</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة الورديات</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-clock" style="color:var(--primary);"></i> إدارة الورديات</h2>
@@ -1791,39 +1427,19 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadShifts()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>النوع</th>
-                                    <th>التاريخ</th>
-                                    <th>وقت البدء</th>
-                                    <th>وقت الانتهاء</th>
-                                    <th>المدير</th>
-                                    <th>أمين الصندوق</th>
-                                    <th>إجمالي المبيعات</th>
-                                    <th>الحالة</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>الرمز</th><th>النوع</th><th>التاريخ</th><th>وقت البدء</th><th>وقت الانتهاء</th><th>المدير</th><th>أمين الصندوق</th><th>إجمالي المبيعات</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
                             <tbody id="shiftsTableBody"><tr><td colspan="10" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: MAINTENANCE
-            ============================================================ -->
+            <!-- =========================== PAGE: MAINTENANCE =========================== -->
             <div class="page" id="page-maintenance">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الصيانة</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">طلبات الصيانة</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-tools" style="color:var(--primary);"></i> طلبات الصيانة</h2>
@@ -1834,37 +1450,19 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadMaintenance()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="table-wrap">
                         <table>
-                            <thead>
-                                <tr>
-                                    <th>الرمز</th>
-                                    <th>العنوان</th>
-                                    <th>نوع الأصل</th>
-                                    <th>معرف الأصل</th>
-                                    <th>الأولوية</th>
-                                    <th>الحالة</th>
-                                    <th>تاريخ الإبلاغ</th>
-                                    <th>الإجراءات</th>
-                                </tr>
-                            </thead>
+                            <thead><tr><th>الرمز</th><th>العنوان</th><th>نوع الأصل</th><th>معرف الأصل</th><th>الأولوية</th><th>الحالة</th><th>تاريخ الإبلاغ</th><th>الإجراءات</th></tr></thead>
                             <tbody id="maintenanceTableBody"><tr><td colspan="8" class="text-center text-muted">جاري التحميل...</td></tr></tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: SMS
-            ============================================================ -->
+            <!-- =========================== PAGE: SMS =========================== -->
             <div class="page" id="page-sms">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الرسائل النصية</span>
-                </div>
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الرسائل النصية</span></div>
                 <div class="page-header">
                     <div class="header-left">
                         <h2><i class="fas fa-sms" style="color:var(--primary);"></i> سجل الرسائل النصية</h2>
@@ -1874,7 +1472,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="loadSmsLogs()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
                 <div class="card">
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
                         <div style="flex:1; min-width:120px; position:relative;">
@@ -1895,7 +1492,6 @@
                         </table>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-title"><i class="fas fa-list card-icon"></i> قائمة السماح (Whitelist)</div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
@@ -1907,22 +1503,77 @@
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: AI CHAT
-            ============================================================ -->
-            <div class="page" id="page-ai">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">المساعد الذكي</span>
-                </div>
+            <!-- =========================== PAGE: NOTIFICATIONS =========================== -->
+            <div class="page" id="page-notifications">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">صندوق الإشعارات</span></div>
                 <div class="page-header">
                     <div class="header-left">
-                        <h2><i class="fas fa-robot" style="color:var(--primary);"></i> مساعد أبو أحمد الذكي</h2>
+                        <h2><i class="fas fa-bell" style="color:var(--primary);"></i> صندوق الإشعارات</h2>
+                        <p>آخر التنبيهات والإشعارات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="loadNotifications()"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div id="notificationsContainer"></div>
+            </div>
+
+            <!-- =========================== PAGE: REPORTS =========================== -->
+            <div class="page" id="page-reports">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">التقارير</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-chart-bar" style="color:var(--primary);"></i> التقارير والتحليلات</h2>
+                        <p>عرض وتحليل البيانات والإحصائيات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" onclick="generateEodReport()"><i class="fas fa-file-alt"></i> تقرير اليوم</button>
+                        <button class="btn btn-info btn-sm" onclick="openProfitReport()"><i class="fas fa-chart-pie"></i> الأرباح/الخسائر</button>
+                        <button class="btn btn-secondary btn-sm" onclick="exportAllData()"><i class="fas fa-download"></i> تصدير</button>
+                    </div>
+                </div>
+                <div id="reportContainer"></div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-chart-line card-icon"></i> المبيعات الشهرية</div>
+                    <div id="monthlyChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: SETTINGS =========================== -->
+            <div class="page" id="page-settings">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الإعدادات</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-cog" style="color:var(--primary);"></i> الإعدادات</h2>
+                        <p>إدارة إعدادات النظام والمفاتيح</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-building card-icon"></i> معلومات المحطة</div>
+                    <div class="form-group"><label>اسم المحطة</label><input type="text" class="form-control" id="settingStationName" value="محطة أبو أحمد لمشتقات الديزل"></div>
+                    <div class="form-group"><label>الهاتف</label><input type="text" class="form-control" id="settingPhone" value="+967 776 979 279"></div>
+                    <div class="form-group"><label>العملة</label><input type="text" class="form-control" id="settingCurrency" value="ريال يمني"></div>
+                    <div class="form-group"><label>حد التنبيه للمخزون (لتر)</label><input type="number" class="form-control" id="settingThreshold" value="1000"></div>
+                    <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-key card-icon"></i> مفاتيح API</div>
+                    <div class="form-group"><label>Gemini API</label><input type="password" class="form-control" id="settingGemini" placeholder="مفتاح Gemini"></div>
+                    <div class="form-group"><label>DeepSeek API</label><input type="password" class="form-control" id="settingDeepseek" placeholder="مفتاح DeepSeek"></div>
+                    <div class="form-group"><label>ChatGPT API</label><input type="password" class="form-control" id="settingChatgpt" placeholder="مفتاح ChatGPT"></div>
+                    <button class="btn btn-primary" onclick="saveApiKeys()"><i class="fas fa-save"></i> حفظ المفاتيح</button>
+                </div>
+            </div>
+
+            <!-- =========================== PAGE: AI =========================== -->
+            <div class="page" id="page-ai">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">المساعد الذكي</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-robot" style="color:var(--primary);"></i> المساعد الذكي</h2>
                         <p>اسأل المساعد عن أي شيء</p>
                     </div>
                 </div>
-
                 <div class="card" style="padding:0; overflow:hidden;">
                     <div class="chat-container">
                         <div class="chat-messages" id="chatMessages">
@@ -1936,67 +1587,154 @@
                 </div>
             </div>
 
-            <!-- ============================================================
-            PAGE: REPORTS
-            ============================================================ -->
-            <div class="page" id="page-reports">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">التقارير</span>
-                </div>
+            <!-- =========================== PAGE: SUPPLIERS =========================== -->
+            <div class="page" id="page-suppliers">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة الموردين</span></div>
                 <div class="page-header">
                     <div class="header-left">
-                        <h2><i class="fas fa-chart-bar" style="color:var(--primary);"></i> التقارير</h2>
-                        <p>عرض وتحليل البيانات والإحصائيات</p>
+                        <h2><i class="fas fa-truck-loading" style="color:var(--primary);"></i> إدارة الموردين</h2>
+                        <p>إدارة بيانات الموردين</p>
                     </div>
                     <div class="page-actions">
-                        <button class="btn btn-primary btn-sm" onclick="generateEodReport()"><i class="fas fa-file-alt"></i> تقرير اليوم</button>
-                        <button class="btn btn-info btn-sm" onclick="openProfitReport()"><i class="fas fa-chart-pie"></i> الأرباح/الخسائر</button>
-                        <button class="btn btn-secondary btn-sm" onclick="exportAllData()"><i class="fas fa-download"></i> تصدير</button>
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
-
-                <div id="reportContainer"></div>
-
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-chart-line card-icon"></i> المبيعات الشهرية</div>
-                    <div id="monthlyChart" style="height:160px; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:4px 0;"></div>
-                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
             </div>
 
-            <!-- ============================================================
-            PAGE: SETTINGS
-            ============================================================ -->
-            <div class="page" id="page-settings">
-                <div class="breadcrumb">
-                    <span>الرئيسية</span>
-                    <span class="separator">›</span>
-                    <span class="current">الإعدادات</span>
-                </div>
+            <!-- =========================== PAGE: VEHICLES =========================== -->
+            <div class="page" id="page-vehicles">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة المركبات</span></div>
                 <div class="page-header">
                     <div class="header-left">
-                        <h2><i class="fas fa-cog" style="color:var(--primary);"></i> الإعدادات</h2>
-                        <p>إدارة إعدادات النظام والمفاتيح</p>
+                        <h2><i class="fas fa-truck" style="color:var(--primary);"></i> إدارة المركبات</h2>
+                        <p>إدارة بيانات المركبات والسائقين</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
                     </div>
                 </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
 
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-building card-icon"></i> معلومات المحطة</div>
-                    <div class="form-group"><label>اسم المحطة</label><input type="text" class="form-control" id="settingStationName" value="محطة أبو أحمد لمشتقات الديزل"></div>
-                    <div class="form-group"><label>الهاتف</label><input type="text" class="form-control" id="settingPhone" value="+967 776 979 279"></div>
-                    <div class="form-group"><label>العملة</label><input type="text" class="form-control" id="settingCurrency" value="ريال يمني"></div>
-                    <div class="form-group"><label>حد التنبيه للمخزون (لتر)</label><input type="number" class="form-control" id="settingThreshold" value="1000"></div>
-                    <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+            <!-- =========================== PAGE: INVENTORY =========================== -->
+            <div class="page" id="page-inventory">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">إدارة المخزون</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-warehouse" style="color:var(--primary);"></i> إدارة المخزون والمستودعات</h2>
+                        <p>متابعة مستويات المخزون والحركات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
                 </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
 
-                <div class="card">
-                    <div class="card-title"><i class="fas fa-key card-icon"></i> مفاتيح API</div>
-                    <div class="form-group"><label>Gemini API</label><input type="password" class="form-control" id="settingGemini" placeholder="مفتاح Gemini"></div>
-                    <div class="form-group"><label>DeepSeek API</label><input type="password" class="form-control" id="settingDeepseek" placeholder="مفتاح DeepSeek"></div>
-                    <div class="form-group"><label>ChatGPT API</label><input type="password" class="form-control" id="settingChatgpt" placeholder="مفتاح ChatGPT"></div>
-                    <button class="btn btn-primary" onclick="saveApiKeys()"><i class="fas fa-save"></i> حفظ المفاتيح</button>
+            <!-- =========================== PAGE: FINANCE =========================== -->
+            <div class="page" id="page-finance">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">المالية والحسابات</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-money-bill-wave" style="color:var(--primary);"></i> المالية والحسابات</h2>
+                        <p>إدارة المدفوعات والإيصالات والميزانيات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
                 </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: ASSETS =========================== -->
+            <div class="page" id="page-assets">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الأصول والصيانة</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-building" style="color:var(--primary);"></i> الأصول والصيانة</h2>
+                        <p>إدارة الأصول الثابتة والصيانة</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: SYSTEM_LOGS =========================== -->
+            <div class="page" id="page-system_logs">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">سجلات النظام</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-history" style="color:var(--primary);"></i> سجلات النظام</h2>
+                        <p>سجلات النظام والتدقيق</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: SYNC =========================== -->
+            <div class="page" id="page-sync">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">المزامنة والنسخ الاحتياطي</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-sync" style="color:var(--primary);"></i> المزامنة والنسخ الاحتياطي</h2>
+                        <p>إدارة المزامنة والنسخ الاحتياطي</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: PRINTING =========================== -->
+            <div class="page" id="page-printing">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الطباعة والقوالب</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-print" style="color:var(--primary);"></i> الطباعة والقوالب</h2>
+                        <p>إدارة الطابعات وقوالب الإيصالات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: MANAGEMENT =========================== -->
+            <div class="page" id="page-management">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الإدارة الأساسية</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-building" style="color:var(--primary);"></i> الإدارة الأساسية</h2>
+                        <p>إعدادات الشركة والمحطات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
+            </div>
+
+            <!-- =========================== PAGE: SECURITY =========================== -->
+            <div class="page" id="page-security">
+                <div class="breadcrumb"><span>الرئيسية</span><span class="separator">›</span><span class="current">الأمان والمصادقة</span></div>
+                <div class="page-header">
+                    <div class="header-left">
+                        <h2><i class="fas fa-shield-alt" style="color:var(--primary);"></i> الأمان والمصادقة</h2>
+                        <p>إدارة المصادقة وسجل النشاطات</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="showToast('هذه الشاشة قيد التطوير', 'info')"><i class="fas fa-sync-alt"></i> تحديث</button>
+                    </div>
+                </div>
+                <div class="card"><div class="text-center text-muted" style="padding:40px;">هذه الشاشة قيد التطوير</div></div>
             </div>
 
         </main>
@@ -2005,15 +1743,13 @@
     <!-- ============================================================
     MODALS
     ============================================================ -->
-
-    <!-- ABOUT MODAL -->
     <div class="modal-overlay" id="aboutModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-info-circle"></i> عن التطبيق</h3><button class="modal-close" onclick="closeModal('aboutModal')">&times;</button></div>
             <div class="modal-body" style="text-align:center;">
                 <div style="width:70px; height:70px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 12px; color:white;"><i class="fas fa-gas-pump"></i></div>
                 <h3 style="font-family:var(--font-heading); color:var(--text);">محطة أبو أحمد لمشتقات الديزل</h3>
-                <p class="text-muted">الإصدار 6.0 Pro</p>
+                <p class="text-muted">الإصدار 7.0 Pro</p>
                 <div style="background:var(--bg); border-radius:var(--radius-sm); padding:12px; margin:12px 0;">
                     <div style="font-weight:700;">👨‍💻 المطور</div>
                     <div style="color:var(--text-secondary);">المهندس / جبر الحميدي</div>
@@ -2302,9 +2038,7 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    SHUTDOWN CONFIRM MODAL
-    ============================================================ -->
+    <!-- SHUTDOWN CONFIRM MODAL -->
     <div class="shutdown-confirm-modal" id="shutdownConfirmModal">
         <div class="shutdown-confirm-content">
             <h3>إيقاف الخادم</h3>
@@ -2338,7 +2072,6 @@
         let currentUser = null;
         let userPermissions = {};
 
-        // الكشف عن وجود AndroidInterface
         const androidInterface = window.AndroidInterface;
         const useAndroidInterface = typeof androidInterface !== 'undefined' && androidInterface !== null;
 
@@ -2422,14 +2155,12 @@
 
             try {
                 let result = null;
-
                 if (useAndroidInterface) {
                     try {
                         const response = androidInterface.login(username, password);
                         result = JSON.parse(response);
                     } catch (e) { result = null; }
                 }
-
                 if (!result || !result.success) {
                     try {
                         result = await apiCall('login', { username, password });
@@ -2440,7 +2171,6 @@
                         return;
                     }
                 }
-
                 if (result && result.success) {
                     if (result.token) localStorage.setItem('authToken', result.token);
                     if (result.user) {
@@ -2501,150 +2231,178 @@
         })();
 
         // ============================================================
-        // SIDEBAR – القائمة الرئيسية (بدون قوائم فرعية مدمجة)
+        // SIDEBAR – القائمة الرئيسية (17 وحدة حسب خطة المشروع)
         // ============================================================
-        const sidebarNavData = [{
-            id: 'dashboard',
-            label: 'الرئيسية',
-            icon: 'fa-home',
-            children: ['ملخص المخزون', 'الملخص المالي', 'التنبيهات والأنشطة']
-        }, {
-            id: 'sales',
-            label: 'عمليات البيع',
-            icon: 'fa-barcode',
-            children: ['مبيعات بالصوتي', 'مبيعات بالباكورد', 'مبيعات أخرى']
-        }, {
-            id: 'products',
-            label: 'المنتجات والمخزون',
-            icon: 'fa-box',
-            children: ['إدارة المنتجات', 'فئات المنتجات', 'وحدات القياس', 'إدخال المخزون', 'الحركات المخزنية', 'الجرد', 'تنبيهات الكمية', 'تتبع السعر', 'تفاصيل المنتج', 'تقييم المستودع']
-        }, {
-            id: 'tanks',
-            label: 'المستودعات',
-            icon: 'fa-warehouse',
-            children: ['قائمة المستودعات', 'توزيع المنتجات']
-        }, {
-            id: 'customers',
-            label: 'الجهات',
-            icon: 'fa-users',
-            children: ['العملاء', 'الموردين', 'الموظفين', 'جهات أخرى', 'العناوين', 'بيانات الاتصال']
-        }, {
-            id: 'payments',
-            label: 'المالية',
-            icon: 'fa-money-bill-wave',
-            children: ['المعاملات', 'تفاصيل المعاملة', 'الدفع و السداد', 'تتبع المدفوعات', 'الفواتير']
-        }, {
-            id: 'accounting',
-            label: 'المحاسبة',
-            icon: 'fa-calculator',
-            children: ['شجرة الحسابات', 'القيود اليومية', 'الميزانية', 'الإيرادات والمصروفات', 'ملخص المبيعات']
-        }, {
-            id: 'employees',
-            label: 'الموظفون',
-            icon: 'fa-user-tie',
-            children: ['الموظفين', 'الرواتب', 'الخصومات', 'صرف الرواتب']
-        }, {
-            id: 'assets',
-            label: 'الأصول',
-            icon: 'fa-building',
-            children: ['الأصول', 'الإهلاك']
-        }, {
-            id: 'settings',
-            label: 'الإعدادات',
-            icon: 'fa-cog',
-            children: ['العملات', 'إعدادات عامة', 'الصلاحيات', 'المستخدمين', 'الجلسات']
-        }, {
-            id: 'logs',
-            label: 'السجلات',
-            icon: 'fa-history',
-            children: ['سجل التغييرات', 'سجل المخزون', 'سجل الأسعار', 'تغييرات النظام']
-        }, {
-            id: 'budgets',
-            label: 'الميزانيات',
-            icon: 'fa-chart-pie',
-            children: ['الميزانيات', 'تفاصيل الميزانية', 'المصروفات التشغيلية']
-        }, {
-            id: 'withdrawals',
-            label: 'السحب',
-            icon: 'fa-credit-card',
-            children: ['السحب اليومي', 'تتبع النقدية']
-        }, {
-            id: 'reports',
-            label: 'التقارير',
-            icon: 'fa-chart-bar',
-            children: ['مبيعات يومية', 'منتجات راكدة', 'الصرف والميزانية', 'التقارير الذكية', 'توصيات موسميه', 'المنتجات الأعلى مبيعاً']
-        }, {
-            id: 'system',
-            label: 'النظام',
-            icon: 'fa-server',
-            children: ['بنية النظام', 'النسخ الاحتياطية']
-        }];
+        const sidebarNavData = [
+            // 1. الأمان والمصادقة
+            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt',
+                children: ['تسجيل الدخول', 'إدارة المستخدمين', 'الأدوار والصلاحيات', 'سجل النشاطات'] },
+            // 2. الإدارة الأساسية
+            { id: 'management', label: 'الإدارة الأساسية', icon: 'fa-building',
+                children: ['إعدادات الشركة', 'إدارة المحطات', 'إعدادات النظام', 'أسعار الصرف'] },
+            // 3. الأطراف والعملاء
+            { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users',
+                children: ['إدارة العملاء', 'إدارة الموردين', 'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'] },
+            // 4. المركبات والسائقين
+            { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck',
+                children: ['إدارة المركبات', 'إدارة السائقين', 'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'] },
+            // 5. المنتجات والوقود
+            { id: 'products_fuel', label: 'المنتجات والوقود', icon: 'fa-gas-pump',
+                children: ['أنواع الوقود', 'إدارة المنتجات', 'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'] },
+            // 6. الخزانات والمضخات
+            { id: 'tanks_pumps', label: 'الخزانات والمضخات', icon: 'fa-oil-can',
+                children: ['إدارة الخزانات', 'إدارة المضخات', 'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'] },
+            // 7. المخزون والمستودعات
+            { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse',
+                children: ['إدارة المستودعات', 'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'] },
+            // 8. المبيعات والورديات
+            { id: 'sales_shifts', label: 'المبيعات والورديات', icon: 'fa-cart-plus',
+                children: ['نقطة البيع (POS)', 'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'] },
+            // 9. المالية والحسابات
+            { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave',
+                children: ['إدارة المدفوعات', 'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات', 'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية', 'دفتر الأستاذ', 'الميزانية العمومية'] },
+            // 10. الموارد البشرية
+            { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie',
+                children: ['إدارة الموظفين', 'الحضور والانصراف', 'إدارة الرواتب', 'دفعات الموظفين'] },
+            // 11. الأصول والصيانة
+            { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools',
+                children: ['الأصول الثابتة', 'إدارة الأصول', 'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'] },
+            // 12. الإشعارات والرسائل
+            { id: 'notifications_msgs', label: 'الإشعارات والرسائل', icon: 'fa-bell',
+                children: ['قوالب الإشعارات', 'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء'] },
+            // 13. التقارير والتحليلات
+            { id: 'reports_analytics', label: 'التقارير والتحليلات', icon: 'fa-chart-bar',
+                children: ['لوحة التحكم', 'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود', 'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'] },
+            // 14. النظام والسجلات
+            { id: 'system_logs', label: 'النظام والسجلات', icon: 'fa-history',
+                children: ['سجلات النظام', 'سجلات التدقيق', 'إدارة الوثائق'] },
+            // 15. المزامنة والنسخ الاحتياطي
+            { id: 'sync_backup', label: 'المزامنة والنسخ الاحتياطي', icon: 'fa-sync',
+                children: ['إدارة الأجهزة', 'سجل المزامنة', 'النسخ الاحتياطي'] },
+            // 16. الطباعة والقوالب
+            { id: 'printing', label: 'الطباعة والقوالب', icon: 'fa-print',
+                children: ['إعدادات الطابعات', 'قوالب الإيصالات', 'قوالب الفواتير'] },
+            // 17. المساعد الذكي
+            { id: 'ai_assistant', label: 'المساعد الذكي', icon: 'fa-robot',
+                children: ['المساعد الذكي'] }
+        ];
 
+        // ============================================================
+        // SUBPAGE MAP – ربط أسماء الشاشات بمعرفات الصفحات
+        // ============================================================
         const subPageMap = {
-            'ملخص المخزون': 'dashboard',
-            'الملخص المالي': 'dashboard',
-            'التنبيهات والأنشطة': 'dashboard',
-            'مبيعات بالصوتي': 'sales',
-            'مبيعات بالباكورد': 'sales',
-            'مبيعات أخرى': 'sales',
+            // الأمان والمصادقة
+            'تسجيل الدخول': 'security',
+            'إدارة المستخدمين': 'users',
+            'الأدوار والصلاحيات': 'roles',
+            'سجل النشاطات': 'security',
+            // الإدارة الأساسية
+            'إعدادات الشركة': 'management',
+            'إدارة المحطات': 'management',
+            'إعدادات النظام': 'settings',
+            'أسعار الصرف': 'management',
+            // الأطراف والعملاء
+            'إدارة العملاء': 'customers',
+            'إدارة الموردين': 'suppliers',
+            'أنواع الأطراف': 'customers',
+            'إدارة العقود': 'customers',
+            'الديون المعدومة': 'customers',
+            'CRM - العلاقات': 'customers',
+            // المركبات والسائقين
+            'إدارة المركبات': 'vehicles',
+            'إدارة السائقين': 'vehicles',
+            'تتبع المركبات': 'vehicles',
+            'رحلات المركبات': 'vehicles',
+            'مصروفات المركبات': 'vehicles',
+            // المنتجات والوقود
+            'أنواع الوقود': 'products',
             'إدارة المنتجات': 'products',
             'فئات المنتجات': 'products',
-            'وحدات القياس': 'products',
-            'إدخال المخزون': 'products',
-            'الحركات المخزنية': 'products',
-            'الجرد': 'products',
-            'تنبيهات الكمية': 'products',
-            'تتبع السعر': 'products',
-            'تفاصيل المنتج': 'products',
-            'تقييم المستودع': 'products',
-            'قائمة المستودعات': 'tanks',
-            'توزيع المنتجات': 'tanks',
-            'العملاء': 'customers',
-            'الموردين': 'customers',
-            'الموظفين': 'employees',
-            'جهات أخرى': 'customers',
-            'العناوين': 'customers',
-            'بيانات الاتصال': 'customers',
-            'المعاملات': 'payments',
-            'تفاصيل المعاملة': 'payments',
-            'الدفع و السداد': 'payments',
-            'تتبع المدفوعات': 'payments',
-            'الفواتير': 'payments',
-            'شجرة الحسابات': 'accounting',
-            'القيود اليومية': 'accounting',
-            'الميزانية': 'accounting',
-            'الإيرادات والمصروفات': 'accounting',
-            'ملخص المبيعات': 'accounting',
-            'الموظفين': 'employees',
-            'الرواتب': 'employees',
-            'الخصومات': 'employees',
-            'صرف الرواتب': 'employees',
-            'الأصول': 'assets',
+            'قوائم الأسعار': 'products',
+            'سجل تغيير الأسعار': 'products',
+            // الخزانات والمضخات
+            'إدارة الخزانات': 'tanks',
+            'إدارة المضخات': 'tanks',
+            'قراءات العدادات': 'tanks',
+            'تعبئة الخزانات': 'tanks',
+            'فحوصات الجودة': 'tanks',
+            'معايرة المعدات': 'tanks',
+            // المخزون والمستودعات
+            'إدارة المستودعات': 'inventory',
+            'مستويات المخزون': 'inventory',
+            'حركات المخزون': 'inventory',
+            'الجرد والتسوية': 'inventory',
+            'المنتجات التالفة': 'inventory',
+            'تنبيهات المخزون': 'inventory',
+            // المبيعات والورديات
+            'نقطة البيع (POS)': 'sales',
+            'إدارة الورديات': 'shifts',
+            'سجل المبيعات': 'sales',
+            'إدارة الطلبات': 'sales',
+            'إدارة التوصيلات': 'sales',
+            'مبيعات الوقود': 'sales',
+            // المالية والحسابات
+            'إدارة المدفوعات': 'payments',
+            'إدارة الإيصالات': 'finance',
+            'إدارة الصناديق': 'finance',
+            'حركات النقدية': 'finance',
+            'البنوك والحسابات': 'finance',
+            'شجرة الحسابات': 'finance',
+            'القيود المحاسبية': 'finance',
+            'فئات المصروفات': 'finance',
+            'إدارة المصروفات': 'finance',
+            'الميزانيات': 'finance',
+            'الإيداعات النقدية': 'payments',
+            'دفتر الأستاذ': 'finance',
+            'الميزانية العمومية': 'finance',
+            // الموارد البشرية
+            'إدارة الموظفين': 'employees',
+            'الحضور والانصراف': 'employees',
+            'إدارة الرواتب': 'employees',
+            'دفعات الموظفين': 'employees',
+            // الأصول والصيانة
+            'الأصول الثابتة': 'assets',
+            'إدارة الأصول': 'assets',
+            'طلبات الصيانة': 'maintenance',
+            'جدولة الصيانة': 'maintenance',
+            'سجل الصيانة': 'maintenance',
             'الإهلاك': 'assets',
-            'العملات': 'settings',
-            'إعدادات عامة': 'settings',
-            'الصلاحيات': 'settings',
-            'المستخدمين': 'settings',
-            'الجلسات': 'settings',
-            'سجل التغييرات': 'logs',
-            'سجل المخزون': 'logs',
-            'سجل الأسعار': 'logs',
-            'تغييرات النظام': 'logs',
-            'الميزانيات': 'budgets',
-            'تفاصيل الميزانية': 'budgets',
-            'المصروفات التشغيلية': 'budgets',
-            'السحب اليومي': 'withdrawals',
-            'تتبع النقدية': 'withdrawals',
-            'مبيعات يومية': 'reports',
-            'منتجات راكدة': 'reports',
-            'الصرف والميزانية': 'reports',
-            'التقارير الذكية': 'reports',
-            'توصيات موسميه': 'reports',
-            'المنتجات الأعلى مبيعاً': 'reports',
-            'بنية النظام': 'system',
-            'النسخ الاحتياطية': 'system'
+            // الإشعارات والرسائل
+            'قوالب الإشعارات': 'notifications',
+            'صندوق الإشعارات': 'notifications',
+            'إدارة الرسائل': 'sms',
+            'سجل الرسائل': 'sms',
+            'تذكيرات الديون': 'sms',
+            'القائمة البيضاء': 'sms',
+            // التقارير والتحليلات
+            'لوحة التحكم': 'dashboard',
+            'تقارير المبيعات': 'reports',
+            'تقرير نهاية اليوم': 'reports',
+            'تقارير المخزون': 'reports',
+            'تقارير العملاء': 'reports',
+            'تقارير الوقود': 'reports',
+            'مؤشرات الأداء KPI': 'reports',
+            'التنبؤات والتحليلات': 'reports',
+            'التقارير المحاسبية': 'reports',
+            // النظام والسجلات
+            'سجلات النظام': 'system_logs',
+            'سجلات التدقيق': 'system_logs',
+            'إدارة الوثائق': 'system_logs',
+            // المزامنة والنسخ الاحتياطي
+            'إدارة الأجهزة': 'sync',
+            'سجل المزامنة': 'sync',
+            'النسخ الاحتياطي': 'sync',
+            // الطباعة والقوالب
+            'إعدادات الطابعات': 'printing',
+            'قوالب الإيصالات': 'printing',
+            'قوالب الفواتير': 'printing',
+            // المساعد الذكي
+            'المساعد الذكي': 'ai'
         };
 
+        // ============================================================
+        // RENDER SIDEBAR
+        // ============================================================
         function renderSidebar() {
             const nav = document.getElementById('sidebarNav');
             nav.innerHTML = '';
@@ -2663,21 +2421,16 @@
                 btn.onclick = function(e) {
                     e.stopPropagation();
                     if (item.children.length) {
-                        // عرض القائمة الفرعية في المودال
                         showSubmenu(e, item.label, item.children);
                     } else {
                         showPage(item.id);
                         closeSidebar();
                     }
                 };
-                // تأثير Ripple عند النقر
-                btn.addEventListener('click', function(e) {
-                    createRipple(e, this);
-                });
+                btn.addEventListener('click', function(e) { createRipple(e, this); });
                 nav.appendChild(btn);
             });
 
-            // استرجاع الحالة المخزنة
             const pinned = localStorage.getItem('sidebar-pinned') === 'true';
             if (pinned) {
                 document.getElementById('sidebar').classList.add('pinned');
@@ -2718,7 +2471,6 @@
             const submenuItems = document.getElementById('submenuItems');
             const overlay = document.getElementById('overlay');
 
-            // تحديث العنوان والعناصر
             submenuTitle.textContent = title;
             submenuItems.innerHTML = '';
 
@@ -2726,11 +2478,9 @@
                 const li = document.createElement('li');
                 li.textContent = item;
 
-                // التحقق من الصلاحية
                 if (!userPermissions[item]) {
                     li.classList.add('disabled');
                 } else {
-                    // تحديد الوجهة لكل عنصر
                     const targetPage = subPageMap[item] || null;
                     li.onclick = function(e) {
                         e.stopPropagation();
@@ -2743,26 +2493,19 @@
                         }
                     };
                 }
-
                 submenuItems.appendChild(li);
             });
 
-            // حساب الموضع بناءً على العنصر المضغوط (الحدث)
             const clickedElement = event.currentTarget;
             const rect = clickedElement.getBoundingClientRect();
-
-            // الحصول على عرض القائمة الجانبية (sidebar width)
             const sidebar = document.getElementById('sidebar');
             const sidebarWidth = sidebar.offsetWidth;
 
-            // تحديد الموقع: المودال يظهر بجانب القائمة (على يسارها في RTL)
-            let leftPos = rect.left - sidebarWidth - 10; // 10px مسافة
-            // إذا كان المودال سيتجاوز الشاشة من اليسار، نضعه على اليمين
+            let leftPos = rect.left - sidebarWidth - 10;
             if (leftPos < 10) {
                 leftPos = rect.right + 10;
             }
 
-            // تحديد الموضع الرأسي بحيث يكون محاذياً للعنصر
             let topPos = rect.top;
             const panelHeight = submenuPanel.scrollHeight || 300;
             if (topPos + panelHeight > window.innerHeight) {
@@ -2772,9 +2515,8 @@
 
             submenuPanel.style.left = leftPos + 'px';
             submenuPanel.style.top = topPos + 'px';
-            submenuPanel.style.right = 'auto'; // نستخدم left للتحديد الدقيق
+            submenuPanel.style.right = 'auto';
 
-            // إظهار المودال والـ overlay
             submenuPanel.classList.add('show');
             overlay.classList.add('show');
         }
@@ -2831,12 +2573,10 @@
         function filterSidebar(event) {
             const query = event.target.value.toLowerCase().trim();
             const items = document.querySelectorAll('.nav-item');
-
             if (!query) {
                 items.forEach(item => { item.style.display = 'flex'; });
                 return;
             }
-
             items.forEach(item => {
                 const label = item.querySelector('.nav-label');
                 const text = label ? label.textContent.toLowerCase() : '';
@@ -2853,7 +2593,6 @@
             const target = document.getElementById('page-' + pageId);
             if (target) target.classList.add('active');
 
-            // تحديث breadcrumb
             const header = target ? target.querySelector('.page-header') : null;
             if (header) {
                 let bc = header.parentNode.querySelector('.breadcrumb');
@@ -2863,11 +2602,10 @@
                     header.parentNode.insertBefore(bc, header);
                 }
                 const pageName = target ? target.id.replace('page-', '') : '';
-                const label = sidebarNavData.find(d => d.id === pageId)?.label || pageId;
+                const label = sidebarNavData.find(d => d.id === pageId)?.label || pageName;
                 bc.innerHTML = `<span>الرئيسية</span><span class="separator">›</span><span class="current">${label}</span>`;
             }
 
-            // تحديث الحالة النشطة في القائمة
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.toggle('active', false);
                 const label = item.querySelector('.nav-label');
@@ -2876,7 +2614,6 @@
                 }
             });
 
-            // تحميل بيانات الشاشة
             switch (pageId) {
                 case 'dashboard': loadDashboard(); break;
                 case 'sales': loadSales(); break;
@@ -2894,6 +2631,7 @@
                 case 'reports': generateEodReport(); loadMonthlyChart(); break;
                 case 'settings': loadSettings(); break;
                 case 'ai': break;
+                default: break;
             }
         }
 
@@ -2960,204 +2698,119 @@
         }
 
         // ============================================================
-        // SALES
+        // USERS
         // ============================================================
-        let salesData = [];
+        let usersData = [];
 
-        async function loadSales() {
+        async function loadUsers() {
             showLoading(true);
             try {
-                const result = await apiCall('get_sales');
+                const result = await apiCall('get_users');
                 if (result.success) {
-                    salesData = result.data || [];
-                    renderSalesTable(salesData);
-                    updateSalesStats(salesData);
+                    usersData = result.data || [];
+                    renderUsersTable(usersData);
+                    const roleResult = await apiCall('get_roles');
+                    const roleSel = document.getElementById('userFormRole');
+                    if (roleResult.success) {
+                        roleSel.innerHTML = '<option value="">-- اختر --</option>';
+                        roleResult.data.forEach(r => {
+                            const opt = document.createElement('option');
+                            opt.value = r.role_id;
+                            opt.textContent = r.role_name;
+                            roleSel.appendChild(opt);
+                        });
+                    }
                 }
-            } catch (e) { showToast('فشل تحميل المبيعات', 'error'); }
+            } catch (e) { showToast('فشل تحميل المستخدمين', 'error'); }
             showLoading(false);
         }
 
-        function renderSalesTable(data) {
-            const tbody = document.getElementById('salesTableBody');
+        function renderUsersTable(data) {
+            const tbody = document.getElementById('usersTableBody');
             if (!data || !data.length) {
-                tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">لا توجد مبيعات</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا يوجد مستخدمين</td></tr>';
                 return;
             }
-            tbody.innerHTML = data.map(s => `
+            tbody.innerHTML = data.map(u => `
                 <tr>
-                    <td>${s.sale_code || s.id || ''}</td>
-                    <td>${s.customer_name || s.customer_party_id || ''}</td>
-                    <td>${s.fuel_name || s.product_name || ''}</td>
-                    <td>${(s.liters || 0).toFixed(2)}</td>
-                    <td>${(s.price_per_liter || 0).toFixed(2)}</td>
-                    <td>${(s.subtotal || 0).toLocaleString()}</td>
-                    <td>${(s.paid_amount || 0).toLocaleString()}</td>
-                    <td>${(s.remaining_amount || 0).toLocaleString()}</td>
-                    <td>${s.payment_method || ''}</td>
-                    <td>${s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG') : ''}</td>
-                    <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${s.status || ''}</span></td>
+                    <td><strong>${u.username || ''}</strong></td>
+                    <td>${u.email || ''}</td>
+                    <td>${u.phone || ''}</td>
+                    <td>${u.full_name || ''}</td>
+                    <td>${u.role_name || u.role_id || ''}</td>
+                    <td><span class="badge ${u.status === 'active' ? 'badge-success' : 'badge-danger'}">${u.status || ''}</span></td>
+                    <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString('ar-EG') : ''}</td>
                     <td>
                         <div class="table-actions">
-                            <button class="ta-btn view" onclick="viewSale(${s.id})"><i class="fas fa-eye"></i></button>
-                            <button class="ta-btn delete" onclick="deleteSale(${s.id})"><i class="fas fa-trash"></i></button>
+                            <button class="ta-btn edit" onclick="editUser(${u.user_id})"><i class="fas fa-edit"></i></button>
+                            <button class="ta-btn delete" onclick="deleteUser(${u.user_id})"><i class="fas fa-trash"></i></button>
                         </div>
                     </td>
                 </tr>
             `).join('');
         }
 
-        function updateSalesStats(data) {
-            const total = data.reduce((sum, s) => sum + (s.subtotal || 0), 0);
-            const liters = data.reduce((sum, s) => sum + (s.liters || 0), 0);
-            document.getElementById('salesTotal').textContent = total.toLocaleString();
-            document.getElementById('salesTotalLiters').textContent = liters.toFixed(0);
-            document.getElementById('salesCount').textContent = data.length;
-            const today = data.filter(s => {
-                const d = new Date(s.created_at);
-                const now = new Date();
-                return d.toDateString() === now.toDateString();
-            });
-            document.getElementById('salesToday').textContent = today.reduce((sum, s) => sum + (s.subtotal || 0), 0)
-                .toLocaleString();
+        function openUserModal(data) {
+            document.getElementById('userFormId').value = data ? data.user_id : '';
+            document.getElementById('userFormUsername').value = data ? data.username : '';
+            document.getElementById('userFormEmail').value = data ? data.email : '';
+            document.getElementById('userFormPhone').value = data ? data.phone : '';
+            document.getElementById('userFormFullName').value = data ? data.full_name : '';
+            document.getElementById('userFormRole').value = data ? data.role_id : '';
+            document.getElementById('userFormStatus').value = data ? data.status : 'active';
+            document.getElementById('userFormPasswordGroup').style.display = data ? 'none' : 'block';
+            document.getElementById('userModalTitle').innerHTML = data ?
+                '<i class="fas fa-edit"></i> تعديل مستخدم' :
+                '<i class="fas fa-user-plus"></i> إضافة مستخدم';
+            document.getElementById('userFormDelete').style.display = data ? 'block' : 'none';
+            openModal('userModal');
         }
 
-        function filterSalesTable() {
-            const q = document.getElementById('salesSearch').value.toLowerCase();
-            const filtered = salesData.filter(s =>
-                (s.customer_name || '').toLowerCase().includes(q) ||
-                (s.sale_code || '').toLowerCase().includes(q)
-            );
-            renderSalesTable(filtered);
+        async function editUser(id) {
+            const u = usersData.find(u => u.user_id == id);
+            if (u) openUserModal(u);
+            else showToast('المستخدم غير موجود', 'error');
         }
 
-        function openSaleModal() {
-            loadSaleDropdowns();
-            document.getElementById('saleForm').reset();
-            document.getElementById('saleTotalPreview').textContent = '0 ريال';
-            document.getElementById('saleDuePreview').textContent = '0 ريال';
-            document.getElementById('saleQty').value = 100;
-            document.getElementById('salePrice').value = 500;
-            document.getElementById('salePaid').value = 0;
-            document.getElementById('saleDueDateGroup').style.display = 'none';
-            openModal('saleModal');
-        }
-
-        async function loadSaleDropdowns() {
-            try {
-                const [cust, fuel, pump] = await Promise.all([
-                    apiCall('get_customers'),
-                    apiCall('get_fuel_types'),
-                    apiCall('get_pumps')
-                ]);
-                const selCust = document.getElementById('saleCustomer');
-                selCust.innerHTML = '<option value="">-- اختر العميل --</option>';
-                if (cust.success) cust.data.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.party_id;
-                    opt.textContent = c.commercial_name + (c.phone ? ` (${c.phone})` : '');
-                    selCust.appendChild(opt);
-                });
-
-                const selFuel = document.getElementById('saleFuelType');
-                selFuel.innerHTML = '<option value="">-- اختر الوقود --</option>';
-                if (fuel.success) fuel.data.forEach(f => {
-                    const opt = document.createElement('option');
-                    opt.value = f.fuel_type_id;
-                    opt.textContent = f.fuel_name_ar || f.fuel_name;
-                    selFuel.appendChild(opt);
-                });
-
-                const selPump = document.getElementById('salePump');
-                selPump.innerHTML = '<option value="">-- اختر المضخة --</option>';
-                if (pump.success) pump.data.forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.pump_id;
-                    opt.textContent = p.pump_name || p.pump_code;
-                    selPump.appendChild(opt);
-                });
-            } catch (e) { console.error('Dropdown error', e); }
-        }
-
-        document.getElementById('salePaymentMethod').addEventListener('change', function() {
-            document.getElementById('saleDueDateGroup').style.display = this.value === 'credit' ? 'block' : 'none';
-        });
-
-        function setSaleQty(v) { document.getElementById('saleQty').value = v;
-            updateSalePreview(); }
-
-        function setSalePaid(v) { document.getElementById('salePaid').value = v;
-            updateSalePreview(); }
-
-        function setSalePaidFull() {
-            const total = parseFloat(document.getElementById('saleTotalPreview').textContent.replace(/[^0-9.]/g, '')) || 0;
-            document.getElementById('salePaid').value = total;
-            updateSalePreview();
-        }
-
-        function updateSalePreview() {
-            const qty = parseFloat(document.getElementById('saleQty').value) || 0;
-            const price = parseFloat(document.getElementById('salePrice').value) || 0;
-            const total = qty * price;
-            document.getElementById('saleTotalPreview').textContent = total.toLocaleString() + ' ريال';
-            const paid = parseFloat(document.getElementById('salePaid').value) || 0;
-            document.getElementById('saleDuePreview').textContent = (total - paid).toLocaleString() + ' ريال';
-        }
-        ['saleQty', 'salePrice', 'salePaid'].forEach(id => {
-            document.getElementById(id).addEventListener('input', updateSalePreview);
-        });
-
-        async function executeSale(e) {
+        async function saveUser(e) {
             e.preventDefault();
-            const customer = document.getElementById('saleCustomer').value;
-            const fuel = document.getElementById('saleFuelType').value;
-            const pump = document.getElementById('salePump').value;
-            const qty = document.getElementById('saleQty').value;
-            const price = document.getElementById('salePrice').value;
-            const paid = document.getElementById('salePaid').value;
-            const method = document.getElementById('salePaymentMethod').value;
-            const due = document.getElementById('saleDueDate').value;
-            const notes = document.getElementById('saleNotes').value;
+            const id = document.getElementById('userFormId').value;
+            const username = document.getElementById('userFormUsername').value;
+            const email = document.getElementById('userFormEmail').value;
+            const phone = document.getElementById('userFormPhone').value;
+            const fullName = document.getElementById('userFormFullName').value;
+            const role = document.getElementById('userFormRole').value;
+            const status = document.getElementById('userFormStatus').value;
+            const password = document.getElementById('userFormPassword').value;
 
-            if (!customer || !fuel || !pump || !qty) {
-                showToast('يرجى ملء جميع الحقول المطلوبة', 'warning');
-                return;
-            }
-
+            if (!username || !fullName) { showToast('اسم المستخدم والاسم الكامل مطلوبان', 'warning'); return; }
+            if (!id && !password) { showToast('كلمة المرور مطلوبة للمستخدم الجديد', 'warning'); return; }
             showLoading(true);
             try {
-                const result = await apiCall('execute_sale', {
-                    customer_party_id: customer,
-                    fuel_type_id: fuel,
-                    pump_id: pump,
-                    liters: qty,
-                    price_per_liter: price,
-                    paid_amount: paid,
-                    payment_method: method,
-                    due_date: due,
-                    notes: notes,
-                    is_credit: method === 'credit' ? 1 : 0,
-                    shift_id: 1
-                });
+                const params = { username, email, phone, full_name: fullName, role_id: role, status };
+                if (!id) params.password = password;
+                const action = id ? 'update_user' : 'add_user';
+                if (id) params.user_id = id;
+                const result = await apiCall(action, params);
                 if (result.success) {
-                    showToast('تم تسجيل البيع بنجاح', 'success');
-                    closeModal('saleModal');
-                    loadSales();
-                    loadDashboard();
+                    showToast('تم حفظ المستخدم', 'success');
+                    closeModal('userModal');
+                    loadUsers();
                 } else {
-                    showToast(result.error || 'فشل البيع', 'error');
+                    showToast(result.error || 'فشل الحفظ', 'error');
                 }
             } catch (e) { showToast('خطأ في الاتصال', 'error'); }
             showLoading(false);
         }
 
-        async function deleteSale(id) {
-            if (!confirm('هل أنت متأكد من حذف هذه المبيعة؟')) return;
+        async function deleteUser(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
             showLoading(true);
             try {
-                const result = await apiCall('delete_sale', { sale_id: id });
+                const result = await apiCall('delete_user', { user_id: id });
                 if (result.success) {
                     showToast('تم الحذف', 'success');
-                    loadSales();
+                    loadUsers();
                 } else {
                     showToast(result.error || 'فشل الحذف', 'error');
                 }
@@ -3165,24 +2818,117 @@
             showLoading(false);
         }
 
-        function viewSale(id) { showToast('عرض تفاصيل المبيعة #' + id, 'info'); }
+        function deleteUserFromForm() {
+            const id = document.getElementById('userFormId').value;
+            if (id) deleteUser(parseInt(id));
+        }
 
-        function exportSalesCSV() {
-            if (!salesData.length) { showToast('لا توجد بيانات للتصدير', 'warning'); return; }
-            let csv =
-                'الرمز,العميل,الوقود,الكمية,السعر/لتر,الإجمالي,المدفوع,المتبقي,طريقة الدفع,التاريخ,الحالة\n';
-            salesData.forEach(s => {
-                csv +=
-                    `${s.sale_code||''},${s.customer_name||''},${s.fuel_name||''},${s.liters||0},${s.price_per_liter||0},${s.subtotal||0},${s.paid_amount||0},${s.remaining_amount||0},${s.payment_method||''},${s.created_at||''},${s.status||''}\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `sales_${new Date().toISOString().slice(0,10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('تم التصدير', 'success');
+        // ============================================================
+        // ROLES
+        // ============================================================
+        let rolesData = [];
+
+        async function loadRoles() {
+            showLoading(true);
+            try {
+                const result = await apiCall('get_roles');
+                if (result.success) {
+                    rolesData = result.data || [];
+                    renderRolesTable(rolesData);
+                }
+            } catch (e) { showToast('فشل تحميل الأدوار', 'error'); }
+            showLoading(false);
+        }
+
+        function renderRolesTable(data) {
+            const tbody = document.getElementById('rolesTableBody');
+            if (!data || !data.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد أدوار</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td>${r.role_code || ''}</td>
+                    <td><strong>${r.role_name || ''}</strong></td>
+                    <td>${r.description || ''}</td>
+                    <td>${r.level || ''}</td>
+                    <td>${r.is_system_role ? 'نعم' : 'لا'}</td>
+                    <td><span class="badge ${r.is_active ? 'badge-success' : 'badge-danger'}">${r.is_active ? 'نشط' : 'غير نشط'}</span></td>
+                    <td>
+                        <div class="table-actions">
+                            <button class="ta-btn edit" onclick="editRole(${r.role_id})"><i class="fas fa-edit"></i></button>
+                            <button class="ta-btn delete" onclick="deleteRole(${r.role_id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openRoleModal(data) {
+            document.getElementById('roleFormId').value = data ? data.role_id : '';
+            document.getElementById('roleFormCode').value = data ? data.role_code : '';
+            document.getElementById('roleFormName').value = data ? data.role_name : '';
+            document.getElementById('roleFormDesc').value = data ? data.description : '';
+            document.getElementById('roleFormLevel').value = data ? data.level : 1;
+            document.getElementById('roleFormSystem').value = data ? (data.is_system_role ? 1 : 0) : 0;
+            document.getElementById('roleModalTitle').innerHTML = data ?
+                '<i class="fas fa-edit"></i> تعديل دور' :
+                '<i class="fas fa-user-shield"></i> إضافة دور';
+            document.getElementById('roleFormDelete').style.display = data ? 'block' : 'none';
+            openModal('roleModal');
+        }
+
+        async function editRole(id) {
+            const r = rolesData.find(r => r.role_id == id);
+            if (r) openRoleModal(r);
+            else showToast('الدور غير موجود', 'error');
+        }
+
+        async function saveRole(e) {
+            e.preventDefault();
+            const id = document.getElementById('roleFormId').value;
+            const code = document.getElementById('roleFormCode').value;
+            const name = document.getElementById('roleFormName').value;
+            const desc = document.getElementById('roleFormDesc').value;
+            const level = document.getElementById('roleFormLevel').value;
+            const system = document.getElementById('roleFormSystem').value;
+
+            if (!code || !name) { showToast('الرمز والاسم مطلوبان', 'warning'); return; }
+            showLoading(true);
+            try {
+                const params = { role_code: code, role_name: name, description: desc, level, is_system_role: system };
+                const action = id ? 'update_role' : 'add_role';
+                if (id) params.role_id = id;
+                const result = await apiCall(action, params);
+                if (result.success) {
+                    showToast('تم حفظ الدور', 'success');
+                    closeModal('roleModal');
+                    loadRoles();
+                } else {
+                    showToast(result.error || 'فشل الحفظ', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function deleteRole(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الدور؟')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('delete_role', { role_id: id });
+                if (result.success) {
+                    showToast('تم الحذف', 'success');
+                    loadRoles();
+                } else {
+                    showToast(result.error || 'فشل الحذف', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        function deleteRoleFromForm() {
+            const id = document.getElementById('roleFormId').value;
+            if (id) deleteRole(parseInt(id));
         }
 
         // ============================================================
@@ -3677,240 +3423,6 @@
         function editPump(id) { showToast('تعديل المضخة #' + id + ' - قيد التطوير', 'info'); }
 
         // ============================================================
-        // USERS
-        // ============================================================
-        let usersData = [];
-
-        async function loadUsers() {
-            showLoading(true);
-            try {
-                const result = await apiCall('get_users');
-                if (result.success) {
-                    usersData = result.data || [];
-                    renderUsersTable(usersData);
-                    const roleResult = await apiCall('get_roles');
-                    const roleSel = document.getElementById('userFormRole');
-                    if (roleResult.success) {
-                        roleSel.innerHTML = '<option value="">-- اختر --</option>';
-                        roleResult.data.forEach(r => {
-                            const opt = document.createElement('option');
-                            opt.value = r.role_id;
-                            opt.textContent = r.role_name;
-                            roleSel.appendChild(opt);
-                        });
-                    }
-                }
-            } catch (e) { showToast('فشل تحميل المستخدمين', 'error'); }
-            showLoading(false);
-        }
-
-        function renderUsersTable(data) {
-            const tbody = document.getElementById('usersTableBody');
-            if (!data || !data.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا يوجد مستخدمين</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.map(u => `
-                <tr>
-                    <td><strong>${u.username || ''}</strong></td>
-                    <td>${u.email || ''}</td>
-                    <td>${u.phone || ''}</td>
-                    <td>${u.full_name || ''}</td>
-                    <td>${u.role_name || u.role_id || ''}</td>
-                    <td><span class="badge ${u.status === 'active' ? 'badge-success' : 'badge-danger'}">${u.status || ''}</span></td>
-                    <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString('ar-EG') : ''}</td>
-                    <td>
-                        <div class="table-actions">
-                            <button class="ta-btn edit" onclick="editUser(${u.user_id})"><i class="fas fa-edit"></i></button>
-                            <button class="ta-btn delete" onclick="deleteUser(${u.user_id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function openUserModal(data) {
-            document.getElementById('userFormId').value = data ? data.user_id : '';
-            document.getElementById('userFormUsername').value = data ? data.username : '';
-            document.getElementById('userFormEmail').value = data ? data.email : '';
-            document.getElementById('userFormPhone').value = data ? data.phone : '';
-            document.getElementById('userFormFullName').value = data ? data.full_name : '';
-            document.getElementById('userFormRole').value = data ? data.role_id : '';
-            document.getElementById('userFormStatus').value = data ? data.status : 'active';
-            document.getElementById('userFormPasswordGroup').style.display = data ? 'none' : 'block';
-            document.getElementById('userModalTitle').innerHTML = data ?
-                '<i class="fas fa-edit"></i> تعديل مستخدم' :
-                '<i class="fas fa-user-plus"></i> إضافة مستخدم';
-            document.getElementById('userFormDelete').style.display = data ? 'block' : 'none';
-            openModal('userModal');
-        }
-
-        async function editUser(id) {
-            const u = usersData.find(u => u.user_id == id);
-            if (u) openUserModal(u);
-            else showToast('المستخدم غير موجود', 'error');
-        }
-
-        async function saveUser(e) {
-            e.preventDefault();
-            const id = document.getElementById('userFormId').value;
-            const username = document.getElementById('userFormUsername').value;
-            const email = document.getElementById('userFormEmail').value;
-            const phone = document.getElementById('userFormPhone').value;
-            const fullName = document.getElementById('userFormFullName').value;
-            const role = document.getElementById('userFormRole').value;
-            const status = document.getElementById('userFormStatus').value;
-            const password = document.getElementById('userFormPassword').value;
-
-            if (!username || !fullName) { showToast('اسم المستخدم والاسم الكامل مطلوبان', 'warning'); return; }
-            if (!id && !password) { showToast('كلمة المرور مطلوبة للمستخدم الجديد', 'warning'); return; }
-            showLoading(true);
-            try {
-                const params = { username, email, phone, full_name: fullName, role_id: role, status };
-                if (!id) params.password = password;
-                const action = id ? 'update_user' : 'add_user';
-                if (id) params.user_id = id;
-                const result = await apiCall(action, params);
-                if (result.success) {
-                    showToast('تم حفظ المستخدم', 'success');
-                    closeModal('userModal');
-                    loadUsers();
-                } else {
-                    showToast(result.error || 'فشل الحفظ', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-            showLoading(false);
-        }
-
-        async function deleteUser(id) {
-            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
-            showLoading(true);
-            try {
-                const result = await apiCall('delete_user', { user_id: id });
-                if (result.success) {
-                    showToast('تم الحذف', 'success');
-                    loadUsers();
-                } else {
-                    showToast(result.error || 'فشل الحذف', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-            showLoading(false);
-        }
-
-        function deleteUserFromForm() {
-            const id = document.getElementById('userFormId').value;
-            if (id) deleteUser(parseInt(id));
-        }
-
-        // ============================================================
-        // ROLES
-        // ============================================================
-        let rolesData = [];
-
-        async function loadRoles() {
-            showLoading(true);
-            try {
-                const result = await apiCall('get_roles');
-                if (result.success) {
-                    rolesData = result.data || [];
-                    renderRolesTable(rolesData);
-                }
-            } catch (e) { showToast('فشل تحميل الأدوار', 'error'); }
-            showLoading(false);
-        }
-
-        function renderRolesTable(data) {
-            const tbody = document.getElementById('rolesTableBody');
-            if (!data || !data.length) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد أدوار</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.map(r => `
-                <tr>
-                    <td>${r.role_code || ''}</td>
-                    <td><strong>${r.role_name || ''}</strong></td>
-                    <td>${r.description || ''}</td>
-                    <td>${r.level || ''}</td>
-                    <td>${r.is_system_role ? 'نعم' : 'لا'}</td>
-                    <td><span class="badge ${r.is_active ? 'badge-success' : 'badge-danger'}">${r.is_active ? 'نشط' : 'غير نشط'}</span></td>
-                    <td>
-                        <div class="table-actions">
-                            <button class="ta-btn edit" onclick="editRole(${r.role_id})"><i class="fas fa-edit"></i></button>
-                            <button class="ta-btn delete" onclick="deleteRole(${r.role_id})"><i class="fas fa-trash"></i></button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function openRoleModal(data) {
-            document.getElementById('roleFormId').value = data ? data.role_id : '';
-            document.getElementById('roleFormCode').value = data ? data.role_code : '';
-            document.getElementById('roleFormName').value = data ? data.role_name : '';
-            document.getElementById('roleFormDesc').value = data ? data.description : '';
-            document.getElementById('roleFormLevel').value = data ? data.level : 1;
-            document.getElementById('roleFormSystem').value = data ? (data.is_system_role ? 1 : 0) : 0;
-            document.getElementById('roleModalTitle').innerHTML = data ?
-                '<i class="fas fa-edit"></i> تعديل دور' :
-                '<i class="fas fa-user-shield"></i> إضافة دور';
-            document.getElementById('roleFormDelete').style.display = data ? 'block' : 'none';
-            openModal('roleModal');
-        }
-
-        async function editRole(id) {
-            const r = rolesData.find(r => r.role_id == id);
-            if (r) openRoleModal(r);
-            else showToast('الدور غير موجود', 'error');
-        }
-
-        async function saveRole(e) {
-            e.preventDefault();
-            const id = document.getElementById('roleFormId').value;
-            const code = document.getElementById('roleFormCode').value;
-            const name = document.getElementById('roleFormName').value;
-            const desc = document.getElementById('roleFormDesc').value;
-            const level = document.getElementById('roleFormLevel').value;
-            const system = document.getElementById('roleFormSystem').value;
-
-            if (!code || !name) { showToast('الرمز والاسم مطلوبان', 'warning'); return; }
-            showLoading(true);
-            try {
-                const params = { role_code: code, role_name: name, description: desc, level, is_system_role: system };
-                const action = id ? 'update_role' : 'add_role';
-                if (id) params.role_id = id;
-                const result = await apiCall(action, params);
-                if (result.success) {
-                    showToast('تم حفظ الدور', 'success');
-                    closeModal('roleModal');
-                    loadRoles();
-                } else {
-                    showToast(result.error || 'فشل الحفظ', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-            showLoading(false);
-        }
-
-        async function deleteRole(id) {
-            if (!confirm('هل أنت متأكد من حذف هذا الدور؟')) return;
-            showLoading(true);
-            try {
-                const result = await apiCall('delete_role', { role_id: id });
-                if (result.success) {
-                    showToast('تم الحذف', 'success');
-                    loadRoles();
-                } else {
-                    showToast(result.error || 'فشل الحذف', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-            showLoading(false);
-        }
-
-        function deleteRoleFromForm() {
-            const id = document.getElementById('roleFormId').value;
-            if (id) deleteRole(parseInt(id));
-        }
-
-        // ============================================================
         // PAYMENTS
         // ============================================================
         async function loadPayments() {
@@ -4045,6 +3557,232 @@
                 }
             } catch (e) { showToast('خطأ في الاتصال', 'error'); }
             showLoading(false);
+        }
+
+        // ============================================================
+        // SALES
+        // ============================================================
+        let salesData = [];
+
+        async function loadSales() {
+            showLoading(true);
+            try {
+                const result = await apiCall('get_sales');
+                if (result.success) {
+                    salesData = result.data || [];
+                    renderSalesTable(salesData);
+                    updateSalesStats(salesData);
+                }
+            } catch (e) { showToast('فشل تحميل المبيعات', 'error'); }
+            showLoading(false);
+        }
+
+        function renderSalesTable(data) {
+            const tbody = document.getElementById('salesTableBody');
+            if (!data || !data.length) {
+                tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">لا توجد مبيعات</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(s => `
+                <tr>
+                    <td>${s.sale_code || s.id || ''}</td>
+                    <td>${s.customer_name || s.customer_party_id || ''}</td>
+                    <td>${s.fuel_name || s.product_name || ''}</td>
+                    <td>${(s.liters || 0).toFixed(2)}</td>
+                    <td>${(s.price_per_liter || 0).toFixed(2)}</td>
+                    <td>${(s.subtotal || 0).toLocaleString()}</td>
+                    <td>${(s.paid_amount || 0).toLocaleString()}</td>
+                    <td>${(s.remaining_amount || 0).toLocaleString()}</td>
+                    <td>${s.payment_method || ''}</td>
+                    <td>${s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG') : ''}</td>
+                    <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${s.status || ''}</span></td>
+                    <td>
+                        <div class="table-actions">
+                            <button class="ta-btn view" onclick="viewSale(${s.id})"><i class="fas fa-eye"></i></button>
+                            <button class="ta-btn delete" onclick="deleteSale(${s.id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateSalesStats(data) {
+            const total = data.reduce((sum, s) => sum + (s.subtotal || 0), 0);
+            const liters = data.reduce((sum, s) => sum + (s.liters || 0), 0);
+            document.getElementById('salesTotal').textContent = total.toLocaleString();
+            document.getElementById('salesTotalLiters').textContent = liters.toFixed(0);
+            document.getElementById('salesCount').textContent = data.length;
+            const today = data.filter(s => {
+                const d = new Date(s.created_at);
+                const now = new Date();
+                return d.toDateString() === now.toDateString();
+            });
+            document.getElementById('salesToday').textContent = today.reduce((sum, s) => sum + (s.subtotal || 0), 0)
+                .toLocaleString();
+        }
+
+        function filterSalesTable() {
+            const q = document.getElementById('salesSearch').value.toLowerCase();
+            const filtered = salesData.filter(s =>
+                (s.customer_name || '').toLowerCase().includes(q) ||
+                (s.sale_code || '').toLowerCase().includes(q)
+            );
+            renderSalesTable(filtered);
+        }
+
+        function openSaleModal() {
+            loadSaleDropdowns();
+            document.getElementById('saleForm').reset();
+            document.getElementById('saleTotalPreview').textContent = '0 ريال';
+            document.getElementById('saleDuePreview').textContent = '0 ريال';
+            document.getElementById('saleQty').value = 100;
+            document.getElementById('salePrice').value = 500;
+            document.getElementById('salePaid').value = 0;
+            document.getElementById('saleDueDateGroup').style.display = 'none';
+            openModal('saleModal');
+        }
+
+        async function loadSaleDropdowns() {
+            try {
+                const [cust, fuel, pump] = await Promise.all([
+                    apiCall('get_customers'),
+                    apiCall('get_fuel_types'),
+                    apiCall('get_pumps')
+                ]);
+                const selCust = document.getElementById('saleCustomer');
+                selCust.innerHTML = '<option value="">-- اختر العميل --</option>';
+                if (cust.success) cust.data.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.party_id;
+                    opt.textContent = c.commercial_name + (c.phone ? ` (${c.phone})` : '');
+                    selCust.appendChild(opt);
+                });
+
+                const selFuel = document.getElementById('saleFuelType');
+                selFuel.innerHTML = '<option value="">-- اختر الوقود --</option>';
+                if (fuel.success) fuel.data.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.fuel_type_id;
+                    opt.textContent = f.fuel_name_ar || f.fuel_name;
+                    selFuel.appendChild(opt);
+                });
+
+                const selPump = document.getElementById('salePump');
+                selPump.innerHTML = '<option value="">-- اختر المضخة --</option>';
+                if (pump.success) pump.data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.pump_id;
+                    opt.textContent = p.pump_name || p.pump_code;
+                    selPump.appendChild(opt);
+                });
+            } catch (e) { console.error('Dropdown error', e); }
+        }
+
+        document.getElementById('salePaymentMethod').addEventListener('change', function() {
+            document.getElementById('saleDueDateGroup').style.display = this.value === 'credit' ? 'block' : 'none';
+        });
+
+        function setSaleQty(v) { document.getElementById('saleQty').value = v;
+            updateSalePreview(); }
+
+        function setSalePaid(v) { document.getElementById('salePaid').value = v;
+            updateSalePreview(); }
+
+        function setSalePaidFull() {
+            const total = parseFloat(document.getElementById('saleTotalPreview').textContent.replace(/[^0-9.]/g, '')) || 0;
+            document.getElementById('salePaid').value = total;
+            updateSalePreview();
+        }
+
+        function updateSalePreview() {
+            const qty = parseFloat(document.getElementById('saleQty').value) || 0;
+            const price = parseFloat(document.getElementById('salePrice').value) || 0;
+            const total = qty * price;
+            document.getElementById('saleTotalPreview').textContent = total.toLocaleString() + ' ريال';
+            const paid = parseFloat(document.getElementById('salePaid').value) || 0;
+            document.getElementById('saleDuePreview').textContent = (total - paid).toLocaleString() + ' ريال';
+        }
+        ['saleQty', 'salePrice', 'salePaid'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateSalePreview);
+        });
+
+        async function executeSale(e) {
+            e.preventDefault();
+            const customer = document.getElementById('saleCustomer').value;
+            const fuel = document.getElementById('saleFuelType').value;
+            const pump = document.getElementById('salePump').value;
+            const qty = document.getElementById('saleQty').value;
+            const price = document.getElementById('salePrice').value;
+            const paid = document.getElementById('salePaid').value;
+            const method = document.getElementById('salePaymentMethod').value;
+            const due = document.getElementById('saleDueDate').value;
+            const notes = document.getElementById('saleNotes').value;
+
+            if (!customer || !fuel || !pump || !qty) {
+                showToast('يرجى ملء جميع الحقول المطلوبة', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const result = await apiCall('execute_sale', {
+                    customer_party_id: customer,
+                    fuel_type_id: fuel,
+                    pump_id: pump,
+                    liters: qty,
+                    price_per_liter: price,
+                    paid_amount: paid,
+                    payment_method: method,
+                    due_date: due,
+                    notes: notes,
+                    is_credit: method === 'credit' ? 1 : 0,
+                    shift_id: 1
+                });
+                if (result.success) {
+                    showToast('تم تسجيل البيع بنجاح', 'success');
+                    closeModal('saleModal');
+                    loadSales();
+                    loadDashboard();
+                } else {
+                    showToast(result.error || 'فشل البيع', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        async function deleteSale(id) {
+            if (!confirm('هل أنت متأكد من حذف هذه المبيعة؟')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('delete_sale', { sale_id: id });
+                if (result.success) {
+                    showToast('تم الحذف', 'success');
+                    loadSales();
+                } else {
+                    showToast(result.error || 'فشل الحذف', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+            showLoading(false);
+        }
+
+        function viewSale(id) { showToast('عرض تفاصيل المبيعة #' + id, 'info'); }
+
+        function exportSalesCSV() {
+            if (!salesData.length) { showToast('لا توجد بيانات للتصدير', 'warning'); return; }
+            let csv =
+                'الرمز,العميل,الوقود,الكمية,السعر/لتر,الإجمالي,المدفوع,المتبقي,طريقة الدفع,التاريخ,الحالة\n';
+            salesData.forEach(s => {
+                csv +=
+                    `${s.sale_code||''},${s.customer_name||''},${s.fuel_name||''},${s.liters||0},${s.price_per_liter||0},${s.subtotal||0},${s.paid_amount||0},${s.remaining_amount||0},${s.payment_method||''},${s.created_at||''},${s.status||''}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sales_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('تم التصدير', 'success');
         }
 
         // ============================================================
@@ -4628,7 +4366,7 @@
         function showAboutModal() { openModal('aboutModal'); }
 
         // ============================================================
-        // CLOSE PANELS (للتوافق مع التصميم الأصلي)
+        // CLOSE PANELS
         // ============================================================
         function closePanels() {
             closeSidebar();
@@ -4662,7 +4400,6 @@
                 document.getElementById('loginScreen').classList.remove('hidden');
             }
 
-            // أحداث الفقاعات
             document.getElementById('shutdownBubble').addEventListener('click', function(e) {
                 e.stopPropagation();
                 showShutdownConfirm();
@@ -4672,14 +4409,11 @@
                 window.open('/chat', '_blank', 'width=1000,height=700,scrollbars=yes');
             });
 
-            // إغلاق القوائم عند النقر خارجها
             document.addEventListener('click', function(e) {
                 const sidebar = document.getElementById('sidebar');
                 const submenuPanel = document.getElementById('submenuPanel');
-                const overlay = document.getElementById('overlay');
                 const menuToggle = document.querySelector('.menu-toggle');
 
-                // إغلاق القائمة الجانبية إذا كانت مفتوحة والنقر خارجها (على الجوال)
                 if (window.innerWidth < 992) {
                     if (sidebar.classList.contains('open') &&
                         !sidebar.contains(e.target) &&
@@ -4689,7 +4423,6 @@
                     }
                 }
 
-                // إغلاق القائمة الفرعية إذا كانت مفتوحة والنقر خارجها
                 if (submenuPanel.classList.contains('show') &&
                     !submenuPanel.contains(e.target) &&
                     !e.target.closest('.nav-item')) {
@@ -4697,7 +4430,6 @@
                 }
             });
 
-            // إظهار الفقاعات بعد تأخير
             setTimeout(() => {
                 const sb = document.getElementById('shutdownBubble');
                 if (sb) sb.style.opacity = '1';
