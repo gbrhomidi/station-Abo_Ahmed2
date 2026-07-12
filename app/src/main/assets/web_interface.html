@@ -32,7 +32,7 @@
             --radius: 12px;
             --radius-sm: 6px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --sidebar-width: 280px;
+            --sidebar-width: 100px;
             --header-height: 64px;
             --font-family: 'Inter', sans-serif;
             --font-heading: 'Poppins', sans-serif;
@@ -91,7 +91,7 @@
         }
         body {
             padding-bottom: 20px;
-            cursor: pointer;
+            cursor: default;
         }
 
         ::-webkit-scrollbar {
@@ -114,10 +114,6 @@
             from { opacity: 0; transform: translateX(20px); }
             to { opacity: 1; transform: translateX(0); }
         }
-        @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
@@ -128,10 +124,6 @@
         @keyframes ripple {
             from { transform: scale(0); opacity: 0.5; }
             to { transform: scale(4); opacity: 0; }
-        }
-        @keyframes slideDown {
-            from { max-height: 0; opacity: 0; }
-            to { max-height: 500px; opacity: 1; }
         }
 
         .fade-in { animation: fadeIn 0.35s ease; }
@@ -285,7 +277,7 @@
         .menu-toggle:hover { background: var(--border); }
 
         /* ============================================================
-           SIDEBAR - القائمة الرئيسية المطورة
+           SIDEBAR - القائمة الرئيسية (بدون قوائم فرعية مدمجة)
            ============================================================ */
         .sidebar-overlay {
             position: fixed;
@@ -302,7 +294,7 @@
             top: 0;
             right: 0;
             bottom: 0;
-            width: 100px;
+            width: var(--sidebar-width);
             background: var(--card-bg);
             border-left: 1px solid var(--border);
             z-index: 99;
@@ -443,7 +435,6 @@
         .sidebar-nav .nav-item .nav-icon { font-size: 0.9rem; width: 20px; text-align: center; flex-shrink: 0; }
         .sidebar-nav .nav-item .nav-label { flex: 1; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .sidebar-nav .nav-item .nav-arrow { font-size: 10px; transition: transform 0.3s; }
-        .sidebar-nav .nav-item .nav-arrow.open { transform: rotate(180deg); }
         .sidebar-nav .nav-item.disabled {
             opacity: 0.5;
             pointer-events: none;
@@ -459,57 +450,84 @@
             pointer-events: none;
         }
 
-        /* القوائم الفرعية - Submenu */
-        .sidebar-nav .sub-menu {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease, opacity 0.3s ease;
-            opacity: 0;
-            padding-right: 8px;
+        /* ============================================================
+           SUBMENU PANEL (مودال القوائم الفرعية) - جديد
+           ============================================================ */
+        .submenu-panel {
+            position: fixed;
+            background: var(--card-bg);
+            padding: 0.8rem 0.5rem;
+            z-index: 1004;
+            display: none;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+            border: 1px solid rgba(0,0,0,0.1);
+            max-height: 70vh;
+            overflow-y: auto;
+            min-width: 160px;
+            max-width: 220px;
+            animation: slideInRight 0.3s ease;
         }
-        .sidebar-nav .sub-menu.open {
-            max-height: 500px;
-            opacity: 1;
+        .submenu-panel.show {
+            display: block;
         }
-        .sidebar-nav .sub-menu .sub-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 10px 8px 12px;
-            margin: 4px 0;
-            border-radius: 6px;
+        .submenu-panel h4 {
+            font-size: 1rem;
+            margin: 0.5rem 0;
+            color: var(--main-color);
+            text-align: center;
+            border-bottom: 2px solid var(--main-color);
+            padding-bottom: 8px;
+        }
+        .submenu-panel ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .submenu-panel ul li {
             background: linear-gradient(to left, var(--main-color), var(--main-color-dark));
             color: white;
+            margin: 6px 0;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
             cursor: pointer;
-            font-size: 0.85rem;
             transition: all 0.2s;
             box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            border: none;
-            width: 100%;
             text-align: right;
-            font-family: var(--font-family);
         }
-        .sidebar-nav .sub-menu .sub-item:hover {
+        .submenu-panel ul li:hover:not(.disabled) {
             transform: translateX(-5px);
             background: var(--main-color-dark);
         }
-        .sidebar-nav .sub-menu .sub-item:active {
+        .submenu-panel ul li:active:not(.disabled) {
             transform: scale(0.98);
             background: var(--gold-color);
             color: #333;
         }
-        .sidebar-nav .sub-menu .sub-item.active {
-            border-right: 3px solid var(--gold-color);
-            box-shadow: 0 0 15px rgba(25, 118, 210, 0.3);
-        }
-        .sidebar-nav .sub-menu .sub-item.disabled {
+        .submenu-panel ul li.disabled {
             opacity: 0.5;
             pointer-events: none;
             cursor: not-allowed;
             background: linear-gradient(to left, #666, #888);
         }
-        .sidebar-nav .sub-menu .sub-item .sub-icon { font-size: 0.8rem; width: 18px; text-align: center; flex-shrink: 0; }
-        .sidebar-nav .sub-menu .sub-item .sub-label { flex: 1; font-size: 0.85rem; }
+
+        /* Overlay للقوائم الفرعية */
+        .overlay {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            background: rgba(0,0,0,0.3);
+            display: none;
+            z-index: 998;
+            backdrop-filter: blur(3px);
+        }
+        .overlay.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
 
         /* ============================================================
            MAIN CONTENT
@@ -526,12 +544,12 @@
                 border-left: 1px solid var(--border);
             }
             .sidebar-overlay { display: none !important; }
-            .main-content { margin-right: 100px; }
+            .main-content { margin-right: var(--sidebar-width); }
             .menu-toggle { display: none; }
             .sidebar-close { display: none; }
         }
         @media (min-width: 1024px) {
-            .sidebar.pinned + .main-content { margin-right: 100px; }
+            .sidebar.pinned + .main-content { margin-right: var(--sidebar-width); }
             .sidebar:not(.pinned) + .main-content { margin-right: 0; }
         }
 
@@ -736,7 +754,7 @@
         @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
 
         /* ============================================================
-           MODALS
+           MODALS (للشاشات الأخرى)
            ============================================================ */
         .modal-overlay {
             position: fixed;
@@ -889,16 +907,29 @@
             .form-row { grid-template-columns: 1fr; }
             .table-wrap table { font-size: 12px; }
             .table-wrap table th, .table-wrap table td { padding: 6px 8px; }
+            .submenu-panel {
+                min-width: 140px;
+                max-width: 180px;
+                font-size: 0.85rem;
+            }
         }
         @media (max-width: 480px) {
             .sidebar { width: 120px; }
             .sidebar .nav-item { font-size: 0.8rem; padding: 0.4rem 0.5rem; }
-            .sidebar .sub-menu .sub-item { font-size: 0.8rem; padding: 6px 8px; }
             .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
             .quick-actions { grid-template-columns: repeat(2, 1fr); }
             .stat-card .stat-value { font-size: 17px; }
             .app-header .header-brand h1 { font-size: 14px; }
             .app-header .header-brand small { font-size: 10px; }
+            .submenu-panel {
+                min-width: 120px;
+                max-width: 160px;
+                padding: 0.5rem 0.3rem;
+            }
+            .submenu-panel ul li {
+                padding: 8px 10px;
+                font-size: 0.8rem;
+            }
         }
 
         /* ============================================================
@@ -1019,7 +1050,7 @@
         .invoice-preview .inv-total { font-size: 16px; font-weight: 800; border-top: 2px solid #1a3a5a; padding-top: 8px; margin-top: 8px; }
 
         /* ============================================================
-           SHUTDOWN BUBBLE & CHAT BUBBLE (محفوظ من التصميم الأصلي)
+           SHUTDOWN BUBBLE & CHAT BUBBLE
            ============================================================ */
         .shutdown-bubble {
             position: fixed;
@@ -1240,7 +1271,7 @@
         <!-- SIDEBAR OVERLAY -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-        <!-- SIDEBAR - القائمة الرئيسية المطورة -->
+        <!-- SIDEBAR - القائمة الرئيسية (بدون قوائم فرعية مدمجة) -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -1262,6 +1293,17 @@
                 <!-- سيتم إنشاء القائمة عبر JavaScript -->
             </nav>
         </aside>
+
+        <!-- ============================================================
+        SUBMENU PANEL (مودال القوائم الفرعية)
+        ============================================================ -->
+        <div class="submenu-panel" id="submenuPanel">
+            <h4 id="submenuTitle"></h4>
+            <ul id="submenuItems"></ul>
+        </div>
+
+        <!-- Overlay للقوائم الفرعية -->
+        <div class="overlay" id="overlay" onclick="closePanels()"></div>
 
         <!-- MAIN CONTENT -->
         <main class="main-content" id="mainContent">
@@ -2459,7 +2501,7 @@
         })();
 
         // ============================================================
-        // SIDEBAR – القائمة الرئيسية المطورة
+        // SIDEBAR – القائمة الرئيسية (بدون قوائم فرعية مدمجة)
         // ============================================================
         const sidebarNavData = [{
             id: 'dashboard',
@@ -2612,45 +2654,27 @@
                 const btn = document.createElement('button');
                 btn.className = `nav-item ${activePage === item.id ? 'active' : ''}`;
                 btn.setAttribute('role', 'menuitem');
-                btn.setAttribute('aria-expanded', 'false');
                 btn.setAttribute('data-index', index);
                 btn.innerHTML = `
                     <span class="nav-icon"><i class="fas ${item.icon}"></i></span>
                     <span class="nav-label">${item.label}</span>
-                    ${item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
+                    ${item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-left"></i></span>` : ''}
                 `;
                 btn.onclick = function(e) {
-                    toggleNavItem(this, item, e);
+                    e.stopPropagation();
+                    if (item.children.length) {
+                        // عرض القائمة الفرعية في المودال
+                        showSubmenu(e, item.label, item.children);
+                    } else {
+                        showPage(item.id);
+                        closeSidebar();
+                    }
                 };
                 // تأثير Ripple عند النقر
                 btn.addEventListener('click', function(e) {
                     createRipple(e, this);
                 });
                 nav.appendChild(btn);
-
-                if (item.children.length) {
-                    const sub = document.createElement('div');
-                    sub.className = 'sub-menu';
-                    sub.setAttribute('role', 'menu');
-                    item.children.forEach(child => {
-                        const subBtn = document.createElement('button');
-                        subBtn.className = 'sub-item';
-                        const targetPage = subPageMap[child] || item.id;
-                        const hasPermission = userPermissions[child] !== false;
-                        if (!hasPermission) {
-                            subBtn.classList.add('disabled');
-                        }
-                        subBtn.innerHTML = `<span class="sub-icon"><i class="fas fa-angle-left"></i></span><span class="sub-label">${child}</span>`;
-                        subBtn.onclick = function(e) {
-                            e.stopPropagation();
-                            if (this.classList.contains('disabled')) return;
-                            showPage(targetPage);
-                            closeSidebar();
-                        };
-                        sub.appendChild(subBtn);
-                    });
-                    btn.after(sub);
-                }
             });
 
             // استرجاع الحالة المخزنة
@@ -2658,49 +2682,6 @@
             if (pinned) {
                 document.getElementById('sidebar').classList.add('pinned');
                 document.getElementById('pinBtn').classList.add('pinned');
-            }
-
-            // استرجاع آخر قسم مفتوح
-            const openSection = sessionStorage.getItem('sidebar-open-section');
-            if (openSection) {
-                const items = nav.querySelectorAll('.nav-item');
-                items.forEach(item => {
-                    const label = item.querySelector('.nav-label');
-                    if (label && label.textContent.trim() === openSection) {
-                        const sub = item.nextElementSibling;
-                        if (sub && sub.classList.contains('sub-menu')) {
-                            sub.classList.add('open');
-                            const arrow = item.querySelector('.nav-arrow i');
-                            if (arrow) {
-                                arrow.classList.remove('fa-chevron-down');
-                                arrow.classList.add('fa-chevron-up');
-                            }
-                            item.setAttribute('aria-expanded', 'true');
-                        }
-                    }
-                });
-            }
-        }
-
-        function toggleNavItem(btn, item, e) {
-            if (e) e.stopPropagation();
-            const sub = btn.nextElementSibling;
-            const arrow = btn.querySelector('.nav-arrow i');
-            if (sub && sub.classList.contains('sub-menu')) {
-                sub.classList.toggle('open');
-                if (arrow) {
-                    arrow.classList.toggle('fa-chevron-down');
-                    arrow.classList.toggle('fa-chevron-up');
-                }
-                btn.setAttribute('aria-expanded', sub.classList.contains('open') ? 'true' : 'false');
-                if (sub.classList.contains('open')) {
-                    sessionStorage.setItem('sidebar-open-section', item.label);
-                } else {
-                    sessionStorage.removeItem('sidebar-open-section');
-                }
-            } else {
-                showPage(item.id);
-                closeSidebar();
             }
         }
 
@@ -2726,6 +2707,89 @@
             return 'dashboard';
         }
 
+        // ============================================================
+        // SUBMENU – عرض القوائم الفرعية في مودال منفصل
+        // ============================================================
+        function showSubmenu(event, title, items) {
+            event.stopPropagation();
+
+            const submenuPanel = document.getElementById('submenuPanel');
+            const submenuTitle = document.getElementById('submenuTitle');
+            const submenuItems = document.getElementById('submenuItems');
+            const overlay = document.getElementById('overlay');
+
+            // تحديث العنوان والعناصر
+            submenuTitle.textContent = title;
+            submenuItems.innerHTML = '';
+
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+
+                // التحقق من الصلاحية
+                if (!userPermissions[item]) {
+                    li.classList.add('disabled');
+                } else {
+                    // تحديد الوجهة لكل عنصر
+                    const targetPage = subPageMap[item] || null;
+                    li.onclick = function(e) {
+                        e.stopPropagation();
+                        if (this.classList.contains('disabled')) return;
+                        if (targetPage) {
+                            showPage(targetPage);
+                            closePanels();
+                        } else {
+                            showToast('هذه الشاشة قيد التطوير', 'info');
+                        }
+                    };
+                }
+
+                submenuItems.appendChild(li);
+            });
+
+            // حساب الموضع بناءً على العنصر المضغوط (الحدث)
+            const clickedElement = event.currentTarget;
+            const rect = clickedElement.getBoundingClientRect();
+
+            // الحصول على عرض القائمة الجانبية (sidebar width)
+            const sidebar = document.getElementById('sidebar');
+            const sidebarWidth = sidebar.offsetWidth;
+
+            // تحديد الموقع: المودال يظهر بجانب القائمة (على يسارها في RTL)
+            let leftPos = rect.left - sidebarWidth - 10; // 10px مسافة
+            // إذا كان المودال سيتجاوز الشاشة من اليسار، نضعه على اليمين
+            if (leftPos < 10) {
+                leftPos = rect.right + 10;
+            }
+
+            // تحديد الموضع الرأسي بحيث يكون محاذياً للعنصر
+            let topPos = rect.top;
+            const panelHeight = submenuPanel.scrollHeight || 300;
+            if (topPos + panelHeight > window.innerHeight) {
+                topPos = window.innerHeight - panelHeight - 20;
+            }
+            if (topPos < 10) topPos = 10;
+
+            submenuPanel.style.left = leftPos + 'px';
+            submenuPanel.style.top = topPos + 'px';
+            submenuPanel.style.right = 'auto'; // نستخدم left للتحديد الدقيق
+
+            // إظهار المودال والـ overlay
+            submenuPanel.classList.add('show');
+            overlay.classList.add('show');
+        }
+
+        // ============================================================
+        // CLOSE PANELS
+        // ============================================================
+        function closePanels() {
+            document.getElementById('submenuPanel').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+
+        // ============================================================
+        // SIDEBAR TOGGLE
+        // ============================================================
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -2767,35 +2831,14 @@
         function filterSidebar(event) {
             const query = event.target.value.toLowerCase().trim();
             const items = document.querySelectorAll('.nav-item');
-            const subItems = document.querySelectorAll('.sub-item');
 
             if (!query) {
                 items.forEach(item => { item.style.display = 'flex'; });
-                subItems.forEach(item => { item.style.display = 'flex'; });
                 return;
             }
 
             items.forEach(item => {
                 const label = item.querySelector('.nav-label');
-                const text = label ? label.textContent.toLowerCase() : '';
-                const match = text.includes(query);
-                item.style.display = match ? 'flex' : 'none';
-                // إذا كان العنصر متطابقاً، افتح القائمة الفرعية
-                if (match) {
-                    const sub = item.nextElementSibling;
-                    if (sub && sub.classList.contains('sub-menu')) {
-                        sub.classList.add('open');
-                        const arrow = item.querySelector('.nav-arrow i');
-                        if (arrow) {
-                            arrow.classList.remove('fa-chevron-down');
-                            arrow.classList.add('fa-chevron-up');
-                        }
-                    }
-                }
-            });
-
-            subItems.forEach(item => {
-                const label = item.querySelector('.sub-label');
                 const text = label ? label.textContent.toLowerCase() : '';
                 const match = text.includes(query);
                 item.style.display = match ? 'flex' : 'none';
@@ -2811,18 +2854,17 @@
             if (target) target.classList.add('active');
 
             // تحديث breadcrumb
-            const breadcrumb = target ? target.querySelector('.breadcrumb') : null;
-            if (!breadcrumb) {
-                // إضافة breadcrumb إذا لم يكن موجوداً
-                const header = target ? target.querySelector('.page-header') : null;
-                if (header) {
-                    const bc = document.createElement('div');
+            const header = target ? target.querySelector('.page-header') : null;
+            if (header) {
+                let bc = header.parentNode.querySelector('.breadcrumb');
+                if (!bc) {
+                    bc = document.createElement('div');
                     bc.className = 'breadcrumb';
-                    const pageName = target ? target.id.replace('page-', '') : '';
-                    const label = sidebarNavData.find(d => d.id === pageId)?.label || pageId;
-                    bc.innerHTML = `<span>الرئيسية</span><span class="separator">›</span><span class="current">${label}</span>`;
                     header.parentNode.insertBefore(bc, header);
                 }
+                const pageName = target ? target.id.replace('page-', '') : '';
+                const label = sidebarNavData.find(d => d.id === pageId)?.label || pageId;
+                bc.innerHTML = `<span>الرئيسية</span><span class="separator">›</span><span class="current">${label}</span>`;
             }
 
             // تحديث الحالة النشطة في القائمة
@@ -4520,14 +4562,18 @@
 
         function performShutdown() {
             hideShutdownConfirm();
-            Swal.fire({
-                title: 'جاري إيقاف الخادم',
-                text: 'يرجى الانتظار...',
-                icon: 'info',
-                allowOutsideClick: false,
-                showConfirmButton: false,
-                willOpen: () => { Swal.showLoading(); }
-            });
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'جاري إيقاف الخادم',
+                    text: 'يرجى الانتظار...',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    willOpen: () => { Swal.showLoading(); }
+                });
+            } else {
+                showToast('جاري إيقاف الخادم...', 'info');
+            }
 
             const csrf = getCsrfToken();
             const headers = { 'Content-Type': 'application/json' };
@@ -4545,26 +4591,34 @@
             })
             .then(data => {
                 if (data.status === 'ok') {
-                    Swal.fire({
-                        title: 'تم الإيقاف!',
-                        text: 'تم إيقاف الخادم بنجاح.',
-                        icon: 'success',
-                        confirmButtonText: 'حسناً'
-                    }).then(() => {
-                        document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:Cairo;font-size:24px;background:#f0f8ff;height:100vh;display:flex;align-items:center;justify-content:center;">تم إيقاف الخادم. يمكنك إغلاق التطبيق الآن.</div>';
-                    });
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'تم الإيقاف!',
+                            text: 'تم إيقاف الخادم بنجاح.',
+                            icon: 'success',
+                            confirmButtonText: 'حسناً'
+                        }).then(() => {
+                            document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:Cairo;font-size:24px;background:#f0f8ff;height:100vh;display:flex;align-items:center;justify-content:center;">تم إيقاف الخادم. يمكنك إغلاق التطبيق الآن.</div>';
+                        });
+                    } else {
+                        showToast('تم إيقاف الخادم', 'success');
+                    }
                 } else {
                     throw new Error(data.message || 'فشل في إيقاف الخادم');
                 }
             })
             .catch(error => {
                 console.error('Error shutting down server:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'خطأ!',
-                    text: error.message || 'فشل في إرسال طلب الإيقاف',
-                    confirmButtonText: 'حسناً'
-                });
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ!',
+                        text: error.message || 'فشل في إرسال طلب الإيقاف',
+                        confirmButtonText: 'حسناً'
+                    });
+                } else {
+                    showToast('فشل إيقاف الخادم', 'error');
+                }
             });
         }
 
@@ -4578,12 +4632,8 @@
         // ============================================================
         function closePanels() {
             closeSidebar();
-            // إخفاء أي قوائم فرعية مفتوحة
-            document.querySelectorAll('.sub-menu.open').forEach(el => el.classList.remove('open'));
-            document.querySelectorAll('.nav-arrow i.fa-chevron-up').forEach(el => {
-                el.classList.remove('fa-chevron-up');
-                el.classList.add('fa-chevron-down');
-            });
+            document.getElementById('submenuPanel').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
         }
 
         // ============================================================
@@ -4625,19 +4675,25 @@
             // إغلاق القوائم عند النقر خارجها
             document.addEventListener('click', function(e) {
                 const sidebar = document.getElementById('sidebar');
-                const overlay = document.getElementById('sidebarOverlay');
                 const submenuPanel = document.getElementById('submenuPanel');
+                const overlay = document.getElementById('overlay');
+                const menuToggle = document.querySelector('.menu-toggle');
+
+                // إغلاق القائمة الجانبية إذا كانت مفتوحة والنقر خارجها (على الجوال)
                 if (window.innerWidth < 992) {
-                    if (!sidebar.contains(e.target) && !e.target.closest('.menu-toggle') && !e.target.closest('.sub-menu') && !e.target.closest('.nav-item')) {
-                        if (sidebar.classList.contains('open')) {
-                            closeSidebar();
-                        }
+                    if (sidebar.classList.contains('open') &&
+                        !sidebar.contains(e.target) &&
+                        !menuToggle.contains(e.target) &&
+                        !submenuPanel.contains(e.target)) {
+                        closeSidebar();
                     }
                 }
-                // إغلاق القوائم الفرعية عند النقر خارجها
-                if (submenuPanel && !submenuPanel.contains(e.target)) {
-                    submenuPanel.classList.remove('show');
-                    overlay.classList.remove('show');
+
+                // إغلاق القائمة الفرعية إذا كانت مفتوحة والنقر خارجها
+                if (submenuPanel.classList.contains('show') &&
+                    !submenuPanel.contains(e.target) &&
+                    !e.target.closest('.nav-item')) {
+                    closePanels();
                 }
             });
 
