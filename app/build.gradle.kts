@@ -157,7 +157,7 @@ dependencies {
     implementation(libs.moshi.kotlin)
     ksp(libs.moshi.kotlin.codegen)
 
-    // Coroutines (تم تثبيت الإصدار 1.7.3 كما هو مطلوب)
+    // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
@@ -167,12 +167,15 @@ dependencies {
     // Biometric
     implementation("androidx.biometric:biometric:1.1.0")
 
-    // Security (تم تثبيت الإصدار المطلوب)
+    // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.scottyab:rootbeer-lib:0.1.0")
 
-    // NanoHTTPD
-    implementation(libs.nanohttpd)
+    // ═══════════════════════════════════════════════════════════
+    // ❌ تم إزالة NanoHTTPD لأنه لم يعد مستخدماً
+    //    (تم تعطيل الخادم المحلي نهائياً)
+    // ═══════════════════════════════════════════════════════════
+    // implementation(libs.nanohttpd)
 
     // Material Components
     implementation("com.google.android.material:material:1.12.0")
