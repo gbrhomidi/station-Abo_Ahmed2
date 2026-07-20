@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
-    <meta name="theme-color" content="#1a3a5a" />
-    <title>محطة أبو أحمد – إدارة العملاء</title>
+    <title>أبو أحمد – النظام المتكامل</title>
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <style>
         /* ============================================================
-           المتغيرات وإعادة الضبط (مطابقة لـ main.html)
+           المتغيرات وإعادة الضبط
            ============================================================ */
         :root {
             --primary: #1e40af;
@@ -88,12 +87,7 @@
         .fade-in { animation: fadeIn 0.35s ease; }
 
         /* ============================================================
-           حاوية التطبيق
-           ============================================================ */
-        .app-container { display: block; }
-
-        /* ============================================================
-           الرأس (Header)
+           الرأس (بدون قائمة جانبية، بدون عنوان شاشة)
            ============================================================ */
         .app-header {
             position: sticky;
@@ -143,38 +137,6 @@
             transition: fill 0.3s;
         }
         .icon-btn:hover svg { fill: var(--primary); }
-        .menu-toggle {
-            background: transparent;
-            border: none;
-            color: var(--text);
-            font-size: 22px;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: var(--radius-sm);
-            transition: var(--transition);
-        }
-        .menu-toggle:hover { background: var(--border); }
-
-        /* ============================================================
-           القائمة الجانبية (مختصرة – سيتم استيرادها من main.html)
-           ============================================================ */
-        /* في هذا الملف المستقل، سنحتوي على شريط تنقل بسيط للعودة */
-        .back-nav {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 0;
-            margin-bottom: 8px;
-            border-bottom: 1px solid var(--border);
-        }
-        .back-nav a {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        .back-nav a:hover { text-decoration: underline; }
-        .back-nav .separator { color: var(--text-secondary); }
 
         /* ============================================================
            المحتوى الرئيسي
@@ -187,7 +149,7 @@
         }
 
         /* ============================================================
-           بطاقات الإحصائيات السريعة (لشاشة العملاء)
+           بطاقات الإحصائيات السريعة
            ============================================================ */
         .stats-mini {
             display: grid;
@@ -322,6 +284,8 @@
         .btn-secondary:hover { background: #5a6268; transform: translateY(-2px); }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
         .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-warning { background: var(--warning); color: #000; }
+        .btn-warning:hover { background: #e0a800; transform: translateY(-2px); }
         .btn-sm { padding: 4px 12px; font-size: 12px; gap: 4px; }
         .btn-block { width: 100%; justify-content: center; }
 
@@ -419,7 +383,7 @@
         .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
 
         /* ============================================================
-           النوافذ المنبثقة (Modal) – مطابقة للتصميم
+           النوافذ المنبثقة (Modal)
            ============================================================ */
         .modal-overlay {
             position: fixed;
@@ -489,7 +453,109 @@
         }
 
         /* ============================================================
-           تبويبات داخل النافذة
+           مودال التقارير (القائمة العائمة)
+           ============================================================ */
+        .reports-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            padding: 8px 0;
+        }
+        .report-card {
+            background: var(--bg);
+            border-radius: var(--radius-sm);
+            padding: 16px 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            border: 2px solid transparent;
+            border-left: 4px solid var(--primary);
+        }
+        .report-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            border-color: var(--primary);
+        }
+        .report-card .report-icon { font-size: 32px; color: var(--primary); margin-bottom: 8px; }
+        .report-card .report-name { font-weight: 700; font-size: 15px; color: var(--text); }
+        .report-card .report-desc { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* ============================================================
+           مودال عرض التقرير
+           ============================================================ */
+        .report-viewer .report-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            align-items: flex-end;
+            background: var(--bg);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+        }
+        .report-viewer .report-filters .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+            min-width: 140px;
+        }
+        .report-viewer .report-filters .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .report-viewer .report-filters .filter-group input[type="date"] {
+            padding: 8px 10px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--card-bg);
+            color: var(--text);
+            font-size: 14px;
+            font-family: var(--font-family);
+            outline: none;
+            transition: var(--transition);
+            width: 100%;
+        }
+        .report-viewer .report-filters .filter-group input[type="date"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(30,64,175,0.1);
+        }
+        .report-viewer .report-filters .filter-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .report-content {
+            overflow-x: auto;
+            margin-top: 12px;
+        }
+        .report-content table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .report-content table th {
+            background: var(--primary);
+            color: white;
+            padding: 8px 12px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .report-content table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+        .report-content table tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+        .report-content table tr:hover td { background: rgba(30,64,175,0.04); }
+
+        /* ============================================================
+           تبويبات داخل نافذة العميل
            ============================================================ */
         .tabs {
             display: flex;
@@ -521,7 +587,7 @@
         .tab-content.active { display: block; }
 
         /* ============================================================
-           النماذج (Forms)
+           النماذج
            ============================================================ */
         .form-group { margin-bottom: 14px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
@@ -560,7 +626,7 @@
         }
 
         /* ============================================================
-           جداول فرعية داخل التبويبات (جهات الاتصال، العناوين)
+           جداول فرعية داخل التبويبات
            ============================================================ */
         .sub-table-wrap {
             overflow-x: auto;
@@ -588,7 +654,7 @@
         }
 
         /* ============================================================
-           الإشعارات (Toast)
+           الإشعارات والتحميل
            ============================================================ */
         .toast-container {
             position: fixed;
@@ -623,9 +689,6 @@
         .toast.error { border-right-color: var(--danger); }
         .toast.warning { border-right-color: var(--warning); }
 
-        /* ============================================================
-           التحميل
-           ============================================================ */
         .spinner {
             display: inline-block;
             width: 24px; height: 24px;
@@ -669,11 +732,15 @@
             .modal { max-width: 100%; margin: 10px; max-height: 95vh; }
             .table-wrap table { font-size: 12px; }
             .table-wrap table th, .table-wrap table td { padding: 6px 8px; }
+            .reports-grid { grid-template-columns: 1fr 1fr; }
+            .report-viewer .report-filters { flex-direction: column; align-items: stretch; }
+            .report-viewer .report-filters .filter-group { min-width: 100%; }
         }
         @media (max-width: 480px) {
             .stats-mini { grid-template-columns: 1fr 1fr; gap: 6px; }
             .stat-mini .stat-number { font-size: 18px; }
             .table-actions .ta-btn { width: 26px; height: 26px; font-size: 12px; }
+            .reports-grid { grid-template-columns: 1fr; }
         }
 
         /* ============================================================
@@ -712,16 +779,16 @@
     </div>
 
     <!-- ============================================================
-    حاوية التطبيق
+    حاوية التطبيق (بدون قائمة جانبية)
     ============================================================ -->
     <div class="app-container">
 
-        <!-- الرأس (مطابق لـ main.html) -->
+        <!-- الرأس (بدون أزرار القائمة الجانبية) -->
         <header class="app-header">
             <div class="header-left">
-                <button class="menu-toggle" onclick="window.location.href='main.html'" aria-label="الرجوع للرئيسية">
+                <a href="main.html" style="color:var(--primary);font-size:24px;text-decoration:none;display:flex;align-items:center;gap:8px;">
                     <i class="fas fa-arrow-right"></i>
-                </button>
+                </a>
                 <div class="header-brand">
                     <div class="brand-icon"><i class="fas fa-users"></i></div>
                     <div>
@@ -751,14 +818,7 @@
         ============================================================ -->
         <main class="main-content">
 
-            <!-- شريط التنقل -->
-            <div class="back-nav">
-                <a href="main.html"><i class="fas fa-home"></i> الرئيسية</a>
-                <span class="separator">›</span>
-                <span style="font-weight:700;color:var(--text);">إدارة العملاء</span>
-            </div>
-
-            <!-- العنوان والأزرار -->
+            <!-- العنوان والأزرار (بدون Breadcrumb) -->
             <div class="page-header">
                 <div>
                     <h2><i class="fas fa-users" style="color:var(--primary);"></i> العملاء والأطراف</h2>
@@ -768,6 +828,7 @@
                     <button class="btn btn-primary" onclick="openCustomerModal()"><i class="fas fa-plus"></i> عميل جديد</button>
                     <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fas fa-sync-alt"></i> تحديث</button>
                     <button class="btn btn-outline btn-sm" onclick="exportCustomers()"><i class="fas fa-file-export"></i> تصدير</button>
+                    <button class="btn btn-warning" onclick="openReportsModal()"><i class="fas fa-chart-bar"></i> التقارير</button>
                 </div>
             </div>
 
@@ -833,6 +894,93 @@
             </div>
 
         </main>
+    </div>
+
+    <!-- ============================================================
+    مودال التقارير (القائمة العائمة)
+    ============================================================ -->
+    <div class="modal-overlay" id="reportsModal">
+        <div class="modal" style="max-width:720px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-chart-bar"></i> التقارير</h3>
+                <button class="modal-close" onclick="closeModal('reportsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color:var(--text-secondary);margin-bottom:16px;">اختر التقرير المطلوب لعرض البيانات:</p>
+                <div class="reports-grid">
+                    <div class="report-card" onclick="openReportViewer('customers')">
+                        <div class="report-icon"><i class="fas fa-users"></i></div>
+                        <div class="report-name">تقرير العملاء</div>
+                        <div class="report-desc">قائمة جميع العملاء مع بياناتهم</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('sales')">
+                        <div class="report-icon"><i class="fas fa-shopping-cart"></i></div>
+                        <div class="report-name">تقرير المبيعات</div>
+                        <div class="report-desc">المبيعات حسب الفترة</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('debts')">
+                        <div class="report-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="report-name">تقرير الديون</div>
+                        <div class="report-desc">الديون المستحقة والمتأخرة</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('payments')">
+                        <div class="report-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <div class="report-name">تقرير المدفوعات</div>
+                        <div class="report-desc">المدفوعات الواردة حسب الفترة</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('tanks')">
+                        <div class="report-icon"><i class="fas fa-oil-can"></i></div>
+                        <div class="report-name">تقرير الخزانات</div>
+                        <div class="report-desc">مستويات الخزانات والإحصائيات</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('products')">
+                        <div class="report-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="report-name">تقرير المخزون</div>
+                        <div class="report-desc">المنتجات والمخزون الحالي</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('reportsModal')">إغلاق</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال عرض التقرير
+    ============================================================ -->
+    <div class="modal-overlay" id="reportViewerModal">
+        <div class="modal" style="max-width:1000px;">
+            <div class="modal-header">
+                <h3 id="reportViewerTitle"><i class="fas fa-file-alt"></i> عرض التقرير</h3>
+                <button class="modal-close" onclick="closeModal('reportViewerModal')">&times;</button>
+            </div>
+            <div class="modal-body report-viewer">
+                <!-- فلاتر التقرير -->
+                <div class="report-filters">
+                    <div class="filter-group">
+                        <label>من تاريخ</label>
+                        <input type="date" id="reportFromDate" />
+                    </div>
+                    <div class="filter-group">
+                        <label>إلى تاريخ</label>
+                        <input type="date" id="reportToDate" />
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-primary" onclick="refreshReport()"><i class="fas fa-sync-alt"></i> عرض</button>
+                        <button class="btn btn-success" onclick="printReport()"><i class="fas fa-print"></i> طباعة</button>
+                    </div>
+                </div>
+
+                <!-- محتوى التقرير -->
+                <div id="reportContent" class="report-content">
+                    <div class="text-center text-muted">اختر التقرير من القائمة الرئيسية</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('reportViewerModal')">إغلاق</button>
+            </div>
+        </div>
     </div>
 
     <!-- ============================================================
@@ -1152,8 +1300,12 @@
         let ledgerData = [];
         let salesData = [];
 
+        // حالة التقارير
+        let currentReportType = 'customers';
+        let reportData = [];
+
         // ============================================================
-        // دالة apiCall الموحدة (مطابقة لـ main.html مع دعم AndroidInterface)
+        // دالة apiCall الموحدة (مع دعم AndroidInterface)
         // ============================================================
         async function apiCall(action, params = {}) {
             const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
@@ -1180,7 +1332,12 @@
                         'update_address': 'updatePartyAddress',
                         'delete_address': 'deletePartyAddress',
                         'make_payment': 'makePayment',
-                        'get_dashboard_stats': 'getDashboardStats'
+                        'get_dashboard_stats': 'getDashboardStats',
+                        'get_sales': 'getSales',
+                        'get_payments': 'getPayments',
+                        'get_tanks': 'getTanks',
+                        'get_products': 'getProducts',
+                        'get_customer_debts': 'getCustomerDebts'
                     };
 
                     const methodName = actionMap[action];
@@ -1343,7 +1500,6 @@
                     const overdue = parseFloat(c.overdue_amount || 0);
                     const status = c.is_active === 1 || c.is_active === true ? 'نشط' : 'غير نشط';
                     const statusBadge = (c.is_active === 1 || c.is_active === true) ? 'badge-success' : 'badge-danger';
-                    // الحصول على أول هاتف من جهات الاتصال (سيتم تحميله لاحقاً)
                     const phone = c.phone || '';
                     return `
                         <tr>
@@ -1366,7 +1522,6 @@
                 }).join('');
             }
 
-            // تحديث ترقيم الصفحات
             const totalPages = Math.ceil(filteredCustomers.length / PAGE_SIZE);
             document.getElementById('pageInfo').textContent = `صفحة ${currentPage} من ${totalPages || 1}`;
             document.getElementById('prevPage').disabled = currentPage <= 1;
@@ -1412,7 +1567,7 @@
         }
 
         // ============================================================
-        // تحميل القوائم المنسدلة (الأنواع، العملات، المستخدمين، أنواع الوقود)
+        // تحميل القوائم المنسدلة
         // ============================================================
         async function loadDropdowns() {
             try {
@@ -1429,7 +1584,6 @@
                 const userSelect = document.getElementById('assignedTo');
                 const fuelSelect = document.getElementById('fuelPreference');
 
-                // Types
                 const typeOptions = types.success ? types.data : [];
                 typeSelect.innerHTML = '<option value="">-- اختر --</option>';
                 filterType.innerHTML = '<option value="">جميع الأنواع</option>';
@@ -1444,7 +1598,6 @@
                     filterType.appendChild(opt2);
                 });
 
-                // Currencies
                 const currencyOptions = currencies.success ? currencies.data : [];
                 currencySelect.innerHTML = '<option value="">-- اختر --</option>';
                 currencyOptions.forEach(c => {
@@ -1454,7 +1607,6 @@
                     currencySelect.appendChild(opt);
                 });
 
-                // Users
                 const userOptions = users.success ? users.data : [];
                 userSelect.innerHTML = '<option value="">-- اختر --</option>';
                 userOptions.forEach(u => {
@@ -1464,7 +1616,6 @@
                     userSelect.appendChild(opt);
                 });
 
-                // Fuel Types
                 const fuelOptions = fuelTypes.success ? fuelTypes.data : [];
                 fuelSelect.innerHTML = '<option value="">-- اختر --</option>';
                 fuelOptions.forEach(f => {
@@ -1511,7 +1662,6 @@
                 '<i class="fas fa-user-plus"></i> إضافة عميل جديد';
             document.getElementById('deleteCustomerBtn').style.display = data ? 'inline-flex' : 'none';
 
-            // تحميل البيانات المرتبطة (جهات الاتصال، العناوين، المالية، المبيعات)
             if (data) {
                 loadCustomerDetails(data.party_id);
             } else {
@@ -1526,8 +1676,11 @@
                 resetFinancialSummary();
             }
 
+            document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = false);
+            document.querySelectorAll('#customerForm .form-check input').forEach(el => el.disabled = false);
+            document.querySelector('#customerForm button[type="submit"]').style.display = 'inline-flex';
+
             openModal('customerModal');
-            // تفعيل التبويب الأول
             activateTab('tab-basic');
         }
 
@@ -1542,28 +1695,22 @@
             else showToast('العميل غير موجود', 'error');
         }
 
-        async function viewCustomer(id) {
-            // فتح نافذة التفاصيل مع وضع القراءة فقط (جميع الحقول مقفلة)
+        function viewCustomer(id) {
             const customer = allCustomers.find(c => c.party_id === id);
             if (customer) {
                 openCustomerModal(customer);
-                // تعطيل الحقول للقراءة فقط
                 document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = true);
                 document.querySelectorAll('#customerForm .form-check input').forEach(el => el.disabled = true);
                 document.querySelector('#customerForm button[type="submit"]').style.display = 'none';
                 document.querySelector('#deleteCustomerBtn').style.display = 'none';
-                // تغيير عنوان النافذة
                 document.getElementById('customerModalTitle').innerHTML = '<i class="fas fa-eye"></i> عرض عميل';
             } else {
                 showToast('العميل غير موجود', 'error');
             }
         }
 
-        // إعادة تفعيل الحقول عند الإغلاق (للتعديل والإضافة)
-        // سنقوم بإعادة التفعيل عند فتح النافذة مرة أخرى في openCustomerModal
-
         // ============================================================
-        // تحميل تفاصيل العميل (جهات الاتصال، العناوين، المالية، المبيعات)
+        // تحميل تفاصيل العميل
         // ============================================================
         async function loadCustomerDetails(partyId) {
             showLoading(true);
@@ -1751,7 +1898,6 @@
                 party_id: currentCustomerId
             };
 
-            // حفظ عبر API
             saveContact(newContact);
         }
 
@@ -1947,7 +2093,6 @@
         // ============================================================
         async function deleteCustomer(id) {
             if (!confirm('هل أنت متأكد من حذف هذا العميل؟')) return;
-            // التحقق من وجود ديون
             const customer = allCustomers.find(c => c.party_id === id);
             if (customer && parseFloat(customer.total_due || 0) > 0) {
                 showToast('لا يمكن حذف العميل لأنه لديه ديون مستحقة', 'warning');
@@ -2043,81 +2188,442 @@
         }
 
         // ============================================================
+        // ============================================================
+        // نظام التقارير (Reports System)
+        // ============================================================
+        // ============================================================
+
+        function openReportsModal() {
+            openModal('reportsModal');
+        }
+
+        function openReportViewer(type) {
+            currentReportType = type;
+            const titles = {
+                'customers': 'تقرير العملاء',
+                'sales': 'تقرير المبيعات',
+                'debts': 'تقرير الديون',
+                'payments': 'تقرير المدفوعات',
+                'tanks': 'تقرير الخزانات',
+                'products': 'تقرير المخزون'
+            };
+            document.getElementById('reportViewerTitle').innerHTML = `<i class="fas fa-file-alt"></i> ${titles[type] || 'تقرير'}`;
+            // تعيين التواريخ الافتراضية
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            document.getElementById('reportFromDate').value = firstDay.toISOString().slice(0, 10);
+            document.getElementById('reportToDate').value = today.toISOString().slice(0, 10);
+
+            closeModal('reportsModal');
+            openModal('reportViewerModal');
+            refreshReport();
+        }
+
+        async function refreshReport() {
+            const fromDate = document.getElementById('reportFromDate').value;
+            const toDate = document.getElementById('reportToDate').value;
+
+            if (!fromDate || !toDate) {
+                showToast('يرجى اختيار الفترة الزمنية', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                let result;
+                switch (currentReportType) {
+                    case 'customers':
+                        result = await apiCall('get_customers');
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderCustomerReport(reportData);
+                        }
+                        break;
+                    case 'sales':
+                        result = await apiCall('get_sales', { from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderSalesReport(reportData);
+                        }
+                        break;
+                    case 'debts':
+                        result = await apiCall('get_customer_debts', { from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderDebtsReport(reportData);
+                        }
+                        break;
+                    case 'payments':
+                        result = await apiCall('get_payments', { from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderPaymentsReport(reportData);
+                        }
+                        break;
+                    case 'tanks':
+                        result = await apiCall('get_tanks');
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderTanksReport(reportData);
+                        }
+                        break;
+                    case 'products':
+                        result = await apiCall('get_products');
+                        if (result.success) {
+                            reportData = result.data || [];
+                            renderProductsReport(reportData);
+                        }
+                        break;
+                    default:
+                        showToast('نوع التقرير غير معروف', 'error');
+                        return;
+                }
+                if (!result || !result.success) {
+                    showToast(result?.error || 'فشل تحميل التقرير', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في تحميل التقرير', 'error');
+            }
+            showLoading(false);
+        }
+
+        // ============================================================
+        // دوال عرض التقارير المختلفة
+        // ============================================================
+
+        function renderCustomerReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد بيانات للعرض</div>';
+                return;
+            }
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الرمز</th>
+                            <th>الاسم التجاري</th>
+                            <th>الهاتف</th>
+                            <th>الرصيد</th>
+                            <th>الديون</th>
+                            <th>المتأخرات</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((c, i) => {
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${c.party_code || ''}</td>
+                        <td>${c.commercial_name || c.legal_name || ''}</td>
+                        <td>${c.phone || ''}</td>
+                        <td>${(c.current_balance || 0).toFixed(2)}</td>
+                        <td>${(c.total_due || 0).toFixed(2)}</td>
+                        <td>${(c.overdue_amount || 0).toFixed(2)}</td>
+                        <td><span class="badge ${c.is_active ? 'badge-success' : 'badge-danger'}">${c.is_active ? 'نشط' : 'غير نشط'}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--text-secondary);">
+                    إجمالي العملاء: ${data.length}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderSalesReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد مبيعات في هذه الفترة</div>';
+                return;
+            }
+            let totalAmount = 0;
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>رقم الفاتورة</th>
+                            <th>العميل</th>
+                            <th>الكمية (لتر)</th>
+                            <th>الإجمالي</th>
+                            <th>طريقة الدفع</th>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((s, i) => {
+                totalAmount += parseFloat(s.net_amount || 0);
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${s.invoice_number || s.sale_code || ''}</td>
+                        <td>${s.customer_name || ''}</td>
+                        <td>${(s.liters || 0).toFixed(2)}</td>
+                        <td>${(s.net_amount || 0).toFixed(2)}</td>
+                        <td>${s.payment_method || ''}</td>
+                        <td>${s.created_at || ''}</td>
+                        <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${s.status || ''}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--primary);">
+                    إجمالي المبيعات: ${totalAmount.toFixed(2)} ريال
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderDebtsReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد ديون مستحقة</div>';
+                return;
+            }
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>العميل</th>
+                            <th>المبلغ المستحق</th>
+                            <th>المتأخرات</th>
+                            <th>تاريخ الاستحقاق</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((d, i) => {
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${d.customer_name || ''}</td>
+                        <td>${(d.total_due || 0).toFixed(2)}</td>
+                        <td>${(d.overdue_amount || 0).toFixed(2)}</td>
+                        <td>${d.due_date || ''}</td>
+                        <td><span class="badge ${d.overdue_amount > 0 ? 'badge-danger' : 'badge-warning'}">${d.overdue_amount > 0 ? 'متأخر' : 'مستحق'}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--danger);">
+                    إجمالي الديون: ${data.reduce((sum, d) => sum + parseFloat(d.total_due || 0), 0).toFixed(2)} ريال
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderPaymentsReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد مدفوعات في هذه الفترة</div>';
+                return;
+            }
+            let totalPayments = 0;
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>العميل</th>
+                            <th>المبلغ</th>
+                            <th>طريقة الدفع</th>
+                            <th>رقم المرجع</th>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((p, i) => {
+                totalPayments += parseFloat(p.amount || 0);
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${p.customer_name || ''}</td>
+                        <td>${(p.amount || 0).toFixed(2)}</td>
+                        <td>${p.payment_method || ''}</td>
+                        <td>${p.cheque_number || p.transfer_reference || ''}</td>
+                        <td>${p.created_at || ''}</td>
+                        <td><span class="badge ${p.status === 'completed' ? 'badge-success' : 'badge-warning'}">${p.status || ''}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--success);">
+                    إجمالي المدفوعات: ${totalPayments.toFixed(2)} ريال
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderTanksReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد خزانات</div>';
+                return;
+            }
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الرمز</th>
+                            <th>الاسم</th>
+                            <th>الوقود</th>
+                            <th>السعة (لتر)</th>
+                            <th>الكمية الحالية</th>
+                            <th>النسبة المئوية</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((t, i) => {
+                const pct = t.capacity_liters ? Math.round((t.current_quantity || 0) / t.capacity_liters * 100) : 0;
+                const color = pct > 50 ? 'badge-success' : pct > 25 ? 'badge-warning' : 'badge-danger';
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${t.tank_code || ''}</td>
+                        <td>${t.tank_name || ''}</td>
+                        <td>${t.fuel_name || ''}</td>
+                        <td>${(t.capacity_liters || 0).toFixed(0)}</td>
+                        <td>${(t.current_quantity || 0).toFixed(0)}</td>
+                        <td><span class="badge ${color}">${pct}%</span></td>
+                        <td><span class="badge ${t.status === 'active' ? 'badge-success' : 'badge-danger'}">${t.status || ''}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--text-secondary);">
+                    إجمالي الخزانات: ${data.length}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderProductsReport(data) {
+            const container = document.getElementById('reportContent');
+            if (!data || !data.length) {
+                container.innerHTML = '<div class="text-center text-muted">لا توجد منتجات</div>';
+                return;
+            }
+            let totalValue = 0;
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الرمز</th>
+                            <th>الاسم</th>
+                            <th>الفئة</th>
+                            <th>الكمية</th>
+                            <th>سعر البيع</th>
+                            <th>القيمة الإجمالية</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            data.forEach((p, i) => {
+                const value = (p.quantity || 0) * (p.sale_price || 0);
+                totalValue += value;
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${p.product_code || ''}</td>
+                        <td>${p.product_name || ''}</td>
+                        <td>${p.category_name || ''}</td>
+                        <td>${(p.quantity || 0).toFixed(2)}</td>
+                        <td>${(p.sale_price || 0).toFixed(2)}</td>
+                        <td>${value.toFixed(2)}</td>
+                        <td><span class="badge ${p.status === 'active' ? 'badge-success' : 'badge-danger'}">${p.status || ''}</span></td>
+                    </tr>
+                `;
+            });
+            html += `
+                    </tbody>
+                </table>
+                <div style="margin-top:12px;font-weight:600;color:var(--primary);">
+                    القيمة الإجمالية للمخزون: ${totalValue.toFixed(2)} ريال
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // ============================================================
+        // طباعة التقرير
+        // ============================================================
+        function printReport() {
+            const content = document.getElementById('reportContent');
+            const title = document.getElementById('reportViewerTitle').textContent;
+            const fromDate = document.getElementById('reportFromDate').value;
+            const toDate = document.getElementById('reportToDate').value;
+
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html dir="rtl">
+                <head><title>${title}</title>
+                <style>
+                    body { font-family: 'Inter', sans-serif; padding: 20px; direction: rtl; }
+                    h2 { text-align: center; color: #1e40af; margin-bottom: 8px; }
+                    .report-period { text-align: center; color: #6b7280; margin-bottom: 20px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                    th { background: #1e40af; color: white; padding: 8px 12px; text-align: right; }
+                    td { padding: 6px 12px; border-bottom: 1px solid #e5e7eb; }
+                    tr:nth-child(even) td { background: #f8fafc; }
+                    .totals { margin-top: 16px; font-weight: 700; font-size: 16px; text-align: left; }
+                    @media print {
+                        body { padding: 10px; }
+                        .no-print { display: none; }
+                    }
+                </style>
+                </head>
+                <body>
+                    <h2>${title}</h2>
+                    <div class="report-period">الفترة: ${fromDate} إلى ${toDate}</div>
+                    ${content.innerHTML}
+                    <div class="totals no-print">
+                        <button onclick="window.print()" style="padding:10px 20px;background:#1e40af;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
+                    </div>
+                    <script>
+                        // طباعة تلقائية عند التحميل
+                        window.onload = function() { setTimeout(function() { window.print(); }, 500); };
+                    <\/script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+        }
+
+        // ============================================================
         // تهيئة الشاشة
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
             loadDropdowns();
             loadCustomers();
-
-            // إعادة تفعيل الحقول عند فتح النافذة (للتعديل والإضافة)
-            // سنقوم بذلك داخل openCustomerModal
         });
-
-        // ============================================================
-        // إعادة تفعيل الحقول عند فتح النافذة (للتعديل والإضافة)
-        // ============================================================
-        // تم تعديل openCustomerModal لتعطيل الحقول فقط في وضع العرض
-        // سيتم إعادة تفعيلها عند فتح النافذة في وضع التعديل أو الإضافة
-        // ولكن لضمان ذلك، نضيف مستمعاً لحدث DOMContentLoaded لإعادة التفعيل
-        document.addEventListener('DOMContentLoaded', function() {
-            // لا حاجة لإعادة تفعيل هنا لأن openCustomerModal تتحكم في ذلك
-        });
-
-        // ============================================================
-        // دالة مساعدة لإعادة التفعيل عند فتح النافذة في وضع التعديل
-        // ============================================================
-        // تم التعديل في openCustomerModal بحيث إذا كان هناك بيانات (تعديل)
-        // يتم تعطيل الحقول مؤقتاً ثم إعادة تفعيلها بعد تحميل البيانات
-        // ولكننا نريد تفعيلها دائماً في وضع التعديل والإضافة
-        // سنقوم بتعديل openCustomerModal لإعادة التفعيل بعد تحميل البيانات
-
-        // حفظ المرجع الأصلي لـ openCustomerModal
-        const originalOpenCustomerModal = window.openCustomerModal;
-
-        // استبدال الدالة لضمان إعادة التفعيل
-        window.openCustomerModal = function(data) {
-            // استدعاء الدالة الأصلية
-            originalOpenCustomerModal(data);
-
-            // إعادة تفعيل الحقول إذا لم تكن في وضع العرض
-            if (data) {
-                // إذا كانت بيانات، فهي في وضع التعديل أو العرض
-                // نتحقق من وجود زر الحفظ لتحديد الوضع
-                const saveBtn = document.querySelector('#customerForm button[type="submit"]');
-                if (saveBtn && saveBtn.style.display !== 'none') {
-                    // وضع التعديل: تفعيل الحقول
-                    document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = false);
-                    document.querySelectorAll('#customerForm .form-check input').forEach(el => el.disabled = false);
-                }
-            } else {
-                // وضع الإضافة: تفعيل الحقول
-                document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = false);
-                document.querySelectorAll('#customerForm .form-check input').forEach(el => el.disabled = false);
-                document.querySelector('#customerForm button[type="submit"]').style.display = 'inline-flex';
-                document.querySelector('#deleteCustomerBtn').style.display = 'none';
-            }
-        };
-
-        // ============================================================
-        // دالة لعرض العميل (قراءة فقط)
-        // ============================================================
-        // تم تعديل viewCustomer لتعطيل الحقول وإخفاء أزرار الحفظ والحذف
-        // وإظهار زر إغلاق فقط
-        window.viewCustomer = function(id) {
-            const customer = allCustomers.find(c => c.party_id === id);
-            if (customer) {
-                // استدعاء openCustomerModal مع البيانات
-                originalOpenCustomerModal(customer);
-                // تعطيل الحقول للقراءة فقط
-                document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = true);
-                document.querySelectorAll('#customerForm .form-check input').forEach(el => el.disabled = true);
-                document.querySelector('#customerForm button[type="submit"]').style.display = 'none';
-                document.querySelector('#deleteCustomerBtn').style.display = 'none';
-                document.getElementById('customerModalTitle').innerHTML = '<i class="fas fa-eye"></i> عرض عميل';
-            } else {
-                showToast('العميل غير موجود', 'error');
-            }
-        };
     </script>
 </body>
 </html>
