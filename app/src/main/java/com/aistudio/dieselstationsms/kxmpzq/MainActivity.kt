@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity() {
         try {
             if (wv.isAttachedToWindow) {
                 Log.d(TAG, "Loading web_interface.html from assets")
-                wv.loadUrl("file:///android_asset/web_interface.html")
+                wv.loadUrl("file:///android_asset/main.html")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
