@@ -1,9 +1,9 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
 import android.app.Notification
-import android.app.PendingIntent
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -15,12 +15,10 @@ import androidx.core.app.NotificationCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.io.IOException
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -29,11 +27,26 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * SMSService – خدمة الخلفية لإدارة الرسائل النصية والمهام
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * المعمارية الجديدة:
+ * - تم إلغاء خادم NanoHTTPD المحلي (المنفذ 8080) نهائياً.
+ * - جميع الاتصالات من الواجهات الأمامية تتم عبر AndroidInterface.
+ * - هذه الخدمة مسؤولة فقط عن:
+ *   1. استقبال الرسائل النصية (SMS) ومعالجتها.
+ *   2. إرسال الرسائل النصية عبر SmsManager.
+ *   3. جدولة المهام الدورية (النسخ الاحتياطي، التنبيهات).
+ *   4. الاتصال بـ APIs الخارجية (Gemini, DeepSeek, Grok, Kimi, ChatGPT).
+ *
+ * لا تحتوي هذه الخدمة على أي جزء متعلق بالخادم المحلي.
+ */
 class SMSService : Service() {
 
     companion object {
         private const val TAG = "SMSService"
-        private const val PORT = 8080
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "sms_service_channel"
         private const val BACKUP_WORK_NAME = "auto_backup_work"
@@ -46,16 +59,18 @@ class SMSService : Service() {
         private val DATETIME_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     }
 
-    private var server: ApiServer? = null
+    // ===== Coroutine Scope للعمليات غير المتزامنة =====
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val isDestroyed = AtomicBoolean(false)
 
+    // ===== مفاتيح API من BuildConfig =====
     private val geminiApiKey: String by lazy { BuildConfig.GEMINI_API_KEY }
     private val deepseekApiKey: String by lazy { BuildConfig.DEEPSEEK_API_KEY }
     private val grokApiKey: String by lazy { BuildConfig.GROK_API_KEY }
     private val kimiApiKey: String by lazy { BuildConfig.KIMI_API_KEY }
     private val chatgptApiKey: String by lazy { BuildConfig.CHATGPT_API_KEY }
 
+    // ===== دورة حياة الخدمة =====
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "SMSService onCreate")
@@ -65,15 +80,41 @@ class SMSService : Service() {
         serviceScope.launch {
             try {
                 startForegroundService()
-                startServer()
+                // تم إلغاء بدء الخادم المحلي نهائياً
+                // startServer() – لم يعد مستخدماً
                 scheduleAutoBackup()
-                Log.d(TAG, "Service initialization completed successfully")
+                Log.d(TAG, "Service initialization completed successfully (HTTP Server DISABLED)")
             } catch (e: Exception) {
                 Log.e(TAG, "Fatal Error in service initialization: ${e.message}", e)
                 stopSelf()
             }
         }
     }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "SMSService onStartCommand")
+        startForeground(NOTIFICATION_ID, buildNotification())
+        // لا توجد حاجة لإعادة تشغيل الخادم
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        isDestroyed.set(true)
+        try {
+            serviceScope.cancel()
+            WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
+            Log.d(TAG, "Service destroyed and resources cleaned")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during service destruction: ${e.message}", e)
+        }
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent): IBinder? = null
+
+    // ================================================================
+    //  الإشعارات (Notification)
+    // ================================================================
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -90,15 +131,6 @@ class SMSService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "SMSService onStartCommand")
-        startForeground(NOTIFICATION_ID, buildNotification())
-        if (!isDestroyed.get() && (server == null || !server!!.isAlive)) {
-            serviceScope.launch { startServer() }
-        }
-        return START_STICKY
-    }
-
     private fun buildNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -109,8 +141,8 @@ class SMSService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("محطة أبو أحمد")
-            .setContentText("خدمة الرسائل النصية نشطة")
+            .setContentTitle("⛽ محطة أبو أحمد")
+            .setContentText("الخدمة نشطة (خادم HTTP معطل - يعمل عبر الجسر المباشر)")
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
@@ -118,26 +150,10 @@ class SMSService : Service() {
             .build()
     }
 
-    override fun onDestroy() {
-        isDestroyed.set(true)
-        try {
-            server?.stop()
-            server = null
-            serviceScope.cancel()
-            WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
-            Log.d(TAG, "Service destroyed and resources cleaned")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during service destruction: ${e.message}", e)
-        }
-        super.onDestroy()
-    }
-
-    override fun onBind(intent: Intent): IBinder? = null
-
     private fun startForegroundService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
-            .setContentText("الخادم المحلي يعمل على المنفذ $PORT...")
+            .setContentText("خدمة الرسائل النصية نشطة (بدون خادم محلي)")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -145,7 +161,7 @@ class SMSService : Service() {
             .build()
 
         startForeground(NOTIFICATION_ID, notification)
-        Log.d(TAG, "Foreground service started with notification")
+        Log.d(TAG, "Foreground service started")
     }
 
     private fun updateNotification(text: String) {
@@ -160,23 +176,9 @@ class SMSService : Service() {
         nm?.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun startServer() {
-        if (isDestroyed.get()) {
-            Log.w(TAG, "Service is destroyed, not starting server")
-            return
-        }
-
-        try {
-            server?.stop()
-            server = ApiServer(PORT)
-            server?.start()
-            Log.d(TAG, "Server started successfully at port $PORT")
-            updateNotification("الخادم المحلي يعمل على المنفذ $PORT")
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to start server on port $PORT: ${e.message}", e)
-            updateNotification("فشل بدء الخادم على المنفذ $PORT")
-        }
-    }
+    // ================================================================
+    //  الجدولة التلقائية (Auto Backup)
+    // ================================================================
 
     private fun scheduleAutoBackup() {
         try {
@@ -197,914 +199,258 @@ class SMSService : Service() {
     }
 
     // ================================================================
-    //  API SERVER (NanoHTTPD)
+    //  دوال المساعدة لقراءة الإعدادات من DatabaseHelper (ديناميكية)
     // ================================================================
-    private inner class ApiServer(port: Int) : NanoHTTPD(port) {
 
-        override fun serve(session: IHTTPSession): Response {
-            val uri = session.uri ?: "/"
-            val method = session.method ?: Method.GET
+    private fun getDieselPrice(db: DatabaseHelper): Double {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = 'DIESEL' AND is_deleted = 0 LIMIT 1",
+            null
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
 
-            val headers = mutableMapOf<String, String>()
-            headers["Access-Control-Allow-Origin"] = "*"
-            headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-            headers["Access-Control-Allow-Headers"] = "Content-Type"
-            headers["Content-Type"] = "application/json; charset=utf-8"
-            headers["X-Content-Type-Options"] = "nosniff"
-            headers["X-Frame-Options"] = "DENY"
+    private fun getGasolinePrice(db: DatabaseHelper, fuelCode: String = "PETROL_95"): Double {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(fuelCode)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
 
-            if (Method.OPTIONS == method) {
-                val res = newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "")
-                headers.forEach { (k, v) -> res.addHeader(k, v) }
-                return res
+    private fun getManagerPhone(db: DatabaseHelper): String? {
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT u.phone FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
+              AND u.status = 'active' AND u.is_deleted = 0
+            ORDER BY r.level ASC LIMIT 1
+        """, null)
+        return cursor.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+    }
+
+    private fun getDriverPhones(db: DatabaseHelper): List<String> {
+        val phones = mutableListOf<String>()
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT phone, phone2 FROM drivers WHERE status = 'active' AND is_deleted = 0",
+            null
+        )
+        cursor.use {
+            while (it.moveToNext()) {
+                it.getString(0)?.let { p -> if (p.isNotBlank()) phones.add(p) }
+                it.getString(1)?.let { p -> if (p.isNotBlank()) phones.add(p) }
             }
+        }
+        return phones.distinct()
+    }
 
-            if (!uri.startsWith("/api")) {
-                return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not Found")
+    private fun getTrustedSmscList(db: DatabaseHelper): List<String> {
+        val phones = mutableListOf<String>()
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT phone FROM sms_whitelist WHERE enabled = 1 ORDER BY name",
+            null
+        )
+        cursor.use {
+            while (it.moveToNext()) phones.add(it.getString(0))
+        }
+        return phones
+    }
+
+    private fun getCustomerBalanceByPhone(db: DatabaseHelper, phone: String): Double {
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT p.current_balance FROM parties p
+            WHERE p.phone = ? AND p.is_deleted = 0
+            LIMIT 1
+        """, arrayOf(phone))
+        return cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    private fun getLastOrderByPhone(db: DatabaseHelper, phone: String): JSONObject? {
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT 1
+        """, arrayOf(phone))
+        return cursor.use {
+            if (it.moveToFirst()) {
+                val json = JSONObject()
+                json.put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                json.put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")) ?: "")
+                json.put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                json
+            } else null
+        }
+    }
+
+    private fun getOrderHistoryByPhone(db: DatabaseHelper, phone: String, limit: Int): JSONArray {
+        val arr = JSONArray()
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT ?
+        """, arrayOf(phone, limit.toString()))
+        cursor.use {
+            while (it.moveToNext()) {
+                val json = JSONObject()
+                json.put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type")))
+                json.put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                json.put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
+                json.put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                arr.put(json)
             }
+        }
+        return arr
+    }
 
-            val db = DatabaseHelper(this@SMSService)
-            val responseJson = JSONObject()
-            val params = session.parameters ?: mutableMapOf()
-            val action = params["action"]?.firstOrNull() ?: ""
+    private fun getPartyIdByPhone(db: DatabaseHelper, phone: String): Int? {
+        val cleanPhone = normalizePhone(phone)
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(cleanPhone)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+    }
 
-            try {
-                when (action) {
+    private fun normalizePhone(phone: String): String {
+        return phone.replace("[^0-9]".toRegex(), "").takeLast(9)
+    }
 
-                    // ============================================================
-                    //  AUTHENTICATION
-                    // ============================================================
-                    "login" -> {
-                        val username = params["username"]?.firstOrNull() ?: ""
-                        val password = params["password"]?.firstOrNull() ?: ""
-                        val auth = db.authenticateUser(username, password)
-                        if (auth != null) {
-                            responseJson.put("success", true)
-                            responseJson.put("user", auth)
-                            responseJson.put("token", UUID.randomUUID().toString())
-                        } else {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات خاطئة")
-                        }
-                    }
+    private fun isTrustedSmsc(db: DatabaseHelper, smsc: String): Boolean {
+        if (smsc.isEmpty()) return true
+        val trusted = getTrustedSmscList(db)
+        if (trusted.isEmpty()) return true
+        return trusted.any { smsc.contains(it) || it.contains(smsc) }
+    }
 
-                    // ============================================================
-                    //  CUSTOMERS (Parties with type = customer)
-                    // ============================================================
-                    "get_customers" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getParties("customer"))
-                    }
-                    "add_customer" -> {
-                        val name = params["commercial_name"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val credit = params["credit_limit"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val type = params["party_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        if (name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "الاسم مطلوب")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("commercial_name", name)
-                                put("phone", phone)
-                                put("credit_limit", credit)
-                                put("party_type_id", type)
-                            }
-                            val id = db.insertParty(json)
-                            responseJson.put("success", true)
-                            responseJson.put("party_id", id)
-                        }
-                    }
-                    "update_customer" -> {
-                        val id = params["party_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        val name = params["commercial_name"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val credit = params["credit_limit"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        if (id <= 0 || name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("commercial_name", name)
-                                put("phone", phone)
-                                put("credit_limit", credit)
-                            }
-                            db.updateParty(id, json)
-                            responseJson.put("success", true)
-                        }
-                    }
-                    "delete_customer" -> {
-                        val id = params["party_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            db.deleteParty(id)
-                            responseJson.put("success", true)
-                        }
-                    }
+    private fun getRetentionDays(db: DatabaseHelper): Int {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'retention_days' LIMIT 1",
+            null
+        )
+        val days = cursor.use {
+            if (it.moveToFirst()) it.getInt(0) else 90
+        }
+        return days.coerceIn(7, 365)
+    }
 
-                    // ============================================================
-                    //  SUPPLIERS (Parties with type = supplier)
-                    // ============================================================
-                    "get_suppliers" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getParties("supplier"))
-                    }
-
-                    // ============================================================
-                    //  DRIVERS (Parties with type = driver)
-                    // ============================================================
-                    "get_drivers" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getParties("driver"))
-                    }
-
-                    // ============================================================
-                    //  SALES (sales_transactions with fuel and customer names)
-                    // ============================================================
-                    "get_sales" -> {
-                        val limit = params["limit"]?.firstOrNull()?.toIntOrNull() ?: 200
-                        val offset = params["offset"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val sales = db.getSalesTransactions(1, limit, offset)
-                        // إضافة أسماء الوقود والعملاء يدوياً (أو تحسين الاستعلام في DB)
-                        // نحن نستخدم طريقة آمنة: إضافة الحقول المطلوبة عبر دالة إضافية.
-                        val enriched = JSONArray()
-                        for (i in 0 until sales.length()) {
-                            val s = sales.getJSONObject(i)
-                            val fuelTypeId = s.optInt("fuel_type_id", 0)
-                            val customerId = s.optInt("customer_party_id", 0)
-                            // جلب اسم الوقود
-                            if (fuelTypeId > 0) {
-                                val fuelName = db.getFuelNameById(fuelTypeId)
-                                s.put("fuel_name", fuelName ?: "")
-                            } else {
-                                s.put("fuel_name", "")
-                            }
-                            // جلب اسم العميل
-                            if (customerId > 0) {
-                                val customer = db.getParty(customerId)
-                                s.put("customer_name", customer?.optString("commercial_name") ?: "")
-                            } else {
-                                s.put("customer_name", "")
-                            }
-                            enriched.put(s)
-                        }
-                        responseJson.put("success", true)
-                        responseJson.put("data", enriched)
-                    }
-                    "execute_sale" -> {
-                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        val pumpId = params["pump_id"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        val liters = params["liters"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val pricePerLiter = params["price_per_liter"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val paid = params["paid_amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val paymentMethod = params["payment_method"]?.firstOrNull() ?: "cash"
-                        val isCredit = params["is_credit"]?.firstOrNull()?.toIntOrNull() == 1
-                        val dueDate = params["due_date"]?.firstOrNull() ?: ""
-                        val notes = params["notes"]?.firstOrNull() ?: ""
-                        val shiftId = params["shift_id"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        val cashierId = 1
-
-                        if (customerId <= 0 || liters <= 0 || pricePerLiter <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val subtotal = liters * pricePerLiter
-                            val totalPaid = if (isCredit) 0.0 else paid
-                            val due = subtotal - totalPaid
-
-                            val saleId = db.insertSaleTransaction(
-                                stationId = 1,
-                                shiftId = shiftId,
-                                customerPartyId = customerId,
-                                fuelTypeId = fuelTypeId,
-                                pumpId = pumpId,
-                                nozzleId = null,
-                                liters = liters,
-                                pricePerLiter = pricePerLiter,
-                                subtotal = subtotal,
-                                discountAmount = 0.0,
-                                taxAmount = 0.0,
-                                grossAmount = subtotal,
-                                netAmount = subtotal,
-                                paymentMethod = paymentMethod,
-                                isCredit = isCredit,
-                                dueDate = if (isCredit) dueDate else null,
-                                cashierId = cashierId,
-                                notes = notes
-                            )
-
-                            if (saleId == -1L) {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "فشل إدراج البيع")
-                            } else {
-                                db.logActivity("cashier_$cashierId", "sale", "بيع جديد: $liters لتر - $subtotal ريال")
-                                responseJson.put("success", true)
-                                responseJson.put("sale_id", saleId)
-                                responseJson.put("message", "تم البيع بنجاح")
-                                responseJson.put("invoice_number", "INV-${System.currentTimeMillis()}")
-                            }
-                        }
-                    }
-                    "delete_sale" -> {
-                        val saleId = params["sale_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (saleId <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            // soft delete
-                            val dbWritable = db.writableDatabase
-                            val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
-                            val rows = dbWritable.update("sales_transactions", cv, "id=?", arrayOf(saleId.toString()))
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_sale", "حذف مبيعة $saleId")
-                        }
-                    }
-
-                    // ============================================================
-                    //  PAYMENTS (with customer name)
-                    // ============================================================
-                    "get_payments" -> {
-                        val payments = db.getPaymentsWithCustomer()
-                        responseJson.put("success", true)
-                        responseJson.put("data", payments)
-                    }
-                    "make_payment" -> {
-                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val method = params["payment_method"]?.firstOrNull() ?: "cash"
-                        val notes = params["notes"]?.firstOrNull() ?: ""
-                        val operator = params["operator"]?.firstOrNull() ?: "System"
-
-                        if (customerId <= 0 || amount <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val success = db.processPayment(customerId, amount, method, operator)
-                            if (success) {
-                                db.logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId")
-                                responseJson.put("success", true)
-                                responseJson.put("message", "تم التسديد بنجاح")
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "فشل التسديد")
-                            }
-                        }
-                    }
-                    "delete_payment" -> {
-                        val paymentId = params["payment_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (paymentId <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val dbWritable = db.writableDatabase
-                            val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
-                            val rows = dbWritable.update("payments", cv, "id=?", arrayOf(paymentId.toString()))
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_payment", "حذف دفعة $paymentId")
-                        }
-                    }
-                    "add_deposit" -> {
-                        val customerId = params["customer_party_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val amount = params["amount"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val notes = params["notes"]?.firstOrNull() ?: ""
-                        val operator = params["operator"]?.firstOrNull() ?: "System"
-
-                        if (customerId <= 0 || amount <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val success = db.addCashDeposit(customerId, amount, notes, operator)
-                            if (success) {
-                                responseJson.put("success", true)
-                                responseJson.put("message", "تم الإيداع بنجاح")
-                            } else {
-                                responseJson.put("success", false)
-                                responseJson.put("error", "فشل الإيداع")
-                            }
-                        }
-                    }
-
-                    // ============================================================
-                    //  PRODUCTS (جدول products)
-                    // ============================================================
-                    "get_products" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getProducts(1))
-                    }
-                    "add_product" -> {
-                        val code = params["product_code"]?.firstOrNull() ?: ""
-                        val name = params["product_name"]?.firstOrNull() ?: ""
-                        val fuelTypeId = params["fuel_type_id"]?.firstOrNull()?.toIntOrNull()
-                        val categoryId = params["category_id"]?.firstOrNull()?.toIntOrNull()
-                        val salePrice = params["sale_price"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val purchasePrice = params["purchase_price"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val quantity = params["quantity"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val minStock = params["minimum_stock"]?.firstOrNull()?.toDoubleOrNull() ?: 10.0
-                        val unit = params["unit_id"]?.firstOrNull() ?: "لتر"
-
-                        if (code.isBlank() || name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "الرمز والاسم مطلوبان")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("product_code", code)
-                                put("product_name", name)
-                                fuelTypeId?.let { put("fuel_type_id", it) }
-                                categoryId?.let { put("category_id", it) }
-                                put("sale_price", salePrice)
-                                put("purchase_price", purchasePrice)
-                                put("quantity", quantity)
-                                put("minimum_stock", minStock)
-                                put("unit_id", unit)
-                                put("station_id", 1)
-                            }
-                            val id = db.insertProduct(json)
-                            responseJson.put("success", true)
-                            responseJson.put("product_id", id)
-                        }
-                    }
-                    "update_product" -> {
-                        val id = params["product_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val json = JSONObject().apply {
-                                params["product_code"]?.firstOrNull()?.let { put("product_code", it) }
-                                params["product_name"]?.firstOrNull()?.let { put("product_name", it) }
-                                params["fuel_type_id"]?.firstOrNull()?.toIntOrNull()?.let { put("fuel_type_id", it) }
-                                params["category_id"]?.firstOrNull()?.toIntOrNull()?.let { put("category_id", it) }
-                                params["sale_price"]?.firstOrNull()?.toDoubleOrNull()?.let { put("sale_price", it) }
-                                params["purchase_price"]?.firstOrNull()?.toDoubleOrNull()?.let { put("purchase_price", it) }
-                                params["quantity"]?.firstOrNull()?.toDoubleOrNull()?.let { put("quantity", it) }
-                                params["minimum_stock"]?.firstOrNull()?.toDoubleOrNull()?.let { put("minimum_stock", it) }
-                                params["unit_id"]?.firstOrNull()?.let { put("unit_id", it) }
-                            }
-                            val rows = db.updateProduct(id, json)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "update_product", "تحديث منتج $id")
-                        }
-                    }
-                    "delete_product" -> {
-                        val id = params["product_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val rows = db.deleteProduct(id)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_product", "حذف منتج $id")
-                        }
-                    }
-
-                    // ============================================================
-                    //  PRODUCT CATEGORIES
-                    // ============================================================
-                    "get_categories" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getProductCategories())
-                    }
-
-                    // ============================================================
-                    //  FUEL TYPES
-                    // ============================================================
-                    "get_fuel_types" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getFuelTypes())
-                    }
-
-                    // ============================================================
-                    //  EMPLOYEES
-                    // ============================================================
-                    "get_employees" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getEmployees(1))
-                    }
-                    "add_employee" -> {
-                        val name = params["full_name"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val jobTitle = params["job_title"]?.firstOrNull() ?: ""
-                        val department = params["department"]?.firstOrNull() ?: ""
-                        val salary = params["basic_salary"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val status = params["status"]?.firstOrNull() ?: "active"
-                        if (name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "الاسم مطلوب")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("full_name", name)
-                                put("phone", phone)
-                                put("job_title", jobTitle)
-                                put("department", department)
-                                put("basic_salary", salary)
-                                put("status", status)
-                                put("station_id", 1)
-                            }
-                            val id = db.addEmployee(json)
-                            responseJson.put("success", true)
-                            responseJson.put("employee_id", id)
-                        }
-                    }
-                    "update_employee" -> {
-                        val id = params["employee_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        val name = params["full_name"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val jobTitle = params["job_title"]?.firstOrNull() ?: ""
-                        val department = params["department"]?.firstOrNull() ?: ""
-                        val salary = params["basic_salary"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        val status = params["status"]?.firstOrNull() ?: "active"
-                        if (id <= 0 || name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("full_name", name)
-                                put("phone", phone)
-                                put("job_title", jobTitle)
-                                put("department", department)
-                                put("basic_salary", salary)
-                                put("status", status)
-                            }
-                            val rows = db.updateEmployee(id, json)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "update_employee", "تحديث موظف $id")
-                        }
-                    }
-                    "delete_employee" -> {
-                        val id = params["employee_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val rows = db.deleteEmployee(id.toInt())
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_employee", "حذف موظف $id")
-                        }
-                    }
-
-                    // ============================================================
-                    //  USERS (with roles)
-                    // ============================================================
-                    "get_users" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getUsers())
-                    }
-                    "add_user" -> {
-                        val username = params["username"]?.firstOrNull() ?: ""
-                        val password = params["password"]?.firstOrNull() ?: ""
-                        val email = params["email"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val fullName = params["full_name"]?.firstOrNull() ?: ""
-                        val roleId = params["role_id"]?.firstOrNull()?.toIntOrNull() ?: 4
-                        val status = params["status"]?.firstOrNull() ?: "active"
-
-                        if (username.isBlank() || fullName.isBlank() || password.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "اسم المستخدم، الاسم الكامل وكلمة المرور مطلوبة")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("username", username)
-                                put("password", password)
-                                put("email", email)
-                                put("phone", phone)
-                                put("full_name", fullName)
-                                put("role_id", roleId)
-                                put("status", status)
-                                put("station_id", 1)
-                                put("company_id", 1)
-                            }
-                            val id = db.addUser(json)
-                            responseJson.put("success", true)
-                            responseJson.put("user_id", id)
-                        }
-                    }
-                    "update_user" -> {
-                        val id = params["user_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        val email = params["email"]?.firstOrNull() ?: ""
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val fullName = params["full_name"]?.firstOrNull() ?: ""
-                        val roleId = params["role_id"]?.firstOrNull()?.toIntOrNull()
-                        val status = params["status"]?.firstOrNull() ?: "active"
-
-                        if (id <= 0 || fullName.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("full_name", fullName)
-                                put("email", email)
-                                put("phone", phone)
-                                roleId?.let { put("role_id", it) }
-                                put("status", status)
-                            }
-                            val rows = db.updateUser(id, json)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "update_user", "تحديث مستخدم $id")
-                        }
-                    }
-                    "delete_user" -> {
-                        val id = params["user_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val rows = db.deleteUser(id)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_user", "حذف مستخدم $id")
-                        }
-                    }
-
-                    // ============================================================
-                    //  ROLES
-                    // ============================================================
-                    "get_roles" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getRoles())
-                    }
-                    "add_role" -> {
-                        val code = params["role_code"]?.firstOrNull() ?: ""
-                        val name = params["role_name"]?.firstOrNull() ?: ""
-                        val desc = params["description"]?.firstOrNull() ?: ""
-                        val level = params["level"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        val isSystem = params["is_system_role"]?.firstOrNull()?.toIntOrNull() ?: 0
-
-                        if (code.isBlank() || name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "الرمز والاسم مطلوبان")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("role_code", code)
-                                put("role_name", name)
-                                put("description", desc)
-                                put("level", level)
-                                put("is_system_role", isSystem)
-                            }
-                            val id = db.addRole(json)
-                            responseJson.put("success", true)
-                            responseJson.put("role_id", id)
-                        }
-                    }
-                    "update_role" -> {
-                        val id = params["role_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        val name = params["role_name"]?.firstOrNull() ?: ""
-                        val desc = params["description"]?.firstOrNull() ?: ""
-                        val level = params["level"]?.firstOrNull()?.toIntOrNull()
-                        val isSystem = params["is_system_role"]?.firstOrNull()?.toIntOrNull()
-
-                        if (id <= 0 || name.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val json = JSONObject().apply {
-                                put("role_name", name)
-                                put("description", desc)
-                                level?.let { put("level", it) }
-                                isSystem?.let { put("is_system_role", it) }
-                            }
-                            val rows = db.updateRole(id, json)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "update_role", "تحديث دور $id")
-                        }
-                    }
-                    "delete_role" -> {
-                        val id = params["role_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val rows = db.deleteRole(id)
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_role", "حذف دور $id")
-                        }
-                    }
-
-                    // ============================================================
-                    //  SHIFTS
-                    // ============================================================
-                    "get_shifts" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getShifts(1))
-                    }
-                    "add_shift" -> {
-                        val shiftType = params["shift_type"]?.firstOrNull() ?: "morning"
-                        val shiftDate = params["shift_date"]?.firstOrNull() ?: DATE_FORMAT.format(Date())
-                        val startTime = params["start_time"]?.firstOrNull() ?: ""
-                        val cashierId = params["cashier_id"]?.firstOrNull()?.toIntOrNull() ?: 1
-                        val openingCash = params["opening_cash"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-
-                        if (shiftDate.isBlank() || startTime.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "التاريخ ووقت البدء مطلوبان")
-                        } else {
-                            // تحويل startTime إلى DateTime
-                            val startDateTime = "$shiftDate $startTime:00"
-                            val cv = android.content.ContentValues().apply {
-                                put("uuid", UUID.randomUUID().toString())
-                                put("shift_code", "SHF-${System.currentTimeMillis()}")
-                                put("station_id", 1)
-                                put("shift_date", shiftDate)
-                                put("shift_type", shiftType)
-                                put("start_time", startDateTime)
-                                put("cashier_id", cashierId)
-                                put("opening_cash", openingCash)
-                                put("status", "open")
-                            }
-                            val id = db.writableDatabase.insert("shifts", null, cv)
-                            responseJson.put("success", id > 0)
-                            if (id > 0) db.logActivity("system", "add_shift", "إضافة وردية $id")
-                        }
-                    }
-                    "delete_shift" -> {
-                        val id = params["shift_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (id <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val dbWritable = db.writableDatabase
-                            val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
-                            val rows = dbWritable.update("shifts", cv, "id=?", arrayOf(id.toString()))
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_shift", "حذف وردية $id")
-                        }
-                    }
-
-                    // ============================================================
-                    //  MAINTENANCE REQUESTS
-                    // ============================================================
-                    "get_maintenance_requests" -> {
-                        val status = params["status"]?.firstOrNull()
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getMaintenanceRequests(1, status))
-                    }
-                    "add_maintenance_request" -> {
-                        val assetType = params["asset_type"]?.firstOrNull() ?: "tank"
-                        val assetId = params["asset_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val requestType = params["request_type"]?.firstOrNull() ?: ""
-                        val priority = params["priority"]?.firstOrNull() ?: "medium"
-                        val title = params["title"]?.firstOrNull() ?: ""
-                        val description = params["description"]?.firstOrNull() ?: ""
-                        val reportedBy = 1
-
-                        if (assetId <= 0 || requestType.isBlank() || title.isBlank() || description.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, reportedBy, 1)
-                            responseJson.put("success", true)
-                            responseJson.put("request_id", id)
-                        }
-                    }
-                    "update_maintenance_status" -> {
-                        val requestId = params["request_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        val status = params["status"]?.firstOrNull() ?: ""
-
-                        if (requestId <= 0 || status.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            val dbWritable = db.writableDatabase
-                            val cv = android.content.ContentValues().apply {
-                                put("status", status)
-                                if (status == "completed") {
-                                    put("completed_at", DATETIME_FORMAT.format(Date()))
-                                }
-                            }
-                            val rows = dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "update_maintenance", "تحديث حالة الصيانة $requestId إلى $status")
-                        }
-                    }
-                    "delete_maintenance" -> {
-                        val requestId = params["request_id"]?.firstOrNull()?.toLongOrNull() ?: 0
-                        if (requestId <= 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "معرف غير صالح")
-                        } else {
-                            val dbWritable = db.writableDatabase
-                            val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
-                            val rows = dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
-                            responseJson.put("success", rows > 0)
-                            if (rows > 0) db.logActivity("system", "delete_maintenance", "حذف طلب صيانة $requestId")
-                        }
-                    }
-
-                    // ============================================================
-                    //  TANKS & PUMPS
-                    // ============================================================
-                    "get_tanks" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getTanks(1))
-                    }
-                    "get_pumps" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getPumps(1))
-                    }
-                    "update_tank_quantity" -> {
-                        val tankId = params["tank_id"]?.firstOrNull()?.toIntOrNull() ?: 0
-                        val quantity = params["quantity"]?.firstOrNull()?.toDoubleOrNull() ?: 0.0
-                        if (tankId <= 0 || quantity < 0) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "بيانات غير صالحة")
-                        } else {
-                            db.updateTankQuantity(tankId, quantity, "System")
-                            responseJson.put("success", true)
-                        }
-                    }
-
-                    // ============================================================
-                    //  CASHIERS (users with role CASHIER)
-                    // ============================================================
-                    "get_cashiers" -> {
-                        val cashiers = db.getUsersByRole("CASHIER")
-                        responseJson.put("success", true)
-                        responseJson.put("data", cashiers)
-                    }
-
-                    // ============================================================
-                    //  NOTIFICATIONS
-                    // ============================================================
-                    "get_notifications" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getNotifications())
-                    }
-
-                    // ============================================================
-                    //  SMS LOGS
-                    // ============================================================
-                    "get_sms_logs" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getSmsLogs())
-                    }
-
-                    // ============================================================
-                    //  SMS WHITELIST
-                    // ============================================================
-                    "get_whitelist" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getSmsWhitelist())
-                    }
-                    "add_whitelist" -> {
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        val name = params["name"]?.firstOrNull() ?: ""
-                        if (phone.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "رقم الهاتف مطلوب")
-                        } else {
-                            db.addToSmsWhitelist(phone, name)
-                            responseJson.put("success", true)
-                        }
-                    }
-                    "remove_whitelist" -> {
-                        val phone = params["phone"]?.firstOrNull() ?: ""
-                        if (phone.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "رقم الهاتف مطلوب")
-                        } else {
-                            db.removeFromSmsWhitelist(phone)
-                            responseJson.put("success", true)
-                        }
-                    }
-
-                    // ============================================================
-                    //  REPORTS
-                    // ============================================================
-                    "get_dashboard" -> {
-                        responseJson.put("success", true)
-                        val stats = db.getDashboardStats(1)
-                        stats.put("diesel_price", db.getDieselPrice())
-                        stats.put("gasoline_price", db.getGasolinePrice())
-                        stats.put("manager_phone", db.getManagerPhone() ?: "")
-                        stats.put("retention_days", db.getRetentionDays())
-                        responseJson.put("data", stats)
-                    }
-                    "get_daily_sales" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getDailySales(1))
-                    }
-                    "get_monthly_sales" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getMonthlySales(1))
-                    }
-                    "get_eod_report" -> {
-                        val from = params["from_date"]?.firstOrNull()
-                        val to = params["to_date"]?.firstOrNull()
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.getEodReport(1, from, to))
-                    }
-                    "get_profit_report" -> {
-                        val from = params["from_date"]?.firstOrNull()
-                        val to = params["to_date"]?.firstOrNull()
-                        val report = db.getEodReport(1, from, to)
-                        val profit = report.optDouble("total_sales", 0.0) - report.optDouble("total_payments", 0.0)
-                        report.put("profit", profit)
-                        report.put("revenue", report.optDouble("total_sales", 0.0))
-                        report.put("cost", report.optDouble("total_payments", 0.0))
-                        responseJson.put("success", true)
-                        responseJson.put("data", report)
-                    }
-                    "export_data" -> {
-                        responseJson.put("success", true)
-                        responseJson.put("data", db.exportAllData())
-                    }
-
-                    // ============================================================
-                    //  AI
-                    // ============================================================
-                    "ai_chat" -> {
-                        val message = params["message"]?.firstOrNull() ?: ""
-                        val sessionId = params["session_id"]?.firstOrNull() ?: "default"
-                        if (message.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "الرسالة فارغة")
-                        } else {
-                            val history = db.getAiChatHistory(sessionId)
-                            val context = if (history.length() > 0) {
-                                "سياق المحادثة السابقة: ${history.toString().take(500)}\n\n"
-                            } else ""
-                            val prompt = "$context\nالسؤال: $message\nالرد بالعربية مختصراً ومهنياً."
-
-                            val reply = callAIWithFallback(prompt, db)
-                            db.saveAiMessage(sessionId, "assistant", reply)
-                            responseJson.put("success", true)
-                            responseJson.put("reply", reply)
-                        }
-                    }
-                    "get_ai_insight" -> {
-                        if (geminiApiKey.isEmpty() && deepseekApiKey.isEmpty() && grokApiKey.isEmpty() && kimiApiKey.isEmpty() && chatgptApiKey.isEmpty()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "لا توجد مفاتيح API مُكوّنة")
-                        } else {
-                            val stats = db.getDashboardStats(1)
-                            val prompt = """
-                                أنت مساعد ذكي لمحطة وقود. قدم تحليلاً مختصراً للبيانات التالية:
-                                - المخزون المتبقي: ${stats.optDouble("total_remaining", 0.0).toInt()} لتر
-                                - الديون المستحقة: ${stats.optDouble("total_due", 0.0).toInt()} ريال
-                                - مبيعات اليوم: ${stats.optDouble("total_sales", 0.0).toInt()} ريال
-                                - عدد العملاء: ${stats.optInt("total_customers", 0)}
-                                قدم توصية واحدة عملية مختصرة (سطرين فقط).
-                            """.trimIndent()
-                            val insight = callAIWithFallback(prompt, db)
-                            responseJson.put("success", true)
-                            responseJson.put("insight", insight)
-                        }
-                    }
-
-                    // ============================================================
-                    //  SETTINGS
-                    // ============================================================
-                    "get_setting" -> {
-                        val key = params["key"]?.firstOrNull() ?: ""
-                        if (key.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "المفتاح مطلوب")
-                        } else {
-                            val value = db.getSetting(key)
-                            responseJson.put("success", true)
-                            responseJson.put("value", value)
-                        }
-                    }
-                    "set_setting" -> {
-                        val key = params["key"]?.firstOrNull() ?: ""
-                        val value = params["value"]?.firstOrNull() ?: ""
-                        if (key.isBlank()) {
-                            responseJson.put("success", false)
-                            responseJson.put("error", "المفتاح مطلوب")
-                        } else {
-                            db.setSetting(key, value)
-                            responseJson.put("success", true)
-                        }
-                    }
-
-                    // ============================================================
-                    //  UNKNOWN ACTION
-                    // ============================================================
-                    else -> {
-                        responseJson.put("success", false)
-                        responseJson.put("error", "إجراء غير معروف: $action")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "API Error in $action: ${e.message}", e)
-                responseJson.put("success", false)
-                responseJson.put("error", "Internal error: ${e.message}")
-            } finally {
-                db.close()
-            }
-
-            val res = newFixedLengthResponse(
-                Response.Status.OK, "application/json", responseJson.toString()
-            )
-            headers.forEach { (k, v) -> res.addHeader(k, v) }
-            return res
+    private fun getSystemSetting(db: DatabaseHelper, key: String, defaultValue: String = "0"): String {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT setting_value FROM system_settings WHERE setting_key = ? LIMIT 1",
+            arrayOf(key)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) it.getString(0) else defaultValue
         }
     }
 
     // ================================================================
-    //  AI FALLBACK
+    //  دوال معالجة الرسائل النصية (SMS)
     // ================================================================
+
+    private fun isSmsEnabled(db: DatabaseHelper): Boolean {
+        return db.getSetting("sms_enabled") != "0"
+    }
+
+    private fun isSmsAllowed(phone: String, db: DatabaseHelper): Boolean {
+        if (!isSmsEnabled(db)) return false
+        val whitelist = db.getSmsWhitelist()
+        for (i in 0 until whitelist.length()) {
+            val entry = whitelist.getJSONObject(i)
+            if (entry.getString("phone") == phone && entry.getInt("enabled") == 1) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun sendSMS(db: DatabaseHelper, phone: String, message: String, type: String): Boolean {
+        if (!isSmsAllowed(phone, db)) {
+            db.logSms(phone, message, type, "blocked: not in whitelist")
+            Log.w(TAG, "SMS blocked: $phone not in whitelist")
+            return false
+        }
+
+        if (!phone.matches(Regex(PHONE_REGEX))) {
+            db.logSms(phone, message, type, "failed: invalid number")
+            return false
+        }
+
+        if (message.length > MAX_SMS_LENGTH) {
+            db.logSms(phone, message, type, "failed: too long")
+            return false
+        }
+
+        return try {
+            val sms = SmsManager.getDefault()
+            sms.sendTextMessage(phone, null, message, null, null)
+            db.logSms(phone, message, type, "sent")
+            Log.d(TAG, "SMS sent to $phone")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "SMS send failed: ${e.message}", e)
+            db.logSms(phone, message, type, "failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun safeSendReply(context: Context, db: DatabaseHelper, phone: String, message: String) {
+        try {
+            sendReply(context, db, phone, message)
+        } catch (e: Exception) {
+            Log.e(TAG, "Safe send failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun sendReply(context: Context, db: DatabaseHelper, phone: String, message: String) {
+        val hasPermission = context.checkSelfPermission(android.Manifest.permission.SEND_SMS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            db.logSms(phone, message, "auto_reply", "failed: permission denied")
+            return
+        }
+
+        try {
+            val smsManager = getSmsManager(context)
+            val parts = smsManager.divideMessage(message)
+            if (parts.size > 1) {
+                smsManager.sendMultipartTextMessage(phone, null, parts, null, null)
+            } else {
+                smsManager.sendTextMessage(phone, null, message, null, null)
+            }
+            db.logSms(phone, message, "auto_reply", "sent")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send reply: ${e.javaClass.simpleName}")
+            db.logSms(phone, message, "auto_reply", "failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun getSmsManager(context: Context): SmsManager {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
+        } else {
+            SmsManager.getDefault()
+        }
+    }
+
+    // ================================================================
+    //  AI Providers (Gemini, DeepSeek, Grok, Kimi, ChatGPT)
+    // ================================================================
+
     private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
         val providers = listOf(
             "gemini" to geminiApiKey,
@@ -1353,51 +699,131 @@ class SMSService : Service() {
     }
 
     // ================================================================
-    //  SMS SENDING
+    //  دوال إضافية مساعدة
     // ================================================================
-    private fun isSmsEnabled(db: DatabaseHelper): Boolean {
-        return db.getSetting("sms_enabled") != "0"
-    }
 
-    private fun isSmsAllowed(phone: String, db: DatabaseHelper): Boolean {
-        if (!isSmsEnabled(db)) return false
-        val whitelist = db.getSmsWhitelist()
-        for (i in 0 until whitelist.length()) {
-            val entry = whitelist.getJSONObject(i)
-            if (entry.getString("phone") == phone && entry.getInt("enabled") == 1) {
-                return true
+    private fun recordDieselDelivery(
+        db: DatabaseHelper,
+        customerId: String,
+        customerName: String,
+        quantityLiters: Double,
+        quantityDabbas: Double,
+        location: String,
+        deliveryTime: String,
+        unitPrice: Double,
+        totalAmount: Double,
+        orderId: String
+    ): Boolean {
+        try {
+            val partyId = getPartyIdByPhone(db, customerId) ?: return false
+
+            require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
+            require(unitPrice in 1.0..1000000.0) { "Invalid price" }
+            require(totalAmount in 0.0..1000000.0 * 10000.0) { "Invalid total" }
+            require(location.length in 3..200) { "Invalid location" }
+
+            val subtotal = quantityLiters * unitPrice
+
+            val result = db.insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+                customerPartyId = partyId,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = quantityLiters,
+                pricePerLiter = unitPrice,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = "credit",
+                isCredit = true,
+                dueDate = DATE_FORMAT.format(Date()),
+                cashierId = 1,
+                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
+            )
+
+            if (result <= 0) return false
+
+            val currentBalance = getCustomerBalanceByPhone(db, customerId)
+            val newBalance = currentBalance + totalAmount
+            val values = android.content.ContentValues().apply {
+                put("current_balance", newBalance)
+                put("total_due", totalAmount)
             }
+            db.writableDatabase.update("parties", values, "id = ?", arrayOf(partyId.toString()))
+
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recording delivery: ${e.javaClass.simpleName}")
+            return false
         }
-        return false
     }
 
-    private fun sendSMS(db: DatabaseHelper, phone: String, message: String, type: String): Boolean {
-        if (!isSmsAllowed(phone, db)) {
-            db.logSms(phone, message, type, "blocked: not in whitelist")
-            Log.w(TAG, "SMS blocked: $phone not in whitelist")
-            return false
-        }
-
-        if (!phone.matches(Regex(PHONE_REGEX))) {
-            db.logSms(phone, message, type, "failed: invalid number")
-            return false
-        }
-
-        if (message.length > MAX_SMS_LENGTH) {
-            db.logSms(phone, message, type, "failed: too long")
-            return false
-        }
-
-        return try {
-            val sms = SmsManager.getDefault()
-            sms.sendTextMessage(phone, null, message, null, null)
-            db.logSms(phone, message, type, "sent")
-            Log.d(TAG, "SMS sent to $phone")
-            true
+    private fun notifyManager(context: Context, db: DatabaseHelper, managerPhone: String, message: String) {
+        try {
+            sendReply(context, db, managerPhone, message)
+            val pushEnabled = getSystemSetting(db, "push_notifications_enabled", "0") == "1"
+            if (pushEnabled) {
+                // تنبيه دفع (Push) – يمكن تفعيله لاحقاً
+                Log.d(TAG, "Push notification would be sent to $managerPhone")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "SMS send failed: ${e.message}", e)
-            db.logSms(phone, message, type, "failed: ${e.message}")
-            false
+            Log.e(TAG, "Failed to notify manager: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun logSecurityEvent(context: Context, event: String, phone: String, details: String) {
+        // تسجيل الأحداث الأمنية – يمكن توسيعها لاحقاً
+        Log.i(TAG, "SECURITY: $event | $phone | $details")
+    }
+
+    private fun cleanupOldData(context: Context, db: DatabaseHelper, retentionDays: Int) {
+        try {
+            val cutoff = System.currentTimeMillis() - (retentionDays * 24L * 60 * 60 * 1000)
+            val cutoffDate = DATE_FORMAT.format(Date(cutoff))
+
+            db.execSQL("DELETE FROM user_activity_log WHERE created_at < ?", arrayOf(cutoffDate))
+            db.execSQL("DELETE FROM sms_logs WHERE created_at < ?", arrayOf(cutoffDate))
+            db.execSQL("DELETE FROM customer_ledger WHERE transaction_date < ?", arrayOf(cutoffDate))
+
+            db.execSQL("UPDATE sales_transactions SET archived = 1 WHERE created_at < ? AND status = 'delivered'", arrayOf(cutoffDate))
+
+            Log.d(TAG, "Cleanup completed, retention days: $retentionDays")
+        } catch (e: Exception) {
+            Log.e(TAG, "Cleanup failed: ${e.message}")
+        }
+    }
+
+    // ================================================================
+    //  دوال تم إلغاؤها (كانت خاصة بالخادم المحلي)
+    // ================================================================
+
+    // تم إزالة فئة ApiServer (NanoHTTPD) بالكامل.
+    // تم إزالة متغير server.
+    // تم إزالة دالة startServer() التي كانت تشغل الخادم.
+}
+
+/**
+ * Worker للنسخ الاحتياطي التلقائي (يُستخدم مع WorkManager).
+ */
+class BackupWorker(
+    context: Context,
+    params: androidx.work.WorkerParameters
+) : androidx.work.CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val db = DatabaseHelper(applicationContext)
+            val path = db.backupDatabase()
+            Log.d("BackupWorker", "Auto backup completed: $path")
+            db.close()
+            Result.success()
+        } catch (e: Exception) {
+            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
+            Result.retry()
         }
     }
 }

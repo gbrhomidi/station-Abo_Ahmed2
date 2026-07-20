@@ -7,6 +7,3 @@ plugins {
     alias(libs.plugins.roborazzi) apply false
     // alias(libs.plugins.secrets) apply false  // Commented out - plugin removed
 }
-
-
-

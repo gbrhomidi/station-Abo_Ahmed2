@@ -48,6 +48,33 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * النشاط الرئيسي للتطبيق - محطة أبو أحمد V6
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * المعمارية الجديدة (بدون خادم):
+ *
+ *   MainActivity
+ *        │
+ *        ▼
+ *   WebView (main.html)
+ *        │
+ *        ▼
+ *   AndroidInterface (JavascriptInterface)
+ *        │
+ *        ▼
+ *   WebAppInterface (Kotlin)
+ *        │
+ *        ▼
+ *   DatabaseHelper
+ *        │
+ *        ▼
+ *   SQLite
+ *
+ * تم إلغاء الاعتماد على NanoHTTPD والخادم المحلي (المنفذ 8080)
+ * نهائياً. جميع العمليات تتم محلياً عبر الجسر المباشر.
+ */
 class MainActivity : AppCompatActivity() {
 
     companion object {
@@ -64,7 +91,7 @@ class MainActivity : AppCompatActivity() {
 
     private var webView: WebView? = null
     private var geminiApiKey: String = ""
-    private var serverReady = false
+    private var serverReady = false  // تم إهمالها (تُرك للتوافق مع الكود القديم)
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
@@ -153,6 +180,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * تحميل الشاشة الرئيسية من مجلد assets.
+     * تم التحديث لتحميل main.html بدلاً من web_interface.html
+     * لأن main.html هي الآن الشاشة الرئيسية (لوحة التحكم + القوائم).
+     */
     private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
         val wv = webView ?: run {
@@ -162,8 +194,9 @@ class MainActivity : AppCompatActivity() {
 
         try {
             if (wv.isAttachedToWindow) {
-                Log.d(TAG, "Loading web_interface.html from assets")
-                wv.loadUrl("file:///android_asset/web_interface.html")
+                Log.d(TAG, "Loading main.html from assets")
+                // المسار الجديد للشاشة الرئيسية
+                wv.loadUrl("file:///android_asset/main.html")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
@@ -353,10 +386,15 @@ class MainActivity : AppCompatActivity() {
                         webChromeClient = WebChromeClient()
 
                         try {
+                            // ============================================================
+                            // ربط الجسر (AndroidInterface) بـ WebView
+                            // هذا الجسر هو نقطة الاتصال الوحيدة بين JavaScript و Kotlin
+                            // ============================================================
                             addJavascriptInterface(
                                 WebAppInterface(context, this@MainActivity),
                                 "AndroidInterface"
                             )
+                            Log.d(TAG, "AndroidInterface bridge registered successfully")
                         } catch (e: Exception) {
                             Log.e(TAG, "Failed to add JS interface: ${e.message}")
                         }
@@ -596,6 +634,8 @@ class MainActivity : AppCompatActivity() {
 
     // ================================================================
     // WEB APP INTERFACE - COMPLETE CRUD BRIDGE
+    // هذه الطبقة هي الجسر الوحيد بين JavaScript و DatabaseHelper
+    // جميع الشاشات (main.html, screens/*.html) تستخدم هذا الجسر
     // ================================================================
     inner class WebAppInterface(
         private val context: Context,
@@ -728,7 +768,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== PARTIES ==========
+        // ========== PARTIES (العملاء والأطراف) ==========
         @JavascriptInterface
         fun addParty(jsonData: String): String {
             return try {
@@ -851,7 +891,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== ORDERS ==========
+        // ========== ORDERS (الطلبات) ==========
         @JavascriptInterface
         fun addOrder(jsonData: String): String {
             return try {
@@ -885,7 +925,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getPendingOrders(): String = getOrders("pending")
 
-        // ========== DELIVERIES ==========
+        // ========== DELIVERIES (التوصيلات) ==========
         @JavascriptInterface
         fun addDelivery(jsonData: String): String {
             return try {
@@ -927,7 +967,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== SALES ==========
+        // ========== SALES (المبيعات) ==========
         @JavascriptInterface
         fun addSale(jsonData: String): String {
             return try {
@@ -988,7 +1028,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== CASH MOVEMENTS ==========
+        // ========== CASH MOVEMENTS (الحركات النقدية) ==========
         @JavascriptInterface
         fun addCashMovement(jsonData: String): String {
             return try {
@@ -1030,7 +1070,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== METER READINGS ==========
+        // ========== METER READINGS (قراءات العدادات) ==========
         @JavascriptInterface
         fun addMeterReading(jsonData: String): String {
             return try {
@@ -1061,7 +1101,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== TANK READINGS ==========
+        // ========== TANK READINGS (قراءات الخزانات) ==========
         @JavascriptInterface
         fun addTankReading(jsonData: String): String {
             return try {
@@ -1092,7 +1132,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== STOCK MOVEMENTS ==========
+        // ========== STOCK MOVEMENTS (حركات المخزون) ==========
         @JavascriptInterface
         fun addStockMovement(jsonData: String): String {
             return try {
@@ -1134,7 +1174,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== ASSETS ==========
+        // ========== ASSETS (الأصول) ==========
         @JavascriptInterface
         fun addAsset(jsonData: String): String {
             return try {
@@ -1165,7 +1205,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== USERS ==========
+        // ========== USERS (المستخدمين) ==========
         @JavascriptInterface
         fun addUser(jsonData: String): String {
             return try {
@@ -1244,7 +1284,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== EMPLOYEES ==========
+        // ========== EMPLOYEES (الموظفين) ==========
         @JavascriptInterface
         fun addEmployee(jsonData: String): String {
             return try {
@@ -1312,7 +1352,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== SHIFTS ==========
+        // ========== SHIFTS (الورديات) ==========
         @JavascriptInterface
         fun startShift(jsonData: String): String {
             return try {
@@ -1371,7 +1411,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getShifts(): String {
             return try {
-                val shifts = dbHelper.getShifts(1)
+                val shifts = dbHelper.getShifts()
                 shifts.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getShifts error", e)
@@ -1466,7 +1506,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== NOTIFICATIONS ==========
+        // ========== NOTIFICATIONS (الإشعارات) ==========
         @JavascriptInterface
         fun addNotification(jsonData: String): String {
             return try {
@@ -1524,7 +1564,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== SMS MESSAGES ==========
+        // ========== SMS MESSAGES (الرسائل النصية) ==========
         @JavascriptInterface
         fun addSmsMessage(jsonData: String): String {
             return try {
@@ -1670,7 +1710,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== SMS WHITELIST ==========
+        // ========== SMS WHITELIST (القائمة البيضاء) ==========
         @JavascriptInterface
         fun getWhitelist(): String {
             return try {
@@ -1729,7 +1769,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== SETTINGS ==========
+        // ========== SETTINGS (الإعدادات) ==========
         @JavascriptInterface
         fun addSetting(jsonData: String): String {
             return try {
@@ -1808,7 +1848,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== DASHBOARD & REPORTS ==========
+        // ========== DASHBOARD & REPORTS (لوحة التحكم والتقارير) ==========
         @JavascriptInterface
         fun getDashboardStats(): String {
             return try {
@@ -1853,7 +1893,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== PRODUCTS & FUEL ==========
+        // ========== PRODUCTS & FUEL (المنتجات والوقود) ==========
         @JavascriptInterface
         fun getProducts(): String {
             return try {
@@ -1943,7 +1983,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== VEHICLES ==========
+        // ========== VEHICLES (المركبات) ==========
         @JavascriptInterface
         fun getVehicles(): String {
             return try {
@@ -1955,7 +1995,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== TANKS & PUMPS ==========
+        // ========== TANKS & PUMPS (الخزانات والمضخات) ==========
         @JavascriptInterface
         fun getTanks(): String {
             return try {
@@ -2003,7 +2043,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== MAINTENANCE REQUESTS ==========
+        // ========== MAINTENANCE REQUESTS (طلبات الصيانة) ==========
         @JavascriptInterface
         fun getMaintenanceRequests(): String {
             return try {
@@ -2048,14 +2088,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun updateMaintenanceStatus(requestId: Long, status: String): String {
+        fun updateMaintenanceStatus(jsonData: String): String {
             return try {
-                val rows = dbHelper.updateMaintenanceRequestStatus(requestId, status)
-                JSONObject().apply {
-                    put("success", rows > 0)
-                    put("rowsAffected", rows)
-                    put("message", if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
-                }.toString()
+                val data = JSONObject(jsonData)
+                val requestId = data.optLong("request_id", 0)
+                val status = data.optString("status", "")
+                if (requestId <= 0 || status.isBlank()) {
+                    JSONObject().apply {
+                        put("success", false)
+                        put("error", "بيانات غير صالحة")
+                    }.toString()
+                } else {
+                    val rows = dbHelper.updateMaintenanceRequestStatus(requestId, status)
+                    JSONObject().apply {
+                        put("success", rows > 0)
+                        put("rowsAffected", rows)
+                        put("message", if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
+                    }.toString()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "updateMaintenanceStatus error", e)
                 JSONObject().apply {
@@ -2084,7 +2134,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== PAYMENTS ==========
+        // ========== PAYMENTS (المدفوعات) ==========
         @JavascriptInterface
         fun getPayments(): String {
             return try {
@@ -2173,7 +2223,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== CASHIERS ==========
+        // ========== CASHIERS (أمناء الصندوق) ==========
         @JavascriptInterface
         fun getCashiers(): String {
             return try {
@@ -2185,7 +2235,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== REPORTS (Extra) ==========
+        // ========== REPORTS (التقارير الإضافية) ==========
         @JavascriptInterface
         fun getMonthlySales(): String {
             return try {
@@ -2303,7 +2353,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== BACKUP & EXPORT ==========
+        // ========== BACKUP & EXPORT (النسخ الاحتياطي والتصدير) ==========
         @JavascriptInterface
         fun backupDatabase(): String {
             return try {
@@ -2413,7 +2463,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== UTILITY ==========
+        // ========== UTILITY (أدوات مساعدة) ==========
         @JavascriptInterface
         fun showToast(message: String) {
             if (isDestroyed.get()) return
@@ -2422,7 +2472,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun isServerReady(): Boolean = serverReady
+        fun isServerReady(): Boolean = serverReady  // تم إهمالها (تُرك للتوافق)
 
         @JavascriptInterface
         fun getAppVersion(): String {
@@ -2671,7 +2721,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ========== EXPORT ALL DATA ==========
+        // ========== EXPORT ALL DATA (تصدير جميع البيانات) ==========
         @JavascriptInterface
         fun exportAllData(): String {
             return try {
@@ -2680,6 +2730,197 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "exportAllData error", e)
                 "{}"
+            }
+        }
+
+        // ============================================================
+        // دوال إضافية للشاشات الجديدة (screens/*.html)
+        // ============================================================
+
+        @JavascriptInterface
+        fun getPartyTypes(): String {
+            return try {
+                val types = dbHelper.getPartyTypes()
+                types.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getPartyTypes error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getCurrencies(): String {
+            return try {
+                val currencies = dbHelper.getCurrencies()
+                currencies.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCurrencies error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomerLedger(partyId: Long): String {
+            return try {
+                val ledger = dbHelper.getCustomerLedger(partyId)
+                ledger.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCustomerLedger error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomerSales(partyId: Long): String {
+            return try {
+                val sales = dbHelper.getCustomerSales(partyId)
+                sales.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCustomerSales error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getPartyContacts(partyId: Long): String {
+            return try {
+                val contacts = dbHelper.getPartyContacts(partyId)
+                contacts.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getPartyContacts error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun getPartyAddresses(partyId: Long): String {
+            return try {
+                val addresses = dbHelper.getPartyAddresses(partyId)
+                addresses.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getPartyAddresses error", e)
+                "[]"
+            }
+        }
+
+        @JavascriptInterface
+        fun addPartyContact(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addPartyContact(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة جهة الاتصال بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addPartyContact error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun updatePartyContact(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = data.optLong("id", 0)
+                val rows = dbHelper.updatePartyContact(id, data)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "updatePartyContact error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deletePartyContact(contactId: Long): String {
+            return try {
+                val rows = dbHelper.deletePartyContact(contactId)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "deletePartyContact error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun addPartyAddress(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = dbHelper.addPartyAddress(data)
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إضافة العنوان بنجاح")
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "addPartyAddress error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun updatePartyAddress(jsonData: String): String {
+            return try {
+                val data = JSONObject(jsonData)
+                val id = data.optLong("id", 0)
+                val rows = dbHelper.updatePartyAddress(id, data)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "updatePartyAddress error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun deletePartyAddress(addressId: Long): String {
+            return try {
+                val rows = dbHelper.deletePartyAddress(addressId)
+                JSONObject().apply {
+                    put("success", rows > 0)
+                    put("rowsAffected", rows)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "deletePartyAddress error", e)
+                JSONObject().apply {
+                    put("success", false)
+                    put("error", e.message)
+                }.toString()
+            }
+        }
+
+        @JavascriptInterface
+        fun getCustomerDebts(fromDate: String?, toDate: String?): String {
+            return try {
+                val debts = dbHelper.getCustomerDebts(fromDate, toDate)
+                debts.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "getCustomerDebts error", e)
+                "[]"
             }
         }
     }
