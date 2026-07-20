@@ -42,6 +42,11 @@
         android:name="android.hardware.biometrics.face"
         android:required="false" />
 
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- ✅ تم التغيير: تم تعطيل Cleartext Traffic نهائياً       -->
+    <!--    لم نعد نستخدم خادم HTTP محلي (NanoHTTPD/8080)        -->
+    <!--    جميع الاتصالات الخارجية عبر HTTPS فقط               -->
+    <!-- ════════════════════════════════════════════════════════ -->
     <application
         android:name=".MyApplication"
         android:allowBackup="false"
@@ -57,11 +62,6 @@
         android:screenOrientation="portrait"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
-        <!-- ════════════════════════════════════════════════════════ -->
-        <!-- ✅ تم التغيير: تم تعطيل Cleartext Traffic نهائياً       -->
-        <!--    لم نعد نستخدم خادم HTTP محلي (NanoHTTPD/8080)        -->
-        <!--    جميع الاتصالات الخارجية عبر HTTPS فقط               -->
-        <!-- ════════════════════════════════════════════════════════ -->
         android:usesCleartextTraffic="false"
         tools:targetApi="31">
 
