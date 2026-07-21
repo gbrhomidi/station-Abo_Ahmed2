@@ -78,7 +78,6 @@ class SMSService : Service() {
         serviceScope.launch {
             try {
                 startForegroundService()
-                // تم إلغاء بدء الخادم المحلي نهائياً
                 scheduleAutoBackup()
                 Log.d(TAG, "Service initialization completed successfully (HTTP Server DISABLED)")
             } catch (e: Exception) {
@@ -742,36 +741,6 @@ class SMSService : Service() {
             Log.d(TAG, "Cleanup completed, retention days: $retentionDays")
         } catch (e: Exception) {
             Log.e(TAG, "Cleanup failed: ${e.message}")
-        }
-    }
-
-    // ================================================================
-    //  دوال تم إلغاؤها (كانت خاصة بالخادم المحلي)
-    // ================================================================
-
-    // تم إزالة فئة ApiServer (NanoHTTPD) بالكامل.
-    // تم إزالة متغير server.
-    // تم إزالة دالة startServer() التي كانت تشغل الخادم.
-}
-
-/**
- * Worker للنسخ الاحتياطي التلقائي (يُستخدم مع WorkManager).
- */
-class BackupWorker(
-    context: Context,
-    params: androidx.work.WorkerParameters
-) : androidx.work.CoroutineWorker(context, params) {
-
-    override suspend fun doWork(): Result {
-        return try {
-            val db = DatabaseHelper(applicationContext)
-            val path = db.backupDatabase()
-            Log.d("BackupWorker", "Auto backup completed: $path")
-            db.close()
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
-            Result.retry()
         }
     }
 }
