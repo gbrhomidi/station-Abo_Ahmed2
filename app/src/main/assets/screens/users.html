@@ -1,0 +1,2994 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة المستخدمين والصلاحيات</title>
+    <!-- CSS Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+    <style>
+        :root {
+            --primary-color: #0066ff;
+            --primary-color2: #00FFFF;
+            --primary-color3: #FFFF33;
+            --primary-color4: #FFDAB9;
+            --primary-color5: #007BFF;
+
+            --secondary-color: #0044cc;
+            --success-color: #28a745;
+            --info-color: #17a2b8;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --bg-color: #ffffff;
+            --text-color: #0066ff;
+            --text-color2: #FFD700;
+            --card-bg: #ffffff;
+            --header-bg: #ffffff;
+            --border-color: #0066ff;
+            --input-border: #0066ff;
+            --font-size-base: 18px;
+            --font-size-lg: 20px;
+            --font-size-sm: 16px;
+            --glow-effect: 0 0 10px rgba(0, 102, 255, 0.5);
+            --shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+            --gradient-primary: linear-gradient(135deg, #0066ff 0%, #0044cc 100%);
+            --gradient-warning: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            --gradient-success: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+            --gradient-danger: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            --gradient-info: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        }
+        
+        .dark-mode {
+            --bg-color: #1a1c21;
+            --text-color: #ffffff;
+            --text-color2: #FFD700;
+            --card-bg: #2a2d36;
+            --header-bg: #2a2d36;
+            --border-color: #4da6ff;
+            --input-border: #4da6ff;
+            --light-color: #2a2d36;
+            --dark-color: #f8f9fa;
+            --shadow: 0 2px 15px rgba(0, 0, 0, 0.3);
+            --gradient-primary: linear-gradient(135deg, #4da6ff 0%, #0066ff 100%);
+            --gradient-warning: linear-gradient(135deg, #ffd54f 0%, #ffc107 100%);
+            --gradient-success: linear-gradient(135deg, #4caf50 0%, #28a745 100%);
+        }
+        
+        * {
+            box-sizing: border-box;
+            max-width: 100%;
+            font-size: var(--font-size-base);
+            font-weight: 900;
+        }
+        
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            position: relative;
+            font-size: var(--font-size-base);
+        }
+        
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+            padding: 0;
+            margin: 0;
+            font-weight: 900;
+        }
+        
+        .main-header {
+            background: var(--header-bg);
+            padding: 15px 25px;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            width: 100%;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .main-header h2 {
+            margin: 0;
+            font-weight: 900;
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            text-shadow: var(--glow-effect);
+        }
+        
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .theme-toggle, .home-btn {
+            background: none;
+            border: none;
+            font-size: 2.2rem;
+            color: var(--text-color2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .theme-toggle:hover, .home-btn:hover {
+            transform: scale(1.1);
+            color: #FFC107;
+            background: rgba(255, 215, 0, 0.1);
+            box-shadow: var(--glow-effect);
+        }
+        
+        .main-container {
+            padding: 25px 20px;
+            margin-top: 0;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .row.no-overflow {
+            margin: 0;
+            padding: 0;
+        }
+        
+        .dashboard-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            transition: all 0.4s ease;
+            border: 2px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 25px;
+            padding: 30px 25px;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .dashboard-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: var(--gradient-primary);
+            z-index: 2;
+        }
+        
+        .dashboard-card.users-card::before {
+            background: var(--gradient-primary);
+        }
+        
+        .dashboard-card.permissions-card::before {
+            background: var(--gradient-warning);
+        }
+        
+        .dashboard-card.screens-card::before {
+            background: var(--gradient-success);
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15), var(--glow-effect);
+        }
+        
+        .card-icon {
+            font-size: 4.5rem;
+            opacity: 0.9;
+            transition: all 0.4s ease;
+            margin-bottom: 20px;
+            display: inline-block;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+        
+        .users-card .card-icon {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .permissions-card .card-icon {
+            background: var(--gradient-warning);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .screens-card .card-icon {
+            background: var(--gradient-success);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .dashboard-card:hover .card-icon {
+            opacity: 1;
+            transform: scale(1.15) rotate(5deg);
+        }
+        
+        .btn-primary-gradient {
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 50px;
+            padding: 14px 30px;
+            font-weight: 900;
+            font-size: 1.3rem;
+            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4), var(--glow-effect);
+            transition: all 0.4s ease;
+            width: 100%;
+            max-width: 280px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .btn-primary-gradient::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: all 0.6s ease;
+            z-index: -1;
+        }
+        
+        .btn-primary-gradient:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 10px 25px rgba(0, 102, 255, 0.6), var(--glow-effect);
+            color: white;
+        }
+        
+        .btn-primary-gradient:hover::before {
+            left: 100%;
+        }
+        
+        .permissions-card .btn-primary-gradient {
+            background: var(--gradient-warning);
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.4), var(--glow-effect);
+        }
+        
+        .screens-card .btn-primary-gradient {
+            background: var(--gradient-success);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4), var(--glow-effect);
+        }
+        
+        .offcanvas {
+            background: var(--card-bg);
+            transition: all 0.5s ease;
+            color: var(--text-color);
+            width: 85% !important;
+            max-width: 700px !important;
+        }
+        
+        .offcanvas-header {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 20px;
+            font-size: 1.2rem;
+            box-shadow: var(--glow-effect);
+        }
+        
+        .permissions-offcanvas .offcanvas-header {
+            background: var(--gradient-warning);
+        }
+        
+        .screens-offcanvas .offcanvas-header {
+            background: var(--gradient-success);
+        }
+        
+        .offcanvas-title {
+            font-size: 1.5rem;
+            font-weight: 900;
+        }
+        
+        .sidebar-nav {
+            padding: 20px 0;
+            background: var(--card-bg);
+            border-right: 2px solid var(--border-color);
+            width: 250px;
+            flex-shrink: 0;
+            height: 100%;
+            overflow-y: auto;
+        }
+        
+        .nav-link {
+            color: var(--text-color);
+            border-radius: 12px;
+            margin: 8px 15px;
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+            font-weight: 700;
+            font-size: 1.1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 8px solid var(--primary-color);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            background: var(--gradient-primary);
+            color: white;
+            transform: translateX(-5px);
+            border-color: var(--primary-color4);
+            box-shadow: var(--glow-effect);
+            padding-right: 25px;
+        }
+        
+        .nav-link:hover::before, .nav-link.active::before {
+            opacity: 1;
+            right: 10px;
+        }
+        
+        .nav-link i {
+            margin-left: 10px;
+            font-size: 1.2rem;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .tab-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            height: 100%;
+        }
+        
+        .tab-pane {
+            height: 100%;
+        }
+        
+        .data-table-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            border: 2px solid var(--border-color);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            max-height: 70vh;
+        }
+        
+        .data-table-header {
+            padding: 15px 20px;
+            background: var(--gradient-primary);
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .data-table {
+            overflow: auto;
+            flex: 1;
+        }
+        
+        .table {
+            color: var(--text-color);
+            margin-bottom: 0;
+            width: 100%;
+            min-width: 800px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .table th {
+            background: var(--gradient-primary);
+            color: #FFFFFF;
+            border: none;
+            padding: 15px 12px;
+            font-size: 1rem;
+            font-weight: 900;
+            box-shadow: var(--glow-effect);
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .table td {
+            border-color: var(--border-color);
+            vertical-align: middle;
+            padding: 12px 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .table tbody tr {
+            transition: all 0.3s ease;
+        }
+        
+        .table tbody tr:hover {
+            background-color: rgba(0, 102, 255, 0.1);
+            transform: scale(1.01);
+        }
+        
+        .dark-mode .table tbody tr:hover {
+            background-color: rgba(77, 166, 255, 0.2);
+        }
+        
+        .dark-mode .table tbody tr:hover td {
+            color: #ffffff !important;
+        }
+        
+        .dark-mode .table td {
+            color: #ffffff;
+        }
+        
+        .dark-mode .text-muted {
+            color: #adb5bd !important;
+        }
+        
+        .filter-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+            border: 2px solid var(--border-color);
+            width: 100%;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .filter-section.active {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .form-control, .form-select {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border: 2px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 10px 15px;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.3rem rgba(0, 102, 255, 0.25), var(--glow-effect);
+            transform: translateY(-2px);
+        }
+        
+        .form-label {
+            color: var(--text-color);
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .action-buttons .btn {
+            margin-left: 5px;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            padding: 0;
+            transition: all 0.3s ease;
+            font-weight: 700;
+            box-shadow: var(--glow-effect);
+        }
+        
+        .action-buttons .btn:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 15px rgba(0, 102, 255, 0.7);
+        }
+        
+        .status-badge {
+            padding: 8px 12px;
+            border-radius: 25px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            box-shadow: var(--glow-effect);
+        }
+        
+        .badge.bg-success {
+            background: var(--gradient-success) !important;
+        }
+        
+        .badge.bg-danger {
+            background: var(--gradient-danger) !important;
+        }
+        
+        .badge.bg-warning {
+            background: var(--gradient-warning) !important;
+            color: #212529;
+        }
+        
+        .badge.bg-info {
+            background: var(--gradient-info) !important;
+        }
+        
+        .badge.bg-secondary {
+            background: linear-gradient(to right, #6c757d, #545b62) !important;
+        }
+        
+        .pagination .page-link {
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            border-color: var(--border-color);
+            padding: 8px 15px;
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 3px;
+            border-radius: 8px;
+            box-shadow: var(--glow-effect);
+        }
+        
+        .pagination .page-item.active .page-link {
+            background: var(--gradient-primary);
+            border-color: var(--primary-color);
+            font-weight: 700;
+        }
+        
+        .form-row-2 {
+            display: flex;
+            flex-wrap: wrap;
+            margin-left: -10px;
+            margin-right: -10px;
+        }
+        
+        .form-row-2 .form-group {
+            flex: 0 0 calc(50% - 20px);
+            margin: 0 10px 15px;
+        }
+        
+        .form-group-full {
+            flex: 0 0 100% !important;
+            margin: 0 10px 15px;
+        }
+        
+        .report-card {
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--bg-color) 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px solid var(--border-color);
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .report-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--gradient-info);
+        }
+        
+        .report-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), var(--glow-effect);
+            border-color: var(--primary-color);
+        }
+        
+        .report-card h5 {
+            color: var(--primary-color);
+            font-weight: 900;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            text-shadow: var(--glow-effect);
+        }
+        
+        .report-card p {
+            color: var(--text-color);
+            margin-bottom: 15px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .report-card .btn {
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 25px;
+            padding: 8px 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            box-shadow: var(--glow-effect);
+            color: white;
+        }
+        
+        .dark-mode .report-card {
+            background: linear-gradient(135deg, #2a2d36 0%, #1a1c21 100%);
+        }
+        
+        .dark-mode .form-control, 
+        .dark-mode .form-select {
+            border-color: #4da6ff;
+        }
+        
+        .dark-mode .form-control:focus, 
+        .dark-mode .form-select:focus {
+            border-color: #66b3ff;
+            box-shadow: 0 0 0 0.3rem rgba(77, 166, 255, 0.25), var(--glow-effect);
+        }
+        
+        .dark-mode .table {
+            color: var(--text-color);
+        }
+        
+        .dark-mode .nav-link {
+            color: var(--text-color);
+        }
+        
+        .dark-mode .h1,
+        .dark-mode .h2,
+        .dark-mode .h3,
+        .dark-mode .h4,
+        .dark-mode .h5,
+        .dark-mode .h6,
+        .dark-mode .lead,
+        .dark-mode p:not(.text-muted),
+        .dark-mode .form-label,
+        .dark-mode .form-check-label,
+        .dark-mode .text-truncate-mobile,
+        .dark-mode .action-buttons .btn,
+        .dark-mode .table th,
+        .dark-mode .table td,
+        .dark-mode .table tbody tr:hover td,
+        .dark-mode .accordion-button,
+        .dark-mode .accordion-body {
+            color: #ffffff !important;
+        }
+
+        .dark-mode .table tbody tr.selected {
+            background-color: rgba(77, 166, 255, 0.3) !important;
+        }
+
+        .dark-mode .table tbody tr.selected td {
+            color: #ffffff !important;
+            font-weight: bold;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999999;
+            max-width: 350px;
+            width: 100%;
+        }
+        
+        .custom-toast {
+            background: var(--card-bg);
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25), var(--glow-effect);
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+            margin-bottom: 15px;
+            animation: slideInRight 0.4s ease-out, fadeOut 0.4s ease-in 2.6s;
+            animation-fill-mode: forwards;
+            border-left: 5px solid;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+        
+        .custom-toast:hover {
+            transform: translateX(-5px);
+        }
+        
+        .custom-toast.success {
+            border-left-color: var(--success-color);
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, var(--card-bg) 100%);
+        }
+        
+        .custom-toast.error {
+            border-left-color: var(--danger-color);
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, var(--card-bg) 100%);
+        }
+        
+        .custom-toast.warning {
+            border-left-color: var(--warning-color);
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, var(--card-bg) 100%);
+        }
+        
+        .custom-toast.info {
+            border-left-color: var(--info-color);
+            background: linear-gradient(135deg, rgba(23, 162, 184, 0.15) 0%, var(--card-bg) 100%);
+        }
+        
+        .toast-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 20px;
+            color: var(--text-color);
+        }
+        
+        .toast-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .toast-icon.success {
+            background: rgba(40, 167, 69, 0.2);
+            color: var(--success-color);
+        }
+        
+        .toast-icon.error {
+            background: rgba(220, 53, 69, 0.2);
+            color: var(--danger-color);
+        }
+        
+        .toast-icon.warning {
+            background: rgba(255, 193, 7, 0.2);
+            color: var(--warning-color);
+        }
+        
+        .toast-icon.info {
+            background: rgba(23, 162, 184, 0.2);
+            color: var(--info-color);
+        }
+        
+        .toast-title {
+            font-weight: 900;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+        
+        .toast-body {
+            padding: 20px;
+            color: var(--text-color);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        
+        .toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: var(--success-color);
+            width: 100%;
+            animation: progressBar 3s linear;
+        }
+        
+        .toast-progress.error {
+            background: var(--danger-color);
+        }
+        
+        .toast-progress.warning {
+            background: var(--warning-color);
+        }
+        
+        .toast-progress.info {
+            background: var(--info-color);
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fadeOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        
+        @keyframes progressBar {
+            from { width: 100%; }
+            to { width: 0%; }
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .btn-close-white {
+            filter: invert(1);
+            opacity: 0.8;
+        }
+        
+        .btn-close-white:hover {
+            opacity: 1;
+        }
+        
+        .dark-mode .custom-toast {
+            background: linear-gradient(135deg, rgba(42, 45, 54, 0.95) 0%, rgba(26, 28, 33, 0.95) 100%);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .dark-mode .toast-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --font-size-base: 16px;
+                --font-size-lg: 18px;
+                --font-size-sm: 14px;
+            }
+            
+            .main-container {
+                padding: 15px 10px;
+            }
+            
+            .dashboard-card {
+                margin-bottom: 15px;
+                padding: 20px 15px;
+            }
+            
+            .main-header {
+                padding: 12px 15px;
+                flex-direction: row;
+                gap: 10px;
+            }
+            
+            .main-header h2 {
+                font-size: 1.5rem;
+            }
+            
+            .display-4 {
+                font-size: 1.8rem !important;
+            }
+            
+            .lead {
+                font-size: 1rem !important;
+            }
+            
+            .btn-primary-gradient {
+                padding: 12px 20px;
+                font-size: 1rem;
+                max-width: 220px;
+            }
+            
+            .card-icon {
+                font-size: 3rem;
+            }
+            
+            .offcanvas {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            
+            .sidebar-nav {
+                width: 100%;
+                border-right: none;
+                border-bottom: 2px solid var(--border-color);
+                padding: 10px 0;
+                height: auto;
+            }
+            
+            .nav-link {
+                margin: 5px;
+                padding: 10px 12px;
+                font-size: 1rem;
+            }
+            
+            .filter-section .row {
+                margin-left: -5px;
+                margin-right: -5px;
+            }
+            
+            .filter-section .col-md-4,
+            .filter-section .col-md-3,
+            .filter-section .col-md-2 {
+                padding-left: 5px;
+                padding-right: 5px;
+                margin-bottom: 10px;
+            }
+            
+            .data-table-container {
+                max-height: 60vh;
+            }
+            
+            .action-buttons .btn {
+                width: 35px;
+                height: 35px;
+                margin-left: 3px;
+                font-size: 0.9rem;
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .pagination .page-item {
+                margin-bottom: 5px;
+            }
+            
+            .offcanvas-body .d-flex {
+                flex-direction: column;
+            }
+            
+            .sidebar-nav {
+                width: 100%;
+            }
+            
+            .form-row-2 .form-group {
+                flex: 0 0 100%;
+            }
+
+            .toast-container {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: 100%;
+            }
+            
+            .custom-toast {
+                margin-bottom: 10px;
+            }
+            
+            .toast-header {
+                padding: 12px 15px;
+            }
+            
+            .toast-body {
+                padding: 15px;
+                font-size: 0.95rem;
+            }
+            
+            .toast-title {
+                font-size: 1rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            :root {
+                --font-size-base: 14px;
+                --font-size-lg: 16px;
+                --font-size-sm: 12px;
+            }
+            
+            .main-header h2 {
+                font-size: 1.3rem;
+            }
+            
+            .display-4 {
+                font-size: 1.5rem !important;
+            }
+            
+            .dashboard-card {
+                padding: 15px 12px;
+            }
+            
+            .btn-primary-gradient {
+                padding: 10px 18px;
+                font-size: 0.9rem;
+                max-width: 200px;
+            }
+            
+            .card-icon {
+                font-size: 2.5rem;
+            }
+            
+            .nav-link {
+                font-size: 0.9rem;
+            }
+            
+            .table th, .table td {
+                padding: 10px 8px;
+                font-size: 0.9rem;
+            }
+            
+            .action-buttons .btn {
+                width: 32px;
+                height: 32px;
+                font-size: 0.8rem;
+            }
+            
+            .status-badge {
+                padding: 6px 10px;
+                font-size: 0.8rem;
+            }
+            
+            .filter-section {
+                padding: 15px;
+            }
+            
+            .form-control, .form-select {
+                padding: 8px 12px;
+                font-size: 0.9rem;
+            }
+        }
+        
+        .glow {
+            box-shadow: var(--glow-effect);
+        }
+        
+        .text-glow {
+            text-shadow: var(--glow-effect);
+        }
+        
+        .form-check {
+            margin-bottom: 10px;
+        }
+        
+        .form-check-input {
+            width: 20px;
+            height: 20px;
+            margin-left: 10px;
+        }
+        
+        .form-check-label {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .tab-pane {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.875rem;
+        }
+        
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 1.25rem;
+        }
+        
+        .text-truncate-mobile {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 150px;
+        }
+        
+        @media (max-width: 768px) {
+            .text-truncate-mobile {
+                max-width: 100px;
+            }
+        }
+        
+        .accordion-button {
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-weight: 700;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background: var(--gradient-primary);
+            color: white;
+        }
+        
+        .accordion-body {
+            background: var(--bg-color);
+            color: var(--text-color);
+        }
+        
+        .offcanvas-body {
+            overflow: hidden;
+            display: flex;
+        }
+        
+        .offcanvas-body > .d-flex {
+            width: 100%;
+        }
+
+        .dashboard-card .h4 {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 900;
+            margin-bottom: 15px;
+        }
+        
+        .permissions-card .h4 {
+            background: var(--gradient-warning);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .screens-card .h4 {
+            background: var(--gradient-success);
+            -webkit-background-clip: text;
+            background-clip: text;
+        }
+        
+        .loading-spinner {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            vertical-align: text-bottom;
+            border: 0.25em solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spinner-border 0.75s linear infinite;
+        }
+        
+        @keyframes spinner-border {
+            to { transform: rotate(360deg); }
+        }
+        
+        .form-select option {
+            background: var(--card-bg);
+            color: var(--text-color);
+        }
+        
+        .alert-enhanced {
+            border-radius: 12px;
+            border: none;
+            box-shadow: var(--shadow);
+            padding: 15px 20px;
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px rgba(0, 102, 255, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(0, 102, 255, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(0, 102, 255, 0.5); }
+        }
+    </style>
+</head>
+<body>
+    <header class="main-header">
+        <h2><i class="fas fa-users-cog me-2"></i> إدارة المستخدمين والصلاحيات</h2>
+        <div class="header-controls">
+            <button class="home-btn" onclick="window.location.href='main.html'">
+                <i class="fas fa-home"></i>
+            </button>
+            <button id="themeToggle" class="theme-toggle">
+                <i class="fas fa-moon" id="moonIcon"></i>
+                <i class="fas fa-sun" id="sunIcon" style="display: none;"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="main-container container-fixed">
+        <div class="row justify-content-center mb-4">
+            <div class="col-12 text-center">
+                <h1 class="display-4 fw-bold text-primary mb-3 text-glow" style="color: var(--text-color) !important;">نظام إدارة المستخدمين والصلاحيات</h1>
+                <p class="lead text-muted">إدارة كاملة لمستخدمي النظام، الصلاحيات، والشاشات بشكل متكامل وآمن</p>
+            </div>
+        </div>
+        
+        <div class="row no-overflow">
+            <div class="col-md-4 col-sm-6 col-12">
+                <div class="dashboard-card text-center p-4 animate-fadeIn users-card" style="animation-delay: 0.1s;">
+                    <div class="card-icon text-primary mb-3">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3 class="h4">إدارة المستخدمين</h3>
+                    <p class="text-muted">إضافة، تعديل، وحذف المستخدمين وإدارة مجموعاتهم</p>
+                    <button class="btn btn-primary-gradient mt-3" data-bs-toggle="offcanvas" data-bs-target="#usersOffcanvas">
+                        فتح لوحة التحكم <i class="fas fa-arrow-left ms-2"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-4 col-sm-6 col-12">
+                <div class="dashboard-card text-center p-4 animate-fadeIn permissions-card" style="animation-delay: 0.2s;">
+                    <div class="card-icon text-warning mb-3">
+                        <i class="fas fa-user-lock"></i>
+                    </div>
+                    <h3 class="h4">إدارة الصلاحيات</h3>
+                    <p class="text-muted">منح، سحب، وإدارة صلاحيات المستخدمين والمجموعات</p>
+                    <button class="btn btn-primary-gradient mt-3" id="openPermissionsOffcanvas">
+                        فتح لوحة التحكم <i class="fas fa-arrow-left ms-2"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="col-md-4 col-sm-6 col-12">
+                <div class="dashboard-card text-center p-4 animate-fadeIn screens-card" style="animation-delay: 0.3s;">
+                    <div class="card-icon text-success mb-3">
+                        <i class="fas fa-desktop"></i>
+                    </div>
+                    <h3 class="h4">إدارة الشاشات</h3>
+                    <p class="text-muted">إضافة، تعديل، وإدارة شاشات النظام وتفعيلها</p>
+                    <button class="btn btn-primary-gradient mt-3" id="openScreensOffcanvas">
+                        فتح لوحة التحكم <i class="fas fa-arrow-left ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Users Offcanvas -->
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="usersOffcanvas">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title">
+                    <i class="fas fa-users me-2"></i> إدارة المستخدمين
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0">
+                <div class="d-flex h-100">
+                    <div class="sidebar-nav">
+                        <ul class="nav flex-column w-100">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#usersList" data-bs-toggle="tab">
+                                    <i class="fas fa-list"></i> قائمة المستخدمين
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#addUser" data-bs-toggle="tab">
+                                    <i class="fas fa-plus-circle"></i> إضافة مستخدم جديد
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#userGroups" data-bs-toggle="tab">
+                                    <i class="fas fa-layer-group"></i> مجموعات المستخدمين
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#userPermissions" data-bs-toggle="tab">
+                                    <i class="fas fa-key"></i> صلاحيات المستخدمين
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#userReports" data-bs-toggle="tab">
+                                    <i class="fas fa-chart-bar"></i> تقارير المستخدمين
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="usersList">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h4 class="mb-0 h4">قائمة المستخدمين</h4>
+                                <div>
+                                    <button class="btn btn-outline-primary btn-sm me-2" id="toggleFilterBtn">
+                                        <i class="fas fa-filter"></i> فلترة
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" id="refreshUsers">
+                                        <i class="fas fa-sync-alt"></i> تحديث
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-section" id="filterSection">
+                                <div class="row g-3">
+                                    <div class="col-12 col-sm-6 col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">بحث بالاسم أو البريد الإلكتروني</label>
+                                            <input type="text" class="form-control form-control-sm" id="userSearch" placeholder="ابحث...">
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-sm-6 col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">حالة المستخدم</label>
+                                            <select class="form-control form-control-sm" id="userStatusFilter">
+                                                <option value="all">الكل</option>
+                                                <option value="active">مفعل</option>
+                                                <option value="inactive">غير مفعل</option>
+                                                <option value="locked">مقفل</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-12 col-sm-6 col-md-4">
+                                        <div class="form-group">
+                                            <label class="form-label">الدور</label>
+                                            <select class="form-control form-control-sm" id="userRoleFilter">
+                                                <option value="all">الكل</option>
+                                                <option value="1">مدير</option>
+                                                <option value="2">مشرف</option>
+                                                <option value="3">محاسب</option>
+                                                <option value="4">أمين صندوق</option>
+                                                <option value="5">مستخدم</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <button class="btn btn-primary btn-sm w-100" id="filterUsers">
+                                            <i class="fas fa-filter"></i> تطبيق الفلتر
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="data-table-container">
+                                <div class="data-table-header">
+                                    <i class="fas fa-table me-2"></i> جدول المستخدمين
+                                </div>
+                                <div class="data-table">
+                                    <table class="table table-hover" id="usersTable">
+                                        <thead>
+                                            <tr>
+                                                <th>اسم المستخدم</th>
+                                                <th>الاسم الكامل</th>
+                                                <th>البريد الإلكتروني</th>
+                                                <th>الدور</th>
+                                                <th>الحالة</th>
+                                                <th>آخر دخول</th>
+                                                <th>الإجراءات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="7" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap">
+                                <div class="mb-2">عرض <span id="usersCount">0</span> مستخدم</div>
+                                <nav>
+                                    <ul class="pagination justify-content-center mb-2" id="usersPagination"></ul>
+                                </nav>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="addUser">
+                            <h4 class="mb-3 h4">إضافة مستخدم جديد</h4>
+                            <form id="addUserForm">
+                                <div class="form-row-2">
+                                    <div class="form-group">
+                                        <label for="username" class="form-label">اسم المستخدم *</label>
+                                        <input type="text" class="form-control" id="username" name="username" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="full_name" class="form-label">الاسم الكامل *</label>
+                                        <input type="text" class="form-control" id="full_name" name="full_name" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="email" class="form-label">البريد الإلكتروني</label>
+                                        <input type="email" class="form-control" id="email" name="email">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="phone" class="form-label">رقم الهاتف</label>
+                                        <input type="tel" class="form-control" id="phone" name="phone">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="password" class="form-label">كلمة المرور *</label>
+                                        <input type="password" class="form-control" id="password" name="password" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="confirm_password" class="form-label">تأكيد كلمة المرور *</label>
+                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="role" class="form-label">الدور *</label>
+                                        <select class="form-control" id="role" name="role" required>
+                                            <option value="1">مدير</option>
+                                            <option value="2">مشرف</option>
+                                            <option value="3">محاسب</option>
+                                            <option value="4">أمين صندوق</option>
+                                            <option value="5">مستخدم</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="station_id" class="form-label">المحطة</label>
+                                        <select class="form-control" id="station_id" name="station_id">
+                                            <option value="">اختر المحطة</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                            <label class="form-check-label" for="is_active">الحساب مفعل</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="must_change_password" name="must_change_password" checked>
+                                            <label class="form-check-label" for="must_change_password">يجب تغيير كلمة المرور عند أول دخول</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg mt-3">إضافة المستخدم</button>
+                            </form>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="userGroups">
+                            <h4 class="mb-3 h4">مجموعات المستخدمين</h4>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="btn btn-primary btn-sm" id="addGroupBtn" data-bs-toggle="modal" data-bs-target="#addGroupModal">
+                                    <i class="fas fa-plus"></i> إضافة مجموعة جديدة
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" id="refreshGroups">
+                                    <i class="fas fa-sync-alt"></i> تحديث
+                                </button>
+                            </div>
+                            <div class="data-table-container">
+                                <div class="data-table-header">
+                                    <i class="fas fa-layer-group me-2"></i> جدول المجموعات
+                                </div>
+                                <div class="data-table">
+                                    <table class="table table-hover" id="groupsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>اسم المجموعة</th>
+                                                <th>الوصف</th>
+                                                <th>عدد المستخدمين</th>
+                                                <th>الحالة</th>
+                                                <th>الإجراءات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="5" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="userPermissions">
+                            <h4 class="mb-3 h4">صلاحيات المستخدمين</h4>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="userSelect" class="form-label">اختر المستخدم</label>
+                                    <select class="form-control" id="userSelect">
+                                        <option value="">اختر المستخدم</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="userPermissionsContent">
+                                <p class="text-center text-muted">يرجى اختيار مستخدم لعرض صلاحياته</p>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="userReports">
+                            <h4 class="mb-3 h4">تقارير المستخدمين</h4>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="report-card" data-report="user-activity">
+                                        <h5>تقرير نشاط المستخدمين</h5>
+                                        <p>عرض تقرير بنشاط المستخدمين خلال فترة زمنية محددة</p>
+                                        <button class="btn btn-primary">عرض التقرير</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="report-card" data-report="user-permissions">
+                                        <h5>تقرير أذونات المستخدمين</h5>
+                                        <p>عرض تقرير بجميع أذونات المستخدمين في النظام</p>
+                                        <button class="btn btn-primary">عرض التقرير</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="report-card" data-report="login-audit">
+                                        <h5>تقرير تسجيلات الدخول</h5>
+                                        <p>عرض تقرير بتسجيلات الدخول الناجحة والفاشلة</p>
+                                        <button class="btn btn-primary">عرض التقرير</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="report-card" data-report="password-changes">
+                                        <h5>تقرير تغييرات كلمة المرور</h5>
+                                        <p>عرض تقرير بتغييرات كلمات المرور للمستخدمين</p>
+                                        <button class="btn btn-primary">عرض التقرير</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Permissions Offcanvas -->
+        <div class="offcanvas offcanvas-start permissions-offcanvas" tabindex="-1" id="permissionsOffcanvas">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title">
+                    <i class="fas fa-user-lock me-2"></i> إدارة الصلاحيات
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0">
+                <div class="d-flex h-100">
+                    <div class="sidebar-nav">
+                        <ul class="nav flex-column w-100">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#permissionsList" data-bs-toggle="tab">
+                                    <i class="fas fa-list"></i> قائمة الصلاحيات
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#addPermission" data-bs-toggle="tab">
+                                    <i class="fas fa-plus-circle"></i> إضافة صلاحية جديدة
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#userPermissionsManagement" data-bs-toggle="tab">
+                                    <i class="fas fa-user-cog"></i> منح صلاحيات للمستخدمين
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#groupPermissions" data-bs-toggle="tab">
+                                    <i class="fas fa-users-cog"></i> صلاحيات المجموعات
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#temporaryPermissions" data-bs-toggle="tab">
+                                    <i class="fas fa-clock"></i> الصلاحيات المؤقتة
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="permissionsList">
+                            <h4 class="mb-3 h4">قائمة الصلاحيات</h4>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="input-group" style="max-width: 300px;">
+                                    <input type="text" class="form-control" id="permissionSearch" placeholder="ابحث في الصلاحيات...">
+                                    <button class="btn btn-outline-secondary" type="button" id="searchPermissions">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                                <button class="btn btn-outline-secondary btn-sm" id="refreshPermissions">
+                                    <i class="fas fa-sync-alt"></i> تحديث
+                                </button>
+                            </div>
+                            <div class="data-table-container">
+                                <div class="data-table-header">
+                                    <i class="fas fa-key me-2"></i> جدول الصلاحيات
+                                </div>
+                                <div class="data-table">
+                                    <table class="table table-hover" id="permissionsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>اسم الصلاحية</th>
+                                                <th>الوصف</th>
+                                                <th>المجموعة</th>
+                                                <th>تاريخ الإنشاء</th>
+                                                <th>الإجراءات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="5" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="addPermission">
+                            <h4 class="mb-3 h4">إضافة صلاحية جديدة</h4>
+                            <form id="addPermissionForm">
+                                <div class="form-row-2">
+                                    <div class="form-group">
+                                        <label for="permission_name" class="form-label">اسم الصلاحية *</label>
+                                        <input type="text" class="form-control" id="permission_name" name="permission_name" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="permission_group" class="form-label">المجموعة *</label>
+                                        <select class="form-control" id="permission_group" name="permission_group" required>
+                                            <option value="users">المستخدمين</option>
+                                            <option value="permissions">الصلاحيات</option>
+                                            <option value="reports">التقارير</option>
+                                            <option value="settings">الإعدادات</option>
+                                            <option value="inventory">المخزون</option>
+                                            <option value="financial">المالية</option>
+                                            <option value="sales">المبيعات</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group-full">
+                                        <label for="permission_description" class="form-label">وصف الصلاحية</label>
+                                        <textarea class="form-control" id="permission_description" name="permission_description" rows="3"></textarea>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg mt-3">إضافة الصلاحية</button>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="userPermissionsManagement">
+                            <h4 class="mb-3 h4">منح صلاحيات للمستخدمين</h4>
+                            <form id="grantPermissionForm">
+                                <div class="form-row-2">
+                                    <div class="form-group">
+                                        <label for="userForPermission" class="form-label">اختر المستخدم *</label>
+                                        <select class="form-control" id="userForPermission" required>
+                                            <option value="">اختر المستخدم</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="permissionToGrant" class="form-label">اختر الصلاحية *</label>
+                                        <select class="form-control" id="permissionToGrant" required>
+                                            <option value="">اختر الصلاحية</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="screenForPermission" class="form-label">اختر الشاشة *</label>
+                                        <select class="form-control" id="screenForPermission" required>
+                                            <option value="">اختر الشاشة</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="permissionExpiry" class="form-label">تاريخ الانتهاء (اختياري)</label>
+                                        <input type="date" class="form-control" id="permissionExpiry">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg mt-3">منح الصلاحية</button>
+                            </form>
+                            
+                            <div class="mt-4">
+                                <h5 class="mb-3">الصلاحيات الممنوحة</h5>
+                                <div class="data-table-container">
+                                    <div class="data-table-header">
+                                        <i class="fas fa-list-check me-2"></i> الصلاحيات الممنوحة
+                                    </div>
+                                    <div class="data-table">
+                                        <table class="table table-hover" id="grantedPermissionsTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>المستخدم</th>
+                                                    <th>الصلاحية</th>
+                                                    <th>الشاشة</th>
+                                                    <th>تاريخ المنح</th>
+                                                    <th>تاريخ الانتهاء</th>
+                                                    <th>الحالة</th>
+                                                    <th>الإجراءات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr><td colspan="7" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="groupPermissions">
+                            <h4 class="mb-3 h4">صلاحيات المجموعات</h4>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="groupSelect" class="form-label">اختر المجموعة</label>
+                                    <select class="form-control" id="groupSelect">
+                                        <option value="">اختر المجموعة</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="groupPermissionsContent">
+                                <p class="text-center text-muted">يرجى اختيار مجموعة لعرض صلاحياتها</p>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="temporaryPermissions">
+                            <h4 class="mb-3 h4">الصلاحيات المؤقتة</h4>
+                            <form id="delegatePermissionForm">
+                                <div class="form-row-2">
+                                    <div class="form-group">
+                                        <label for="delegator_id" class="form-label">المفوض *</label>
+                                        <select class="form-control" id="delegator_id" required>
+                                            <option value="">اختر المفوض</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="delegatee_id" class="form-label">المفوض إليه *</label>
+                                        <select class="form-control" id="delegatee_id" required>
+                                            <option value="">اختر المفوض إليه</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="permission_to_delegate" class="form-label">الصلاحية *</label>
+                                        <select class="form-control" id="permission_to_delegate" required>
+                                            <option value="">اختر الصلاحية</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="screen_for_delegation" class="form-label">الشاشة *</label>
+                                        <select class="form-control" id="screen_for_delegation" required>
+                                            <option value="">اختر الشاشة</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="delegation_expiry" class="form-label">تاريخ انتهاء التفويض *</label>
+                                        <input type="date" class="form-control" id="delegation_expiry" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg mt-3">تفويض الصلاحية</button>
+                            </form>
+                            
+                            <div class="mt-4">
+                                <h5 class="mb-3">الصلاحيات المفوضة</h5>
+                                <div class="data-table-container">
+                                    <div class="data-table-header">
+                                        <i class="fas fa-people-arrows me-2"></i> الصلاحيات المفوضة
+                                    </div>
+                                    <div class="data-table">
+                                        <table class="table table-hover" id="delegatedPermissionsTable">
+                                            <thead>
+                                                <tr>
+                                                    <th>المفوض</th>
+                                                    <th>المفوض إليه</th>
+                                                    <th>الصلاحية</th>
+                                                    <th>الشاشة</th>
+                                                    <th>تاريخ التفويض</th>
+                                                    <th>تاريخ الانتهاء</th>
+                                                    <th>الحالة</th>
+                                                    <th>الإجراءات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr><td colspan="8" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Screens Offcanvas -->
+        <div class="offcanvas offcanvas-start screens-offcanvas" tabindex="-1" id="screensOffcanvas">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title">
+                    <i class="fas fa-desktop me-2"></i> إدارة الشاشات
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0">
+                <div class="d-flex h-100">
+                    <div class="sidebar-nav">
+                        <ul class="nav flex-column w-100">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="#screensList" data-bs-toggle="tab">
+                                    <i class="fas fa-list"></i> قائمة الشاشات
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#addScreen" data-bs-toggle="tab">
+                                    <i class="fas fa-plus-circle"></i> إضافة شاشة جديدة
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#screenPermissions" data-bs-toggle="tab">
+                                    <i class="fas fa-key"></i> صلاحيات الشاشات
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#screenModules" data-bs-toggle="tab">
+                                    <i class="fas fa-cubes"></i> وحدات الشاشات
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="screensList">
+                            <h4 class="mb-3 h4">قائمة الشاشات</h4>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="input-group" style="max-width: 300px;">
+                                    <input type="text" class="form-control" id="screenSearch" placeholder="ابحث في الشاشات...">
+                                    <button class="btn btn-outline-secondary" type="button" id="searchScreens">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                                <button class="btn btn-outline-secondary btn-sm" id="refreshScreens">
+                                    <i class="fas fa-sync-alt"></i> تحديث
+                                </button>
+                            </div>
+                            <div class="data-table-container">
+                                <div class="data-table-header">
+                                    <i class="fas fa-desktop me-2"></i> جدول الشاشات
+                                </div>
+                                <div class="data-table">
+                                    <table class="table table-hover" id="screensTable">
+                                        <thead>
+                                            <tr>
+                                                <th>اسم الشاشة</th>
+                                                <th>الوحدة</th>
+                                                <th>الوصف</th>
+                                                <th>الحالة</th>
+                                                <th>تاريخ الإنشاء</th>
+                                                <th>الإجراءات</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td colspan="6" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="addScreen">
+                            <h4 class="mb-3 h4">إضافة شاشة جديدة</h4>
+                            <form id="addScreenForm">
+                                <div class="form-row-2">
+                                    <div class="form-group">
+                                        <label for="screen_name" class="form-label">اسم الشاشة *</label>
+                                        <input type="text" class="form-control" id="screen_name" name="screen_name" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="screen_module" class="form-label">الوحدة *</label>
+                                        <select class="form-control" id="screen_module" name="screen_module" required>
+                                            <option value="users">المستخدمين</option>
+                                            <option value="reports">التقارير</option>
+                                            <option value="settings">الإعدادات</option>
+                                            <option value="permissions">الصلاحيات</option>
+                                            <option value="inventory">المخزون</option>
+                                            <option value="financial">المالية</option>
+                                            <option value="sales">المبيعات</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group-full">
+                                        <label for="screen_description" class="form-label">وصف الشاشة</label>
+                                        <textarea class="form-control" id="screen_description" name="screen_description" rows="3"></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="screen_is_active" name="screen_is_active" checked>
+                                            <label class="form-check-label" for="screen_is_active">الشاشة مفعلة</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg mt-3">إضافة الشاشة</button>
+                            </form>
+                        </div>
+                        <div class="tab-pane fade" id="screenPermissions">
+                            <h4 class="mb-3 h4">صلاحيات الشاشات</h4>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="screenForPermissionList" class="form-label">اختر الشاشة</label>
+                                    <select class="form-control" id="screenForPermissionList">
+                                        <option value="">اختر الشاشة</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="screenPermissionsContent">
+                                <p class="text-center text-muted">يرجى اختيار شاشة لعرض صلاحياتها</p>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="screenModules">
+                            <h4 class="mb-3 h4">وحدات الشاشات</h4>
+                            <div class="data-table-container">
+                                <div class="data-table-header">
+                                    <i class="fas fa-cubes me-2"></i> جدول الوحدات
+                                </div>
+                                <div class="data-table">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>اسم الوحدة</th>
+                                                <th>عدد الشاشات</th>
+                                                <th>الحالة</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td>المستخدمين</td><td><span class="badge bg-primary">5</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                            <tr><td>التقارير</td><td><span class="badge bg-primary">3</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                            <tr><td>الإعدادات</td><td><span class="badge bg-primary">2</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                            <tr><td>الصلاحيات</td><td><span class="badge bg-primary">4</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                            <tr><td>المخزون</td><td><span class="badge bg-primary">8</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                            <tr><td>المالية</td><td><span class="badge bg-primary">6</span></td><td><span class="badge bg-success">نشط</span></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Reports Offcanvas -->
+        <div class="offcanvas offcanvas-end" tabindex="-1" id="reportsOffcanvas" style="width: 90% !important; max-width: 1000px !important;">
+            <div class="offcanvas-header bg-info">
+                <h5 class="offcanvas-title">
+                    <i class="fas fa-chart-bar me-2"></i> تقرير المستخدمين
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body">
+                <div id="reportContent">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-3">جاري تحميل التقرير...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add Group Modal -->
+        <div class="modal fade" id="addGroupModal" tabindex="-1" aria-labelledby="addGroupModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="addGroupModalLabel"><i class="fas fa-plus-circle me-2"></i> إضافة مجموعة جديدة</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addGroupForm">
+                            <div class="form-group mb-3">
+                                <label for="group_name" class="form-label">اسم المجموعة *</label>
+                                <input type="text" class="form-control" id="group_name" name="group_name" required>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="group_description" class="form-label">وصف المجموعة</label>
+                                <textarea class="form-control" id="group_description" name="group_description" rows="3"></textarea>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="group_is_active" name="group_is_active" checked>
+                                <label class="form-check-label" for="group_is_active">المجموعة مفعلة</label>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="button" class="btn btn-primary" id="saveGroupBtn">حفظ المجموعة</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Edit User Modal -->
+        <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-white">
+                        <h5 class="modal-title" id="editUserModalLabel"><i class="fas fa-edit me-2"></i> تعديل بيانات المستخدم</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editUserForm">
+                            <input type="hidden" id="edit_user_id" name="user_id">
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label for="edit_username" class="form-label">اسم المستخدم *</label>
+                                    <input type="text" class="form-control" id="edit_username" name="username" required readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_full_name" class="form-label">الاسم الكامل *</label>
+                                    <input type="text" class="form-control" id="edit_full_name" name="full_name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_email" class="form-label">البريد الإلكتروني</label>
+                                    <input type="email" class="form-control" id="edit_email" name="email">
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_phone" class="form-label">رقم الهاتف</label>
+                                    <input type="tel" class="form-control" id="edit_phone" name="phone">
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_role" class="form-label">الدور *</label>
+                                    <select class="form-control" id="edit_role" name="role" required>
+                                        <option value="1">مدير</option>
+                                        <option value="2">مشرف</option>
+                                        <option value="3">محاسب</option>
+                                        <option value="4">أمين صندوق</option>
+                                        <option value="5">مستخدم</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_station_id" class="form-label">المحطة</label>
+                                    <select class="form-control" id="edit_station_id" name="station_id">
+                                        <option value="">اختر المحطة</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edit_password" class="form-label">كلمة المرور الجديدة (اتركها فارغة للحفاظ على كلمة المرور الحالية)</label>
+                                    <input type="password" class="form-control" id="edit_password" name="password">
+                                </div>
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+                                        <label class="form-check-label" for="edit_is_active">الحساب مفعل</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="edit_account_locked" name="account_locked">
+                                        <label class="form-check-label" for="edit_account_locked">الحساب مقفل</label>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="edit_must_change_password" name="must_change_password">
+                                        <label class="form-check-label" for="edit_must_change_password">يجب تغيير كلمة المرور عند أول دخول</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="button" class="btn btn-warning" id="updateUserBtn">تحديث البيانات</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // دالة apiCall الموحدة (مع دعم AndroidInterface)
+        // ============================================================
+        async function apiCall(action, params = {}) {
+            const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
+
+            if (hasBridge) {
+                try {
+                    const actionMap = {
+                        'get_users': 'getUsers',
+                        'get_user': 'getUserById',
+                        'add_user': 'addUser',
+                        'update_user': 'updateUser',
+                        'delete_user': 'deleteUser',
+                        'get_roles': 'getRoles',
+                        'get_permissions': 'getPermissions',
+                        'add_permission': 'addPermission',
+                        'update_permission': 'updatePermission',
+                        'delete_permission': 'deletePermission',
+                        'get_screens': 'getScreens',
+                        'add_screen': 'addScreen',
+                        'update_screen': 'updateScreen',
+                        'delete_screen': 'deleteScreen',
+                        'get_groups': 'getGroups',
+                        'add_group': 'addGroup',
+                        'update_group': 'updateGroup',
+                        'delete_group': 'deleteGroup',
+                        'get_user_permissions': 'getUserPermissions',
+                        'grant_user_permission': 'grantUserPermission',
+                        'revoke_user_permission': 'revokeUserPermission',
+                        'get_stations': 'getStations',
+                        'get_user_activity': 'getUserActivity',
+                        'get_login_audit': 'getLoginAudit',
+                        'get_password_changes': 'getPasswordChanges'
+                    };
+
+                    const methodName = actionMap[action];
+                    if (!methodName) {
+                        if (typeof AndroidInterface[action] === 'function') {
+                            const result = AndroidInterface[action]();
+                            return handleAndroidResult(result);
+                        }
+                        throw new Error(`الإجراء غير معروف: ${action}`);
+                    }
+
+                    const method = AndroidInterface[methodName];
+                    if (typeof method !== 'function') {
+                        throw new Error(`الدالة ${methodName} غير موجودة`);
+                    }
+
+                    let result;
+                    switch (action) {
+                        case 'add_user':
+                        case 'update_user':
+                        case 'add_permission':
+                        case 'update_permission':
+                        case 'add_screen':
+                        case 'update_screen':
+                        case 'add_group':
+                        case 'update_group':
+                        case 'grant_user_permission':
+                        case 'revoke_user_permission':
+                            result = method(JSON.stringify(params));
+                            break;
+                        case 'delete_user':
+                        case 'delete_permission':
+                        case 'delete_screen':
+                        case 'delete_group':
+                            result = method(parseInt(params.id));
+                            break;
+                        default:
+                            result = method();
+                            break;
+                    }
+                    return handleAndroidResult(result);
+                } catch (e) {
+                    console.error('AndroidInterface error:', e);
+                    showToast('حدث خطأ في الاتصال الداخلي', 'error');
+                    throw e;
+                }
+            }
+
+            // Fallback: استخدام fetch (للاختبار في المتصفح)
+            try {
+                const url = new URL(window.location.origin + '/api');
+                url.searchParams.append('action', action);
+                Object.keys(params).forEach(key => {
+                    if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+                        url.searchParams.append(key, params[key]);
+                    }
+                });
+                const response = await fetch(url.toString(), {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (e) {
+                console.error('Fallback API Error:', e);
+                showToast('تعذر الاتصال بالواجهة الداخلية (بيئة تطوير)', 'error');
+                throw e;
+            }
+        }
+
+        function handleAndroidResult(result) {
+            if (typeof result === 'string') {
+                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
+            }
+            if (result && typeof result === 'object' && 'success' in result) return result;
+            if (Array.isArray(result)) return { success: true, data: result };
+            if (result && typeof result === 'object') return { success: true, data: result };
+            return { success: true, data: result };
+        }
+
+        // ============================================================
+        // نظام الإشعارات
+        // ============================================================
+        class ToastNotification {
+            constructor() {
+                this.container = document.getElementById('toastContainer');
+            }
+            
+            show(message, type = 'success', title = '') {
+                const toastId = 'toast-' + Date.now();
+                const icons = {
+                    success: 'fas fa-check-circle',
+                    error: 'fas fa-times-circle',
+                    warning: 'fas fa-exclamation-triangle',
+                    info: 'fas fa-info-circle'
+                };
+                
+                const toastTitle = title || this.getDefaultTitle(type);
+                const toast = document.createElement('div');
+                toast.className = `custom-toast ${type}`;
+                toast.id = toastId;
+                
+                toast.innerHTML = `
+                    <div class="toast-header">
+                        <div class="toast-icon ${type}">
+                            <i class="${icons[type]}"></i>
+                        </div>
+                        <strong class="toast-title me-auto">${toastTitle}</strong>
+                        <button type="button" class="btn-close btn-close-white" onclick="document.getElementById('${toastId}').remove()"></button>
+                    </div>
+                    <div class="toast-body">${message}</div>
+                    <div class="toast-progress ${type}"></div>
+                `;
+                
+                this.container.appendChild(toast);
+                
+                setTimeout(() => {
+                    if (document.getElementById(toastId)) {
+                        const element = document.getElementById(toastId);
+                        element.style.animation = 'fadeOut 0.3s ease-in';
+                        setTimeout(() => {
+                            if (element && element.parentNode) {
+                                element.parentNode.removeChild(element);
+                            }
+                        }, 400);
+                    }
+                }, 3000);
+                
+                toast.addEventListener('click', () => {
+                    toast.style.animation = 'fadeOut 0.3s ease-in';
+                    setTimeout(() => {
+                        if (toast.parentNode) {
+                            toast.parentNode.removeChild(toast);
+                        }
+                    }, 300);
+                });
+            }
+            
+            getDefaultTitle(type) {
+                return { success: 'نجاح', error: 'خطأ', warning: 'تحذير', info: 'معلومة' }[type] || 'إشعار';
+            }
+            
+            success(message, title = 'نجاح') { this.show(message, 'success', title); }
+            error(message, title = 'خطأ') { this.show(message, 'error', title); }
+            warning(message, title = 'تحذير') { this.show(message, 'warning', title); }
+            info(message, title = 'معلومة') { this.show(message, 'info', title); }
+        }
+
+        const toast = new ToastNotification();
+
+        // ============================================================
+        // الوضع الليلي
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('themeToggle');
+            const moonIcon = document.getElementById('moonIcon');
+            const sunIcon = document.getElementById('sunIcon');
+            
+            if (localStorage.getItem('theme') === 'dark') {
+                document.body.classList.add('dark-mode');
+                moonIcon.style.display = 'none';
+                sunIcon.style.display = 'inline';
+            }
+            
+            themeToggle.addEventListener('click', function() {
+                document.body.classList.toggle('dark-mode');
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('theme', 'dark');
+                    moonIcon.style.display = 'none';
+                    sunIcon.style.display = 'inline';
+                    toast.success('تم تفعيل الوضع الليلي', 'إشعار النظام');
+                } else {
+                    localStorage.setItem('theme', 'light');
+                    sunIcon.style.display = 'none';
+                    moonIcon.style.display = 'inline';
+                    toast.success('تم تفعيل الوضع النهاري', 'إشعار النظام');
+                }
+            });
+        });
+
+        // ============================================================
+        // وظائف تحميل البيانات
+        // ============================================================
+        async function loadUsersData(page = 1) {
+            const search = document.getElementById('userSearch').value;
+            const status = document.getElementById('userStatusFilter').value;
+            const role = document.getElementById('userRoleFilter').value;
+            
+            const tbody = document.querySelector('#usersTable tbody');
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="loading-spinner text-primary"></div><p class="mt-2">جاري التحميل...</p></td></tr>';
+            
+            try {
+                const result = await apiCall('get_users');
+                if (result.success) {
+                    const users = result.data || [];
+                    renderUsersTable(users);
+                    document.getElementById('usersCount').textContent = users.length;
+                    toast.success(`تم تحميل ${users.length} مستخدم`, 'تحميل البيانات');
+                } else {
+                    toast.error('فشل في تحميل المستخدمين', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.querySelector('#usersTable tbody');
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">لا توجد بيانات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = users.map(user => {
+                const statusBadge = user.status === 'active' ? 
+                    '<span class="badge bg-success status-badge">مفعل</span>' : 
+                    user.status === 'locked' ? 
+                    '<span class="badge bg-danger status-badge">مقفل</span>' : 
+                    '<span class="badge bg-secondary status-badge">غير مفعل</span>';
+                
+                const lastLogin = user.last_login_at ? new Date(user.last_login_at).toLocaleString('ar-EG') : 'لم يسجل دخول';
+                const roleName = user.role_name || user.role_id || 'مستخدم';
+                
+                return `
+                    <tr>
+                        <td class="text-truncate-mobile">${user.username}</td>
+                        <td class="text-truncate-mobile">${user.full_name || user.full_name_ar || ''}</td>
+                        <td class="text-truncate-mobile">${user.email || 'غير محدد'}</td>
+                        <td>${roleName}</td>
+                        <td>${statusBadge}</td>
+                        <td class="text-truncate-mobile">${lastLogin}</td>
+                        <td class="action-buttons">
+                            <button class="btn btn-sm btn-info view-user" data-id="${user.user_id}" title="عرض">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-warning edit-user" data-id="${user.user_id}" title="تعديل">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger delete-user" data-id="${user.user_id}" title="حذف">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // إضافة معالجي الأحداث
+            document.querySelectorAll('.view-user').forEach(btn => {
+                btn.addEventListener('click', () => viewUserDetails(parseInt(btn.dataset.id)));
+            });
+            document.querySelectorAll('.edit-user').forEach(btn => {
+                btn.addEventListener('click', () => editUser(parseInt(btn.dataset.id)));
+            });
+            document.querySelectorAll('.delete-user').forEach(btn => {
+                btn.addEventListener('click', () => deleteUser(parseInt(btn.dataset.id)));
+            });
+        }
+
+        // ============================================================
+        // وظائف إدارة المستخدمين
+        // ============================================================
+        async function viewUserDetails(userId) {
+            try {
+                const result = await apiCall('get_user', { id: userId });
+                if (result.success) {
+                    const user = result.data;
+                    const lastLogin = user.last_login_at ? new Date(user.last_login_at).toLocaleString('ar-EG') : 'لم يسجل دخول';
+                    const createdAt = user.created_at ? new Date(user.created_at).toLocaleString('ar-EG') : '-';
+                    
+                    alert(`
+تفاصيل المستخدم: ${user.username}
+الاسم الكامل: ${user.full_name || user.full_name_ar || ''}
+البريد الإلكتروني: ${user.email || 'غير محدد'}
+رقم الهاتف: ${user.phone || 'غير محدد'}
+الدور: ${user.role_name || user.role_id || ''}
+الحالة: ${user.status === 'active' ? 'مفعل' : user.status === 'locked' ? 'مقفل' : 'غير مفعل'}
+آخر دخول: ${lastLogin}
+تاريخ الإنشاء: ${createdAt}
+                    `);
+                } else {
+                    toast.error('فشل في تحميل تفاصيل المستخدم', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function editUser(userId) {
+            try {
+                const result = await apiCall('get_user', { id: userId });
+                if (result.success) {
+                    const user = result.data;
+                    document.getElementById('edit_user_id').value = user.user_id;
+                    document.getElementById('edit_username').value = user.username || '';
+                    document.getElementById('edit_full_name').value = user.full_name || user.full_name_ar || '';
+                    document.getElementById('edit_email').value = user.email || '';
+                    document.getElementById('edit_phone').value = user.phone || '';
+                    document.getElementById('edit_role').value = user.role_id || 5;
+                    document.getElementById('edit_station_id').value = user.station_id || '';
+                    document.getElementById('edit_is_active').checked = user.status === 'active';
+                    document.getElementById('edit_account_locked').checked = user.status === 'locked';
+                    document.getElementById('edit_must_change_password').checked = user.must_change_password === 1;
+                    document.getElementById('edit_password').value = '';
+                    
+                    // تحميل المحطات للقائمة المنسدلة
+                    loadStationsForSelect();
+                    
+                    $('#editUserModal').modal('show');
+                } else {
+                    toast.error('فشل في تحميل بيانات المستخدم', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
+            try {
+                const result = await apiCall('delete_user', { id: userId });
+                if (result.success) {
+                    toast.success('تم حذف المستخدم بنجاح', 'حذف');
+                    loadUsersData();
+                } else {
+                    toast.error('فشل في حذف المستخدم', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function addNewUser() {
+            const form = document.getElementById('addUserForm');
+            const data = {
+                username: document.getElementById('username').value,
+                full_name: document.getElementById('full_name').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value,
+                password: document.getElementById('password').value,
+                role_id: parseInt(document.getElementById('role').value),
+                station_id: document.getElementById('station_id').value || null,
+                is_active: document.getElementById('is_active').checked ? 1 : 0,
+                must_change_password: document.getElementById('must_change_password').checked ? 1 : 0
+            };
+            
+            const confirmPassword = document.getElementById('confirm_password').value;
+            if (data.password !== confirmPassword) {
+                toast.error('كلمة المرور غير متطابقة', 'خطأ');
+                return;
+            }
+            if (data.password.length < 6) {
+                toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'خطأ');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('add_user', data);
+                if (result.success) {
+                    toast.success('تم إضافة المستخدم بنجاح', 'نجاح');
+                    form.reset();
+                    loadUsersData();
+                    document.querySelector('[href="#usersList"]').click();
+                } else {
+                    toast.error(result.error || 'فشل في إضافة المستخدم', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function updateUser() {
+            const userId = parseInt(document.getElementById('edit_user_id').value);
+            const data = {
+                id: userId,
+                full_name: document.getElementById('edit_full_name').value,
+                email: document.getElementById('edit_email').value,
+                phone: document.getElementById('edit_phone').value,
+                role_id: parseInt(document.getElementById('edit_role').value),
+                station_id: document.getElementById('edit_station_id').value || null,
+                is_active: document.getElementById('edit_is_active').checked ? 1 : 0,
+                account_locked: document.getElementById('edit_account_locked').checked ? 1 : 0,
+                must_change_password: document.getElementById('edit_must_change_password').checked ? 1 : 0
+            };
+            
+            const newPassword = document.getElementById('edit_password').value;
+            if (newPassword) {
+                if (newPassword.length < 6) {
+                    toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'خطأ');
+                    return;
+                }
+                data.password = newPassword;
+            }
+            
+            try {
+                const result = await apiCall('update_user', data);
+                if (result.success) {
+                    toast.success('تم تحديث بيانات المستخدم', 'نجاح');
+                    $('#editUserModal').modal('hide');
+                    loadUsersData();
+                } else {
+                    toast.error(result.error || 'فشل في تحديث المستخدم', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        // ============================================================
+        // وظائف إدارة الصلاحيات
+        // ============================================================
+        async function loadPermissions() {
+            try {
+                const result = await apiCall('get_permissions');
+                if (result.success) {
+                    const permissions = result.data || [];
+                    renderPermissionsTable(permissions);
+                }
+            } catch (e) {
+                toast.error('فشل في تحميل الصلاحيات', 'خطأ');
+            }
+        }
+
+        function renderPermissionsTable(permissions) {
+            const tbody = document.querySelector('#permissionsTable tbody');
+            if (!permissions || permissions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">لا توجد بيانات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = permissions.map(perm => `
+                <tr>
+                    <td>${perm.permission_name || perm.permission_code || ''}</td>
+                    <td>${perm.description || perm.permission_name_ar || ''}</td>
+                    <td>${perm.module || ''}</td>
+                    <td>${perm.created_at ? new Date(perm.created_at).toLocaleDateString('ar-EG') : '-'}</td>
+                    <td class="action-buttons">
+                        <button class="btn btn-sm btn-danger delete-permission" data-id="${perm.permission_id}" title="حذف">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.querySelectorAll('.delete-permission').forEach(btn => {
+                btn.addEventListener('click', () => deletePermission(parseInt(btn.dataset.id)));
+            });
+        }
+
+        async function addNewPermission() {
+            const data = {
+                permission_name: document.getElementById('permission_name').value,
+                module: document.getElementById('permission_group').value,
+                description: document.getElementById('permission_description').value
+            };
+            
+            if (!data.permission_name || !data.module) {
+                toast.error('يرجى ملء جميع الحقول المطلوبة', 'خطأ');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('add_permission', data);
+                if (result.success) {
+                    toast.success('تم إضافة الصلاحية', 'نجاح');
+                    document.getElementById('addPermissionForm').reset();
+                    loadPermissions();
+                } else {
+                    toast.error(result.error || 'فشل في إضافة الصلاحية', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function deletePermission(permissionId) {
+            if (!confirm('هل أنت متأكد من حذف هذه الصلاحية؟')) return;
+            try {
+                const result = await apiCall('delete_permission', { id: permissionId });
+                if (result.success) {
+                    toast.success('تم حذف الصلاحية', 'نجاح');
+                    loadPermissions();
+                } else {
+                    toast.error('فشل في حذف الصلاحية', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        // ============================================================
+        // وظائف إدارة الشاشات
+        // ============================================================
+        async function loadScreens() {
+            try {
+                const result = await apiCall('get_screens');
+                if (result.success) {
+                    const screens = result.data || [];
+                    renderScreensTable(screens);
+                }
+            } catch (e) {
+                toast.error('فشل في تحميل الشاشات', 'خطأ');
+            }
+        }
+
+        function renderScreensTable(screens) {
+            const tbody = document.querySelector('#screensTable tbody');
+            if (!screens || screens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">لا توجد بيانات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = screens.map(screen => `
+                <tr>
+                    <td>${screen.screen_name || ''}</td>
+                    <td>${screen.module || ''}</td>
+                    <td>${screen.description || ''}</td>
+                    <td><span class="badge ${screen.is_active ? 'bg-success' : 'bg-secondary'}">${screen.is_active ? 'مفعلة' : 'غير مفعلة'}</span></td>
+                    <td>${screen.created_at ? new Date(screen.created_at).toLocaleDateString('ar-EG') : '-'}</td>
+                    <td class="action-buttons">
+                        <button class="btn btn-sm btn-danger delete-screen" data-id="${screen.screen_id}" title="حذف">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.querySelectorAll('.delete-screen').forEach(btn => {
+                btn.addEventListener('click', () => deleteScreen(parseInt(btn.dataset.id)));
+            });
+        }
+
+        async function addNewScreen() {
+            const data = {
+                screen_name: document.getElementById('screen_name').value,
+                module: document.getElementById('screen_module').value,
+                description: document.getElementById('screen_description').value,
+                is_active: document.getElementById('screen_is_active').checked ? 1 : 0
+            };
+            
+            if (!data.screen_name || !data.module) {
+                toast.error('يرجى ملء جميع الحقول المطلوبة', 'خطأ');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('add_screen', data);
+                if (result.success) {
+                    toast.success('تم إضافة الشاشة', 'نجاح');
+                    document.getElementById('addScreenForm').reset();
+                    loadScreens();
+                } else {
+                    toast.error(result.error || 'فشل في إضافة الشاشة', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function deleteScreen(screenId) {
+            if (!confirm('هل أنت متأكد من حذف هذه الشاشة؟')) return;
+            try {
+                const result = await apiCall('delete_screen', { id: screenId });
+                if (result.success) {
+                    toast.success('تم حذف الشاشة', 'نجاح');
+                    loadScreens();
+                } else {
+                    toast.error('فشل في حذف الشاشة', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        // ============================================================
+        // وظائف إدارة المجموعات
+        // ============================================================
+        async function loadGroups() {
+            try {
+                const result = await apiCall('get_groups');
+                if (result.success) {
+                    const groups = result.data || [];
+                    renderGroupsTable(groups);
+                }
+            } catch (e) {
+                toast.error('فشل في تحميل المجموعات', 'خطأ');
+            }
+        }
+
+        function renderGroupsTable(groups) {
+            const tbody = document.querySelector('#groupsTable tbody');
+            if (!groups || groups.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">لا توجد بيانات</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = groups.map(group => `
+                <tr>
+                    <td>${group.group_name || ''}</td>
+                    <td>${group.description || ''}</td>
+                    <td>${group.members_count || 0}</td>
+                    <td><span class="badge ${group.is_active ? 'bg-success' : 'bg-secondary'}">${group.is_active ? 'مفعلة' : 'غير مفعلة'}</span></td>
+                    <td class="action-buttons">
+                        <button class="btn btn-sm btn-danger delete-group" data-id="${group.group_id}" title="حذف">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.querySelectorAll('.delete-group').forEach(btn => {
+                btn.addEventListener('click', () => deleteGroup(parseInt(btn.dataset.id)));
+            });
+        }
+
+        async function addNewGroup() {
+            const data = {
+                group_name: document.getElementById('group_name').value,
+                description: document.getElementById('group_description').value,
+                is_active: document.getElementById('group_is_active').checked ? 1 : 0
+            };
+            
+            if (!data.group_name) {
+                toast.error('اسم المجموعة مطلوب', 'خطأ');
+                return;
+            }
+            
+            try {
+                const result = await apiCall('add_group', data);
+                if (result.success) {
+                    toast.success('تم إضافة المجموعة', 'نجاح');
+                    document.getElementById('addGroupForm').reset();
+                    $('#addGroupModal').modal('hide');
+                    loadGroups();
+                } else {
+                    toast.error(result.error || 'فشل في إضافة المجموعة', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        async function deleteGroup(groupId) {
+            if (!confirm('هل أنت متأكد من حذف هذه المجموعة؟')) return;
+            try {
+                const result = await apiCall('delete_group', { id: groupId });
+                if (result.success) {
+                    toast.success('تم حذف المجموعة', 'نجاح');
+                    loadGroups();
+                } else {
+                    toast.error('فشل في حذف المجموعة', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        // ============================================================
+        // وظائف المحطات
+        // ============================================================
+        async function loadStationsForSelect() {
+            try {
+                const result = await apiCall('get_stations');
+                if (result.success) {
+                    const stations = result.data || [];
+                    const selects = ['station_id', 'edit_station_id'];
+                    selects.forEach(id => {
+                        const sel = document.getElementById(id);
+                        if (sel) {
+                            sel.innerHTML = '<option value="">اختر المحطة</option>';
+                            stations.forEach(st => {
+                                const opt = document.createElement('option');
+                                opt.value = st.station_id || st.id;
+                                opt.textContent = st.station_name || st.name || '';
+                                sel.appendChild(opt);
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading stations:', e);
+            }
+        }
+
+        // ============================================================
+        // وظائف المستخدمين للقوائم المنسدلة
+        // ============================================================
+        async function loadUsersForSelect() {
+            try {
+                const result = await apiCall('get_users');
+                if (result.success) {
+                    const users = result.data || [];
+                    const selects = ['userSelect', 'userForPermission', 'delegator_id', 'delegatee_id'];
+                    selects.forEach(id => {
+                        const sel = document.getElementById(id);
+                        if (sel) {
+                            sel.innerHTML = '<option value="">اختر المستخدم</option>';
+                            users.forEach(u => {
+                                const opt = document.createElement('option');
+                                opt.value = u.user_id;
+                                opt.textContent = (u.full_name || u.username || '') + ' (' + (u.username || '') + ')';
+                                sel.appendChild(opt);
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading users for select:', e);
+            }
+        }
+
+        // ============================================================
+        // وظائف التقارير
+        // ============================================================
+        async function openReport(reportType) {
+            $('#reportsOffcanvas').offcanvas('show');
+            toast.info('جاري تحميل التقرير...', 'جاري المعالجة');
+            
+            try {
+                let result;
+                switch(reportType) {
+                    case 'user-activity':
+                        result = await apiCall('get_user_activity');
+                        break;
+                    case 'user-permissions':
+                        result = await apiCall('get_user_permissions');
+                        break;
+                    case 'login-audit':
+                        result = await apiCall('get_login_audit');
+                        break;
+                    case 'password-changes':
+                        result = await apiCall('get_password_changes');
+                        break;
+                    default:
+                        toast.error('نوع التقرير غير معروف', 'خطأ');
+                        return;
+                }
+                
+                if (result.success) {
+                    renderReport(reportType, result.data || []);
+                    toast.success('تم تحميل التقرير', 'نجاح');
+                } else {
+                    toast.error('فشل في تحميل التقرير', 'خطأ');
+                }
+            } catch (e) {
+                toast.error('حدث خطأ في الاتصال', 'خطأ');
+            }
+        }
+
+        function renderReport(reportType, data) {
+            const container = document.getElementById('reportContent');
+            let html = `<h4 class="mb-3">${getReportTitle(reportType)}</h4>`;
+            
+            if (!data || data.length === 0) {
+                html += '<p class="text-center text-muted">لا توجد بيانات للعرض</p>';
+                container.innerHTML = html;
+                return;
+            }
+            
+            html += `<div class="data-table-container"><div class="data-table"><table class="table table-hover"><thead><tr>`;
+            
+            const headers = getReportHeaders(reportType);
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += `</tr></thead><tbody>`;
+            
+            data.forEach(item => {
+                html += '<tr>';
+                const values = getReportRow(reportType, item);
+                values.forEach(v => html += `<td>${v}</td>`);
+                html += '</tr>';
+            });
+            
+            html += `</tbody></table></div></div>`;
+            container.innerHTML = html;
+        }
+
+        function getReportTitle(type) {
+            const titles = {
+                'user-activity': 'تقرير نشاط المستخدمين',
+                'user-permissions': 'تقرير صلاحيات المستخدمين',
+                'login-audit': 'تقرير تسجيلات الدخول',
+                'password-changes': 'تقرير تغييرات كلمة المرور'
+            };
+            return titles[type] || 'تقرير';
+        }
+
+        function getReportHeaders(type) {
+            switch(type) {
+                case 'user-activity':
+                    return ['اسم المستخدم', 'الاسم الكامل', 'عدد مرات الدخول', 'آخر دخول'];
+                case 'user-permissions':
+                    return ['المستخدم', 'عدد الصلاحيات'];
+                case 'login-audit':
+                    return ['المستخدم', 'وقت الدخول', 'العنوان IP', 'الحالة'];
+                case 'password-changes':
+                    return ['المستخدم', 'آخر تغيير'];
+                default:
+                    return [];
+            }
+        }
+
+        function getReportRow(type, item) {
+            switch(type) {
+                case 'user-activity':
+                    return [
+                        item.username || '',
+                        item.full_name || '',
+                        item.login_count || 0,
+                        item.last_login_at ? new Date(item.last_login_at).toLocaleString('ar-EG') : 'لم يسجل'
+                    ];
+                case 'user-permissions':
+                    return [
+                        item.full_name || item.username || '',
+                        item.permissions_count || 0
+                    ];
+                case 'login-audit':
+                    return [
+                        item.username || '',
+                        item.login_time ? new Date(item.login_time).toLocaleString('ar-EG') : '-',
+                        item.ip_address || '-',
+                        item.status === 'success' ? '<span class="badge bg-success">ناجح</span>' : '<span class="badge bg-danger">فاشل</span>'
+                    ];
+                case 'password-changes':
+                    return [
+                        item.full_name || item.username || '',
+                        item.last_password_change ? new Date(item.last_password_change).toLocaleString('ar-EG') : 'لم يغير'
+                    ];
+                default:
+                    return [];
+            }
+        }
+
+        // ============================================================
+        // تهيئة الصفحة
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            // تحميل البيانات الأولية
+            loadUsersData();
+            loadPermissions();
+            loadScreens();
+            loadGroups();
+            loadStationsForSelect();
+            loadUsersForSelect();
+            
+            // إضافة معالجي الأحداث
+            document.getElementById('refreshUsers').addEventListener('click', () => loadUsersData());
+            document.getElementById('refreshPermissions').addEventListener('click', () => loadPermissions());
+            document.getElementById('refreshScreens').addEventListener('click', () => loadScreens());
+            document.getElementById('refreshGroups').addEventListener('click', () => loadGroups());
+            
+            document.getElementById('filterUsers').addEventListener('click', () => loadUsersData());
+            document.getElementById('toggleFilterBtn').addEventListener('click', () => {
+                document.getElementById('filterSection').classList.toggle('active');
+            });
+            
+            document.getElementById('addUserForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addNewUser();
+            });
+            
+            document.getElementById('addPermissionForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addNewPermission();
+            });
+            
+            document.getElementById('addScreenForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                addNewScreen();
+            });
+            
+            document.getElementById('saveGroupBtn').addEventListener('click', () => {
+                addNewGroup();
+            });
+            
+            document.getElementById('updateUserBtn').addEventListener('click', () => {
+                updateUser();
+            });
+            
+            document.getElementById('openPermissionsOffcanvas').addEventListener('click', () => {
+                $('#permissionsOffcanvas').offcanvas('show');
+                loadPermissions();
+                loadUsersForSelect();
+            });
+            
+            document.getElementById('openScreensOffcanvas').addEventListener('click', () => {
+                $('#screensOffcanvas').offcanvas('show');
+                loadScreens();
+            });
+            
+            document.querySelectorAll('.report-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const reportType = card.dataset.report;
+                    openReport(reportType);
+                });
+            });
+            
+            document.querySelectorAll('.offcanvas').forEach(el => {
+                el.addEventListener('show.bs.offcanvas', function() {
+                    // تحميل البيانات عند فتح الكنفاس
+                });
+            });
+            
+            toast.success('مرحباً بك في نظام إدارة المستخدمين والصلاحيات', 'نظام الإدارة');
+        });
+    </script>
+</body>
+</html>
