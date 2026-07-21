@@ -1401,7 +1401,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getShifts(): String {
             return try {
-                val shifts = dbHelper.getShifts()
+                val shifts = dbHelper.getShifts(1)
                 shifts.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getShifts error", e)
@@ -2752,7 +2752,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getCustomerLedger(partyId: Long): String {
             return try {
-                val ledger = dbHelper.getCustomerLedger(partyId)
+                val ledger = dbHelper.getCustomerLedger(partyId.toInt())
                 ledger.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getCustomerLedger error", e)
@@ -2763,7 +2763,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getCustomerSales(partyId: Long): String {
             return try {
-                val sales = dbHelper.getCustomerSales(partyId)
+                val sales = dbHelper.getCustomerSales(partyId.toInt())
                 sales.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getCustomerSales error", e)
@@ -2774,7 +2774,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getPartyContacts(partyId: Long): String {
             return try {
-                val contacts = dbHelper.getPartyContacts(partyId)
+                val contacts = dbHelper.getPartyContacts(partyId.toInt())
                 contacts.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getPartyContacts error", e)
@@ -2785,7 +2785,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getPartyAddresses(partyId: Long): String {
             return try {
-                val addresses = dbHelper.getPartyAddresses(partyId)
+                val addresses = dbHelper.getPartyAddresses(partyId.toInt())
                 addresses.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getPartyAddresses error", e)
@@ -2906,7 +2906,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getCustomerDebts(fromDate: String?, toDate: String?): String {
             return try {
-                val debts = dbHelper.getCustomerDebts(fromDate, toDate)
+                val debts = dbHelper.getCustomerDebts()
                 debts.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getCustomerDebts error", e)

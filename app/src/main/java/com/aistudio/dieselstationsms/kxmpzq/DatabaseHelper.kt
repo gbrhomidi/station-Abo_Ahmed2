@@ -8583,4 +8583,43 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
+
+    // ================================================================
+    // Compatibility Layer - WebView Long IDs Support
+    // ================================================================
+
+    fun getCustomerLedger(partyId: Long, limit: Int = 100): JSONArray {
+        return getCustomerLedger(partyId.toInt(), limit)
+    }
+
+    fun getCustomerSales(partyId: Long, limit: Int = 100): JSONArray {
+        return getCustomerSales(partyId.toInt(), limit)
+    }
+
+    fun getPartyContacts(partyId: Long): JSONArray {
+        return getPartyContacts(partyId.toInt())
+    }
+
+    fun getPartyAddresses(partyId: Long): JSONArray {
+        return getPartyAddresses(partyId.toInt())
+    }
+
+
+
+    // Compatibility overload for old WebView API
+    fun getCustomerDebts(
+        fromDate: String?,
+        toDate: String?
+    ): JSONArray {
+        return getCustomerDebts(null)
+    }
+
+
+
+    // Compatibility overload
+    fun cleanupOldData(retentionDays: Int): Boolean {
+        return cleanupOldData()
+    }
+
+
 }

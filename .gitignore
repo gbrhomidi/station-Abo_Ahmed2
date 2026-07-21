@@ -29,3 +29,7 @@ debug.keystore
 # app/src/main/assets/.env  ← هذا الملف يُوزع مع التطبيق
 # ويمكن أن يحتوي على مفتاح Gemini للمستخدم النهائي
 # لكن .env في جذر المشروع (لـ BuildConfig) يجب أن يبقى سراً
+
+# Local backup files
+*.bak
+*.backup*
