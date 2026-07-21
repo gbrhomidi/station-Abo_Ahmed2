@@ -8132,4 +8132,455 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             dbLock.unlock()
         }
     }
+    // ================================================================
+    // 71. PARTY TYPES
+    // ================================================================
+    /**
+     * جلب جميع أنواع الأطراف (العملاء، الموردين، إلخ)
+     * @return JSONArray يحتوي على جميع أنواع الأطراف النشطة
+     */
+    fun getPartyTypes(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT id, uuid, type_code, type_name, type_name_ar, description,
+                          default_discount, default_credit_limit, payment_terms_days, is_active
+                   FROM party_types
+                   WHERE is_deleted = 0
+                   ORDER BY type_name""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 72. CURRENCIES
+    // ================================================================
+    /**
+     * جلب جميع العملات المسجلة في النظام
+     * @return JSONArray يحتوي على جميع العملات
+     */
+    fun getCurrencies(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT id, uuid, currency_code, currency_name, currency_name_ar,
+                          symbol, symbol_position, decimal_places, is_default, is_active
+                   FROM currencies
+                   WHERE is_deleted = 0
+                   ORDER BY currency_code""",
+                null
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 73. CUSTOMER LEDGER (دفتر أستاذ العميل)
+    // ================================================================
+    /**
+     * جلب حركات دفتر الأستاذ لعميل محدد
+     * @param partyId معرف العميل
+     * @param limit الحد الأقصى للنتائج
+     * @return JSONArray يحتوي على حركات الدفتر
+     */
+    fun getCustomerLedger(partyId: Int, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT cl.id, cl.uuid, cl.party_id, cl.transaction_date, cl.transaction_type,
+                          cl.transaction_id, cl.reference_number, cl.debit, cl.credit, cl.balance,
+                          cl.description, cl.created_at, cl.created_by,
+                          p.commercial_name as customer_name
+                   FROM customer_ledger cl
+                   LEFT JOIN parties p ON cl.party_id = p.id
+                   WHERE cl.party_id = ?
+                   ORDER BY cl.transaction_date DESC, cl.id DESC
+                   LIMIT ?""",
+                arrayOf(partyId.toString(), limit.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 74. CUSTOMER SALES (مبيعات العميل)
+    // ================================================================
+    /**
+     * جلب جميع معاملات البيع لعميل محدد
+     * @param partyId معرف العميل
+     * @param limit الحد الأقصى للنتائج
+     * @return JSONArray يحتوي على معاملات البيع
+     */
+    fun getCustomerSales(partyId: Int, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT s.id, s.uuid, s.sale_code, s.station_id, s.shift_id, s.customer_party_id,
+                          s.liters, s.price_per_liter, s.fuel_subtotal, s.subtotal,
+                          s.discount_amount, s.tax_amount, s.gross_amount, s.net_amount,
+                          s.payment_method, s.payment_status, s.paid_amount, s.remaining_amount,
+                          s.is_credit, s.due_date, s.invoice_number, s.status, s.created_at,
+                          s.delivery_location, s.delivery_time, s.order_type,
+                          f.fuel_name, f.fuel_name_ar
+                   FROM sales_transactions s
+                   LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
+                   WHERE s.customer_party_id = ? AND s.is_deleted = 0
+                   ORDER BY s.created_at DESC
+                   LIMIT ?""",
+                arrayOf(partyId.toString(), limit.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 75. PARTY CONTACTS (جهات اتصال الأطراف)
+    // ================================================================
+    /**
+     * جلب جميع جهات اتصال طرف محدد
+     * @param partyId معرف الطرف
+     * @return JSONArray يحتوي على جهات الاتصال
+     */
+    fun getPartyContacts(partyId: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT id, uuid, party_id, contact_name, contact_name_ar, job_title,
+                          department, phone, phone2, email, whatsapp,
+                          is_primary, is_billing, is_technical, is_active,
+                          created_at, updated_at
+                   FROM party_contacts
+                   WHERE party_id = ? AND is_deleted = 0
+                   ORDER BY is_primary DESC, contact_name""",
+                arrayOf(partyId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * إضافة جهة اتصال جديدة لطرف
+     * @param data JSONObject يحتوي على بيانات جهة الاتصال
+     * @return Long معرف جهة الاتصال الجديدة
+     */
+    fun addPartyContact(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("party_id", data.optInt("party_id", 0))
+                put("contact_name", data.optString("contact_name", ""))
+                put("contact_name_ar", data.optString("contact_name_ar", ""))
+                put("job_title", data.optString("job_title", ""))
+                put("department", data.optString("department", ""))
+                put("phone", data.optString("phone", ""))
+                put("phone2", data.optString("phone2", ""))
+                put("email", data.optString("email", ""))
+                put("whatsapp", data.optString("whatsapp", ""))
+                put("is_primary", if (data.optBoolean("is_primary", false)) 1 else 0)
+                put("is_billing", if (data.optBoolean("is_billing", false)) 1 else 0)
+                put("is_technical", if (data.optBoolean("is_technical", false)) 1 else 0)
+                put("is_active", 1)
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("party_contacts", null, cv)
+            if (id > 0) logActivity("system", "add_party_contact", "إضافة جهة اتصال للطرف: ${data.optInt("party_id", 0)}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * تحديث جهة اتصال موجودة
+     * @param id معرف جهة الاتصال
+     * @param data JSONObject يحتوي على البيانات المحدثة
+     * @return Int عدد الصفوف المتأثرة
+     */
+    fun updatePartyContact(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                data.optString("contact_name")?.let { if (it.isNotEmpty()) put("contact_name", it) }
+                data.optString("contact_name_ar")?.let { if (it.isNotEmpty()) put("contact_name_ar", it) }
+                data.optString("job_title")?.let { if (it.isNotEmpty()) put("job_title", it) }
+                data.optString("department")?.let { if (it.isNotEmpty()) put("department", it) }
+                data.optString("phone")?.let { if (it.isNotEmpty()) put("phone", it) }
+                data.optString("phone2")?.let { if (it.isNotEmpty()) put("phone2", it) }
+                data.optString("email")?.let { if (it.isNotEmpty()) put("email", it) }
+                data.optString("whatsapp")?.let { if (it.isNotEmpty()) put("whatsapp", it) }
+                if (data.has("is_primary")) put("is_primary", if (data.optBoolean("is_primary")) 1 else 0)
+                if (data.has("is_billing")) put("is_billing", if (data.optBoolean("is_billing")) 1 else 0)
+                if (data.has("is_technical")) put("is_technical", if (data.optBoolean("is_technical")) 1 else 0)
+                if (data.has("is_active")) put("is_active", if (data.optBoolean("is_active")) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("party_contacts", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_party_contact", "تحديث جهة اتصال: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * حذف جهة اتصال (حذف منطقي)
+     * @param id معرف جهة الاتصال
+     * @return Int عدد الصفوف المتأثرة
+     */
+    fun deletePartyContact(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_deleted", 1) }
+            val rows = db.update("party_contacts", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_party_contact", "حذف جهة اتصال: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 76. PARTY ADDRESSES (عناوين الأطراف)
+    // ================================================================
+    /**
+     * جلب جميع عناوين طرف محدد
+     * @param partyId معرف الطرف
+     * @return JSONArray يحتوي على العناوين
+     */
+    fun getPartyAddresses(partyId: Int): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val c = db.rawQuery(
+                """SELECT id, uuid, party_id, address_type, address_line1, address_line2,
+                          city, state, postal_code, country, is_default,
+                          created_at, updated_at
+                   FROM party_addresses
+                   WHERE party_id = ? AND is_deleted = 0
+                   ORDER BY is_default DESC""",
+                arrayOf(partyId.toString())
+            )
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * إضافة عنوان جديد لطرف
+     * @param data JSONObject يحتوي على بيانات العنوان
+     * @return Long معرف العنوان الجديد
+     */
+    fun addPartyAddress(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("party_id", data.optInt("party_id", 0))
+                put("address_type", data.optString("address_type", ""))
+                put("address_line1", data.optString("address_line1", ""))
+                put("address_line2", data.optString("address_line2", ""))
+                put("city", data.optString("city", ""))
+                put("state", data.optString("state", ""))
+                put("postal_code", data.optString("postal_code", ""))
+                put("country", data.optString("country", ""))
+                put("is_default", if (data.optBoolean("is_default", false)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            val id = db.insert("party_addresses", null, cv)
+            if (id > 0) logActivity("system", "add_party_address", "إضافة عنوان للطرف: ${data.optInt("party_id", 0)}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * تحديث عنوان موجود
+     * @param id معرف العنوان
+     * @param data JSONObject يحتوي على البيانات المحدثة
+     * @return Int عدد الصفوف المتأثرة
+     */
+    fun updatePartyAddress(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                data.optString("address_type")?.let { if (it.isNotEmpty()) put("address_type", it) }
+                data.optString("address_line1")?.let { if (it.isNotEmpty()) put("address_line1", it) }
+                data.optString("address_line2")?.let { if (it.isNotEmpty()) put("address_line2", it) }
+                data.optString("city")?.let { if (it.isNotEmpty()) put("city", it) }
+                data.optString("state")?.let { if (it.isNotEmpty()) put("state", it) }
+                data.optString("postal_code")?.let { if (it.isNotEmpty()) put("postal_code", it) }
+                data.optString("country")?.let { if (it.isNotEmpty()) put("country", it) }
+                if (data.has("is_default")) put("is_default", if (data.optBoolean("is_default")) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("party_addresses", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_party_address", "تحديث عنوان: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * حذف عنوان (حذف منطقي)
+     * @param id معرف العنوان
+     * @return Int عدد الصفوف المتأثرة
+     */
+    fun deletePartyAddress(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_deleted", 1) }
+            val rows = db.update("party_addresses", cv, "id=?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_party_address", "حذف عنوان: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 77. CUSTOMER DEBTS (ديون العملاء)
+    // ================================================================
+    /**
+     * جلب معاملات البيع الآجلة (الديون) للعملاء
+     * @param partyId معرف العميل (اختياري - إذا كان null يجلب جميع الديون)
+     * @return JSONArray يحتوي على معاملات الديون
+     */
+    fun getCustomerDebts(partyId: Int? = null): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = if (partyId != null) {
+                """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
+                          s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
+                          s.payment_status, s.invoice_number, s.created_at,
+                          p.commercial_name as customer_name, p.phone as customer_phone
+                   FROM sales_transactions s
+                   LEFT JOIN parties p ON s.customer_party_id = p.id
+                   WHERE s.customer_party_id = ? AND s.remaining_amount > 0 AND s.is_deleted = 0
+                   ORDER BY s.due_date ASC"""
+            } else {
+                """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
+                          s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
+                          s.payment_status, s.invoice_number, s.created_at,
+                          p.commercial_name as customer_name, p.phone as customer_phone
+                   FROM sales_transactions s
+                   LEFT JOIN parties p ON s.customer_party_id = p.id
+                   WHERE s.remaining_amount > 0 AND s.is_deleted = 0
+                   ORDER BY s.due_date ASC"""
+            }
+            val args = if (partyId != null) arrayOf(partyId.toString()) else null
+            val c = db.rawQuery(sql, args)
+            cursorToJsonArray(c)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ================================================================
+    // 78. CLEANUP OLD DATA (تنظيف البيانات القديمة)
+    // ================================================================
+    /**
+     * تنظيف البيانات القديمة بناءً على فترة الاحتفاظ المحددة في الإعدادات
+     * @return Boolean true إذا نجحت العملية
+     */
+    fun cleanupOldData(): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val retentionDays = getRetentionDays()
+            val cutoffDate = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -retentionDays) }
+            val cutoffStr = dateOnlyFormat.format(cutoffDate.time)
+
+            db.beginTransaction()
+            try {
+                // حذف سجلات النشاط القديمة
+                val deletedActivity = db.delete(
+                    "user_activity_log",
+                    "date(created_at) < ?",
+                    arrayOf(cutoffStr)
+                )
+
+                // حذف سجلات النظام القديمة (المحلولة فقط)
+                val deletedSystem = db.delete(
+                    "system_logs",
+                    "date(created_at) < ? AND is_resolved = 1",
+                    arrayOf(cutoffStr)
+                )
+
+                // حذف سجلات المزامنة القديمة
+                val deletedSync = db.delete(
+                    "sync_logs",
+                    "date(created_at) < ?",
+                    arrayOf(cutoffStr)
+                )
+
+                // حذف سجلات الإشعارات القديمة
+                val deletedNotifications = db.delete(
+                    "notification_logs",
+                    "date(sent_at) < ?",
+                    arrayOf(cutoffStr)
+                )
+
+                // حذف سجلات الرسائل القديمة
+                val deletedSms = db.delete(
+                    "sms_logs",
+                    "date(created_at) < ?",
+                    arrayOf(cutoffStr)
+                )
+
+                // تنظيف الفضاء
+                db.execSQL("VACUUM")
+
+                db.setTransactionSuccessful()
+
+                val totalDeleted = deletedActivity + deletedSystem + deletedSync + deletedNotifications + deletedSms
+                logActivity(
+                    "system",
+                    "cleanup_old_data",
+                    "تنظيف البيانات القديمة قبل $cutoffStr. تم حذف $totalDeleted سجل"
+                )
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during cleanup transaction: ${e.message}", e)
+                false
+            } finally {
+                db.endTransaction()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up old data: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 }
