@@ -694,30 +694,3 @@ class SMSService : Service() {
         }
     }
 }
-
-// ================================================================
-//  BackupWorker – عامل النسخ الاحتياطي التلقائي
-// ================================================================
-
-/**
- * عامل (Worker) للنسخ الاحتياطي التلقائي باستخدام WorkManager
- * يتم تشغيله بشكل دوري كل 24 ساعة
- */
-class BackupWorker(
-    context: Context,
-    params: androidx.work.WorkerParameters
-) : androidx.work.CoroutineWorker(context, params) {
-
-    override suspend fun doWork(): Result {
-        return try {
-            val db = DatabaseHelper(applicationContext)
-            val path = db.backupDatabase()
-            Log.d("BackupWorker", "Auto backup completed: $path")
-            db.close()
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
-            Result.retry()
-        }
-    }
-}
