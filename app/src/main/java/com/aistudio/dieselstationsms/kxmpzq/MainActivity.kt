@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
 
     private var webView: WebView? = null
     private var geminiApiKey: String = ""
-    private var serverReady = false  // تم إهمالها (تُرك للتوافق مع الكود القديم)
+    private var serverReady = false
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private var isWebViewInitialized = false
@@ -180,11 +180,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * تحميل الشاشة الرئيسية من مجلد assets.
-     * تم التحديث لتحميل main.html بدلاً من web_interface.html
-     * لأن main.html هي الآن الشاشة الرئيسية (لوحة التحكم + القوائم).
-     */
     private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
         val wv = webView ?: run {
@@ -195,7 +190,6 @@ class MainActivity : AppCompatActivity() {
         try {
             if (wv.isAttachedToWindow) {
                 Log.d(TAG, "Loading main.html from assets")
-                // المسار الجديد للشاشة الرئيسية
                 wv.loadUrl("file:///android_asset/main.html")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
@@ -386,10 +380,6 @@ class MainActivity : AppCompatActivity() {
                         webChromeClient = WebChromeClient()
 
                         try {
-                            // ============================================================
-                            // ربط الجسر (AndroidInterface) بـ WebView
-                            // هذا الجسر هو نقطة الاتصال الوحيدة بين JavaScript و Kotlin
-                            // ============================================================
                             addJavascriptInterface(
                                 WebAppInterface(context, this@MainActivity),
                                 "AndroidInterface"
@@ -1307,7 +1297,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getEmployees(): String {
             return try {
-                val employees = dbHelper.getEmployees()
+                val employees = dbHelper.getEmployees(1)
                 employees.toString()
             } catch (e: Exception) {
                 Log.e(TAG, "getEmployees error", e)
@@ -2472,7 +2462,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun isServerReady(): Boolean = serverReady  // تم إهمالها (تُرك للتوافق)
+        fun isServerReady(): Boolean = serverReady
 
         @JavascriptInterface
         fun getAppVersion(): String {
