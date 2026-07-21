@@ -35,9 +35,8 @@ import java.util.Locale
  * - لا يعتمد على NanoHTTPD أو الخادم المحلي (تم تعطيلهما).
  * - يستخدم DatabaseHelper مباشرة لتصدير البيانات.
  * - جميع العمليات تتم محلياً وبشكل مستقل عن الواجهات أو الشاشات.
- * - متوافق تماماً مع المعمارية الجديدة (AndroidInterface + main.html + screens/*.html).
+ * - متوافق تماماً مع المعمارية الجديدة (AndroidInterface + main.html + screens-*.html).
  * ═══════════════════════════════════════════════════════════════
- */
  */
 class BackupWorker(
     context: Context,
