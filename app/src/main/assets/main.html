@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
-   <!--  <title>محطة أبو أحمد – لوحة التحكم</title>  -->
+    <title>محطة أبو أحمد – لوحة التحكم</title>
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <!-- Google Fonts -->
@@ -32,12 +32,11 @@
             --radius: 12px;
             --radius-sm: 6px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --sidebar-width: auto;  /* سيتم ضبطه ديناميكياً */
+            --sidebar-width: auto;
             --header-height: 64px;
             --font-family: 'Inter', sans-serif;
             --font-heading: 'Poppins', sans-serif;
             --font-mono: 'IBM Plex Mono', monospace;
-
             --main-color: #1976d2;
             --main-color-dark: #004ba0;
             --gold-color: #FFD700;
@@ -205,7 +204,7 @@
             top: 0;
             right: 0;
             bottom: 0;
-            width: max-content;          /* العرض حسب المحتوى */
+            width: max-content;
             min-width: 160px;
             max-width: 300px;
             background: var(--card-bg);
@@ -464,9 +463,9 @@
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
-            margin-top: 0;      /* صفر مسافة من العنصر السابق */
+            margin-top: 0;
             margin-bottom: 16px;
-            padding-top: 0;     /* للتأكد من عدم وجود حشوة */
+            padding-top: 0;
         }
         @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
         @media (min-width: 1024px) { .stats-grid { grid-template-columns: repeat(5, 1fr); } }
@@ -584,7 +583,7 @@
             background: var(--card-bg);
             border-radius: var(--radius);
             padding: 14px 20px;
-            margin-bottom: 0;   /* صفر مسافة للأسفل */
+            margin-bottom: 0;
             margin-top: 0;
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
@@ -946,22 +945,16 @@
                         <circle cx="12" cy="12" r="2"/>
                     </svg>
                 </button>
-                <!-- زر الإشعارات (SVG ملون) -->
-                <button class="icon-btn" onclick="window.location.href='/notifications'" title="التنبيهات" style="color: #e74c3c;">
+                <!-- زر تسجيل الخروج (SVG ملون) -> توجيه إلى شاشة تسجيل الدخول -->
+                <button class="icon-btn" onclick="logout()" title="تسجيل الخروج" style="color: #e67e22;">
                     <svg viewBox="0 0 24 24">
-                        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
                     </svg>
                 </button>
                 <!-- زر عن التطبيق (SVG ملون) -->
                 <button class="icon-btn" onclick="showAboutModal()" title="عن التطبيق" style="color: #3498db;">
                     <svg viewBox="0 0 24 24">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                    </svg>
-                </button>
-                <!-- زر تسجيل الخروج (SVG ملون) -->
-                <button class="icon-btn" onclick="logout()" title="تسجيل الخروج" style="color: #e67e22;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
                     </svg>
                 </button>
             </div>
@@ -1010,7 +1003,7 @@
         <main class="main-content" id="mainContent">
 
             <!-- ============================================================
-            صفحة لوحة التحكم (Dashboard) – بدون breadcrumb أو header
+            صفحة لوحة التحكم (Dashboard)
             ============================================================ -->
             <div class="page" id="page-dashboard">
 
@@ -1032,14 +1025,14 @@
                          onerror="this.src='https://via.placeholder.com/600x375/0066cc/ffffff?text=شعار+الشركة'">
                 </div>
 
-                <!-- البطاقات الإحصائية – المسافة صفر من الوجو -->
+                <!-- البطاقات الإحصائية -->
                 <div class="stats-grid" id="dashStats">
                     <div class="stat-card" id="card-total-products">
                         <div class="card-header">
                             <i class="fas fa-boxes"></i>
                             <h3>إجمالي المنتجات</h3>
                         </div>
-                        <div class="stat-value" id="total-products"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="total-products">0</div>
                         <div class="stat-label">منتج في النظام</div>
                         <div class="stat-trend trend-up" id="products-trend">
                             <i class="fas fa-arrow-up"></i> <span id="products-trend-val">جاري...</span>
@@ -1051,7 +1044,7 @@
                             <i class="fas fa-chart-line"></i>
                             <h3>المبيعات اليومية</h3>
                         </div>
-                        <div class="stat-value" id="daily-sales"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="daily-sales">0.00 ر.ي</div>
                         <div class="stat-label">إجمالي المبيعات اليوم</div>
                         <div class="stat-trend trend-up" id="sales-trend">
                             <i class="fas fa-arrow-up"></i> <span id="sales-trend-val">جاري...</span>
@@ -1063,7 +1056,7 @@
                             <i class="fas fa-users"></i>
                             <h3>العملاء النشطين</h3>
                         </div>
-                        <div class="stat-value" id="active-customers"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="active-customers">0</div>
                         <div class="stat-label">عميل نشط</div>
                     </div>
 
@@ -1072,7 +1065,7 @@
                             <i class="fas fa-hourglass-half"></i>
                             <h3>المنتجات المنتهية قريبًا</h3>
                         </div>
-                        <div class="stat-value" id="expiry-soon"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="expiry-soon">0</div>
                         <div class="stat-label">منتج خلال 30 يومًا</div>
                         <div class="card-badge" id="expiry-badge">0</div>
                     </div>
@@ -1082,7 +1075,7 @@
                             <i class="fas fa-exclamation-circle"></i>
                             <h3>انخفاض المخزون</h3>
                         </div>
-                        <div class="stat-value" id="low-stock"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="low-stock">0</div>
                         <div class="stat-label">منتج تحت الحد الأدنى</div>
                         <div class="card-badge" id="low-stock-badge">0</div>
                     </div>
@@ -1092,7 +1085,7 @@
                             <i class="fas fa-file-invoice"></i>
                             <h3>الفواتير المستحقة</h3>
                         </div>
-                        <div class="stat-value" id="due-invoices"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="due-invoices">0</div>
                         <div class="stat-label">فاتورة خلال أسبوع</div>
                     </div>
 
@@ -1101,7 +1094,7 @@
                             <i class="fas fa-undo"></i>
                             <h3>المنتجات المرتجعة</h3>
                         </div>
-                        <div class="stat-value" id="returned-products"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="returned-products">0</div>
                         <div class="stat-label">كمية اليوم</div>
                     </div>
 
@@ -1110,7 +1103,7 @@
                             <i class="fas fa-ban"></i>
                             <h3>المنتجات التالفة</h3>
                         </div>
-                        <div class="stat-value" id="damaged-products"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="damaged-products">0</div>
                         <div class="stat-label">كمية اليوم</div>
                     </div>
 
@@ -1119,7 +1112,7 @@
                             <i class="fas fa-hand-holding-usd"></i>
                             <h3>مديونية العملاء</h3>
                         </div>
-                        <div class="stat-value" id="customer-debts"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="customer-debts">0.00 ر.ي</div>
                         <div class="stat-label">إجمالي الديون المستحقة</div>
                     </div>
 
@@ -1128,7 +1121,7 @@
                             <i class="fas fa-file-invoice-dollar"></i>
                             <h3>مديونية الموردين</h3>
                         </div>
-                        <div class="stat-value" id="supplier-debts"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="supplier-debts">0.00 ر.ي</div>
                         <div class="stat-label">إجمالي الدين للموردين</div>
                     </div>
 
@@ -1137,7 +1130,7 @@
                             <i class="fas fa-warehouse"></i>
                             <h3>قيمة المخزون</h3>
                         </div>
-                        <div class="stat-value" id="inventory-value"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="inventory-value">0.00 ر.ي</div>
                         <div class="stat-label">القيمة الإجمالية للمخزون</div>
                     </div>
 
@@ -1146,7 +1139,7 @@
                             <i class="fas fa-tasks"></i>
                             <h3>المهام المعلقة</h3>
                         </div>
-                        <div class="stat-value" id="pending-tasks"><span class="spinner spinner-sm"></span></div>
+                        <div class="stat-value" id="pending-tasks">0</div>
                         <div class="stat-label">مهمة تحتاج لمراجعتك</div>
                         <div class="card-badge" id="tasks-badge">0</div>
                     </div>
@@ -1185,27 +1178,25 @@
     </div>
 
     <!-- ============================================================
-    جافاسكريبت – التطبيق الكامل مع دعم AndroidInterface
+    جافاسكريبت – التطبيق الكامل مع دعم AndroidInterface ومعالجة الأخطاء
     ============================================================ -->
     <script>
         // ============================================================
         // الإعدادات والحالة العامة
         // ============================================================
         const API_BASE = 'http://127.0.0.1:8080/api';
-        let authToken = null;
-        let currentUser = { 
-            username: 'admin', 
-            full_name: 'مدير النظام', 
-            email: 'admin@example.com', 
-            role: 'مدير',
-            permissions: {}
-        };
+        let authToken = localStorage.getItem('authToken') || null;
+        let currentUser = null;
         let userPermissions = {};
         let notificationQueue = [];
         let isProcessingQueue = false;
         let activeBubbles = [];
         let notificationsEnabled = true;
         let refreshInterval = null;
+
+        // الكشف عن وجود AndroidInterface
+        const androidInterface = window.AndroidInterface;
+        const useAndroidInterface = typeof androidInterface !== 'undefined' && androidInterface !== null;
 
         // ============================================================
         // أدوات مساعدة
@@ -1232,33 +1223,27 @@
         }
 
         // ============================================================
-        // دالة الاتصال الأساسية (مع دعم AndroidInterface)
+        // دالة الاتصال الأساسية (مع دعم AndroidInterface ومعالجة الأخطاء)
         // ============================================================
         async function apiCall(action, params = {}) {
-            // 1. التحقق من وجود الجسر الأصلي AndroidInterface
             const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
 
             if (hasBridge) {
                 try {
                     // خريطة تحويل الـ actions إلى دوال AndroidInterface
                     const actionMap = {
-                        // لوحة التحكم والإحصائيات
                         'get_dashboard_stats': 'getDashboardStats',
                         'get_daily_sales': 'getDailySales',
                         'get_monthly_sales': 'getMonthlySales',
                         'get_eod_report': 'getEodReport',
                         'get_profit_report': 'getProfitReport',
                         'get_ai_insight': 'getAIInsight',
-
-                        // العملاء والأطراف
                         'get_customers': 'getCustomers',
                         'add_customer': 'addParty',
                         'update_customer': 'updateParty',
                         'delete_customer': 'deleteParty',
                         'get_suppliers': 'getSuppliers',
                         'get_drivers': 'getDrivers',
-
-                        // المنتجات والمخزون
                         'get_products': 'getProducts',
                         'add_product': 'addProduct',
                         'update_product': 'updateProduct',
@@ -1266,35 +1251,24 @@
                         'get_fuel_types': 'getFuelTypes',
                         'get_categories': 'getCategories',
                         'get_low_stock_items': 'getLowStockItems',
-                        'get_inventory_value': 'getInventoryValue',
-
-                        // المبيعات والطلبات
                         'get_sales': 'getSales',
                         'execute_sale': 'addSale',
                         'delete_sale': 'deleteSale',
                         'get_shifts': 'getShifts',
                         'add_shift': 'startShift',
                         'delete_shift': 'deleteShift',
-
-                        // المدفوعات
                         'get_payments': 'getPayments',
                         'make_payment': 'makePayment',
                         'add_deposit': 'addDeposit',
                         'delete_payment': 'deletePayment',
-
-                        // الخزانات والمضخات
                         'get_tanks': 'getTanks',
                         'get_pumps': 'getPumps',
                         'update_tank_quantity': 'updateTankQuantity',
                         'get_tank_stats': 'getTankStats',
-
-                        // الموظفين
                         'get_employees': 'getEmployees',
                         'add_employee': 'addEmployee',
                         'update_employee': 'updateEmployee',
                         'delete_employee': 'deleteEmployee',
-
-                        // المستخدمين والأدوار
                         'get_users': 'getUsers',
                         'add_user': 'addUser',
                         'update_user': 'updateUser',
@@ -1303,38 +1277,33 @@
                         'add_role': 'addRole',
                         'update_role': 'updateRole',
                         'delete_role': 'deleteRole',
-
-                        // الصيانة والأصول
                         'get_maintenance_requests': 'getMaintenanceRequests',
                         'add_maintenance_request': 'addMaintenanceRequest',
                         'update_maintenance_status': 'updateMaintenanceStatus',
                         'delete_maintenance': 'deleteMaintenance',
-
-                        // الإعدادات
                         'get_setting': 'getSetting',
                         'set_setting': 'setSetting',
                         'get_all_settings': 'getAllSettingsMap',
-
-                        // المركبات
                         'get_vehicles': 'getVehicles',
-
-                        // التقارير والتصدير
-                        'export_data': 'exportAllData',
+                        'export_data': 'exportAllData'
                     };
 
                     const methodName = actionMap[action];
                     if (!methodName) {
-                        // محاولة استدعاء الدالة بنفس الاسم إذا كانت موجودة في الجسر
+                        // إذا كانت الدالة غير موجودة في الخريطة، نحاول استدعاءها مباشرة
                         if (typeof AndroidInterface[action] === 'function') {
                             const result = AndroidInterface[action]();
                             return handleAndroidResult(result);
                         }
-                        throw new Error(`الإجراء غير معروف: ${action}`);
+                        // إرجاع خطأ بدلاً من رمي استثناء
+                        console.warn(`الإجراء غير معروف: ${action}`);
+                        return { success: false, error: `Unsupported action: ${action}` };
                     }
 
                     const method = AndroidInterface[methodName];
                     if (typeof method !== 'function') {
-                        throw new Error(`الدالة ${methodName} غير موجودة في الجسر`);
+                        console.warn(`الدالة ${methodName} غير موجودة في الجسر`);
+                        return { success: false, error: `Method ${methodName} not found in bridge` };
                     }
 
                     let result;
@@ -1358,7 +1327,6 @@
                         case 'add_deposit':
                         case 'execute_sale':
                         case 'add_shift':
-                            // دوال تتوقع JSONObject كمعامل وحيد
                             const jsonData = JSON.stringify(params);
                             result = method(jsonData);
                             break;
@@ -1380,37 +1348,35 @@
                         case 'delete_shift':
                         case 'delete_sale':
                         case 'delete_maintenance':
-                            // استخراج الـ id المناسب
                             const idKeys = Object.keys(params).filter(k => k.includes('id') || k === 'shift_id' || k === 'sale_id' || k === 'request_id');
                             const idValue = idKeys.length ? parseInt(params[idKeys[0]]) : 0;
                             result = method(idValue);
                             break;
                         default:
-                            // دوال بدون معاملات
                             result = method();
                             break;
                     }
 
                     return handleAndroidResult(result);
                 } catch (e) {
+                    // في حالة حدوث أي خطأ، نعيد كائن خطأ بدلاً من رمي استثناء
                     console.error('AndroidInterface error:', e);
-                    showToast('خطأ في الاتصال الداخلي: ' + e.message, 'error');
-                    throw e;
+                    return { success: false, error: e.message || 'AndroidInterface error' };
                 }
             }
 
             // ============================================================
-            // 2. الاحتياطي: استخدام fetch في حال عدم وجود الجسر
+            // الاحتياطي: استخدام fetch في حال عدم وجود الجسر
             // ============================================================
             console.warn('AndroidInterface غير موجود، استخدام fetch الاحتياطي');
-            const url = new URL(API_BASE);
-            url.searchParams.append('action', action);
-            Object.keys(params).forEach(key => {
-                if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-                    url.searchParams.append(key, params[key]);
-                }
-            });
             try {
+                const url = new URL(API_BASE);
+                url.searchParams.append('action', action);
+                Object.keys(params).forEach(key => {
+                    if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+                        url.searchParams.append(key, params[key]);
+                    }
+                });
                 const response = await fetch(url.toString(), {
                     method: 'GET',
                     headers: { 'Accept': 'application/json' }
@@ -1458,13 +1424,14 @@
         }
 
         // ============================================================
-        // تسجيل الخروج
+        // تسجيل الخروج (توجيه إلى شاشة تسجيل الدخول)
         // ============================================================
         function logout() {
             if (confirm('تسجيل الخروج؟')) {
                 if (refreshInterval) clearInterval(refreshInterval);
                 localStorage.clear();
-                location.reload();
+                // التوجيه إلى شاشة تسجيل الدخول
+                window.location.href = 'screens/login.html';
             }
         }
 
@@ -1484,7 +1451,7 @@
         })();
 
         // ============================================================
-        // القائمة الجانبية – البيانات من web_interface.html الأصلي
+        // القائمة الجانبية
         // ============================================================
         const sidebarNavData = [{
             id: 'security',
@@ -1573,97 +1540,99 @@
             children: ['المساعد الذكي']
         }];
 
-        // خريطة العنصر الفرعي → المسار (للتوجيه عند النقر)
+        // ============================================================
+        // خريطة العنصر الفرعي → مسار الشاشة الفعلي
+        // ============================================================
         const subPageRouteMap = {
-            'إدارة المستخدمين': '/users',
-            'الأدوار والصلاحيات': '/roles',
-            'سجل النشاطات': '/activity-log',
-            'إعدادات الشركة': '/company-settings',
-            'إدارة المحطات': '/stations',
-            'إعدادات النظام': '/system-settings',
-            'أسعار الصرف': '/exchange-rates',
-            'إدارة العملاء': '/customers',
-            'إدارة الموردين': '/suppliers',
-            'أنواع الأطراف': '/party-types',
-            'إدارة العقود': '/contracts',
-            'الديون المعدومة': '/bad-debts',
-            'CRM - العلاقات': '/crm',
-            'إدارة المركبات': '/vehicles',
-            'إدارة السائقين': '/drivers',
-            'تتبع المركبات': '/vehicle-tracking',
-            'رحلات المركبات': '/trips',
-            'مصروفات المركبات': '/vehicle-expenses',
-            'أنواع الوقود': '/fuel-types',
-            'إدارة المنتجات': '/products',
-            'فئات المنتجات': '/product-categories',
-            'قوائم الأسعار': '/price-lists',
-            'سجل تغيير الأسعار': '/price-change-log',
-            'إدارة الخزانات': '/tanks',
-            'إدارة المضخات': '/pumps',
-            'قراءات العدادات': '/meter-readings',
-            'تعبئة الخزانات': '/tank-filling',
-            'فحوصات الجودة': '/quality-checks',
-            'معايرة المعدات': '/equipment-calibration',
-            'إدارة المستودعات': '/warehouses',
-            'مستويات المخزون': '/stock-levels',
-            'حركات المخزون': '/inventory-movements',
-            'الجرد والتسوية': '/stocktake',
-            'المنتجات التالفة': '/damaged-products',
-            'تنبيهات المخزون': '/inventory-alerts',
-            'نقطة البيع (POS)': '/pos',
-            'إدارة الورديات': '/shifts',
-            'سجل المبيعات': '/sales-log',
-            'إدارة الطلبات': '/orders',
-            'إدارة التوصيلات': '/deliveries',
-            'مبيعات الوقود': '/fuel-sales',
-            'إدارة المدفوعات': '/payments',
-            'إدارة الإيصالات': '/receipts',
-            'إدارة الصناديق': '/cashboxes',
-            'حركات النقدية': '/cash-movements',
-            'البنوك والحسابات': '/banks-accounts',
-            'شجرة الحسابات': '/chart-of-accounts',
-            'القيود المحاسبية': '/journal-entries',
-            'فئات المصروفات': '/expense-categories',
-            'إدارة المصروفات': '/expenses',
-            'الميزانيات': '/budgets',
-            'الإيداعات النقدية': '/cash-deposits',
-            'دفتر الأستاذ': '/ledger',
-            'الميزانية العمومية': '/balance-sheet',
-            'إدارة الموظفين': '/employees',
-            'الحضور والانصراف': '/attendance',
-            'إدارة الرواتب': '/payroll',
-            'دفعات الموظفين': '/employee-payments',
-            'الأصول الثابتة': '/fixed-assets',
-            'إدارة الأصول V12': '/assets-v12',
-            'طلبات الصيانة': '/maintenance-requests',
-            'جدولة الصيانة': '/maintenance-schedule',
-            'سجل الصيانة': '/maintenance-log',
-            'الإهلاك': '/depreciation',
-            'قوالب الإشعارات': '/notification-templates',
-            'صندوق الإشعارات': '/notification-inbox',
-            'إدارة الرسائل': '/messages',
-            'سجل الرسائل': '/message-log',
-            'تذكيرات الديون': '/debt-reminders',
-            'القائمة البيضاء': '/whitelist',
-            'لوحة التحكم': '/dashboard',
-            'تقارير المبيعات': '/sales-reports',
-            'تقرير نهاية اليوم': '/eod-report',
-            'تقارير المخزون': '/inventory-reports',
-            'تقارير العملاء': '/customer-reports',
-            'تقارير الوقود': '/fuel-reports',
-            'مؤشرات الأداء KPI': '/kpi',
-            'التنبؤات والتحليلات': '/forecasts',
-            'التقارير المحاسبية': '/accounting-reports',
-            'سجلات النظام': '/system-logs',
-            'سجلات التدقيق': '/audit-logs',
-            'إدارة الوثائق': '/documents',
-            'إدارة الأجهزة': '/devices',
-            'سجل المزامنة': '/sync-log',
-            'النسخ الاحتياطي': '/backups',
-            'إعدادات الطابعات': '/printer-settings',
-            'قوالب الإيصالات': '/receipt-templates',
-            'قوالب الفواتير': '/invoice-templates',
-            'المساعد الذكي': '/ai-assistant'
+            'إدارة المستخدمين': 'screens/users.html',
+            'الأدوار والصلاحيات': 'screens/roles.html',
+            'سجل النشاطات': 'screens/activity-log.html',
+            'إعدادات الشركة': 'screens/company-settings.html',
+            'إدارة المحطات': 'screens/stations.html',
+            'إعدادات النظام': 'screens/system-settings.html',
+            'أسعار الصرف': 'screens/exchange-rates.html',
+            'إدارة العملاء': 'screens/customers.html',
+            'إدارة الموردين': 'screens/suppliers.html',
+            'أنواع الأطراف': 'screens/party-types.html',
+            'إدارة العقود': 'screens/contracts.html',
+            'الديون المعدومة': 'screens/bad-debts.html',
+            'CRM - العلاقات': 'screens/crm.html',
+            'إدارة المركبات': 'screens/vehicles.html',
+            'إدارة السائقين': 'screens/drivers.html',
+            'تتبع المركبات': 'screens/vehicle-tracking.html',
+            'رحلات المركبات': 'screens/trips.html',
+            'مصروفات المركبات': 'screens/vehicle-expenses.html',
+            'أنواع الوقود': 'screens/fuel-types.html',
+            'إدارة المنتجات': 'screens/products.html',
+            'فئات المنتجات': 'screens/product-categories.html',
+            'قوائم الأسعار': 'screens/price-lists.html',
+            'سجل تغيير الأسعار': 'screens/price-change-log.html',
+            'إدارة الخزانات': 'screens/tanks.html',
+            'إدارة المضخات': 'screens/pumps.html',
+            'قراءات العدادات': 'screens/meter-readings.html',
+            'تعبئة الخزانات': 'screens/tank-filling.html',
+            'فحوصات الجودة': 'screens/quality-checks.html',
+            'معايرة المعدات': 'screens/equipment-calibration.html',
+            'إدارة المستودعات': 'screens/warehouses.html',
+            'مستويات المخزون': 'screens/stock-levels.html',
+            'حركات المخزون': 'screens/inventory-movements.html',
+            'الجرد والتسوية': 'screens/stocktake.html',
+            'المنتجات التالفة': 'screens/damaged-products.html',
+            'تنبيهات المخزون': 'screens/inventory-alerts.html',
+            'نقطة البيع (POS)': 'screens/pos.html',
+            'إدارة الورديات': 'screens/shifts.html',
+            'سجل المبيعات': 'screens/sales-log.html',
+            'إدارة الطلبات': 'screens/orders.html',
+            'إدارة التوصيلات': 'screens/deliveries.html',
+            'مبيعات الوقود': 'screens/fuel-sales.html',
+            'إدارة المدفوعات': 'screens/payments.html',
+            'إدارة الإيصالات': 'screens/receipts.html',
+            'إدارة الصناديق': 'screens/cashboxes.html',
+            'حركات النقدية': 'screens/cash-movements.html',
+            'البنوك والحسابات': 'screens/banks-accounts.html',
+            'شجرة الحسابات': 'screens/chart-of-accounts.html',
+            'القيود المحاسبية': 'screens/journal-entries.html',
+            'فئات المصروفات': 'screens/expense-categories.html',
+            'إدارة المصروفات': 'screens/expenses.html',
+            'الميزانيات': 'screens/budgets.html',
+            'الإيداعات النقدية': 'screens/cash-deposits.html',
+            'دفتر الأستاذ': 'screens/ledger.html',
+            'الميزانية العمومية': 'screens/balance-sheet.html',
+            'إدارة الموظفين': 'screens/employees.html',
+            'الحضور والانصراف': 'screens/attendance.html',
+            'إدارة الرواتب': 'screens/payroll.html',
+            'دفعات الموظفين': 'screens/employee-payments.html',
+            'الأصول الثابتة': 'screens/fixed-assets.html',
+            'إدارة الأصول V12': 'screens/assets-v12.html',
+            'طلبات الصيانة': 'screens/maintenance-requests.html',
+            'جدولة الصيانة': 'screens/maintenance-schedule.html',
+            'سجل الصيانة': 'screens/maintenance-log.html',
+            'الإهلاك': 'screens/depreciation.html',
+            'قوالب الإشعارات': 'screens/notification-templates.html',
+            'صندوق الإشعارات': 'screens/notification-inbox.html',
+            'إدارة الرسائل': 'screens/messages.html',
+            'سجل الرسائل': 'screens/message-log.html',
+            'تذكيرات الديون': 'screens/debt-reminders.html',
+            'القائمة البيضاء': 'screens/whitelist.html',
+            'لوحة التحكم': 'dashboard',
+            'تقارير المبيعات': 'screens/sales-reports.html',
+            'تقرير نهاية اليوم': 'screens/eod-report.html',
+            'تقارير المخزون': 'screens/inventory-reports.html',
+            'تقارير العملاء': 'screens/customer-reports.html',
+            'تقارير الوقود': 'screens/fuel-reports.html',
+            'مؤشرات الأداء KPI': 'screens/kpi.html',
+            'التنبؤات والتحليلات': 'screens/forecasts.html',
+            'التقارير المحاسبية': 'screens/accounting-reports.html',
+            'سجلات النظام': 'screens/system-logs.html',
+            'سجلات التدقيق': 'screens/audit-logs.html',
+            'إدارة الوثائق': 'screens/documents.html',
+            'إدارة الأجهزة': 'screens/devices.html',
+            'سجل المزامنة': 'screens/sync-log.html',
+            'النسخ الاحتياطي': 'screens/backups.html',
+            'إعدادات الطابعات': 'screens/printer-settings.html',
+            'قوالب الإيصالات': 'screens/receipt-templates.html',
+            'قوالب الفواتير': 'screens/invoice-templates.html',
+            'المساعد الذكي': 'screens/ai-assistant.html'
         };
 
         // ============================================================
@@ -1738,7 +1707,7 @@
         }
 
         // ============================================================
-        // عرض القائمة الفرعية (Submenu)
+        // عرض القائمة الفرعية (Submenu) مع مسارات صحيحة
         // ============================================================
         function showSubmenu(event, title, items) {
             event.stopPropagation();
@@ -1755,7 +1724,7 @@
                 const li = document.createElement('li');
                 li.textContent = item;
 
-                const hasPermission = true; // افتراضياً كل شيء مسموح
+                const hasPermission = true;
                 if (!hasPermission) {
                     li.classList.add('disabled');
                 } else {
@@ -1865,23 +1834,49 @@
         }
 
         // ============================================================
-        // التوجيه إلى الشاشات
+        // التوجيه إلى الشاشات (مع مسار صحيح)
         // ============================================================
         function navigateTo(url) {
-            showToast(`جاري فتح الشاشة: ${url}`, 'info');
-            // يمكنك هنا استخدام window.location.href = url; لتوجيه المستخدم
-            // أو تنفيذ منطق خاص بتحميل المحتوى ديناميكياً
+            // إذا كان المسار يشير إلى dashboard، نبقى في الصفحة الحالية
+            if (url === 'dashboard') {
+                closePanels();
+                return;
+            }
+
+            // إذا كان المسار يبدأ بـ screens/، نذهب مباشرة
+            if (url.startsWith('screens/')) {
+                closePanels();
+                window.location.href = url;
+                return;
+            }
+
+            // إذا كان المسار يبدأ بـ /، نحذف الشرطة المائلة
+            if (url.startsWith('/')) {
+                url = url.substring(1);
+            }
+
+            // إضافة screens/ إذا لم تكن موجودة
+            if (!url.startsWith('screens/')) {
+                url = 'screens/' + url;
+            }
+
+            // التأكد من وجود .html
+            if (!url.endsWith('.html')) {
+                url = url + '.html';
+            }
+
             closePanels();
+            window.location.href = url;
         }
 
         // ============================================================
-        // تحميل بيانات لوحة التحكم
+        // تحميل بيانات لوحة التحكم (مع معالجة متقدمة للأخطاء)
         // ============================================================
         async function loadDashboard() {
             showLoading(true);
             try {
                 const result = await apiCall('get_dashboard_stats');
-                if (result.success) {
+                if (result && result.success) {
                     const stats = result.data || {};
                     updateStatsCards(stats);
                     updateUserInfo(stats.user || currentUser);
@@ -1895,17 +1890,35 @@
                     if (notificationsEnabled) {
                         showRealNotifications(stats);
                     }
+                    // إذا نجح التحميل، نعرض رسالة نجاح
+                    showToast('تم تحديث لوحة التحكم', 'success');
                 } else {
-                    showToast(result.error || 'فشل تحميل الإحصائيات', 'error');
+                    // في حالة فشل تحميل البيانات، نعرض رسالة تحذيرية ونضع قيماً افتراضية
+                    const errorMsg = result?.error || 'خطأ غير معروف';
+                    console.warn('Dashboard data loading failed:', errorMsg);
+                    showToast('فشل تحميل إحصائيات لوحة التحكم: ' + errorMsg, 'warning');
+                    // تعيين قيم افتراضية للبطاقات
+                    updateStatsCards({});
+                    document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG');
                 }
             } catch (e) {
+                // في حالة حدوث استثناء غير متوقع
                 console.error('Dashboard error:', e);
                 showToast('فشل تحميل البيانات', 'error');
+                updateStatsCards({});
+                document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG');
+            } finally {
+                showLoading(false);
             }
-            showLoading(false);
         }
 
+        // ============================================================
+        // تحديث البطاقات الإحصائية (مع قيم افتراضية)
+        // ============================================================
         function updateStatsCards(stats) {
+            // التأكد من وجود stats وإلا استخدام كائن فارغ
+            stats = stats || {};
+
             const fields = [
                 { id: 'total-products', val: stats.total_products || 0 },
                 { id: 'daily-sales', val: (stats.total_sales_today || 0).toFixed(2) + ' ر.ي' },
@@ -1920,15 +1933,25 @@
                 { id: 'inventory-value', val: (stats.total_inventory_value || 0).toFixed(2) + ' ر.ي' },
                 { id: 'pending-tasks', val: stats.pending_tasks || 0 }
             ];
+
             fields.forEach(f => {
                 const el = document.getElementById(f.id);
-                if (el) el.textContent = f.val;
+                if (el) {
+                    el.textContent = f.val;
+                }
             });
 
-            document.getElementById('expiry-badge').textContent = stats.expiry_soon || 0;
-            document.getElementById('low-stock-badge').textContent = stats.low_stock || 0;
-            document.getElementById('tasks-badge').textContent = stats.pending_tasks || 0;
+            // تحديث الشارات (badges)
+            const expiryBadge = document.getElementById('expiry-badge');
+            if (expiryBadge) expiryBadge.textContent = stats.expiry_soon || 0;
 
+            const lowStockBadge = document.getElementById('low-stock-badge');
+            if (lowStockBadge) lowStockBadge.textContent = stats.low_stock || 0;
+
+            const tasksBadge = document.getElementById('tasks-badge');
+            if (tasksBadge) tasksBadge.textContent = stats.pending_tasks || 0;
+
+            // تحديث الاتجاهات (trends)
             updateTrend('products-trend-val', stats.products_trend || '+0%');
             updateTrend('sales-trend-val', stats.sales_trend || '+0%');
         }
@@ -1938,6 +1961,9 @@
             if (el) el.textContent = value;
         }
 
+        // ============================================================
+        // تحديث معلومات المستخدم
+        // ============================================================
         function updateUserInfo(user) {
             if (!user) return;
             const nameEl = document.getElementById('userDisplayName');
@@ -1955,9 +1981,12 @@
         }
 
         // ============================================================
-        // التنبيهات (فقاعات)
+        // التنبيهات (فقاعات) – مع تحسينات
         // ============================================================
         function showRealNotifications(stats) {
+            // التأكد من وجود stats
+            stats = stats || {};
+
             if (stats.expiry_soon > 0) {
                 addNotificationToQueue({
                     title: 'تنبيه انتهاء الصلاحية',
@@ -2089,11 +2118,11 @@
         // ============================================================
         function initCardDoubleClick() {
             const cardRoutes = {
-                "card-pending-tasks": "/pending-tasks",
-                "card-damaged-products": "/damaged-products",
-                "card-returned-products": "/returned-products",
-                "card-customer-debts": "/customer-debts",
-                "card-expiry-soon": "/expiry-soon"
+                "card-pending-tasks": "screens/tasks.html",
+                "card-damaged-products": "screens/damaged-products.html",
+                "card-returned-products": "screens/returned-products.html",
+                "card-customer-debts": "screens/customer-debts.html",
+                "card-expiry-soon": "screens/expiry-soon.html"
             };
 
             Object.keys(cardRoutes).forEach(cardId => {
@@ -2111,9 +2140,16 @@
         // بدء التطبيق
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
+            // تهيئة القائمة الجانبية
             renderSidebar();
+
+            // تحميل لوحة التحكم
             loadDashboard();
+
+            // تحديث دوري كل 5 دقائق
             refreshInterval = setInterval(loadDashboard, 300000);
+
+            // ربط النقر المزدوج على البطاقات
             initCardDoubleClick();
 
             // إغلاق القوائم عند النقر خارجها
@@ -2147,6 +2183,18 @@
                 }
                 lastClick = now;
             });
+
+            // تحميل بيانات المستخدم من localStorage إن وجدت
+            try {
+                const user = JSON.parse(localStorage.getItem('user') || 'null');
+                if (user) {
+                    currentUser = user;
+                    userPermissions = user.permissions || {};
+                    updateUserInfo(user);
+                }
+            } catch (e) {
+                currentUser = null;
+            }
         });
     </script>
 </body>
