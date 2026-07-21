@@ -395,6 +395,129 @@ class SMSService : Service() {
     }
 
     // ================================================================
+    //  دوال إرسال الردود (sendReply, sendReplyOnce, safeSendReply)
+    // ================================================================
+
+    private fun sendReply(context: Context, db: DatabaseHelper, phone: String, message: String) {
+        val hasPermission = context.checkSelfPermission(android.Manifest.permission.SEND_SMS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) {
+            db.logSms(phone, message, "auto_reply", "failed: permission denied")
+            return
+        }
+
+        try {
+            val smsManager = getSmsManager(context)
+            val parts = smsManager.divideMessage(message)
+            if (parts.size > 1) {
+                smsManager.sendMultipartTextMessage(phone, null, parts, null, null)
+            } else {
+                smsManager.sendTextMessage(phone, null, message, null, null)
+            }
+            db.logSms(phone, message, "auto_reply", "sent")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send reply: ${e.javaClass.simpleName}")
+            db.logSms(phone, message, "auto_reply", "failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun sendReplyOnce(context: Context, db: DatabaseHelper, phone: String, message: String) {
+        val lastSent = recentReplies[phone] ?: 0
+        if (System.currentTimeMillis() - lastSent < RATE_LIMIT_MS) {
+            Log.d(TAG, "Skipping duplicate reply to $phone")
+            return
+        }
+        sendReply(context, db, phone, message)
+    }
+
+    private fun safeSendReply(context: Context, db: DatabaseHelper, phone: String, message: String) {
+        try {
+            sendReply(context, db, phone, message)
+        } catch (e: Exception) {
+            Log.e(TAG, "Safe send failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun getSmsManager(context: Context): SmsManager {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
+        } else {
+            SmsManager.getDefault()
+        }
+    }
+
+    // ================================================================
+    //  AI Providers (Gemini, DeepSeek, Grok, Kimi, ChatGPT)
+    // ================================================================
+
+    private fun callAIWithFallback(prompt: String, db: DatabaseHelper): String {
+        val providers = listOf(
+            "gemini" to geminiApiKey,
+            "deepseek" to deepseekApiKey,
+            "grok" to grokApiKey,
+            "kimi" to kimiApiKey,
+            "chatgpt" to chatgptApiKey
+        )
+
+        for ((provider, apiKey) in providers) {
+            if (apiKey.isEmpty()) continue
+            try {
+                val result = when (provider) {
+                    "gemini" -> callGeminiAPI(prompt, apiKey)
+                    "deepseek" -> callDeepSeekAPI(prompt, apiKey)
+                    "grok" -> callGrokAPI(prompt, apiKey)
+                    "kimi" -> callKimiAPI(prompt, apiKey)
+                    "chatgpt" -> callChatGPTAPI(prompt, apiKey)
+                    else -> null
+                }
+                if (result != null && !result.contains("خطأ") && !result.contains("API key") && result.length > 10) {
+                    return result
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Provider $provider failed: ${e.message}")
+            }
+        }
+        return "جميع محاولات الاتصال بالذكاء الاصطناعي فشلت. يرجى التحقق من المفاتيح."
+    }
+
+    private fun callGeminiAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$apiKey")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("contents", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply { put("text", prompt) })
+                        })
+                    })
+                })
+                put("generationConfig", JSONObject().apply {
+                    put("temperature", 0.7)
+                    put("maxOutput {
+        try {
+            sendReply(context, db, phone, message)
+        } catch (e: Exception) {
+            Log.e(TAG, "Safe send failed: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun getSmsManager(context: Context): SmsManager {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault()
+        } else {
+            SmsManager.getDefault()
+        }
+    }
+
+    // ================================================================
     //  AI Providers (Gemini, DeepSeek, Grok, Kimi, ChatGPT)
     // ================================================================
 
@@ -471,6 +594,29 @@ class SMSService : Service() {
         }
     }
 
+   Tokens", 1024)
+                })
+            }
+
+            conn.outputStream.use { os ->
+                os.write(requestBody.toString().toByteArray(Charsets.UTF_8))
+            }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            parseAIResponse(response)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gemini error: ${e.message}", e)
+            null
+        }
+    }
+
     private fun callDeepSeekAPI(prompt: String, apiKey: String): String? {
         return try {
             val url = URL("https://api.deepseek.com/v1/chat/completions")
@@ -495,6 +641,46 @@ class SMSService : Service() {
 
             val responseCode = conn.responseCode
             val response = if (responseCode == 200) {
+                conn.input private fun callDeepSeekAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.deepseek.com/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "deepseek-chat")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200)Stream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "DeepSeek error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callGrokAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.x {
                 conn.inputStream.bufferedReader().use { it.readText() }
             } else {
                 conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
@@ -523,13 +709,31 @@ class SMSService : Service() {
             val requestBody = JSONObject().apply {
                 put("model", "grok-beta")
                 put("messages", JSONArray().apply {
+                    put(JSON.ai/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model", "grok-beta")
+                put("messages", JSONArray().apply {
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                 })
                 put("max_tokens", 1024)
                 put("temperature", 0.7)
             }
 
-            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toStringArray(Charsets.UTF_8)) }
 
             val responseCode = conn.responseCode
             val response = if (responseCode == 200) {
@@ -539,7 +743,27 @@ class SMSService : Service() {
             }
             conn.disconnect()
 
-            val json = JSONObject(response)
+            val json = JSONObject(response().toByteArray(Charsets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json =)
+            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "Grok error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callKimiAPI(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.moonshot.cn/v1/chat/com JSONObject(response)
             json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
         } catch (e: Exception) {
             Log.e(TAG, "Grok error: ${e.message}", e)
@@ -559,7 +783,25 @@ class SMSService : Service() {
             conn.readTimeout = 15000
 
             val requestBody = JSONObject().apply {
-                put("model", "moonshot-v1-8k")
+                put("model",pletions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSONObject().apply {
+                put("model "moonshot-v1-8k")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.", "moonshot-v1-8k")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                 })
@@ -577,7 +819,18 @@ class SMSService : Service() {
             }
             conn.disconnect()
 
+            val json = JSONObjectUTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
             val json = JSONObject(response)
+            json(response)
             json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
         } catch (e: Exception) {
             Log.e(TAG, "Kimi error: ${e.message}", e)
@@ -585,7 +838,19 @@ class SMSService : Service() {
         }
     }
 
-    private fun callChatGPTAPI(prompt: String, apiKey: String): String? {
+    private fun callChatGPTAPI.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "Kimi error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun callChatGPTAPI(prompt: String(prompt: String, apiKey: String): String? {
+        return try {
+            val url = URL("https://api.openai.com/v1/chat/completions")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content, apiKey: String): String? {
         return try {
             val url = URL("https://api.openai.com/v1/chat/completions")
             val conn = url.openConnection() as HttpURLConnection
@@ -597,6 +862,21 @@ class SMSService : Service() {
             conn.readTimeout = 15000
 
             val requestBody = JSONObject().apply {
+               -Type", "application/json")
+            conn.setRequestProperty("Authorization", "Bearer $apiKey")
+            conn.doOutput = true
+            conn.connectTimeout = 15000
+            conn.readTimeout = 15000
+
+            val requestBody = JSON put("model", "gpt-3.5-turbo")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                })
+                put("max_tokens", 1024)
+                put("temperature", 0.7)
+            }
+
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_Object().apply {
                 put("model", "gpt-3.5-turbo")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
@@ -605,7 +885,7 @@ class SMSService : Service() {
                 put("temperature", 0.7)
             }
 
-            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Charsets.UTF_8)) }
+            conn.outputStream.use { os -> os.write(requestBody.toString().toByteArray(Chars8)) }
 
             val responseCode = conn.responseCode
             val response = if (responseCode == 200) {
@@ -616,7 +896,29 @@ class SMSService : Service() {
             conn.disconnect()
 
             val json = JSONObject(response)
-            json.getJSONArray("choices")?.getJSONObject(0)?.getJSONObject("message")?.getString("content")
+            json.getJSONArray("choices")?.getJSONObject(0)?.ets.UTF_8)) }
+
+            val responseCode = conn.responseCode
+            val response = if (responseCode == 200) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "{\"error\": \"HTTP $responseCode\"}"
+            }
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            json.getJSONArray("choices")?.getJSONObjectgetJSONObject("message")?.getString("content")
+        } catch (e: Exception) {
+            Log.e(TAG, "ChatGPT error: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun parseAIResponse(response: String): String {
+        return try {
+            val json = JSONObject(response)
+            if (json.has("candidates")) {
+                val candidates = json.getJSONArray("candidates(0)?.getJSONObject("message")?.getString("content")
         } catch (e: Exception) {
             Log.e(TAG, "ChatGPT error: ${e.message}", e)
             null
@@ -628,6 +930,7 @@ class SMSService : Service() {
             val json = JSONObject(response)
             if (json.has("candidates")) {
                 val candidates = json.getJSONArray("candidates")
+")
                 if (candidates.length() > 0) {
                     val content = candidates.getJSONObject(0).getJSONObject("content")
                     val parts = content.getJSONArray("parts")
@@ -637,6 +940,31 @@ class SMSService : Service() {
                 }
             }
             if (json.has("error")) {
+                if (candidates.length() > 0) {
+                    val content = candidates.getJSONObject(0).getJSONObject("content")
+                    val parts = content.getJSONArray("parts")
+                    if (parts.length() > 0) {
+                        return parts.getJSONObject(0).getString("text")
+                    }
+                }
+            }
+            if (json.has("error"))                return json.getJSONObject("error").optString("message", "خطأ في API")
+            }
+            json.optString("error", "لم يتم الحصول على رد")
+        } catch (e: Exception) {
+            "خطأ في معالجة الرد"
+        }
+    }
+
+    // ================================================================
+    //  دوال إضافية مساعدة
+    // ================================================================
+
+    private fun recordDieselDelivery(
+        db: DatabaseHelper,
+        customerId: String,
+        customerName: String,
+        quantityLiters: Double {
                 return json.getJSONObject("error").optString("message", "خطأ في API")
             }
             json.optString("error", "لم يتم الحصول على رد")
@@ -665,7 +993,28 @@ class SMSService : Service() {
             val partyId = getPartyIdByPhone(db, customerId) ?: return false
 
             require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
-            require(unitPrice in 1.0..1000000.0) { "Invalid price" }
+            require(unitPrice in 1.0..1000000.0),
+        quantityDabbas: Double,
+        location: String,
+        deliveryTime: String,
+        unitPrice: Double,
+        totalAmount: Double,
+        orderId: String
+    ): Boolean {
+        try {
+            val partyId = getPartyIdByPhone(db, customerId) ?: return false
+
+            require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
+            require(unitPrice in 1.0..100000 { "Invalid price" }
+            require(totalAmount in 0.0..1000000.0 * 10000.0) { "Invalid total" }
+            require(location.length in 3..200) { "Invalid location" }
+
+            val subtotal = quantityLiters * unitPrice
+
+            val result = db.insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+               0.0) { "Invalid price" }
             require(totalAmount in 0.0..1000000.0 * 10000.0) { "Invalid total" }
             require(location.length in 3..200) { "Invalid location" }
 
@@ -682,7 +1031,22 @@ class SMSService : Service() {
                 pricePerLiter = unitPrice,
                 subtotal = subtotal,
                 discountAmount = 0.0,
+                taxAmount =  customerPartyId = partyId,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = quantityLiters,
+                pricePerLiter = unitPrice,
+                subtotal = subtotal,
+                discountAmount = 0.0,
                 taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = "credit",
+                isCredit = true,
+                dueDate = DATE_FORMAT.format(Date()),
+                cashierId = 1,
+                notes = "طلب توصيل ديزل0.0,
                 grossAmount = totalAmount,
                 netAmount = totalAmount,
                 paymentMethod = "credit",
@@ -692,7 +1056,18 @@ class SMSService : Service() {
                 notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
             )
 
+            if (result <= 0 - ${location.take(100)} في ${deliveryTime.take(50)}"
+            )
+
             if (result <= 0) return false
+
+            val currentBalance = getCustomerBalanceByPhone(db, customerId)
+            val newBalance = currentBalance + totalAmount
+            val values = android.content.ContentValues().apply {
+                put("current_balance", newBalance)
+                put("total_due", totalAmount)
+            }
+            db.writableDatabase.update("part) return false
 
             val currentBalance = getCustomerBalanceByPhone(db, customerId)
             val newBalance = currentBalance + totalAmount
@@ -705,7 +1080,17 @@ class SMSService : Service() {
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Error recording delivery: ${e.javaClass.simpleName}")
+            returnies", values, "id = ?", arrayOf(partyId.toString()))
+
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error recording delivery: ${e.javaClass.simpleName}")
             return false
+        }
+    }
+
+    private fun notifyManager(context: Context, db: DatabaseHelper, managerPhone: String, message: String) {
+        try false
         }
     }
 
@@ -715,10 +1100,23 @@ class SMSService : Service() {
             val pushEnabled = getSystemSetting(db, "push_notifications_enabled", "0") == "1"
             if (pushEnabled) {
                 // تنبيه دفع (Push) – يمكن تفعيله لاحقاً
+                Log.d {
+            sendReply(context, db, managerPhone, message)
+            val pushEnabled = getSystemSetting(db, "push_notifications_enabled", "0") == "1"
+            if (pushEnabled) {
+                // تنبيه دفع (Push) – يمكن تفعيله لاحقاً
                 Log.d(TAG, "Push notification would be sent to $managerPhone")
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to notify manager: ${e.javaClass.simpleName(TAG, "Push notification would be sent to $managerPhone")
+            }
+        } catch (e: Exception) {
             Log.e(TAG, "Failed to notify manager: ${e.javaClass.simpleName}")
+        }
+    }
+
+    private fun logSecurityEvent(context: Context, event: String, phone: String, details: String) {
+        // تسجيل الأحداث الأمنية – يمكن توسيعها ل}")
         }
     }
 
@@ -729,7 +1127,17 @@ class SMSService : Service() {
 
     private fun cleanupOldData(context: Context, db: DatabaseHelper, retentionDays: Int) {
         try {
+            val cutoff = System.currentTimeMillis() - (retentionDays * 24L * 60 * 60 * 1000احقاً
+        Log.i(TAG, "SECURITY: $event | $phone | $details")
+    }
+
+    private fun cleanupOldData(context: Context, db: DatabaseHelper, retentionDays: Int) {
+        try {
             val cutoff = System.currentTimeMillis() - (retentionDays * 24L * 60 * 60 * 1000)
+            val cutoffDate = DATE_FORMAT.format(Date(cutoff))
+
+            db.execSQL("DELETE FROM user_activity_log WHERE created_at < ?", arrayOf(cutoffDate))
+            db.execSQL("DELETE FROM sms_logs WHERE created_at < ?", arrayOf(c)
             val cutoffDate = DATE_FORMAT.format(Date(cutoff))
 
             db.execSQL("DELETE FROM user_activity_log WHERE created_at < ?", arrayOf(cutoffDate))
@@ -738,9 +1146,63 @@ class SMSService : Service() {
 
             db.execSQL("UPDATE sales_transactions SET archived = 1 WHERE created_at < ? AND status = 'delivered'", arrayOf(cutoffDate))
 
+            Log.d(TAGutoffDate))
+            db.execSQL("DELETE FROM customer_ledger WHERE transaction_date < ?", arrayOf(cutoffDate))
+
+            db.execSQL("UPDATE sales_transactions SET archived = 1 WHERE created_at < ? AND status = 'delivered'", arrayOf(cutoffDate))
+
             Log.d(TAG, "Cleanup completed, retention days: $retentionDays")
         } catch (e: Exception) {
             Log.e(TAG, "Cleanup failed: ${e.message}")
+        }
+    }
+, "Cleanup completed, retention days: $retentionDays")
+        } catch (e: Exception) {
+            Log.e(TAG, "Cleanup failed: ${e.message}")
+        }
+    }
+}
+
+/**
+ * Worker للنسخ الاحتياطي التلقائي (يُستخدم مع WorkManager).
+ */
+class BackupWorker(
+    context: Context,
+    params: androidx.work.WorkerParameters
+) : androidx.work.CoroutineWorker(context, params)}
+
+/**
+ * Worker للنسخ الاحتياطي التلقائي (يُستخدم مع WorkManager).
+ */
+class BackupWorker(
+    context: Context,
+    params: androidx.work.WorkerParameters
+) : androidx.work.CoroutineWorker(context, params) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val db = DatabaseHelper(applicationContext)
+            val path = db.backupDatabase {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val db = DatabaseHelper(applicationContext)
+            val path = db.backupDatabase()
+            Log.d("BackupWorker", "Auto backup completed: $path")
+            db.close()
+            Result.success()
+        } catch (e: Exception) {
+            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
+            Result.retry()
+        }
+    }
+()
+            Log.d("BackupWorker", "Auto backup completed: $path")
+            db.close()
+            Result.success()
+        } catch (e: Exception) {
+            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
+            Result.retry()
         }
     }
 }
