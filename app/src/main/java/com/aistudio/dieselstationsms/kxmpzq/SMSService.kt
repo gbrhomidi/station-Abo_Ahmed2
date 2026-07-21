@@ -805,25 +805,3 @@ class SMSService : Service() {
     // تم إزالة متغير server.
     // تم إزالة دالة startServer() التي كانت تشغل الخادم.
 }
-
-/**
- * Worker للنسخ الاحتياطي التلقائي (يُستخدم مع WorkManager).
- */
-class BackupWorker(
-    context: Context,
-    params: androidx.work.WorkerParameters
-) : androidx.work.CoroutineWorker(context, params) {
-
-    override suspend fun doWork(): Result {
-        return try {
-            val db = DatabaseHelper(applicationContext)
-            val path = db.backupDatabase()
-            Log.d("BackupWorker", "Auto backup completed: $path")
-            db.close()
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("BackupWorker", "Backup failed: ${e.message}", e)
-            Result.retry()
-        }
-    }
-}
