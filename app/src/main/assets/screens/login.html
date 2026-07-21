@@ -31,13 +31,13 @@
             --night-border-valid: #2c5282;
             --night-border-invalid: #e74c3c;
         }
-        
+
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
-        
+
         body {
             font-family: 'Tajawal', sans-serif;
             background: linear-gradient(-45deg, #2c3e50, #3498db, #e74c3c, #27ae60);
@@ -55,19 +55,19 @@
             max-width: 100vw;
             overflow-x: hidden;
         }
-        
+
         body.dark-mode {
             background: linear-gradient(-45deg, #1a202c, #2d3748, #4a5568, #2c3e50);
             background-size: 400% 400%;
             color: var(--dark-text);
         }
-        
+
         @keyframes gradientBG {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
-        
+
         .login-container {
             width: 100%;
             max-width: 450px;
@@ -83,12 +83,12 @@
             height: auto;
             margin: 0 auto;
         }
-        
+
         .dark-mode .login-container {
             background-color: var(--dark-card);
             color: var(--dark-text);
         }
-        
+
         .login-header {
             background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
             color: white;
@@ -97,28 +97,28 @@
             position: relative;
             clip-path: polygon(0 0, 100% 0, 100% 85%, 0 100%);
         }
-        
+
         .login-header h1 {
             font-size: 1.8rem;
             margin-bottom: 5px;
             font-weight: 800;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-        
+
         .login-header p {
             font-size: 0.9rem;
             opacity: 0.9;
         }
-        
+
         .login-body {
             padding: 20px 25px;
         }
-        
+
         .input-group {
             position: relative;
             margin-bottom: 20px;
         }
-        
+
         .input-group label {
             display: block;
             margin-bottom: 8px;
@@ -126,11 +126,11 @@
             color: var(--dark-color);
             font-size: 0.95rem;
         }
-        
+
         .dark-mode .input-group label {
             color: var(--dark-text);
         }
-        
+
         .input-group input {
             width: 100%;
             padding: 15px 15px 15px 45px;
@@ -141,43 +141,43 @@
             font-family: 'Tajawal', sans-serif;
             background-color: #f8f9fa;
         }
-        
+
         .dark-mode .input-group input {
             background-color: #2d3748;
             border-color: #4a5568;
             color: var(--dark-text);
         }
-        
+
         .input-group input:focus {
             outline: none;
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
             transform: translateY(-2px);
         }
-        
+
         body:not(.dark-mode) .input-group input:focus {
             border-color: var(--day-border-focus);
         }
-        
+
         body:not(.dark-mode) .input-group input:valid {
             border-color: var(--day-border-valid);
         }
-        
+
         body:not(.dark-mode) .input-group input:invalid:not(:placeholder-shown) {
             border-color: var(--day-border-invalid);
         }
-        
+
         body.dark-mode .input-group input:focus {
             border-color: var(--night-border-focus);
         }
-        
+
         body.dark-mode .input-group input:valid {
             border-color: var(--night-border-valid);
         }
-        
+
         body.dark-mode .input-group input:invalid:not(:placeholder-shown) {
             border-color: var(--night-border-invalid);
         }
-        
+
         .input-group i {
             position: absolute;
             left: 15px;
@@ -186,20 +186,20 @@
             font-size: 1.2rem;
             transition: all 0.3s ease;
         }
-        
+
         .dark-mode .input-group i {
             color: var(--dark-text);
         }
-        
+
         .input-group input:focus + i {
             color: var(--secondary-color);
             transform: scale(1.2);
         }
-        
+
         .dark-mode .input-group input:focus + i {
             color: var(--night-border-focus);
         }
-        
+
         .remember-forgot {
             display: flex;
             justify-content: space-between;
@@ -207,18 +207,18 @@
             margin-bottom: 20px;
             font-size: 0.9rem;
         }
-        
+
         .remember-me {
             display: flex;
             align-items: center;
         }
-        
+
         .remember-me input {
             margin-left: 5px;
             accent-color: var(--secondary-color);
             cursor: pointer;
         }
-        
+
         .forgot-password {
             color: var(--secondary-color);
             text-decoration: none;
@@ -228,20 +228,20 @@
             position: relative;
             display: none;
         }
-        
+
         .forgot-password.show {
             display: block;
         }
-        
+
         .forgot-password:hover {
             text-decoration: underline;
             color: var(--primary-color);
         }
-        
+
         .dark-mode .forgot-password {
             color: #63b3ed;
         }
-        
+
         .login-btn {
             width: 100%;
             padding: 15px;
@@ -263,17 +263,17 @@
             overflow: hidden;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
-        
+
         .login-btn:hover {
             background: linear-gradient(to right, var(--secondary-color), var(--primary-color));
             transform: translateY(-3px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
         }
-        
+
         .login-btn:active {
             transform: translateY(0);
         }
-        
+
         .login-btn::before {
             content: '';
             position: absolute;
@@ -284,11 +284,11 @@
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
             transition: 0.5s;
         }
-        
+
         .login-btn:hover::before {
             left: 100%;
         }
-        
+
         .loader {
             width: 18px;
             height: 18px;
@@ -297,11 +297,11 @@
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
         }
-        
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
+
         .login-footer {
             text-align: center;
             color: var(--text-light);
@@ -310,27 +310,27 @@
             border-top: 1px solid #eee;
             margin-top: 15px;
         }
-        
+
         .dark-mode .login-footer {
             border-top: 1px solid #4a5568;
             color: #a0aec0;
         }
-        
+
         .login-footer a {
             color: var(--secondary-color);
             text-decoration: none;
             font-weight: 600;
             transition: all 0.2s ease;
         }
-        
+
         .dark-mode .login-footer a {
             color: #63b3ed;
         }
-        
+
         .password-input-container {
             position: relative;
         }
-        
+
         .password-toggle {
             position: absolute;
             left: 15px;
@@ -341,20 +341,20 @@
             z-index: 2;
             transition: all 0.3s ease;
         }
-        
+
         .dark-mode .password-toggle {
             color: var(--dark-text);
         }
-        
+
         .password-toggle:hover {
             color: var(--secondary-color);
             transform: scale(1.1);
         }
-        
+
         .dark-mode .password-toggle:hover {
             color: #63b3ed;
         }
-        
+
         #thumbsUpIcon {
             left: 40px;
             color: #F1C27D;
@@ -362,7 +362,7 @@
             animation: pulse 1.5s infinite;
             z-index: 3;
         }
-        
+
         .modal {
             display: none;
             position: fixed;
@@ -375,7 +375,7 @@
             overflow-y: auto;
             animation: fadeIn 0.3s;
         }
-        
+
         .modal-content {
             background-color: white;
             margin: 5% auto;
@@ -390,12 +390,16 @@
             background: linear-gradient(145deg, #ffffff, #f0f0f0);
             overflow: hidden;
         }
-        
+
         .dark-mode .modal-content {
             background: linear-gradient(145deg, #2d3748, #1a202c);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        
+
+        .modal-small {
+            max-width: 520px !important;
+        }
+
         .modal-header {
             display: flex;
             justify-content: space-between;
@@ -404,11 +408,11 @@
             padding-bottom: 15px;
             border-bottom: 2px solid #eee;
         }
-        
+
         .dark-mode .modal-header {
             border-bottom: 2px solid #4a5568;
         }
-        
+
         .modal-header h2 {
             color: var(--primary-color);
             font-size: 1.8rem;
@@ -418,11 +422,11 @@
             align-items: center;
             gap: 10px;
         }
-        
+
         .dark-mode .modal-header h2 {
             color: #63b3ed;
         }
-        
+
         .close-modal {
             background: none;
             border: none;
@@ -437,85 +441,23 @@
             justify-content: center;
             border-radius: 50%;
         }
-        
+
         .close-modal:hover {
             background-color: rgba(231, 76, 60, 0.1);
             transform: rotate(90deg);
         }
-        
+
         .dark-mode .close-modal {
             color: #fc8181;
         }
-        
+
         .modal-body {
             max-height: 70vh;
             overflow-y: auto;
             padding: 10px;
             line-height: 1.7;
         }
-        
-        .recovery-options {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .recovery-option {
-            padding: 15px;
-            border: 2px solid #ddd;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .recovery-option:hover {
-            border-color: var(--secondary-color);
-            background-color: rgba(52, 152, 219, 0.05);
-            transform: translateY(-2px);
-        }
-        
-        .recovery-option.active {
-            border-color: var(--secondary-color);
-            background-color: rgba(52, 152, 219, 0.1);
-        }
-        
-        .recovery-option i {
-            font-size: 1.5rem;
-            color: var(--secondary-color);
-        }
-        
-        .recovery-option-content {
-            flex: 1;
-        }
-        
-        .recovery-option h3 {
-            margin-bottom: 5px;
-            font-size: 1.1rem;
-        }
-        
-        .recovery-option p {
-            font-size: 0.9rem;
-            color: var(--text-light);
-        }
-        
-        .dark-mode .recovery-option p {
-            color: #a0aec0;
-        }
-        
-        .recovery-form {
-            display: none;
-            margin-top: 20px;
-        }
-        
-        .recovery-form.active {
-            display: block;
-            animation: fadeIn 0.5s;
-        }
-        
+
         .phone-hint {
             background-color: #f8f9fa;
             padding: 10px 15px;
@@ -524,48 +466,108 @@
             font-size: 0.9rem;
             border-right: 3px solid var(--secondary-color);
         }
-        
+
         .dark-mode .phone-hint {
             background-color: #2d3748;
             border-right: 3px solid #63b3ed;
         }
-        
+
         .phone-hint strong {
             color: var(--secondary-color);
         }
-        
+
         .dark-mode .phone-hint strong {
             color: #63b3ed;
         }
-        
-        .verification-code-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+
+        .reset-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            width: 70px;
+            height: 70px;
+            line-height: 70px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
         }
-        
-        .verification-code-input {
-            width: 50px;
-            height: 60px;
-            text-align: center;
-            font-size: 1.5rem;
-            border: 2px solid #ddd;
-            border-radius: 8px;
+
+        .password-strength-container {
+            margin-top: 10px;
+        }
+
+        .password-strength {
+            height: 8px;
+            border-radius: 4px;
+            margin-top: 5px;
             transition: all 0.3s ease;
+            width: 100%;
+            background: #e9ecef;
+            overflow: hidden;
         }
-        
-        .verification-code-input:focus {
-            border-color: var(--secondary-color);
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.3);
-            outline: none;
+
+        .strength-weak {
+            background: linear-gradient(to right, var(--error-color), #fd7e14);
+            width: 33%;
+            animation: strengthPulse 2s infinite;
         }
-        
-        .dark-mode .verification-code-input {
-            background-color: #2d3748;
-            border-color: #4a5568;
-            color: var(--dark-text);
+
+        .strength-medium {
+            background: linear-gradient(to right, #fd7e14, var(--warning-color));
+            width: 66%;
+            animation: strengthPulse 1.5s infinite;
         }
-        
+
+        .strength-strong {
+            background: linear-gradient(to right, var(--warning-color), var(--success-color));
+            width: 100%;
+            animation: strengthPulse 1s infinite;
+        }
+
+        .strength-text {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 5px;
+            display: block;
+        }
+
+        .strength-weak-text { color: var(--error-color); }
+        .strength-medium-text { color: #fd7e14; }
+        .strength-strong-text { color: var(--success-color); }
+
+        .form-text {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .dark-mode .form-text {
+            color: #a0aec0;
+        }
+
+        .form-text i {
+            margin-left: 5px;
+        }
+
+        .invalid-feedback {
+            display: none;
+            color: var(--error-color);
+            font-weight: 600;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            animation: shake 0.5s;
+        }
+
+        .is-invalid {
+            border-color: var(--error-color) !important;
+        }
+
+        .is-valid {
+            border-color: var(--success-color) !important;
+        }
+
         .terms-content .glowing-name {
             font-size: 1.8rem;
             font-weight: 900;
@@ -579,14 +581,14 @@
             background: linear-gradient(45deg, rgba(255, 153, 0, 0.1), rgba(255, 153, 0, 0.05));
             border: 1px solid rgba(255, 153, 0, 0.3);
         }
-        
+
         .dark-mode .terms-content .glowing-name {
             color: #ffcc00;
             text-shadow: 0 0 10px rgba(255, 204, 0, 0.8), 0 0 20px rgba(255, 204, 0, 0.6), 0 0 30px rgba(255, 204, 0, 0.4);
             background: linear-gradient(45deg, rgba(255, 204, 0, 0.15), rgba(255, 204, 0, 0.08));
             border: 1px solid rgba(255, 204, 0, 0.4);
         }
-        
+
         @keyframes glow {
             from {
                 text-shadow: 0 0 10px rgba(255, 153, 0, 0.7), 0 0 20px rgba(255, 153, 0, 0.5), 0 0 30px rgba(255, 153, 0, 0.3);
@@ -595,18 +597,87 @@
                 text-shadow: 0 0 15px rgba(255, 153, 0, 0.8), 0 0 25px rgba(255, 153, 0, 0.6), 0 0 35px rgba(255, 153, 0, 0.4);
             }
         }
-        
+
         .terms-content .glowing-text {
             font-weight: 600;
             color: #3498db;
             text-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
         }
-        
+
         .dark-mode .terms-content .glowing-text {
             color: #63b3ed;
             text-shadow: 0 0 5px rgba(99, 179, 237, 0.7);
         }
-        
+
+        .contact-info {
+            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 25px;
+            border-right: 5px solid var(--secondary-color);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dark-mode .contact-info {
+            background: linear-gradient(145deg, #2d3748, #1a202c);
+            border-right: 5px solid #63b3ed;
+        }
+
+        .contact-info::before {
+            content: "";
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 50px;
+            height: 50px;
+            background: var(--secondary-color);
+            border-radius: 50%;
+            opacity: 0.1;
+        }
+
+        .contact-info h3 {
+            color: var(--primary-color);
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dark-mode .contact-info h3 {
+            color: #63b3ed;
+        }
+
+        .contact-info p {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.05rem;
+        }
+
+        .contact-info a {
+            color: var(--secondary-color);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .dark-mode .contact-info a {
+            color: #63b3ed;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+            color: var(--primary-color);
+        }
+
+        .dark-mode .contact-info a:hover {
+            color: #90cdf4;
+        }
+
         .floating-elements {
             position: absolute;
             top: 0;
@@ -617,14 +688,14 @@
             overflow: hidden;
             z-index: -1;
         }
-        
+
         .floating-element {
             position: absolute;
             border-radius: 50%;
             background: rgba(255, 255, 255, 0.1);
             animation: float 15s infinite ease-in-out;
         }
-        
+
         .theme-toggle {
             position: fixed;
             top: 20px;
@@ -644,16 +715,16 @@
             z-index: 100;
             transition: all 0.3s ease;
         }
-        
+
         .theme-toggle:hover {
             transform: scale(1.1) rotate(15deg);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
-        
+
         .dark-mode .theme-toggle {
             background: linear-gradient(145deg, #f39c12, #f1c40f);
         }
-        
+
         .notification-container {
             position: fixed;
             top: 20px;
@@ -665,7 +736,7 @@
             left: 0;
             right: 0;
         }
-        
+
         .notification {
             padding: 18px 20px;
             border-radius: 12px;
@@ -682,7 +753,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        
+
         .notification::after {
             content: '';
             position: absolute;
@@ -695,31 +766,31 @@
             transform-origin: right;
             animation: progress 3s linear forwards;
         }
-        
+
         .notification i {
             font-size: 1.5rem;
         }
-        
+
         .notification-success {
             background: linear-gradient(145deg, #27ae60, #2ecc71);
             color: white;
         }
-        
+
         .notification-error {
             background: linear-gradient(145deg, #e74c3c, #c0392b);
             color: white;
         }
-        
+
         .notification-warning {
             background: linear-gradient(145deg, #f39c12, #e67e22);
             color: white;
         }
-        
+
         .notification-info {
             background: linear-gradient(145deg, #3498db, #2980b9);
             color: white;
         }
-        
+
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -735,18 +806,18 @@
             pointer-events: none;
             transition: opacity 0.3s ease;
         }
-        
+
         .loading-overlay.active {
             opacity: 1;
             pointer-events: all;
         }
-        
+
         .loading-spinner {
             width: 80px;
             height: 80px;
             position: relative;
         }
-        
+
         .loading-spinner div {
             position: absolute;
             width: 100%;
@@ -756,22 +827,22 @@
             border-radius: 50%;
             animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
         }
-        
+
         .loading-spinner div:nth-child(1) {
             animation-delay: -0.45s;
             border-top-color: #e74c3c;
         }
-        
+
         .loading-spinner div:nth-child(2) {
             animation-delay: -0.3s;
             border-top-color: #f39c12;
         }
-        
+
         .loading-spinner div:nth-child(3) {
             animation-delay: -0.15s;
             border-top-color: #27ae60;
         }
-        
+
         .loading-text {
             color: white;
             font-size: 1.2rem;
@@ -780,7 +851,7 @@
             font-weight: 600;
             animation: pulseText 1.5s infinite;
         }
-        
+
         .input-group.user-field::before {
             content: '';
             position: absolute;
@@ -791,11 +862,11 @@
             top: 40px;
             z-index: 2;
         }
-        
+
         .dark-mode .input-group.user-field::before {
             filter: invert(1);
         }
-        
+
         .terms-content::before {
             content: "";
             position: absolute;
@@ -806,175 +877,48 @@
             background: radial-gradient(circle, rgba(52, 152, 219, 0.1) 0%, transparent 70%);
             z-index: -1;
         }
-        
-        .contact-info {
-            background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+
+        .recovery-link-box {
+            background: var(--bg, #f8f9fa);
+            border: 2px dashed var(--secondary-color);
+            border-radius: 10px;
             padding: 20px;
-            border-radius: 15px;
-            margin-top: 25px;
-            border-right: 5px solid var(--secondary-color);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            position: relative;
-            overflow: hidden;
+            margin: 20px 0;
+            word-break: break-all;
+            font-size: 14px;
+            color: var(--text);
         }
-        
-        .dark-mode .contact-info {
-            background: linear-gradient(145deg, #2d3748, #1a202c);
-            border-right: 5px solid #63b3ed;
+
+        .dark-mode .recovery-link-box {
+            background: var(--dark-card);
+            border-color: #63b3ed;
+            color: var(--dark-text);
         }
-        
-        .contact-info::before {
-            content: "";
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 50px;
-            height: 50px;
+
+        .copy-btn {
             background: var(--secondary-color);
-            border-radius: 50%;
-            opacity: 0.1;
+            color: white;
+            border: none;
         }
-        
-        .contact-info h3 {
-            color: var(--primary-color);
-            margin-bottom: 15px;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+
+        .copy-btn:hover {
+            background: var(--primary-color);
         }
-        
-        .dark-mode .contact-info h3 {
-            color: #63b3ed;
+
+        .alert-warning {
+            background: rgba(243, 156, 18, 0.1);
+            border: 1px solid var(--warning-color);
+            color: #856404;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
         }
-        
-        .contact-info p {
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 1.05rem;
+
+        .dark-mode .alert-warning {
+            background: rgba(243, 156, 18, 0.2);
+            color: #ffd700;
         }
-        
-        .contact-info a {
-            color: var(--secondary-color);
-            text-decoration: none;
-            transition: all 0.3s ease;
-            font-weight: 600;
-        }
-        
-        .dark-mode .contact-info a {
-            color: #63b3ed;
-        }
-        
-        .contact-info a:hover {
-            text-decoration: underline;
-            color: var(--primary-color);
-        }
-        
-        .dark-mode .contact-info a:hover {
-            color: #90cdf4;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes fadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; }
-        }
-        
-        @keyframes slideUp {
-            from { transform: translateY(50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        
-        @keyframes slideDown {
-            from { transform: translateY(0); opacity: 1; }
-            to { transform: translateY(50px); opacity: 0; }
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0); }
-            25% { transform: translate(20px, 40px); }
-            50% { transform: translate(40px, 0); }
-            75% { transform: translate(20px, -40px); }
-        }
-        
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
-            20%, 40%, 60%, 80% { transform: translateX(10px); }
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-        }
-        
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        
-        @keyframes progress {
-            to { transform: scaleX(1); }
-        }
-        
-        @keyframes pulseText {
-            0%, 100% { opacity: 0.8; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.05); }
-        }
-        
-        @media (max-width: 480px) {
-            .login-container {
-                max-width: 95%;
-                transform: translateY(0);
-            }
-            
-            .login-header {
-                padding: 20px;
-            }
-            
-            .login-header h1 {
-                font-size: 1.5rem;
-            }
-            
-            .login-body {
-                padding: 15px;
-            }
-            
-            .theme-toggle {
-                top: 15px;
-                left: 15px;
-                width: 40px;
-                height: 40px;
-                font-size: 1.2rem;
-            }
-            
-            .notification-container {
-                width: 95%;
-                max-width: none;
-            }
-            
-            .modal-content {
-                width: 95%;
-                padding: 20px;
-            }
-            
-            .verification-code-container {
-                justify-content: center;
-            }
-            
-            .verification-code-input {
-                width: 40px;
-                height: 50px;
-                font-size: 1.2rem;
-            }
-        }
-        
+
         .error-message {
             color: var(--error-color);
             font-size: 0.9rem;
@@ -982,33 +926,17 @@
             display: none;
             font-weight: 600;
         }
-        
+
         .error-message.show {
             display: block;
             animation: shake 0.5s;
         }
-        
+
         .beam-active {
             animation: pulse 2s infinite;
             color: var(--warning-color) !important;
         }
-        
-        .form-text {
-            color: var(--text-light);
-            font-size: 0.9rem;
-            margin-top: 8px;
-            display: flex;
-            align-items: center;
-        }
-        
-        .dark-mode .form-text {
-            color: #a0aec0;
-        }
-        
-        .form-text i {
-            margin-left: 5px;
-        }
-        
+
         .success-message {
             background-color: rgba(39, 174, 96, 0.2);
             color: var(--success-color);
@@ -1018,18 +946,112 @@
             border-right: 4px solid var(--success-color);
             display: none;
         }
-        
+
         .success-message.show {
             display: block;
             animation: fadeIn 0.5s;
         }
-        
+
         .modal.closing {
             animation: fadeOut 0.3s;
         }
-        
+
         .modal-content.closing {
             animation: slideDown 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(50px); opacity: 0; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(20px, 40px); }
+            50% { transform: translate(40px, 0); }
+            75% { transform: translate(20px, -40px); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes progress {
+            to { transform: scaleX(1); }
+        }
+
+        @keyframes pulseText {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        @keyframes strengthPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                max-width: 95%;
+                transform: translateY(0);
+            }
+
+            .login-header {
+                padding: 20px;
+            }
+
+            .login-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .login-body {
+                padding: 15px;
+            }
+
+            .theme-toggle {
+                top: 15px;
+                left: 15px;
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+            }
+
+            .notification-container {
+                width: 95%;
+                max-width: none;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
         }
     </style>
 </head>
@@ -1058,15 +1080,18 @@
         <i class="fas fa-moon"></i>
     </button>
 
+    <!-- ============================================================ -->
+    <!-- شاشة تسجيل الدخول (الرئيسية) -->
+    <!-- ============================================================ -->
     <div class="login-container">
         <div class="login-header">
             <h1>مرحباً بعودتك</h1>
             <p>الرجاء إدخال بيانات الدخول للوصول إلى نظام إدارة محطات الوقود</p>
         </div>
-        
+
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
-            
+
             <form id="loginForm" method="POST" action="#" novalidate>
                 <div class="input-group user-field">
                     <label for="username">اسم المستخدم</label>
@@ -1074,7 +1099,7 @@
                     <input type="text" id="username" name="username" placeholder="أدخل اسم المستخدم" required autocomplete="username">
                     <div class="error-message" id="usernameError"></div>
                 </div>
-                
+
                 <div class="input-group">
                     <label for="password">كلمة المرور</label>
                     <div class="password-input-container">
@@ -1085,7 +1110,7 @@
                     </div>
                     <div class="error-message" id="passwordError"></div>
                 </div>
-                
+
                 <div class="remember-forgot">
                     <div class="remember-me">
                         <input type="checkbox" id="remember" name="remember">
@@ -1093,20 +1118,22 @@
                     </div>
                     <a href="#" class="forgot-password" id="forgotPassword">نسيت كلمة المرور؟</a>
                 </div>
-                
+
                 <button type="submit" class="login-btn" id="submitBtn">
                     <span id="btnText">تسجيل الدخول</span>
                     <div class="loader" id="formLoader" style="display: none;"></div>
                 </button>
             </form>
-            
+
             <div class="login-footer">
                 نظام إدارة محطات الوقود &copy; <span id="currentYear"></span> | <a href="#" id="termsLink">الشروط والأحكام</a>
             </div>
         </div>
     </div>
 
-    <!-- Terms Modal -->
+    <!-- ============================================================ -->
+    <!-- مودال الشروط والأحكام -->
+    <!-- ============================================================ -->
     <div class="modal" id="termsModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1116,14 +1143,14 @@
             <div class="modal-body terms-content">
                 <h3><i class="fas fa-exclamation-triangle"></i> مقدمة</h3>
                 <p>مرحباً بك في نظام إدارة محطات الوقود. باستخدامك هذا النظام، توافق على الالتزام بهذه الشروط والأحكام. إذا كنت لا توافق، يرجى عدم استخدام النظام.</p>
-                
+
                 <h3><i class="fas fa-ban"></i> حقوق الملكية</h3>
                 <ul>
                     <li>النظام مملوك بالكامل للمهندس <span class="glowing-name">جبر الحميدي</span>.</li>
                     <li>يمنع نسخ، تقليد، أو توزيع النظام دون إذن خطي.</li>
                     <li>أي محاولة للهندسة العكسية أو الاختراق تخضع للمساءلة القانونية.</li>
                 </ul>
-                
+
                 <h3><i class="fas fa-shield-alt"></i> الحماية والأمان</h3>
                 <p>يحتوي النظام على:</p>
                 <ul>
@@ -1131,10 +1158,10 @@
                     <li>حماية متقدمة ضد الاختراق.</li>
                     <li>نسخ احتياطية يومية.</li>
                 </ul>
-                
+
                 <h3><i class="fas fa-balance-scale"></i> المسؤولية</h3>
                 <p>أي انتهاك يؤدي إلى عقوبات قانونية وفق القوانين المحلية والدولية.</p>
-                
+
                 <div class="contact-info">
                     <h3><i class="fas fa-headset"></i> التواصل</h3>
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
@@ -1142,7 +1169,7 @@
                     <p><i class="fab fa-whatsapp"></i> واتساب: <a href="https://wa.me/967781038203">اضغط هنا</a></p>
                     <p><i class="fas fa-envelope"></i> <a href="mailto:gbrhomidi@gmail.com">gbrhomidi@gmail.com</a></p>
                 </div>
-                
+
                 <p style="text-align: center; margin-top: 20px; font-size: 0.9em; color: var(--text-light);">
                     آخر تحديث: <span id="currentDate"></span>
                 </p>
@@ -1150,102 +1177,133 @@
         </div>
     </div>
 
-    <!-- Forgot Password Modal -->
+    <!-- ============================================================ -->
+    <!-- مودال 1: طلب استعادة كلمة المرور -->
+    <!-- ============================================================ -->
     <div class="modal" id="forgotPasswordModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-key"></i> استعادة كلمة المرور</h2>
                 <button class="close-modal" id="closeForgotModal">&times;</button>
             </div>
-            
             <div class="modal-body">
-                <p>اختر طريقة استعادة كلمة المرور المناسبة لك:</p>
-                
-                <div class="recovery-options">
-                    <div class="recovery-option" id="emailOption">
-                        <i class="fas fa-envelope"></i>
-                        <div class="recovery-option-content">
-                            <h3>استعادة عبر البريد الإلكتروني</h3>
-                            <p>سيتم إرسال رابط استعادة إلى بريدك الإلكتروني المسجل</p>
+                <p>أدخل اسم المستخدم الخاص بك وسنرسل لك رابط إعادة تعيين كلمة المرور.</p>
+
+                <div class="input-group">
+                    <label for="resetUsername">اسم المستخدم</label>
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="resetUsername" placeholder="أدخل اسم المستخدم" value="">
+                </div>
+
+                <div class="phone-hint">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>ملاحظة:</strong> سيتم عرض رابط الاستعادة داخل التطبيق (لأن النظام يعمل محلياً بدون خادم بريد/SMS).
+                </div>
+
+                <button class="login-btn" id="sendResetLinkBtn" type="button">
+                    <i class="fas fa-paper-plane me-2"></i>
+                    إرسال رابط الاستعادة
+                    <span id="resetLinkLoading" style="display:none;margin-left:8px;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </span>
+                </button>
+
+                <div id="resetRequestStatus" style="margin-top: 15px; padding: 12px; border-radius: 8px; display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- مودال 2: عرض رابط الاستعادة -->
+    <!-- ============================================================ -->
+    <div class="modal" id="viewRecoveryLinkModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2><i class="fas fa-link"></i> رابط استعادة كلمة المرور</h2>
+                <button class="close-modal" id="closeRecoveryLinkModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="reset-icon" style="text-align:center;margin-bottom:15px;">
+                    <i class="fas fa-link" style="color:var(--secondary-color);"></i>
+                </div>
+                <p style="text-align:center;color:var(--text-secondary);">انسخ الرابط أدناه والصقه في المتصفح، أو انقر على الزر "الانتقال إلى الرابط".</p>
+
+                <div class="recovery-link-box" id="recoveryLinkBox">
+                    <code id="recoveryLinkText" style="font-size:14px;word-break:break-all;"></code>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:10px;margin-top:15px;">
+                    <button class="login-btn copy-btn" onclick="copyRecoveryLink()" style="background:var(--secondary-color);">
+                        <i class="fas fa-copy me-2"></i> نسخ الرابط
+                    </button>
+                    <button class="login-btn" id="goToResetLinkBtn" style="background:var(--success-color);">
+                        <i class="fas fa-external-link-alt me-2"></i> الانتقال إلى الرابط
+                    </button>
+                </div>
+
+                <div class="alert-warning" style="margin-top:15px;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>ملاحظة:</strong> هذا الرابط صالح لمدة 30 دقيقة فقط لأسباب أمنية.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- مودال 3: إعادة تعيين كلمة المرور (resetPasswordModal) -->
+    <!-- ============================================================ -->
+    <div class="modal" id="resetPasswordModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2><i class="fas fa-lock"></i> إعادة تعيين كلمة المرور</h2>
+                <button class="close-modal" id="closeResetPasswordModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="reset-icon" style="text-align:center;margin-bottom:15px;">
+                    <i class="fas fa-key" style="color:var(--secondary-color);"></i>
+                </div>
+                <p style="text-align:center;color:var(--text-secondary);margin-bottom:20px;">أدخل كلمة المرور الجديدة لحسابك.</p>
+
+                <form id="resetPasswordForm" novalidate>
+                    <input type="hidden" id="resetToken" value="">
+
+                    <div class="input-group">
+                        <label for="newPassword">كلمة المرور الجديدة</label>
+                        <div class="password-input-container">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="newPassword" placeholder="أدخل كلمة مرور قوية (8 أحرف على الأقل)" required minlength="8" oninput="checkPasswordStrength(this.value)">
+                            <i class="fas fa-eye password-toggle" id="toggleNewPassword"></i>
+                        </div>
+                        <div class="password-strength-container">
+                            <div class="password-strength" id="passwordStrengthBar"></div>
+                            <span class="strength-text" id="passwordStrengthText"></span>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle"></i>
+                            يجب أن تحتوي على 8 أحرف على الأقل، حروف كبيرة وصغيرة، وأرقام.
                         </div>
                     </div>
-                    
-                    <div class="recovery-option" id="smsOption">
-                        <i class="fas fa-sms"></i>
-                        <div class="recovery-option-content">
-                            <h3>استعادة عبر الرسائل النصية (SMS)</h3>
-                            <p>سيتم إرسال رمز تحقق إلى رقم هاتفك المسجل</p>
+
+                    <div class="input-group">
+                        <label for="confirmPassword">تأكيد كلمة المرور</label>
+                        <div class="password-input-container">
+                            <i class="fas fa-check-circle"></i>
+                            <input type="password" id="confirmPassword" placeholder="أعد إدخال كلمة المرور" required minlength="8" oninput="checkPasswordMatch()">
+                            <i class="fas fa-eye password-toggle" id="toggleConfirmPassword"></i>
+                        </div>
+                        <div class="invalid-feedback" id="passwordMatchError" style="display:none;">
+                            <i class="fas fa-exclamation-circle"></i> كلمات المرور غير متطابقة
                         </div>
                     </div>
-                </div>
-                
-                <!-- Email Recovery Form -->
-                <div class="recovery-form" id="emailRecoveryForm">
-                    <div class="input-group">
-                        <label for="recoveryEmail">البريد الإلكتروني المسجل</label>
-                        <i class="fas fa-envelope"></i>
-                        <input type="email" id="recoveryEmail" placeholder="أدخل البريد الإلكتروني المسجل في النظام">
-                    </div>
-                    
-                    <div class="phone-hint">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>ملاحظة:</strong> سيتم إرسال رابط الاستعادة إلى البريد الإلكتروني المسجل في النظام
-                    </div>
-                    
-                    <button class="login-btn" id="sendEmailRecovery" type="button">
-                        <i class="fas fa-paper-plane me-2"></i>
-                        إرسال رابط الاستعادة
-                        <span id="emailLoading" style="display:none;margin-left:8px;">
+
+                    <button type="submit" class="login-btn" id="resetPasswordBtn" style="margin-top:10px;">
+                        <i class="fas fa-save me-2"></i>
+                        تحديث كلمة المرور
+                        <span id="resetPasswordLoading" style="display:none;margin-left:8px;">
                             <i class="fas fa-spinner fa-spin"></i>
                         </span>
                     </button>
-                </div>
-                
-                <!-- SMS Recovery Form -->
-                <div class="recovery-form" id="smsRecoveryForm">
-                    <div class="input-group">
-                        <label for="recoveryPhone">رقم الهاتف المسجل</label>
-                        <i class="fas fa-phone"></i>
-                        <input type="tel" id="recoveryPhone" placeholder="أدخل رقم الهاتف المسجل في النظام">
-                    </div>
-                    
-                    <div class="phone-hint">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>لحماية حسابك:</strong> سيتم إرسال رمز تحقق إلى رقم الهاتف المسجل في نظامنا
-                    </div>
-                    
-                    <button class="login-btn" id="sendSmsRecovery" type="button">
-                        <i class="fas fa-sms me-2"></i>
-                        إرسال رمز التحقق
-                        <span id="smsLoading" style="display:none;margin-left:8px;">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </span>
-                    </button>
-                </div>
-                
-                <!-- Verification Code Form -->
-                <div class="recovery-form" id="verificationCodeForm">
-                    <div class="input-group">
-                        <label for="verificationCode">رمز التحقق</label>
-                        <i class="fas fa-shield-alt"></i>
-                        <input type="text" id="verificationCode" placeholder="أدخل رمز التحقق الذي استلمته" maxlength="6">
-                    </div>
-                    
-                    <div class="phone-hint">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>ملاحظة:</strong> رمز التحقق صالح لمدة 5 دقائق فقط
-                    </div>
-                    
-                    <button class="login-btn" id="verifyCodeBtn" type="button">
-                        <i class="fas fa-check-circle me-2"></i>
-                        تحقق من الرمز
-                        <span id="verifyLoading" style="display:none;margin-left:8px;">
-                            <i class="fas fa-spinner fa-spin"></i>
-                        </span>
-                    </button>
-                </div>
-                
-                <div id="resetStatus" style="margin-top: 20px; padding: 15px; border-radius: 10px; display: none;"></div>
+                </form>
             </div>
         </div>
     </div>
@@ -1287,7 +1345,7 @@
                             result = method(params.username || '', params.password || '');
                             break;
                         case 'forgot_password':
-                            result = method(params.email || '', params.username || '');
+                            result = method(params.username || '');
                             break;
                         case 'verify_reset_code':
                             result = method(params.phone || '', params.code || '');
@@ -1305,16 +1363,13 @@
                     return handleAndroidResult(result);
                 } catch (e) {
                     console.error('AndroidInterface error:', e);
-                    // ✅ رسالة دقيقة في سياق التطبيق
                     showNotification('حدث خطأ في الاتصال الداخلي', 'error');
                     throw e;
                 }
             }
 
             // ============================================================
-            // ⚠️ المسار الاحتياطي (للاختبار في بيئة المتصفح فقط)
-            // يتم استخدامه فقط عند عدم وجود AndroidInterface
-            // لا يؤثر على التطبيق النهائي داخل WebView
+            // المسار الاحتياطي (للاختبار في بيئة المتصفح فقط)
             // ============================================================
             try {
                 const url = new URL(window.location.origin + '/api');
@@ -1332,7 +1387,6 @@
                 return await response.json();
             } catch (e) {
                 console.error('Fallback API Error:', e);
-                // ✅ رسالة توضح أنها بيئة تطوير
                 showNotification('تعذر الاتصال بالواجهة الداخلية (بيئة تطوير)', 'error');
                 throw e;
             }
@@ -1416,19 +1470,112 @@
             }, 300);
         }
 
-        function showResetStatus(message, type) {
-            const status = document.getElementById('resetStatus');
-            status.innerHTML = message;
-            status.style.display = 'block';
-            status.style.color = type === 'error' ? 'var(--error-color)' : 'var(--success-color)';
-            status.style.backgroundColor = type === 'error' ? 'rgba(231,76,60,0.1)' : 'rgba(39,174,96,0.1)';
-            status.style.border = `1px solid ${type === 'error' ? 'rgba(231,76,60,0.3)' : 'rgba(39,174,96,0.3)'}`;
-            status.style.textAlign = 'center';
-            status.style.fontWeight = '600';
+        function showStatusMessage(message, type, elementId) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = message;
+            el.style.display = 'block';
+            el.style.color = type === 'error' ? 'var(--error-color)' : 'var(--success-color)';
+            el.style.backgroundColor = type === 'error' ? 'rgba(231,76,60,0.1)' : 'rgba(39,174,96,0.1)';
+            el.style.border = `1px solid ${type === 'error' ? 'rgba(231,76,60,0.3)' : 'rgba(39,174,96,0.3)'}`;
+            el.style.textAlign = 'center';
+            el.style.fontWeight = '600';
+            el.style.padding = '12px';
+            el.style.borderRadius = '8px';
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    el.style.display = 'none';
+                }, 5000);
+            }
         }
 
         function validateEmail(email) {
             return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+        }
+
+        // ============================================================
+        // دوال تحليل قوة كلمة المرور
+        // ============================================================
+        function checkPasswordStrength(password) {
+            const bar = document.getElementById('passwordStrengthBar');
+            const text = document.getElementById('passwordStrengthText');
+            let strength = 0;
+            let message = '';
+
+            if (password.length >= 8) strength++;
+            if (/[a-z]/.test(password)) strength++;
+            if (/[A-Z]/.test(password)) strength++;
+            if (/[0-9]/.test(password)) strength++;
+            if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+            bar.className = 'password-strength';
+            text.className = 'strength-text';
+
+            if (password.length === 0) {
+                text.textContent = '';
+                return;
+            }
+
+            if (strength < 2) {
+                bar.classList.add('strength-weak');
+                text.classList.add('strength-weak-text');
+                message = 'كلمة المرور ضعيفة';
+            } else if (strength < 4) {
+                bar.classList.add('strength-medium');
+                text.classList.add('strength-medium-text');
+                message = 'كلمة المرور متوسطة';
+            } else {
+                bar.classList.add('strength-strong');
+                text.classList.add('strength-strong-text');
+                message = 'كلمة المرور قوية';
+            }
+
+            text.textContent = message;
+        }
+
+        function checkPasswordMatch() {
+            const password = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passwordMatchError');
+
+            if (password !== confirm && confirm.length > 0) {
+                document.getElementById('confirmPassword').classList.add('is-invalid');
+                document.getElementById('confirmPassword').classList.remove('is-valid');
+                errorDiv.style.display = 'block';
+            } else {
+                document.getElementById('confirmPassword').classList.remove('is-invalid');
+                if (confirm.length > 0) {
+                    document.getElementById('confirmPassword').classList.add('is-valid');
+                }
+                errorDiv.style.display = 'none';
+            }
+        }
+
+        // ============================================================
+        // دوال نسخ الرابط
+        // ============================================================
+        function copyRecoveryLink() {
+            const link = document.getElementById('recoveryLinkText').textContent;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).then(() => {
+                    showNotification('تم نسخ الرابط إلى الحافظة', 'success');
+                }).catch(() => {
+                    showNotification('فشل في نسخ الرابط', 'error');
+                });
+            } else {
+                // طريقة احتياطية للنسخ
+                const textArea = document.createElement('textarea');
+                textArea.value = link;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification('تم نسخ الرابط إلى الحافظة', 'success');
+                } catch (e) {
+                    showNotification('فشل في نسخ الرابط', 'error');
+                }
+                document.body.removeChild(textArea);
+            }
         }
 
         // ============================================================
@@ -1447,29 +1594,35 @@
             const themeToggle = document.getElementById('themeToggle');
             const termsModal = document.getElementById('termsModal');
             const closeTermsModal = document.getElementById('closeTermsModal');
+
+            // مودالات استعادة كلمة المرور
             const forgotPasswordModal = document.getElementById('forgotPasswordModal');
             const closeForgotModal = document.getElementById('closeForgotModal');
-            const emailOption = document.getElementById('emailOption');
-            const smsOption = document.getElementById('smsOption');
-            const emailRecoveryForm = document.getElementById('emailRecoveryForm');
-            const smsRecoveryForm = document.getElementById('smsRecoveryForm');
-            const verificationCodeForm = document.getElementById('verificationCodeForm');
-            const sendEmailRecovery = document.getElementById('sendEmailRecovery');
-            const sendSmsRecovery = document.getElementById('sendSmsRecovery');
-            const verifyCodeBtn = document.getElementById('verifyCodeBtn');
-            const recoveryEmailInput = document.getElementById('recoveryEmail');
-            const recoveryPhoneInput = document.getElementById('recoveryPhone');
-            const verificationCodeInput = document.getElementById('verificationCode');
+            const viewRecoveryLinkModal = document.getElementById('viewRecoveryLinkModal');
+            const closeRecoveryLinkModal = document.getElementById('closeRecoveryLinkModal');
+            const resetPasswordModal = document.getElementById('resetPasswordModal');
+            const closeResetPasswordModal = document.getElementById('closeResetPasswordModal');
+
+            const sendResetLinkBtn = document.getElementById('sendResetLinkBtn');
+            const resetUsernameInput = document.getElementById('resetUsername');
+            const goToResetLinkBtn = document.getElementById('goToResetLinkBtn');
+            const resetPasswordForm = document.getElementById('resetPasswordForm');
+            const resetTokenInput = document.getElementById('resetToken');
+            const newPasswordInput = document.getElementById('newPassword');
+            const confirmPasswordInput = document.getElementById('confirmPassword');
+            const toggleNewPassword = document.getElementById('toggleNewPassword');
+            const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
 
             let loginAttempts = 0;
             let currentUsername = '';
-            let currentPhone = '';
-            let userData = null;
+            let currentResetToken = '';
 
             // التاريخ
             document.getElementById('currentYear').textContent = new Date().getFullYear();
             document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ar-EG', {
-                year: 'numeric', month: 'long', day: 'numeric'
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
             });
 
             // العناصر العائمة
@@ -1484,11 +1637,13 @@
             themeToggle.addEventListener('click', function() {
                 document.body.classList.toggle('dark-mode');
                 localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-                themeToggle.innerHTML = document.body.classList.contains('dark-mode') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-                showNotification(document.body.classList.contains('dark-mode') ? 'تم تفعيل الوضع الليلي' : 'تم تفعيل الوضع النهاري', 'info');
+                themeToggle.innerHTML = document.body.classList.contains('dark-mode') ? '<i class="fas fa-sun"></i>' :
+                    '<i class="fas fa-moon"></i>';
+                showNotification(document.body.classList.contains('dark-mode') ? 'تم تفعيل الوضع الليلي' :
+                    'تم تفعيل الوضع النهاري', 'info');
             });
 
-            // إظهار/إخفاء كلمة المرور
+            // إظهار/إخفاء كلمة المرور (في نموذج تسجيل الدخول)
             togglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
@@ -1504,6 +1659,21 @@
                 thumbsUpIcon.style.display = 'none';
             });
 
+            // إظهار/إخفاء كلمة المرور (في نموذج إعادة التعيين)
+            toggleNewPassword.addEventListener('click', function() {
+                const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                newPasswordInput.setAttribute('type', type);
+                this.classList.toggle('fa-eye');
+                this.classList.toggle('fa-eye-slash');
+            });
+
+            toggleConfirmPassword.addEventListener('click', function() {
+                const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                confirmPasswordInput.setAttribute('type', type);
+                this.classList.toggle('fa-eye');
+                this.classList.toggle('fa-eye-slash');
+            });
+
             // فتح نافذة الشروط
             termsLink.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -1513,7 +1683,9 @@
                 closeModal(termsModal);
             });
 
-            // فتح نافذة استعادة كلمة المرور
+            // ============================================================
+            // 1. فتح مودال طلب استعادة كلمة المرور
+            // ============================================================
             forgotPasswordLink.addEventListener('click', function(e) {
                 e.preventDefault();
                 currentUsername = usernameInput.value.trim();
@@ -1522,135 +1694,134 @@
                     usernameInput.focus();
                     return;
                 }
-                resetForgotPasswordForm();
+                resetUsernameInput.value = currentUsername;
+                document.getElementById('resetRequestStatus').style.display = 'none';
+                document.getElementById('resetRequestStatus').innerHTML = '';
                 openModal(forgotPasswordModal);
-                // جلب بيانات المستخدم
-                apiCall('get_user_data', { username: currentUsername })
-                    .then(res => {
-                        if (res.success && res.data) {
-                            userData = res.data;
-                            if (userData.email) recoveryEmailInput.value = userData.email;
-                            if (userData.phone) recoveryPhoneInput.value = userData.phone;
-                        }
-                    })
-                    .catch(() => {});
             });
             closeForgotModal.addEventListener('click', function() {
                 closeModal(forgotPasswordModal);
             });
 
-            // اختيار طريقة الاستعادة
-            emailOption.addEventListener('click', function() {
-                selectRecoveryOption('email');
-            });
-            smsOption.addEventListener('click', function() {
-                selectRecoveryOption('sms');
-            });
-
-            function selectRecoveryOption(method) {
-                emailOption.classList.remove('active');
-                smsOption.classList.remove('active');
-                emailRecoveryForm.classList.remove('active');
-                smsRecoveryForm.classList.remove('active');
-                verificationCodeForm.classList.remove('active');
-
-                if (method === 'email') {
-                    emailOption.classList.add('active');
-                    emailRecoveryForm.classList.add('active');
-                    setTimeout(() => recoveryEmailInput.focus(), 300);
-                } else if (method === 'sms') {
-                    smsOption.classList.add('active');
-                    smsRecoveryForm.classList.add('active');
-                    setTimeout(() => recoveryPhoneInput.focus(), 300);
+            // ============================================================
+            // 2. إرسال طلب استعادة كلمة المرور (إنشاء الرابط)
+            // ============================================================
+            sendResetLinkBtn.addEventListener('click', async function() {
+                const username = resetUsernameInput.value.trim();
+                if (!username) {
+                    showStatusMessage('يرجى إدخال اسم المستخدم', 'error', 'resetRequestStatus');
+                    return;
                 }
-            }
-
-            // إرسال استعادة عبر البريد
-            sendEmailRecovery.addEventListener('click', async function() {
-                const email = recoveryEmailInput.value.trim();
-                if (!email) { showResetStatus('يرجى إدخال البريد الإلكتروني', 'error'); return; }
-                if (!validateEmail(email)) { showResetStatus('صيغة البريد غير صحيحة', 'error'); return; }
 
                 try {
-                    sendEmailRecovery.disabled = true;
-                    document.getElementById('emailLoading').style.display = 'inline-block';
-                    const result = await apiCall('forgot_password', { email, username: currentUsername });
+                    sendResetLinkBtn.disabled = true;
+                    document.getElementById('resetLinkLoading').style.display = 'inline-block';
+
+                    const result = await apiCall('forgot_password', { username: username });
+
                     if (result.success) {
-                        showResetStatus(result.message || 'تم حفظ رابط الاستعادة في النظام.', 'success');
+                        const resetUrl = result.reset_url || (window.location.origin + '/reset-password/' + result
+                        .token);
+                        document.getElementById('recoveryLinkText').textContent = resetUrl;
+                        currentResetToken = result.token || '';
+
+                        closeModal(forgotPasswordModal);
+                        openModal(viewRecoveryLinkModal);
+
+                        showStatusMessage('تم إنشاء رابط الاستعادة بنجاح.', 'success', 'resetRequestStatus');
+                    } else {
+                        showStatusMessage(result.error || 'فشل إنشاء رابط الاستعادة', 'error', 'resetRequestStatus');
+                    }
+                } catch (e) {
+                    showStatusMessage('حدث خطأ في الاتصال', 'error', 'resetRequestStatus');
+                } finally {
+                    sendResetLinkBtn.disabled = false;
+                    document.getElementById('resetLinkLoading').style.display = 'none';
+                }
+            });
+
+            // ============================================================
+            // 3. الانتقال إلى رابط الاستعادة (فتح مودال إعادة التعيين)
+            // ============================================================
+            goToResetLinkBtn.addEventListener('click', function() {
+                const link = document.getElementById('recoveryLinkText').textContent;
+                const tokenMatch = link.match(/\/reset-password\/([^\/]+)/);
+                if (tokenMatch && tokenMatch[1]) {
+                    currentResetToken = tokenMatch[1];
+                    resetTokenInput.value = currentResetToken;
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                    document.getElementById('passwordStrengthBar').className = 'password-strength';
+                    document.getElementById('passwordStrengthText').textContent = '';
+                    document.getElementById('passwordMatchError').style.display = 'none';
+                    document.getElementById('confirmPassword').classList.remove('is-invalid', 'is-valid');
+                    closeModal(viewRecoveryLinkModal);
+                    openModal(resetPasswordModal);
+                } else {
+                    showNotification('رابط غير صالح', 'error');
+                }
+            });
+            closeRecoveryLinkModal.addEventListener('click', function() {
+                closeModal(viewRecoveryLinkModal);
+            });
+
+            // ============================================================
+            // 4. إعادة تعيين كلمة المرور (تحديثها) - resetPasswordModal
+            // ============================================================
+            resetPasswordForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const newPassword = newPasswordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                const token = resetTokenInput.value;
+
+                if (newPassword.length < 8) {
+                    showNotification('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 'error');
+                    return;
+                }
+
+                if (newPassword !== confirmPassword) {
+                    document.getElementById('passwordMatchError').style.display = 'block';
+                    confirmPasswordInput.classList.add('is-invalid');
+                    return;
+                }
+
+                try {
+                    document.getElementById('resetPasswordLoading').style.display = 'inline-block';
+                    document.getElementById('resetPasswordBtn').disabled = true;
+
+                    const result = await apiCall('reset_password', {
+                        token: token,
+                        new_password: newPassword
+                    });
+
+                    if (result.success) {
+                        showNotification('تم تحديث كلمة المرور بنجاح!', 'success');
+                        closeModal(resetPasswordModal);
+                        passwordInput.value = newPassword;
+                        document.getElementById('successMessage').textContent =
+                            'تم تحديث كلمة المرور! يمكنك تسجيل الدخول الآن.';
+                        document.getElementById('successMessage').classList.add('show');
                         setTimeout(() => {
-                            closeModal(forgotPasswordModal);
-                            showNotification('تم إرسال تعليمات الاستعادة بنجاح', 'success');
-                        }, 2000);
+                            document.getElementById('successMessage').classList.remove('show');
+                        }, 3000);
                     } else {
-                        showResetStatus(result.error || 'حدث خطأ', 'error');
+                        showNotification(result.error || 'فشل تحديث كلمة المرور', 'error');
                     }
                 } catch (e) {
-                    showResetStatus('حدث خطأ في الاتصال', 'error');
+                    showNotification('حدث خطأ في الاتصال', 'error');
                 } finally {
-                    sendEmailRecovery.disabled = false;
-                    document.getElementById('emailLoading').style.display = 'none';
+                    document.getElementById('resetPasswordLoading').style.display = 'none';
+                    document.getElementById('resetPasswordBtn').disabled = false;
                 }
             });
-
-            // إرسال استعادة عبر SMS
-            sendSmsRecovery.addEventListener('click', async function() {
-                const phone = recoveryPhoneInput.value.trim();
-                if (!phone) { showResetStatus('يرجى إدخال رقم الهاتف', 'error'); return; }
-
-                try {
-                    sendSmsRecovery.disabled = true;
-                    document.getElementById('smsLoading').style.display = 'inline-block';
-                    const result = await apiCall('verify_reset_code', { phone, username: currentUsername });
-                    if (result.success) {
-                        currentPhone = phone;
-                        showResetStatus('تم إرسال رمز التحقق إلى هاتفك', 'success');
-                        smsRecoveryForm.classList.remove('active');
-                        verificationCodeForm.classList.add('active');
-                    } else {
-                        showResetStatus(result.error || 'فشل الإرسال', 'error');
-                    }
-                } catch (e) {
-                    showResetStatus('حدث خطأ في الاتصال', 'error');
-                } finally {
-                    sendSmsRecovery.disabled = false;
-                    document.getElementById('smsLoading').style.display = 'none';
-                }
+            closeResetPasswordModal.addEventListener('click', function() {
+                closeModal(resetPasswordModal);
             });
 
-            // التحقق من رمز الاستعادة
-            verifyCodeBtn.addEventListener('click', async function() {
-                const code = verificationCodeInput.value.trim();
-                if (!code) { showResetStatus('يرجى إدخال رمز التحقق', 'error'); return; }
-                if (code.length !== 6) { showResetStatus('الرمز يجب أن يكون 6 أرقام', 'error'); return; }
-
-                try {
-                    verifyCodeBtn.disabled = true;
-                    document.getElementById('verifyLoading').style.display = 'inline-block';
-                    const result = await apiCall('verify_reset_code', { phone: currentPhone, code });
-                    if (result.success) {
-                        showResetStatus('تم التحقق بنجاح، جاري التوجيه...', 'success');
-                        setTimeout(() => {
-                            closeModal(forgotPasswordModal);
-                            if (result.redirect_url) {
-                                window.location.href = result.redirect_url;
-                            } else if (result.reset_token) {
-                                window.location.href = '/auth/reset-password/' + result.reset_token;
-                            } else {
-                                window.location.href = 'main.html';
-                            }
-                        }, 1500);
-                    } else {
-                        showResetStatus(result.error || 'الرمز غير صحيح', 'error');
-                    }
-                } catch (e) {
-                    showResetStatus('حدث خطأ في التحقق', 'error');
-                } finally {
-                    verifyCodeBtn.disabled = false;
-                    document.getElementById('verifyLoading').style.display = 'none';
-                }
-            });
-
-            // تسجيل الدخول
+            // ============================================================
+            // 5. تسجيل الدخول
+            // ============================================================
             loginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 clearErrors();
@@ -1679,8 +1850,8 @@
                             localStorage.removeItem('username');
                             localStorage.removeItem('remember');
                         }
-                        // رسالة نجاح
-                        document.getElementById('successMessage').textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        document.getElementById('successMessage').textContent =
+                        'تم تسجيل الدخول بنجاح! جاري التوجيه...';
                         document.getElementById('successMessage').classList.add('show');
                         setTimeout(() => {
                             window.location.href = 'main.html';
@@ -1716,8 +1887,13 @@
             window.addEventListener('click', function(e) {
                 if (e.target === termsModal) closeModal(termsModal);
                 if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
+                if (e.target === viewRecoveryLinkModal) closeModal(viewRecoveryLinkModal);
+                if (e.target === resetPasswordModal) closeModal(resetPasswordModal);
             });
 
+            // ============================================================
+            // إنشاء العناصر العائمة
+            // ============================================================
             function createFloatingElements() {
                 const floatingElements = document.getElementById('floatingElements');
                 const businessIcons = [
@@ -1747,20 +1923,6 @@
                     element.style.transform = `rotate(${Math.random() * 360}deg)`;
                     floatingElements.appendChild(element);
                 }
-            }
-
-            function resetForgotPasswordForm() {
-                emailOption.classList.remove('active');
-                smsOption.classList.remove('active');
-                emailRecoveryForm.classList.remove('active');
-                smsRecoveryForm.classList.remove('active');
-                verificationCodeForm.classList.remove('active');
-                recoveryEmailInput.value = '';
-                recoveryPhoneInput.value = '';
-                verificationCodeInput.value = '';
-                document.getElementById('resetStatus').innerHTML = '';
-                document.getElementById('resetStatus').style.display = 'none';
-                currentPhone = '';
             }
         });
     </script>
