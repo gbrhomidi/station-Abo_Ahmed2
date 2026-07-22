@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>نظام إدارة محطات الوقود – إدارة الفئات</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg-color: #f2fbff;
+      --card-color: #ffffff;
+      --primary3-color: #4B0082;
+      --primary-color: #007ACC;
+      --primary-hover: #005e99;
+      --primary2-color: #000000;
+      --primary2-hover: #4B0082;
+      --secondary-hover: #004c7a;
+      --text-color: #000000;
+      --success: #4CAF50;
+      --error: #f44336;
+      --gold: #FFD700;
+      --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+      --blue-glow: 0 0 10px #007ACC, 0 0 20px #005e99;
+      --red-glow: 0 0 10px #f44336, 0 0 20px #d32f2f;
+      --glass-bg: rgba(75, 0, 130, 0.25);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --accent-color: rgba(100, 149, 237, 0.4);
+      --sidebar-bg: rgba(255, 255, 255, 0.9);
+      --sidebar-btn-bg: rgba(75, 0, 130, 0.8);
+      --glow-light: rgba(0, 122, 204, 0.5);
+      --glow-dark: rgba(255, 165, 0, 0.5);
+      --input-border-light: #003366;
+      --input-border-dark: #1fa2ff;
+      --highlight-border-light: #003366;
+      --highlight-border-dark: #4CAF50;
+      --delete-border-light: #f44336;
+      --delete-border-dark: #d32f2f;
+    }
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --card-color: #1e1e1e;
+      --primary-color: #1fa2ff;
+      --primary-hover: #0d81cc;
+      --secondary-hover: #0a6aa8;
+      --text-color: #f0f0f0;
+      --success: #388E3C;
+      --error: #d32f2f;
+      --gold: #FFD700;
+      --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+      --blue-glow: 0 0 10px #1fa2ff, 0 0 20px #0d81cc;
+      --red-glow: 0 0 10px #d32f2f, 0 0 20px #b71c1c;
+      --glass-bg: rgba(43, 0, 82, 0.4);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --accent-color: rgba(100, 149, 237, 0.3);
+      --sidebar-bg: rgba(30, 30, 30, 0.9);
+      --sidebar-btn-bg: rgba(90, 26, 154, 0.8);
+      --glow-light: rgba(0, 122, 204, 0.3);
+      --glow-dark: rgba(255, 165, 0, 0.6);
+    }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 10px;
+      direction: rtl;
+      transition: background 0.3s, color 0.3s;
+      overflow-x: hidden;
+      margin: 0;
+      padding-top: 70px;
+      touch-action: manipulation;
+      background-image: radial-gradient(circle at 20% 30%, rgba(0,122,204,0.05) 0%, transparent 20%),
+                        radial-gradient(circle at 80% 70%, rgba(75,0,130,0.05) 0%, transparent 20%);
+    }
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, var(--primary2-color), var(--primary2-hover));
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      height: 50px;
+      border-bottom: 2px solid var(--gold);
+    }
+    .top-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .top-title h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: white;
+      text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    .mode-toggle-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      margin-left: 10px;
+    }
+    .mode-toggle-btn i {
+      font-size: 1.5rem;
+      color: var(--gold);
+      transition: transform 0.5s;
+    }
+    .mode-toggle-btn:hover {
+      transform: scale(1.1);
+      background: rgba(0,0,0,0.1);
+    }
+    .sidebar {
+      position: fixed;
+      top: 50%;
+      right: -90px;
+      transform: translateY(-50%);
+      width: 65px;
+      background: var(--sidebar-bg);
+      z-index: 999;
+      transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      padding: 8px;
+      border-radius: 15px 0 0 15px;
+      overflow-y: auto;
+      box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      opacity: 0;
+      transform: translateY(-50%) translateX(0) rotateY(90deg) scale(0.8);
+      border-right: 3px solid var(--glow-light);
+      animation: borderPulse 2s infinite alternate;
+    }
+    [data-theme="dark"] .sidebar {
+      border-right: 3px solid var(--glow-dark);
+      animation: borderPulseDark 2s infinite alternate;
+    }
+    @keyframes borderPulse {
+      0% { box-shadow: -5px 0 10px var(--glow-light); }
+      100% { box-shadow: -5px 0 20px var(--glow-light); }
+    }
+    @keyframes borderPulseDark {
+      0% { box-shadow: -5px 0 10px var(--glow-dark); }
+      100% { box-shadow: -5px 0 20px var(--glow-dark); }
+    }
+    .sidebar.open {
+      right: 0;
+      opacity: 1;
+      transform: translateY(-50%) translateX(0) rotateY(0deg) scale(1);
+    }
+    .sidebar-toggle {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      background: linear-gradient(145deg, var(--primary3-color), #5a1a9a);
+      color: white;
+      width: 35px;
+      height: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50% 0 0 50%;
+      cursor: pointer;
+      z-index: 1001;
+      box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transform-style: preserve-3d;
+      perspective: 100px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .sidebar-toggle.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%) scale(0.8);
+    }
+    .sidebar-toggle:hover {
+      background: linear-gradient(145deg, var(--primary-hover), #0d5e99);
+      width: 38px;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.5);
+      transform: translateY(-50%) scale(1.1);
+    }
+    .sidebar-toggle i {
+      transition: transform 0.3s;
+      font-size: 1.2rem;
+    }
+    .sidebar-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sidebar-btn {
+      position: relative;
+      overflow: hidden;
+      background: var(--sidebar-btn-bg);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 
+          0 0 8px rgba(0,0,0,0.2),
+          0 0 15px var(--accent-color);
+      padding: 6px 4px;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 55px;
+      text-align: center;
+      animation: pulseGlow 6s ease-in-out infinite;
+      font-size: 0.8rem;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 15px var(--accent-color); }
+      50% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 25px var(--accent-color); }
+    }
+    .sidebar-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px var(--accent-color), 0 0 25px var(--accent-color);
+      background: rgba(75, 0, 130, 0.35);
+    }
+    .sidebar-btn:active {
+      transform: scale(0.94) rotateX(3deg);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 10px var(--accent-color);
+      transition: all 0.1s;
+    }
+    .sidebar-btn i {
+      font-size: 1.1rem;
+      transition: transform 0.3s;
+      text-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+    .sidebar-btn:hover i {
+      transform: scale(1.2);
+    }
+    .sidebar-btn span {
+      font-size: 0.7rem;
+    }
+    .sidebar-btn::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      pointer-events: none;
+      z-index: 1002;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      min-width: 120px;
+      text-align: center;
+    }
+    .sidebar-btn:hover::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 3000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .spinner {
+      width: 80px;
+      height: 80px;
+      border: 8px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 8px solid var(--primary-color);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .alert-message {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      z-index: 1000;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+      max-width: 90%;
+      box-sizing: border-box;
+      animation: fadeInOut 3s forwards;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; top: 60px; }
+      10% { opacity: 1; top: 80px; }
+      90% { opacity: 1; top: 80px; }
+      100% { opacity: 0; top: 60px; visibility: hidden; }
+    }
+    .error {
+      background-color: #ffebee;
+      color: #e74c3c;
+      border-left: 4px solid #e74c3c;
+    }
+    .success {
+      background-color: #e8f5e9;
+      color: #27ae60;
+      border-left: 4px solid #27ae60;
+    }
+    .info {
+      background-color: #e3f2fd;
+      color: #1976d2;
+      border-left: 4px solid #1976d2;
+    }
+    .container {
+      max-width: 100%;
+      overflow-x: hidden;
+      padding: 0 10px;
+      box-sizing: border-box;
+      margin-top: 60px;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+      padding: 15px;
+      margin-bottom: 15px;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+    .glass-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 25px 0 rgba(0, 0, 0, 0.4);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      padding: 10px;
+      border-radius: 8px;
+      border: 2px solid #003366;
+      font-size: 0.9rem;
+      width: 100%;
+      background-color: var(--card-color);
+      color: var(--text-color);
+      box-sizing: border-box;
+      transition: all 0.3s;
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 5px rgba(0,122,204,0.3);
+      outline: none;
+    }
+    .horizontal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .horizontal-row > div {
+      flex: 1;
+      min-width: 120px;
+    }
+    .table-container {
+      width: 100%;
+      overflow: auto;
+      margin-top: 25px;
+      max-height: 300px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.9rem;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    table th {
+      background: linear-gradient(to bottom, #2c3e50, #1a2a3a);
+      color: white;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    table tr:first-child th:first-child {
+      border-top-right-radius: 12px;
+    }
+    table tr:first-child th:last-child {
+      border-top-left-radius: 12px;
+    }
+    table tr:last-child td:first-child {
+      border-bottom-right-radius: 12px;
+    }
+    table tr:last-child td:last-child {
+      border-bottom-left-radius: 12px;
+    }
+    table tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    [data-theme="dark"] table tr:nth-child(even) {
+      background-color: #2a2a2a;
+    }
+    table tr:hover {
+      background-color: #e9f7fe;
+    }
+    [data-theme="dark"] table tr:hover {
+      background-color: #2c3e50;
+    }
+    tr.selected {
+      background-color: #e3f2fd !important;
+      border: 2px solid #FF8C00 !important;
+      box-shadow: 0 0 0 2px #FF8C00;
+    }
+    [data-theme="dark"] tr.selected {
+      background-color: #1a3a5f !important;
+      border: 2px solid #FFA500 !important;
+      box-shadow: 0 0 0 2px #FFA500;
+    }
+    table td {
+      border-radius: 15px;
+    }
+    table th {
+      border-radius: 15px;
+    }
+    .form-label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #555;
+    }
+    [data-theme="dark"] .form-label {
+      color: #bbb;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-track {
+      background: #2a2a2a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 10px 5px;
+      }
+      .sidebar {
+        width: 60px;
+        padding: 6px;
+      }
+      .sidebar-btn {
+        padding: 6px 3px;
+        min-height: 55px;
+        font-size: 0.75rem;
+      }
+      .sidebar-toggle {
+        width: 32px;
+        height: 32px;
+      }
+      .container {
+        padding: 0 5px;
+      }
+      .glass-card {
+        padding: 12px;
+      }
+      .form-grid input, 
+      .form-grid select, 
+      .form-grid textarea {
+        padding: 8px;
+        font-size: 0.85rem;
+      }
+      table th, 
+      table td {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- شريط المعلومات العلوي -->
+  <div class="top-bar">
+    <div class="top-title">
+      <h2>إدارة الفئات</h2>
+    </div>
+    <button id="darkModeToggle" class="mode-toggle-btn">
+      <i class="fas fa-moon"></i>
+    </button>
+  </div>
+
+  <!-- القائمة الجانبية -->
+  <div class="sidebar-toggle" id="sidebarToggle">
+    <i class="fas fa-bars"></i>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-content">
+      <button class="sidebar-btn ripple" data-tooltip="حفظ التغييرات" onclick="saveCategory()">
+        <div class="glow"></div>
+        <i class="fas fa-save"></i>
+        <span>💾 حفظ</span>
+      </button>
+      <button class="sidebar-btn ripple" data-tooltip="بحث عن فئة" onclick="searchCategory()">
+        <div class="glow"></div>
+        <i class="fas fa-search"></i>
+        <span>👀 استعلام</span>
+      </button>
+      <button class="sidebar-btn ripple" data-tooltip="تعديل الفئة المحددة" onclick="updateCategory()">
+        <div class="glow"></div>
+        <i class="fas fa-edit"></i>
+        <span>🛠 تعديل</span>
+      </button>
+      <button class="sidebar-btn ripple" data-tooltip="حذف الفئة المحددة" onclick="deleteCategory()">
+        <div class="glow"></div>
+        <i class="fas fa-trash"></i>
+        <span>🗑 حذف</span>
+      </button>
+      <button class="sidebar-btn ripple" data-tooltip="إضافة فئة جديدة" onclick="newCategory()">
+        <div class="glow"></div>
+        <i class="fas fa-plus"></i>
+        <span>➕ جديد</span>
+      </button>
+      <button class="sidebar-btn ripple" data-tooltip="العودة للشاشة الرئيسية" onclick="goHome()">
+        <div class="glow"></div>
+        <i class="fas fa-home"></i>
+        <span>🏠 رجوع</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- مؤشر تحميل -->
+  <div class="loading-indicator" id="loadingIndicator">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- المحتوى الرئيسي -->
+  <div class="container">
+    <div id="alertContainer"></div>
+
+    <form id="categoryForm" onsubmit="return false;">
+      <input type="hidden" name="category_id" id="categoryId" value="0">
+      <div class="form-grid">
+        <!-- حقل اسم الفئة -->
+        <div>
+          <label class="form-label">اسم الفئة</label>
+          <input type="text" name="category_name" id="categoryName" placeholder="أدخل اسم الفئة" required>
+        </div>
+        
+        <!-- الصف الأفقي للحقول -->
+        <div class="horizontal-row">
+          <div>
+            <label class="form-label">النوع</label>
+            <select name="category_type" id="categoryType" required>
+              <option value="">اختر النوع</option>
+              <option value="product">منتج</option>
+              <option value="service">خدمة</option>
+              <option value="asset">أصل</option>
+              <option value="expense">مصروف</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">الفئة الأب</label>
+            <select name="parent_category_id" id="parentCategory">
+              <option value="">اختر الفئة الأب</option>
+              <!-- سيتم ملء هذا من قاعدة البيانات -->
+            </select>
+          </div>
+          <div>
+            <label class="form-label">الحالة</label>
+            <select name="is_active" id="isActive" required>
+              <option value="1">نشط</option>
+              <option value="0">غير نشط</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">معدل الضريبة (%)</label>
+            <input type="number" step="0.01" name="tax_rate" id="taxRate" placeholder="أدخل معدل الضريبة">
+          </div>
+        </div>
+        
+        <!-- الحقول الأخرى -->
+        <div>
+          <label class="form-label">الوصف</label>
+          <textarea name="description" id="description" placeholder="أدخل وصفاً للفئة" rows="2"></textarea>
+        </div>
+      </div>
+    </form>
+
+    <div class="table-container">
+      <table id="categoriesTable">
+        <thead>
+          <tr>
+            <th>المعرف</th>
+            <th>الاسم</th>
+            <th>النوع</th>
+            <th>الفئة الأب</th>
+            <th>معدل الضريبة</th>
+            <th>الحالة</th>
+          </tr>
+        </thead>
+        <tbody id="categoriesTableBody">
+          <!-- سيتم ملء هذا من قاعدة البيانات -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// 1. دوال apiCall و handleAndroidResult (الموحدة)
+// ============================================================
+function apiCall(action, params) {
+    return new Promise((resolve, reject) => {
+        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+            try {
+                const jsonParams = JSON.stringify(params || {});
+                const result = window.AndroidInterface.execute(action, jsonParams);
+                try {
+                    const parsed = JSON.parse(result);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ success: true, data: result });
+                }
+            } catch (e) {
+                reject({ success: false, error: e.message });
+            }
+        } else {
+            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
+            // محاكاة للاختبار فقط (في الإنتاج يجب أن يكون AndroidInterface متاحاً)
+            // نرفض الطلب مع رسالة توضيحية لأننا لا نسمح بـ fetch.
+            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+        }
+    });
+}
+
+function handleAndroidResult(action, data) {
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        if (window._pendingResolve) {
+            window._pendingResolve(parsed);
+            window._pendingResolve = null;
+        }
+    } catch (e) {
+        console.error('Error in handleAndroidResult:', e);
+    }
+}
+
+// ============================================================
+// 2. دوال مساعدة (Toast, Loading)
+// ============================================================
+function showToast(message, type = 'success') {
+    // محاكاة الـ Toast الأصلية مع دعم الأنواع
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert-message ${type}`;
+    alertDiv.textContent = message;
+    document.body.appendChild(alertDiv);
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 3000);
+}
+
+function showLoading(show) {
+    const loader = document.getElementById('loadingIndicator');
+    loader.style.display = show ? 'flex' : 'none';
+}
+
+// ============================================================
+// 3. حالة التطبيق
+// ============================================================
+const AppState = {
+    categories: [],
+    parentCategories: [],
+    selectedCategoryId: null
+};
+
+// ============================================================
+// 4. دوال جلب البيانات عبر apiCall
+// ============================================================
+function loadCategories() {
+    showLoading(true);
+    apiCall('getCategories', {})
+    .then(result => {
+        showLoading(false);
+        if (result.success) {
+            const categories = result.data || [];
+            AppState.categories = categories;
+            AppState.parentCategories = categories.filter(c => !c.parent_category_id || c.parent_category_id === '');
+            populateTable(categories);
+            
+            // تحديث قائمة الفئات الأب
+            const parentSelect = document.getElementById('parentCategory');
+            parentSelect.innerHTML = '<option value="">اختر الفئة الأب</option>';
+            AppState.parentCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id;
+                option.textContent = cat.category_name || cat.name;
+                parentSelect.appendChild(option);
+            });
+        } else {
+            showToast(result.message || 'حدث خطأ أثناء جلب البيانات', 'error');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        showToast('حدث خطأ في الاتصال بالجسر', 'error');
+        console.error(error);
+    });
+}
+
+function populateTable(categories) {
+    const tbody = document.getElementById('categoriesTableBody');
+    tbody.innerHTML = '';
+    
+    if (categories.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" style="text-align: center;">لا توجد بيانات متاحة</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+    
+    categories.forEach(category => {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-id', category.id);
+        
+        if (AppState.selectedCategoryId && AppState.selectedCategoryId == category.id) {
+            tr.classList.add('selected');
+        }
+        
+        const parentName = category.parent_name || (category.parent_category_name) || '-';
+        
+        tr.innerHTML = `
+            <td>${category.id}</td>
+            <td>${category.category_name || category.name}</td>
+            <td>${category.category_type || category.type || '-'}</td>
+            <td>${parentName}</td>
+            <td>${category.tax_rate || '0.00'}%</td>
+            <td>${category.is_active ? 'نشط' : 'غير نشط'}</td>
+        `;
+        
+        tr.addEventListener('click', function() {
+            document.querySelectorAll('tr.selected').forEach(row => {
+                row.classList.remove('selected');
+            });
+            this.classList.add('selected');
+            AppState.selectedCategoryId = category.id;
+            fillFormWithCategoryData(category);
+        });
+        
+        tbody.appendChild(tr);
+    });
+}
+
+function fillFormWithCategoryData(category) {
+    document.getElementById('categoryId').value = category.id;
+    document.getElementById('categoryName').value = category.category_name || category.name || '';
+    document.getElementById('categoryType').value = category.category_type || category.type || '';
+    document.getElementById('parentCategory').value = category.parent_category_id || category.parent_id || '';
+    document.getElementById('taxRate').value = category.tax_rate || '';
+    document.getElementById('description').value = category.description || '';
+    document.getElementById('isActive').value = category.is_active ? '1' : '0';
+    AppState.selectedCategoryId = category.id;
+}
+
+// ============================================================
+// 5. دوال العمليات (حفظ، حذف، بحث، تحديث، جديد)
+// ============================================================
+function saveCategory() {
+    const categoryId = document.getElementById('categoryId').value;
+    const categoryName = document.getElementById('categoryName').value.trim();
+    const categoryType = document.getElementById('categoryType').value;
+    const parentCategory = document.getElementById('parentCategory').value;
+    const taxRate = document.getElementById('taxRate').value;
+    const description = document.getElementById('description').value.trim();
+    const isActive = document.getElementById('isActive').value;
+
+    if (!categoryName) {
+        showToast('يرجى إدخال اسم الفئة', 'error');
+        return;
+    }
+
+    const data = {
+        category_id: parseInt(categoryId) || 0,
+        category_name: categoryName,
+        category_type: categoryType,
+        parent_category_id: parentCategory ? parseInt(parentCategory) : null,
+        tax_rate: parseFloat(taxRate) || 0,
+        description: description,
+        is_active: parseInt(isActive)
+    };
+
+    showLoading(true);
+    apiCall('saveCategory', data)
+    .then(result => {
+        showLoading(false);
+        if (result.success) {
+            const action = categoryId === '0' ? 'إضافة' : 'تحديث';
+            showToast(`تم ${action} الفئة بنجاح`, 'success');
+            loadCategories();
+            if (categoryId === '0') {
+                document.getElementById('categoryForm').reset();
+                document.getElementById('categoryId').value = '0';
+                AppState.selectedCategoryId = null;
+            }
+        } else {
+            showToast(result.message || 'حدث خطأ أثناء الحفظ', 'error');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        showToast('حدث خطأ في الاتصال بالجسر', 'error');
+        console.error(error);
+    });
+}
+
+function deleteCategory() {
+    const id = AppState.selectedCategoryId || document.getElementById('categoryId').value;
+    if (!id || id === "0") {
+        showToast('يرجى اختيار فئة لحذفها', 'error');
+        return;
+    }
+    
+    if (confirm("هل أنت متأكد من حذف هذه الفئة؟")) {
+        showLoading(true);
+        apiCall('deleteCategory', { category_id: parseInt(id) })
+        .then(result => {
+            showLoading(false);
+            if (result.success) {
+                showToast('تم حذف الفئة بنجاح', 'success');
+                loadCategories();
+                document.getElementById('categoryForm').reset();
+                document.getElementById('categoryId').value = '0';
+                AppState.selectedCategoryId = null;
+            } else {
+                showToast(result.message || 'حدث خطأ أثناء الحذف', 'error');
+            }
+        })
+        .catch(error => {
+            showLoading(false);
+            showToast('حدث خطأ في الاتصال بالجسر', 'error');
+            console.error(error);
+        });
+    }
+}
+
+function searchCategory() {
+    const name = document.getElementById('categoryName').value.trim();
+    if (name) {
+        showLoading(true);
+        apiCall('searchCategories', { search: name })
+        .then(result => {
+            showLoading(false);
+            if (result.success) {
+                showToast(`تم العثور على ${result.data ? result.data.length : 0} نتيجة`, 'info');
+                populateTable(result.data || []);
+            } else {
+                showToast(result.message || 'حدث خطأ أثناء البحث', 'error');
+            }
+        })
+        .catch(error => {
+            showLoading(false);
+            showToast('حدث خطأ في الاتصال بالجسر', 'error');
+            console.error(error);
+        });
+    } else {
+        loadCategories();
+    }
+}
+
+function updateCategory() {
+    const id = AppState.selectedCategoryId || document.getElementById('categoryId').value;
+    if (!id || id === "0") {
+        showToast('يرجى اختيار فئة لتعديلها', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    apiCall('getCategory', { category_id: parseInt(id) })
+    .then(result => {
+        showLoading(false);
+        if (result.success) {
+            fillFormWithCategoryData(result.data);
+            showToast('تم تحميل بيانات الفئة للتعديل', 'info');
+        } else {
+            showToast(result.message || 'حدث خطأ أثناء جلب بيانات الفئة', 'error');
+        }
+    })
+    .catch(error => {
+        showLoading(false);
+        showToast('حدث خطأ في الاتصال بالجسر', 'error');
+        console.error(error);
+    });
+}
+
+function newCategory() {
+    document.getElementById('categoryId').value = '0';
+    document.getElementById('categoryForm').reset();
+    document.querySelectorAll('tr.selected').forEach(row => {
+        row.classList.remove('selected');
+    });
+    AppState.selectedCategoryId = null;
+    showToast('تم تفعيل وضع إضافة فئة جديدة', 'info');
+}
+
+function goHome() {
+    window.location.href = 'main.html';
+}
+
+// ============================================================
+// 6. الوضع الليلي وإدارة القائمة الجانبية
+// ============================================================
+function toggleMode() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    const icon = document.querySelector('#darkModeToggle i');
+    icon.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
+}
+
+function loadSavedTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    const icon = document.querySelector('#darkModeToggle i');
+    icon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+}
+
+function setupSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    
+    sidebarToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+        if (sidebar.classList.contains('open')) {
+            sidebarToggle.classList.add('hidden');
+        } else {
+            sidebarToggle.classList.remove('hidden');
+        }
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
+            sidebar.classList.remove('open');
+            sidebarToggle.classList.remove('hidden');
+        }
+    });
+}
+
+// ============================================================
+// 7. التهيئة الأولية
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadCategories();
+    loadSavedTheme();
+    setupSidebar();
+    document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
+    
+    // التنقل بين الحقول باستخدام Enter
+    const formElements = document.querySelectorAll('#categoryForm input, #categoryForm select, #categoryForm textarea');
+    formElements.forEach((el, index) => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (index < formElements.length - 1) {
+                    formElements[index + 1].focus();
+                } else {
+                    saveCategory();
+                }
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>

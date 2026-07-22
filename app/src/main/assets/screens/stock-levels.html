@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة محطات الوقود – مستويات المخزون</title>
+    
+    <!-- المكتبات المطلوبة من CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    
+    <!-- مكتبات JavaScript من CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        :root {
+            --bg-color: #f2fbff;
+            --card-color: #ffffff;
+            --primary3-color: #4B0082;
+            --primary-color: #007ACC;
+            --primary-hover: #005e99;
+            --primary2-color: #000000;
+            --primary2-hover: #4B0082;
+            --secondary-hover: #004c7a;
+            --text-color: #000000;
+            --success: #4CAF50;
+            --error: #f44336;
+            --gold: #FFD700;
+            --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+            --blue-glow: 0 0 10px #007ACC, 0 0 20px #005e99;
+            --red-glow: 0 0 10px #f44336, 0 0 20px #d32f2f;
+            --glass-bg: rgba(75, 0, 130, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --accent-color: rgba(100, 149, 237, 0.4);
+            --sidebar-bg: rgba(255, 255, 255, 0.9);
+            --sidebar-btn-bg: rgba(75, 0, 130, 0.8);
+            --glow-light: rgba(0, 122, 204, 0.5);
+            --glow-dark: rgba(255, 165, 0, 0.5);
+            --input-border-light: #003366;
+            --input-border-dark: #1fa2ff;
+            --highlight-border-light: #003366;
+            --highlight-border-dark: #4CAF50;
+            --delete-border-light: #f44336;
+            --delete-border-dark: #d32f2f;
+        }
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --card-color: #1e1e1e;
+            --primary-color: #1fa2ff;
+            --primary-hover: #0d81cc;
+            --secondary-hover: #0a6aa8;
+            --text-color: #f0f0f0;
+            --success: #388E3C;
+            --error: #d32f2f;
+            --gold: #FFD700;
+            --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+            --blue-glow: 0 0 10px #1fa2ff, 0 0 20px #0d81cc;
+            --red-glow: 0 0 10px #d32f2f, 0 0 20px #b71c1c;
+            --glass-bg: rgba(43, 0, 82, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-color: rgba(100, 149, 237, 0.3);
+            --sidebar-bg: rgba(30, 30, 30, 0.9);
+            --sidebar-btn-bg: rgba(90, 26, 154, 0.8);
+            --glow-light: rgba(0, 122, 204, 0.3);
+            --glow-dark: rgba(255, 165, 0, 0.6);
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 10px;
+            direction: rtl;
+            transition: background 0.3s, color 0.3s;
+            overflow-x: hidden;
+            margin: 0;
+            padding-top: 70px;
+            touch-action: manipulation;
+            background-image: radial-gradient(circle at 20% 30%, rgba(0,122,204,0.05) 0%, transparent 20%),
+                              radial-gradient(circle at 80% 70%, rgba(75,0,130,0.05) 0%, transparent 20%);
+        }
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 14px;
+            background: linear-gradient(135deg, var(--primary2-color), var(--primary2-hover));
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            height: 50px;
+            border-bottom: 2px solid var(--gold);
+        }
+        .top-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: white;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        .mode-toggle-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            margin-left: 10px;
+        }
+        .mode-toggle-btn i {
+            font-size: 1.5rem;
+            color: var(--gold);
+            transition: transform 0.5s;
+        }
+        .mode-toggle-btn:hover {
+            transform: scale(1.1);
+            background: rgba(0,0,0,0.1);
+        }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 65px;
+            background: var(--sidebar-bg);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            perspective: 1000px;
+            transform-style: preserve-3d;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            opacity: 0;
+            transform: translateY(-50%) translateX(0) rotateY(90deg) scale(0.8);
+            border-right: 3px solid var(--glow-light);
+            animation: borderPulse 2s infinite alternate;
+        }
+        [data-theme="dark"] .sidebar {
+            border-right: 3px solid var(--glow-dark);
+            animation: borderPulseDark 2s infinite alternate;
+        }
+        @keyframes borderPulse {
+            0% { box-shadow: -5px 0 10px var(--glow-light); }
+            100% { box-shadow: -5px 0 20px var(--glow-light); }
+        }
+        @keyframes borderPulseDark {
+            0% { box-shadow: -5px 0 10px var(--glow-dark); }
+            100% { box-shadow: -5px 0 20px var(--glow-dark); }
+        }
+        .sidebar.open {
+            right: 0;
+            opacity: 1;
+            transform: translateY(-50%) translateX(0) rotateY(0deg) scale(1);
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, var(--primary3-color), #5a1a9a);
+            color: white;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transform-style: preserve-3d;
+            perspective: 100px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .sidebar-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-50%) scale(0.8);
+        }
+        .sidebar-toggle:hover {
+            background: linear-gradient(145deg, var(--primary-hover), #0d5e99);
+            width: 38px;
+            box-shadow: -4px 0 12px rgba(0,0,0,0.5);
+            transform: translateY(-50%) scale(1.1);
+        }
+        .sidebar-toggle i {
+            transition: transform 0.3s;
+            font-size: 1.2rem;
+        }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .sidebar-btn {
+            position: relative;
+            overflow: hidden;
+            background: var(--sidebar-btn-bg);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 
+                0 0 8px rgba(0,0,0,0.2),
+                0 0 15px var(--accent-color);
+            padding: 6px 4px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 55px;
+            text-align: center;
+            animation: pulseGlow 6s ease-in-out infinite;
+            font-size: 0.8rem;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 15px var(--accent-color); }
+            50% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 25px var(--accent-color); }
+        }
+        .sidebar-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--accent-color), 0 0 25px var(--accent-color);
+            background: rgba(75, 0, 130, 0.35);
+        }
+        .sidebar-btn:active {
+            transform: scale(0.94) rotateX(3deg);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 10px var(--accent-color);
+            transition: all 0.1s;
+        }
+        .sidebar-btn i {
+            font-size: 1.1rem;
+            transition: transform 0.3s;
+            text-shadow: 0 0 8px rgba(255,255,255,0.5);
+        }
+        .sidebar-btn:hover i {
+            transform: scale(1.2);
+        }
+        .sidebar-btn span {
+            font-size: 0.7rem;
+        }
+        .sidebar-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            pointer-events: none;
+            z-index: 1002;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            min-width: 120px;
+            text-align: center;
+        }
+        .sidebar-btn:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        @keyframes vibrate {
+            0% { transform: translateX(0) rotate(0.5deg); }
+            20% { transform: translateX(-1px) rotate(-0.5deg); }
+            40% { transform: translateX(1px) rotate(0.5deg); }
+            60% { transform: translateX(-1px) rotate(-0.5deg); }
+            80% { transform: translateX(1px) rotate(0.5deg); }
+            100% { transform: translateX(0) rotate(0); }
+        }
+        .vibrate {
+            animation: vibrate 0.3s linear;
+        }
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .spinner {
+            width: 80px;
+            height: 80px;
+            border: 8px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 8px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .container {
+            max-width: 100%;
+            overflow-x: hidden;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+        [data-theme="dark"] .glass-card {
+            background: rgba(30, 30, 30, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px 0 rgba(0, 0, 0, 0.3);
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 16px;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo {
+            font-size: 24px;
+            color: var(--primary-color);
+        }
+        .page-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        .refresh-btn {
+            background: var(--primary-color);
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+            color: white;
+        }
+        .refresh-btn:hover {
+            transform: rotate(360deg);
+            background: var(--primary-hover);
+        }
+        .refresh-btn i {
+            font-size: 18px;
+        }
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .kpi-card {
+            position: relative;
+            overflow: hidden;
+            padding: 20px;
+            border-radius: 16px;
+            background: rgba(44, 62, 80, 0.7);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.4s ease;
+            color: white;
+        }
+        .kpi-card:hover {
+            transform: scale(1.02);
+            background: rgba(44, 62, 80, 0.85);
+        }
+        .kpi-icon {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 32px;
+            opacity: 0.3;
+            color: white;
+        }
+        .kpi-content {
+            text-align: right;
+            margin-left: 50px;
+        }
+        .kpi-title {
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #ecf0f1;
+        }
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .kpi-trend {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            gap: 5px;
+        }
+        .trend-up { color: #27ae60; }
+        .trend-down { color: #e74c3c; }
+        .filters-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.08);
+            box-sizing: border-box;
+            align-items: flex-end;
+        }
+        [data-theme="dark"] .filters-panel {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        .filter-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        .filter-select, .filter-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 2px solid var(--input-border-light);
+            background: var(--card-color);
+            color: var(--text-color);
+            font-size: 14px;
+            box-sizing: border-box;
+            font-family: 'Cairo', sans-serif;
+            transition: all 0.3s;
+        }
+        [data-theme="dark"] .filter-select,
+        [data-theme="dark"] .filter-input {
+            border: 2px solid var(--input-border-dark);
+        }
+        .filter-select:focus, .filter-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(0,122,204,0.3);
+            outline: none;
+        }
+        .filter-select option {
+            background: var(--card-color);
+            color: var(--text-color);
+        }
+        .apply-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 10px 25px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(44, 111, 187, 0.4);
+            min-height: 48px;
+            white-space: nowrap;
+        }
+        .apply-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        .apply-btn-secondary {
+            background: #9c27b0;
+        }
+        .apply-btn-secondary:hover {
+            background: #7b1fa2;
+        }
+        .apply-btn-warning {
+            background: #ff9800;
+        }
+        .apply-btn-warning:hover {
+            background: #f57c00;
+        }
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            padding: 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            box-sizing: border-box;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 8px 15px;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+        .chart-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .chart-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+        .chart-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        .table-container {
+            overflow-x: auto;
+            border-radius: 16px;
+            margin-bottom: 15px;
+            max-height: 350px;
+            -webkit-overflow-scrolling: touch;
+            overflow-y: auto;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.9rem;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .data-table th {
+            background: rgba(44, 111, 187, 0.6);
+            padding: 14px 18px;
+            text-align: right;
+            font-weight: 700;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            color: white;
+        }
+        [data-theme="dark"] .data-table th {
+            background: rgba(30, 64, 175, 0.8);
+        }
+        .data-table td {
+            padding: 12px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .data-table tr:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .data-table tr.selected {
+            background: rgba(0, 122, 204, 0.2) !important;
+            box-shadow: 0 0 10px rgba(0, 122, 204, 0.3);
+        }
+        .action-btn {
+            padding: 7px 12px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 13px;
+        }
+        .action-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        .action-btn-danger {
+            background: var(--error);
+        }
+        .action-btn-danger:hover {
+            background: #d32f2f;
+        }
+        .action-btn-success {
+            background: var(--success);
+        }
+        .action-btn-success:hover {
+            background: #388E3C;
+        }
+        .alerts-container {
+            margin-bottom: 20px;
+        }
+        .alert-card {
+            display: flex;
+            align-items: center;
+            padding: 16px 18px;
+            margin-bottom: 12px;
+            border-radius: 14px;
+            background: rgba(231, 76, 60, 0.15);
+            border-left: 4px solid var(--error);
+            animation: pulse 2s infinite;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .alert-card-warning {
+            background: rgba(243, 156, 18, 0.15);
+            border-left-color: #f39c12;
+        }
+        .alert-card-success {
+            background: rgba(39, 174, 96, 0.15);
+            border-left-color: #27ae60;
+        }
+        .alert-icon {
+            margin-left: 12px;
+            font-size: 22px;
+            color: var(--error);
+        }
+        .alert-card-warning .alert-icon { color: #f39c12; }
+        .alert-card-success .alert-icon { color: #27ae60; }
+        .alert-content {
+            flex: 1;
+        }
+        .alert-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .alert-desc {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .alert-actions {
+            display: flex;
+            gap: 8px;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.2); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+        .footer-menu {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-around;
+            background: rgba(44, 62, 80, 0.95);
+            padding: 10px 0;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+            box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+        [data-theme="dark"] .footer-menu {
+            background: rgba(20, 20, 30, 0.95);
+        }
+        .menu-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 4px 12px;
+        }
+        .menu-item.active {
+            color: var(--primary-color);
+        }
+        .menu-item i {
+            font-size: 18px;
+        }
+        .menu-item:hover {
+            transform: translateY(-4px);
+            color: white;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: var(--card-color);
+            border-radius: 16px;
+            padding: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+            text-align: center;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+        .modal-content::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+            border-radius: 16px 16px 0 0;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal-title {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+        .modal-input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        .modal-input {
+            flex: 1;
+            min-width: 100px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 2px solid var(--input-border-light);
+            font-size: 0.9rem;
+            background: var(--card-color);
+            color: var(--text-color);
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+        [data-theme="dark"] .modal-input {
+            border: 2px solid var(--input-border-dark);
+        }
+        .modal-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(0,122,204,0.3);
+            outline: none;
+        }
+        .modal-btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+        .modal-btn-primary {
+            background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+            color: white;
+        }
+        .modal-btn-primary:hover {
+            background: linear-gradient(to right, var(--primary-hover), var(--primary2-hover));
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .modal-btn-cancel {
+            background: #f0f0f0;
+            color: #333;
+        }
+        .modal-btn-cancel:hover {
+            background: #e0e0e0;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .action-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        /* تنسيقات خاصة بالهاتف */
+        @media (max-width: 768px) {
+            body { padding: 10px 5px; padding-top: 60px; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .filters-panel { flex-direction: column; }
+            .page-header { flex-direction: column; gap: 12px; text-align: center; }
+            .logo-container { justify-content: center; }
+            .sidebar { width: 60px; padding: 6px; }
+            .sidebar-btn { padding: 6px 3px; min-height: 50px; font-size: 0.7rem; }
+            .sidebar-toggle { width: 32px; height: 32px; }
+            .chart-container { height: 220px; }
+            .footer-menu { padding: 8px 0; }
+            .menu-item { font-size: 9px; padding: 2px 8px; }
+            .menu-item i { font-size: 16px; }
+            .container { padding: 0 5px; }
+            .glass-card { padding: 10px; }
+            .modal-content { width: 95%; padding: 15px; }
+            .modal-input-group { flex-direction: column; gap: 8px; }
+            .modal-input { min-width: 100%; padding: 8px; font-size: 0.85rem; }
+            .modal-btn { width: 100%; margin: 5px 0; }
+            .data-table th, .data-table td { padding: 8px 10px; font-size: 0.75rem; }
+            .action-btn { padding: 4px 8px; font-size: 0.7rem; }
+            .filter-select, .filter-input { padding: 8px 10px; font-size: 0.85rem; }
+            .apply-btn { padding: 8px 16px; font-size: 0.85rem; width: 100%; }
+            .kpi-value { font-size: 18px; }
+            .kpi-title { font-size: 12px; }
+            .top-title h2 { font-size: 1.1rem; }
+            .refresh-btn { width: 35px; height: 35px; }
+            .refresh-btn i { font-size: 14px; }
+        }
+        @media (max-width: 480px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+            .dashboard-grid { grid-template-columns: 1fr; }
+            .chart-container { height: 180px; }
+        }
+        .numeric {
+            font-family: 'Arial', sans-serif !important;
+            direction: ltr;
+            text-align: center;
+        }
+        .text-center { text-align: center !important; }
+        .mt-2 { margin-top: 10px; }
+        .mb-2 { margin-bottom: 10px; }
+        .w-100 { width: 100%; }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .badge-success { background: var(--success); color: white; }
+        .badge-warning { background: #f39c12; color: white; }
+        .badge-danger { background: var(--error); color: white; }
+        .badge-info { background: var(--primary-color); color: white; }
+        .badge-purple { background: #9c27b0; color: white; }
+    </style>
+</head>
+<body>
+
+<!-- شريط المعلومات العلوي -->
+<div class="top-bar">
+    <div class="top-title">
+        <h2>📊 مستويات المخزون</h2>
+    </div>
+    <button id="darkModeToggle" class="mode-toggle-btn">
+        <i class="fas fa-moon"></i>
+    </button>
+</div>
+
+<!-- القائمة الجانبية -->
+<div class="sidebar-toggle" id="sidebarToggle">
+    <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-content">
+        <button class="sidebar-btn ripple" data-tooltip="إضافة صنف جديد" onclick="showAddModal()">
+            <div class="glow"></div>
+            <i class="fas fa-plus"></i>
+            <span>➕ إضافة</span>
+        </button>
+        <button class="sidebar-btn ripple" data-tooltip="بحث عن صنف" onclick="showSearchModal()">
+            <div class="glow"></div>
+            <i class="fas fa-search"></i>
+            <span>👀 استعلام</span>
+        </button>
+        <button class="sidebar-btn ripple" data-tooltip="إعدادات النظام" onclick="showSettings()">
+            <div class="glow"></div>
+            <i class="fas fa-cog"></i>
+            <span>⚙️ إعدادات</span>
+        </button>
+        <button class="sidebar-btn ripple" data-tooltip="العودة للشاشة الرئيسية" onclick="goToMain()">
+            <div class="glow"></div>
+            <i class="fas fa-home"></i>
+            <span>🏠 رجوع</span>
+        </button>
+    </div>
+</div>
+
+<!-- مؤشر تحميل -->
+<div class="loading-indicator" id="loadingIndicator">
+    <div class="spinner"></div>
+</div>
+
+<!-- المحتوى الرئيسي -->
+<div class="container">
+
+    <!-- ===== قسم الملخص ===== -->
+    <div class="section active" id="summarySection">
+        <!-- رأس الصفحة -->
+        <header class="glass-card page-header">
+            <div class="logo-container">
+                <i class="fas fa-warehouse logo"></i>
+                <h1 class="page-title">مستويات المخزون الشامل</h1>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <div class="refresh-btn" id="refreshBtn" title="تحديث">
+                    <i class="fas fa-redo"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- بطاقات المؤشرات -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <i class="fas fa-money-bill-wave kpi-icon"></i>
+                <div class="kpi-content">
+                    <div class="kpi-title">القيمة الإجمالية للمخزون</div>
+                    <div class="kpi-value" id="totalInventoryValue">0 ريال</div>
+                    <div class="kpi-trend trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span id="inventoryTrend">0% عن الشهر الماضي</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <i class="fas fa-exclamation-triangle kpi-icon"></i>
+                <div class="kpi-content">
+                    <div class="kpi-title">وحدات تحت الحد الأدنى</div>
+                    <div class="kpi-value" id="lowStockCount">0 منتج</div>
+                    <div class="kpi-trend trend-down">
+                        <i class="fas fa-arrow-down"></i>
+                        <span id="criticalCount">تحذير: 0 منتج حرج</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <i class="fas fa-hourglass-end kpi-icon"></i>
+                <div class="kpi-content">
+                    <div class="kpi-title">قيمة منتهي الصلاحية</div>
+                    <div class="kpi-value" id="expiredValue">0 ريال</div>
+                    <div class="kpi-trend trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span id="expiryTrend">زيادة 0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="kpi-card">
+                <i class="fas fa-retweet kpi-icon"></i>
+                <div class="kpi-content">
+                    <div class="kpi-title">معدل دوران المخزون</div>
+                    <div class="kpi-value" id="turnoverRate">0 مرة</div>
+                    <div class="kpi-trend trend-up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span id="turnoverStatus">ممتاز (المعدل المثالي 3-5)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- لوحة الفلاتر -->
+        <div class="glass-card">
+            <div class="filters-panel">
+                <div class="filter-group">
+                    <label class="filter-label">🏢 المخزن</label>
+                    <select class="filter-select" id="warehouseFilter">
+                        <option value="all">جميع المخازن</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">📂 الفئة</label>
+                    <select class="filter-select" id="categoryFilter">
+                        <option value="all">جميع الفئات</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">📅 نطاق التاريخ</label>
+                    <select class="filter-select" id="dateRangeFilter">
+                        <option value="30">آخر 30 يومًا</option>
+                        <option value="7">الأسبوع الحالي</option>
+                        <option value="current">الشهر الحالي</option>
+                        <option value="quarter">ربع سنوي</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label class="filter-label">⏳ حالة الصلاحية</label>
+                    <select class="filter-select" id="expiryFilter">
+                        <option value="all">الكل</option>
+                        <option value="active">نشط</option>
+                        <option value="soon">قارب الانتهاء</option>
+                        <option value="expired">منتهي</option>
+                    </select>
+                </div>
+                <button class="apply-btn" onclick="applyFilters()">🔍 تطبيق الفلاتر</button>
+                <button class="apply-btn apply-btn-secondary" onclick="showAdvancedFilter()">⚙️ تصفية متقدمة</button>
+            </div>
+        </div>
+
+        <!-- الرسوم البيانية -->
+        <div class="dashboard-grid">
+            <div class="glass-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">📈 حركة المخزون خلال 30 يومًا</h3>
+                    <div class="chart-actions">
+                        <button class="chart-btn" onclick="downloadChart('movementChart')"><i class="fas fa-download"></i></button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="movementChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">📊 توزيع المخزون حسب الفئة</h3>
+                    <div class="chart-actions">
+                        <button class="chart-btn" onclick="downloadChart('distributionChart')"><i class="fas fa-download"></i></button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">📉 اتجاهات المخزون خلال 6 أشهر</h3>
+                    <div class="chart-actions">
+                        <button class="chart-btn" onclick="downloadChart('trendChart')"><i class="fas fa-download"></i></button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">⏳ حالة صلاحية المخزون</h3>
+                    <div class="chart-actions">
+                        <button class="chart-btn" onclick="downloadChart('expiryChart')"><i class="fas fa-download"></i></button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="expiryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- جدول المنتجات المنخفضة -->
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0;">⚠️ المنتجات تحت الحد الأدنى</h3>
+                <div class="action-bar">
+                    <button class="action-btn action-btn-success" onclick="exportLowStockTable()">
+                        <i class="fas fa-file-excel"></i> Excel
+                    </button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="data-table" id="lowStockTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>كود المنتج</th>
+                            <th>اسم المنتج</th>
+                            <th>الكمية الحالية</th>
+                            <th>الحد الأدنى</th>
+                            <th>العجز</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lowStockTableBody">
+                        <tr><td colspan="7" class="text-center">⏳ جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- التنبيهات -->
+        <div class="glass-card alerts-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0;">🔔 تنبيهات المخزون</h3>
+                <div class="action-bar">
+                    <button class="action-btn" onclick="exportAlerts()">
+                        <i class="fas fa-file-export"></i> تصدير التنبيهات
+                    </button>
+                </div>
+            </div>
+
+            <div class="alert-card" id="criticalAlertCard">
+                <div class="alert-icon"><i class="fas fa-exclamation-circle"></i></div>
+                <div class="alert-content">
+                    <div class="alert-title">نقص حاد في المخزون</div>
+                    <div class="alert-desc" id="criticalAlert">0 منتجات وصلت إلى أقل من 10% من الحد الأدنى</div>
+                </div>
+                <div class="alert-actions">
+                    <button class="action-btn" onclick="showCriticalProducts()">عرض المنتجات</button>
+                </div>
+            </div>
+
+            <div class="alert-card alert-card-warning" id="expiringAlertCard">
+                <div class="alert-icon"><i class="fas fa-hourglass-half"></i></div>
+                <div class="alert-content">
+                    <div class="alert-title">منتجات قاربت على الانتهاء</div>
+                    <div class="alert-desc" id="expiringAlert">0 منتج ستنتهي صلاحيته خلال الشهر القادم</div>
+                </div>
+                <div class="alert-actions">
+                    <button class="action-btn" onclick="showExpiringProducts()">اتخاذ إجراء</button>
+                </div>
+            </div>
+
+            <div class="alert-card alert-card-success" id="auditAlertCard">
+                <div class="alert-icon"><i class="fas fa-sync-alt"></i></div>
+                <div class="alert-content">
+                    <div class="alert-title">جرد تلقائي ناجح</div>
+                    <div class="alert-desc" id="auditAlert">تم إجراء جرد تلقائي لـ 0 منتج</div>
+                </div>
+                <div class="alert-actions">
+                    <button class="action-btn" onclick="showAuditReport()">عرض التقرير</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== قسم الحركات ===== -->
+    <div class="section" id="movementsSection">
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 class="page-title">🔄 حركات المخزون</h2>
+                <div class="action-bar">
+                    <button class="action-btn action-btn-success" onclick="exportMovements()">
+                        <i class="fas fa-file-excel"></i> Excel
+                    </button>
+                </div>
+            </div>
+            <div class="table-container" style="max-height: 400px;">
+                <table class="data-table" id="movementsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>التاريخ</th>
+                            <th>المنتج</th>
+                            <th>النوع</th>
+                            <th>الكمية</th>
+                            <th>القيمة</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movementsTableBody">
+                        <tr><td colspan="7" class="text-center">⏳ جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== قسم القيم ===== -->
+    <div class="section" id="valuesSection">
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 class="page-title">💰 قيم المخزون</h2>
+                <div class="action-bar">
+                    <button class="action-btn action-btn-success" onclick="exportValues()">
+                        <i class="fas fa-file-excel"></i> Excel
+                    </button>
+                </div>
+            </div>
+            <div class="table-container" style="max-height: 400px;">
+                <table class="data-table" id="valuesTable">
+                    <thead>
+                        <tr>
+                            <th>المنتج</th>
+                            <th>المخزن</th>
+                            <th>الكمية</th>
+                            <th>متوسط التكلفة</th>
+                            <th>القيمة الإجمالية</th>
+                        </tr>
+                    </thead>
+                    <tbody id="valuesTableBody">
+                        <tr><td colspan="5" class="text-center">⏳ جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== قسم التنبيهات ===== -->
+    <div class="section" id="alertsSection">
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h2 class="page-title">🔔 تنبيهات المخزون</h2>
+                <div class="action-bar">
+                    <button class="action-btn action-btn-success" onclick="exportAlerts()">
+                        <i class="fas fa-file-excel"></i> Excel
+                    </button>
+                </div>
+            </div>
+            <div class="table-container" style="max-height: 400px;">
+                <table class="data-table" id="alertsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>المنتج</th>
+                            <th>نوع التنبيه</th>
+                            <th>المستوى</th>
+                            <th>التاريخ</th>
+                            <th>الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTableBody">
+                        <tr><td colspan="6" class="text-center">⏳ جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- القائمة السفلية -->
+<div class="footer-menu">
+    <div class="menu-item active" data-section="summary" onclick="switchSection('summary')">
+        <i class="fas fa-home"></i>
+        <span>الملخص</span>
+    </div>
+    <div class="menu-item" data-section="movements" onclick="switchSection('movements')">
+        <i class="fas fa-exchange-alt"></i>
+        <span>الحركات</span>
+    </div>
+    <div class="menu-item" data-section="values" onclick="switchSection('values')">
+        <i class="fas fa-chart-pie"></i>
+        <span>القيم</span>
+    </div>
+    <div class="menu-item" data-section="alerts" onclick="switchSection('alerts')">
+        <i class="fas fa-bell"></i>
+        <span>التنبيهات</span>
+    </div>
+</div>
+
+<!-- ===== النماذج المنبثقة ===== -->
+
+<!-- نموذج البحث -->
+<div id="searchModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-title">🔍 استعلام عن منتج</div>
+        <p style="margin-bottom: 15px; color: #666;">أدخل كود المنتج أو اسم المنتج للبحث</p>
+        <div class="modal-input-group">
+            <input type="text" id="searchCode" class="modal-input" placeholder="كود المنتج">
+            <input type="text" id="searchName" class="modal-input" placeholder="اسم المنتج">
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal('searchModal')">إلغاء</button>
+            <button class="modal-btn modal-btn-primary" onclick="performSearch()">🔍 استعلام</button>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج الإضافة -->
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-title">➕ إضافة منتج جديد</div>
+        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+            <input type="text" id="addCode" class="modal-input" placeholder="كود المنتج" required>
+            <input type="text" id="addName" class="modal-input" placeholder="اسم المنتج" required>
+            <input type="number" id="addQuantity" class="modal-input" placeholder="الكمية" required>
+            <input type="number" id="addMinStock" class="modal-input" placeholder="الحد الأدنى للمخزون" required>
+            <input type="number" id="addPrice" class="modal-input" placeholder="سعر الشراء" required>
+            <select id="addCategory" class="modal-input" required>
+                <option value="">اختر الفئة</option>
+            </select>
+            <select id="addWarehouse" class="modal-input" required>
+                <option value="">اختر المخزن</option>
+            </select>
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal('addModal')">إلغاء</button>
+            <button class="modal-btn modal-btn-primary" onclick="saveNewProduct()">💾 حفظ</button>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج الإعدادات -->
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-title">⚙️ إعدادات النظام</div>
+        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+            <div class="filter-group">
+                <label class="filter-label">اللغة</label>
+                <select class="modal-input" id="languageSetting">
+                    <option value="ar">العربية</option>
+                    <option value="en">الإنجليزية</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">السمة</label>
+                <select class="modal-input" id="themeSetting">
+                    <option value="light">فاتح</option>
+                    <option value="dark">داكن</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">تحديث تلقائي</label>
+                <select class="modal-input" id="autoRefreshSetting">
+                    <option value="5">كل 5 دقائق</option>
+                    <option value="15">كل 15 دقيقة</option>
+                    <option value="30">كل 30 دقيقة</option>
+                    <option value="0">معطل</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal('settingsModal')">إلغاء</button>
+            <button class="modal-btn modal-btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج التصفية المتقدمة -->
+<div id="advancedFilterModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-title">⚙️ تصفية متقدمة</div>
+        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+            <div class="filter-group">
+                <label class="filter-label">نطاق القيمة</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="minValue" class="modal-input" placeholder="الحد الأدنى">
+                    <input type="number" id="maxValue" class="modal-input" placeholder="الحد الأقصى">
+                </div>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">نطاق الكمية</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="minQuantity" class="modal-input" placeholder="الحد الأدنى">
+                    <input type="number" id="maxQuantity" class="modal-input" placeholder="الحد الأقصى">
+                </div>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">تاريخ الإضافة</label>
+                <input type="date" id="addDate" class="modal-input">
+            </div>
+        </div>
+        <div style="margin-top: 15px;">
+            <button class="modal-btn modal-btn-cancel" onclick="closeModal('advancedFilterModal')">إلغاء</button>
+            <button class="modal-btn modal-btn-primary" onclick="applyAdvancedFilters()">تطبيق التصفية</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- JavaScript -->
+<!-- ============================================================ -->
+<script>
+// ============================================================
+// 1. دوال apiCall و handleAndroidResult (الموحدة)
+// ============================================================
+function apiCall(action, params) {
+    return new Promise((resolve, reject) => {
+        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+            try {
+                const jsonParams = JSON.stringify(params || {});
+                const result = window.AndroidInterface.execute(action, jsonParams);
+                try {
+                    const parsed = JSON.parse(result);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ success: true, data: result });
+                }
+            } catch (e) {
+                reject({ success: false, error: e.message });
+            }
+        } else {
+            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
+            // محاكاة بيانات للاختبار
+            resolve(mockApiResponse(action, params));
+        }
+    });
+}
+
+function handleAndroidResult(action, data) {
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        if (window._pendingResolve) {
+            window._pendingResolve(parsed);
+            window._pendingResolve = null;
+        }
+    } catch (e) {
+        console.error('Error in handleAndroidResult:', e);
+    }
+}
+
+// ============================================================
+// 2. دوال مساعدة (Toast, Loading)
+// ============================================================
+function showToast(message, type = 'success') {
+    const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+    Swal.fire({
+        title: type === 'success' ? '✅ نجاح' : type === 'error' ? '❌ خطأ' : '⚠️ تنبيه',
+        text: message,
+        icon: icon,
+        timer: 3000,
+        showConfirmButton: false,
+        position: 'top-end',
+        toast: true
+    });
+}
+
+function showLoading(show) {
+    document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+}
+
+// ============================================================
+// 3. متغيرات عامة
+// ============================================================
+let chartInstances = {
+    movement: null,
+    distribution: null,
+    trend: null,
+    expiry: null
+};
+let allProducts = [];
+let allWarehouses = [];
+let allCategories = [];
+let allInventoryLevels = [];
+let allMovements = [];
+let allAlerts = [];
+let allStockValues = [];
+
+// ============================================================
+// 4. دوال التهيئة والتبويبات
+// ============================================================
+function switchSection(sectionId) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById(sectionId + 'Section').classList.add('active');
+    document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+    document.querySelector(`.menu-item[data-section="${sectionId}"]`).classList.add('active');
+    
+    // تحميل البيانات حسب القسم
+    if (sectionId === 'movements') loadMovements();
+    if (sectionId === 'values') loadStockValues();
+    if (sectionId === 'alerts') loadAlerts();
+}
+
+function toggleTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('theme', 'dark');
+        document.querySelector('#darkModeToggle i').className = 'fas fa-sun';
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('theme', 'light');
+        document.querySelector('#darkModeToggle i').className = 'fas fa-moon';
+    }
+}
+
+function loadSavedTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') toggleTheme('dark');
+}
+
+function goToMain() {
+    window.location.href = 'main.html';
+}
+
+// ============================================================
+// 5. تحميل البيانات الأساسية
+// ============================================================
+async function loadInitialData() {
+    showLoading(true);
+    try {
+        await Promise.all([
+            loadWarehouses(),
+            loadCategories(),
+            loadInventorySummary(),
+            loadLowStockProducts(),
+            loadAlertsData(),
+            loadChartsData()
+        ]);
+    } catch (e) {
+        console.error('Error loading initial data:', e);
+        showToast('خطأ في تحميل البيانات الأساسية', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function loadWarehouses() {
+    try {
+        const result = await apiCall('getWarehouses', {});
+        if (result.success) {
+            allWarehouses = result.data || [];
+            populateWarehouseDropdowns();
+        }
+    } catch (e) {
+        console.error('Error loading warehouses:', e);
+        // بيانات تجريبية
+        allWarehouses = [{ warehouse_id: 1, warehouse_name: 'المستودع الرئيسي' }];
+        populateWarehouseDropdowns();
+    }
+}
+
+function populateWarehouseDropdowns() {
+    const selects = ['warehouseFilter', 'addWarehouse'];
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">اختر المخزن</option>';
+        allWarehouses.forEach(w => {
+            const opt = document.createElement('option');
+            opt.value = w.warehouse_id || w.id;
+            opt.textContent = w.warehouse_name || w.name;
+            sel.appendChild(opt);
+        });
+        if (currentVal) sel.value = currentVal;
+    });
+}
+
+async function loadCategories() {
+    try {
+        const result = await apiCall('getCategories', {});
+        if (result.success) {
+            allCategories = result.data || [];
+            populateCategoryDropdowns();
+        }
+    } catch (e) {
+        console.error('Error loading categories:', e);
+        allCategories = [{ category_id: 1, category_name: 'منتجات' }];
+        populateCategoryDropdowns();
+    }
+}
+
+function populateCategoryDropdowns() {
+    const selects = ['categoryFilter', 'addCategory'];
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">اختر الفئة</option>';
+        allCategories.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.category_id || c.id;
+            opt.textContent = c.category_name || c.name;
+            sel.appendChild(opt);
+        });
+        if (currentVal) sel.value = currentVal;
+    });
+}
+
+// ============================================================
+// 6. تحميل ملخص المخزون
+// ============================================================
+async function loadInventorySummary() {
+    try {
+        const result = await apiCall('getInventorySummary', {});
+        if (result.success) {
+            const data = result.data || {};
+            document.getElementById('totalInventoryValue').textContent = 
+                (data.total_value || 0).toLocaleString('en') + ' ريال';
+            document.getElementById('inventoryTrend').textContent = 
+                (data.inventory_trend || 0).toFixed(2) + '% عن الشهر الماضي';
+            document.getElementById('lowStockCount').textContent = 
+                (data.low_stock || 0) + ' منتج';
+            document.getElementById('criticalCount').textContent = 
+                'تحذير: ' + (data.critical_count || 0) + ' منتج حرج';
+            document.getElementById('expiredValue').textContent = 
+                (data.expired_value || 0).toLocaleString('en') + ' ريال';
+            document.getElementById('expiryTrend').textContent = 
+                'زيادة ' + (data.expiry_trend || 0).toFixed(2) + '%';
+            document.getElementById('turnoverRate').textContent = 
+                (data.turnover_rate || 0).toFixed(2) + ' مرة';
+            document.getElementById('turnoverStatus').textContent = 
+                data.turnover_status || 'ممتاز (المعدل المثالي 3-5)';
+        }
+    } catch (e) {
+        console.error('Error loading inventory summary:', e);
+    }
+}
+
+// ============================================================
+// 7. تحميل المنتجات المنخفضة
+// ============================================================
+async function loadLowStockProducts() {
+    try {
+        const result = await apiCall('getLowStockProducts', {});
+        if (result.success) {
+            const products = result.data || [];
+            populateLowStockTable(products);
+        }
+    } catch (e) {
+        console.error('Error loading low stock products:', e);
+        populateLowStockTable([]);
+    }
+}
+
+function populateLowStockTable(products) {
+    const tbody = document.getElementById('lowStockTableBody');
+    tbody.innerHTML = '';
+    if (!products || products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">✅ لا توجد منتجات تحت الحد الأدنى</td></tr>';
+        return;
+    }
+    products.forEach((p, idx) => {
+        const shortage = (p.min_stock_level || 0) - (p.quantity_on_hand || 0);
+        const row = document.createElement('tr');
+        row.setAttribute('data-id', p.product_id || p.id);
+        row.onclick = function() { selectRow(this); };
+        row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${p.product_code || '---'}</td>
+            <td>${p.product_name || '---'}</td>
+            <td class="numeric">${(p.quantity_on_hand || 0).toLocaleString('en')}</td>
+            <td class="numeric">${(p.min_stock_level || 0).toLocaleString('en')}</td>
+            <td class="numeric" style="color: var(--error); font-weight: bold;">${shortage.toLocaleString('en')}</td>
+            <td>
+                <button class="action-btn action-btn-success" onclick="event.stopPropagation();createOrder(${p.product_id || p.id}, '${p.product_name || ''}')">
+                    <i class="fas fa-shopping-cart"></i> طلب
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function selectRow(row) {
+    document.querySelectorAll('#lowStockTableBody tr').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+}
+
+// ============================================================
+// 8. تحميل بيانات التنبيهات
+// ============================================================
+async function loadAlertsData() {
+    try {
+        const result = await apiCall('getInventoryAlerts', {});
+        if (result.success) {
+            const alerts = result.data || {};
+            document.getElementById('criticalAlert').textContent = 
+                (alerts.critical_count || 0) + ' منتجات وصلت إلى أقل من 10% من الحد الأدنى';
+            document.getElementById('expiringAlert').textContent = 
+                (alerts.expiring_count || 0) + ' منتج ستنتهي صلاحيته خلال الشهر القادم بقيمة ' + 
+                (alerts.expiring_value || 0).toLocaleString('en') + ' ريال';
+            document.getElementById('auditAlert').textContent = 
+                'تم إجراء جرد تلقائي لـ ' + (alerts.audit_items || 0) + ' منتج مع فروق أقل من ' + 
+                (alerts.audit_variance || 0) + '%';
+        }
+    } catch (e) {
+        console.error('Error loading alerts data:', e);
+    }
+}
+
+// ============================================================
+// 9. تحميل بيانات الرسوم البيانية
+// ============================================================
+async function loadChartsData() {
+    try {
+        const result = await apiCall('getInventoryCharts', {});
+        if (result.success) {
+            const data = result.data || {};
+            updateMovementChart(data.movement_chart || []);
+            updateDistributionChart(data.distribution_chart || []);
+            updateTrendChart(data.trend_chart || []);
+            updateExpiryChart(data.expiry_chart || { active: 60, expiring: 25, expired: 15 });
+        }
+    } catch (e) {
+        console.error('Error loading charts data:', e);
+        // بيانات تجريبية
+        updateMovementChart(generateMockData(30));
+        updateDistributionChart([
+            { category: 'وقود', value: 40 },
+            { category: 'زيوت', value: 25 },
+            { category: 'قطع غيار', value: 20 },
+            { category: 'خدمات', value: 15 }
+        ]);
+        updateTrendChart(generateTrendData(6));
+        updateExpiryChart({ active: 60, expiring: 25, expired: 15 });
+    }
+}
+
+function generateMockData(days) {
+    const labels = [];
+    const values = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('ar-EG', { month: '2-digit', day: '2-digit' }));
+        values.push(Math.floor(Math.random() * 80) + 20);
+    }
+    return labels.map((label, idx) => ({ date: label, value: values[idx] }));
+}
+
+function generateTrendData(months) {
+    const data = [];
+    const today = new Date();
+    for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setMonth(d.getMonth() - i);
+        data.push({
+            month: d.toLocaleDateString('ar-EG', { month: 'short', year: 'numeric' }),
+            value: Math.floor(Math.random() * 50000) + 20000
+        });
+    }
+    return data;
+}
+
+// ============================================================
+// 10. تحديث الرسوم البيانية
+// ============================================================
+function updateMovementChart(data) {
+    const ctx = document.getElementById('movementChart').getContext('2d');
+    if (chartInstances.movement) chartInstances.movement.destroy();
+    chartInstances.movement = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => d.date || ''),
+            datasets: [{
+                label: 'صافي الحركة اليومية',
+                data: data.map(d => d.value || 0),
+                borderColor: '#007ACC',
+                backgroundColor: 'rgba(0, 122, 204, 0.1)',
+                tension: 0.3,
+                fill: true,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function updateDistributionChart(data) {
+    const ctx = document.getElementById('distributionChart').getContext('2d');
+    if (chartInstances.distribution) chartInstances.distribution.destroy();
+    const colors = ['#4B0082', '#007ACC', '#4CAF50', '#FFC107', '#FF5722', '#9C27B0', '#3F51B5', '#009688'];
+    chartInstances.distribution = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.category || ''),
+            datasets: [{
+                data: data.map(d => d.value || 0),
+                backgroundColor: colors.slice(0, data.length),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'left',
+                    labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 12 }
+                }
+            }
+        }
+    });
+}
+
+function updateTrendChart(data) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (chartInstances.trend) chartInstances.trend.destroy();
+    chartInstances.trend = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.month || ''),
+            datasets: [{
+                label: 'متوسط القيمة الشهري',
+                data: data.map(d => d.value || 0),
+                backgroundColor: 'rgba(0, 122, 204, 0.7)',
+                borderColor: 'rgba(0, 122, 204, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function updateExpiryChart(data) {
+    const ctx = document.getElementById('expiryChart').getContext('2d');
+    if (chartInstances.expiry) chartInstances.expiry.destroy();
+    chartInstances.expiry = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['نشط', 'قارب الانتهاء', 'منتهي'],
+            datasets: [{
+                data: [data.active || 0, data.expiring || 0, data.expired || 0],
+                backgroundColor: ['rgba(76, 175, 80, 0.7)', 'rgba(255, 193, 7, 0.7)', 'rgba(244, 67, 54, 0.7)'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'left',
+                    labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 12 }
+                }
+            }
+        }
+    });
+}
+
+// ============================================================
+// 11. دوال تحميل الأقسام الأخرى
+// ============================================================
+async function loadMovements() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getMovements', { limit: 100 });
+        if (result.success) {
+            allMovements = result.data || [];
+            populateMovementsTable(allMovements);
+        }
+    } catch (e) {
+        console.error('Error loading movements:', e);
+        populateMovementsTable([]);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function populateMovementsTable(movements) {
+    const tbody = document.getElementById('movementsTableBody');
+    tbody.innerHTML = '';
+    if (!movements || movements.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center">لا توجد حركات لعرضها</td></tr>';
+        return;
+    }
+    movements.slice(0, 50).forEach((m, idx) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td class="numeric">${m.movement_date || m.created_at || '---'}</td>
+            <td>${m.product_name || '---'}</td>
+            <td><span class="badge ${m.movement_type === 'in' || m.movement_type === 'دخول' ? 'badge-success' : 'badge-danger'}">${getMovementLabel(m.movement_type)}</span></td>
+            <td class="numeric">${(m.quantity_change || 0).toLocaleString('en')}</td>
+            <td class="numeric">${(m.total_cost || 0).toLocaleString('en')}</td>
+            <td><span class="badge ${m.status === 'completed' ? 'badge-success' : 'badge-warning'}">${m.status === 'completed' ? '✅ مكتمل' : '⏳ قيد الانتظار'}</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getMovementLabel(type) {
+    const map = {
+        'in': '📥 دخول',
+        'out': '📤 خروج',
+        'دخول': '📥 دخول',
+        'خروج': '📤 خروج',
+        'transfer': '🔄 تحويل',
+        'return_customer': '🔄 إرجاع عميل',
+        'return_supplier': '🔄 إرجاع مورد',
+        'waste': '🗑️ هالك',
+        'adjustment': '⚖️ تسوية',
+        'stocktake': '📋 جرد'
+    };
+    return map[type] || type;
+}
+
+async function loadStockValues() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getStockValues', {});
+        if (result.success) {
+            allStockValues = result.data || [];
+            populateValuesTable(allStockValues);
+        }
+    } catch (e) {
+        console.error('Error loading stock values:', e);
+        populateValuesTable([]);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function populateValuesTable(values) {
+    const tbody = document.getElementById('valuesTableBody');
+    tbody.innerHTML = '';
+    if (!values || values.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">لا توجد بيانات للعرض</td></tr>';
+        return;
+    }
+    values.slice(0, 50).forEach((v, idx) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${v.product_name || '---'}</td>
+            <td>${v.warehouse_name || '---'}</td>
+            <td class="numeric">${(v.quantity_on_hand || 0).toLocaleString('en')}</td>
+            <td class="numeric">${(v.average_cost || 0).toFixed(2)}</td>
+            <td class="numeric">${(v.total_value || 0).toLocaleString('en')}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function loadAlerts() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getAlerts', {});
+        if (result.success) {
+            allAlerts = result.data || [];
+            populateAlertsTable(allAlerts);
+        }
+    } catch (e) {
+        console.error('Error loading alerts:', e);
+        populateAlertsTable([]);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function populateAlertsTable(alerts) {
+    const tbody = document.getElementById('alertsTableBody');
+    tbody.innerHTML = '';
+    if (!alerts || alerts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">✅ لا توجد تنبيهات</td></tr>';
+        return;
+    }
+    alerts.slice(0, 50).forEach((a, idx) => {
+        const row = document.createElement('tr');
+        const statusClass = a.is_resolved ? 'badge-success' : 'badge-warning';
+        const statusText = a.is_resolved ? '✅ محلول' : '⏳ قيد المعالجة';
+        row.innerHTML = `
+            <td>${idx + 1}</td>
+            <td>${a.product_name || '---'}</td>
+            <td>${a.alert_type || '---'}</td>
+            <td><span class="badge ${a.alert_level === 'critical' ? 'badge-danger' : 'badge-warning'}">${a.alert_level || 'normal'}</span></td>
+            <td>${a.created_at || '---'}</td>
+            <td><span class="badge ${statusClass}">${statusText}</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// ============================================================
+// 12. دوال الفلاتر والعمليات
+// ============================================================
+async function applyFilters() {
+    const warehouse = document.getElementById('warehouseFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    const dateRange = document.getElementById('dateRangeFilter').value;
+    const expiry = document.getElementById('expiryFilter').value;
+    
+    showLoading(true);
+    try {
+        const result = await apiCall('filterInventory', {
+            warehouse_id: warehouse === 'all' ? null : warehouse,
+            category_id: category === 'all' ? null : category,
+            date_range: dateRange,
+            expiry_status: expiry === 'all' ? null : expiry
+        });
+        if (result.success) {
+            const data = result.data || {};
+            document.getElementById('totalInventoryValue').textContent = 
+                (data.total_value || 0).toLocaleString('en') + ' ريال';
+            populateLowStockTable(data.products || []);
+            updateMovementChart(data.movement_chart || []);
+            showToast('تم تطبيق الفلاتر بنجاح', 'success');
+        }
+    } catch (e) {
+        showToast('خطأ في تطبيق الفلاتر', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function showAdvancedFilter() {
+    document.getElementById('advancedFilterModal').style.display = 'flex';
+}
+
+async function applyAdvancedFilters() {
+    const minValue = document.getElementById('minValue').value;
+    const maxValue = document.getElementById('maxValue').value;
+    const minQty = document.getElementById('minQuantity').value;
+    const maxQty = document.getElementById('maxQuantity').value;
+    const addDate = document.getElementById('addDate').value;
+    
+    showLoading(true);
+    try {
+        const result = await apiCall('advancedFilter', {
+            min_value: minValue || null,
+            max_value: maxValue || null,
+            min_quantity: minQty || null,
+            max_quantity: maxQty || null,
+            add_date: addDate || null
+        });
+        if (result.success) {
+            populateLowStockTable(result.data || []);
+            closeModal('advancedFilterModal');
+            showToast('تم تطبيق التصفية المتقدمة', 'success');
+        }
+    } catch (e) {
+        showToast('خطأ في التصفية المتقدمة', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function createOrder(productId, productName) {
+    const { value: quantity } = await Swal.fire({
+        title: `طلب شراء: ${productName}`,
+        input: 'number',
+        inputLabel: 'الكمية المطلوبة',
+        inputPlaceholder: 'أدخل الكمية',
+        showCancelButton: true,
+        confirmButtonText: 'تأكيد الطلب',
+        cancelButtonText: 'إلغاء',
+        inputValidator: (v) => {
+            if (!v || v <= 0) return 'الرجاء إدخال كمية صحيحة';
+        }
+    });
+    if (!quantity) return;
+    showLoading(true);
+    try {
+        const result = await apiCall('createPurchaseOrder', {
+            product_id: productId,
+            quantity: parseInt(quantity)
+        });
+        if (result.success) {
+            showToast('تم إنشاء طلب الشراء بنجاح', 'success');
+            loadLowStockProducts();
+        }
+    } catch (e) {
+        showToast('خطأ في إنشاء طلب الشراء', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ============================================================
+// 13. دوال النماذج المنبثقة
+// ============================================================
+function showSearchModal() {
+    document.getElementById('searchModal').style.display = 'flex';
+}
+
+function showAddModal() {
+    document.getElementById('addModal').style.display = 'flex';
+}
+
+function showSettings() {
+    document.getElementById('settingsModal').style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+async function performSearch() {
+    const code = document.getElementById('searchCode').value.trim();
+    const name = document.getElementById('searchName').value.trim();
+    if (!code && !name) {
+        showToast('الرجاء إدخال كود أو اسم المنتج', 'error');
+        return;
+    }
+    showLoading(true);
+    try {
+        const result = await apiCall('searchProducts', { code, name });
+        if (result.success) {
+            populateLowStockTable(result.data || []);
+            closeModal('searchModal');
+            showToast(`تم العثور على ${(result.data || []).length} منتج`, 'success');
+        }
+    } catch (e) {
+        showToast('خطأ في البحث', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function saveNewProduct() {
+    const code = document.getElementById('addCode').value.trim();
+    const name = document.getElementById('addName').value.trim();
+    const quantity = document.getElementById('addQuantity').value;
+    const minStock = document.getElementById('addMinStock').value;
+    const price = document.getElementById('addPrice').value;
+    const category = document.getElementById('addCategory').value;
+    const warehouse = document.getElementById('addWarehouse').value;
+    
+    if (!code || !name || !quantity || !minStock || !price || !category || !warehouse) {
+        showToast('الرجاء ملء جميع الحقول', 'error');
+        return;
+    }
+    showLoading(true);
+    try {
+        const result = await apiCall('addProduct', {
+            product_code: code,
+            product_name: name,
+            quantity: parseFloat(quantity),
+            min_stock_level: parseFloat(minStock),
+            purchase_price: parseFloat(price),
+            category_id: parseInt(category),
+            warehouse_id: parseInt(warehouse)
+        });
+        if (result.success) {
+            showToast('تم إضافة المنتج بنجاح', 'success');
+            closeModal('addModal');
+            loadInitialData();
+        }
+    } catch (e) {
+        showToast('خطأ في إضافة المنتج', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function saveSettings() {
+    const language = document.getElementById('languageSetting').value;
+    const theme = document.getElementById('themeSetting').value;
+    const autoRefresh = document.getElementById('autoRefreshSetting').value;
+    
+    showLoading(true);
+    try {
+        const result = await apiCall('saveSettings', {
+            language,
+            theme,
+            auto_refresh: parseInt(autoRefresh)
+        });
+        if (result.success) {
+            if (theme === 'dark') toggleTheme('dark');
+            else toggleTheme('light');
+            closeModal('settingsModal');
+            showToast('تم حفظ الإعدادات', 'success');
+        }
+    } catch (e) {
+        showToast('خطأ في حفظ الإعدادات', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ============================================================
+// 14. دوال التصدير والتنبيهات
+// ============================================================
+function exportLowStockTable() {
+    const table = document.getElementById('lowStockTable');
+    exportTableToCSV(table, 'المنتجات_تحت_الحد_الأدنى');
+}
+
+function exportMovements() {
+    const table = document.getElementById('movementsTable');
+    exportTableToCSV(table, 'حركات_المخزون');
+}
+
+function exportValues() {
+    const table = document.getElementById('valuesTable');
+    exportTableToCSV(table, 'قيم_المخزون');
+}
+
+function exportAlerts() {
+    const table = document.getElementById('alertsTable');
+    exportTableToCSV(table, 'تنبيهات_المخزون');
+}
+
+function exportTableToCSV(table, filename) {
+    let csv = '';
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('th, td');
+        const rowData = [];
+        cells.forEach(cell => {
+            let text = cell.textContent.trim().replace(/,/g, '');
+            rowData.push(text);
+        });
+        csv += rowData.join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showToast('تم التصدير بنجاح', 'success');
+}
+
+function downloadChart(chartId) {
+    const canvas = document.getElementById(chartId);
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = `${chartId}_${new Date().toISOString().slice(0,10)}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+function showCriticalProducts() {
+    loadLowStockProducts();
+    showToast('تم عرض المنتجات الحرجة', 'success');
+}
+
+async function showExpiringProducts() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getExpiringProducts', {});
+        if (result.success) {
+            populateLowStockTable(result.data || []);
+            showToast(`تم عرض ${(result.data || []).length} منتج قارب على الانتهاء`, 'success');
+        }
+    } catch (e) {
+        showToast('خطأ في جلب المنتجات القاربة على الانتهاء', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function showAuditReport() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getAuditReport', {});
+        if (result.success && result.data && result.data.url) {
+            window.open(result.data.url, '_blank');
+            showToast('تم فتح تقرير الجرد', 'success');
+        } else {
+            showToast('لا يوجد تقرير جرد متاح', 'info');
+        }
+    } catch (e) {
+        showToast('خطأ في تحميل تقرير الجرد', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// ============================================================
+// 15. دوال mock للاختبار (للاستخدام بدون AndroidInterface)
+// ============================================================
+function mockApiResponse(action, params) {
+    // بيانات تجريبية للاختبار
+    const mockData = {
+        getWarehouses: { success: true, data: [{ warehouse_id: 1, warehouse_name: 'المستودع الرئيسي' }] },
+        getCategories: { success: true, data: [{ category_id: 1, category_name: 'منتجات' }] },
+        getInventorySummary: {
+            success: true,
+            data: {
+                total_value: 125000,
+                inventory_trend: 5.2,
+                low_stock: 8,
+                critical_count: 3,
+                expired_value: 4500,
+                expiry_trend: 2.1,
+                turnover_rate: 4.5,
+                turnover_status: 'ممتاز'
+            }
+        },
+        getLowStockProducts: {
+            success: true,
+            data: [
+                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 },
+                { product_id: 2, product_code: 'P002', product_name: 'بنزين 95', quantity_on_hand: 80, min_stock_level: 300 },
+                { product_id: 3, product_code: 'P003', product_name: 'زيت محرك', quantity_on_hand: 15, min_stock_level: 50 }
+            ]
+        },
+        getInventoryAlerts: {
+            success: true,
+            data: {
+                critical_count: 3,
+                expiring_count: 5,
+                expiring_value: 12000,
+                audit_items: 45,
+                audit_variance: 0.5
+            }
+        },
+        getInventoryCharts: {
+            success: true,
+            data: {
+                movement_chart: generateMockData(30),
+                distribution_chart: [
+                    { category: 'وقود', value: 40 },
+                    { category: 'زيوت', value: 25 },
+                    { category: 'قطع غيار', value: 20 },
+                    { category: 'خدمات', value: 15 }
+                ],
+                trend_chart: generateTrendData(6),
+                expiry_chart: { active: 60, expiring: 25, expired: 15 }
+            }
+        },
+        getMovements: {
+            success: true,
+            data: [
+                { movement_id: 1, movement_date: '2026-07-22 10:30', product_name: 'ديزل', movement_type: 'in', quantity_change: 500, total_cost: 900000, status: 'completed' },
+                { movement_id: 2, movement_date: '2026-07-21 14:20', product_name: 'بنزين 95', movement_type: 'out', quantity_change: 200, total_cost: 400000, status: 'completed' },
+                { movement_id: 3, movement_date: '2026-07-20 09:15', product_name: 'زيت محرك', movement_type: 'in', quantity_change: 50, total_cost: 25000, status: 'pending' }
+            ]
+        },
+        getStockValues: {
+            success: true,
+            data: [
+                { product_name: 'ديزل', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 2500, average_cost: 1800, total_value: 4500000 },
+                { product_name: 'بنزين 95', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 1800, average_cost: 2000, total_value: 3600000 },
+                { product_name: 'زيت محرك', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 120, average_cost: 500, total_value: 60000 }
+            ]
+        },
+        getAlerts: {
+            success: true,
+            data: [
+                { alert_id: 1, product_name: 'ديزل', alert_type: 'low_stock', alert_level: 'critical', created_at: '2026-07-22 08:00', is_resolved: 0 },
+                { alert_id: 2, product_name: 'بنزين 95', alert_type: 'low_stock', alert_level: 'warning', created_at: '2026-07-21 16:30', is_resolved: 0 },
+                { alert_id: 3, product_name: 'زيت محرك', alert_type: 'expiry', alert_level: 'warning', created_at: '2026-07-20 10:00', is_resolved: 1 }
+            ]
+        },
+        filterInventory: {
+            success: true,
+            data: {
+                total_value: 125000,
+                products: [
+                    { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
+                ],
+                movement_chart: generateMockData(30)
+            }
+        },
+        advancedFilter: {
+            success: true,
+            data: [
+                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
+            ]
+        },
+        createPurchaseOrder: { success: true, order_id: 1001 },
+        searchProducts: {
+            success: true,
+            data: [
+                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
+            ]
+        },
+        addProduct: { success: true, product_id: 100 },
+        saveSettings: { success: true },
+        getExpiringProducts: {
+            success: true,
+            data: [
+                { product_id: 5, product_code: 'P005', product_name: 'زيت فرامل', quantity_on_hand: 30, min_stock_level: 40 }
+            ]
+        },
+        getAuditReport: { success: true, data: { url: '#' } },
+        getDashboardStats: {
+            success: true,
+            data: {
+                total_products: 120,
+                low_stock: 8,
+                out_of_stock: 3,
+                total_value: 125000
+            }
+        }
+    };
+    return mockData[action] || { success: false, message: 'إجراء غير معروف' };
+}
+
+// ============================================================
+// 16. التهيئة الأولية
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    loadSavedTheme();
+    loadInitialData();
+    
+    // أحداث التبديل
+    document.getElementById('darkModeToggle').addEventListener('click', function() {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        toggleTheme(isDark ? 'light' : 'dark');
+    });
+    
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        loadInitialData();
+        showToast('تم تحديث البيانات', 'success');
+    });
+    
+    // أحداث القائمة الجانبية
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    sidebarToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+        if (sidebar.classList.contains('open')) {
+            sidebarToggle.classList.add('hidden');
+        } else {
+            sidebarToggle.classList.remove('hidden');
+        }
+    });
+    document.addEventListener('click', function(e) {
+        if (!sidebar.contains(e.target) && e.target !== sidebarToggle) {
+            sidebar.classList.remove('open');
+            sidebarToggle.classList.remove('hidden');
+        }
+    });
+    
+    // تحديث تلقائي كل 30 ثانية (في حالة عدم وجود AndroidInterface)
+    if (typeof window.AndroidInterface === 'undefined') {
+        setInterval(() => {
+            loadInventorySummary();
+            loadLowStockProducts();
+            loadAlertsData();
+            loadChartsData();
+        }, 30000);
+    }
+});
+</script>
+</body>
+</html>

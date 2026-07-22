@@ -1,0 +1,4105 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>نظام إدارة محطات الوقود – نقاط البيع</title>
+  <!-- مكتبات خارجية من CDN -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- جميع الأنماط المحسنة (منسوخة من التصميم الأصلي) -->
+  <style>
+    :root {
+      --bg-color: #f2fbff;
+      --card-color: #ffffff;
+      --primary3-color: #4B0082;
+      --primary-color: #007ACC;
+      --primary-hover: #005e99;
+      --primary2-color: #000000;
+      --primary2-hover: #4B0082;
+      --secondary-hover: #004c7a;
+      --text-color: #000000;
+      --success: #4CAF50;
+      --error: #f44336;
+      --gold: #FFD700;
+      --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+      --blue-glow: 0 0 10px #007ACC, 0 0 20px #005e99;
+      --red-glow: 0 0 10px #f44336, 0 0 20px #d32f2f;
+      --glass-bg: rgba(75, 0, 130, 0.25);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --accent-color: rgba(100, 149, 237, 0.4);
+      --sidebar-bg: rgba(255, 255, 255, 0.9);
+      --sidebar-btn-bg: rgba(75, 0, 130, 0.8);
+      --glow-light: rgba(0, 122, 204, 0.5);
+      --glow-dark: rgba(255, 165, 0, 0.5);
+      --input-border-light: #003366;
+      --input-border-dark: #1fa2ff;
+      --highlight-border-light: #003366;
+      --highlight-border-dark: #4CAF50;
+      --delete-border-light: #f44336;
+      --delete-border-dark: #d32f2f;
+      --pink-glow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+      --dark-blue: #1a237e;
+      --orange-text: #ff9800;
+    }
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --card-color: #1e1e1e;
+      --primary-color: #1fa2ff;
+      --primary-hover: #0d81cc;
+      --secondary-hover: #0a6aa8;
+      --text-color: #f0f0f0;
+      --success: #388E3C;
+      --error: #d32f2f;
+      --gold: #FFD700;
+      --gold-glow: 0 0 10px #FFD700, 0 0 20px #FFA500;
+      --blue-glow: 0 0 10px #1fa2ff, 0 0 20px #0d81cc;
+      --red-glow: 0 0 10px #d32f2f, 0 0 20px #b71c1c;
+      --glass-bg: rgba(43, 0, 82, 0.4);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --accent-color: rgba(100, 149, 237, 0.3);
+      --sidebar-bg: rgba(30, 30, 30, 0.9);
+      --sidebar-btn-bg: rgba(90, 26, 154, 0.8);
+      --glow-light: rgba(0, 122, 204, 0.3);
+      --glow-dark: rgba(255, 165, 0, 0.6);
+      --pink-glow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+      --dark-blue: #283593;
+      --orange-text: #ffb74d;
+    }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 1px;
+      direction: rtl;
+      transition: background 0.3s, color 0.3s;
+      overflow-x: hidden;
+      margin: 0;
+      padding-top: 50px;
+      touch-action: manipulation;
+      background-image: radial-gradient(circle at 20% 30%, rgba(0,122,204,0.05) 0%, transparent 20%),
+                        radial-gradient(circle at 80% 70%, rgba(75,0,130,0.05) 0%, transparent 20%);
+    }
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, var(--primary2-color), var(--primary2-hover));
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      height: 50px;
+      border-bottom: 2px solid var(--gold);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    h2 {
+      color: var(--primary-color);
+      margin: 0;
+      font-size: 1.5rem;
+      text-align: right;
+    }
+    .mode-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .container {
+      background-color: var(--card-color);
+      border-radius: 16px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      padding: 15px;
+      max-width: 100%;
+      margin: auto;
+      overflow: hidden;
+      position: relative;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    .form-grid input, .form-grid select, .form-grid textarea {
+      padding: 12px 15px;
+      border-radius: 10px;
+      border: 2px solid var(--input-border-light);
+      font-size: 1rem;
+      width: 100%;
+      background-color: var(--card-color);
+      color: var(--text-color);
+      box-sizing: border-box;
+      transition: all 0.3s;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      direction: ltr;
+      text-align: center;
+    }
+    [data-theme="dark"] .form-grid input, 
+    [data-theme="dark"] .form-grid select, 
+    [data-theme="dark"] .form-grid textarea {
+      border: 2px solid var(--input-border-dark);
+    }
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 8px rgba(0,122,204,0.5);
+      outline: none;
+    }
+    .horizontal-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .horizontal-row > div {
+      flex: 1;
+      min-width: 120px;
+    }
+    .sidebar {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      width: 80px;
+      background: var(--sidebar-bg);
+      z-index: 999;
+      transition: transform 0.5s ease;
+      padding: 8px;
+      border-radius: 15px 0 0 15px;
+      overflow-y: auto;
+      box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      transform: translateY(-50%) translateX(100%);
+      border-right: 3px solid var(--glow-light);
+      animation: borderPulse 2s infinite alternate;
+    }
+    #retrieveInvoiceTable {
+      background-color: var(--bs-light);
+      color: #000;
+    }
+    body.dark-mode #retrieveInvoiceTable {
+      background-color: #333;
+      color: #fff;
+    }
+    #retrieveInvoiceTable th, #retrieveInvoiceTable td {
+      color: inherit;
+    }
+    
+    #salesReportTable {
+      width: 100%;
+      background-color: var(--bs-light);
+      color: #000;
+    }
+    body.dark-mode #salesReportTable {
+      background-color: #333;
+      color: #fff;
+    }
+    #salesReportTable th, #salesReportTable td {
+      color: inherit;
+      padding: 12px;
+      font-size: 16px;
+    }
+
+    #productDetailsCanvas {
+      background-color: var(--bs-light);
+      color: #000;
+    }
+    body.dark-mode #productDetailsCanvas {
+      background-color: #333;
+      color: #fff;
+    }
+    #productDetailsCanvas .offcanvas-title,
+    #productDetailsCanvas .offcanvas-body {
+      color: inherit;
+    }
+    
+    [data-theme="light"] {
+      --bg-color: #f2fbff;
+      --card-color: #ffffff;
+      --primary-color: #007ACC;
+      --primary-hover: #005e99;
+      --text-color: #000000;
+      --success: #4CAF50;
+      --error: #f44336;
+      --field-label-color: #1a237e;
+      --field-border-color: #003366;
+      --field-text-color: #000000;
+    }
+    [data-theme="light"] .form-label {
+      color: var(--field-label-color);
+      font-weight: bold;
+    }
+    [data-theme="light"] .form-control {
+      border-color: var(--field-border-color);
+      color: var(--field-text-color);
+    }
+    [data-theme="light"] .gold-text {
+      color: var(--field-label-color);
+      text-shadow: none;
+    }
+    [data-theme="dark"] .sidebar {
+      border-right: 3px solid var(--glow-dark);
+      animation: borderPulseDark 2s infinite alternate;
+    }
+    @keyframes borderPulse {
+      0% { box-shadow: -5px 0 10px var(--glow-light); }
+      100% { box-shadow: -5px 0 20px var(--glow-light); }
+    }
+    @keyframes borderPulseDark {
+      0% { box-shadow: -5px 0 10px var(--glow-dark); }
+      100% { box-shadow: -5px 0 20px var(--glow-dark); }
+    }
+    .sidebar.open {
+      transform: translateY(-50%) translateX(0);
+    }
+    .sidebar-toggle {
+      position: fixed;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      background: linear-gradient(145deg, var(--primary3-color), #5a1a9a);
+      color: white;
+      width: 35px;
+      height: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50% 0 0 50%;
+      cursor: pointer;
+      z-index: 1001;
+      box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .sidebar-toggle:hover {
+      background: linear-gradient(145deg, var(--primary-hover), #0d5e99);
+      width: 38px;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.5);
+      transform: translateY(-50%) scale(1.1);
+    }
+    .sidebar-toggle i {
+      transition: transform 0.3s;
+      font-size: 1.2rem;
+    }
+    .sidebar-btn {
+      position: relative;
+      overflow: hidden;
+      background: var(--sidebar-btn-bg);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 
+        0 0 8px rgba(0,0,0,0.2),
+        0 0 15px var(--accent-color);
+      padding: 6px 4px;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 50px;
+      text-align: center;
+      animation: pulseGlow 6s ease-in-out infinite;
+      font-size: 0.75rem;
+      width: 100%;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 15px var(--accent-color); }
+      50% { box-shadow: 0 0 8px rgba(0,0,0,0.2), 0 0 25px var(--accent-color); }
+    }
+    .sidebar-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 15px var(--accent-color), 0 0 25px var(--accent-color);
+      background: rgba(75, 0, 130, 0.35);
+    }
+    .sidebar-btn:active {
+      transform: scale(0.94) rotateX(3deg);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 10px var(--accent-color);
+      transition: all 0.1s;
+    }
+    .sidebar-btn i {
+      font-size: 1rem;
+      transition: transform 0.3s;
+      text-shadow: 0 0 8px rgba(255,255,255,0.5);
+    }
+    .sidebar-btn:hover i {
+      transform: scale(1.2);
+    }
+    .sidebar-btn::after {
+      content: "";
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      pointer-events: none;
+      z-index: 1002;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      min-width: 120px;
+      text-align: center;
+    }
+    .sidebar-btn:hover::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    @keyframes vibrate {
+      0% { transform: translateX(0) rotate(0.5deg); }
+      20% { transform: translateX(-1px) rotate(-0.5deg); }
+      40% { transform: translateX(1px) rotate(0.5deg); }
+      60% { transform: translateX(-1px) rotate(-0.5deg); }
+      80% { transform: translateX(1px) rotate(0.5deg); }
+      100% { transform: translateX(0) rotate(0); }
+    }
+    .vibrate {
+      animation: vibrate 0.3s linear;
+    }
+    @keyframes pulse-glow {
+      0% { box-shadow: 0 0 0 0 var(--accent-color); }
+      70% { box-shadow: 0 0 0 10px rgba(100, 149, 237, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(100, 149, 237, 0); }
+    }
+    .pulse-glow {
+      animation: pulse-glow 1.5s infinite;
+    }
+    .glow {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(
+        circle at center,
+        rgba(255,255,255,0.4) 0%,
+        rgba(255,255,255,0) 70%
+      );
+      border-radius: 10px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 0;
+    }
+    .sidebar-btn:hover .glow {
+      opacity: 0.6;
+    }
+    .table-container {
+      width: 100%;
+      overflow: auto;
+      margin-top: 25px;
+      max-height: 300px;
+      border-radius: 0;
+      border: 1px solid #ddd;
+      box-shadow: none;
+      margin-left: -15px;
+      margin-right: -15px;
+      width: calc(100% + 30px);
+    }
+    #returnsTable, #damagedTable {
+      width: 100%;
+      font-size: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    #returnsTable, #damagedTable {
+      width: 100%;
+      font-size: 16px;
+    }
+    #returnsTable th, #returnsTable td,
+    #damagedTable th, #damagedTable td {
+      padding: 12px;
+      text-align: center;
+    }
+    #returnsTable thead th, #damagedTable thead th {
+      color: #007bff;
+    }
+    body.dark-mode #returnsTable thead th,
+    body.dark-mode #damagedTable thead th {
+      color: #ffd700;
+    }
+    #returnsTable tbody td, #damagedTable tbody td {
+      color: #007bff;
+    }
+    body.dark-mode #returnsTable tbody td,
+    body.dark-mode #damagedTable tbody td {
+      color: #ffd700;
+    }
+    .product-table {
+      width: 100%;
+      min-width: 100%;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.9rem;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    table th, table td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    table th {
+      background: linear-gradient(to bottom, #2c3e50, #1a2a3a);
+      color: white;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-radius: 20px;
+    }
+    table tr:first-child th:first-child {
+      border-top-right-radius: 20px;
+    }
+    table tr:first-child th:last-child {
+      border-top-left-radius: 20px;
+    }
+    table tr:last-child td:first-child {
+      border-bottom-right-radius: 12px;
+    }
+    table tr:last-child td:last-child {
+      border-bottom-left-radius: 12px;
+    }
+    table tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    [data-theme="dark"] table tr:nth-child(even) {
+      background-color: #2a2a2a;
+    }
+    table tr:hover {
+      background-color: #e9f7fe;
+    }
+    [data-theme="dark"] table tr:hover {
+      background-color: #2c3e50;
+    }
+    .selected-row {
+      box-shadow: 0 0 0 2px var(--highlight-border-light);
+    }
+    [data-theme="dark"] .selected-row {
+      box-shadow: 0 0 0 2px var(--highlight-border-dark);
+    }
+    .delete-row {
+      box-shadow: 0 0 0 2px var(--delete-border-light);
+    }
+    [data-theme="dark"] .delete-row {
+      box-shadow: 0 0 0 2px var(--delete-border-dark);
+    }
+    .alert {
+      padding: 4px 6px !important;
+      font-size: 0.425rem !important;
+      max-width: 150px !important;
+      right: 5px !important;
+      top: 30px !important;
+      border-radius: 3px !important;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.075) !important;
+      position: fixed;
+      z-index: 1000;
+      animation: advancedIn 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, advancedOut 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 2.2s;
+      box-sizing: border-box;
+    }
+    .alert p {
+      margin: 0 !important;
+      line-height: 1.3 !important;
+    }
+    @keyframes advancedIn {
+      0% { opacity: 0; transform: translateY(-50px) rotateX(90deg) scale(0.8); }
+      100% { opacity: 1; transform: translateY(0) rotateX(0) scale(1); }
+    }
+    @keyframes advancedOut {
+      0% { opacity: 1; transform: translateY(0) rotateX(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-50px) rotateX(-90deg) scale(0.8); visibility: hidden; }
+    }
+    .error {
+      background-color: #ffebee;
+      color: var(--error);
+      border-left: 4px solid var(--error);
+    }
+    .success {
+      background-color: #e8f5e9;
+      color: var(--success);
+      border-left: 4px solid var(--success);
+    }
+    tr.selected {
+      background-color: #e3f2fd !important;
+      box-shadow: var(--blue-glow);
+      position: relative;
+      z-index: 10;
+    }
+    [data-theme="dark"] tr.selected {
+      background-color: #1a3a5f !important;
+      box-shadow: var(--blue-glow);
+    }
+    .form-label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #555;
+      font-size: 0.9rem;
+    }
+    [data-theme="dark"] .form-label {
+      color: #bbb;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    [data-theme="dark"] ::-webkit-scrollbar-track {
+      background: #2a2a2a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    .gold-text {
+      color: var(--gold);
+      text-shadow: var(--gold-glow);
+      font-weight: bold;
+    }
+    .ripple {
+      position: relative;
+      overflow: hidden;
+      transform: translate3d(0, 0, 0);
+    }
+    .ripple:after {
+      content: "";
+      display: block;
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+      background-repeat: no-repeat;
+      background-position: 50%;
+      transform: scale(10, 10);
+      opacity: 0;
+      transition: transform .5s, opacity 1s;
+    }
+    .ripple:active:after {
+      transform: scale(0, 0);
+      opacity: .3;
+      transition: 0s;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    }
+    .modal-content {
+      background: var(--card-color);
+      border-radius: 16px;
+      padding: 20px;
+      width: 90%;
+      max-width: 450px;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+      text-align: center;
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .modal-content::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+      border-radius: 16px 16px 0 0;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .modal-title {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+      color: var(--primary-color);
+      font-weight: bold;
+      text-shadow: 0 2px 3px rgba(0,0,0,0.1);
+    }
+    .modal-input-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+      justify-content: center;
+    }
+    .modal-input {
+      flex: 1;
+      min-width: 100px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 0.9rem;
+      background: var(--card-color);
+      color: var(--text-color);
+      transition: all 0.3s;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+      direction: ltr;
+    }
+    .modal-input:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 8px rgba(0,122,204,0.3);
+    }
+    .modal-btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+      margin: 0 5px;
+      position: relative;
+      overflow: hidden;
+    }
+    .modal-btn-primary {
+      background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+      color: white;
+    }
+    .modal-btn-primary:hover {
+      background: linear-gradient(to right, var(--primary-hover), var(--primary2-hover));
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    .modal-btn-cancel {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .modal-btn-cancel:hover {
+      background: #e0e0e0;
+    }
+    .row-highlight {
+      animation: highlightRow 1.5s ease;
+      position: relative;
+      z-index: 100;
+    }
+    @keyframes highlightRow {
+      0% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 215, 0, 0.5); }
+      50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+    }
+    .row-update {
+      animation: updateRow 2s ease;
+      position: relative;
+      z-index: 100;
+    }
+    @keyframes updateRow {
+      0% { background-color: #e3f2fd; box-shadow: var(--blue-glow); }
+      50% { background-color: #c8e6c9; box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
+      100% { background-color: inherit; box-shadow: none; }
+    }
+    .row-delete {
+      animation: deleteRow 1.5s forwards;
+      position: relative;
+      z-index: 100;
+    }
+    @keyframes deleteRow {
+      0% { opacity: 1; transform: scale(1); box-shadow: var(--red-glow); }
+      50% { opacity: 0.7; transform: scale(0.95); box-shadow: 0 0 30px rgba(244, 67, 54, 0.8); }
+      100% { opacity: 0; transform: scale(0.9); height: 0; padding: 0; margin: 0; border: none; }
+    }
+    .glow-effect::before {
+      content: "";
+      position: absolute;
+      top: -10px;
+      left: -10px;
+      right: -10px;
+      bottom: -10px;
+      border-radius: 12px;
+      z-index: -1;
+      animation: pulse 2s infinite;
+    }
+    .glow-query::before {
+      background: rgba(255, 215, 0, 0.2);
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+    .glow-update::before {
+      background: rgba(0, 122, 204, 0.2);
+      box-shadow: 0 0 20px rgba(0, 122, 204, 0.5);
+    }
+    .glow-delete::before {
+      background: rgba(244, 67, 54, 0.2);
+      box-shadow: 0 0 20px rgba(244, 67, 54, 0.5);
+    }
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
+    .confirmation-message {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--success);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      z-index: 2000;
+      animation: fadeOut 2s forwards;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; top: 50%; }
+      70% { opacity: 1; top: 50%; }
+      100% { opacity: 0; top: 45%; }
+    }
+    .row-tooltip {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--card-color);
+      border-radius: 16px;
+      padding: 15px;
+      width: 90%;
+      max-width: 450px;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+      z-index: 3000;
+      display: none;
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid rgba(255,255,255,0.1);
+      overflow: hidden;
+    }
+    .row-tooltip::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+      border-radius: 16px 16px 0 0;
+    }
+    .row-tooltip-content {
+      text-align: center;
+    }
+    .row-tooltip-title {
+      font-size: 1.3rem;
+      margin-bottom: 15px;
+      color: var(--primary-color);
+      font-weight: bold;
+    }
+    .row-tooltip-data {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    .row-tooltip-item {
+      background: rgba(0,0,0,0.05);
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 3px solid var(--primary-color);
+    }
+    .row-tooltip-label {
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 5px;
+      font-size: 0.85rem;
+    }
+    .row-tooltip-value {
+      font-size: 0.95rem;
+    }
+    .row-tooltip-close {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: var(--error);
+      color: white;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      font-size: 0.9rem;
+    }
+    .mode-toggle-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      margin-left: 10px;
+    }
+    .mode-toggle-btn i {
+      font-size: 1.5rem;
+      color: var(--gold) !important;
+      text-shadow: 0 0 10px var(--gold);
+      transition: transform 0.5s;
+    }
+    .mode-toggle-btn:hover {
+      transform: scale(1.1);
+      background: rgba(0,0,0,0.1);
+    }
+    .mode-toggle-btn:hover i {
+      text-shadow: 0 0 15px var(--gold), 0 0 25px var(--gold);
+    }
+    .top-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .top-title h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: white;
+      text-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    .field-group {
+      position: relative;
+      margin-bottom: 15px;
+    }
+    .field-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #777;
+      pointer-events: none;
+    }
+    .row-delete-tooltip {
+      position: absolute;
+      background: var(--card-color);
+      border-radius: 20px;
+      padding: 15px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      z-index: 2000;
+      display: none;
+      text-align: center;
+      min-width: 300px;
+      border: 2px solid var(--error);
+      transform: translateY(-100%) translateX(-50%);
+      left: 50%;
+      top: -10px;
+    }
+    .row-delete-tooltip::before {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 10px 0;
+      border-style: solid;
+      border-color: var(--card-color) transparent transparent;
+    }
+    [data-theme="dark"] .row-delete-tooltip {
+      background: #2a2a2a;
+      border: 2px solid var(--delete-border-dark);
+    }
+    .delete-options {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .delete-option-btn {
+      padding: 8px 15px;
+      border-radius: 20px;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      min-width: 100px;
+    }
+    .delete-permanent {
+      background: linear-gradient(to right, #f44336, #d32f2f);
+      color: white;
+    }
+    .delete-archive {
+      background: linear-gradient(to right, #ff9800, #f57c00);
+      color: white;
+    }
+    .delete-cancel {
+      background: linear-gradient(to right, #9e9e9e, #757575);
+      color: white;
+    }
+    @media (max-width: 768px) {
+      .sidebar {
+        width: 70px;
+        padding: 6px;
+      }
+      .sidebar-btn {
+        padding: 6px 3px;
+        min-height: 45px;
+        font-size: 0.7rem;
+      }
+      .sidebar-toggle {
+        width: 32px;
+        height: 32px;
+      }
+      .sidebar-btn::after {
+        font-size: 0.7rem;
+        padding: 4px 6px;
+        bottom: calc(100% + 8px);
+      }
+      .modal-content, .row-tooltip {
+        padding: 12px;
+        max-width: 95%;
+      }
+      .top-bar {
+        height: 60px;
+        padding: 5px 10px;
+      }
+      .top-title h2 {
+        font-size: 1.3rem;
+      }
+      .barcode-container {
+        width: 100%;
+        height: 200px;
+        margin-bottom: 15px;
+      }
+      .product-table th, .product-table td {
+        padding: 6px;
+        font-size: 0.8rem;
+      }
+      .receipt-preview {
+        font-size: 0.9rem;
+        padding: 10px;
+      }
+      .invoice-summary input {
+        padding: 8px;
+        font-size: 0.9rem;
+      }
+    }
+    body.sleep-mode * {
+      animation: none !important;
+      transition: none !important;
+    }
+    body.sleep-mode .sidebar {
+      display: none;
+    }
+    body.sleep-mode .sidebar-toggle {
+      display: none;
+    }
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 3000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .spinner {
+      width: 80px;
+      height: 80px;
+      border: 8px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 8px solid var(--primary-color);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .barcode-container {
+      width: 100%;
+      height: 25vh;
+      max-height: 250px;
+      margin: 0 auto;
+      border: 2px dashed var(--primary-color);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--bg-color);
+    }
+    @media (max-width: 480px) {
+      .barcode-container {
+        height: 30vh;
+      }
+    }
+    .flash-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 100;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .scan-toggle-btn {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 100;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .sales-report-table tr.selected-row {
+      background-color: black !important;
+      color: orange !important;
+      font-weight: bold;
+      transform: scale(1.02);
+      box-shadow: 0 0 10px blue;
+      z-index: 10;
+      position: sticky;
+    }
+    .sales-report-table {
+      width: 95%;
+      height: 40px;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 80px;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    .sales-report-table tr {
+      width: 95%;
+      height: 40px;
+      background-color: black !important;
+      color: white;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .product-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 800px;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    .product-table th {
+      background: linear-gradient(to bottom, var(--primary-color), var(--primary-hover));
+      color: white;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .product-table th:nth-child(1) { width: 6% !important; min-width: 60px !important; }
+    .product-table th:nth-child(2) { width: 40% !important; min-width: 300px !important; }
+    .product-table th:nth-child(3) { width: 12% !important; min-width: 100px !important; }
+    .product-table th:nth-child(4) { width: 12% !important; min-width: 100px !important; }
+    .product-table th:nth-child(5) { width: 24% !important; min-width: 150px !important; }
+    .product-table td {
+      min-width: 120px;
+      text-align: center;
+    }
+    .product-table tr:nth-child(even) {
+      background-color: rgba(0,0,0,0.05);
+    }
+    .product-table tr:hover {
+      background-color: rgba(0,122,204,0.1);
+    }
+    .quantity-input {
+      width: 60px;
+      text-align: center;
+      border: 1px solid var(--input-border-light);
+      border-radius: 6px;
+      padding: 5px;
+      direction: ltr;
+    }
+    .receipt-preview {
+      background-color: var(--card-color);
+      border: 1px solid var(--input-border-light);
+      padding: 15px;
+      font-family: 'Courier New', monospace;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .invoice-summary input {
+      background-color: var(--card-color);
+      border: 1px solid var(--input-border-light);
+      color: var(--text-color);
+      text-align: center;
+      font-weight: bold;
+      direction: ltr;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .action-buttons button {
+      flex: 1;
+    }
+    .btn {
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #d32f2f;
+    }
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    .btn-success:hover {
+      background: #388E3C;
+    }
+    .btn-info {
+      background: #17a2b8;
+      color: white;
+    }
+    .btn-info:hover {
+      background: #138496;
+    }
+    .w-100 {
+      width: 100%;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .text-muted {
+      color: #6c757d;
+    }
+    @media (max-width: 480px) {
+      .product-table th, .product-table td {
+        padding: 4px;
+        font-size: 0.7rem;
+      }
+      .quantity-input {
+        width: 50px;
+      }
+      .receipt-preview {
+        font-size: 0.8rem;
+        padding: 8px;
+      }
+    }
+    #qr-reader {
+      width: 100%;
+      height: 100%;
+    }
+    #qr-reader__dashboard_section_csr {
+      display: none;
+    }
+    #qr-reader__dashboard_section_swaplink {
+      display: none;
+    }
+    .invoice-retrieve-btn {
+      background: linear-gradient(to right, #4B0082, #7B68EE);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      margin-top: 5px;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+    .invoice-retrieve-btn:hover {
+      background: linear-gradient(to right, #5a1a9a, #8A2BE2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .customer-action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .customer-action-buttons button {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .whatsapp-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    }
+    .whatsapp-modal-content {
+      background: var(--card-color);
+      border-radius: 16px;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+      text-align: center;
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .whatsapp-modal-content::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(to right, #25D366, #128C7E);
+      border-radius: 16px 16px 0 0;
+    }
+    .whatsapp-input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 2px solid var(--input-border-light);
+      font-size: 1rem;
+      margin-bottom: 15px;
+      background: var(--card-color);
+      color: var(--text-color);
+      box-sizing: border-box;
+      transition: all 0.3s;
+    }
+    .whatsapp-input:focus {
+      border-color: #25D366;
+      box-shadow: 0 0 8px rgba(37, 211, 102, 0.3);
+      outline: none;
+    }
+    .daily-report-container {
+      display: none;
+      margin-top: 20px;
+      border: 1px solid var(--input-border-light);
+      border-radius: 12px;
+      padding: 15px;
+      background: var(--card-color);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* ===== تصميم فاخر لجدول المنتجات المضافة ===== */
+    .products-scroll-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 15px;
+      width: 100% !important;
+      margin: 15px 0 !important;
+      padding: 0 !important;
+      border: 2px solid #2c3e50;
+      background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+    [data-theme="dark"] .products-scroll-container {
+      border: 2px solid #ffd700;
+      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+    .products-scroll-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
+      margin: 0;
+      padding: 10px;
+    }
+    .products-container-vertical {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 350px;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .products-scroll-wrapper::-webkit-scrollbar,
+    .products-container-vertical::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .products-scroll-wrapper::-webkit-scrollbar-thumb,
+    .products-container-vertical::-webkit-scrollbar-thumb {
+      background: #3498db;
+      border-radius: 4px;
+      border: 2px solid #ecf0f1;
+    }
+    [data-theme="dark"] .products-scroll-wrapper::-webkit-scrollbar-thumb,
+    [data-theme="dark"] .products-container-vertical::-webkit-scrollbar-thumb {
+      background: #ffd700;
+      border: 2px solid #2c3e50;
+    }
+    .products-scroll-wrapper::-webkit-scrollbar-track,
+    .products-container-vertical::-webkit-scrollbar-track {
+      background: #ecf0f1;
+      border-radius: 4px;
+    }
+    [data-theme="dark"] .products-scroll-wrapper::-webkit-scrollbar-track,
+    [data-theme="dark"] .products-container-vertical::-webkit-scrollbar-track {
+      background: #2c3e50;
+    }
+    #productsTable {
+      width: 100% !important;
+      border-collapse: separate;
+      border-spacing: 4px;
+      background: transparent;
+      border-radius: 12px;
+      position: relative;
+      margin: 0;
+      padding: 8px;
+    }
+    #productsTable thead {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #productsTable th {
+      background: linear-gradient(145deg, #8e44ad 0%, #9b59b6 100%);
+      color: #ffffff;
+      font-weight: 700;
+      text-align: center;
+      padding: 14px 10px;
+      border: 2px solid #6c3483;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      white-space: nowrap;
+      font-family: 'Cairo', sans-serif;
+      border-radius: 10px;
+    }
+    [data-theme="dark"] #productsTable th {
+      background: linear-gradient(145deg, #ffd700 0%, #f39c12 100%);
+      color: #2c3e50;
+      border: 2px solid #b8941f;
+    }
+    #productsTable th:nth-child(1), #productsTable td:nth-child(1) {
+      min-width: 70px;
+      max-width: 80px;
+      width: 8%;
+    }
+    #productsTable th:nth-child(2), #productsTable td:nth-child(2) {
+      min-width: 250px;
+      max-width: 300px;
+      width: 50%;
+    }
+    #productsTable th:nth-child(3), #productsTable td:nth-child(3) {
+      min-width: 100px;
+      max-width: 120px;
+      width: 12%;
+    }
+    #productsTable th:nth-child(4), #productsTable td:nth-child(4) {
+      min-width: 100px;
+      max-width: 120px;
+      width: 12%;
+    }
+    #productsTable th:nth-child(5), #productsTable td:nth-child(5) {
+      min-width: 120px;
+      max-width: 150px;
+      width: 18%;
+    }
+    #productsTable td {
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      color: #2c3e50;
+      text-align: center;
+      padding: 12px 8px;
+      border: 2px solid #d4af37;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      font-size: 13px;
+      border-radius: 8px;
+      margin: 3px;
+    }
+    [data-theme="dark"] #productsTable td {
+      background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+      color: #ecf0f1;
+      border: 2px solid #ffd700;
+    }
+    #productsTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    [data-theme="dark"] #productsTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #4a5568 0%, #34495e 100%);
+    }
+    #productsTable tr.selected-row:not([data-theme="dark"]) td {
+      background: #007bff;
+      color: #ffffff;
+      font-weight: 700;
+      border: 2px solid #000000;
+      position: relative;
+      overflow: hidden;
+    }
+    #productsTable tr.selected-row:not([data-theme="dark"]) td::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+      transition: left 0.5s ease;
+    }
+    #productsTable tr.selected-row:not([data-theme="dark"]) td.crystal-effect::after {
+      left: 100%;
+    }
+    [data-theme="dark"] #productsTable tr.selected-row td {
+      background: #000000;
+      color: #ffa500;
+      font-weight: 700;
+      border: 2px solid #ffd700;
+      position: relative;
+      overflow: hidden;
+    }
+    [data-theme="dark"] #productsTable tr.selected-row td::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+      transition: left 0.5s ease;
+    }
+    [data-theme="dark"] #productsTable tr.selected-row td.crystal-effect::after {
+      left: 100%;
+    }
+    #productsTable thead th:first-child {
+      border-top-right-radius: 8px;
+    }
+    #productsTable thead th:last-child {
+      border-top-left-radius: 8px;
+    }
+    #productsTable tr:last-child td:first-child {
+      border-bottom-right-radius: 8px;
+    }
+    #productsTable tr:last-child td:last-child {
+      border-bottom-left-radius: 8px;
+    }
+    #productsTable .btn {
+      background: linear-gradient(145deg, #27ae60 0%, #2ecc71 100%);
+      border: 1px solid #229954;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: white;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      margin: 2px;
+      font-size: 12px;
+    }
+    #productsTable .btn:hover {
+      transform: translateY(-1px);
+    }
+    #productsTable .btn-danger {
+      background: linear-gradient(145deg, #e74c3c 0%, #c0392b 100%);
+      border: 1px solid #c0392b;
+    }
+    @media (max-width: 768px) {
+      .products-container-vertical {
+        max-height: 300px;
+      }
+      #productsTable th, #productsTable td {
+        padding: 10px 6px;
+        font-size: 12px;
+      }
+      #productsTable th:nth-child(2), #productsTable td:nth-child(2) {
+        min-width: 180px;
+        max-width: 220px;
+      }
+      #productsTable .btn {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+      .products-scroll-wrapper {
+        padding: 8px;
+      }
+    }
+
+    /* ===== تصميم فاخر لجدول استرجاع الفواتير ===== */
+    .table-scroll-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 15px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border: 2px solid #dee2e6;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+    .table-scroll-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+    .table-container-vertical {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 400px;
+      width: 100%;
+    }
+    .table-scroll-wrapper::-webkit-scrollbar,
+    .table-container-vertical::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    .table-scroll-wrapper::-webkit-scrollbar-thumb,
+    .table-container-vertical::-webkit-scrollbar-thumb {
+      background: linear-gradient(145deg, #d4af37 0%, #b8941f 100%);
+      border-radius: 10px;
+      border: 2px solid #e9ecef;
+    }
+    .table-scroll-wrapper::-webkit-scrollbar-track,
+    .table-container-vertical::-webkit-scrollbar-track {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 10px;
+    }
+    #invoiceResultsTable {
+      width: auto;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: linear-gradient(135deg, #e6e6e6 0%, #ffffff 25%, #f0f0f0 50%, #ffffff 75%, #e6e6e6 100%);
+      border: 3px solid #d4af37;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      position: relative;
+    }
+    #invoiceResultsTable thead {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #invoiceResultsTable th {
+      background: linear-gradient(145deg, #2c3e50 0%, #34495e 50%, #2c3e50 100%) !important;
+      color: #ecf0f1 !important;
+      font-weight: 700;
+      text-align: center;
+      padding: 16px 12px;
+      border: none;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      border-bottom: 3px solid #d4af37;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #invoiceResultsTable th:nth-child(1), #invoiceResultsTable td:nth-child(1) { min-width: 150px; max-width: 200px; }
+    #invoiceResultsTable th:nth-child(2), #invoiceResultsTable td:nth-child(2) { min-width: 120px; max-width: 150px; }
+    #invoiceResultsTable th:nth-child(3), #invoiceResultsTable td:nth-child(3) { min-width: 150px; max-width: 200px; }
+    #invoiceResultsTable th:nth-child(4), #invoiceResultsTable td:nth-child(4) { min-width: 100px; max-width: 120px; }
+    #invoiceResultsTable th:nth-child(5), #invoiceResultsTable td:nth-child(5) { min-width: 120px; max-width: 150px; }
+    #invoiceResultsTable th:nth-child(6), #invoiceResultsTable td:nth-child(6) { min-width: 120px; max-width: 150px; }
+    #invoiceResultsTable th:nth-child(7), #invoiceResultsTable td:nth-child(7) { min-width: 140px; max-width: 180px; }
+    #invoiceResultsTable th:nth-child(8), #invoiceResultsTable td:nth-child(8) { min-width: 100px; max-width: 120px; }
+    #invoiceResultsTable td {
+      background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+      color: #2c3e50;
+      text-align: center;
+      padding: 14px 10px;
+      border: none;
+      border-bottom: 1px solid #e0e0e0;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      font-size: 15px;
+      border-radius: 8px;
+      margin: 2px;
+    }
+    #invoiceResultsTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #f8f9fa 0%, #f1f3f5 100%);
+    }
+    #invoiceResultsTable tr:active td,
+    #invoiceResultsTable tr.touch-active td {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+      color: white !important;
+      transform: scale(0.98);
+      box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+    }
+    #invoiceResultsTable tr:hover td {
+      background: linear-gradient(135deg, #8e44ad 0%, #6c3483 100%) !important;
+      color: white !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(142, 68, 173, 0.3);
+    }
+    #invoiceResultsTable tr.selected-row td {
+      background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%) !important;
+      color: #2c3e50 !important;
+      font-weight: 700;
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+      transform: scale(1.02);
+    }
+    #invoiceResultsTable thead th:first-child { border-top-right-radius: 12px; }
+    #invoiceResultsTable thead th:last-child { border-top-left-radius: 12px; }
+    #invoiceResultsTable tr:last-child td:first-child { border-bottom-right-radius: 12px; }
+    #invoiceResultsTable tr:last-child td:last-child { border-bottom-left-radius: 12px; }
+
+    [data-theme="dark"] .table-scroll-container {
+      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+      border-color: #4a5568;
+    }
+    [data-theme="dark"] #invoiceResultsTable {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 50%, #2d3748 100%);
+      border-color: #d4af37;
+    }
+    [data-theme="dark"] #invoiceResultsTable th {
+      background: linear-gradient(145deg, #1a202c 0%, #2d3748 50%, #1a202c 100%);
+      color: #e2e8f0;
+      border-bottom-color: #d4af37;
+    }
+    [data-theme="dark"] #invoiceResultsTable td {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+      color: #e2e8f0;
+      border-bottom-color: #4a5568;
+    }
+    [data-theme="dark"] #invoiceResultsTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #4a5568 0%, #718096 100%);
+    }
+    [data-theme="dark"] #invoiceResultsTable tr:active td,
+    [data-theme="dark"] #invoiceResultsTable tr.touch-active td {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+    }
+    [data-theme="dark"] #invoiceResultsTable tr:hover td {
+      background: linear-gradient(135deg, #7e22ce 0%, #6b21a8 100%) !important;
+    }
+    [data-theme="dark"] #invoiceResultsTable tr.selected-row td {
+      background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
+      color: white !important;
+    }
+    @media (max-width: 768px) {
+      .table-container-vertical { max-height: 300px; }
+      #invoiceResultsTable th, #invoiceResultsTable td { padding: 12px 8px; font-size: 14px; min-width: 100px !important; }
+      #invoiceResultsTable { font-size: 14px; border-width: 2px; }
+    }
+
+    .disabled-row {
+      opacity: 0.5;
+      pointer-events: none;
+      background-color: #f8d7da !important;
+    }
+
+    /* ===== تصميم فاخر لجداول المرتجع والتالف ===== */
+    .returns-scroll-container,
+    .damaged-scroll-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 15px;
+      width: 130% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 3px solid #007bff;
+      box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    [data-theme="dark"] .returns-scroll-container,
+    [data-theme="dark"] .damaged-scroll-container {
+      border: 3px solid #ffd700;
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.5);
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    }
+    .returns-scroll-wrapper,
+    .damaged-scroll-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      width: 130%;
+      -webkit-overflow-scrolling: touch;
+      margin: 0;
+      padding: 0;
+    }
+    .returns-container-vertical,
+    .damaged-container-vertical {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 300px;
+      width: 130%;
+      margin: 0;
+      padding: 0;
+    }
+    .returns-scroll-wrapper::-webkit-scrollbar,
+    .damaged-scroll-wrapper::-webkit-scrollbar,
+    .returns-container-vertical::-webkit-scrollbar,
+    .damaged-container-vertical::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .returns-scroll-wrapper::-webkit-scrollbar-thumb,
+    .damaged-scroll-wrapper::-webkit-scrollbar-thumb,
+    .returns-container-vertical::-webkit-scrollbar-thumb,
+    .damaged-container-vertical::-webkit-scrollbar-thumb {
+      background: linear-gradient(145deg, #007bff 0%, #0056b3 100%);
+      border-radius: 8px;
+      border: 2px solid #f8f9fa;
+    }
+    [data-theme="dark"] .returns-scroll-wrapper::-webkit-scrollbar-thumb,
+    [data-theme="dark"] .damaged-scroll-wrapper::-webkit-scrollbar-thumb,
+    [data-theme="dark"] .returns-container-vertical::-webkit-scrollbar-thumb,
+    [data-theme="dark"] .damaged-container-vertical::-webkit-scrollbar-thumb {
+      background: linear-gradient(145deg, #ffd700 0%, #b8941f 100%);
+      border: 2px solid #2d3748;
+    }
+    #returnSalesTable,
+    #damagedSalesTable {
+      width: 100% !important;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+      border-radius: 12px;
+      position: relative;
+      margin: 0;
+      padding: 0;
+    }
+    [data-theme="dark"] #returnSalesTable,
+    [data-theme="dark"] #damagedSalesTable {
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    }
+    #returnSalesTable thead,
+    #damagedSalesTable thead {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #returnSalesTable th,
+    #damagedSalesTable th {
+      background: linear-gradient(145deg, #1e40af 0%, #1d4ed8 50%, #1e40af 100%) !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      text-align: center;
+      padding: 16px 8px;
+      border: none;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #007bff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    [data-theme="dark"] #returnSalesTable th,
+    [data-theme="dark"] #damagedSalesTable th {
+      background: linear-gradient(145deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #ffd700 !important;
+      border-bottom: 2px solid #ffd700;
+    }
+    #returnSalesTable th:nth-child(1), #returnSalesTable td:nth-child(1),
+    #damagedSalesTable th:nth-child(1), #damagedSalesTable td:nth-child(1) {
+      min-width: 150px;
+      max-width: 200px;
+    }
+    #returnSalesTable th:nth-child(2), #returnSalesTable td:nth-child(2),
+    #damagedSalesTable th:nth-child(2), #damagedSalesTable td:nth-child(2) {
+      min-width: 150px;
+      max-width: 200px;
+    }
+    #returnSalesTable th:nth-child(3), #returnSalesTable td:nth-child(3),
+    #damagedSalesTable th:nth-child(3), #damagedSalesTable td:nth-child(3) {
+      min-width: 300px;
+      max-width: 350px;
+    }
+    #returnSalesTable th:nth-child(4), #returnSalesTable td:nth-child(4),
+    #damagedSalesTable th:nth-child(4), #damagedSalesTable td:nth-child(4) {
+      min-width: 100px;
+      max-width: 160px;
+    }
+    #returnSalesTable th:nth-child(5), #returnSalesTable td:nth-child(5),
+    #damagedSalesTable th:nth-child(5), #damagedSalesTable td:nth-child(5) {
+      min-width: 100px;
+      max-width: 160px;
+    }
+    #returnSalesTable th:nth-child(6), #returnSalesTable td:nth-child(6),
+    #damagedSalesTable th:nth-child(6), #damagedSalesTable td:nth-child(6) {
+      min-width: 100px;
+      max-width: 160px;
+    }
+    #returnSalesTable td,
+    #damagedSalesTable td {
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      color: #2c3e50;
+      text-align: center;
+      padding: 14px 8px;
+      border: none;
+      border-bottom: 1px solid #e9ecef;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      border-radius: 8px;
+      margin: 2px;
+    }
+    [data-theme="dark"] #returnSalesTable td,
+    [data-theme="dark"] #damagedSalesTable td {
+      background: linear-gradient(135deg, #4a5568 0%, #718096 100%);
+      color: #e2e8f0;
+      border-bottom: 1px solid #4a5568;
+    }
+    #returnSalesTable tr:nth-child(even) td,
+    #damagedSalesTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #f1f3f5 0%, #e9ecef 100%);
+    }
+    [data-theme="dark"] #returnSalesTable tr:nth-child(even) td,
+    [data-theme="dark"] #damagedSalesTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+    }
+    #returnSalesTable tr.touch-active td,
+    #damagedSalesTable tr.touch-active td {
+      border: 2px solid #1e40af !important;
+      box-shadow: 0 0 15px rgba(30, 64, 175, 0.6);
+      position: relative;
+      z-index: 10;
+    }
+    [data-theme="dark"] #returnSalesTable tr.touch-active td,
+    [data-theme="dark"] #damagedSalesTable tr.touch-active td {
+      border: 2px solid #ffd700 !important;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.7);
+    }
+    #returnSalesTable tr.selected-row,
+    #damagedSalesTable tr.selected-row {
+      position: relative;
+      z-index: 20;
+    }
+    #returnSalesTable tr.selected-row td,
+    #damagedSalesTable tr.selected-row td {
+      background: #000000 !important;
+      color: #ffa500 !important;
+      font-weight: 700;
+      border: 2px solid #ffd700 !important;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+      text-shadow: 0 0 10px rgba(255, 165, 0, 0.8);
+    }
+    #returnSalesTable tr.selected-row::after,
+    #damagedSalesTable tr.selected-row::after {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      right: -5px;
+      bottom: -5px;
+      background: linear-gradient(45deg, transparent 40%, rgba(76, 175, 80, 0.3) 50%, transparent 60%);
+      border-radius: 12px;
+      z-index: 5;
+      animation: greenGlow 2s infinite ease-in-out;
+    }
+    @keyframes greenGlow {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    #returnSalesTable thead th:first-child,
+    #damagedSalesTable thead th:first-child {
+      border-top-right-radius: 10px;
+    }
+    #returnSalesTable thead th:last-child,
+    #damagedSalesTable thead th:last-child {
+      border-top-left-radius: 10px;
+    }
+    #returnSalesTable tr:last-child td:first-child,
+    #damagedSalesTable tr:last-child td:first-child {
+      border-bottom-right-radius: 10px;
+    }
+    #returnSalesTable tr:last-child td:last-child,
+    #damagedSalesTable tr:last-child td:last-child {
+      border-bottom-left-radius: 10px;
+    }
+    .flying-data {
+      position: fixed;
+      background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(30, 64, 175, 0.6);
+      z-index: 10000;
+      pointer-events: none;
+      white-space: nowrap;
+      font-size: 16px;
+      animation: flyAway 2.5s ease-in-out forwards;
+      transform-origin: center;
+      border: 2px solid #ffffff;
+    }
+    [data-theme="dark"] .flying-data {
+      background: linear-gradient(135deg, #ffd700 0%, #b8941f 100%);
+      color: #000000;
+      box-shadow: 0 8px 30px rgba(255, 215, 0, 0.7);
+      border: 2px solid #000000;
+    }
+    @keyframes flyAway {
+      0% { transform: scale(0.3) translateY(0) rotate(0deg); opacity: 0; }
+      20% { transform: scale(1) translateY(-20px) rotate(-5deg); opacity: 1; }
+      40% { transform: scale(1.1) translateY(-60px) rotate(5deg); opacity: 0.9; }
+      60% { transform: scale(1.05) translateY(-120px) rotate(-3deg); opacity: 0.7; }
+      80% { transform: scale(0.9) translateY(-180px) rotate(2deg); opacity: 0.4; }
+      100% { transform: scale(0.7) translateY(-250px) rotate(0deg); opacity: 0; }
+    }
+    @media (max-width: 968px) {
+      .returns-container-vertical, .damaged-container-vertical { max-height: 250px; }
+      #returnSalesTable th, #returnSalesTable td,
+      #damagedSalesTable th, #damagedSalesTable td {
+        padding: 10px 6px;
+        font-size: 12px;
+      }
+    }
+
+    /* ===== تصميم فاخر لتقرير المبيعات ===== */
+    .sales-report-scroll-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: 15px;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 3px solid #007bff;
+      box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    [data-theme="dark"] .sales-report-scroll-container {
+      border: 3px solid #ffd700;
+      box-shadow: 0 0 25px rgba(255, 215, 0, 0.5);
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    }
+    .sales-report-scroll-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
+      margin: 0;
+      padding: 0;
+    }
+    .sales-report-container-vertical {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 400px;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .sales-report-scroll-wrapper::-webkit-scrollbar,
+    .sales-report-container-vertical::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .sales-report-scroll-wrapper::-webkit-scrollbar-thumb,
+    .sales-report-container-vertical::-webkit-scrollbar-thumb {
+      background: linear-gradient(145deg, #007bff 0%, #0056b3 100%);
+      border-radius: 8px;
+      border: 2px solid #f8f9fa;
+    }
+    [data-theme="dark"] .sales-report-scroll-wrapper::-webkit-scrollbar-thumb,
+    [data-theme="dark"] .sales-report-container-vertical::-webkit-scrollbar-thumb {
+      background: linear-gradient(145deg, #ffd700 0%, #b8941f 100%);
+      border: 2px solid #2d3748;
+    }
+    .sales-report-scroll-wrapper::-webkit-scrollbar-track,
+    .sales-report-container-vertical::-webkit-scrollbar-track {
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 8px;
+    }
+    [data-theme="dark"] .sales-report-scroll-wrapper::-webkit-scrollbar-track,
+    [data-theme="dark"] .sales-report-container-vertical::-webkit-scrollbar-track {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+    }
+    #salesReportTable {
+      width: 100% !important;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
+      border-radius: 12px;
+      position: relative;
+      margin: 0;
+      padding: 0;
+    }
+    [data-theme="dark"] #salesReportTable {
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+    }
+    #salesReportTable thead {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #salesReportTable th {
+      background: linear-gradient(145deg, #1e40af 0%, #1d4ed8 50%, #1e40af 100%) !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      text-align: center;
+      padding: 16px 8px;
+      border: none;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.6);
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #007bff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    [data-theme="dark"] #salesReportTable th {
+      background: linear-gradient(145deg, #0f172a 0%, #1e293b 50%, #0f172a 100%) !important;
+      color: #ffd700 !important;
+      border-bottom: 2px solid #ffd700;
+    }
+    #salesReportTable th:nth-child(1), #salesReportTable td:nth-child(1) {
+      min-width: 100px;
+      max-width: 120px;
+    }
+    #salesReportTable th:nth-child(2), #salesReportTable td:nth-child(2) {
+      min-width: 100px;
+      max-width: 120px;
+    }
+    #salesReportTable th:nth-child(3), #salesReportTable td:nth-child(3) {
+      min-width: 120px;
+      max-width: 150px;
+    }
+    #salesReportTable th:nth-child(4), #salesReportTable td:nth-child(4) {
+      min-width: 100px;
+      max-width: 120px;
+    }
+    #salesReportTable th:nth-child(5), #salesReportTable td:nth-child(5) {
+      min-width: 120px;
+      max-width: 140px;
+    }
+    #salesReportTable td {
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      color: #2c3e50;
+      text-align: center;
+      padding: 14px 8px;
+      border: none;
+      border-bottom: 1px solid #e9ecef;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      border-radius: 8px;
+      margin: 2px;
+    }
+    [data-theme="dark"] #salesReportTable td {
+      background: linear-gradient(135deg, #4a5568 0%, #718096 100%);
+      color: #e2e8f0;
+      border-bottom: 1px solid #4a5568;
+    }
+    #salesReportTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #f1f3f5 0%, #e9ecef 100%);
+    }
+    [data-theme="dark"] #salesReportTable tr:nth-child(even) td {
+      background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+    }
+    #salesReportTable tr.touch-active td {
+      border: 2px solid #1e40af !important;
+      box-shadow: 0 0 15px rgba(30, 64, 175, 0.6);
+      position: relative;
+      z-index: 10;
+    }
+    [data-theme="dark"] #salesReportTable tr.touch-active td {
+      border: 2px solid #ffd700 !important;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.7);
+    }
+    #salesReportTable tr.selected-row {
+      position: relative;
+      z-index: 20;
+    }
+    #salesReportTable tr.selected-row td {
+      background: #000000 !important;
+      color: #ffa500 !important;
+      font-weight: 700;
+      border: 2px solid #ffd700 !important;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+      text-shadow: 0 0 10px rgba(255, 165, 0, 0.8);
+    }
+    #salesReportTable tr.selected-row::after {
+      content: '';
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      right: -5px;
+      bottom: -5px;
+      background: linear-gradient(45deg, transparent 40%, rgba(76, 175, 80, 0.3) 50%, transparent 60%);
+      border-radius: 12px;
+      z-index: 5;
+      animation: greenGlow 2s infinite ease-in-out;
+    }
+    @keyframes greenGlow {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    .sales-flying-data {
+      position: fixed;
+      background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(30, 64, 175, 0.6);
+      z-index: 10000;
+      pointer-events: none;
+      white-space: nowrap;
+      font-size: 16px;
+      animation: salesFlyAway 2.5s ease-in-out forwards;
+      transform-origin: center;
+      border: 2px solid #ffffff;
+    }
+    [data-theme="dark"] .sales-flying-data {
+      background: linear-gradient(135deg, #ffd700 0%, #b8941f 100%);
+      color: #000000;
+      box-shadow: 0 8px 30px rgba(255, 215, 0, 0.7);
+      border: 2px solid #000000;
+    }
+    @keyframes salesFlyAway {
+      0% { transform: scale(0.3) translateY(0) rotate(0deg); opacity: 0; }
+      20% { transform: scale(1) translateY(-20px) rotate(-5deg); opacity: 1; }
+      40% { transform: scale(1.1) translateY(-60px) rotate(5deg); opacity: 0.9; }
+      60% { transform: scale(1.05) translateY(-120px) rotate(-3deg); opacity: 0.7; }
+      80% { transform: scale(0.9) translateY(-180px) rotate(2deg); opacity: 0.4; }
+      100% { transform: scale(0.7) translateY(-250px) rotate(0deg); opacity: 0; }
+    }
+    #salesReportTable thead th:first-child { border-top-right-radius: 10px; }
+    #salesReportTable thead th:last-child { border-top-left-radius: 10px; }
+    #salesReportTable tr:last-child td:first-child { border-bottom-right-radius: 10px; }
+    #salesReportTable tr:last-child td:last-child { border-bottom-left-radius: 10px; }
+    @media (max-width: 768px) {
+      .sales-report-container-vertical { max-height: 300px; }
+      #salesReportTable th, #salesReportTable td { padding: 10px 6px; font-size: 12px; }
+      #salesReportTable th:nth-child(1), #salesReportTable td:nth-child(1) { min-width: 100px; max-width: 120px; }
+      #salesReportTable th:nth-child(2), #salesReportTable td:nth-child(2) { min-width: 90px; max-width: 110px; }
+      #salesReportTable th:nth-child(3), #salesReportTable td:nth-child(3) { min-width: 150px; max-width: 200px; }
+    }
+
+    /* ===== تصميم بطاقة هوية العميل ===== */
+    #customerIdentityCard {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 400px;
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      border-radius: 20px;
+      padding: 25px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      border: 3px solid #007bff;
+      z-index: 3000;
+      backdrop-filter: blur(20px);
+    }
+    [data-theme="dark"] #customerIdentityCard {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+      border: 3px solid #ffd700;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    }
+    .customer-card { text-align: center; }
+    .customer-card-header {
+      background: linear-gradient(145deg, #007bff 0%, #0056b3 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 15px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    [data-theme="dark"] .customer-card-header {
+      background: linear-gradient(145deg, #ffd700 0%, #b8941f 100%);
+      color: #2c3e50;
+    }
+    .customer-card-header h3 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    .customer-card-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    .customer-detail-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+      border-radius: 12px;
+      border: 2px solid #dee2e6;
+    }
+    [data-theme="dark"] .customer-detail-item {
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+      border: 2px solid #6b7280;
+      color: #facc15;
+    }
+    .detail-label {
+      font-weight: 700;
+      color: #2c3e50;
+      font-size: 14px;
+    }
+    [data-theme="dark"] .detail-label { color: #e2e8f0; }
+    .detail-value {
+      color: #6c757d;
+      font-weight: 600;
+      font-size: 15px;
+      text-align: left;
+      direction: ltr;
+    }
+    [data-theme="dark"] .detail-value { color: #cbd5e0; }
+    .customer-card-footer {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
+    #cancelCustomerBtn {
+      background: linear-gradient(145deg, #dc3545 0%, #c82333 100%);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+    }
+    #cancelCustomerBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+    }
+    #confirmCustomerBtn {
+      background: linear-gradient(145deg, #28a745 0%, #218838 100%);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    }
+    #confirmCustomerBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.5);
+    }
+    #customerInfoRow, #customerDetailsContainer, #customerNameField {
+      display: none !important;
+    }
+    #deferredPaymentModal {
+      z-index: 3001 !important;
+    }
+    #deferredPaymentModal .modal-content {
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      border: 3px solid #007bff;
+    }
+    [data-theme="dark"] #deferredPaymentModal .modal-content {
+      background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+      border: 3px solid #ffd700;
+    }
+    @media (max-width: 768px) {
+      #customerIdentityCard { width: 95%; padding: 20px; max-width: 350px; }
+      .customer-card-header { padding: 15px; }
+      .customer-card-header h3 { font-size: 20px; }
+      .customer-detail-item { padding: 10px 12px; }
+      .detail-label { font-size: 13px; }
+      .detail-value { font-size: 14px; }
+      .customer-card-footer { flex-direction: column; }
+      #cancelCustomerBtn, #confirmCustomerBtn { width: 100%; padding: 15px; }
+    }
+    #customerIdentityCard.show { display: block; animation: cardSlideIn 0.4s ease-out; }
+    @keyframes cardSlideIn {
+      from { opacity: 0; transform: translate(-50%, -60%) scale(0.9); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    }
+
+    /* إشعار المسح الضوئي */
+    .barcode-scan-notification {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #FFD700, #FF4500);
+      color: #000000;
+      padding: 12px 20px;
+      border-radius: 15px;
+      z-index: 1100;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: barcode-scan-slideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, 
+                 barcode-scan-fadeOut 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 2.2s;
+      font-size: 1rem;
+      font-weight: bold;
+      text-shadow: 0 0 5px rgba(255,255,255,0.8);
+      max-width: 100%;
+      width: auto;
+      box-sizing: border-box;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @keyframes barcode-scan-slideIn {
+      0% { top: -100px; opacity: 0; transform: translateX(-50%) scale(0.5); }
+      100% { top: 20px; opacity: 1; transform: translateX(-50%) scale(1); }
+    }
+    @keyframes barcode-scan-fadeOut {
+      0% { opacity: 1; transform: translateX(-50%) scale(1); }
+      100% { opacity: 0; transform: translateX(-50%) scale(0.5); visibility: hidden; }
+    }
+    .barcode-scan-notification i { font-size: 1rem; color: #FFFFFF; text-shadow: 0 0 8px rgba(255,0,0,0.5); }
+    .barcode-scan-notification span { overflow: hidden; text-overflow: ellipsis; }
+
+    .return-modal, .damaged-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(5px);
+    }
+    .return-content, .damaged-content {
+      background: var(--card-color);
+      border-radius: 16px;
+      padding: 20px;
+      width: 35%;
+      max-width: 1200px;
+      max-height: 95vh;
+      overflow-y: auto;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      border: 1px solid rgba(255,255,255,0.1);
+      position: relative;
+    }
+    .return-content::before, .damaged-content::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(to right, var(--primary-color), var(--primary3-color));
+      border-radius: 16px 16px 0 0;
+    }
+    .date-range-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .return-form-grid, .damaged-form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .return-table-container, .damaged-table-container {
+      max-height: 180px;
+      overflow: auto;
+      margin-bottom: 15px;
+    }
+    .floating-buttons {
+      position: sticky;
+      bottom: 0;
+      background: var(--card-color);
+      padding: 15px;
+      border-top: 1px solid var(--input-border-light);
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .product-details-enhanced {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .detail-card {
+      background: rgba(0,0,0,0.05);
+      padding: 15px;
+      border-radius: 12px;
+      border-left: 4px solid var(--primary-color);
+      text-align: center;
+    }
+    .detail-label {
+      font-weight: bold;
+      color: var(--primary-color);
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+    .detail-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .product-name-large {
+      font-size: 1.4rem !important;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+<!-- شريط المعلومات العلوي -->
+<div class="top-bar">
+  <div class="top-title">
+    <h2 style="color: silver; text-shadow: 0 0 10px silver; font-weight: bold;">نقاط البيع</h2>
+  </div>
+  <button id="darkModeToggle" class="mode-toggle-btn">
+    <i class="fas fa-moon"></i>
+  </button>
+</div>
+
+<!-- القائمة الجانبية المحسّنة -->
+<div class="sidebar-toggle" id="sidebarToggle">
+  <i class="fas fa-bars"></i>
+</div>
+
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-content">
+    <button class="sidebar-btn ripple" data-tooltip="بدء عملية بيع جديدة" onclick="handleButtonClick('newSale')">
+      <div class="glow"></div>
+      <i class="fas fa-cash-register"></i>
+      <span>🛒 جديد</span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="إرجاع منتج" onclick="handleButtonClick('return')">
+      <div class="glow"></div>
+      <i class="fas fa-undo"></i>
+      <span>🔄 مرتجع</span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="استرجاع الفواتير" onclick="handleButtonClick('invoiceRetrieveModal')">
+      <div class="glow"></div>
+      <i class="fas fa-file-invoice"></i>
+      <span>🔍 استرجاع الفواتير</span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="تقرير المبيعات" onclick="handleButtonClick('salesReport')">
+      <div class="glow"></div>
+      <i class="fas fa-chart-line"></i>
+      <span>📊 تقرير المبيعات</span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="العودة للشاشة الرئيسية" onclick="handleButtonClick('back')">
+      <div class="glow"></div>
+      <i class="fas fa-home"></i>
+      <span>🏠 رجوع</span>
+    </button>
+  </div>
+</div>
+
+<!-- مؤشر تحميل -->
+<div class="loading-indicator" id="loadingIndicator">
+  <div class="spinner"></div>
+</div>
+
+<!-- المحتوى الرئيسي -->
+<div class="container">
+  <div class="header"></div>
+  <div id="messageContainer"></div>
+
+  <!-- معلومات الفاتورة -->
+  <div class="form-grid">
+    <div class="horizontal-row">
+      <div class="field-group">
+        <label class="form-label">رقم الفاتورة</label>
+        <input type="text" id="invoiceNumber" class="form-control" readonly>
+        <i class="fas fa-file-invoice field-icon"></i>
+      </div>
+      <div class="field-group">
+        <label class="form-label">طريقة الدفع</label>
+        <select id="paymentType" class="form-control">
+          <option value="نقداً">نقداً</option>
+          <option value="آجل">آجل</option>
+        </select>
+        <i class="fas fa-money-bill-wave field-icon"></i>
+      </div>
+    </div>
+    
+    <div id="customerInfoRow" style="display: none;">
+      <div class="horizontal-row">
+        <div class="field-group">
+          <label class="form-label">نوع العميل</label>
+          <select id="entityTypeSelect" class="form-control"></select>
+        </div>
+        <div class="field-group hidden-field" id="customerNameField">
+          <label class="form-label">اسم العميل</label>
+          <select id="customerId" class="form-control"></select>
+        </div>
+      </div>
+      <div id="customerDetailsContainer" class="customer-info-grid" style="display: none;">
+        <!-- تفاصيل العميل ستظهر هنا -->
+      </div>
+      <div class="customer-action-buttons">
+        <button class="btn btn-primary" id="addCustomerBtn">إضافة عميل</button>
+        <button class="btn btn-danger" id="clearCustomerBtn">إلغاء</button>
+      </div>
+    </div>
+  </div>
+   
+  <!-- مسح الباركود -->
+  <div class="form-grid">
+    <h3 class="gold-text">مسح الباركود</h3>
+    <div class="barcode-container" id="barcodeScanner">
+      <div id="qr-reader"></div>
+      <button class="flash-btn" id="toggleFlashBtn">
+        <i class="fas fa-bolt"></i>
+      </button>
+      <button class="scan-toggle-btn" id="toggleScanBtn">
+        <i class="fas fa-play"></i>
+      </button>
+    </div>
+    
+    <div class="field-group">
+      <label class="form-label">إدخال يدوي</label>
+      <div class="input-group">
+        <input type="text" id="manualBarcodeInput" class="form-control" placeholder="أدخل رمز الباركود يدوياً" dir="ltr">
+        <button class="btn btn-primary" id="addManualBarcodeBtn">إضافة</button>
+      </div>
+    </div>
+    
+    <button class="btn btn-danger w-100" id="stopScanBtn" style="display: none;">إيقاف المسح</button>
+  </div>
+
+  <!-- قائمة المنتجات المضافة -->
+  <div class="form-grid">
+    <h3 class="gold-text">المنتجات المضافة</h3>
+    <div class="table-container">
+      <table class="product-table" id="productsTable">
+        <thead>
+          <tr>
+            <th>الكمية</th>
+            <th>المنتـــــــــــج</th>
+            <th>السعر</th>
+            <th>المجموع</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="productsTableBody">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ملخص الفاتورة -->
+  <div class="form-grid">
+    <h3 class="gold-text">ملخص الفاتورة</h3>
+    <div class="horizontal-row">
+      <div class="field-group">
+        <label class="form-label">الإجمالي قبل الضريبة</label>
+        <input type="text" id="subtotal" class="form-control invoice-summary" readonly>
+      </div>
+      <div class="field-group">
+        <label class="form-label">الضريبة</label>
+        <input type="text" id="taxAmount" class="form-control invoice-summary" readonly>
+      </div>
+    </div>
+    
+    <div class="horizontal-row">
+      <div class="field-group">
+        <label class="form-label">الإجمالي النهائي</label>
+        <input type="text" id="totalAmount" class="form-control invoice-summary" readonly>
+      </div>
+      <div class="field-group">
+        <label class="form-label">المبلغ المدفوع</label>
+        <input type="number" id="amountPaid" class="form-control invoice-summary" dir="ltr">
+      </div>
+    </div>
+    
+    <div class="field-group">
+      <label class="form-label">الباقي</label>
+      <input type="text" id="remainingAmount" class="form-control invoice-summary" readonly>
+    </div>
+
+    <input type="hidden" id="quantityOnHand" name="quantity_on_hand">
+    <div class="action-buttons">
+      <button class="btn btn-success" id="completeSaleBtn">ترحيل الفاتورة</button>
+      <button class="btn btn-primary" id="printReceiptBtn">طباعة</button>
+      <button class="btn btn-info" id="sendWhatsAppBtn">واتساب</button>
+    </div>
+  </div>
+  
+  <!-- تقرير المبيعات (مودال) -->
+  <div id="salesReportModal" class="modal">
+    <div class="modal-content" style="width: 100%; max-width: none;">
+      <div class="modal-title">تقرير المبيعات اليومية</div>
+      <div class="table-container">
+        <table class="sales-report-table" id="salesReportTable">
+          <thead>
+            <tr>
+              <th>رقم الفاتورة</th>
+              <th>تاريخ البيع</th>
+              <th>إسم المنتج</th>
+              <th>الكمية المباعه</th>
+              <th>إجمالي المبلغ</th>
+            </tr>
+          </thead>
+          <tbody id="salesReportTableBody">
+          </tbody>
+        </table>
+      </div>
+      <button class="modal-btn modal-btn-primary" onclick="closeModal('salesReportModal')">إغلاق</button>
+    </div>
+  </div>
+
+  <!-- نماذج منبثقة -->
+  <div id="customerSearchModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">بحث عن عميل</div>
+      <div class="modal-input-group">
+        <input type="text" id="customerSearchInput" class="modal-input" placeholder="ابحث برقم العميل أو الاسم">
+      </div>
+      <div class="table-container" style="max-height: 300px; margin: 15px 0;">
+        <table class="product-table">
+          <thead>
+            <tr>
+              <th>رقم العميل</th>
+              <th>الاسم</th>
+              <th>اختيار</th>
+            </tr>
+          </thead>
+          <tbody id="customerSearchResults">
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top: 15px;">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('customerSearchModal')">إلغاء</button>
+        <button class="modal-btn modal-btn-primary" onclick="searchCustomers()">بحث</button>
+        <button class="modal-btn modal-btn-primary" onclick="addNewCustomer()">عميل جديد</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="newCustomerModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">إضافة عميل جديد</div>
+      <div class="form-grid">
+        <div class="field-group">
+          <label class="form-label">الاسم الكامل</label>
+          <input type="text" id="newCustomerName" class="modal-input">
+        </div>
+        <div class="field-group">
+          <label class="form-label">الهاتف</label>
+          <input type="text" id="newCustomerPhone" class="modal-input" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">البريد الإلكتروني</label>
+          <input type="email" id="newCustomerEmail" class="modal-input">
+        </div>
+        <div class="field-group">
+          <label class="form-label">الحد الائتماني</label>
+          <input type="number" id="newCustomerCreditLimit" class="modal-input" value="0" dir="ltr">
+        </div>
+      </div>
+      <div style="margin-top: 15px;">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('newCustomerModal')">إلغاء</button>
+        <button class="modal-btn modal-btn-primary" id="saveNewCustomerBtn">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نموذج الإرجاع البسيط (من القائمة الجانبية) -->
+  <div id="returnModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">إرجاع منتج</div>
+      <div class="form-grid">
+        <div class="field-group">
+          <label class="form-label">رقم الفاتورة</label>
+          <input type="text" id="returnInvoiceNumber" class="modal-input" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">باركود المنتج</label>
+          <input type="text" id="returnBarcode" class="modal-input" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">الكمية المراد إرجاعها</label>
+          <input type="number" id="returnQuantity" class="modal-input" min="1" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">سبب الإرجاع</label>
+          <textarea id="returnReason" class="modal-input" rows="3"></textarea>
+        </div>
+      </div>
+      <div style="margin-top: 15px;">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('returnModal')">إلغاء</button>
+        <button class="modal-btn modal-btn-primary" onclick="processReturn()">تأكيد الإرجاع</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نموذج واتساب -->
+  <div id="whatsappModal" class="whatsapp-modal">
+    <div class="whatsapp-modal-content">
+      <div class="modal-title">إرسال الفاتورة عبر واتساب</div>
+      <input type="text" id="whatsappPhone" class="whatsapp-input" placeholder="أدخل رقم الهاتف بدون الرمز الدولي" dir="ltr">
+      <div style="margin-top: 15px;">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('whatsappModal')">إلغاء</button>
+        <button class="modal-btn modal-btn-primary" id="sendWhatsAppConfirmBtn">إرسال</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نموذج استرجاع الفواتير -->
+  <div id="invoiceRetrieveModal" class="modal">
+    <div class="modal-content" style="width: 100%; max-width: 1200px;">
+      <div class="modal-title" style="color: yellow;">استرجاع الفواتير</div>
+      
+      <div class="date-range-container">
+        <div class="field-group">
+          <label class="form-label">من تاريخ</label>
+          <input type="date" id="startDate" class="modal-input" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">إلى تاريخ</label>
+          <input type="date" id="endDate" class="modal-input" dir="ltr">
+        </div>
+      </div>
+      
+      <div class="action-buttons">
+        <button class="modal-btn modal-btn-primary" onclick="searchInvoices()">بحث</button>
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('invoiceRetrieveModal')">إلغاء</button>
+      </div>
+      
+      <div class="table-container" style="max-height: 280px; overflow: auto;">
+        <table class="product-table" id="invoiceResultsTable" style="border: 2px solid red; border-radius: 10px;">
+          <thead>
+            <tr>
+              <th style="background: blue; border-radius: 20px; color: yellow;">رقم الفاتورة</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">المستخدم</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">العميل</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">نوع الدفع</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">المجموع الكلي</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">المبلغ المدفوع</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">تاريخ البيع</th>
+              <th style="background: blue; border-radius: 20px; color: yellow;">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceResultsBody" style="border: 1px solid red;">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- كنفاس الإرجاع المتقدم -->
+  <div id="returnOverlay" class="return-modal">
+    <div class="return-content" style="width: 130%; max-width: 1200px; height: 90vh;">
+      <div class="modal-title">توثيق المنتجات المرتجعه</div>
+      
+      <div class="date-range-container">
+        <div class="field-group">
+          <label class="form-label">من تاريخ</label>
+          <input type="date" id="returnStartDate" class="modal-input" dir="ltr">
+        </div>
+        <div class="field-group">
+          <label class="form-label">إلى تاريخ</label>
+          <input type="date" id="returnEndDate" class="modal-input" dir="ltr" onchange="searchReturnSales()">
+        </div>
+      </div>
+      
+      <div class="table-container" style="max-height: 180px; overflow: auto; width: 130%;">
+        <table class="product-table" id="returnSalesTable">
+          <thead>
+            <tr>
+              <th>رقم الفاتورة</th>
+              <th>تاريخ البيع</th>
+              <th>اسم المنتج</th>
+              <th>الكمية المباعة</th>
+              <th>السعر</th>
+              <th>المجموع</th>
+            </tr>
+          </thead>
+          <tbody id="returnSalesTableBody">
+          </tbody>
+        </table>
+      </div>
+      
+      <h3 class="gold-text" style="margin-top: 20px;">تفاصيل الإرجاع</h3>
+      
+      <div class="return-form-grid">
+        <div class="horizontal-row">
+          <div class="field-group">
+            <label class="form-label">رقم الفاتورة</label>
+            <input type="text" id="returnDetailInvoice" class="form-control" dir="ltr" readonly>
+          </div>
+          <div class="field-group">
+            <label class="form-label">المنتج</label>
+            <input type="text" id="returnDetailProduct" class="form-control" readonly>
+          </div>
+        </div>
+        
+        <div class="horizontal-row">
+          <div class="field-group">
+            <label class="form-label">الكمية المراد إرجاعها</label>
+            <input type="number" id="returnDetailQuantity" class="form-control" dir="ltr" min="1">
+          </div>
+          <div class="field-group">
+            <label class="form-label">سبب الإرجاع</label>
+            <select id="returnDetailReason" class="form-control">
+              <option value="تالف">تالف</option>
+              <option value="غير مرغوب">غير مرغوب</option>
+              <option value="خطأ في الطلب">خطأ في الطلب</option>
+              <option value="أخرى">أخرى</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="field-group">
+          <label class="form-label">ملاحظات إضافية</label>
+          <textarea id="returnDetailNotes" class="form-control" rows="2"></textarea>
+        </div>
+      </div>
+      
+      <div class="floating-buttons">
+        <button class="btn btn-success" onclick="saveReturn()">حفظ</button>
+        <button class="btn btn-danger" onclick="closeModal('returnOverlay')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- كنفاس اختيار العميل للدفع الآجل -->
+  <div id="deferredPaymentModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-title">اختيار العميل</div>
+      <div class="horizontal-row">
+        <div class="field-group">
+          <label class="form-label">نوع العميل</label>
+          <select id="deferredEntityTypeSelect" class="form-control"></select>
+        </div>
+        <div class="field-group" id="deferredCustomerNameField">
+          <label class="form-label">اسم العميل</label>
+          <select id="deferredCustomerId" class="form-control"></select>
+        </div>
+      </div>
+      <div id="deferredCustomerDetailsContainer" class="customer-info-grid" style="display: none;">
+        <!-- تفاصيل العميل ستظهر هنا -->
+      </div>
+      <div class="action-buttons">
+        <button class="modal-btn modal-btn-primary" onclick="confirmDeferredCustomer()">تأكيد</button>
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('deferredPaymentModal')">رجوع</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- كنفاس تفاصيل المنتج -->
+  <div id="productDetailsCanvas" class="modal">
+    <div class="modal-content" style="border: 3px solid orange; border-radius: 15px; box-shadow: 0 0 20px orange;">
+      <div class="modal-title">تفاصيل المنتج</div>
+      <div id="productDetailsContent"></div>
+      <button class="modal-btn modal-btn-primary" onclick="closeModal('productDetailsCanvas')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- مكتبات JavaScript من CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// ============================================================
+// 1. دوال apiCall و handleAndroidResult (الموحدة)
+// ============================================================
+function apiCall(action, params) {
+    return new Promise((resolve, reject) => {
+        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+            try {
+                const jsonParams = JSON.stringify(params || {});
+                const result = window.AndroidInterface.execute(action, jsonParams);
+                try {
+                    const parsed = JSON.parse(result);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ success: true, data: result });
+                }
+            } catch (e) {
+                reject({ success: false, error: e.message });
+            }
+        } else {
+            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
+            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+        }
+    });
+}
+
+function handleAndroidResult(action, data) {
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        if (window._pendingResolve) {
+            window._pendingResolve(parsed);
+            window._pendingResolve = null;
+        }
+    } catch (e) {
+        console.error('Error in handleAndroidResult:', e);
+    }
+}
+
+// ============================================================
+// 2. دوال مساعدة (Toast, Loading)
+// ============================================================
+function showToast(message, type = 'success') {
+    const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+    Swal.fire({
+        title: type === 'success' ? 'نجاح' : type === 'error' ? 'خطأ' : 'تنبيه',
+        text: message,
+        icon: icon,
+        timer: 3000,
+        showConfirmButton: false,
+        customClass: { popup: 'swal-custom-popup' }
+    });
+}
+
+function showLoading(show) {
+    document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+}
+
+// ============================================================
+// 3. متغيرات عامة
+// ============================================================
+let html5Qrcode;
+let isScanning = false;
+let flashEnabled = false;
+let scannerActive = true;
+let lastScannedBarcode = '';
+let audioDing = new Audio('/static/sound/Ding.mp3'); // سيتم استبداله بملف صوتي محلي لاحقاً
+let inactivityTimer;
+let sleepModeTimer;
+const INACTIVITY_TIMEOUT = 10000;
+const SLEEP_MODE_TIMEOUT = 20000;
+let currentRowEffect = '';
+let isSleepMode = false;
+
+// ============================================================
+// 4. دوال الوضع الليلي والتهيئة
+// ============================================================
+function toggleMode() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    const icon = document.querySelector('#darkModeToggle i');
+    icon.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
+}
+
+function loadThemeSettings() {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.querySelector('#darkModeToggle i').className = 'fas fa-sun';
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.querySelector('#darkModeToggle i').className = 'fas fa-moon';
+    }
+}
+
+// ============================================================
+// 5. دوال الماسح الضوئي
+// ============================================================
+function initBarcodeScanner() {
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('مكتبة مسح الباركود غير متوفرة', 'error');
+        return;
+    }
+
+    const config = {
+        fps: 10,
+        qrbox: { width: 300, height: 300 },
+        aspectRatio: 1.0,
+        disableFlip: false
+    };
+
+    html5Qrcode = new Html5Qrcode("qr-reader");
+
+    Html5Qrcode.getCameras()
+        .then(devices => {
+            if (devices && devices.length) {
+                const cameraId = devices.find(d => d.label.includes('back'))?.id || devices[0].id;
+                html5Qrcode.start(
+                    cameraId,
+                    config,
+                    onScanSuccess,
+                    onScanError
+                ).then(() => {
+                    isScanning = true;
+                    document.getElementById('stopScanBtn').style.display = 'block';
+                    document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-pause" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>';
+                    showScanNotification();
+                }).catch(err => {
+                    console.error(err);
+                    showToast('فشل تشغيل الكاميرا: ' + err, 'error');
+                });
+            } else {
+                showToast('لا توجد كاميرا متاحة', 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('خطأ في الوصول إلى الكاميرا: ' + err, 'error');
+        });
+}
+
+function showScanNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'barcode-scan-notification';
+    notification.innerHTML = `
+        <i class="fas fa-barcode"></i>
+        <span>ستضاف المنتجات آلياً عند مسح الباركود<br>للإيقاف، اضغط على زر "إيقاف"</span>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => { notification.remove(); }, 3000);
+}
+
+function toggleScanner() {
+    if (isScanning) {
+        stopScanner();
+        document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-play" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>';
+    } else {
+        initBarcodeScanner();
+        document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-pause" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>';
+    }
+}
+
+function toggleFlash() {
+    const video = document.querySelector('#qr-reader video');
+    const track = video?.srcObject?.getVideoTracks?.()?.[0];
+    if (!track) return showToast('الفلاش غير متاح', 'error');
+
+    track.applyConstraints({ advanced: [{ torch: !flashEnabled }] })
+        .then(() => {
+            flashEnabled = !flashEnabled;
+            document.getElementById('toggleFlashBtn').innerHTML = flashEnabled
+                ? '<i class="fas fa-bolt" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>'
+                : '<i class="fas fa-bolt" style="color: white;"></i>';
+        })
+        .catch(() => showToast('الفلاش غير مدعوم على هذا الجهاز', 'error'));
+}
+
+function onScanSuccess(decodedText) {
+    decodedText = decodedText.trim();
+    document.getElementById('manualBarcodeInput').value = decodedText;
+    addProductByBarcode(decodedText);
+    try { audioDing.play(); } catch (e) { console.log('Error playing sound:', e); }
+    stopScanner();
+    setTimeout(() => {
+        if (!isScanning) initBarcodeScanner();
+    }, 1000);
+}
+
+function onScanError(error) { /* تجاهل */ }
+
+function stopScanner() {
+    if (isScanning && html5Qrcode) {
+        html5Qrcode.stop().then(() => {
+            isScanning = false;
+            document.getElementById('stopScanBtn').style.display = 'none';
+            document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-play" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>';
+        }).catch(err => console.error(err));
+    }
+}
+
+// ============================================================
+// 6. دوال المنتجات والجدول
+// ============================================================
+function addProductByBarcode(barcode) {
+    barcode = barcode.trim();
+    showLoading(true);
+    const existingRow = document.querySelector(`tr[data-barcode="${barcode}"]`);
+    if (existingRow) {
+        const qtyInput = existingRow.querySelector('.quantity-input');
+        qtyInput.value = parseInt(qtyInput.value) + 1;
+        updateProductQuantity(existingRow);
+        qtyInput.focus();
+        qtyInput.select();
+        showLoading(false);
+        return;
+    }
+    apiCall('getProductByBarcode', { barcode: barcode })
+        .then(data => {
+            if (data.success) {
+                const product = {
+                    product_id: data.id || Math.random().toString(36).substr(2, 9),
+                    barcode: barcode,
+                    product_name: data.name,
+                    unit_price: data.price,
+                    expiry_date: data.expiry_date,
+                    min_stock_level: data.min_stock_level,
+                    sale_type: data.sale_type,
+                    invoice_type: data.invoice_type
+                };
+                addProductToTable(product);
+                updateInvoiceSummary();
+                showSuccessCheckmark();
+            } else {
+                showToast(data.message || 'المنتج غير موجود', 'error');
+            }
+        })
+        .catch(error => {
+            showToast('خطأ في جلب بيانات المنتج', 'error');
+        })
+        .finally(() => showLoading(false));
+}
+
+function showSuccessCheckmark() {
+    const checkmark = document.getElementById('successCheckmark');
+    if (!checkmark) return;
+    checkmark.style.display = 'block';
+    setTimeout(() => { checkmark.style.display = 'none'; }, 1000);
+}
+
+function addProductManually() {
+    const barcode = document.getElementById('manualBarcodeInput').value.trim();
+    if (!barcode) {
+        showToast('يرجى إدخال باركود المنتج', 'error');
+        return;
+    }
+    addProductByBarcode(barcode);
+    document.getElementById('manualBarcodeInput').value = '';
+}
+
+function addProductToTable(product) {
+    const tbody = document.getElementById('productsTableBody');
+    const existingRow = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
+    if (existingRow) {
+        const qtyInput = existingRow.querySelector('.quantity-input');
+        qtyInput.value = parseInt(qtyInput.value) + 1;
+        updateProductQuantity(existingRow);
+        existingRow.classList.add('row-highlight');
+        setTimeout(() => existingRow.classList.remove('row-highlight'), 1000);
+        qtyInput.focus();
+        qtyInput.select();
+        return;
+    }
+
+    const row = document.createElement('tr');
+    row.setAttribute('data-product-id', product.product_id);
+    row.setAttribute('data-barcode', product.barcode);
+    row.setAttribute('data-expiry-date', product.expiry_date || '');
+    row.setAttribute('data-min-stock', product.min_stock_level || '');
+    row.setAttribute('data-sale-type', product.sale_type || '');
+    row.setAttribute('data-invoice-type', product.invoice_type || '');
+    row.innerHTML = `
+        <td><input type="number" class="form-control quantity-input" value="1" min="1" dir="ltr"></td>
+        <td class="product-name-large">${product.product_name}</td>
+        <td>${product.unit_price.toFixed(2)}</td>
+        <td class="product-total">${product.unit_price.toFixed(2)}</td>
+        <td>
+            <button class="btn btn-sm btn-primary product-details-btn" title="تفاصيل المنتج"><i class="fas fa-info-circle"></i></button>
+            <button class="btn btn-sm btn-danger remove-product-btn" title="حذف"><i class="fas fa-trash"></i></button>
+        </td>
+    `;
+    tbody.appendChild(row);
+
+    const qtyInput = row.querySelector('.quantity-input');
+    qtyInput.addEventListener('change', () => updateProductQuantity(row));
+    qtyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('amountPaid').focus();
+            document.getElementById('amountPaid').select();
+        }
+    });
+    row.querySelector('.remove-product-btn').addEventListener('click', () => removeProduct(row));
+    row.querySelector('.product-details-btn').addEventListener('click', () => showProductDetails(product));
+    row.addEventListener('dblclick', (e) => {
+        showDoubleClickActions(e, row, product);
+    });
+    row.classList.add('row-highlight');
+    setTimeout(() => row.classList.remove('row-highlight'), 1000);
+    qtyInput.focus();
+    qtyInput.select();
+}
+
+function showDoubleClickActions(event, row, product) {
+    // إزالة أي أزرار سابقة
+    const existingActions = document.querySelector('.double-click-actions');
+    if (existingActions) existingActions.remove();
+
+    const actions = document.createElement('div');
+    actions.className = 'double-click-actions';
+    actions.style.position = 'relative';
+    actions.style.top = '-50px';
+    actions.style.width = '100%';
+    actions.style.display = 'flex';
+    actions.style.justifyContent = 'center';
+    actions.style.gap = '10px';
+    actions.style.marginBottom = '10px';
+    actions.innerHTML = `
+        <button class="double-click-btn double-click-details" onclick="showProductDetailsCanvas(${JSON.stringify(product).replace(/"/g, '&quot;')})">
+            <i class="fas fa-info-circle"></i> تفاصيل
+        </button>
+        <button class="double-click-btn double-click-delete" onclick="removeProduct(this.closest('tr'))">
+            <i class="fas fa-trash"></i> حذف
+        </button>
+    `;
+    row.parentNode.insertBefore(actions, row);
+    setTimeout(() => {
+        document.addEventListener('click', function hideActions(e) {
+            if (actions && !actions.contains(e.target)) {
+                actions.remove();
+                document.removeEventListener('click', hideActions);
+            }
+        });
+    }, 0);
+}
+
+function showProductDetailsCanvas(product) {
+    const content = document.getElementById('productDetailsContent');
+    content.innerHTML = `
+        <p>اسم المنتج: ${product.product_name}</p>
+        <p>تاريخ الإنتهاء: ${product.expiry_date || 'غير محدد'}</p>
+        <p>مستوى المخزون الأدنى: ${product.min_stock_level || 'غير محدد'}</p>
+        <p>نوع البيع: ${product.sale_type || 'غير محدد'}</p>
+        <p>نوع الفاتورة: ${product.invoice_type || 'غير محدد'}</p>
+    `;
+    document.getElementById('productDetailsCanvas').style.display = 'flex';
+}
+
+function updateProductQuantity(row) {
+    const qty = parseInt(row.querySelector('.quantity-input').value) || 1;
+    const price = parseFloat(row.querySelector('td:nth-child(3)').textContent);
+    const total = price * qty;
+    row.querySelector('.product-total').textContent = total.toFixed(2);
+    updateInvoiceSummary();
+}
+
+function removeProduct(row) {
+    row.classList.add('row-delete');
+    setTimeout(() => {
+        row.remove();
+        updateInvoiceSummary();
+        document.querySelectorAll('#productsTableBody tr').forEach((row, index) => {
+            row.cells[0].textContent = index + 1;
+        });
+    }, 1500);
+}
+
+// ============================================================
+// 7. ملخص الفاتورة
+// ============================================================
+function updateInvoiceSummary() {
+    let subtotal = 0;
+    document.querySelectorAll('#productsTableBody tr').forEach(row => {
+        subtotal += parseFloat(row.querySelector('.product-total').textContent);
+    });
+    const tax = subtotal * 0.0;
+    const total = subtotal + tax;
+    document.getElementById('subtotal').value = subtotal.toFixed(2);
+    document.getElementById('taxAmount').value = tax.toFixed(2);
+    document.getElementById('totalAmount').value = total.toFixed(2);
+    updateRemainingAmount();
+}
+
+function updateRemainingAmount() {
+    const total = parseFloat(document.getElementById('totalAmount').value) || 0;
+    const paid = parseFloat(document.getElementById('amountPaid').value) || 0;
+    document.getElementById('remainingAmount').value = (total - paid).toFixed(2);
+}
+
+// ============================================================
+// 8. دوال الفاتورة والعمليات
+// ============================================================
+function generateInvoiceNumber() {
+    apiCall('getNextInvoiceNumber', {})
+        .then(data => {
+            if (data.success && data.next_invoice_number) {
+                document.getElementById('invoiceNumber').value = data.next_invoice_number;
+            } else {
+                // توليد مؤقت
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = (now.getMonth() + 1).toString().padStart(2, '0');
+                const day = now.getDate().toString().padStart(2, '0');
+                const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+                document.getElementById('invoiceNumber').value = `INV-${year}${month}${day}-${random}`;
+            }
+        })
+        .catch(() => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            document.getElementById('invoiceNumber').value = `INV-${year}${month}${day}-${random}`;
+        });
+}
+
+function resetForm() {
+    generateInvoiceNumber();
+    document.getElementById('productsTableBody').innerHTML = '';
+    document.getElementById('paymentType').value = 'نقداً';
+    document.getElementById('customerInfoRow').style.display = 'none';
+    document.getElementById('entityTypeSelect').value = '';
+    document.getElementById('customerId').value = '';
+    document.getElementById('customerDetailsContainer').style.display = 'none';
+    document.getElementById('subtotal').value = '0.00';
+    document.getElementById('taxAmount').value = '0.00';
+    document.getElementById('totalAmount').value = '0.00';
+    document.getElementById('amountPaid').value = '';
+    document.getElementById('remainingAmount').value = '0.00';
+    document.getElementById('toggleScanBtn').innerHTML = '<i class="fas fa-play" style="color: var(--gold); text-shadow: var(--gold-glow);"></i>';
+    lastScannedBarcode = '';
+}
+
+function completeSale() {
+    const total = parseFloat(document.getElementById('totalAmount').value) || 0;
+    const paid = parseFloat(document.getElementById('amountPaid').value) || 0;
+
+    if (!paid) { showToast('يرجى إدخال المبلغ المدفوع', 'error'); return; }
+    if (paid < total) { showToast('المبلغ المدفوع أقل من الإجمالي النهائي', 'error'); return; }
+
+    const paymentType = document.getElementById('paymentType').value;
+    let entityId = null;
+    let entityTypeId = null;
+
+    if (paymentType === 'آجل') {
+        entityId = document.getElementById('deferredCustomerId').value;
+        entityTypeId = document.getElementById('deferredEntityTypeSelect').value;
+        if (!entityId || !entityTypeId) {
+            showToast('يرجى اختيار العميل ونوع الكيان', 'error');
+            return;
+        }
+        // التحقق من الحد الائتماني سيتم في الجسر (DatabaseHelper)
+    }
+
+    const products = Array.from(document.querySelectorAll('#productsTableBody tr')).map(row => ({
+        product_id: row.getAttribute('data-product-id'),
+        quantity: parseInt(row.querySelector('.quantity-input').value),
+        unit_price: parseFloat(row.querySelector('td:nth-child(3)').textContent)
+    }));
+
+    if (products.length === 0) { showToast('يرجى إضافة منتجات قبل الترحيل', 'error'); return; }
+
+    const invoiceData = {
+        invoice_number: document.getElementById('invoiceNumber').value,
+        payment_type: paymentType,
+        entity_id: entityId,
+        entity_type_id: entityTypeId,
+        products: products,
+        amount_paid: paid
+    };
+
+    showLoading(true);
+    apiCall('completeSale', invoiceData)
+        .then(data => {
+            if (data.success) {
+                showSuccessCheckmark();
+                localStorage.setItem('lastSaleId', data.sale_id);
+                localStorage.setItem('lastInvoiceNumber', data.invoice_number);
+                resetForm();
+            } else {
+                showToast(data.message || 'حدث خطأ أثناء الترحيل', 'error');
+            }
+        })
+        .catch(error => {
+            showToast('حدث خطأ أثناء الترحيل', 'error');
+        })
+        .finally(() => showLoading(false));
+}
+
+function printReceipt() {
+    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    if (!invoiceNumber) { showToast('لا توجد فاتورة للطباعة', 'error'); return; }
+    showLoading(true);
+    apiCall('printReceipt', { invoice_number: invoiceNumber })
+        .then(data => {
+            if (data.success && data.html) {
+                const printWindow = window.open('', '_blank');
+                printWindow.document.write(data.html);
+                printWindow.document.close();
+                setTimeout(() => { printWindow.print(); }, 500);
+            } else {
+                showToast(data.message || 'فشل الطباعة', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء الطباعة', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function sendWhatsAppReceipt() {
+    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
+    document.getElementById('whatsappModal').style.display = 'flex';
+    document.getElementById('whatsappPhone').value = '';
+    document.getElementById('whatsappPhone').focus();
+}
+
+function confirmWhatsAppSend() {
+    const phone = document.getElementById('whatsappPhone').value.trim();
+    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    if (!phone) { showToast('يرجى إدخال رقم الهاتف', 'error'); return; }
+    if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
+
+    showLoading(true);
+    apiCall('sendWhatsApp', { phone: phone, invoice_number: invoiceNumber })
+        .then(data => {
+            if (data.success) {
+                window.location.href = data.whatsapp_deeplink;
+                setTimeout(() => {
+                    if (!document.hidden) window.open(data.fallback_url, '_blank');
+                }, 2000);
+                closeModal('whatsappModal');
+                showToast('جاري فتح واتساب لإرسال الفاتورة', 'success');
+            } else {
+                showToast(data.message || 'فشل الإرسال عبر واتساب', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء الإرسال', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+// ============================================================
+// 9. دوال العملاء
+// ============================================================
+function loadCustomers() {
+    apiCall('getCustomers', {})
+        .then(data => {
+            const select = document.getElementById('customerId');
+            select.innerHTML = '<option value="">اختر عميل</option>';
+            if (data.success && data.customers) {
+                data.customers.forEach(customer => {
+                    const option = document.createElement('option');
+                    option.value = customer.id;
+                    option.textContent = customer.name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => { console.error('Error loading customers:', error); });
+}
+
+function loadEntityTypes() {
+    apiCall('getEntityTypes', {})
+        .then(data => {
+            const select = document.getElementById('entityTypeSelect');
+            select.innerHTML = '<option value="">اختر نوع العميل</option>';
+            if (data.success && data.entity_types) {
+                data.entity_types.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.type_id;
+                    option.textContent = type.type_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => { console.error('Error loading entity types:', error); });
+}
+
+function loadCustomersByEntityType(entityTypeId) {
+    if (!entityTypeId) return;
+    apiCall('getEntitiesByType', { entity_type_id: entityTypeId })
+        .then(data => {
+            const select = document.getElementById('customerId');
+            select.innerHTML = '<option value="">اختر عميل</option>';
+            if (data.success && data.entities) {
+                data.entities.forEach(entity => {
+                    const option = document.createElement('option');
+                    option.value = entity.entity_id;
+                    option.textContent = entity.commercial_name || entity.legal_name;
+                    select.appendChild(option);
+                });
+                document.getElementById('customerNameField').style.display = 'block';
+            }
+        })
+        .catch(error => { console.error('Error loading customers by type:', error); });
+}
+
+function loadCustomerDetails(customerId) {
+    if (!customerId) { document.getElementById('customerDetailsContainer').style.display = 'none'; return; }
+    showLoading(true);
+    apiCall('getEntityDetails', { entity_id: customerId })
+        .then(data => {
+            if (data.success) {
+                displayCustomerDetails(data.entity);
+            } else {
+                showToast(data.message || 'حدث خطأ في جلب بيانات العميل', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ في جلب بيانات العميل', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function displayCustomerDetails(customer) {
+    const container = document.getElementById('customerDetailsContainer');
+    container.innerHTML = `
+        <div class="customer-info-grid">
+            <div class="customer-info-item"><strong>رقم العميل:</strong> ${customer.entity_id}</div>
+            <div class="customer-info-item"><strong>الاسم القانوني:</strong> ${customer.legal_name || ''}</div>
+            <div class="customer-info-item"><strong>الاسم التجاري:</strong> ${customer.commercial_name || ''}</div>
+            <div class="customer-info-item"><strong>الحد الائتماني:</strong> ${customer.credit_limit || 0} ريال</div>
+            <div class="customer-info-item"><strong>الرصيد الحالي:</strong> ${customer.current_balance || 0} ريال</div>
+            <div class="customer-info-item"><strong>شروط الدفع:</strong> ${customer.payment_terms || ''}</div>
+            <div class="customer-info-item"><strong>الحالة:</strong> ${customer.is_active ? 'نشط' : 'غير نشط'}</div>
+            <div class="customer-info-item"><strong>الهاتف:</strong> ${customer.primary_phone || ''}</div>
+            <div class="customer-info-item"><strong>البريد الإلكتروني:</strong> ${customer.email || ''}</div>
+            <div class="customer-info-item"><strong>العنوان:</strong> ${customer.address_line1 || ''} ${customer.address_line2 || ''} ${customer.city || ''} ${customer.state || ''}</div>
+        </div>
+    `;
+    container.style.display = 'block';
+}
+
+function searchCustomers() {
+    const searchTerm = document.getElementById('customerSearchInput').value.trim();
+    if (!searchTerm) { showToast('يرجى إدخال مصطلح البحث', 'error'); return; }
+    showLoading(true);
+    apiCall('searchCustomers', { query: searchTerm })
+        .then(data => {
+            const resultsContainer = document.getElementById('customerSearchResults');
+            resultsContainer.innerHTML = '';
+            if (data.success && data.customers) {
+                data.customers.forEach(customer => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${customer.id}</td>
+                        <td>${customer.name}</td>
+                        <td><button class="btn btn-sm btn-primary" onclick="selectCustomer('${customer.id}', '${customer.name}')">اختيار</button></td>
+                    `;
+                    resultsContainer.appendChild(row);
+                });
+            } else {
+                resultsContainer.innerHTML = '<tr><td colspan="4">لا توجد نتائج</td></tr>';
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء البحث', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function selectCustomer(customerId, customerName) {
+    document.getElementById('customerId').value = customerId;
+    closeModal('customerSearchModal');
+    loadCustomerDetails(customerId);
+}
+
+function addNewCustomer() {
+    closeModal('customerSearchModal');
+    document.getElementById('newCustomerModal').style.display = 'flex';
+}
+
+function saveNewCustomer() {
+    const name = document.getElementById('newCustomerName').value.trim();
+    const phone = document.getElementById('newCustomerPhone').value.trim();
+    const email = document.getElementById('newCustomerEmail').value.trim();
+    const creditLimit = document.getElementById('newCustomerCreditLimit').value || 0;
+    if (!name || !phone) { showToast('يرجى إدخال الاسم والهاتف', 'error'); return; }
+    showLoading(true);
+    apiCall('addCustomer', { name, phone, email, credit_limit: creditLimit })
+        .then(data => {
+            if (data.success && data.customer) {
+                selectCustomer(data.customer.id, data.customer.name);
+                showToast('تم حفظ العميل بنجاح', 'success');
+                loadCustomers();
+                loadCustomerDetails(data.customer.id);
+            } else {
+                showToast(data.message || 'حدث خطأ أثناء حفظ العميل', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء حفظ العميل', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+// ============================================================
+// 10. دوال الإرجاع
+// ============================================================
+function openReturnOverlay() {
+    document.getElementById('returnOverlay').style.display = 'flex';
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+    document.getElementById('returnStartDate').value = formatDate(weekAgo);
+    document.getElementById('returnEndDate').value = formatDate(today);
+    flatpickr("#returnStartDate", { locale: "ar", dateFormat: "Y-m-d", defaultDate: formatDate(weekAgo) });
+    flatpickr("#returnEndDate", { locale: "ar", dateFormat: "Y-m-d", defaultDate: formatDate(today) });
+    searchReturnSales();
+}
+
+function searchReturnSales() {
+    const startDate = document.getElementById('returnStartDate').value;
+    const endDate = document.getElementById('returnEndDate').value;
+    if (!startDate || !endDate) { showToast('يرجى اختيار نطاق التواريخ', 'error'); return; }
+    showLoading(true);
+    apiCall('searchSales', { start_date: startDate, end_date: endDate, mode: 'return' })
+        .then(data => {
+            const tbody = document.getElementById('returnSalesTableBody');
+            tbody.innerHTML = '';
+            if (data.success && data.sales) {
+                data.sales.slice(0, 100).forEach(sale => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${sale.invoice_number}</td>
+                        <td>${sale.sale_date}</td>
+                        <td>${sale.product_name}</td>
+                        <td>${sale.quantity}</td>
+                        <td>${sale.unit_price}</td>
+                        <td>${sale.total_price}</td>
+                    `;
+                    tr.addEventListener('click', () => {
+                        document.querySelectorAll('#returnSalesTableBody tr').forEach(r => r.classList.remove('selected-row'));
+                        tr.classList.add('selected-row');
+                    });
+                    tr.addEventListener('dblclick', () => {
+                        fillReturnForm(sale);
+                        document.getElementById('returnDetailQuantity').focus();
+                        document.getElementById('returnDetailQuantity').select();
+                    });
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6">لا توجد مبيعات في الفترة المحددة</td></tr>';
+            }
+        })
+        .catch(error => { showToast('حدث خطأ في البحث عن المبيعات', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function fillReturnForm(sale) {
+    document.getElementById('returnDetailInvoice').value = sale.invoice_number;
+    document.getElementById('returnDetailProduct').value = sale.product_name;
+    document.getElementById('returnDetailQuantity').value = sale.quantity;
+    document.getElementById('returnDetailReason').value = 'تالف';
+    document.getElementById('returnDetailNotes').value = '';
+}
+
+function saveReturn() {
+    const invoiceNumber = document.getElementById('returnDetailInvoice').value;
+    const productName = document.getElementById('returnDetailProduct').value;
+    const quantity = document.getElementById('returnDetailQuantity').value;
+    const reason = document.getElementById('returnDetailReason').value;
+    const notes = document.getElementById('returnDetailNotes').value;
+    if (!invoiceNumber || !productName || !quantity || !reason) {
+        showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
+        return;
+    }
+    showLoading(true);
+    apiCall('saveReturn', { invoice_number: invoiceNumber, product_name: productName, quantity: quantity, reason: reason, notes: notes })
+        .then(data => {
+            if (data.success) {
+                showToast('تم حفظ بيانات الإرجاع بنجاح', 'success');
+                closeModal('returnOverlay');
+            } else {
+                showToast(data.message || 'حدث خطأ أثناء حفظ البيانات', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء حفظ البيانات', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function processReturn() {
+    const invoiceNumber = document.getElementById('returnInvoiceNumber').value;
+    const barcode = document.getElementById('returnBarcode').value;
+    const quantity = document.getElementById('returnQuantity').value;
+    const reason = document.getElementById('returnReason').value;
+    if (!invoiceNumber || !barcode || !quantity || !reason) {
+        showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
+        return;
+    }
+    showLoading(true);
+    apiCall('processReturn', { invoice_number: invoiceNumber, barcode: barcode, quantity: quantity, reason: reason })
+        .then(data => {
+            if (data.success) {
+                showToast('تم معالجة الإرجاع بنجاح', 'success');
+                closeModal('returnModal');
+            } else {
+                showToast(data.message || 'حدث خطأ أثناء معالجة الإرجاع', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ أثناء معالجة الإرجاع', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+// ============================================================
+// 11. دوال استرجاع الفواتير وتقرير المبيعات
+// ============================================================
+function retrieveInvoice() {
+    document.getElementById('invoiceRetrieveModal').style.display = 'flex';
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    flatpickr("#startDate", { locale: "ar", dateFormat: "Y-m-d", defaultDate: weekAgo });
+    flatpickr("#endDate", { locale: "ar", dateFormat: "Y-m-d", defaultDate: today });
+}
+
+function searchInvoices() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    if (!startDate || !endDate) { showToast('يرجى اختيار نطاق التواريخ', 'error'); return; }
+    showLoading(true);
+    apiCall('searchInvoices', { start_date: startDate, end_date: endDate })
+        .then(data => {
+            const tbody = document.getElementById('invoiceResultsBody');
+            tbody.innerHTML = '';
+            if (data.success && data.invoices) {
+                data.invoices.slice(0, 7).forEach(invoice => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${invoice.invoice_number}</td>
+                        <td>${invoice.username}</td>
+                        <td>${invoice.customer_name || '-'}</td>
+                        <td>${invoice.payment_type}</td>
+                        <td>${invoice.total_amount}</td>
+                        <td>${invoice.amount_paid}</td>
+                        <td>${invoice.sale_date}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="loadInvoice('${invoice.invoice_number}')">
+                                <i class="fas fa-download"></i> تحميل
+                            </button>
+                        </td>
+                    `;
+                    tr.addEventListener('click', () => {
+                        document.querySelectorAll('#invoiceResultsBody tr').forEach(r => r.classList.remove('selected-row'));
+                        tr.classList.add('selected-row');
+                    });
+                    tr.addEventListener('dblclick', () => { loadInvoice(invoice.invoice_number); });
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="8">لا توجد فواتير</td></tr>';
+            }
+        })
+        .catch(error => { showToast('حدث خطأ في البحث عن الفواتير', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function loadInvoice(invoiceNumber) {
+    showLoading(true);
+    apiCall('retrieveInvoice', { invoice_number: invoiceNumber })
+        .then(data => {
+            if (data.success) {
+                loadInvoiceData(data);
+                closeModal('invoiceRetrieveModal');
+                showToast('تم تحميل الفاتورة بنجاح', 'success');
+            } else {
+                showToast(data.message || 'حدث خطأ في تحميل الفاتورة', 'error');
+            }
+        })
+        .catch(error => { showToast('حدث خطأ في تحميل الفاتورة', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+function loadInvoiceData(data) {
+    document.getElementById('invoiceNumber').value = data.invoice_number;
+    document.getElementById('paymentType').value = data.payment_type;
+    if (data.payment_type === 'آجل' && data.entity_id) {
+        document.getElementById('customerInfoRow').style.display = 'block';
+    }
+    const tbody = document.getElementById('productsTableBody');
+    tbody.innerHTML = '';
+    data.items.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-product-id', item.product_id);
+        row.setAttribute('data-barcode', item.barcode);
+        row.innerHTML = `
+            <td><input type="number" class="form-control quantity-input" value="${item.quantity}" min="1" dir="ltr"></td>
+            <td class="product-name-large">${item.name}</td>
+            <td>${item.unit_price.toFixed(2)}</td>
+            <td class="product-total">${item.total_price.toFixed(2)}</td>
+            <td>
+                <button class="btn btn-sm btn-primary product-details-btn" title="تفاصيل المنتج"><i class="fas fa-info-circle"></i></button>
+                <button class="btn btn-sm btn-danger remove-product-btn" title="حذف"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(row);
+        const qtyInput = row.querySelector('.quantity-input');
+        qtyInput.addEventListener('change', () => updateProductQuantity(row));
+        const productNameCell = row.querySelector('.product-name-large');
+        productNameCell.addEventListener('dblclick', (e) => {
+            showDoubleClickActions(e, row, item);
+        });
+    });
+    updateInvoiceSummary();
+}
+
+function toggleSalesReport() {
+    const reportModal = document.getElementById('salesReportModal');
+    if (reportModal.style.display === 'flex') {
+        reportModal.style.display = 'none';
+    } else {
+        reportModal.style.display = 'flex';
+        fetchSalesReport();
+    }
+}
+
+function fetchSalesReport() {
+    showLoading(true);
+    apiCall('salesReport', {})
+        .then(data => {
+            const tableBody = document.getElementById('salesReportTableBody');
+            tableBody.innerHTML = '';
+            if (data.success && data.sales) {
+                data.sales.forEach(sale => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${sale.invoice_number}</td>
+                        <td>${sale.date}</td>
+                        <td>${sale.product_name}</td>
+                        <td>${sale.quantity}</td>
+                        <td>${sale.total_amount.toFixed(2)}</td>
+                    `;
+                    tr.addEventListener('click', () => {
+                        document.querySelectorAll('.sales-report-table tr').forEach(r => r.classList.remove('selected-row'));
+                        tr.classList.add('selected-row');
+                    });
+                    tableBody.appendChild(tr);
+                });
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="5">لا توجد مبيعات</td></tr>';
+            }
+        })
+        .catch(error => { showToast('حدث خطأ في جلب تقرير المبيعات', 'error'); })
+        .finally(() => showLoading(false));
+}
+
+// ============================================================
+// 12. دوال القائمة الجانبية والمودالات
+// ============================================================
+function handleButtonClick(action) {
+    switch(action) {
+        case 'newSale': resetForm(); showToast('تم بدء عملية بيع جديدة', 'success'); break;
+        case 'return': openReturnOverlay(); break;
+        case 'invoiceRetrieveModal': retrieveInvoice(); break;
+        case 'salesReport': toggleSalesReport(); break;
+        case 'back': window.location.href = 'main.html'; break;
+        default: showToast('إجراء غير معروف', 'error');
+    }
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function setupSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (!sidebar || !sidebarToggle) { console.error('Sidebar elements not found'); return; }
+    sidebarToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+        sidebarToggle.style.display = sidebar.classList.contains('open') ? 'none' : 'flex';
+    });
+    document.addEventListener('click', (e) => {
+        if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== sidebarToggle) {
+            sidebar.classList.remove('open');
+            sidebarToggle.style.display = 'flex';
+        }
+    });
+    let touchStartX = 0, touchEndX = 0;
+    document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+    document.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        if (touchEndX < touchStartX - 50) {
+            sidebar.classList.remove('open');
+            sidebarToggle.style.display = 'flex';
+        }
+        if (touchEndX > touchStartX + 50 && touchStartX < 50) {
+            sidebar.classList.add('open');
+            sidebarToggle.style.display = 'none';
+        }
+    });
+}
+
+// ============================================================
+// 13. دوال العميل للدفع الآجل
+// ============================================================
+function loadDeferredEntityTypes() {
+    apiCall('getEntityTypes', {})
+        .then(data => {
+            const select = document.getElementById('deferredEntityTypeSelect');
+            select.innerHTML = '<option value="">اختر نوع العميل</option>';
+            if (data.success && data.entity_types) {
+                data.entity_types.forEach(type => {
+                    const option = document.createElement('option');
+                    option.value = type.type_id;
+                    option.textContent = type.type_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => { console.error('Error loading entity types for deferred:', error); });
+
+    document.getElementById('deferredEntityTypeSelect').addEventListener('change', function() {
+        if (this.value) loadCustomersByEntityTypeDeferred(this.value);
+    });
+    document.getElementById('deferredCustomerId').addEventListener('change', function() {
+        loadCustomerDetailsDeferred(this.value);
+    });
+}
+
+function loadCustomersByEntityTypeDeferred(entityTypeId) {
+    apiCall('getEntitiesByType', { entity_type_id: entityTypeId })
+        .then(data => {
+            const select = document.getElementById('deferredCustomerId');
+            select.innerHTML = '<option value="">اختر عميل</option>';
+            if (data.success && data.entities) {
+                data.entities.forEach(entity => {
+                    const option = document.createElement('option');
+                    option.value = entity.entity_id;
+                    option.textContent = entity.commercial_name || entity.legal_name;
+                    select.appendChild(option);
+                });
+            }
+        })
+        .catch(error => { console.error('Error:', error); });
+}
+
+function loadCustomerDetailsDeferred(customerId) {
+    if (!customerId) return;
+    apiCall('getEntityDetails', { entity_id: customerId })
+        .then(data => {
+            if (data.success) {
+                displayDeferredCustomerDetails(data.entity);
+            }
+        })
+        .catch(error => { console.error('Error:', error); });
+}
+
+function displayDeferredCustomerDetails(customer) {
+    const container = document.getElementById('deferredCustomerDetailsContainer');
+    container.innerHTML = `
+        <div class="customer-info-grid">
+            <div class="customer-info-item"><strong>رقم العميل:</strong> ${customer.entity_id}</div>
+            <div class="customer-info-item"><strong>الاسم القانوني:</strong> ${customer.legal_name || ''}</div>
+            <div class="customer-info-item"><strong>الاسم التجاري:</strong> ${customer.commercial_name || ''}</div>
+            <div class="customer-info-item"><strong>الحد الائتماني:</strong> ${customer.credit_limit || 0} ريال</div>
+            <div class="customer-info-item"><strong>الرصيد الحالي:</strong> ${customer.current_balance || 0} ريال</div>
+            <div class="customer-info-item"><strong>شروط الدفع:</strong> ${customer.payment_terms || ''}</div>
+            <div class="customer-info-item"><strong>الحالة:</strong> ${customer.is_active ? 'نشط' : 'غير نشط'}</div>
+            <div class="customer-info-item"><strong>الهاتف:</strong> ${customer.primary_phone || ''}</div>
+            <div class="customer-info-item"><strong>البريد الإلكتروني:</strong> ${customer.email || ''}</div>
+            <div class="customer-info-item"><strong>العنوان:</strong> ${customer.address_line1 || ''} ${customer.address_line2 || ''} ${customer.city || ''} ${customer.state || ''}</div>
+        </div>
+    `;
+    container.style.display = 'block';
+}
+
+function confirmDeferredCustomer() {
+    const entityTypeId = document.getElementById('deferredEntityTypeSelect').value;
+    const customerId = document.getElementById('deferredCustomerId').value;
+    if (!entityTypeId || !customerId) {
+        showToast('يرجى اختيار نوع واسم العميل', 'error');
+        return;
+    }
+    document.getElementById('entityTypeSelect').value = entityTypeId;
+    document.getElementById('customerId').value = customerId;
+    document.getElementById('customerInfoRow').style.display = 'block';
+    document.getElementById('customerNameField').style.display = 'block';
+    loadCustomerDetails(customerId);
+    closeModal('deferredPaymentModal');
+}
+
+// ============================================================
+// 14. التهيئة الأولية
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    loadThemeSettings();
+    generateInvoiceNumber();
+    loadEntityTypes();
+    loadCustomers();
+
+    document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
+    document.getElementById('paymentType').addEventListener('change', function() {
+        const customerRow = document.getElementById('customerInfoRow');
+        if (this.value === 'آجل') {
+            document.getElementById('deferredPaymentModal').style.display = 'flex';
+            loadDeferredEntityTypes();
+        } else {
+            customerRow.style.display = 'none';
+            document.getElementById('customerId').value = '';
+            document.getElementById('entityTypeSelect').value = '';
+            document.getElementById('customerDetailsContainer').style.display = 'none';
+        }
+    });
+    document.getElementById('entityTypeSelect').addEventListener('change', function() {
+        if (this.value) loadCustomersByEntityType(this.value);
+        else document.getElementById('customerNameField').style.display = 'none';
+    });
+    document.getElementById('customerId').addEventListener('change', function() {
+        loadCustomerDetails(this.value);
+    });
+    document.getElementById('amountPaid').addEventListener('input', updateRemainingAmount);
+    document.getElementById('amountPaid').addEventListener('dblclick', function() {
+        this.value = document.getElementById('totalAmount').value;
+        updateRemainingAmount();
+    });
+    document.getElementById('amountPaid').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') completeSale();
+    });
+    document.getElementById('completeSaleBtn').addEventListener('click', completeSale);
+    document.getElementById('addManualBarcodeBtn').addEventListener('click', addProductManually);
+    document.getElementById('stopScanBtn').addEventListener('click', stopScanner);
+    document.getElementById('toggleFlashBtn').addEventListener('click', toggleFlash);
+    document.getElementById('toggleScanBtn').addEventListener('click', toggleScanner);
+    document.getElementById('saveNewCustomerBtn').addEventListener('click', saveNewCustomer);
+    document.getElementById('printReceiptBtn').addEventListener('click', printReceipt);
+    document.getElementById('sendWhatsAppBtn').addEventListener('click', sendWhatsAppReceipt);
+    document.getElementById('sendWhatsAppConfirmBtn').addEventListener('click', confirmWhatsAppSend);
+    document.getElementById('addCustomerBtn').addEventListener('click', () => { /* يمكن إضافة منطق */ });
+    document.getElementById('clearCustomerBtn').addEventListener('click', function() {
+        document.getElementById('customerId').value = '';
+        document.getElementById('entityTypeSelect').value = '';
+        document.getElementById('customerDetailsContainer').style.display = 'none';
+        document.getElementById('customerNameField').style.display = 'none';
+    });
+
+    setupSidebar();
+
+    // بدء الماسح الضوئي بعد تأخير
+    setTimeout(() => {
+        if (scannerActive) initBarcodeScanner();
+    }, 1000);
+});
+</script>
+</body>
+</html>

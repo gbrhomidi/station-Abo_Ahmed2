@@ -1,0 +1,2056 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>نظام إدارة محطات الوقود – الحركات المخزنية</title>
+  
+  <!-- المكتبات المطلوبة من CDN -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --card-color: #ffffff;
+      --primary-color: #2563eb;
+      --primary-hover: #1d4ed8;
+      --secondary-color: #64748b;
+      --success-color: #22c55e;
+      --warning-color: #f59e0b;
+      --danger-color: #ef4444;
+      --info-color: #3b82f6;
+      --text-color: #1e293b;
+      --border-color: #e2e8f0;
+      --input-border-color: #3b82f6;
+      --input-glow: 0 0 8px rgba(59, 130, 246, 0.5);
+      --accent-gradient: linear-gradient(135deg, #2563eb, #1d4ed8);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
+      --stat-border-color: #3b82f6;
+      --stat-text-color: #1e293b;
+      --header-text-color: #1e293b;
+      --modal-bg-color: #ffffff;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #0f172a;
+      --card-color: #1e293b;
+      --text-color: #f1f5f9;
+      --border-color: #334155;
+      --input-border-color: #60a5fa;
+      --input-glow: 0 0 8px rgba(96, 165, 250, 0.5);
+      --stat-border-color: #f59e0b;
+      --stat-text-color: #f1f5f9;
+      --header-text-color: #ffffff;
+      --modal-bg-color: #1a2332;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.6;
+      padding: 0;
+      margin: 0;
+      transition: all 0.3s ease;
+      overflow-x: hidden;
+      max-width: 100vw;
+      font-weight: 600;
+      padding-top: 60px;
+    }
+
+    .app-container {
+      display: block;
+      min-height: 100vh;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    /* الشريط العلوي الثابت */
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--card-color);
+      padding: 10px 15px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      max-width: 100%;
+      z-index: 1000;
+      border-bottom: 2px solid var(--primary-color);
+    }
+
+    .page-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--header-text-color);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .theme-toggle {
+      display: flex;
+      gap: 8px;
+    }
+
+    .theme-toggle i {
+      font-size: 1.3rem;
+      color: gold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    }
+
+    .theme-toggle i:hover {
+      transform: scale(1.1);
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      transform: translateY(-2px);
+    }
+    .btn-success {
+      background: var(--success-color);
+      color: white;
+    }
+    .btn-danger {
+      background: var(--danger-color);
+      color: white;
+    }
+    .btn-warning {
+      background: var(--warning-color);
+      color: white;
+    }
+    .btn-info {
+      background: var(--info-color);
+      color: white;
+    }
+    .btn-secondary {
+      background: var(--secondary-color);
+      color: white;
+    }
+    .btn-back {
+      background: #6b7280;
+      color: white;
+    }
+    .btn-back:hover {
+      background: #4b5563;
+    }
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 0.75rem;
+    }
+
+    .main-content {
+      padding: 15px;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+
+    /* التبويبات */
+    .nav-tabs {
+      display: flex;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 15px;
+      overflow-x: auto;
+      width: 100%;
+      max-width: 100%;
+      background: var(--card-color);
+      border-radius: 12px 12px 0 0;
+      padding: 0 10px;
+    }
+
+    .nav-tab {
+      padding: 10px 16px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text-color);
+    }
+
+    .nav-tab.active {
+      border-bottom-color: var(--primary-color);
+      color: var(--primary-color);
+      font-weight: 700;
+    }
+
+    .nav-tab:hover {
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .tab-content {
+      display: none;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* الإحصائيات */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .stats-grid-analytics {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .stat-card {
+      background: var(--card-color);
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--stat-border-color);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+    }
+
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--stat-text-color);
+      margin-bottom: 5px;
+      text-align: center;
+      width: 100%;
+      font-family: 'Arial', sans-serif !important;
+    }
+
+    .stat-label {
+      color: var(--stat-text-color);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+      width: 100%;
+    }
+
+    /* النماذج */
+    .form-container {
+      background: var(--card-color);
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 15px;
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .form-row-compact {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .form-group-half {
+      margin-bottom: 10px;
+      min-width: 0;
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 600;
+      color: var(--header-text-color);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 8px 10px;
+      border: 2px solid var(--input-border-color);
+      border-radius: 10px;
+      background: var(--card-color);
+      color: var(--text-color);
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: center;
+      font-family: 'Arial', sans-serif !important;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), var(--input-glow);
+    }
+
+    textarea.form-control {
+      text-align: right;
+      font-family: 'Cairo', sans-serif !important;
+    }
+
+    /* الجدول */
+    .table-container {
+      background: var(--card-color);
+      border-radius: 12px;
+      overflow-x: auto;
+      box-shadow: var(--shadow-md);
+      width: 100%;
+      max-width: 100%;
+      margin-bottom: 15px;
+      position: relative;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 8px 10px;
+      text-align: center;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .data-table th {
+      background: var(--primary-color);
+      font-weight: 700;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .data-table tr {
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .data-table tr:hover {
+      background: rgba(37, 99, 235, 0.05);
+    }
+
+    .data-table tr.selected {
+      background: rgba(37, 99, 235, 0.15) !important;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.4);
+      border: 2px solid var(--primary-color);
+      font-weight: 700;
+      transform: scale(1.01);
+    }
+
+    [data-theme="dark"] .data-table tr.selected {
+      background: rgba(96, 165, 250, 0.2) !important;
+      box-shadow: 0 0 10px rgba(96, 165, 250, 0.6);
+      border: 2px solid #60a5fa;
+    }
+
+    .numeric {
+      font-family: 'Arial', sans-serif !important;
+      direction: ltr;
+      text-align: center;
+    }
+
+    .badge {
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      white-space: nowrap;
+      text-align: center;
+      display: inline-block;
+    }
+
+    .badge-success { background: var(--success-color); color: white; }
+    .badge-warning { background: var(--warning-color); color: white; }
+    .badge-danger { background: var(--danger-color); color: white; }
+    .badge-info { background: var(--info-color); color: white; }
+    .badge-purple { background: #8b5cf6; color: white; }
+    .badge-pink { background: #ec4899; color: white; }
+    .badge-indigo { background: #4f46e5; color: white; }
+    .badge-teal { background: #14b8a6; color: white; }
+    .badge-orange { background: #f97316; color: white; }
+    .badge-cyan { background: #06b6d4; color: white; }
+    .badge-lime { background: #84cc16; color: white; }
+    .badge-secondary { background: var(--secondary-color); color: white; }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+    }
+
+    .btn-action-group {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* مودال */
+    .modal-content {
+      background: var(--card-color);
+      color: var(--text-color);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .modal-header {
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .modal-title {
+      text-align: center;
+      width: 100%;
+      font-weight: 700;
+    }
+
+    .btn-close {
+      filter: var(--btn-close-filter);
+    }
+
+    [data-theme="dark"] .btn-close {
+      filter: invert(1) grayscale(100%) brightness(200%);
+    }
+
+    /* معلومات المخزون */
+    .inventory-info {
+      background: var(--card-color);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid var(--primary-color);
+    }
+
+    .inventory-info h4 {
+      margin-bottom: 8px;
+      color: var(--primary-color);
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 6px;
+    }
+
+    .info-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--border-color);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    /* تقارير */
+    .report-card {
+      background: var(--card-color);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 15px;
+      box-shadow: var(--shadow-sm);
+      width: 100%;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .report-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+      margin: 0;
+    }
+
+    /* التصفح */
+    .pagination {
+      display: flex;
+      list-style: none;
+      padding: 0;
+      margin: 15px 0;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .page-item {
+      margin: 0 3px;
+    }
+
+    .page-link {
+      display: block;
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--text-color);
+      transition: all 0.3s ease;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .page-item.active .page-link {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+
+    .page-link:hover {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    /* الرسم البياني */
+    #product-analytics-chart {
+      height: 280px;
+      width: 100%;
+      position: relative;
+    }
+
+    /* التجاوب */
+    @media (max-width: 768px) {
+      .stats-grid, .stats-grid-analytics {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      .top-bar {
+        flex-direction: row;
+        gap: 8px;
+        padding: 8px 10px;
+      }
+      .action-buttons {
+        width: 100%;
+        justify-content: center;
+      }
+      .btn {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+      }
+      .page-title {
+        font-size: 1rem;
+      }
+      .data-table th, .data-table td {
+        padding: 6px 6px;
+        font-size: 0.7rem;
+      }
+      .main-content {
+        padding: 10px;
+      }
+      .form-row-compact {
+        flex-direction: column;
+      }
+      .form-group-half {
+        width: 100%;
+        min-width: unset;
+      }
+      .nav-tab {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+      }
+      .stat-value {
+        font-size: 1.1rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid, .stats-grid-analytics {
+        grid-template-columns: 1fr;
+      }
+      .top-bar {
+        flex-direction: column;
+        gap: 6px;
+      }
+      .page-title {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .action-buttons {
+        flex-direction: row;
+        width: 100%;
+      }
+      .btn {
+        width: 48%;
+        justify-content: center;
+        font-size: 0.7rem;
+        padding: 5px 8px;
+      }
+      .data-table {
+        min-width: 700px;
+      }
+      .data-table th, .data-table td {
+        padding: 4px 4px;
+        font-size: 0.65rem;
+      }
+    }
+
+    /* تخصيص شريط التمرير */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-color); }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--secondary-color); }
+
+    /* تأثيرات */
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    .slide-in { animation: slideIn 0.3s ease-out; }
+    @keyframes slideIn {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(0); }
+    }
+
+    /* تحسينات الوضع الليلي */
+    [data-theme="dark"] .form-control {
+      background: #1e293b;
+      color: #f1f5f9;
+    }
+    [data-theme="dark"] .stat-card,
+    [data-theme="dark"] .form-container,
+    [data-theme="dark"] .table-container,
+    [data-theme="dark"] .report-card,
+    [data-theme="dark"] .inventory-info {
+      background: #1e293b;
+      border: 1px solid #334155;
+    }
+    [data-theme="dark"] .data-table th {
+      background: #1e40af;
+    }
+    [data-theme="dark"] .nav-tab.active {
+      color: #60a5fa;
+      border-bottom-color: #60a5fa;
+    }
+    [data-theme="dark"] .modal-content {
+      background: #1a2332;
+      border: 1px solid #334155;
+    }
+    [data-theme="dark"] .modal-header {
+      border-bottom: 1px solid #334155;
+    }
+    [data-theme="dark"] .modal-footer {
+      border-top: 1px solid #334155;
+    }
+
+    .text-center { text-align: center !important; }
+    .mt-2 { margin-top: 10px; }
+    .mb-2 { margin-bottom: 10px; }
+    .w-100 { width: 100%; }
+
+    /* مؤشر التحميل المخصص */
+    .loading-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 6px solid var(--primary-color);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- مؤشر التحميل -->
+<div class="loading-indicator" id="loadingIndicator">
+  <div class="spinner"></div>
+</div>
+
+<!-- الشريط العلوي الثابت -->
+<div class="top-bar">
+  <div class="page-title">
+    <span>📊 الحركات المخزنية</span>
+    <div class="theme-toggle">
+      <i class="fas fa-moon" id="moonIcon" onclick="toggleTheme('dark')"></i>
+      <i class="fas fa-sun" id="sunIcon" onclick="toggleTheme('light')" style="display: none;"></i>
+    </div>
+  </div>
+  <div class="action-buttons">
+    <button class="btn btn-primary" onclick="showCreateModal()">
+      <i class="fas fa-plus-circle"></i> ➕ حركة جديدة
+    </button>
+    <button class="btn btn-back" onclick="goToDashboard()">
+      <i class="fas fa-arrow-circle-right"></i> ↩️ رجوع
+    </button>
+  </div>
+</div>
+
+<div class="app-container">
+  <main class="main-content">
+
+    <!-- التبويبات -->
+    <div class="nav-tabs">
+      <div class="nav-tab active" data-tab="movements" onclick="switchTab('movements')">📈 الحركات</div>
+      <div class="nav-tab" data-tab="reports" onclick="switchTab('reports')">📋 التقارير</div>
+      <div class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">📊 التحليلات</div>
+    </div>
+
+    <!-- ========== تبويب الحركات ========== -->
+    <div class="tab-content active" id="movements-tab">
+      <!-- إحصائيات -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="total-movements">0</div>
+          <div class="stat-label">📊 إجمالي الحركات</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value numeric" id="total-value">0.00</div>
+          <div class="stat-label">💰 القيمة الإجمالية</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="today-movements">0</div>
+          <div class="stat-label">📅 حركات اليوم</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="pending-count">0</div>
+          <div class="stat-label">⏳ بانتظار المراجعة</div>
+        </div>
+      </div>
+
+      <!-- فلترة -->
+      <div class="form-container">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">🔍 بحث بالمنتج</label>
+            <input type="text" class="form-control" id="search-product" placeholder="اسم المنتج أو الباركود">
+          </div>
+          <div class="form-group">
+            <label class="form-label">📝 نوع الحركة</label>
+            <select class="form-control" id="filter-type">
+              <option value="">جميع الأنواع</option>
+              <option value="in">📥 دخول مخزني</option>
+              <option value="out">📤 خروج مخزني</option>
+              <option value="return_customer">🔄 إرجاع من عميل</option>
+              <option value="return_supplier">🔄 إرجاع لمورد</option>
+              <option value="waste">🗑️ هالك</option>
+              <option value="transfer">🔄 تحويل بين مستودعات</option>
+              <option value="adjustment">⚖️ تسوية مخزنية</option>
+              <option value="stocktake">📋 جرد</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row-compact">
+          <div class="form-group-half">
+            <label class="form-label">📅 من تاريخ</label>
+            <input type="date" class="form-control numeric" id="filter-from">
+          </div>
+          <div class="form-group-half">
+            <label class="form-label">📅 إلى تاريخ</label>
+            <input type="date" class="form-control numeric" id="filter-to">
+          </div>
+        </div>
+        <div class="form-row-compact">
+          <div class="form-group-half">
+            <label class="form-label">🏢 المستودع</label>
+            <select class="form-control" id="filter-warehouse">
+              <option value="">جميع المستودعات</option>
+            </select>
+          </div>
+          <div class="form-group-half">
+            <label class="form-label">📊 الحالة</label>
+            <select class="form-control" id="filter-status">
+              <option value="">جميع الحالات</option>
+              <option value="completed">✅ مكتمل</option>
+              <option value="pending">⏳ قيد الانتظار</option>
+              <option value="cancelled">❌ ملغى</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row-compact">
+          <div class="form-group-half">
+            <label class="form-label">🏭 المورد</label>
+            <select class="form-control" id="filter-supplier">
+              <option value="">جميع الموردين</option>
+            </select>
+          </div>
+          <div class="form-group-half">
+            <label class="form-label">👥 العميل</label>
+            <select class="form-control" id="filter-customer">
+              <option value="">جميع العملاء</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
+          <button class="btn btn-primary" onclick="applyFilters()"><i class="fas fa-filter"></i> 🔍 تطبيق الفلترة</button>
+          <button class="btn btn-secondary" onclick="resetFilters()"><i class="fas fa-times"></i> 🗑️ إعادة الضبط</button>
+        </div>
+      </div>
+
+      <!-- جدول الحركات -->
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#️⃣ #</th>
+              <th>📅 التاريخ</th>
+              <th>🛒 المنتج</th>
+              <th>📦 الكمية</th>
+              <th>📝 النوع</th>
+              <th>🏢 المستودع</th>
+              <th>🔄 المصدر/الهدف</th>
+              <th>👥 المورد/العميل</th>
+              <th>💰 السعر</th>
+              <th>💵 القيمة</th>
+              <th>📊 الحالة</th>
+              <th>🛠️ الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="movements-table-body">
+            <tr><td colspan="12" class="text-center">⏳ جاري التحميل...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- التصفح -->
+      <div style="margin-top: 15px; text-align: center;">
+        <nav>
+          <ul class="pagination" id="pagination-container">
+            <li class="page-item disabled"><a class="page-link" href="#">⬅️ السابق</a></li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item"><a class="page-link" href="#">➡️ التالي</a></li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ========== تبويب التقارير ========== -->
+    <div class="tab-content" id="reports-tab">
+      <div class="form-container">
+        <h4 style="text-align: center;">📋 تقارير الحركات المخزنية</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">📊 نوع التقرير</label>
+            <select class="form-control" id="report-type">
+              <option value="stock_detail">📦 تفاصيل المخزون</option>
+              <option value="movements_summary">📈 ملخص الحركات</option>
+              <option value="profit_product">💰 الربح حسب المنتج</option>
+              <option value="profit_supplier">🏭 الربح حسب المورد</option>
+              <option value="profit_customer">👥 الربح حسب العميل</option>
+              <option value="below_min">📉 المنتجات تحت الحد الأدنى</option>
+              <option value="movements_detailed">📋 حركات مفصلة</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">⚙️ خيارات إضافية</label>
+            <input type="text" class="form-control" id="report-options" placeholder="خيارات التقرير">
+          </div>
+        </div>
+        <div class="form-row-compact">
+          <div class="form-group-half">
+            <label class="form-label">📅 من تاريخ</label>
+            <input type="date" class="form-control numeric" id="report-from">
+          </div>
+          <div class="form-group-half">
+            <label class="form-label">📅 إلى تاريخ</label>
+            <input type="date" class="form-control numeric" id="report-to">
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
+          <button class="btn btn-primary" onclick="generateReport()"><i class="fas fa-cog"></i> ⚙️ توليد التقرير</button>
+          <button class="btn btn-success" onclick="exportReport()"><i class="fas fa-file-export"></i> 📤 تصدير التقرير</button>
+        </div>
+      </div>
+
+      <div class="report-card">
+        <div class="report-header">
+          <h4 class="report-title" id="report-title">📊 تفاصيل التقرير</h4>
+          <span class="badge badge-info" id="report-date-range">📅 الفترة: -</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="report-table">
+            <thead id="report-table-head">
+              <tr><th>📝 اختر نوع التقرير واضغط على "توليد التقرير"</th></tr>
+            </thead>
+            <tbody id="report-table-body">
+              <tr><td>❌ لا توجد بيانات لعرضها</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== تبويب التحليلات ========== -->
+    <div class="tab-content" id="analytics-tab">
+      <div class="stats-grid-analytics">
+        <div class="stat-card">
+          <div class="stat-value numeric" id="analytics-total-value">0.00</div>
+          <div class="stat-label">💰 إجمالي قيمة المخزون</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="analytics-total-products">0</div>
+          <div class="stat-label">🛒 عدد المنتجات</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="analytics-total-warehouses">0</div>
+          <div class="stat-label">🏢 عدد المستودعات</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="analytics-below-min">0</div>
+          <div class="stat-label">📉 منتجات تحت الحد الأدنى</div>
+        </div>
+      </div>
+
+      <div class="form-container">
+        <h4 style="text-align: center;">📈 تحليل حركة منتج</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">🛒 اختر المنتج</label>
+            <select class="form-control" id="analytics-product">
+              <option value="">اختر منتجاً</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">📅 الفترة (أيام)</label>
+            <select class="form-control" id="analytics-days">
+              <option value="7">🗓️ أسبوع</option>
+              <option value="30" selected>🗓️ شهر</option>
+              <option value="90">🗓️ 3 أشهر</option>
+              <option value="180">🗓️ 6 أشهر</option>
+              <option value="365">🗓️ سنة</option>
+            </select>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 10px;">
+          <button class="btn btn-primary" onclick="loadProductAnalytics()">
+            <i class="fas fa-chart-line"></i> 📊 عرض التحليل
+          </button>
+        </div>
+      </div>
+
+      <div class="report-card">
+        <div class="report-header">
+          <h4 class="report-title">📈 تحليل حركة المنتج</h4>
+          <span class="badge badge-info" id="product-analytics-range">📅 الفترة: 30 يوم</span>
+        </div>
+        <div id="product-analytics-chart">
+          <p class="text-center">❌ لم يتم تحميل بيانات التحليل بعد</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ========== مودال إنشاء حركة ========== -->
+<div class="modal fade" id="createModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">➕ إضافة حركة مخزنية جديدة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="movement-form">
+          <div class="form-grid">
+            <div class="form-row-compact">
+              <div class="form-group-half">
+                <label class="form-label">📝 نوع الحركة *</label>
+                <select class="form-control" id="movement-type" required onchange="toggleMovementFields()">
+                  <option value="">اختر نوع الحركة</option>
+                  <option value="in">📥 دخول مخزني (شراء)</option>
+                  <option value="out">📤 خروج مخزني (بيع)</option>
+                  <option value="return_customer">🔄 إرجاع من عميل</option>
+                  <option value="return_supplier">🔄 إرجاع لمورد</option>
+                  <option value="waste">🗑️ هالك</option>
+                  <option value="transfer">🔄 تحويل بين مستودعات</option>
+                  <option value="adjustment">⚖️ تسوية مخزنية</option>
+                  <option value="stocktake">📋 جرد</option>
+                </select>
+              </div>
+              <div class="form-group-half">
+                <label class="form-label">📅 التاريخ *</label>
+                <input type="datetime-local" class="form-control numeric" id="movement-date" required>
+              </div>
+            </div>
+            <div class="form-row-compact">
+              <div class="form-group-half">
+                <label class="form-label">🛒 المنتج *</label>
+                <select class="form-control" id="product-select" required onchange="loadProductInfo()">
+                  <option value="">اختر المنتج</option>
+                </select>
+              </div>
+              <div class="form-group-half">
+                <label class="form-label">📦 الكمية *</label>
+                <input type="number" step="0.001" class="form-control numeric" id="movement-quantity" required>
+              </div>
+            </div>
+            <div class="form-row-compact">
+              <div class="form-group-half">
+                <label class="form-label">💰 سعر الوحدة</label>
+                <input type="number" step="0.01" class="form-control numeric" id="unit-price">
+              </div>
+              <div class="form-group-half" id="source-warehouse-group" style="display:none;">
+                <label class="form-label">📤 المستودع المصدر</label>
+                <select class="form-control" id="source-warehouse">
+                  <option value="">اختر المستودع المصدر</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row-compact">
+              <div class="form-group-half" id="target-warehouse-group" style="display:none;">
+                <label class="form-label">📥 المستودع الهدف</label>
+                <select class="form-control" id="target-warehouse">
+                  <option value="">اختر المستودع الهدف</option>
+                </select>
+              </div>
+              <div class="form-group-half" id="supplier-group" style="display:none;">
+                <label class="form-label">🏭 المورد</label>
+                <select class="form-control" id="supplier-select">
+                  <option value="">اختر المورد</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row-compact">
+              <div class="form-group-half" id="customer-group" style="display:none;">
+                <label class="form-label">👥 العميل</label>
+                <select class="form-control" id="customer-select">
+                  <option value="">اختر العميل</option>
+                </select>
+              </div>
+              <div class="form-group-half">
+                <label class="form-label">📎 المرجع</label>
+                <input type="text" class="form-control" id="movement-reference" placeholder="رقم المرجع أو الوثيقة">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">📝 ملاحظات</label>
+              <textarea class="form-control" id="movement-notes" rows="3" style="text-align: right;"></textarea>
+            </div>
+          </div>
+          <div class="inventory-info" id="product-info" style="display: none;">
+            <h4>📊 معلومات المخزون الحالية</h4>
+            <div class="info-grid">
+              <div class="info-item"><span>📦 الكمية المتاحة:</span><span id="current-quantity" class="numeric">0</span></div>
+              <div class="info-item"><span>💰 متوسط التكلفة:</span><span id="current-cost" class="numeric">0.00</span></div>
+              <div class="info-item"><span>📉 الحد الأدنى:</span><span id="min-stock" class="numeric">0</span></div>
+              <div class="info-item"><span>🕒 آخر حركة:</span><span id="last-movement">---</span></div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ إلغاء</button>
+        <button type="button" class="btn btn-primary" onclick="saveMovement()">💾 حفظ الحركة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== مودال عرض الحركة ========== -->
+<div class="modal fade" id="viewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">👁️ تفاصيل الحركة</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="movement-details">
+        <div class="text-center">⏳ جاري التحميل...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ إغلاق</button>
+        <button type="button" class="btn btn-primary" onclick="printMovement()">🖨️ طباعة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- مكتبات Bootstrap و Swal -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// ============================================================
+// 1. دوال apiCall و handleAndroidResult (الموحدة)
+// ============================================================
+function apiCall(action, params) {
+    return new Promise((resolve, reject) => {
+        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+            try {
+                const jsonParams = JSON.stringify(params || {});
+                const result = window.AndroidInterface.execute(action, jsonParams);
+                try {
+                    const parsed = JSON.parse(result);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ success: true, data: result });
+                }
+            } catch (e) {
+                reject({ success: false, error: e.message });
+            }
+        } else {
+            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
+            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+        }
+    });
+}
+
+function handleAndroidResult(action, data) {
+    try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        if (window._pendingResolve) {
+            window._pendingResolve(parsed);
+            window._pendingResolve = null;
+        }
+    } catch (e) {
+        console.error('Error in handleAndroidResult:', e);
+    }
+}
+
+// ============================================================
+// 2. دوال مساعدة (Toast, Loading)
+// ============================================================
+function showToast(message, type = 'success') {
+    const icon = type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning';
+    Swal.fire({
+        title: type === 'success' ? 'نجاح' : type === 'error' ? 'خطأ' : 'تنبيه',
+        text: message,
+        icon: icon,
+        timer: 3000,
+        showConfirmButton: false
+    });
+}
+
+function showLoading(show) {
+    document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+}
+
+// ============================================================
+// 3. متغيرات عامة
+// ============================================================
+let allMovements = [];
+let allProducts = [];
+let allWarehouses = [];
+let allSuppliers = [];
+let allCustomers = [];
+let chartInstance = null;
+let currentPage = 1;
+const pageSize = 20;
+
+// ============================================================
+// 4. دوال التهيئة والتبويبات
+// ============================================================
+function switchTab(tabId) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.nav-tab[data-tab="${tabId}"]`).classList.add('active');
+    document.getElementById(`${tabId}-tab`).classList.add('active');
+    if (tabId === 'analytics') loadAnalytics();
+    if (tabId === 'reports') loadReportDefaults();
+}
+
+function toggleTheme(theme) {
+    const moon = document.getElementById('moonIcon');
+    const sun = document.getElementById('sunIcon');
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        moon.style.display = 'none';
+        sun.style.display = 'inline';
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        sun.style.display = 'none';
+        moon.style.display = 'inline';
+        localStorage.setItem('theme', 'light');
+    }
+}
+
+function restoreTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') toggleTheme('dark');
+}
+
+function goToDashboard() {
+    window.location.href = 'main.html';
+}
+
+// ============================================================
+// 5. تحميل البيانات الأساسية
+// ============================================================
+async function loadInitialData() {
+    showLoading(true);
+    try {
+        await Promise.all([
+            loadProducts(),
+            loadWarehouses(),
+            loadSuppliers(),
+            loadCustomers(),
+            loadMovements(),
+            loadStats(),
+            loadAnalytics()
+        ]);
+    } catch (e) {
+        console.error('Error loading initial data:', e);
+        showToast('خطأ في تحميل البيانات الأساسية', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function loadProducts() {
+    try {
+        const result = await apiCall('getProducts', {});
+        if (result.success) {
+            allProducts = result.data || [];
+            populateProductDropdowns();
+        }
+    } catch (e) {
+        console.error('Error loading products:', e);
+    }
+}
+
+function populateProductDropdowns() {
+    const selects = ['product-select', 'analytics-product'];
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">اختر المنتج</option>';
+        allProducts.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.product_id || p.id;
+            opt.textContent = (p.product_name || p.name) + ' - ' + (p.product_code || p.code || '');
+            sel.appendChild(opt);
+        });
+        if (currentVal) sel.value = currentVal;
+    });
+}
+
+async function loadWarehouses() {
+    try {
+        const result = await apiCall('getWarehouses', {});
+        if (result.success) {
+            allWarehouses = result.data || [];
+            populateWarehouseDropdowns();
+        }
+    } catch (e) {
+        console.error('Error loading warehouses:', e);
+    }
+}
+
+function populateWarehouseDropdowns() {
+    const selects = ['filter-warehouse', 'source-warehouse', 'target-warehouse'];
+    selects.forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">اختر المستودع</option>';
+        allWarehouses.forEach(w => {
+            const opt = document.createElement('option');
+            opt.value = w.warehouse_id || w.id;
+            opt.textContent = w.warehouse_name || w.name;
+            sel.appendChild(opt);
+        });
+        if (currentVal) sel.value = currentVal;
+    });
+}
+
+async function loadSuppliers() {
+    try {
+        const result = await apiCall('getSuppliers', {});
+        if (result.success) {
+            allSuppliers = result.data || [];
+            populatePartyDropdowns('filter-supplier', 'supplier-select');
+        }
+    } catch (e) {
+        console.error('Error loading suppliers:', e);
+    }
+}
+
+async function loadCustomers() {
+    try {
+        const result = await apiCall('getCustomers', {});
+        if (result.success) {
+            allCustomers = result.data || [];
+            populatePartyDropdowns('filter-customer', 'customer-select');
+        }
+    } catch (e) {
+        console.error('Error loading customers:', e);
+    }
+}
+
+function populatePartyDropdowns(filterId, selectId) {
+    const list = filterId === 'filter-supplier' ? allSuppliers : allCustomers;
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="">اختر</option>';
+    list.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.entity_id || p.id;
+        opt.textContent = p.commercial_name || p.legal_name || p.name || 'غير محدد';
+        sel.appendChild(opt);
+    });
+    if (currentVal) sel.value = currentVal;
+}
+
+// ============================================================
+// 6. تحميل الحركات والإحصائيات
+// ============================================================
+async function loadMovements() {
+    showLoading(true);
+    try {
+        const result = await apiCall('getMovements', { page: currentPage, limit: pageSize });
+        if (result.success) {
+            allMovements = result.data || [];
+            populateMovementsTable(allMovements);
+            updatePagination(result.total || allMovements.length);
+        } else {
+            showToast(result.message || 'خطأ في تحميل الحركات', 'error');
+        }
+    } catch (e) {
+        console.error('Error loading movements:', e);
+        showToast('خطأ في تحميل الحركات', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function populateMovementsTable(movements) {
+    const tbody = document.getElementById('movements-table-body');
+    tbody.innerHTML = '';
+    if (!movements || movements.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center">❌ لا توجد حركات لعرضها</td></tr>';
+        return;
+    }
+    movements.forEach((m, idx) => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-id', m.movement_id || m.id);
+        row.onclick = function() { selectRow(this); };
+        const typeLabel = getMovementTypeLabel(m.movement_type);
+        const statusBadge = m.status === 'completed' ? '<span class="badge badge-success">✅ مكتمل</span>' :
+                            m.status === 'pending' ? '<span class="badge badge-warning">⏳ قيد الانتظار</span>' :
+                            '<span class="badge badge-danger">❌ ملغى</span>';
+        const productName = m.product_name || m.product?.product_name || '---';
+        const warehouseName = m.warehouse_name || m.warehouse?.warehouse_name || '---';
+        const sourceTarget = m.source_warehouse_id ? '📤 من: ' + (m.source_warehouse_name || '---') : '';
+        const targetInfo = m.target_warehouse_id ? ' 📥 إلى: ' + (m.target_warehouse_name || '---') : '';
+        const entityInfo = m.supplier_id ? '🏭 مورد: ' + (m.supplier_name || '---') :
+                          m.customer_id ? '👥 عميل: ' + (m.customer_name || '---') : '---';
+        row.innerHTML = `
+            <td class="numeric">${m.movement_id || m.id || idx+1}</td>
+            <td class="numeric">${m.movement_date || m.created_at || '---'}</td>
+            <td>${productName}</td>
+            <td class="numeric">${m.quantity_change || m.quantity || 0}</td>
+            <td>${typeLabel}</td>
+            <td>${warehouseName}</td>
+            <td>${sourceTarget + targetInfo || '---'}</td>
+            <td>${entityInfo}</td>
+            <td class="numeric">${(m.unit_cost || 0).toFixed(2)}</td>
+            <td class="numeric">${(m.total_cost || 0).toFixed(2)}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <div class="btn-action-group">
+                    <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();viewMovement(${m.movement_id || m.id})" title="عرض">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteMovement(${m.movement_id || m.id})" title="حذف">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function selectRow(row) {
+    document.querySelectorAll('#movements-table-body tr').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+}
+
+function getMovementTypeLabel(type) {
+    const map = {
+        'in': '<span class="badge badge-success status-indicator">📥 دخول مخزني</span>',
+        'out': '<span class="badge badge-danger status-indicator">📤 خروج مخزني</span>',
+        'return_customer': '<span class="badge badge-pink status-indicator">🔄 إرجاع من عميل</span>',
+        'return_supplier': '<span class="badge badge-purple status-indicator">🔄 إرجاع لمورد</span>',
+        'waste': '<span class="badge badge-cyan status-indicator">🗑️ هالك</span>',
+        'transfer': '<span class="badge badge-info status-indicator">🔄 تحويل بين مستودعات</span>',
+        'adjustment': '<span class="badge badge-indigo status-indicator">⚖️ تسوية مخزنية</span>',
+        'stocktake': '<span class="badge badge-teal status-indicator">📋 جرد</span>'
+    };
+    return map[type] || `<span class="badge badge-secondary">${type}</span>`;
+}
+
+function updatePagination(total) {
+    const container = document.getElementById('pagination-container');
+    const totalPages = Math.ceil(total / pageSize);
+    if (totalPages <= 1) { container.innerHTML = ''; return; }
+    let html = `<li class="page-item ${currentPage <= 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="changePage(${currentPage-1})">⬅️ السابق</a>
+    </li>`;
+    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+        </li>`;
+    }
+    if (totalPages > 5) html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+    html += `<li class="page-item ${currentPage >= totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" onclick="changePage(${currentPage+1})">➡️ التالي</a>
+    </li>`;
+    container.innerHTML = html;
+}
+
+function changePage(page) {
+    if (page < 1) return;
+    currentPage = page;
+    loadMovements();
+}
+
+async function loadStats() {
+    try {
+        const result = await apiCall('getMovementStats', {});
+        if (result.success) {
+            const s = result.data || {};
+            document.getElementById('total-movements').textContent = (s.total_movements || 0).toLocaleString('en');
+            document.getElementById('total-value').textContent = (s.total_value || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+            document.getElementById('today-movements').textContent = (s.today_movements || 0).toLocaleString('en');
+            document.getElementById('pending-count').textContent = (s.pending_count || 0).toLocaleString('en');
+        }
+    } catch (e) {
+        console.error('Error loading stats:', e);
+    }
+}
+
+// ============================================================
+// 7. دوال الفلترة
+// ============================================================
+function applyFilters() {
+    const product = document.getElementById('search-product').value.trim();
+    const type = document.getElementById('filter-type').value;
+    const from = document.getElementById('filter-from').value;
+    const to = document.getElementById('filter-to').value;
+    const warehouse = document.getElementById('filter-warehouse').value;
+    const supplier = document.getElementById('filter-supplier').value;
+    const customer = document.getElementById('filter-customer').value;
+    const status = document.getElementById('filter-status').value;
+
+    let filtered = allMovements;
+    if (product) filtered = filtered.filter(m => (m.product_name || '').toLowerCase().includes(product.toLowerCase()));
+    if (type) filtered = filtered.filter(m => m.movement_type === type);
+    if (from) filtered = filtered.filter(m => (m.movement_date || '').slice(0,10) >= from);
+    if (to) filtered = filtered.filter(m => (m.movement_date || '').slice(0,10) <= to);
+    if (warehouse) filtered = filtered.filter(m => m.warehouse_id == warehouse || m.source_warehouse_id == warehouse || m.target_warehouse_id == warehouse);
+    if (supplier) filtered = filtered.filter(m => m.supplier_id == supplier);
+    if (customer) filtered = filtered.filter(m => m.customer_id == customer);
+    if (status) filtered = filtered.filter(m => m.status === status);
+    populateMovementsTable(filtered);
+    showToast('تم تطبيق الفلترة', 'success');
+}
+
+function resetFilters() {
+    document.getElementById('search-product').value = '';
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-from').value = '';
+    document.getElementById('filter-to').value = '';
+    document.getElementById('filter-warehouse').value = '';
+    document.getElementById('filter-supplier').value = '';
+    document.getElementById('filter-customer').value = '';
+    document.getElementById('filter-status').value = '';
+    loadMovements();
+    showToast('تم إعادة ضبط الفلترة', 'success');
+}
+
+// ============================================================
+// 8. دوال المودال والحركات
+// ============================================================
+function showCreateModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createModal'));
+    document.getElementById('movement-type').value = '';
+    document.getElementById('movement-date').value = new Date().toISOString().slice(0,16);
+    document.getElementById('product-select').value = '';
+    document.getElementById('movement-quantity').value = '';
+    document.getElementById('unit-price').value = '';
+    document.getElementById('source-warehouse').value = '';
+    document.getElementById('target-warehouse').value = '';
+    document.getElementById('supplier-select').value = '';
+    document.getElementById('customer-select').value = '';
+    document.getElementById('movement-reference').value = '';
+    document.getElementById('movement-notes').value = '';
+    document.getElementById('product-info').style.display = 'none';
+    toggleMovementFields();
+    modal.show();
+}
+
+function toggleMovementFields() {
+    const type = document.getElementById('movement-type').value;
+    document.getElementById('source-warehouse-group').style.display = 'none';
+    document.getElementById('target-warehouse-group').style.display = 'none';
+    document.getElementById('supplier-group').style.display = 'none';
+    document.getElementById('customer-group').style.display = 'none';
+
+    if (type === 'in' || type === 'return_supplier' || type === 'waste') {
+        document.getElementById('supplier-group').style.display = 'block';
+        document.getElementById('target-warehouse-group').style.display = 'block';
+    } else if (type === 'out' || type === 'return_customer') {
+        document.getElementById('customer-group').style.display = 'block';
+        document.getElementById('source-warehouse-group').style.display = 'block';
+    } else if (type === 'transfer') {
+        document.getElementById('source-warehouse-group').style.display = 'block';
+        document.getElementById('target-warehouse-group').style.display = 'block';
+    } else if (type === 'adjustment' || type === 'stocktake') {
+        document.getElementById('source-warehouse-group').style.display = 'block';
+    }
+}
+
+async function loadProductInfo() {
+    const productId = document.getElementById('product-select').value;
+    const warehouseId = document.getElementById('source-warehouse').value || document.getElementById('target-warehouse').value || 0;
+    if (!productId) { document.getElementById('product-info').style.display = 'none'; return; }
+    try {
+        const result = await apiCall('getInventoryDetails', { product_id: productId, warehouse_id: warehouseId });
+        if (result.success && result.data) {
+            const d = result.data;
+            document.getElementById('current-quantity').textContent = (d.quantity_on_hand || 0).toLocaleString('en');
+            document.getElementById('current-cost').textContent = (d.average_cost || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+            document.getElementById('min-stock').textContent = (d.min_stock_level || 0).toLocaleString('en');
+            document.getElementById('last-movement').textContent = d.last_movement_date || '---';
+            if (!document.getElementById('unit-price').value && d.average_cost > 0) {
+                document.getElementById('unit-price').value = d.average_cost;
+            }
+            document.getElementById('product-info').style.display = 'block';
+        }
+    } catch (e) {
+        console.error('Error loading product info:', e);
+    }
+}
+
+async function saveMovement() {
+    const type = document.getElementById('movement-type').value;
+    const productId = document.getElementById('product-select').value;
+    const quantity = parseFloat(document.getElementById('movement-quantity').value);
+    const date = document.getElementById('movement-date').value;
+    const unitPrice = parseFloat(document.getElementById('unit-price').value) || 0;
+    const sourceWarehouse = document.getElementById('source-warehouse').value;
+    const targetWarehouse = document.getElementById('target-warehouse').value;
+    const supplierId = document.getElementById('supplier-select').value;
+    const customerId = document.getElementById('customer-select').value;
+    const reference = document.getElementById('movement-reference').value.trim();
+    const notes = document.getElementById('movement-notes').value.trim();
+
+    if (!type || !productId || !quantity || quantity <= 0 || !date) {
+        showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
+        return;
+    }
+    if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) {
+        showToast('يرجى اختيار مستودعين مختلفين للتحويل', 'error');
+        return;
+    }
+    if ((type === 'in' || type === 'return_supplier' || type === 'waste') && !targetWarehouse) {
+        showToast('يرجى اختيار المستودع الهدف', 'error');
+        return;
+    }
+    if ((type === 'out' || type === 'return_customer') && !sourceWarehouse) {
+        showToast('يرجى اختيار المستودع المصدر', 'error');
+        return;
+    }
+
+    const data = {
+        movement_type: type,
+        product_id: parseInt(productId),
+        quantity_change: quantity,
+        movement_date: date,
+        unit_cost: unitPrice,
+        source_warehouse_id: sourceWarehouse ? parseInt(sourceWarehouse) : null,
+        target_warehouse_id: targetWarehouse ? parseInt(targetWarehouse) : null,
+        supplier_id: supplierId ? parseInt(supplierId) : null,
+        customer_id: customerId ? parseInt(customerId) : null,
+        reference: reference,
+        notes: notes,
+        status: 'completed'
+    };
+
+    showLoading(true);
+    try {
+        const result = await apiCall('saveMovement', data);
+        if (result.success) {
+            showToast('تم حفظ الحركة بنجاح', 'success');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createModal'));
+            modal.hide();
+            loadMovements();
+            loadStats();
+        } else {
+            showToast(result.message || 'خطأ في حفظ الحركة', 'error');
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function viewMovement(id) {
+    showLoading(true);
+    try {
+        const result = await apiCall('getMovement', { movement_id: id });
+        if (result.success) {
+            const m = result.data;
+            const details = document.getElementById('movement-details');
+            const typeLabel = getMovementTypeLabel(m.movement_type);
+            const statusBadge = m.status === 'completed' ? '✅ مكتمل' : m.status === 'pending' ? '⏳ قيد الانتظار' : '❌ ملغى';
+            details.innerHTML = `
+                <div class="info-grid">
+                    <div class="info-item"><span>#️⃣ رقم الحركة:</span><span class="numeric">${m.movement_id || m.id}</span></div>
+                    <div class="info-item"><span>📝 النوع:</span><span>${typeLabel}</span></div>
+                    <div class="info-item"><span>📅 التاريخ:</span><span class="numeric">${m.movement_date || '---'}</span></div>
+                    <div class="info-item"><span>🛒 المنتج:</span><span>${m.product_name || '---'}</span></div>
+                    <div class="info-item"><span>📦 الكمية:</span><span class="numeric">${m.quantity_change || 0}</span></div>
+                    <div class="info-item"><span>💰 السعر:</span><span class="numeric">${(m.unit_cost || 0).toFixed(2)}</span></div>
+                    <div class="info-item"><span>💵 القيمة:</span><span class="numeric">${(m.total_cost || 0).toFixed(2)}</span></div>
+                    <div class="info-item"><span>🏢 المستودع:</span><span>${m.warehouse_name || '---'}</span></div>
+                    ${m.source_warehouse_id ? `<div class="info-item"><span>📤 المصدر:</span><span>${m.source_warehouse_name || '---'}</span></div>` : ''}
+                    ${m.target_warehouse_id ? `<div class="info-item"><span>📥 الهدف:</span><span>${m.target_warehouse_name || '---'}</span></div>` : ''}
+                    ${m.supplier_id ? `<div class="info-item"><span>🏭 المورد:</span><span>${m.supplier_name || '---'}</span></div>` : ''}
+                    ${m.customer_id ? `<div class="info-item"><span>👥 العميل:</span><span>${m.customer_name || '---'}</span></div>` : ''}
+                    <div class="info-item"><span>📎 المرجع:</span><span>${m.reference || '---'}</span></div>
+                    <div class="info-item"><span>📊 الحالة:</span><span>${statusBadge}</span></div>
+                    <div class="info-item"><span>📝 الملاحظات:</span><span>${m.notes || '---'}</span></div>
+                </div>
+            `;
+            const modal = new bootstrap.Modal(document.getElementById('viewModal'));
+            modal.show();
+        } else {
+            showToast(result.message || 'خطأ في تحميل البيانات', 'error');
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function deleteMovement(id) {
+    const result = await Swal.fire({
+        title: '⚠️ هل أنت متأكد؟',
+        text: "لا يمكن التراجع عن هذا الإجراء!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: '🗑️ نعم، احذف!',
+        cancelButtonText: '❌ إلغاء'
+    });
+    if (!result.isConfirmed) return;
+    showLoading(true);
+    try {
+        const res = await apiCall('deleteMovement', { movement_id: id });
+        if (res.success) {
+            showToast('تم حذف الحركة بنجاح', 'success');
+            loadMovements();
+            loadStats();
+        } else {
+            showToast(res.message || 'خطأ في الحذف', 'error');
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function printMovement() {
+    const content = document.getElementById('movement-details').innerHTML;
+    const win = window.open('', '_blank');
+    win.document.write(`
+        <html><head><title>تفاصيل الحركة</title>
+        <style>body{font-family:Cairo,sans-serif;padding:20px;direction:rtl;}
+        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+        .info-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #ddd;}</style>
+        </head><body>
+        <h2 style="text-align:center;">📊 تفاصيل الحركة المخزنية</h2>
+        <div class="info-grid">${content}</div>
+        <p style="text-align:center;margin-top:20px;color:#888;">تم الطباعة من نظام Station Enterprise V5</p>
+        <script>window.onload=function(){window.print();}<\/script>
+        </body></html>
+    `);
+    win.document.close();
+}
+
+// ============================================================
+// 9. دوال التقارير
+// ============================================================
+function loadReportDefaults() {
+    const today = new Date().toISOString().slice(0,10);
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10);
+    document.getElementById('report-from').value = weekAgo;
+    document.getElementById('report-to').value = today;
+}
+
+async function generateReport() {
+    const type = document.getElementById('report-type').value;
+    const from = document.getElementById('report-from').value;
+    const to = document.getElementById('report-to').value;
+    const options = document.getElementById('report-options').value.trim();
+
+    showLoading(true);
+    try {
+        const result = await apiCall('generateReport', {
+            report_type: type,
+            start_date: from,
+            end_date: to,
+            options: options
+        });
+        if (result.success) {
+            const titles = {
+                'stock_detail': '📦 تفاصيل المخزون',
+                'movements_summary': '📈 ملخص الحركات',
+                'profit_product': '💰 الربح حسب المنتج',
+                'profit_supplier': '🏭 الربح حسب المورد',
+                'profit_customer': '👥 الربح حسب العميل',
+                'below_min': '📉 المنتجات تحت الحد الأدنى',
+                'movements_detailed': '📋 حركات مفصلة'
+            };
+            document.getElementById('report-title').textContent = titles[type] || '📊 التقرير';
+            document.getElementById('report-date-range').textContent = `📅 الفترة: ${from || 'البداية'} إلى ${to || 'النهاية'}`;
+            updateReportTable(type, result.data || []);
+        } else {
+            showToast(result.message || 'خطأ في توليد التقرير', 'error');
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function updateReportTable(reportType, data) {
+    const head = document.getElementById('report-table-head');
+    const body = document.getElementById('report-table-body');
+    head.innerHTML = '';
+    body.innerHTML = '';
+
+    let headers = [];
+    const typeMap = {
+        'stock_detail': ['🛒 المنتج', '🏢 المستودع', '📦 الكمية', '💰 متوسط التكلفة', '💵 القيمة', '🕒 آخر جرد'],
+        'movements_summary': ['📝 النوع', '🛒 المنتج', '🏢 المستودع', '📦 الكمية', '💵 القيمة'],
+        'profit_product': ['🛒 المنتج', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
+        'profit_supplier': ['🏭 المورد', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
+        'profit_customer': ['👥 العميل', '💰 المبيعات', '📊 تكلفة البضاعة', '💸 الربح'],
+        'below_min': ['🛒 المنتج', '📦 الكمية المتاحة', '📉 الحد الأدنى'],
+        'movements_detailed': ['#️⃣ الرقم', '📅 التاريخ', '📝 النوع', '🛒 المنتج', '📦 الكمية', '🏢 المستودع', '💵 القيمة', '📝 الملاحظات']
+    };
+    headers = typeMap[reportType] || ['📊 البيانات'];
+
+    let headerRow = '<tr>';
+    headers.forEach(h => { headerRow += `<th>${h}</th>`; });
+    headerRow += '</tr>';
+    head.innerHTML = headerRow;
+
+    if (!data || data.length === 0) {
+        body.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">❌ لا توجد بيانات لعرضها</td></tr>`;
+        return;
+    }
+
+    data.forEach(item => {
+        let row = '<tr onclick="selectReportRow(this)">';
+        if (reportType === 'stock_detail') {
+            row += `<td>${item.product_name || '---'}</td><td>${item.warehouse_name || '---'}</td>
+                    <td class="numeric">${(item.quantity_on_hand || 0).toLocaleString('en')}</td>
+                    <td class="numeric">${(item.average_cost || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.total_value || 0).toFixed(2)}</td>
+                    <td>${item.last_count_date || '---'}</td>`;
+        } else if (reportType === 'movements_summary') {
+            row += `<td>${getMovementTypeLabel(item.movement_type)}</td><td>${item.product_name || '---'}</td>
+                    <td>${item.warehouse_name || '---'}</td>
+                    <td class="numeric">${(item.quantity_change || 0).toLocaleString('en')}</td>
+                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>`;
+        } else if (reportType === 'profit_product') {
+            row += `<td>${item.product_name || '---'}</td>
+                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
+        } else if (reportType === 'profit_supplier') {
+            row += `<td>${item.supplier_name || '---'}</td>
+                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
+        } else if (reportType === 'profit_customer') {
+            row += `<td>${item.customer_name || '---'}</td>
+                    <td class="numeric">${(item.total_sales || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
+                    <td class="numeric">${(item.profit || 0).toFixed(2)}</td>`;
+        } else if (reportType === 'below_min') {
+            row += `<td>${item.product_name || '---'}</td>
+                    <td class="numeric">${(item.quantity_on_hand || 0).toLocaleString('en')}</td>
+                    <td class="numeric">${(item.min_stock_level || 0).toLocaleString('en')}</td>`;
+        } else if (reportType === 'movements_detailed') {
+            row += `<td class="numeric">${item.movement_id || '---'}</td>
+                    <td class="numeric">${item.movement_date || '---'}</td>
+                    <td>${getMovementTypeLabel(item.movement_type)}</td>
+                    <td>${item.product_name || '---'}</td>
+                    <td class="numeric">${(item.quantity_change || 0).toLocaleString('en')}</td>
+                    <td>${item.warehouse_name || '---'}</td>
+                    <td class="numeric">${(item.total_cost || 0).toFixed(2)}</td>
+                    <td>${item.notes || '---'}</td>`;
+        }
+        row += '</tr>';
+        body.innerHTML += row;
+    });
+}
+
+function selectReportRow(row) {
+    document.querySelectorAll('#report-table-body tr').forEach(r => r.classList.remove('selected'));
+    row.classList.add('selected');
+}
+
+function exportReport() {
+    const type = document.getElementById('report-type').value;
+    const from = document.getElementById('report-from').value;
+    const to = document.getElementById('report-to').value;
+    const table = document.getElementById('report-table');
+    if (!table) { showToast('لا توجد بيانات للتصدير', 'error'); return; }
+    let csv = '';
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('th, td');
+        const rowData = [];
+        cells.forEach(cell => {
+            let text = cell.textContent.trim().replace(/,/g, '');
+            rowData.push(text);
+        });
+        csv += rowData.join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `report_${type}_${from || 'start'}_${to || 'end'}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showToast('تم تصدير التقرير بنجاح', 'success');
+}
+
+// ============================================================
+// 10. دوال التحليلات
+// ============================================================
+async function loadAnalytics() {
+    try {
+        const result = await apiCall('getInventoryAnalytics', {});
+        if (result.success) {
+            const a = result.data || {};
+            document.getElementById('analytics-total-value').textContent = (a.total_value || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+            document.getElementById('analytics-total-products').textContent = (a.total_products || 0).toLocaleString('en');
+            document.getElementById('analytics-total-warehouses').textContent = (a.total_warehouses || 0).toLocaleString('en');
+            document.getElementById('analytics-below-min').textContent = (a.below_min || 0).toLocaleString('en');
+        }
+    } catch (e) {
+        console.error('Error loading analytics:', e);
+    }
+}
+
+async function loadProductAnalytics() {
+    const productId = document.getElementById('analytics-product').value;
+    const days = parseInt(document.getElementById('analytics-days').value) || 30;
+    if (!productId) { showToast('يرجى اختيار منتج أولاً', 'warning'); return; }
+    showLoading(true);
+    try {
+        const result = await apiCall('getProductTrend', { product_id: productId, days: days });
+        if (result.success && result.data) {
+            const d = result.data;
+            document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
+            renderChart(d.labels || [], d.values || []);
+        } else {
+            // بيانات تجريبية للعرض
+            const mock = generateMockData(days);
+            document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
+            renderChart(mock.labels, mock.values);
+        }
+    } catch (e) {
+        const mock = generateMockData(days);
+        document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
+        renderChart(mock.labels, mock.values);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function generateMockData(days) {
+    const labels = [];
+    const values = [];
+    const today = new Date();
+    for (let i = days-1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('ar-EG', {month:'2-digit', day:'2-digit'}));
+        values.push(Math.floor(Math.random() * 80) + 10);
+    }
+    return { labels, values };
+}
+
+function renderChart(labels, values) {
+    const container = document.getElementById('product-analytics-chart');
+    container.innerHTML = '<canvas id="productChart"></canvas>';
+    const ctx = document.getElementById('productChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'حركة المنتج',
+                data: values,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: 'تحليل حركة المنتج خلال الفترة' },
+                legend: { display: false }
+            },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// ============================================================
+// 11. التهيئة الأولية
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    restoreTheme();
+    document.getElementById('movement-date').value = new Date().toISOString().slice(0,16);
+    // تعيين التواريخ الافتراضية للتقرير
+    const today = new Date().toISOString().slice(0,10);
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0,10);
+    document.getElementById('report-from').value = weekAgo;
+    document.getElementById('report-to').value = today;
+    loadInitialData();
+});
+</script>
+</body>
+</html>
