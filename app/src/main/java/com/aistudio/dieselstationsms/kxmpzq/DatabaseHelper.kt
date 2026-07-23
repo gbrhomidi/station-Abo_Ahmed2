@@ -5719,7 +5719,157 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
+    
+
     // ================================================================
+    // POS COMPLETE SALE SUPPORT
+    // ================================================================
+
+    fun getProductByBarcode(barcode: String): JSONObject? {
+        val db = readableDatabase
+
+        val c = db.rawQuery(
+            """
+            SELECT *
+            FROM products
+            WHERE barcode = ?
+            AND is_deleted = 0
+            LIMIT 1
+            """,
+            arrayOf(barcode)
+        )
+
+        return c.use {
+            if (it.moveToFirst()) {
+                JSONObject().apply {
+                    put("product_id", it.getInt(it.getColumnIndexOrThrow("id")))
+                    put("product_code", it.getString(it.getColumnIndexOrThrow("product_code")))
+                    put("product_name", it.getString(it.getColumnIndexOrThrow("product_name")))
+                    put("sale_price", it.getDouble(it.getColumnIndexOrThrow("sale_price")))
+                    put("quantity", it.getDouble(it.getColumnIndexOrThrow("quantity")))
+                }
+            } else null
+        }
+    }
+
+
+    fun completeSale(data: JSONObject): JSONObject {
+
+        val result = JSONObject()
+
+        dbLock.lock()
+
+        try {
+
+            val products = data.getJSONArray("products")
+
+            var total = 0.0
+
+            for (i in 0 until products.length()) {
+                val item = products.getJSONObject(i)
+                total += item.optDouble("quantity") *
+                        item.optDouble("unit_price")
+            }
+
+
+            val saleId = insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+                customerPartyId = data.optInt("entity_id",0)
+                    .takeIf { it > 0 },
+                fuelTypeId = null,
+                pumpId = null,
+                nozzleId = null,
+                liters = 0.0,
+                pricePerLiter = 0.0,
+                subtotal = total,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = total,
+                netAmount = total,
+                paymentMethod =
+                    data.optString("payment_type","cash"),
+                isCredit =
+                    data.optString("payment_type") == "آجل",
+                dueDate = null,
+                cashierId = 1,
+                orderType = "product"
+            )
+
+
+            val db = writableDatabase
+
+
+            for (i in 0 until products.length()) {
+
+                val item = products.getJSONObject(i)
+
+                val qty = item.optDouble("quantity")
+                val price = item.optDouble("unit_price")
+
+                val cv = ContentValues().apply {
+
+                    put("uuid", UUID.randomUUID().toString())
+                    put("sale_id", saleId)
+                    put("line_number", i + 1)
+                    put("item_type", "product")
+                    put("product_id",
+                        item.getInt("product_id"))
+                    put("quantity", qty)
+                    put("unit_price", price)
+                    put("subtotal", qty * price)
+                    put("line_total", qty * price)
+
+                }
+
+                db.insert("sale_items", null, cv)
+
+
+                addStockMovement(
+                    JSONObject().apply {
+
+                        put("product_id",
+                            item.getInt("product_id"))
+
+                        put("quantity", qty)
+
+                        put("movement_type","out")
+
+                        put("reference_type",
+                            "sale")
+
+                        put("reference_id",
+                            saleId)
+
+                    }
+                )
+            }
+
+
+            result.put("success", true)
+            result.put("sale_id", saleId)
+            result.put(
+                "invoice_number",
+                "INV-$saleId"
+            )
+
+
+        } catch(e:Exception){
+
+            result.put("success",false)
+            result.put("error",e.message)
+
+        } finally {
+
+            dbLock.unlock()
+
+        }
+
+        return result
+    }
+
+
+// ================================================================
     // 30. METER READINGS
     // ================================================================
     fun addMeterReading(data: JSONObject): Long {

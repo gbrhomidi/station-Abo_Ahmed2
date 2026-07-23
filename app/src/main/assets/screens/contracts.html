@@ -1,0 +1,3777 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة العقود – محطات الوقود</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* ============================================================
+           Cobalt / Ruby Theme – متغيرات مخصصة
+           ============================================================ */
+        :root {
+            /* اللون الأساسي: كوبالت (Cobalt) */
+            --cobalt: #1a3a6b;
+            --cobalt-light: #2a5a8b;
+            --cobalt-dark: #0d1f3d;
+            --cobalt-dim: rgba(26, 58, 107, 0.12);
+            --cobalt-glow: rgba(26, 58, 107, 0.25);
+
+            /* اللون الثانوي: ياقوتي (Ruby) */
+            --ruby: #9b1d3a;
+            --ruby-light: #c0395a;
+            --ruby-dark: #6b1225;
+            --ruby-dim: rgba(155, 29, 58, 0.12);
+            --ruby-glow: rgba(155, 29, 58, 0.25);
+
+            /* اللون المميز: ذهبي للتنبيهات */
+            --gold: #d4a017;
+            --gold-dim: rgba(212, 160, 23, 0.12);
+
+            /* الأساسيات */
+            --bg-color: #f4f0eb;
+            --surface-color: #fcf8f2;
+            --surface-elevated: #fffcf7;
+            --text-color: #1a1a2e;
+            --text-muted: #5a5a7a;
+            --border-color: var(--cobalt);
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 30px rgba(26, 58, 107, 0.08);
+            --glass-bg: rgba(255, 252, 247, 0.88);
+            --header-bg: linear-gradient(145deg, var(--cobalt-dark) 0%, var(--cobalt) 100%);
+            --card-hover-bg: rgba(26, 58, 107, 0.04);
+            --fab-shadow: rgba(26, 58, 107, 0.35);
+            --scrollbar-track: #f4f0eb;
+            --scrollbar-thumb: rgba(26, 58, 107, 0.2);
+            --skeleton-bg: #e8e2d8;
+            --skeleton-shine: #f4f0eb;
+            --input-bg: #fcf8f2;
+            --input-border: var(--cobalt);
+            --data-text-color: #1a1a2e;
+            --data-text-muted: #5a5a7a;
+            --success: #0d7a4a;
+            --error: #b31b3a;
+            --warning: #b8860b;
+            --info: #1a3a6b;
+            --toast-bg: #fcf8f2;
+            --chart-grid: rgba(26, 58, 107, 0.10);
+            --chart-text: #1a1a2e;
+            --skip-link-bg: var(--cobalt);
+            --skip-link-color: #fff;
+            --focus-ring: 0 0 0 3px var(--ruby);
+            --high-contrast-bg: #000;
+            --high-contrast-text: #fff;
+        }
+
+        /* ============================================================
+           Dark Mode – الوضع المظلم
+           ============================================================ */
+        [data-theme="dark"] {
+            --bg-color: #0d0d1a;
+            --surface-color: #16162a;
+            --surface-elevated: #1f1f3a;
+            --text-color: #e8e8f0;
+            --text-muted: #9999b8;
+            --border-color: #8a7a5a;
+            --shadow-glow: 0 0 30px rgba(26, 58, 107, 0.20);
+            --glass-bg: rgba(22, 22, 42, 0.88);
+            --header-bg: linear-gradient(145deg, #0a0a18 0%, #1a1a3a 100%);
+            --card-hover-bg: rgba(26, 58, 107, 0.08);
+            --fab-shadow: rgba(26, 58, 107, 0.40);
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+            --skeleton-bg: #2a2a4a;
+            --skeleton-shine: #3a3a5a;
+            --input-bg: #1f1f3a;
+            --input-border: #8a7a5a;
+            --data-text-color: #e8e8f0;
+            --data-text-muted: #9999b8;
+            --toast-bg: #1f1f3a;
+            --chart-grid: rgba(255, 255, 255, 0.08);
+            --chart-text: #e8e8f0;
+            --skip-link-bg: #2a2a5a;
+            --skip-link-color: #fff;
+            --high-contrast-bg: #000;
+            --high-contrast-text: #fff;
+        }
+
+        /* ============================================================
+           High Contrast – وضع عالي التباين
+           ============================================================ */
+        @media (prefers-contrast: high) {
+            :root {
+                --bg-color: #000;
+                --surface-color: #111;
+                --surface-elevated: #222;
+                --text-color: #fff;
+                --text-muted: #ccc;
+                --border-color: #fff;
+                --border-style: solid;
+                --border-width: 2px;
+                --shadow-glow: none;
+                --glass-bg: rgba(0, 0, 0, 0.95);
+                --header-bg: #000;
+                --card-hover-bg: rgba(255, 255, 255, 0.05);
+                --skeleton-bg: #333;
+                --skeleton-shine: #555;
+                --input-bg: #111;
+                --input-border: #fff;
+                --data-text-color: #fff;
+                --data-text-muted: #ccc;
+                --toast-bg: #111;
+                --chart-grid: rgba(255, 255, 255, 0.20);
+                --chart-text: #fff;
+                --skip-link-bg: #fff;
+                --skip-link-color: #000;
+                --focus-ring: 0 0 0 4px #fff, 0 0 0 8px #000;
+            }
+            [data-theme="dark"] {
+                --bg-color: #000;
+                --surface-color: #111;
+                --surface-elevated: #222;
+                --text-color: #fff;
+                --text-muted: #ccc;
+                --border-color: #fff;
+                --border-style: solid;
+                --glass-bg: rgba(0, 0, 0, 0.95);
+                --header-bg: #000;
+                --input-bg: #111;
+                --input-border: #fff;
+                --data-text-color: #fff;
+                --data-text-muted: #ccc;
+                --toast-bg: #111;
+                --chart-grid: rgba(255, 255, 255, 0.20);
+                --chart-text: #fff;
+            }
+        }
+
+        /* ============================================================
+           Reduced Motion – تقليل الحركة
+           ============================================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .animate-fade-up,
+            .skeleton-card::after,
+            .contract-card,
+            .stat-card {
+                animation: none !important;
+            }
+        }
+
+        /* ============================================================
+           Skip Link – للوصول السريع
+           ============================================================ */
+        .skip-link {
+            position: fixed;
+            top: -999px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--skip-link-bg);
+            color: var(--skip-link-color);
+            padding: 12px 24px;
+            border-radius: 0 0 12px 12px;
+            z-index: 9999;
+            font-weight: 700;
+            font-size: 1rem;
+            text-decoration: none;
+            border: 2px solid var(--border-color);
+            border-top: none;
+        }
+        .skip-link:focus {
+            top: 0;
+            outline: 3px solid var(--ruby);
+            outline-offset: 2px;
+        }
+
+        /* ============================================================
+           Reset & Base
+           ============================================================ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.3s ease, color 0.3s ease;
+            touch-action: pan-y;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 2px;
+        }
+        :focus-visible {
+            outline: 3px solid var(--ruby);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        /* ============================================================
+           Accessibility: aria-live regions
+           ============================================================ */
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            border: 0 !important;
+        }
+
+        /* ============================================================
+           Loading & Skeleton
+           ============================================================ */
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(26, 58, 107, 0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--cobalt);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        .skeleton-card {
+            background: var(--surface-elevated);
+            border-radius: 18px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, var(--skeleton-shine) 50%, transparent 100%);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+        .skeleton-row {
+            height: 12px;
+            background: var(--skeleton-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skeleton-row.short {
+            width: 40%;
+        }
+        .skeleton-row.medium {
+            width: 60%;
+        }
+        .skeleton-row.long {
+            width: 80%;
+        }
+
+        /* ============================================================
+           Offline Banner
+           ============================================================ */
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, var(--warning), #d4770a);
+            color: #fff;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show {
+            transform: translateY(0);
+        }
+
+        /* ============================================================
+           Header – Cobalt/Ruby
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 12px 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.3s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+        .top-title h2 i {
+            color: var(--ruby-light);
+            margin-left: 6px;
+        }
+        .top-title .badge-ruby {
+            background: var(--ruby);
+            color: #fff;
+            font-size: 0.6rem;
+            padding: 2px 10px;
+            border-radius: 12px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .header-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-size: 0.95rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--ruby-dim);
+            color: #fff;
+            border-color: var(--ruby-light);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active {
+            transform: scale(0.92);
+        }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: var(--ruby-light);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--ruby-glow);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.4);
+            }
+        }
+        .icon-btn.ruby-btn {
+            background: var(--ruby-dim);
+            color: var(--ruby-light);
+            border-color: var(--ruby);
+        }
+        .icon-btn.ruby-btn:hover {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby-light);
+        }
+
+        /* ============================================================
+           Search & Filters
+           ============================================================ */
+        .search-wrap {
+            position: relative;
+            margin-bottom: 8px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 10px 44px 10px 16px;
+            border-radius: 14px;
+            border: 2px dashed rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .search-input:focus {
+            border-color: var(--ruby-light);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+            background: rgba(255, 255, 255, 0.10);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .search-shortcut {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 6px;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            font-weight: 600;
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+            flex-wrap: nowrap;
+        }
+        .filter-chips::-webkit-scrollbar {
+            display: none;
+        }
+        .filter-chip {
+            padding: 4px 14px;
+            border-radius: 20px;
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.7rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.25s;
+            touch-action: manipulation;
+            font-weight: 600;
+        }
+        .filter-chip:active {
+            transform: scale(0.95);
+        }
+        .filter-chip.active {
+            background: var(--ruby-dim);
+            color: #fff;
+            border-color: var(--ruby-light);
+        }
+        .filter-chip:hover:not(.active) {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .filter-chip.ai-chip {
+            background: rgba(155, 29, 58, 0.15);
+            border-color: var(--ruby);
+            color: var(--ruby-light);
+        }
+        .filter-chip.ai-chip.active {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby-light);
+        }
+
+        /* ============================================================
+           Stats Grid – Cobalt/Ruby
+           ============================================================ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 12px 16px;
+        }
+        .stat-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 14px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .stat-card:active {
+            transform: scale(0.96);
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--ruby-light);
+            box-shadow: var(--shadow-glow);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--cobalt), var(--ruby));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+        .stat-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .stat-icon.cobalt {
+            background: var(--cobalt-dim);
+            color: var(--cobalt);
+        }
+        .stat-icon.ruby {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+        }
+        .stat-icon.gold {
+            background: var(--gold-dim);
+            color: var(--gold);
+        }
+        .stat-icon.green {
+            background: rgba(13, 122, 74, 0.12);
+            color: var(--success);
+        }
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 800;
+            margin-bottom: 2px;
+            color: var(--data-text-color);
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .stat-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.65rem;
+            margin-top: 6px;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+        .stat-trend.up {
+            background: rgba(13, 122, 74, 0.10);
+            color: var(--success);
+        }
+        .stat-trend.down {
+            background: rgba(179, 27, 58, 0.10);
+            color: var(--error);
+        }
+        .stat-trend.neutral {
+            background: rgba(26, 58, 107, 0.08);
+            color: var(--text-muted);
+        }
+
+        @media (min-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* ============================================================
+           Section Title
+           ============================================================ */
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 16px;
+            margin-bottom: 8px;
+        }
+        .section-title h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--data-text-color);
+        }
+        .section-title .count-badge {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: 1px dashed var(--ruby);
+        }
+        .section-title .pagination-info {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* ============================================================
+           Pagination
+           ============================================================ */
+        .pagination-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            flex-wrap: wrap;
+        }
+        .pagination-bar button {
+            padding: 6px 14px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            touch-action: manipulation;
+            font-weight: 600;
+        }
+        .pagination-bar button:active {
+            transform: scale(0.95);
+        }
+        .pagination-bar button:hover:not(:disabled) {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .pagination-bar button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .pagination-bar .page-num {
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .pagination-bar .page-num.active {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby);
+        }
+
+        /* ============================================================
+           Contract Cards – Cobalt/Ruby Style
+           ============================================================ */
+        .cards-container {
+            padding: 0 16px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            touch-action: pan-y;
+        }
+
+        .contract-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 18px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+        .contract-card:hover {
+            border-color: var(--ruby-light);
+            box-shadow: 0 4px 24px rgba(155, 29, 58, 0.10);
+            background: var(--card-hover-bg);
+        }
+        .contract-card.selected {
+            border-color: var(--ruby);
+            box-shadow: 0 0 0 2px var(--ruby-dim), 0 4px 24px rgba(155, 29, 58, 0.12);
+        }
+        .contract-card:active {
+            transform: scale(0.98);
+            transition-duration: 0.05s;
+        }
+
+        .contract-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .contract-card .card-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: linear-gradient(145deg, var(--cobalt), var(--ruby));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .contract-card .card-status {
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            white-space: nowrap;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .card-status.active {
+            background: rgba(13, 122, 74, 0.12);
+            color: var(--success);
+            border-color: var(--success);
+        }
+        .card-status.expired {
+            background: rgba(179, 27, 58, 0.12);
+            color: var(--error);
+            border-color: var(--error);
+        }
+        .card-status.expiring {
+            background: rgba(184, 134, 11, 0.12);
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+        .card-status.terminated {
+            background: rgba(90, 90, 122, 0.10);
+            color: var(--text-muted);
+            border-color: var(--text-muted);
+        }
+        .card-status.draft {
+            background: rgba(90, 90, 122, 0.06);
+            color: var(--text-muted);
+            border-color: var(--text-muted);
+        }
+
+        .contract-card .card-name {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+            color: var(--data-text-color);
+        }
+        .contract-card .card-code {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'Arial', sans-serif;
+            direction: ltr;
+            display: inline-block;
+            background: var(--cobalt-dim);
+            padding: 0 8px;
+            border-radius: 6px;
+            color: var(--cobalt);
+        }
+        .contract-card .card-party {
+            font-size: 0.75rem;
+            color: var(--data-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .contract-card .card-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            margin: 6px 0 8px;
+        }
+        .contract-card .card-body .metric-box {
+            background: var(--surface-color);
+            padding: 6px 8px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            text-align: center;
+        }
+        .contract-card .card-body .metric-box .metric-value {
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: var(--data-text-color);
+        }
+        .contract-card .card-body .metric-box .metric-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+        .contract-card .card-dates {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            padding: 6px 10px;
+            background: var(--surface-color);
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .contract-card .card-dates .date-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .contract-card .card-dates .date-item i {
+            font-size: 0.65rem;
+        }
+        .contract-card .card-actions {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .contract-card .card-actions .card-btn {
+            flex: 1;
+            min-width: 60px;
+            padding: 8px 6px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.25s;
+            touch-action: manipulation;
+        }
+        .contract-card .card-actions .card-btn:active {
+            transform: scale(0.95);
+        }
+        .contract-card .card-actions .card-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .contract-card .card-actions .card-btn.danger:hover {
+            background: rgba(179, 27, 58, 0.12);
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .ai-insight-badge {
+            display: inline-block;
+            background: linear-gradient(145deg, var(--cobalt), var(--ruby));
+            color: #fff;
+            font-size: 0.55rem;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 10px;
+            margin-bottom: 4px;
+            animation: fadeInUp 0.5s ease;
+        }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        /* ============================================================
+           FAB – Ruby style
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, var(--ruby), var(--ruby-dark));
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 24px var(--ruby-glow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active {
+            transform: scale(0.9);
+        }
+        .fab:hover {
+            transform: scale(1.08) rotate(90deg);
+            box-shadow: 0 6px 36px var(--ruby-glow);
+        }
+
+        /* ============================================================
+           Sidebar – Cobalt/Ruby
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, var(--cobalt), var(--ruby));
+            color: #fff;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 16px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.9);
+        }
+        .sidebar-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 70px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 24px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+            max-height: 80vh;
+        }
+        .sidebar.open {
+            right: 0;
+            opacity: 1;
+        }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .sidebar-btn {
+            background: rgba(26, 58, 107, 0.10);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 6px 2px;
+            border-radius: 10px;
+            color: var(--text-color);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            min-height: 48px;
+            text-align: center;
+            font-size: 0.65rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active {
+            transform: scale(0.95);
+        }
+        .sidebar-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+            box-shadow: 0 0 20px var(--ruby-glow);
+        }
+        .sidebar-btn i {
+            font-size: 1rem;
+        }
+        .sidebar-btn span {
+            font-size: 0.6rem;
+        }
+        .sidebar-btn.ruby-bg {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .sidebar-btn.ruby-bg:hover {
+            background: var(--ruby);
+            color: #fff;
+        }
+
+        /* ============================================================
+           Bottom Navigation
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 6px 0 env(safe-area-inset-bottom, 6px) 0;
+            z-index: 300;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.5rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            padding: 4px 4px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active {
+            transform: scale(0.9);
+        }
+        .bottom-nav .nav-item i {
+            font-size: 16px;
+            transition: all 0.25s;
+        }
+        .bottom-nav .nav-item span {
+            font-weight: 600;
+            margin-top: 1px;
+        }
+        .bottom-nav .nav-item.active {
+            color: var(--ruby);
+        }
+        .bottom-nav .nav-item.active i {
+            transform: translateY(-3px);
+            text-shadow: 0 0 24px var(--ruby-glow);
+        }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 3px;
+            background: var(--ruby);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           Charts
+           ============================================================ */
+        .chart-container {
+            background: var(--surface-elevated);
+            border-radius: 16px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            margin: 0 16px 16px;
+        }
+        .chart-container canvas {
+            max-height: 220px;
+            max-width: 100%;
+        }
+        .chart-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        @media (max-width: 640px) {
+            .chart-grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ============================================================
+           Modals – Cobalt/Ruby
+           ============================================================ */
+        .modal-overlay,
+        .report-modal-overlay,
+        .details-overlay,
+        .ai-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 800;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show,
+        .report-modal-overlay.show,
+        .details-overlay.show,
+        .ai-modal-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        .modal,
+        .report-modal,
+        .details-content,
+        .ai-modal-content {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .modal-overlay.show .modal,
+        .report-modal-overlay.show .report-modal,
+        .details-overlay.show .details-content,
+        .ai-modal-overlay.show .ai-modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--data-text-color);
+        }
+        .modal-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s;
+            touch-action: manipulation;
+        }
+        .modal-close:active {
+            transform: scale(0.9);
+        }
+        .modal-close:hover {
+            background: var(--error);
+            color: #fff;
+            border-color: var(--error);
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: var(--ruby);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+        }
+        .form-input[readonly] {
+            background: var(--cobalt-dim);
+            color: var(--cobalt);
+            font-weight: 700;
+            direction: ltr;
+            text-align: right;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(145deg, var(--ruby), var(--ruby-dark));
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 6px;
+            touch-action: manipulation;
+        }
+        .submit-btn:active {
+            transform: scale(0.97);
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 24px var(--ruby-glow);
+        }
+
+        /* ============================================================
+           File Dropzone
+           ============================================================ */
+        .dropzone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            transition: all 0.3s;
+            cursor: pointer;
+            background: var(--surface-color);
+        }
+        .dropzone.dragover {
+            border-color: var(--ruby);
+            background: var(--ruby-dim);
+        }
+        .dropzone i {
+            font-size: 1.8rem;
+            display: block;
+            margin-bottom: 6px;
+            color: var(--ruby);
+        }
+        .file-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .file-tag {
+            background: var(--cobalt-dim);
+            color: var(--cobalt);
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px dashed var(--cobalt);
+        }
+        .file-tag .remove-file {
+            cursor: pointer;
+            color: var(--error);
+            font-weight: 700;
+        }
+
+        /* ============================================================
+           Toast
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success {
+            border-color: var(--success);
+        }
+        .toast.error {
+            border-color: var(--error);
+        }
+        .toast.warning {
+            border-color: var(--warning);
+        }
+        .toast-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+        .toast.success .toast-icon {
+            background: rgba(13, 122, 74, 0.10);
+            color: var(--success);
+        }
+        .toast.error .toast-icon {
+            background: rgba(179, 27, 58, 0.10);
+            color: var(--error);
+        }
+        .toast.warning .toast-icon {
+            background: var(--gold-dim);
+            color: var(--warning);
+        }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                padding: 10px;
+            }
+            .stat-card {
+                padding: 10px;
+            }
+            .stat-value {
+                font-size: 1rem;
+            }
+            .contract-card .card-body {
+                grid-template-columns: 1fr 1fr;
+            }
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .cards-container {
+                padding: 0 10px 12px;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 14px;
+            }
+            .bottom-nav .nav-item span {
+                font-size: 0.45rem;
+            }
+            .sidebar {
+                width: 60px;
+            }
+            .sidebar-btn {
+                min-height: 42px;
+                font-size: 0.6rem;
+            }
+            .sidebar-btn i {
+                font-size: 0.85rem;
+            }
+            .fab {
+                width: 48px;
+                height: 48px;
+                font-size: 1.2rem;
+                bottom: 80px;
+                left: 14px;
+            }
+            .filter-chip {
+                font-size: 0.6rem;
+                padding: 3px 10px;
+            }
+            .top-title h2 {
+                font-size: 1rem;
+            }
+            .icon-btn {
+                width: 34px;
+                height: 34px;
+                font-size: 0.8rem;
+            }
+            .report-modal {
+                padding: 14px;
+            }
+            .chart-grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .chart-container {
+                padding: 12px;
+                margin: 0 10px 12px;
+            }
+            .contract-card .card-actions .card-btn {
+                font-size: 0.65rem;
+                padding: 6px 4px;
+                min-width: 50px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                gap: 6px;
+                padding: 8px;
+            }
+            .stat-card {
+                padding: 8px;
+            }
+            .stat-value {
+                font-size: 0.85rem;
+            }
+            .stat-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 0.75rem;
+            }
+            .contract-card .card-body {
+                grid-template-columns: 1fr 1fr;
+            }
+            .card-actions {
+                flex-wrap: wrap;
+            }
+            .card-btn {
+                font-size: 0.6rem;
+                padding: 4px 6px;
+            }
+            .bottom-nav .nav-item {
+                padding: 2px 2px;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 12px;
+            }
+            .bottom-nav .nav-item span {
+                font-size: 0.4rem;
+            }
+            .modal {
+                padding: 12px;
+            }
+            .search-input {
+                font-size: 0.8rem;
+                padding: 8px 38px 8px 12px;
+            }
+            .filter-chip {
+                font-size: 0.55rem;
+                padding: 2px 8px;
+            }
+            .top-title h2 {
+                font-size: 0.85rem;
+            }
+        }
+
+        /* ============================================================
+           Print Styles
+           ============================================================ */
+        @media print {
+            .top-bar,
+            .bottom-nav,
+            .fab,
+            .sidebar-toggle,
+            .sidebar,
+            .filter-chips,
+            .search-wrap,
+            .card-actions,
+            .pagination-bar,
+            .icon-btn {
+                display: none !important;
+            }
+            body {
+                background: #fff !important;
+                color: #000 !important;
+                padding: 10px !important;
+            }
+            .contract-card {
+                break-inside: avoid;
+                border: 1px solid #000 !important;
+                box-shadow: none !important;
+            }
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+            }
+            .stat-card {
+                border: 1px solid #000 !important;
+                box-shadow: none !important;
+            }
+            .chart-container {
+                border: 1px solid #000 !important;
+                break-inside: avoid;
+            }
+            .modal-overlay,
+            .report-modal-overlay,
+            .details-overlay,
+            .ai-modal-overlay {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+    Skip Link – للوصول السريع
+    ============================================================ -->
+    <a class="skip-link" href="#main-content">تخطي إلى المحتوى الرئيسي</a>
+
+    <!-- ============================================================
+    Offline Banner
+    ============================================================ -->
+    <div class="offline-banner" id="offlineBanner" role="alert" aria-live="polite">
+        <i class="fas fa-wifi-slash" aria-hidden="true"></i> أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
+    </div>
+
+    <!-- ============================================================
+    Loading Indicator
+    ============================================================ -->
+    <div class="loading-indicator" id="loadingIndicator" role="status" aria-live="polite">
+        <div class="spinner" aria-label="جاري التحميل..."></div>
+        <span class="sr-only">جاري التحميل...</span>
+    </div>
+
+    <!-- ============================================================
+    الرئيسية (main-content)
+    ============================================================ -->
+    <main id="main-content">
+
+        <!-- ============================================================
+        Header – Cobalt/Ruby
+        ============================================================ -->
+        <header class="top-bar" role="banner" aria-label="رأس الصفحة">
+            <div class="header-top">
+                <div class="top-title">
+                    <h2><i class="fas fa-file-signature" aria-hidden="true"></i> إدارة العقود <span class="badge-ruby">v3.0</span></h2>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" aria-label="التنبيهات" title="التنبيهات">
+                        <i class="fas fa-bell" aria-hidden="true"></i>
+                        <span class="sr-only">التنبيهات</span>
+                    </button>
+                    <button class="icon-btn" id="themeToggle" aria-label="تبديل الوضع" title="تبديل الوضع">
+                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                        <span class="sr-only">تبديل الوضع</span>
+                    </button>
+                    <button class="icon-btn ruby-btn" onclick="openAIAdvisor()" aria-label="المستشار الذكي" title="المستشار الذكي">
+                        <i class="fas fa-robot" aria-hidden="true"></i>
+                        <span class="sr-only">المستشار الذكي</span>
+                    </button>
+                    <button class="icon-btn" onclick="openExportModal()" aria-label="تصدير" title="تصدير">
+                        <i class="fas fa-file-export" aria-hidden="true"></i>
+                        <span class="sr-only">تصدير</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="search-wrap" role="search">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم العقد، الكود، الطرف، أو القيمة..." aria-label="بحث في العقود" oninput="handleSearch(this.value)">
+                <span class="search-shortcut">Ctrl+K</span>
+            </div>
+
+            <div class="filter-chips" role="tablist" aria-label="فلاتر العقود">
+                <button class="filter-chip active" role="tab" aria-selected="true" onclick="setFilter('all', this)">الكل</button>
+                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('active', this)">نشط</button>
+                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('expiring', this)">قارب الانتهاء</button>
+                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('expired', this)">منتهي</button>
+                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('terminated', this)">ملغى</button>
+                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('draft', this)">مسودة</button>
+                <button class="filter-chip ai-chip" role="tab" aria-selected="false" onclick="setFilter('ai_suggest', this)">🤖 توصية AI</button>
+            </div>
+        </header>
+
+        <!-- ============================================================
+        Stats
+        ============================================================ -->
+        <section class="stats-grid" aria-label="إحصائيات العقود">
+            <div class="stat-card animate-fade-up" onclick="showStatDetail('total')" role="button" tabindex="0" aria-label="إجمالي العقود">
+                <div class="stat-icon cobalt"><i class="fas fa-file-contract" aria-hidden="true"></i></div>
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">إجمالي العقود</div>
+                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendTotal">0%</span></div>
+            </div>
+            <div class="stat-card animate-fade-up" onclick="showStatDetail('active')" role="button" tabindex="0" aria-label="العقود النشطة">
+                <div class="stat-icon green"><i class="fas fa-check-circle" aria-hidden="true"></i></div>
+                <div class="stat-value" id="statActive">0</div>
+                <div class="stat-label">عقود نشطة</div>
+                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendActive">0%</span></div>
+            </div>
+            <div class="stat-card animate-fade-up" onclick="showStatDetail('expiring')" role="button" tabindex="0" aria-label="العقود قاربة الانتهاء">
+                <div class="stat-icon gold"><i class="fas fa-clock" aria-hidden="true"></i></div>
+                <div class="stat-value" id="statExpiring">0</div>
+                <div class="stat-label">قارب الانتهاء</div>
+                <div class="stat-trend down"><i class="fas fa-arrow-down" aria-hidden="true"></i> <span id="trendExpiring">0%</span></div>
+            </div>
+            <div class="stat-card animate-fade-up" onclick="showStatDetail('total_value')" role="button" tabindex="0" aria-label="القيمة الإجمالية">
+                <div class="stat-icon ruby"><i class="fas fa-money-bill-wave" aria-hidden="true"></i></div>
+                <div class="stat-value" id="statTotalValue">0</div>
+                <div class="stat-label">القيمة الإجمالية</div>
+                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendTotalValue">0%</span></div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+        Charts
+        ============================================================ -->
+        <div class="chart-grid-2" aria-label="المخططات التحليلية">
+            <div class="chart-container" role="img" aria-label="توزيع العقود حسب الحالة">
+                <canvas id="statusChart" aria-hidden="true"></canvas>
+            </div>
+            <div class="chart-container" role="img" aria-label="القيم الإجمالية حسب النوع">
+                <canvas id="valueChart" aria-hidden="true"></canvas>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        Section Title + Pagination
+        ============================================================ -->
+        <div class="section-title">
+            <h3>📋 قائمة العقود</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <span class="count-badge" id="contractCount">0</span>
+                <span class="pagination-info" id="paginationInfo">صفحة 1 من 1</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        Alerts Container
+        ============================================================ -->
+        <div class="alerts-container" id="alertsContainer" style="padding:0 16px 12px;" role="region" aria-label="التنبيهات"></div>
+
+        <!-- ============================================================
+        Cards Container
+        ============================================================ -->
+        <div class="cards-container" id="cardsContainer" role="list" aria-label="قائمة العقود"></div>
+
+        <!-- ============================================================
+        Pagination
+        ============================================================ -->
+        <div class="pagination-bar" id="paginationBar" role="navigation" aria-label="تصفح الصفحات">
+            <button id="prevPage" onclick="changePage(-1)" aria-label="الصفحة السابقة" disabled>
+                <i class="fas fa-chevron-right" aria-hidden="true"></i> السابقة
+            </button>
+            <span id="pageNumbers"></span>
+            <button id="nextPage" onclick="changePage(1)" aria-label="الصفحة التالية">
+                التالية <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <!-- ============================================================
+        FAB
+        ============================================================ -->
+        <button class="fab" onclick="openAddModal()" aria-label="إضافة عقد جديد" title="إضافة عقد جديد">
+            <i class="fas fa-plus" aria-hidden="true"></i>
+            <span class="sr-only">إضافة عقد جديد</span>
+        </button>
+
+        <!-- ============================================================
+        Sidebar
+        ============================================================ -->
+        <div class="sidebar-toggle" id="sidebarToggle" role="button" tabindex="0" aria-label="فتح القائمة الجانبية">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </div>
+        <nav class="sidebar" id="sidebar" role="navigation" aria-label="القائمة الجانبية">
+            <div class="sidebar-content">
+                <button class="sidebar-btn" onclick="handleSidebarAction('add')" aria-label="إضافة عقد">
+                    <i class="fas fa-plus" aria-hidden="true"></i> <span>إضافة</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('save')" aria-label="حفظ">
+                    <i class="fas fa-save" aria-hidden="true"></i> <span>حفظ</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('search')" aria-label="بحث">
+                    <i class="fas fa-search" aria-hidden="true"></i> <span>استعلام</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('delete')" aria-label="حذف">
+                    <i class="fas fa-trash" aria-hidden="true"></i> <span>حذف</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('export')" aria-label="تصدير">
+                    <i class="fas fa-file-export" aria-hidden="true"></i> <span>تصدير</span>
+                </button>
+                <button class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')" aria-label="المستشار الذكي">
+                    <i class="fas fa-robot" aria-hidden="true"></i> <span>AI</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('backup')" aria-label="نسخ احتياطي">
+                    <i class="fas fa-database" aria-hidden="true"></i> <span>نسخ احتياطي</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('audit')" aria-label="سجل التغييرات">
+                    <i class="fas fa-history" aria-hidden="true"></i> <span>سجل</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('home')" aria-label="الرئيسية">
+                    <i class="fas fa-home" aria-hidden="true"></i> <span>رجوع</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- ============================================================
+        Bottom Navigation
+        ============================================================ -->
+        <nav class="bottom-nav" role="navigation" aria-label="القائمة السفلية">
+            <button class="nav-item" onclick="openReport('contracts_summary')" aria-label="ملخص العقود">
+                <i class="fas fa-file-contract" aria-hidden="true"></i>
+                <span>ملخص</span>
+            </button>
+            <button class="nav-item" onclick="openReport('by_party')" aria-label="حسب الطرف">
+                <i class="fas fa-users" aria-hidden="true"></i>
+                <span>حسب الطرف</span>
+            </button>
+            <button class="nav-item" onclick="openReport('expiry_analysis')" aria-label="تحليل الانتهاء">
+                <i class="fas fa-calendar-times" aria-hidden="true"></i>
+                <span>تحليل</span>
+            </button>
+            <button class="nav-item active" onclick="openReport('contracts')" aria-label="عرض الكل">
+                <i class="fas fa-list" aria-hidden="true"></i>
+                <span>عرض الكل</span>
+            </button>
+            <button class="nav-item" onclick="openReport('value_analysis')" aria-label="تحليل القيم">
+                <i class="fas fa-chart-bar" aria-hidden="true"></i>
+                <span>القيم</span>
+            </button>
+        </nav>
+
+    </main>
+
+    <!-- ============================================================
+    Toast
+    ============================================================ -->
+    <div class="toast" id="toast" role="alert" aria-live="assertive">
+        <div class="toast-icon"><i class="fas fa-check" aria-hidden="true"></i></div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ============================================================
+    MODAL: إضافة / تعديل عقد
+    ============================================================ -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">➕ إضافة عقد جديد</h3>
+                <button class="modal-close" onclick="closeModal()" aria-label="إغلاق النافذة">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <form id="contractForm" onsubmit="return false;" aria-label="نموذج العقد">
+                <input type="hidden" id="editId" value="0">
+
+                <div class="form-group">
+                    <label class="form-label" for="contractCode">كود العقد * <span style="color:var(--error);">(للقراءة فقط)</span></label>
+                    <input type="text" class="form-input" id="contractCode" placeholder="سيتولى النظام إنشاء الكود تلقائياً" readonly aria-readonly="true">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="contractName">اسم العقد *</label>
+                    <input type="text" class="form-input" id="contractName" placeholder="أدخل اسم العقد" required aria-required="true">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="partyId">الطرف / المورد *</label>
+                    <select class="form-input" id="partyId" required aria-required="true">
+                        <option value="">اختر الطرف</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="contractType">نوع العقد *</label>
+                        <select class="form-input" id="contractType" required aria-required="true">
+                            <option value="purchase">شراء</option>
+                            <option value="sale">بيع</option>
+                            <option value="service">خدمات</option>
+                            <option value="rental">إيجار</option>
+                            <option value="maintenance">صيانة</option>
+                            <option value="other">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="contractStatus">الحالة *</label>
+                        <select class="form-input" id="contractStatus" required aria-required="true">
+                            <option value="active">نشط</option>
+                            <option value="draft">مسودة</option>
+                            <option value="terminated">ملغى</option>
+                            <option value="expired">منتهي</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="startDate">📅 تاريخ البداية *</label>
+                        <input type="date" class="form-input" id="startDate" required aria-required="true">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="endDate">📅 تاريخ النهاية *</label>
+                        <input type="date" class="form-input" id="endDate" required aria-required="true">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="totalValue">💵 القيمة الإجمالية</label>
+                        <input type="number" step="0.01" class="form-input" id="totalValue" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="currencyId">💰 العملة</label>
+                        <select class="form-input" id="currencyId">
+                            <option value="">اختر العملة</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="autoRenew">التجديد التلقائي</label>
+                    <select class="form-input" id="autoRenew">
+                        <option value="0">لا</option>
+                        <option value="1">نعم</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="terms">شروط وأحكام</label>
+                    <textarea class="form-input" id="terms" rows="3" placeholder="أدخل شروط وأحكام العقد..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="specialConditions">شروط خاصة</label>
+                    <textarea class="form-input" id="specialConditions" rows="2" placeholder="أدخل الشروط الخاصة..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="notes">ملاحظات</label>
+                    <textarea class="form-input" id="notes" rows="2" placeholder="ملاحظات إضافية..."></textarea>
+                </div>
+
+                <!-- المرفقات -->
+                <div class="form-group">
+                    <label class="form-label">📎 المرفقات</label>
+                    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="اسحب الملفات هنا أو انقر للاختيار">
+                        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+                        <span>اسحب الملفات هنا أو انقر للاختيار</span>
+                        <input type="file" id="fileInput" multiple style="display:none;" aria-label="اختر ملفات مرفقة">
+                    </div>
+                    <div class="file-list" id="fileList" role="list" aria-label="قائمة الملفات المرفقة"></div>
+                </div>
+
+                <button type="button" class="submit-btn" onclick="saveContract()">
+                    <i class="fas fa-save" aria-hidden="true"></i> حفظ العقد
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: التقارير
+    ============================================================ -->
+    <div class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+        <div class="report-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="reportModalTitle">📊 تقرير العقود</h3>
+                <button class="modal-close" onclick="closeReportModal()" aria-label="إغلاق التقرير">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label" for="reportFrom">📅 من تاريخ</label>
+                    <input type="date" class="form-input" id="reportFrom">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reportTo">📅 إلى تاريخ</label>
+                    <input type="date" class="form-input" id="reportTo">
+                </div>
+            </div>
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label" for="reportStatus">📊 الحالة</label>
+                    <select class="form-input" id="reportStatus">
+                        <option value="">الكل</option>
+                        <option value="active">نشط</option>
+                        <option value="expired">منتهي</option>
+                        <option value="expiring">قارب الانتهاء</option>
+                        <option value="terminated">ملغى</option>
+                        <option value="draft">مسودة</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reportExtra">📋 نوع التقرير</label>
+                    <select class="form-input" id="reportExtra">
+                        <option value="">الكل</option>
+                        <option value="detailed">مفصل</option>
+                        <option value="summary">ملخص</option>
+                        <option value="stats">إحصائيات</option>
+                    </select>
+                </div>
+            </div>
+            <div class="report-actions" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+                <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;">
+                    <i class="fas fa-cog" aria-hidden="true"></i> توليد التقرير
+                </button>
+                <button class="submit-btn" onclick="exportReport()" style="flex:1;min-width:100px;background:var(--cobalt);">
+                    <i class="fas fa-file-export" aria-hidden="true"></i> تصدير
+                </button>
+                <button class="submit-btn" onclick="closeReportModal()" style="flex:0 0 auto;background:var(--text-muted);">
+                    <i class="fas fa-times" aria-hidden="true"></i> إلغاء
+                </button>
+            </div>
+            <div class="report-results" id="reportResults" style="margin-top:12px;max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;">
+                <div class="empty-state">
+                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i>
+                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: تفاصيل العقد
+    ============================================================ -->
+    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
+        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+            <!-- يتم تعبئتها عبر JavaScript -->
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: المستشار الذكي
+    ============================================================ -->
+    <div class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+        <div class="ai-modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="aiTitle">🤖 المستشار الذكي – العقود</h3>
+                <button class="modal-close" onclick="closeAIModal()" aria-label="إغلاق المستشار الذكي">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div id="aiContent" style="padding:6px 0;"></div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: تصدير
+    ============================================================ -->
+    <div class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="exportTitle">📤 تصدير البيانات</h3>
+                <button class="modal-close" onclick="closeExportModal()" aria-label="إغلاق التصدير">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <button class="submit-btn" onclick="exportData('xlsx')" style="background:var(--cobalt);">Excel (XLSX)</button>
+                <button class="submit-btn" onclick="exportData('pdf')" style="background:var(--ruby);">PDF</button>
+                <button class="submit-btn" onclick="exportData('json')" style="background:var(--gold);color:#000;">JSON</button>
+                <button class="submit-btn" onclick="exportData('csv')" style="background:var(--success);">CSV</button>
+            </div>
+            <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
+                <i class="fas fa-info-circle" aria-hidden="true"></i> سيتم تصدير جميع العقود مع المرفقات والبيانات المرتبطة
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: نسخ احتياطي
+    ============================================================ -->
+    <div class="modal-overlay" id="backupModal" onclick="closeBackupModal(event)" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="backupTitle">💾 النسخ الاحتياطي</h3>
+                <button class="modal-close" onclick="closeBackupModal()" aria-label="إغلاق النسخ الاحتياطي">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <button class="submit-btn" onclick="createBackup()" style="background:var(--cobalt);">
+                    <i class="fas fa-database" aria-hidden="true"></i> إنشاء نسخة احتياطية يدوية
+                </button>
+                <button class="submit-btn" onclick="restoreBackup()" style="background:var(--ruby);">
+                    <i class="fas fa-undo" aria-hidden="true"></i> استعادة من نسخة احتياطية
+                </button>
+                <input type="file" id="restoreFileInput" accept=".json,.db" style="display:none;" aria-label="اختر ملف النسخة الاحتياطية">
+                <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i> يتم إنشاء نسخة احتياطية يومية تلقائياً عند الساعة 2:00 صباحاً
+                </div>
+                <div id="backupList" style="max-height:150px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;font-size:0.75rem;">
+                    <div style="color:var(--text-muted);text-align:center;">جاري تحميل قائمة النسخ...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    MODAL: سجل التغييرات (Audit Trail)
+    ============================================================ -->
+    <div class="modal-overlay" id="auditModal" onclick="closeAuditModal(event)" role="dialog" aria-modal="true" aria-labelledby="auditTitle">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="auditTitle">📜 سجل التغييرات</h3>
+                <button class="modal-close" onclick="closeAuditModal()" aria-label="إغلاق السجل">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div id="auditContent" style="max-height:400px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;">
+                <div style="color:var(--text-muted);text-align:center;">جاري تحميل سجل التغييرات...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    JavaScript المتكامل
+    ============================================================ -->
+    <script>
+        /* ============================================================
+           0. RBAC – دور المستخدم (افتراضي Admin)
+           ============================================================ */
+        const ROLES = {
+            ADMIN: 'admin',
+            MANAGER: 'manager',
+            VIEWER: 'viewer',
+            AUDITOR: 'auditor'
+        };
+
+        let currentUserRole = ROLES.ADMIN; // سيتم جلبها من قاعدة البيانات
+
+        function hasPermission(action) {
+            // Admin: كل الصلاحيات
+            if (currentUserRole === ROLES.ADMIN) return true;
+            // Manager: كل شيء ما عدا الحذف وحذف المستخدمين
+            if (currentUserRole === ROLES.MANAGER) {
+                if (action === 'delete' || action === 'delete_user') return false;
+                return true;
+            }
+            // Viewer: قراءة فقط
+            if (currentUserRole === ROLES.VIEWER) {
+                return action === 'read' || action === 'view' || action === 'export';
+            }
+            // Auditor: قراءة + تصدير + سجل
+            if (currentUserRole === ROLES.AUDITOR) {
+                return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
+            }
+            return false;
+        }
+
+        function requirePermission(action) {
+            if (!hasPermission(action)) {
+                showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
+                return false;
+            }
+            return true;
+        }
+
+        /* ============================================================
+           1. API Call – بدون بيانات تجريبية
+           ============================================================ */
+        function apiCall(action, params) {
+            return new Promise((resolve, reject) => {
+                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+                    try {
+                        const jsonParams = JSON.stringify(params || {});
+                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        try {
+                            const parsed = JSON.parse(result);
+                            resolve(parsed);
+                        } catch (e) {
+                            resolve({ success: true, data: result });
+                        }
+                    } catch (e) {
+                        reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
+                    }
+                } else {
+                    // في بيئة التطوير – نعرض رسالة خطأ بدلاً من بيانات تجريبية
+                    reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+                }
+            });
+        }
+
+        /* ============================================================
+           2. Local Storage (للنسخ الاحتياطي المؤقت)
+           ============================================================ */
+        const LocalDB = {
+            prefix: 'fuel_station_',
+            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
+                catch (e) { return false; } },
+            get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
+                    JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); }
+        };
+
+        /* ============================================================
+           3. Offline / Online
+           ============================================================ */
+        let isOnline = navigator.onLine;
+
+        function updateOnlineStatus() {
+            isOnline = navigator.onLine;
+            const banner = document.getElementById('offlineBanner');
+            if (!isOnline) {
+                banner.classList.add('show');
+                showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
+            } else {
+                banner.classList.remove('show');
+                showToast('✅ تم استعادة الاتصال', 'success');
+                syncPendingOperations();
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        async function syncPendingOperations() {
+            if (!isOnline) return;
+            const pending = LocalDB.get('pending_ops', []);
+            if (pending.length === 0) return;
+            showLoading(true);
+            let ok = 0,
+                fail = 0;
+            for (const op of pending) {
+                try {
+                    const result = await apiCall(op.action, op.data);
+                    if (result.success) ok++;
+                    else fail++;
+                } catch (e) { fail++; }
+            }
+            if (ok > 0) {
+                const remaining = pending.slice(fail);
+                LocalDB.set('pending_ops', remaining);
+                showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
+            }
+            if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
+            showLoading(false);
+        }
+
+        /* ============================================================
+           4. Toast, Loading, Helpers
+           ============================================================ */
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toastMessage');
+            const icon = toast.querySelector('.toast-icon i');
+            toast.className = 'toast ' + (type || '');
+            msg.textContent = message;
+            if (type === 'success') { icon.className = 'fas fa-check'; } else if (type === 'error') { icon.className =
+                    'fas fa-times'; } else if (type === 'warning') { icon.className = 'fas fa-exclamation-triangle'; } else { icon
+                    .className = 'fas fa-info-circle'; }
+            toast.classList.add('show');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+            return num.toLocaleString('ar');
+        }
+
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '0.00';
+            return parseFloat(num).toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function getContractStatusClass(status) {
+            const map = { 'active': 'active', 'expired': 'expired', 'expiring': 'expiring', 'terminated': 'terminated',
+                'draft': 'draft' };
+            return map[status] || 'draft';
+        }
+
+        function getContractStatusLabel(status) {
+            const map = { 'active': 'نشط', 'expired': 'منتهي', 'expiring': 'قارب الانتهاء', 'terminated': 'ملغى',
+            'draft': 'مسودة' };
+            return map[status] || status;
+        }
+
+        function getContractTypeLabel(type) {
+            const map = { 'purchase': 'شراء', 'sale': 'بيع', 'service': 'خدمات', 'rental': 'إيجار', 'maintenance': 'صيانة',
+                'other': 'أخرى' };
+            return map[type] || type;
+        }
+
+        /* ============================================================
+           5. Theme Toggle
+           ============================================================ */
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const isDark = current === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            const icon = document.getElementById('themeIcon');
+            icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            // تحديث المخططات
+            if (window.statusChart) { window.statusChart.update(); }
+            if (window.valueChart) { window.valueChart.update(); }
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+            const icon = document.getElementById('themeIcon');
+            icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+        }
+        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+        /* ============================================================
+           6. Sidebar
+           ============================================================ */
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    toggle.classList.remove('hidden');
+                }
+            });
+        }
+
+        function handleSidebarAction(action) {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarToggle').classList.remove('hidden');
+            switch (action) {
+                case 'add':
+                    openAddModal();
+                    break;
+                case 'save':
+                    if (document.getElementById('modalOverlay').classList.contains('show')) saveContract();
+                    else showToast('⚠️ لا يوجد نموذج مفتوح للحفظ', 'warning');
+                    break;
+                case 'search':
+                    document.getElementById('searchInput').focus();
+                    showToast('🔍 اكتب كلمة البحث في الحقل أعلاه', 'info');
+                    break;
+                case 'delete':
+                    if (selectedContractId) deleteContract(selectedContractId);
+                    else showToast('❌ يرجى تحديد عقد أولاً (انقر على البطاقة)', 'error');
+                    break;
+                case 'export':
+                    openExportModal();
+                    break;
+                case 'ai_advisor':
+                    openAIAdvisor();
+                    break;
+                case 'backup':
+                    openBackupModal();
+                    break;
+                case 'audit':
+                    openAuditModal();
+                    break;
+                case 'home':
+                    window.location.href = 'main.html';
+                    break;
+                default:
+                    showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        /* ============================================================
+           7. Keyboard Shortcuts (Ctrl+K)
+           ============================================================ */
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+                document.getElementById('searchInput').select();
+            }
+        });
+
+        /* ============================================================
+           8. State
+           ============================================================ */
+        let allContracts = [];
+        let allParties = [];
+        let allCurrencies = [];
+        let allUsers = [];
+        let currentFilter = 'all';
+        let currentPage = 1;
+        const PAGE_SIZE = 10;
+        let selectedContractId = null;
+        let currentEditId = 0;
+        let isInitialLoad = true;
+        let searchQuery = '';
+        let attachedFiles = [];
+        let fuseInstance = null;
+
+        /* ============================================================
+           9. Load Data from Database
+           ============================================================ */
+        async function loadData() {
+            if (isInitialLoad) renderSkeleton();
+            showLoading(true);
+            try {
+                const [contractsRes, partiesRes, currenciesRes, usersRes] = await Promise.all([
+                    apiCall('getContracts', {}),
+                    apiCall('getParties', {}),
+                    apiCall('getCurrencies', {}),
+                    apiCall('getUsers', {})
+                ]);
+
+                if (contractsRes.success && contractsRes.data) {
+                    allContracts = contractsRes.data;
+                    LocalDB.set('contracts', allContracts);
+                } else {
+                    allContracts = LocalDB.get('contracts', []);
+                }
+                if (partiesRes.success && partiesRes.data) {
+                    allParties = partiesRes.data;
+                    LocalDB.set('parties', allParties);
+                } else {
+                    allParties = LocalDB.get('parties', []);
+                }
+                if (currenciesRes.success && currenciesRes.data) {
+                    allCurrencies = currenciesRes.data;
+                    LocalDB.set('currencies', allCurrencies);
+                } else {
+                    allCurrencies = LocalDB.get('currencies', []);
+                }
+                if (usersRes.success && usersRes.data) {
+                    allUsers = usersRes.data;
+                    LocalDB.set('users', allUsers);
+                } else {
+                    allUsers = LocalDB.get('users', []);
+                }
+
+                // تحديث دور المستخدم من أول مستخدم
+                if (allUsers.length > 0) {
+                    const u = allUsers[0];
+                    const role = u.role_name || u.role || 'admin';
+                    if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
+                    else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
+                    else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
+                    else currentUserRole = ROLES.VIEWER;
+                }
+
+                populateDropdowns();
+                generateAIInsights();
+                renderCards();
+                updateStats();
+                updateCharts();
+                updateAlerts();
+                isInitialLoad = false;
+                showLoading(false);
+            } catch (e) {
+                console.error('Load error:', e);
+                // محاولة استخدام التخزين المحلي كفشل
+                allContracts = LocalDB.get('contracts', []);
+                allParties = LocalDB.get('parties', []);
+                allCurrencies = LocalDB.get('currencies', []);
+                allUsers = LocalDB.get('users', []);
+                populateDropdowns();
+                renderCards();
+                updateStats();
+                updateCharts();
+                updateAlerts();
+                isInitialLoad = false;
+                showLoading(false);
+                showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
+            }
+        }
+
+        function renderSkeleton() {
+            const container = document.getElementById('cardsContainer');
+            let html = '<div class="skeleton-grid">';
+            for (let i = 0; i < 3; i++) {
+                html += `
+                    <div class="skeleton-card">
+                        <div style="display:flex;align-items:center;margin-bottom:10px;">
+                            <div style="width:44px;height:44px;border-radius:14px;background:var(--skeleton-bg);flex-shrink:0;margin-left:12px;"></div>
+                            <div style="flex:1;"><div class="skeleton-row long"></div><div class="skeleton-row medium"></div></div>
+                        </div>
+                        <div class="skeleton-row"></div><div class="skeleton-row"></div>
+                        <div style="display:flex;gap:8px;margin-top:10px;">
+                            <div class="skeleton-row" style="flex:1;height:36px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:36px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:36px;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function populateDropdowns() {
+            const partySelect = document.getElementById('partyId');
+            partySelect.innerHTML = '<option value="">اختر الطرف</option>';
+            allParties.forEach(p => {
+                const name = p.commercial_name || p.legal_name || p.name || 'طرف';
+                const opt = document.createElement('option');
+                opt.value = p.id || p.party_id;
+                opt.textContent = name;
+                partySelect.appendChild(opt);
+            });
+
+            const currencySelect = document.getElementById('currencyId');
+            currencySelect.innerHTML = '<option value="">اختر العملة</option>';
+            allCurrencies.forEach(c => {
+                const name = c.currency_name || c.name || 'عملة';
+                const opt = document.createElement('option');
+                opt.value = c.id || c.currency_id;
+                opt.textContent = name + ' (' + (c.currency_code || c.code || '') + ')';
+                currencySelect.appendChild(opt);
+            });
+        }
+
+        /* ============================================================
+           10. Fuzzy Search (Fuse.js)
+           ============================================================ */
+        function initFuse() {
+            if (typeof Fuse === 'undefined') return;
+            fuseInstance = new Fuse(allContracts, {
+                keys: ['contract_code', 'contract_name', 'party_name', 'contract_type', 'status'],
+                threshold: 0.3,
+                distance: 100,
+                includeScore: true
+            });
+        }
+
+        function handleSearch(query) {
+            searchQuery = query.trim();
+            currentPage = 1;
+            renderCards();
+        }
+
+        function getFilteredData() {
+            let data = [...allContracts];
+
+            // فلتر الحالة
+            if (currentFilter === 'active') data = data.filter(s => s.status === 'active');
+            else if (currentFilter === 'expiring') data = data.filter(s => s.status === 'expiring');
+            else if (currentFilter === 'expired') data = data.filter(s => s.status === 'expired');
+            else if (currentFilter === 'terminated') data = data.filter(s => s.status === 'terminated');
+            else if (currentFilter === 'draft') data = data.filter(s => s.status === 'draft');
+            else if (currentFilter === 'ai_suggest') {
+                const insights = LocalDB.get('ai_insights', []);
+                const ids = insights.map(i => i.contractId);
+                data = data.filter(s => ids.includes(s.id));
+            }
+
+            // بحث ضبابي
+            if (searchQuery && fuseInstance) {
+                const results = fuseInstance.search(searchQuery);
+                const ids = results.map(r => r.item.id);
+                data = data.filter(s => ids.includes(s.id));
+            } else if (searchQuery) {
+                const q = searchQuery.toLowerCase();
+                data = data.filter(s =>
+                    (s.contract_code || '').toLowerCase().includes(q) ||
+                    (s.contract_name || '').toLowerCase().includes(q) ||
+                    (s.party_name || '').toLowerCase().includes(q) ||
+                    (s.contract_type || '').toLowerCase().includes(q)
+                );
+            }
+
+            return data;
+        }
+
+        /* ============================================================
+           11. Render Cards with Pagination
+           ============================================================ */
+        function renderCards() {
+            const filtered = getFilteredData();
+            const total = filtered.length;
+            const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+            document.getElementById('contractCount').textContent = total;
+            document.getElementById('paginationInfo').textContent = `صفحة ${currentPage} من ${totalPages}`;
+
+            const container = document.getElementById('cardsContainer');
+            if (pageItems.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-file-contract" aria-hidden="true"></i>
+                        <p>لا توجد عقود مطابقة</p>
+                    </div>
+                `;
+                renderPagination(totalPages);
+                return;
+            }
+
+            const insights = LocalDB.get('ai_insights', []);
+
+            container.innerHTML = pageItems.map((s, idx) => {
+                const id = s.id;
+                const code = s.contract_code || '---';
+                const name = s.contract_name || '---';
+                const partyName = s.party_name || '---';
+                const type = getContractTypeLabel(s.contract_type);
+                const status = s.status || 'draft';
+                const statusClass = getContractStatusClass(status);
+                const statusLabel = getContractStatusLabel(status);
+                const totalValue = parseFloat(s.total_value || 0);
+                const startDate = s.start_date || '---';
+                const endDate = s.end_date || '---';
+                const avatar = name.substring(0, 2);
+
+                const insight = insights.find(i => i.contractId == id);
+                const insightHTML = insight ?
+                    `<div class="ai-insight-badge"><i class="fas fa-robot" aria-hidden="true"></i> ${insight.suggestion.substring(0, 45)}${insight.suggestion.length > 45 ? '...' : ''}</div>` :
+                    '';
+
+                return `
+                    <div class="contract-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" role="listitem">
+                        <div class="card-header">
+                            <div class="card-avatar">${avatar}</div>
+                            <span class="card-status ${statusClass}">${statusLabel}</span>
+                        </div>
+                        <div class="card-name">${escapeHtml(name)}</div>
+                        <div class="card-code" style="direction:ltr;text-align:right;">${escapeHtml(code)}</div>
+                        <div class="card-party"><i class="fas fa-user" aria-hidden="true"></i> ${escapeHtml(partyName)} – ${type}</div>
+                        ${insightHTML}
+                        <div class="card-body">
+                            <div class="metric-box"><div class="metric-value" style="color:var(--ruby);">${formatCurrency(totalValue)}</div><div class="metric-label">القيمة</div></div>
+                            <div class="metric-box"><div class="metric-value" style="color:var(--cobalt);">${startDate}</div><div class="metric-label">البداية</div></div>
+                            <div class="metric-box"><div class="metric-value" style="color:${status === 'expired' ? 'var(--error)' : status === 'expiring' ? 'var(--warning)' : 'var(--success)'}">${endDate}</div><div class="metric-label">النهاية</div></div>
+                        </div>
+                        <div class="card-dates">
+                            <span class="date-item"><i class="fas fa-calendar-alt" aria-hidden="true"></i> البداية: ${startDate}</span>
+                            <span class="date-item"><i class="fas fa-calendar-check" aria-hidden="true"></i> النهاية: ${endDate}</span>
+                        </div>
+                        <div class="card-actions">
+                            <button class="card-btn" onclick="event.stopPropagation(); viewContract(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
+                            <button class="card-btn" onclick="event.stopPropagation(); editContract(${id})" aria-label="تعديل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
+                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteContract(${id})" aria-label="حذف" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-trash" aria-hidden="true"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            renderPagination(totalPages);
+        }
+
+        function renderPagination(totalPages) {
+            const container = document.getElementById('pageNumbers');
+            let html = '';
+            const maxShow = 5;
+            let start = Math.max(1, currentPage - Math.floor(maxShow / 2));
+            let end = Math.min(totalPages, start + maxShow - 1);
+            if (end - start < maxShow - 1) start = Math.max(1, end - maxShow + 1);
+
+            for (let i = start; i <= end; i++) {
+                html += `<span class="page-num ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})" role="button" tabindex="0">${i}</span>`;
+            }
+            container.innerHTML = html;
+
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        }
+
+        function changePage(delta) {
+            const total = Math.ceil(getFilteredData().length / PAGE_SIZE) || 1;
+            const newPage = currentPage + delta;
+            if (newPage < 1 || newPage > total) return;
+            currentPage = newPage;
+            renderCards();
+            document.getElementById('cardsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function goToPage(page) {
+            const total = Math.ceil(getFilteredData().length / PAGE_SIZE) || 1;
+            if (page < 1 || page > total) return;
+            currentPage = page;
+            renderCards();
+            document.getElementById('cardsContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function selectCard(el, id) {
+            document.querySelectorAll('.contract-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedContractId = id;
+        }
+
+        /* ============================================================
+           12. Update Stats
+           ============================================================ */
+        function updateStats() {
+            const total = allContracts.length;
+            const active = allContracts.filter(s => s.status === 'active').length;
+            const expiring = allContracts.filter(s => s.status === 'expiring').length;
+            const totalValue = allContracts.reduce((sum, s) => sum + parseFloat(s.total_value || 0), 0);
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statActive').textContent = active;
+            document.getElementById('statExpiring').textContent = expiring;
+            document.getElementById('statTotalValue').textContent = formatNumber(totalValue);
+
+            // اتجاهات وهمية (يمكن جعلها حقيقية من قاعدة البيانات)
+            document.getElementById('trendTotal').textContent = total > 0 ? '+12%' : '0%';
+            document.getElementById('trendActive').textContent = active > 0 ? '+5%' : '0%';
+            document.getElementById('trendExpiring').textContent = expiring > 0 ? '-3%' : '0%';
+            document.getElementById('trendTotalValue').textContent = totalValue > 0 ? '+8%' : '0%';
+
+            LocalDB.set('contract_stats', { total, active, expiring, total_value: totalValue });
+        }
+
+        function showStatDetail(type) {
+            showToast('📊 عرض تفاصيل: ' + type, 'info');
+        }
+
+        /* ============================================================
+           13. Charts (Chart.js)
+           ============================================================ */
+        let statusChartInstance = null;
+        let valueChartInstance = null;
+
+        function updateCharts() {
+            const statusCounts = {
+                'نشط': allContracts.filter(s => s.status === 'active').length,
+                'قارب الانتهاء': allContracts.filter(s => s.status === 'expiring').length,
+                'منتهي': allContracts.filter(s => s.status === 'expired').length,
+                'ملغى': allContracts.filter(s => s.status === 'terminated').length,
+                'مسودة': allContracts.filter(s => s.status === 'draft').length
+            };
+
+            const typeValues = {};
+            allContracts.forEach(s => {
+                const key = getContractTypeLabel(s.contract_type);
+                typeValues[key] = (typeValues[key] || 0) + parseFloat(s.total_value || 0);
+            });
+
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const textColor = isDark ? '#e8e8f0' : '#1a1a2e';
+            const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(26,58,107,0.10)';
+
+            // مخطط الحالات
+            const ctx1 = document.getElementById('statusChart').getContext('2d');
+            if (statusChartInstance) statusChartInstance.destroy();
+            statusChartInstance = new Chart(ctx1, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: ['#0d7a4a', '#b8860b', '#b31b3a', '#5a5a7a', '#2a5a8b'],
+                        borderColor: isDark ? '#1f1f3a' : '#fffcf7',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
+                    }
+                }
+            });
+
+            // مخطط القيم
+            const ctx2 = document.getElementById('valueChart').getContext('2d');
+            if (valueChartInstance) valueChartInstance.destroy();
+            const labels = Object.keys(typeValues);
+            const values = Object.values(typeValues);
+            valueChartInstance = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'القيمة الإجمالية',
+                        data: values,
+                        backgroundColor: ['#1a3a6b', '#2a5a8b', '#9b1d3a', '#c0395a', '#d4a017', '#0d7a4a'],
+                        borderColor: isDark ? '#1f1f3a' : '#fffcf7',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } }
+                    }
+                }
+            });
+
+            window.statusChart = statusChartInstance;
+            window.valueChart = valueChartInstance;
+        }
+
+        /* ============================================================
+           14. AI Insights
+           ============================================================ */
+        function generateAIInsights() {
+            const insights = [];
+            const today = new Date();
+            allContracts.forEach(c => {
+                const endDate = new Date(c.end_date);
+                const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                const value = parseFloat(c.total_value || 0);
+                let suggestion = '',
+                    priority = 'low';
+                if (c.status === 'expired') {
+                    suggestion = '⚠️ العقد منتهي – يفضل تجديده أو إنهاؤه رسمياً';
+                    priority = 'high';
+                } else if (daysLeft <= 30 && daysLeft > 0) {
+                    suggestion = '🔔 ينتهي خلال ' + daysLeft + ' يوم – ابدأ إجراءات التجديد';
+                    priority = 'high';
+                } else if (daysLeft <= 90 && daysLeft > 0) {
+                    suggestion = '📅 ينتهي خلال ' + daysLeft + ' يوم – راجع شروط التجديد';
+                    priority = 'medium';
+                } else if (value > 1000000) {
+                    suggestion = '💎 عقد عالي القيمة – راجع الأداء والتكاليف';
+                    priority = 'medium';
+                } else {
+                    suggestion = '✅ العقد يسير بشكل جيد';
+                    priority = 'low';
+                }
+                if (c.status !== 'terminated' && c.status !== 'expired') {
+                    insights.push({ contractId: c.id, contractName: c.contract_name, suggestion, priority, daysLeft,
+                    value });
+                }
+            });
+            LocalDB.set('ai_insights', insights);
+            return insights;
+        }
+
+        function getTopAIInsight() {
+            const insights = LocalDB.get('ai_insights', []);
+            if (insights.length === 0) return null;
+            const pri = { 'high': 3, 'medium': 2, 'low': 1 };
+            return insights.reduce((a, b) => (pri[a.priority] > pri[b.priority] ? a : b));
+        }
+
+        function openAIAdvisor() {
+            const modal = document.getElementById('aiModal');
+            const content = document.getElementById('aiContent');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            const insights = LocalDB.get('ai_insights', []);
+            if (insights.length === 0) {
+                content.innerHTML = `
+                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
+                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
+                        <p>لا توجد توصيات حالياً</p>
+                        <p style="font-size:0.8rem;">أضف عقوداً للحصول على تحليل ذكي</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const top = getTopAIInsight();
+            let html = `
+                <div style="background:var(--ruby-dim);border-radius:14px;padding:14px;margin-bottom:12px;border:2px dashed var(--ruby);">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                        <i class="fas fa-star" style="color:var(--gold);" aria-hidden="true"></i>
+                        <span style="font-weight:700;font-size:0.95rem;">التوصية الأولى</span>
+                        ${top && top.priority === 'high' ? '<span style="background:var(--error);color:#fff;padding:0 8px;border-radius:4px;font-size:0.6rem;">عاجل</span>' : ''}
+                    </div>
+                    <div style="font-weight:600;color:var(--ruby);">${top ? top.suggestion : ''}</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);">${top ? 'للعقد: ' + top.contractName : ''}</div>
+                </div>
+                <div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">📋 توصيات أخرى</div>
+            `;
+
+            insights.slice(0, 5).forEach((ins, i) => {
+                const border = ins.priority === 'high' ? 'var(--error)' : ins.priority === 'medium' ? 'var(--warning)' :
+                    'var(--success)';
+                html += `
+                    <div style="background:var(--surface-color);border-radius:12px;padding:10px;margin-bottom:6px;border:2px dashed ${border};border-right:4px solid ${border};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-weight:600;">${ins.contractName}</span>
+                            <span style="font-size:0.65rem;color:var(--text-muted);">${ins.daysLeft > 0 ? 'متبقي: ' + ins.daysLeft + ' يوم' : 'منتهي'}</span>
+                        </div>
+                        <div style="font-size:0.85rem;">${ins.suggestion}</div>
+                    </div>
+                `;
+            });
+
+            content.innerHTML = html;
+        }
+
+        function closeAIModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('aiModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        /* ============================================================
+           15. Alerts & Notifications
+           ============================================================ */
+        function updateAlerts() {
+            const container = document.getElementById('alertsContainer');
+            const today = new Date();
+            const alerts = [];
+            allContracts.forEach(c => {
+                const endDate = new Date(c.end_date);
+                const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
+                if (daysLeft <= 0 && c.status !== 'terminated') {
+                    alerts.push({ type: 'error', icon: 'fa-exclamation-circle', title: '⚠️ عقد منتهي',
+                        desc: c.contract_name + ' (' + (c.party_name || '') + ')' });
+                } else if (daysLeft <= 30 && daysLeft > 0) {
+                    alerts.push({ type: 'warning', icon: 'fa-clock', title: '⏳ قارب على الانتهاء',
+                        desc: c.contract_name + ' – متبقي ' + daysLeft + ' يوم' });
+                }
+            });
+            LocalDB.set('notifications', alerts);
+
+            if (alerts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+                <div style="padding:8px 14px;background:var(--surface-elevated);border-radius:12px;margin-bottom:6px;border:2px dashed ${a.type === 'error' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:8px;animation:fadeInUp 0.4s ease ${i*0.1}s both;">
+                    <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;${a.type === 'error' ? 'background:rgba(179,27,58,0.12);color:var(--error);' : 'background:rgba(184,134,11,0.12);color:var(--warning);'}"><i class="fas ${a.icon}" aria-hidden="true"></i></div>
+                    <div style="flex:1;"><div style="font-weight:700;font-size:0.8rem;">${a.title}</div><div style="font-size:0.7rem;color:var(--text-muted);">${a.desc}</div></div>
+                </div>
+            `).join('');
+        }
+
+        function showNotifications() {
+            const alerts = LocalDB.get('notifications', []);
+            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
+            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
+            document.getElementById('alertsContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        /* ============================================================
+           16. CRUD: Add / Edit / Delete / View
+           ============================================================ */
+        function openAddModal() {
+            if (!requirePermission('create')) return;
+            currentEditId = 0;
+            document.getElementById('modalTitle').textContent = '➕ إضافة عقد جديد';
+            document.getElementById('editId').value = '0';
+            document.getElementById('contractForm').reset();
+            document.getElementById('contractCode').value = 'سيتولى النظام إنشاء الكود';
+            document.getElementById('modalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            attachedFiles = [];
+            renderFileList();
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('modalOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function saveContract() {
+            if (!requirePermission('create') && currentEditId === 0) return;
+            if (!requirePermission('update') && currentEditId > 0) return;
+
+            const name = document.getElementById('contractName').value.trim();
+            const partyId = document.getElementById('partyId').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!name) { showToast('❌ الرجاء إدخال اسم العقد', 'error');
+                document.getElementById('contractName').focus(); return; }
+            if (!partyId) { showToast('❌ الرجاء اختيار الطرف', 'error');
+                document.getElementById('partyId').focus(); return; }
+            if (!startDate || !endDate) { showToast('❌ الرجاء إدخال تاريخ البداية والنهاية', 'error'); return; }
+
+            const data = {
+                id: currentEditId || 0,
+                contract_name: name,
+                party_id: parseInt(partyId),
+                contract_type: document.getElementById('contractType').value,
+                status: document.getElementById('contractStatus').value,
+                start_date: startDate,
+                end_date: endDate,
+                total_value: parseFloat(document.getElementById('totalValue').value) || 0,
+                currency_id: document.getElementById('currencyId').value ? parseInt(document.getElementById('currencyId')
+                    .value) : null,
+                auto_renew: parseInt(document.getElementById('autoRenew').value),
+                terms: document.getElementById('terms').value.trim(),
+                special_conditions: document.getElementById('specialConditions').value.trim(),
+                notes: document.getElementById('notes').value.trim(),
+                attachments: attachedFiles
+            };
+
+            showLoading(true);
+            try {
+                const action = currentEditId > 0 ? 'updateContract' : 'saveContract';
+                const result = await apiCall(action, data);
+                if (result.success) {
+                    showToast(result.message || '✅ تم حفظ العقد بنجاح', 'success');
+                    closeModal();
+                    await loadData();
+                } else {
+                    throw new Error(result.message || 'فشل في الحفظ');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: currentEditId > 0 ?
+                                'updateContract' : 'saveContract', data }]);
+                    if (currentEditId > 0) {
+                        const idx = allContracts.findIndex(s => s.id == currentEditId);
+                        if (idx >= 0) allContracts[idx] = { ...allContracts[idx], ...data };
+                    } else {
+                        allContracts.push({ ...data, id: Date.now(), contract_code: 'CONT-' + Date.now() });
+                    }
+                    LocalDB.set('contracts', allContracts);
+                    showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
+                    closeModal();
+                    renderCards();
+                    updateStats();
+                    updateCharts();
+                    updateAlerts();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function editContract(id) {
+            if (!requirePermission('update')) return;
+            const item = allContracts.find(s => s.id == id);
+            if (!item) { showToast('❌ العقد غير موجود', 'error'); return; }
+
+            currentEditId = id;
+            document.getElementById('modalTitle').textContent = '✏️ تعديل عقد';
+            document.getElementById('editId').value = id;
+            document.getElementById('contractCode').value = item.contract_code || 'سيتم إنشاؤه تلقائياً';
+            document.getElementById('contractName').value = item.contract_name || '';
+            document.getElementById('partyId').value = item.party_id || '';
+            document.getElementById('contractType').value = item.contract_type || 'purchase';
+            document.getElementById('contractStatus').value = item.status || 'draft';
+            document.getElementById('startDate').value = item.start_date || '';
+            document.getElementById('endDate').value = item.end_date || '';
+            document.getElementById('totalValue').value = item.total_value || '';
+            document.getElementById('currencyId').value = item.currency_id || '';
+            document.getElementById('autoRenew').value = item.auto_renew || '0';
+            document.getElementById('terms').value = item.terms || '';
+            document.getElementById('specialConditions').value = item.special_conditions || '';
+            document.getElementById('notes').value = item.notes || '';
+            attachedFiles = item.attachments || [];
+            renderFileList();
+
+            document.getElementById('modalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        async function deleteContract(id) {
+            if (!requirePermission('delete')) return;
+            const item = allContracts.find(s => s.id == id);
+            const name = item ? (item.contract_name || 'هذا العقد') : 'هذا العقد';
+
+            const confirmed = await Swal.fire({
+                title: '⚠️ هل أنت متأكد؟',
+                text: 'سيتم حذف العقد "' + name + '" – لا يمكن التراجع!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#b31b3a',
+                cancelButtonColor: '#5a5a7a',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء',
+                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1f1f3a' : '#fffcf7',
+                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#e8e8f0' : '#1a1a2e'
+            });
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+            try {
+                const result = await apiCall('deleteContract', { id });
+                if (result.success) {
+                    showToast('✅ تم الحذف بنجاح', 'success');
+                    await loadData();
+                } else {
+                    throw new Error(result.message || 'فشل في الحذف');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteContract', data: { id } }]);
+                    allContracts = allContracts.filter(s => s.id != id);
+                    LocalDB.set('contracts', allContracts);
+                    showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
+                    renderCards();
+                    updateStats();
+                    updateCharts();
+                    updateAlerts();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function viewContract(id) {
+            const item = allContracts.find(s => s.id == id);
+            if (!item) { showToast('❌ العقد غير موجود', 'error'); return; }
+
+            const party = allParties.find(p => (p.id || p.party_id) == item.party_id);
+            const currency = allCurrencies.find(c => (c.id || c.currency_id) == item.currency_id);
+            const statusClass = getContractStatusClass(item.status);
+            const statusLabel = getContractStatusLabel(item.status);
+            const typeLabel = getContractTypeLabel(item.contract_type);
+
+            const content = document.getElementById('detailsContent');
+            content.innerHTML = `
+                <div class="details-header">
+                    <h3 class="details-title" id="detailsTitle">📄 تفاصيل العقد</h3>
+                    <button class="modal-close" onclick="closeDetails()" aria-label="إغلاق"><i class="fas fa-times" aria-hidden="true"></i></button>
+                </div>
+                <div style="text-align:center;margin-bottom:16px;">
+                    <div style="width:60px;height:60px;border-radius:20px;background:linear-gradient(145deg,var(--cobalt),var(--ruby));display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:#fff;margin:0 auto 8px;">${(item.contract_name || 'ع').substring(0,2)}</div>
+                    <div style="font-weight:700;font-size:1.1rem;">${escapeHtml(item.contract_name || '---')}</div>
+                    <span class="card-status ${statusClass}" style="display:inline-block;margin-top:4px;">${statusLabel}</span>
+                </div>
+
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:8px;"><i class="fas fa-info-circle" aria-hidden="true"></i> المعلومات الأساسية</div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">كود العقد</span><span style="direction:ltr;font-weight:600;">${escapeHtml(item.contract_code || '---')}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">الطرف</span><span style="font-weight:600;">${escapeHtml(party ? (party.commercial_name || party.legal_name || party.name || '---') : '---')}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">النوع</span><span style="font-weight:600;">${typeLabel}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">الحالة</span><span class="card-status ${statusClass}" style="display:inline-block;padding:0 12px;">${statusLabel}</span></div>
+                </div>
+
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:8px;"><i class="fas fa-calendar-alt" aria-hidden="true"></i> التواريخ</div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">تاريخ البداية</span><span style="font-weight:600;">${item.start_date || '---'}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">تاريخ النهاية</span><span style="font-weight:600;">${item.end_date || '---'}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">التجديد التلقائي</span><span style="font-weight:600;">${item.auto_renew ? '✅ نعم' : '❌ لا'}</span></div>
+                </div>
+
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:8px;"><i class="fas fa-money-bill-wave" aria-hidden="true"></i> المعلومات المالية</div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">القيمة الإجمالية</span><span style="font-weight:600;color:var(--ruby);">${formatCurrency(item.total_value || 0)}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">العملة</span><span style="font-weight:600;">${currency ? (currency.currency_name || currency.name || '---') + ' (' + (currency.currency_code || currency.code || '') + ')' : '---'}</span></div>
+                </div>
+
+                ${item.terms ? `
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-file-alt" aria-hidden="true"></i> الشروط والأحكام</div>
+                    <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(item.terms)}</p>
+                </div>
+                ` : ''}
+
+                ${item.special_conditions ? `
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-star" aria-hidden="true"></i> شروط خاصة</div>
+                    <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(item.special_conditions)}</p>
+                </div>
+                ` : ''}
+
+                ${item.notes ? `
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-sticky-note" aria-hidden="true"></i> ملاحظات</div>
+                    <p style="font-size:0.8rem;color:var(--data-text-muted);">${escapeHtml(item.notes)}</p>
+                </div>
+                ` : ''}
+
+                ${(item.attachments && item.attachments.length > 0) ? `
+                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);">
+                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-paperclip" aria-hidden="true"></i> المرفقات</div>
+                    ${item.attachments.map(f => `<div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;padding:4px 0;border-bottom:1px dashed var(--border-color);"><i class="fas fa-file" aria-hidden="true"></i> ${escapeHtml(f.name || f.file_name || 'ملف')} (${formatNumber(f.size || 0)} KB)</div>`).join('')}
+                </div>
+                ` : ''}
+
+                <div style="height:40px;"></div>
+            `;
+
+            document.getElementById('detailsOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        /* ============================================================
+           17. File Attachments (Drag & Drop)
+           ============================================================ */
+        function setupFileUpload() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+
+            dropzone.addEventListener('click', () => fileInput.click());
+            dropzone.addEventListener('dragover', (e) => { e.preventDefault();
+                dropzone.classList.add('dragover'); });
+            dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                attachedFiles = attachedFiles.concat(files.map(f => ({ name: f.name, size: (f.size / 1024).toFixed(1),
+                    file: f })));
+                renderFileList();
+            });
+            fileInput.addEventListener('change', (e) => {
+                const files = Array.from(e.target.files);
+                attachedFiles = attachedFiles.concat(files.map(f => ({ name: f.name, size: (f.size / 1024).toFixed(1),
+                    file: f })));
+                renderFileList();
+                fileInput.value = '';
+            });
+        }
+
+        function renderFileList() {
+            const container = document.getElementById('fileList');
+            if (attachedFiles.length === 0) { container.innerHTML = ''; return; }
+            container.innerHTML = attachedFiles.map((f, i) => `
+                <span class="file-tag">
+                    <i class="fas fa-file" aria-hidden="true"></i> ${escapeHtml(f.name)} (${f.size} KB)
+                    <span class="remove-file" onclick="removeFile(${i})" role="button" tabindex="0" aria-label="حذف الملف">×</span>
+                </span>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            attachedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        /* ============================================================
+           18. Reports
+           ============================================================ */
+        let currentReportType = 'contracts';
+        let reportData = [];
+
+        function openReport(type) {
+            currentReportType = type;
+            const titles = {
+                'contracts_summary': '📊 ملخص العقود',
+                'by_party': '📊 العقود حسب الطرف',
+                'expiry_analysis': '📊 تحليل انتهاء العقود',
+                'contracts': '📊 قائمة العقود',
+                'value_analysis': '📊 تحليل قيم العقود'
+            };
+            document.getElementById('reportModalTitle').textContent = titles[type] || '📊 التقرير';
+
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+
+            document.getElementById('reportModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('reportResults').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i>
+                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
+                </div>
+            `;
+        }
+
+        function closeReportModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('reportModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function generateReport() {
+            const from = document.getElementById('reportFrom').value;
+            const to = document.getElementById('reportTo').value;
+            const status = document.getElementById('reportStatus').value;
+            const extra = document.getElementById('reportExtra').value;
+
+            if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
+
+            showLoading(true);
+            try {
+                const params = { report_type: currentReportType, start_date: from, end_date: to, status: status || null,
+                    extra: extra || null };
+                const result = await apiCall('generateContractReport', params);
+                if (result.success && result.data) {
+                    reportData = result.data;
+                    renderReportResults(result.data);
+                    showToast('✅ تم توليد التقرير بنجاح', 'success');
+                } else {
+                    document.getElementById('reportResults').innerHTML = `
+                        <div class="empty-state"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i><p>${result.message || 'لا توجد بيانات'}</p></div>
+                    `;
+                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
+                }
+            } catch (e) {
+                showToast('❌ فشل توليد التقرير', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderReportResults(data) {
+            const container = document.getElementById('reportResults');
+            if (!data || data.length === 0) {
+                container.innerHTML =
+                    `<div class="empty-state"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i><p>لا توجد بيانات مطابقة</p></div>`;
+                return;
+            }
+
+            let headers = [],
+                rows = [];
+            switch (currentReportType) {
+                case 'contracts_summary':
+                    headers = ['#', 'اسم العقد', 'الطرف', 'الحالة', 'القيمة', 'تاريخ البداية', 'تاريخ النهاية'];
+                    rows = data.map((item, idx) => [idx + 1, item.contract_name || '---', item.party_name || '---',
+                        getContractStatusLabel(item.status), formatCurrency(item.total_value || 0), item
+                        .start_date || '---', item.end_date || '---'
+                    ]);
+                    break;
+                case 'by_party':
+                    headers = ['#', 'الطرف', 'عدد العقود', 'نشطة', 'منتهية', 'القيمة الإجمالية'];
+                    rows = data.map((item, idx) => [idx + 1, item.party_name || '---', item.contract_count || 0, item
+                            .active_count || 0, item.expired_count || 0, formatCurrency(item.total_value || 0)
+                    ]);
+                    break;
+                case 'expiry_analysis':
+                    headers = ['#', 'العقد', 'الطرف', 'تاريخ النهاية', 'الأيام المتبقية', 'الحالة', 'القيمة'];
+                    rows = data.map((item, idx) => {
+                        const days = Math.ceil((new Date(item.end_date) - new Date()) / (1000 * 60 * 60 * 24));
+                        return [idx + 1, item.contract_name || '---', item.party_name || '---', item.end_date ||
+                            '---', days > 0 ? days + ' يوم' : 'منتهي', getContractStatusLabel(item.status),
+                            formatCurrency(item.total_value || 0)
+                        ];
+                    });
+                    break;
+                case 'contracts':
+                    headers = ['#', 'الكود', 'اسم العقد', 'الطرف', 'النوع', 'الحالة', 'القيمة', 'تاريخ البداية', 'تاريخ النهاية'];
+                    rows = data.map((item, idx) => [idx + 1, item.contract_code || '---', item.contract_name || '---',
+                        item.party_name || '---', getContractTypeLabel(item.contract_type),
+                        getContractStatusLabel(item.status), formatCurrency(item.total_value || 0), item
+                        .start_date || '---', item.end_date || '---'
+                    ]);
+                    break;
+                case 'value_analysis':
+                    headers = ['#', 'العقد', 'الطرف', 'القيمة', 'العملة', 'الحالة', 'المدة (أيام)'];
+                    rows = data.map((item, idx) => {
+                        const days = Math.ceil((new Date(item.end_date) - new Date(item.start_date)) / (1000 * 60 *
+                            60 * 24));
+                        return [idx + 1, item.contract_name || '---', item.party_name || '---',
+                            formatCurrency(item.total_value || 0), item.currency_code || '---',
+                            getContractStatusLabel(item.status), days || 0
+                        ];
+                    });
+                    break;
+                default:
+                    headers = ['#', 'البيانات'];
+                    rows = data.map((item, idx) => [idx + 1, JSON.stringify(item)]);
+            }
+
+            let html =
+                `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;"><thead><tr>${headers.map(h => `<th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);text-align:center;font-weight:700;color:var(--data-text-color);">${h}</th>`).join('')}</tr></thead><tbody>`;
+            rows.forEach(row => {
+                html += `<tr>${row.map(cell => `<td style="padding:4px 10px;border-bottom:1px dashed var(--border-color);text-align:center;color:var(--data-text-color);">${cell}</td>`).join('')}</tr>`;
+            });
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        function exportReport() {
+            if (!reportData || reportData.length === 0) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
+            exportData('xlsx');
+        }
+
+        /* ============================================================
+           19. Export (Excel, PDF, JSON, CSV)
+           ============================================================ */
+        function openExportModal() {
+            if (!requirePermission('export')) return;
+            document.getElementById('exportModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeExportModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('exportModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        function exportData(format) {
+            if (!requirePermission('export')) return;
+            const data = allContracts.map(c => ({
+                'كود العقد': c.contract_code || '',
+                'اسم العقد': c.contract_name || '',
+                'الطرف': c.party_name || '',
+                'النوع': getContractTypeLabel(c.contract_type),
+                'الحالة': getContractStatusLabel(c.status),
+                'القيمة': c.total_value || 0,
+                'تاريخ البداية': c.start_date || '',
+                'تاريخ النهاية': c.end_date || '',
+                'التجديد التلقائي': c.auto_renew ? 'نعم' : 'لا',
+                'الملاحظات': c.notes || ''
+            }));
+
+            if (data.length === 0) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
+
+            try {
+                if (format === 'xlsx') {
+                    if (typeof XLSX === 'undefined') { showToast('❌ مكتبة Excel غير متوفرة', 'error'); return; }
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'العقود');
+                    XLSX.writeFile(wb, 'العقود_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                    showToast('✅ تم تصدير Excel بنجاح', 'success');
+                } else if (format === 'pdf') {
+                    if (typeof window.jspdf === 'undefined') { showToast('❌ مكتبة PDF غير متوفرة', 'error'); return; }
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF('l', 'mm', 'a4');
+                    doc.setFont('Cairo');
+                    doc.setFontSize(14);
+                    doc.text('تقرير العقود', 20, 20);
+                    doc.setFontSize(8);
+                    let y = 30;
+                    const headers = Object.keys(data[0]);
+                    const colWidth = 260 / headers.length;
+                    headers.forEach((h, i) => { doc.text(h, 20 + i * colWidth, y); });
+                    y += 6;
+                    data.forEach(row => {
+                        if (y > 270) { doc.addPage();
+                            y = 20; }
+                        headers.forEach((h, i) => {
+                            doc.text(String(row[h] || ''), 20 + i * colWidth, y);
+                        });
+                        y += 6;
+                    });
+                    doc.save('العقود_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                    showToast('✅ تم تصدير PDF بنجاح', 'success');
+                } else if (format === 'json') {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'العقود_' + new Date().toISOString().slice(0, 10) + '.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('✅ تم تصدير JSON بنجاح', 'success');
+                } else if (format === 'csv') {
+                    const headers = Object.keys(data[0]);
+                    let csv = headers.join(',') + '\n';
+                    data.forEach(row => {
+                        csv += headers.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(',') +
+                        '\n';
+                    });
+                    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'العقود_' + new Date().toISOString().slice(0, 10) + '.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('✅ تم تصدير CSV بنجاح', 'success');
+                }
+            } catch (e) {
+                showToast('❌ فشل التصدير: ' + e.message, 'error');
+                console.error(e);
+            }
+        }
+
+        /* ============================================================
+           20. Backup & Restore
+           ============================================================ */
+        function openBackupModal() {
+            if (!requirePermission('audit')) return;
+            document.getElementById('backupModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            loadBackupList();
+        }
+
+        function closeBackupModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('backupModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function createBackup() {
+            if (!requirePermission('audit')) return;
+            showLoading(true);
+            try {
+                const result = await apiCall('backupData', {});
+                if (result.success) {
+                    showToast('✅ تم إنشاء النسخة الاحتياطية بنجاح', 'success');
+                    loadBackupList();
+                } else {
+                    throw new Error(result.message || 'فشل في النسخ الاحتياطي');
+                }
+            } catch (e) {
+                // نسخ احتياطي محلي
+                const data = { contracts: allContracts, parties: allParties, currencies: allCurrencies, timestamp: new Date()
+                        .toISOString() };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'backup_' + new Date().toISOString().slice(0, 10) + '.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('✅ تم إنشاء نسخة احتياطية محلية', 'success');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function restoreBackup() {
+            if (!requirePermission('audit')) return;
+            document.getElementById('restoreFileInput').click();
+            document.getElementById('restoreFileInput').onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if (data.contracts) {
+                            allContracts = data.contracts;
+                            LocalDB.set('contracts', allContracts);
+                            renderCards();
+                            updateStats();
+                            updateCharts();
+                            updateAlerts();
+                            showToast('✅ تم استعادة البيانات بنجاح', 'success');
+                        } else {
+                            showToast('❌ ملف غير صالح', 'error');
+                        }
+                    } catch (err) {
+                        showToast('❌ فشل استعادة الملف: ' + err.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+                document.getElementById('restoreFileInput').value = '';
+            };
+        }
+
+        function loadBackupList() {
+            const container = document.getElementById('backupList');
+            container.innerHTML = `
+                <div style="color:var(--text-muted);text-align:center;padding:10px;">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> جاري التحميل...
+                </div>
+            `;
+            // محاكاة قائمة النسخ
+            setTimeout(() => {
+                const backups = [
+                    { name: 'نسخة تلقائية', date: new Date().toLocaleString('ar'), size: '2.4 MB' },
+                    { name: 'نسخة يدوية', date: new Date(Date.now() - 86400000).toLocaleString('ar'), size: '2.3 MB' },
+                ];
+                container.innerHTML = backups.map(b => `
+                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;">
+                        <span>${b.name}</span>
+                        <span style="color:var(--text-muted);">${b.date} – ${b.size}</span>
+                    </div>
+                `).join('');
+            }, 500);
+        }
+
+        /* ============================================================
+           21. Audit Trail
+           ============================================================ */
+        async function openAuditModal() {
+            if (!requirePermission('audit')) return;
+            document.getElementById('auditModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            const container = document.getElementById('auditContent');
+            container.innerHTML =
+                `<div style="color:var(--text-muted);text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> جاري التحميل...</div>`;
+
+            try {
+                const result = await apiCall('getAuditLogs', { limit: 50 });
+                if (result.success && result.data) {
+                    const logs = result.data;
+                    if (logs.length === 0) {
+                        container.innerHTML =
+                            `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات</div>`;
+                        return;
+                    }
+                    container.innerHTML = logs.map(log => `
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;gap:8px;flex-wrap:wrap;">
+                            <span style="font-weight:600;">${escapeHtml(log.action || 'إجراء')}</span>
+                            <span style="color:var(--text-muted);">${escapeHtml(log.description || '')}</span>
+                            <span style="color:var(--text-muted);font-size:0.65rem;">${log.created_at || ''} – ${escapeHtml(log.username || 'نظام')}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML =
+                        `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات</div>`;
+                }
+            } catch (e) {
+                // عرض سجلات محلية
+                const localLogs = LocalDB.get('audit_logs', []);
+                if (localLogs.length === 0) {
+                    container.innerHTML =
+                        `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات محلية</div>`;
+                } else {
+                    container.innerHTML = localLogs.slice(-20).reverse().map(log => `
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;gap:8px;flex-wrap:wrap;">
+                            <span style="font-weight:600;">${escapeHtml(log.action || 'إجراء')}</span>
+                            <span style="color:var(--text-muted);">${escapeHtml(log.description || '')}</span>
+                            <span style="color:var(--text-muted);font-size:0.65rem;">${log.created_at || ''} – ${escapeHtml(log.username || 'نظام')}</span>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        function closeAuditModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('auditModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        /* ============================================================
+           22. Filter
+           ============================================================ */
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => {
+                c.classList.remove('active');
+                c.setAttribute('aria-selected', 'false');
+            });
+            if (btn) { btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true'); }
+            currentPage = 1;
+            renderCards();
+        }
+
+        /* ============================================================
+           23. Pull-to-Refresh
+           ============================================================ */
+        let pullStartY = 0,
+            pullOffset = 0,
+            isPulling = false;
+
+        document.addEventListener('touchstart', (e) => {
+            if (window.scrollY <= 0) { pullStartY = e.touches[0].clientY;
+                isPulling = true; }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!isPulling) return;
+            const diff = e.touches[0].clientY - pullStartY;
+            if (diff > 20) {
+                pullOffset = Math.min(diff, 80);
+                const indicator = document.getElementById('pullIndicator');
+                if (indicator) indicator.style.top = (pullOffset - 60) + 'px';
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', () => {
+            if (isPulling && pullOffset > 60) {
+                loadData();
+                setTimeout(() => {
+                    const indicator = document.getElementById('pullIndicator');
+                    if (indicator) indicator.style.top = '-60px';
+                    isPulling = false;
+                    pullOffset = 0;
+                }, 300);
+            } else {
+                const indicator = document.getElementById('pullIndicator');
+                if (indicator) indicator.style.top = '-60px';
+                isPulling = false;
+                pullOffset = 0;
+            }
+        }, { passive: true });
+
+        /* ============================================================
+           24. Init
+           ============================================================ */
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            setupSidebar();
+            setupFileUpload();
+            updateOnlineStatus();
+
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+            // إغلاق المودالات عند الضغط خارجها
+            document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this)
+                closeModal(); });
+            document.getElementById('reportModal').addEventListener('click', function(e) { if (e.target === this)
+                closeReportModal(); });
+            document.getElementById('detailsOverlay').addEventListener('click', function(e) { if (e.target === this)
+                closeDetails(); });
+            document.getElementById('aiModal').addEventListener('click', function(e) { if (e.target === this)
+                closeAIModal(); });
+            document.getElementById('exportModal').addEventListener('click', function(e) { if (e.target === this)
+                closeExportModal(); });
+            document.getElementById('backupModal').addEventListener('click', function(e) { if (e.target === this)
+                closeBackupModal(); });
+            document.getElementById('auditModal').addEventListener('click', function(e) { if (e.target === this)
+                closeAuditModal(); });
+
+            loadData();
+
+            // تحديث دوري كل 60 ثانية
+            setInterval(() => {
+                if (isOnline) loadData();
+            }, 60000);
+
+            // PWA: تسجيل Service Worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            }
+
+            showToast('📄 مرحباً بك في نظام إدارة العقود', 'info');
+        });
+
+        // ============================================================
+        // Compatibility: إعادة تعريف الدوال القديمة لتجنب الأخطاء
+        // ============================================================
+        // تم دمج جميع الدوال أعلاه، لكن نحتفظ ببعض التوافق للدوال القديمة
+        window.loadContracts = loadData;
+        window.renderCards = renderCards;
+        window.updateStats = updateStats;
+        window.updateAlerts = updateAlerts;
+        window.updateCharts = updateCharts;
+        window.generateAIInsights = generateAIInsights;
+        window.openAIAdvisor = openAIAdvisor;
+        window.closeAIModal = closeAIModal;
+        window.openAddModal = openAddModal;
+        window.closeModal = closeModal;
+        window.saveContract = saveContract;
+        window.editContract = editContract;
+        window.deleteContract = deleteContract;
+        window.viewContract = viewContract;
+        window.closeDetails = closeDetails;
+        window.openReport = openReport;
+        window.closeReportModal = closeReportModal;
+        window.generateReport = generateReport;
+        window.exportReport = exportReport;
+        window.exportData = exportData;
+        window.openExportModal = openExportModal;
+        window.closeExportModal = closeExportModal;
+        window.openBackupModal = openBackupModal;
+        window.closeBackupModal = closeBackupModal;
+        window.createBackup = createBackup;
+        window.restoreBackup = restoreBackup;
+        window.openAuditModal = openAuditModal;
+        window.closeAuditModal = closeAuditModal;
+        window.setFilter = setFilter;
+        window.handleSearch = handleSearch;
+        window.showStatDetail = showStatDetail;
+        window.showNotifications = showNotifications;
+        window.handleSidebarAction = handleSidebarAction;
+        window.selectCard = selectCard;
+        window.changePage = changePage;
+        window.goToPage = goToPage;
+        window.toggleTheme = toggleTheme;
+        window.removeFile = removeFile;
+        window.renderFileList = renderFileList;
+        window.apiCall = apiCall;
+        window.showToast = showToast;
+        window.showLoading = showLoading;
+        window.formatNumber = formatNumber;
+        window.formatCurrency = formatCurrency;
+        window.escapeHtml = escapeHtml;
+        window.getContractStatusClass = getContractStatusClass;
+        window.getContractStatusLabel = getContractStatusLabel;
+        window.getContractTypeLabel = getContractTypeLabel;
+        window.hasPermission = hasPermission;
+        window.requirePermission = requirePermission;
+        window.ROLES = ROLES;
+        window.currentUserRole = currentUserRole;
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,3290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة محطات الوقود – البنوك والحسابات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* ============================================================
+           المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
+           ============================================================ */
+        :root {
+            /* === الوضع الفاتح (Light Mode - افتراضي) === */
+            --bg-color: #f5efe6;
+            --surface-color: #faf3e8;
+            --surface-elevated: #fdf8f0;
+            --primary-color: #007ACC;
+            --primary-dim: rgba(0,122,204,0.12);
+            --accent-color: #d4a017;
+            --accent-dim: rgba(212,160,23,0.12);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #1a2a3a;
+            --text-muted: #6a7f94;
+            --border-color: #003366;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
+            --glass-bg: rgba(255,248,240,0.85);
+            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
+            --card-hover-bg: rgba(0,122,204,0.04);
+            --fab-shadow: rgba(0,122,204,0.3);
+            --toast-bg: #fdf8f0;
+            --scrollbar-track: #f5efe6;
+            --scrollbar-thumb: rgba(0,51,102,0.2);
+            --skeleton-bg: #e8e0d5;
+            --skeleton-shine: #f5efe6;
+            --modal-border-color: #003366;
+            --modal-border-style: dashed;
+            --input-bg: #fdf8f0;
+            --input-border: #003366;
+            --input-border-style: dashed;
+            --data-text-color: #1a2a3a;
+            --data-text-muted: #4a5a6a;
+        }
+
+        [data-theme="dark"] {
+            /* === الوضع المظلم (Dark Mode) === */
+            --bg-color: #0a0e1a;
+            --surface-color: #111827;
+            --surface-elevated: #1a2236;
+            --primary-color: #00d4ff;
+            --primary-dim: rgba(0,212,255,0.15);
+            --accent-color: #f59e0b;
+            --accent-dim: rgba(245,158,11,0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #e8d48b;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
+            --glass-bg: rgba(22,34,64,0.85);
+            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-hover-bg: rgba(0,212,255,0.05);
+            --fab-shadow: rgba(0,212,255,0.3);
+            --toast-bg: #1a2236;
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255,255,255,0.1);
+            --skeleton-bg: #1e293b;
+            --skeleton-shine: #2d3a4f;
+            --modal-border-color: #e8d48b;
+            --modal-border-style: dashed;
+            --input-bg: #1e293b;
+            --input-border: #e8d48b;
+            --input-border-style: dashed;
+            --data-text-color: #f1f5f9;
+            --data-text-muted: #94a3b8;
+        }
+
+        /* ============================================================
+           الأنماط الأساسية
+           ============================================================ */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.4s ease, color 0.4s ease;
+            touch-action: pan-y;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+        /* ===== Pull-to-Refresh Indicator ===== */
+        .pull-indicator {
+            position: fixed;
+            top: -60px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            transition: top 0.2s ease;
+            z-index: 50;
+            background: var(--surface-elevated);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            pointer-events: none;
+        }
+        .pull-indicator.active { top: 0; }
+        .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
+        .pull-indicator.loading i { animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ===== Loading ===== */
+        .loading-indicator {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(0,212,255,0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        /* ===== Skeleton Loading ===== */
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        .skeleton-card {
+            background: var(--surface-elevated);
+            border-radius: 18px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--skeleton-shine) 50%,
+                transparent 100%);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .skeleton-row {
+            height: 12px;
+            background: var(--skeleton-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skeleton-row.short { width: 40%; }
+        .skeleton-row.medium { width: 60%; }
+        .skeleton-row.long { width: 80%; }
+
+        /* ===== Offline Banner ===== */
+        .offline-banner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: linear-gradient(90deg, var(--warning), #f97316);
+            color: #000;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show { transform: translateY(0); }
+
+        /* ============================================================
+           الشريط العلوي (Header)
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.4s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 6px; right: 6px;
+            width: 8px; height: 8px;
+            background: var(--error);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--error);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        .ai-badge {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* ============================================================
+           البحث والفلاتر
+           ============================================================ */
+        .search-wrap {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 44px 12px 16px;
+            border-radius: 14px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .filter-chips::-webkit-scrollbar { display: none; }
+        .filter-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .filter-chip:active { transform: scale(0.95); }
+        .filter-chip.active {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .filter-chip:hover:not(.active) {
+            border-color: var(--text-muted);
+            color: var(--text-color);
+        }
+
+        /* ============================================================
+           بطاقات الإحصائيات
+           ============================================================ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        .stat-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .stat-card:active { transform: scale(0.96); }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-glow);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-icon {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
+        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
+        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
+        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: var(--data-text-color);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .stat-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+        .stat-trend.up { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-trend.down { background: rgba(239,68,68,0.15); color: var(--error); }
+
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ============================================================
+           بطاقات البنوك والحسابات
+           ============================================================ */
+        .cards-container {
+            padding: 0 16px 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            touch-action: pan-y;
+        }
+
+        /* === Bank Card === */
+        .bank-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 18px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+        .bank-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: var(--card-hover-bg);
+        }
+        .bank-card.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
+        }
+        .bank-card:active { transform: scale(0.98); transition-duration: 0.05s; }
+
+        .bank-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .bank-card .card-header .card-avatar {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: white;
+            flex-shrink: 0;
+        }
+        .bank-card .card-header .card-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .card-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
+        .card-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+
+        .bank-card .card-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--data-text-color);
+            margin-bottom: 2px;
+        }
+        .bank-card .card-code {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Arial', sans-serif;
+            margin-bottom: 8px;
+        }
+        .bank-card .card-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 12px;
+            margin: 8px 0 10px;
+        }
+        .bank-card .card-details .detail-item {
+            font-size: 0.8rem;
+            color: var(--data-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .bank-card .card-details .detail-item i {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .bank-card .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .bank-card .card-actions .card-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .bank-card .card-actions .card-btn:active { transform: scale(0.95); }
+        .bank-card .card-actions .card-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .bank-card .card-actions .card-btn.danger:hover {
+            background: rgba(239,68,68,0.15);
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        /* === Account Card (nested inside Bank Card or separate) === */
+        .account-card {
+            background: var(--surface-color);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            transition: all 0.3s;
+        }
+        .account-card:hover {
+            border-color: var(--primary-color);
+            background: var(--card-hover-bg);
+        }
+        .account-card .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .account-card .account-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--data-text-color);
+        }
+        .account-card .account-number {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Arial', sans-serif;
+        }
+        .account-card .account-balance {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--primary-color);
+        }
+        .account-card .account-details {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .account-card .account-details .badge-type {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .badge-type.current { background: rgba(16,185,129,0.15); color: var(--success); }
+        .badge-type.savings { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .badge-type.deposit { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .badge-type.loan { background: rgba(239,68,68,0.15); color: var(--error); }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+        /* ============================================================
+           الزر العائم (FAB)
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px var(--fab-shadow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active { transform: scale(0.9); }
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px var(--fab-shadow);
+        }
+
+        /* ============================================================
+           القائمة الجانبية (Sidebar)
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, #4B0082, #5a1a9a);
+            color: white;
+            width: 35px; height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 70px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+        }
+        .sidebar.open { right: 0; opacity: 1; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-btn {
+            position: relative;
+            background: rgba(75, 0, 130, 0.8);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 8px 4px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 55px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active { transform: scale(0.95); }
+        .sidebar-btn:hover {
+            transform: scale(1.05);
+            background: rgba(75,0,130,0.35);
+            box-shadow: 0 0 15px rgba(0,212,255,0.2);
+        }
+        .sidebar-btn i { font-size: 1.1rem; }
+        .sidebar-btn span { font-size: 0.65rem; }
+
+        /* ============================================================
+           القائمة السفلية (Bottom Navigation)
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+            z-index: 300;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.55rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 4px 8px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active { transform: scale(0.9); }
+        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
+        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
+        .bottom-nav .nav-item.active { color: var(--primary-color); }
+        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           مودال التقارير
+           ============================================================ */
+        .report-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 900;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .report-modal-overlay.show { display: flex; opacity: 1; }
+        .report-modal {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .report-modal-overlay.show .report-modal { transform: translateY(0); }
+        .report-modal .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .report-modal .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .report-modal .modal-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .report-modal .modal-close:active { transform: scale(0.9); }
+        .report-modal .modal-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .report-filter-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .report-filter-row .form-group { margin-bottom: 0; }
+        .report-filter-row .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .report-filter-row .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .report-filter-row .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .report-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .report-actions .btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .report-actions .btn:active { transform: scale(0.97); }
+        .report-actions .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            color: white;
+        }
+        .report-actions .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px var(--primary-dim);
+        }
+        .report-actions .btn-secondary {
+            background: var(--surface-color);
+            color: var(--text-muted);
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .report-actions .btn-secondary:hover { background: var(--border-color); }
+        .report-results {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+        }
+        .report-results table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .report-results table th {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            padding: 10px 12px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 700;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .report-results table td {
+            padding: 8px 12px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            text-align: center;
+            color: var(--data-text-color);
+        }
+        .report-results table tr:hover { background: var(--card-hover-bg); }
+        .report-results .empty-state {
+            padding: 30px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* ============================================================
+           مودال الإضافة / التعديل (البنوك والحسابات)
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 800;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show { display: flex; opacity: 1; }
+        .modal {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .modal-overlay.show .modal { transform: translateY(0); }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .modal-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .modal-close:active { transform: scale(0.9); }
+        .modal-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+
+        /* ===== حقول النموذج ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            color: white;
+            font-family: 'Cairo', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+            touch-action: manipulation;
+        }
+        .submit-btn:active { transform: scale(0.97); }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px var(--primary-dim);
+        }
+
+        /* ============================================================
+           مودال تفاصيل البنك/الحساب
+           ============================================================ */
+        .details-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(12px);
+            z-index: 850;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            overflow-y: auto;
+        }
+        .details-overlay.show { display: block; opacity: 1; }
+        .details-content {
+            background: var(--surface-elevated);
+            min-height: 100vh;
+            padding: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-top: none;
+        }
+        .details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background: var(--surface-elevated);
+            padding: 10px 0;
+            z-index: 10;
+        }
+        .details-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .details-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .details-close:active { transform: scale(0.9); }
+        .details-close:hover { background: var(--error); color: white; border-color: var(--error); }
+        .details-profile { text-align: center; margin-bottom: 24px; }
+        .details-avatar {
+            width: 72px; height: 72px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: white;
+            margin: 0 auto 12px;
+        }
+        .details-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: var(--data-text-color); }
+        .details-status {
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
+        .details-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+        .details-section {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-row:last-child { border-bottom: none; }
+        .details-label { font-size: 0.8rem; color: var(--text-muted); }
+        .details-value { font-size: 0.85rem; font-weight: 600; color: var(--data-text-color); }
+
+        /* ============================================================
+           Toast إشعارات
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+        .toast.warning { border-color: var(--warning); }
+        .toast-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
+        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
+        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+
+        /* ============================================================
+           الرسوم المتحركة
+           ============================================================ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 0.5s ease forwards;
+        }
+
+        /* ============================================================
+           تحسينات للهواتف
+           ============================================================ */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
+            .stat-card { padding: 12px; }
+            .stat-value { font-size: 1.1rem; }
+            .bank-card .card-details { grid-template-columns: 1fr; }
+            .report-filter-row { grid-template-columns: 1fr; }
+            .cards-container { padding: 0 12px 16px; }
+            .bottom-nav .nav-item i { font-size: 15px; }
+            .bottom-nav .nav-item span { font-size: 0.5rem; }
+            .sidebar { width: 60px; }
+            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
+            .sidebar-btn i { font-size: 0.9rem; }
+            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
+            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
+            .top-title h2 { font-size: 1rem; }
+            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
+            .report-modal { padding: 16px; }
+            .report-results { max-height: 200px; }
+            .report-results table th,
+            .report-results table td { padding: 6px 8px; font-size: 0.7rem; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { gap: 6px; padding: 10px; }
+            .stat-card { padding: 10px; }
+            .stat-value { font-size: 0.95rem; }
+            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
+            .bank-card .card-details { grid-template-columns: 1fr; }
+            .card-actions { flex-wrap: wrap; }
+            .card-btn { font-size: 0.7rem; padding: 8px; }
+            .bottom-nav .nav-item { padding: 4px 4px; }
+            .bottom-nav .nav-item i { font-size: 13px; }
+            .bottom-nav .nav-item span { font-size: 0.45rem; }
+            .modal { padding: 16px; }
+            .account-card .account-details { flex-direction: column; gap: 4px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Pull-to-Refresh Indicator -->
+    <div class="pull-indicator" id="pullIndicator">
+        <i class="fas fa-arrow-down"></i>
+        <span>اسحب للتحديث</span>
+    </div>
+
+    <!-- Offline Banner -->
+    <div class="offline-banner" id="offlineBanner">
+        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- ============================================================
+    الشريط العلوي (Header)
+    ============================================================ -->
+    <header class="top-bar">
+        <div class="header-top">
+            <div class="top-title">
+                <h2>🏦 البنوك والحسابات <span class="ai-badge">🤖 AI</span></h2>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
+                    <i class="fas fa-robot"></i>
+                </button>
+            </div>
+        </div>
+        <div class="search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم البنك، الحساب، أو رقم IBAN..." oninput="handleSearch(this.value)">
+        </div>
+        <div class="filter-chips">
+            <button class="filter-chip active" onclick="setFilter('all', this)">الكل</button>
+            <button class="filter-chip" onclick="setFilter('bank', this)">🏦 بنوك</button>
+            <button class="filter-chip" onclick="setFilter('account', this)">💰 حسابات</button>
+            <button class="filter-chip" onclick="setFilter('active', this)">✅ نشط</button>
+            <button class="filter-chip" onclick="setFilter('inactive', this)">❌ غير نشط</button>
+            <button class="filter-chip" onclick="setFilter('ai_suggest', this)" style="background:rgba(139,92,246,0.15);color:#8b5cf6;">🤖 توصية AI</button>
+        </div>
+    </header>
+
+    <!-- ============================================================
+    بطاقات الإحصائيات
+    ============================================================ -->
+    <div class="stats-grid">
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('total')">
+            <div class="stat-icon blue"><i class="fas fa-university"></i></div>
+            <div class="stat-value" id="statTotalBanks">0</div>
+            <div class="stat-label">إجمالي البنوك</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotalBanks">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('accounts')">
+            <div class="stat-icon green"><i class="fas fa-wallet"></i></div>
+            <div class="stat-value" id="statTotalAccounts">0</div>
+            <div class="stat-label">إجمالي الحسابات</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotalAccounts">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('balance')">
+            <div class="stat-icon orange"><i class="fas fa-money-bill-wave"></i></div>
+            <div class="stat-value" id="statTotalBalance">0</div>
+            <div class="stat-label">إجمالي الأرصدة</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotalBalance">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('active')">
+            <div class="stat-icon purple"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-value" id="statActive">0</div>
+            <div class="stat-label">حسابات نشطة</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendActive">0%</span></div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    حاوية التنبيهات
+    ============================================================ -->
+    <div class="alerts-container" id="alertsContainer" style="padding:0 16px 16px;"></div>
+
+    <!-- ============================================================
+    عنوان القسم
+    ============================================================ -->
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
+        <h3>📋 قائمة البنوك والحسابات</h3>
+        <span class="count-badge" id="itemCount" style="background:var(--primary-dim);color:var(--primary-color);padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:700;">0</span>
+    </div>
+
+    <!-- ============================================================
+    بطاقات البنوك والحسابات
+    ============================================================ -->
+    <div class="cards-container" id="cardsContainer">
+        <!-- سيتم تعبئتها عبر JavaScript -->
+    </div>
+
+    <!-- ============================================================
+    الزر العائم (FAB)
+    ============================================================ -->
+    <button class="fab" onclick="openAddModal('bank')">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- ============================================================
+    القائمة الجانبية (Sidebar)
+    ============================================================ -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <button class="sidebar-btn" onclick="handleSidebarAction('add_bank')">
+                <i class="fas fa-university"></i> <span>بنك</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('add_account')">
+                <i class="fas fa-wallet"></i> <span>حساب</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('save')">
+                <i class="fas fa-save"></i> <span>حفظ</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('search')">
+                <i class="fas fa-search"></i> <span>استعلام</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('delete')">
+                <i class="fas fa-trash"></i> <span>حذف</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('export')">
+                <i class="fas fa-file-export"></i> <span>تصدير</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('ai_advisor')" style="background:rgba(139,92,246,0.3);">
+                <i class="fas fa-robot"></i> <span>AI</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('home')">
+                <i class="fas fa-home"></i> <span>رجوع</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    القائمة السفلية (Bottom Navigation)
+    ============================================================ -->
+    <nav class="bottom-nav">
+        <button class="nav-item" onclick="openReport('banks')">
+            <i class="fas fa-university"></i>
+            <span>تقرير البنوك</span>
+        </button>
+        <button class="nav-item" onclick="openReport('accounts')">
+            <i class="fas fa-wallet"></i>
+            <span>تقرير الحسابات</span>
+        </button>
+        <button class="nav-item active" onclick="openReport('all')">
+            <i class="fas fa-list"></i>
+            <span>جميع</span>
+        </button>
+        <button class="nav-item" onclick="openReport('balance')">
+            <i class="fas fa-chart-bar"></i>
+            <span>تحليل الأرصدة</span>
+        </button>
+        <button class="nav-item" onclick="openReport('transactions')">
+            <i class="fas fa-exchange-alt"></i>
+            <span>حركات</span>
+        </button>
+    </nav>
+
+    <!-- ============================================================
+    مودال التقارير
+    ============================================================ -->
+    <div class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)">
+        <div class="report-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="reportModalTitle">📊 تقرير البنوك والحسابات</h3>
+                <button class="modal-close" onclick="closeReportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label">📅 من تاريخ</label>
+                    <input type="date" class="form-input" id="reportFrom">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">📅 إلى تاريخ</label>
+                    <input type="date" class="form-input" id="reportTo">
+                </div>
+            </div>
+            <div class="report-filter-row">
+                <div class="form-group">
+                    <label class="form-label">📊 نوع التقرير</label>
+                    <select class="form-input" id="reportExtra">
+                        <option value="">الكل</option>
+                        <option value="summary">ملخص</option>
+                        <option value="detailed">مفصل</option>
+                        <option value="stats">إحصائيات</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">📋 الحالة</label>
+                    <select class="form-input" id="reportStatus">
+                        <option value="">الكل</option>
+                        <option value="1">نشط</option>
+                        <option value="0">غير نشط</option>
+                    </select>
+                </div>
+            </div>
+            <div class="report-actions">
+                <button class="btn btn-primary" onclick="generateReport()">
+                    <i class="fas fa-cog"></i> توليد التقرير
+                </button>
+                <button class="btn btn-secondary" onclick="closeReportModal()">
+                    <i class="fas fa-times"></i> إلغاء
+                </button>
+            </div>
+            <div class="report-results" id="reportResults">
+                <div class="empty-state">
+                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال الإضافة / التعديل (البنوك)
+    ============================================================ -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">➕ إضافة بنك جديد</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="bankForm" onsubmit="return false;">
+                <input type="hidden" id="editId" value="0">
+                <input type="hidden" id="formType" value="bank">
+
+                <!-- من جدول banks -->
+                <div class="form-group">
+                    <label class="form-label">كود البنك *</label>
+                    <input type="text" class="form-input" id="bankCode" placeholder="مثال: BANK-001" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">اسم البنك (عربي) *</label>
+                        <input type="text" class="form-input" id="bankNameAr" placeholder="مثال: البنك المركزي" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">اسم البنك (إنجليزي)</label>
+                        <input type="text" class="form-input" id="bankNameEn" placeholder="مثال: Central Bank">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">رمز SWIFT</label>
+                    <input type="text" class="form-input" id="swiftCode" placeholder="مثال: CENTYEYD">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">الدولة</label>
+                        <input type="text" class="form-input" id="country" placeholder="مثال: اليمن">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">المدينة</label>
+                        <input type="text" class="form-input" id="city" placeholder="مثال: صنعاء">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">العنوان</label>
+                    <input type="text" class="form-input" id="address" placeholder="العنوان الكامل">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">رقم الهاتف</label>
+                        <input type="tel" class="form-input" id="phone" placeholder="رقم الهاتف">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">البريد الإلكتروني</label>
+                        <input type="email" class="form-input" id="email" placeholder="email@mail.com">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">الموقع الإلكتروني</label>
+                    <input type="url" class="form-input" id="website" placeholder="https://www.bank.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">الحالة</label>
+                    <select class="form-input" id="isActive">
+                        <option value="1">نشط</option>
+                        <option value="0">غير نشط</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea class="form-input" id="notes" rows="2" placeholder="ملاحظات إضافية..."></textarea>
+                </div>
+
+                <button type="button" class="submit-btn" onclick="saveBank()">
+                    <i class="fas fa-save"></i> حفظ البنك
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال إضافة / تعديل الحساب البنكي
+    ============================================================ -->
+    <div class="modal-overlay" id="accountModalOverlay" onclick="closeAccountModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="accountModalTitle">➕ إضافة حساب جديد</h3>
+                <button class="modal-close" onclick="closeAccountModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="accountForm" onsubmit="return false;">
+                <input type="hidden" id="accountEditId" value="0">
+                <input type="hidden" id="accountBankId" value="0">
+
+                <!-- من جدول bank_accounts -->
+                <div class="form-group">
+                    <label class="form-label">كود الحساب *</label>
+                    <input type="text" class="form-input" id="accountCode" placeholder="مثال: ACC-001" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">البنك *</label>
+                    <select class="form-input" id="accountBankSelect" required>
+                        <option value="">اختر البنك</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">اسم الحساب (عربي) *</label>
+                        <input type="text" class="form-input" id="accountNameAr" placeholder="مثال: حساب التوفير" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">اسم الحساب (إنجليزي)</label>
+                        <input type="text" class="form-input" id="accountNameEn" placeholder="مثال: Savings Account">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">رقم الحساب *</label>
+                        <input type="text" class="form-input" id="accountNumber" placeholder="رقم الحساب" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">رقم IBAN</label>
+                        <input type="text" class="form-input" id="iban" placeholder="IBAN">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">نوع الحساب *</label>
+                        <select class="form-input" id="accountType" required>
+                            <option value="current">جاري</option>
+                            <option value="savings">توفير</option>
+                            <option value="deposit">وديعة</option>
+                            <option value="loan">قرض</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">العملة *</label>
+                        <select class="form-input" id="currencyId" required>
+                            <option value="">اختر العملة</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">الرصيد الافتتاحي</label>
+                        <input type="number" step="0.01" class="form-input" id="openingBalance" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">السحب على المكشوف</label>
+                        <input type="number" step="0.01" class="form-input" id="overdraftLimit" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">المستخدمون المصرح لهم</label>
+                    <input type="text" class="form-input" id="authorizedUsers" placeholder="أسماء المستخدمين المصرح لهم">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">الحالة</label>
+                    <select class="form-input" id="accountStatus">
+                        <option value="active">نشط</option>
+                        <option value="inactive">غير نشط</option>
+                        <option value="closed">مغلق</option>
+                        <option value="frozen">متجمد</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ملاحظات</label>
+                    <textarea class="form-input" id="accountNotes" rows="2" placeholder="ملاحظات إضافية..."></textarea>
+                </div>
+
+                <button type="button" class="submit-btn" onclick="saveAccount()">
+                    <i class="fas fa-save"></i> حفظ الحساب
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال تفاصيل البنك/الحساب
+    ============================================================ -->
+    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
+        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+            <!-- يتم تعبئتها عبر JavaScript -->
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال المستشار الذكي (AI Advisor)
+    ============================================================ -->
+    <div class="modal-overlay ai-modal" id="aiModal" onclick="closeAIModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-height:80vh;">
+            <div class="modal-header">
+                <h3 class="modal-title">🤖 المستشار الذكي - البنوك والحسابات</h3>
+                <button class="modal-close" onclick="closeAIModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="aiContent" style="padding:8px 0;">
+                <div style="text-align:center;color:var(--text-muted);padding:20px;">
+                    <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
+                    <p>جاري تحليل بيانات البنوك والحسابات...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    Toast إشعارات
+    ============================================================ -->
+    <div class="toast" id="toast">
+        <div class="toast-icon"><i class="fas fa-check"></i></div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ============================================================
+    JavaScript المتكامل
+    ============================================================ -->
+    <script>
+        // ============================================================
+        // 1. دالة apiCall الموحدة
+        // ============================================================
+        function apiCall(action, params) {
+            return new Promise((resolve, reject) => {
+                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+                    try {
+                        const jsonParams = JSON.stringify(params || {});
+                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        try {
+                            const parsed = JSON.parse(result);
+                            resolve(parsed);
+                        } catch (e) {
+                            resolve({ success: true, data: result });
+                        }
+                    } catch (e) {
+                        reject({ success: false, error: e.message });
+                    }
+                } else {
+                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                }
+            });
+        }
+
+        // ============================================================
+        // 2. نظام التخزين المحلي (Offline Mode)
+        // ============================================================
+        const LocalDB = {
+            prefix: 'fuel_station_',
+            set: function(key, value) {
+                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
+            },
+            get: function(key, defaultValue) {
+                try {
+                    const item = localStorage.getItem(this.prefix + key);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) { return defaultValue; }
+            },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); },
+            getBanks: function() { return this.get('banks', []); },
+            setBanks: function(data) { this.set('banks', data); },
+            getAccounts: function() { return this.get('accounts', []); },
+            setAccounts: function(data) { this.set('accounts', data); },
+            getCurrencies: function() { return this.get('currencies', []); },
+            setCurrencies: function(data) { this.set('currencies', data); },
+            getPendingOps: function() { return this.get('pending_ops', []); },
+            addPendingOp: function(op) {
+                const ops = this.getPendingOps();
+                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
+                this.set('pending_ops', ops);
+            },
+            clearPendingOps: function() { this.remove('pending_ops'); },
+            getStats: function() { return this.get('bank_stats', {}); },
+            setStats: function(stats) { this.set('bank_stats', stats); },
+            getNotifications: function() { return this.get('bank_notifications', []); },
+            setNotifications: function(notifications) { this.set('bank_notifications', notifications); },
+            getAIInsights: function() { return this.get('bank_ai_insights', []); },
+            setAIInsights: function(insights) { this.set('bank_ai_insights', insights); }
+        };
+
+        // ============================================================
+        // 3. حالة الاتصال
+        // ============================================================
+        let isOnline = navigator.onLine;
+
+        function updateOnlineStatus() {
+            isOnline = navigator.onLine;
+            const banner = document.getElementById('offlineBanner');
+            if (!isOnline) {
+                banner.classList.add('show');
+                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+            } else {
+                banner.classList.remove('show');
+                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
+                syncPendingOperations();
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // ============================================================
+        // 4. مزامنة العمليات المعلقة
+        // ============================================================
+        async function syncPendingOperations() {
+            if (!isOnline) return;
+            const pendingOps = LocalDB.getPendingOps();
+            if (pendingOps.length === 0) return;
+            showLoading(true);
+            let successCount = 0,
+                failCount = 0;
+            for (const op of pendingOps) {
+                try {
+                    const result = await apiCall(op.action, op.data);
+                    if (result.success) successCount++;
+                    else failCount++;
+                } catch (e) { failCount++; }
+            }
+            if (successCount > 0) {
+                LocalDB.clearPendingOps();
+                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
+                await loadData();
+            }
+            if (failCount > 0) {
+                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
+            }
+            showLoading(false);
+        }
+
+        // ============================================================
+        // 5. Haptic Feedback
+        // ============================================================
+        function hapticFeedback(type) {
+            try {
+                if (navigator.vibrate) {
+                    if (type === 'success') navigator.vibrate(20);
+                    else if (type === 'error') navigator.vibrate([30, 50, 30]);
+                    else if (type === 'light') navigator.vibrate(10);
+                }
+            } catch (e) { /* تجاهل */ }
+        }
+
+        // ============================================================
+        // 6. دوال مساعدة
+        // ============================================================
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = toast.querySelector('.toast-icon i');
+            toast.className = 'toast ' + type;
+            msgEl.textContent = message;
+            if (type === 'success') { iconEl.className = 'fas fa-check';
+                hapticFeedback('success'); } else if (type === 'error') { iconEl.className = 'fas fa-times';
+                hapticFeedback('error'); } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle';
+                hapticFeedback('light'); }
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            else if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+            return num.toLocaleString('en');
+        }
+
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '0.00';
+            return parseFloat(num).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getField(obj, ...keys) {
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+            }
+            return null;
+        }
+
+        function getAccountTypeLabel(type) {
+            const map = {
+                'current': 'جاري',
+                'savings': 'توفير',
+                'deposit': 'وديعة',
+                'loan': 'قرض'
+            };
+            return map[type] || type;
+        }
+
+        function getAccountTypeClass(type) {
+            const map = {
+                'current': 'current',
+                'savings': 'savings',
+                'deposit': 'deposit',
+                'loan': 'loan'
+            };
+            return map[type] || 'current';
+        }
+
+        function getAccountStatusLabel(status) {
+            const map = {
+                'active': 'نشط',
+                'inactive': 'غير نشط',
+                'closed': 'مغلق',
+                'frozen': 'متجمد'
+            };
+            return map[status] || status;
+        }
+
+        function getAccountStatusClass(status) {
+            const map = {
+                'active': 'active',
+                'inactive': 'inactive',
+                'closed': 'inactive',
+                'frozen': 'inactive'
+            };
+            return map[status] || 'inactive';
+        }
+
+        // ============================================================
+        // 7. نظام تبديل الوضع (مع أيقونة شمس/هلال صحيحة)
+        // ============================================================
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const isDark = current === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            const icon = document.getElementById('themeIcon');
+            if (newTheme === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+            hapticFeedback('light');
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+
+            const icon = document.getElementById('themeIcon');
+            if (saved === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+
+        // ============================================================
+        // 8. Pull-to-Refresh
+        // ============================================================
+        let pullStartY = 0,
+            pullOffset = 0,
+            isPulling = false;
+
+        document.addEventListener('touchstart', function(e) {
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            if (scrollTop <= 0) {
+                pullStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+            if (!isPulling) return;
+            const currentY = e.touches[0].clientY;
+            const diff = currentY - pullStartY;
+            if (diff > 20) {
+                pullOffset = Math.min(diff, 80);
+                const indicator = document.getElementById('pullIndicator');
+                indicator.style.top = (pullOffset - 60) + 'px';
+                if (pullOffset > 60) {
+                    indicator.querySelector('i').className = 'fas fa-arrow-down';
+                    indicator.querySelector('span').textContent = 'حرر للتحديث';
+                } else {
+                    indicator.querySelector('i').className = 'fas fa-arrow-down';
+                    indicator.querySelector('span').textContent = 'اسحب للتحديث';
+                }
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function() {
+            if (isPulling && pullOffset > 60) {
+                const indicator = document.getElementById('pullIndicator');
+                indicator.querySelector('i').className = 'fas fa-spinner fa-spin';
+                indicator.querySelector('span').textContent = 'جاري التحديث...';
+                setTimeout(() => {
+                    loadData();
+                    setTimeout(() => {
+                        indicator.style.top = '-60px';
+                        isPulling = false;
+                        pullOffset = 0;
+                    }, 500);
+                }, 300);
+            } else {
+                document.getElementById('pullIndicator').style.top = '-60px';
+                isPulling = false;
+                pullOffset = 0;
+            }
+        }, { passive: true });
+
+        // ============================================================
+        // 9. AI Advisor - تحليل البنوك والحسابات
+        // ============================================================
+        function analyzeAccounts() {
+            const insights = [];
+            const totalBalance = allAccounts.reduce((sum, a) => sum + parseFloat(a.current_balance || 0), 0);
+
+            allBanks.forEach(b => {
+                const bankAccounts = allAccounts.filter(a => a.bank_id == b.id);
+                const total = bankAccounts.reduce((sum, a) => sum + parseFloat(a.current_balance || 0), 0);
+                const count = bankAccounts.length;
+
+                if (count > 0) {
+                    insights.push({
+                        type: 'bank',
+                        id: b.id,
+                        name: b.bank_name_ar || b.bank_name || 'بنك',
+                        suggestion: count + ' حسابات بإجمالي ' + formatCurrency(total),
+                        reason: 'أكبر بنك من حيث عدد الحسابات',
+                        priority: count > 3 ? 'high' : 'medium'
+                    });
+                }
+            });
+
+            allAccounts.forEach(a => {
+                const balance = parseFloat(a.current_balance || 0);
+                const overdraft = parseFloat(a.overdraft_limit || 0);
+                if (balance < 0 && overdraft > 0) {
+                    insights.push({
+                        type: 'account',
+                        id: a.id,
+                        name: a.account_name_ar || a.account_name || 'حساب',
+                        suggestion: '⚠️ الحساب في منطقة السحب على المكشوف',
+                        reason: 'الرصيد: ' + formatCurrency(balance) + ' | حد السحب: ' + formatCurrency(overdraft),
+                        priority: 'high'
+                    });
+                }
+            });
+
+            LocalDB.setAIInsights(insights);
+            return insights;
+        }
+
+        function getTopAIInsight() {
+            const insights = LocalDB.getAIInsights();
+            if (insights.length === 0) return null;
+            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+            return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
+        }
+
+        function openAIAdvisor() {
+            const modal = document.getElementById('aiModal');
+            const content = document.getElementById('aiContent');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            const insights = analyzeAccounts();
+
+            if (insights.length === 0) {
+                content.innerHTML = `
+                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
+                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
+                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
+                        <p style="font-size:0.8rem;">أضف بنوكاً وحسابات أولاً للحصول على توصيات</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const top = getTopAIInsight();
+            const allSuggestions = insights.slice(0, 5);
+
+            let html = `
+                <div style="background:var(--primary-dim);border-radius:16px;padding:16px;margin-bottom:16px;border:2px dashed var(--primary-color);">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <i class="fas fa-star" style="color:var(--accent-color);"></i>
+                        <span style="font-weight:700;font-size:1rem;color:var(--data-text-color);">التوصية الأولى</span>
+                        ${top && top.priority === 'high' ? '<span style="background:var(--error);color:white;padding:0 8px;border-radius:4px;font-size:0.6rem;">عاجل</span>' : ''}
+                    </div>
+                    <div style="font-size:0.95rem;font-weight:600;color:var(--primary-color);">${top ? top.suggestion : ''}</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${top ? top.reason : ''}</div>
+                </div>
+                <div style="font-weight:700;font-size:0.9rem;margin-bottom:12px;color:var(--data-text-color);">📋 توصيات أخرى</div>
+            `;
+
+            allSuggestions.forEach((insight, idx) => {
+                const borderColor = insight.priority === 'high' ? 'var(--error)' : 'var(--warning)';
+                html += `
+                    <div style="background:var(--surface-color);border-radius:12px;padding:12px;margin-bottom:8px;border:2px dashed ${borderColor};border-right:4px solid ${borderColor};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-weight:600;color:var(--data-text-color);">${insight.name}</span>
+                            <span style="font-size:0.7rem;color:var(--text-muted);">${insight.type === 'bank' ? '🏦 بنك' : '💰 حساب'}</span>
+                        </div>
+                        <div style="font-size:0.85rem;color:var(--data-text-color);">${insight.suggestion}</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${insight.reason}</div>
+                    </div>
+                `;
+            });
+
+            content.innerHTML = html;
+            hapticFeedback('light');
+        }
+
+        function closeAIModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('aiModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ============================================================
+        // 10. نظام التقارير
+        // ============================================================
+        let currentReportType = 'all';
+        let reportData = [];
+
+        function openReport(type) {
+            currentReportType = type;
+            const titles = {
+                'banks': '📊 تقرير البنوك',
+                'accounts': '📊 تقرير الحسابات',
+                'all': '📊 تقرير البنوك والحسابات',
+                'balance': '📊 تحليل الأرصدة',
+                'transactions': '📊 حركات الحسابات'
+            };
+            document.getElementById('reportModalTitle').textContent = titles[type] || '📊 التقرير';
+
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('reportFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+
+            document.getElementById('reportModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('reportResults').innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
+                </div>
+            `;
+            hapticFeedback('light');
+        }
+
+        function closeReportModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('reportModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function generateReport() {
+            const from = document.getElementById('reportFrom').value;
+            const to = document.getElementById('reportTo').value;
+            const extra = document.getElementById('reportExtra').value;
+            const status = document.getElementById('reportStatus').value;
+
+            showLoading(true);
+            try {
+                const params = {
+                    report_type: currentReportType,
+                    start_date: from,
+                    end_date: to,
+                    extra: extra || null,
+                    status: status || null
+                };
+                const result = await apiCall('generateBankReport', params);
+                if (result.success && result.data) {
+                    reportData = result.data;
+                    renderReportResults(result.data);
+                    showToast('✅ تم توليد التقرير بنجاح', 'success');
+                    hapticFeedback('success');
+                } else {
+                    document.getElementById('reportResults').innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                            <p>${result.message || 'لا توجد بيانات للتقرير'}</p>
+                        </div>
+                    `;
+                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
+                }
+            } catch (e) {
+                showToast('❌ فشل توليد التقرير', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderReportResults(data) {
+            const container = document.getElementById('reportResults');
+            if (!data || data.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
+                        <p>لا توجد بيانات مطابقة للفترة المحددة</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let headers = [];
+            let rows = [];
+
+            switch (currentReportType) {
+                case 'banks':
+                    headers = ['#', 'كود البنك', 'اسم البنك', 'الدولة', 'المدينة', 'عدد الحسابات', 'إجمالي الأرصدة', 'الحالة'];
+                    rows = data.map((item, idx) => [
+                        idx + 1,
+                        item.bank_code || '---',
+                        item.bank_name_ar || item.bank_name || '---',
+                        item.country || '---',
+                        item.city || '---',
+                        item.account_count || 0,
+                        formatCurrency(item.total_balance || 0),
+                        item.is_active ? 'نشط' : 'غير نشط'
+                    ]);
+                    break;
+                case 'accounts':
+                    headers = ['#', 'كود الحساب', 'اسم الحساب', 'البنك', 'رقم الحساب', 'الرصيد', 'نوع الحساب', 'الحالة'];
+                    rows = data.map((item, idx) => [
+                        idx + 1,
+                        item.account_code || '---',
+                        item.account_name_ar || item.account_name || '---',
+                        item.bank_name || '---',
+                        item.account_number || '---',
+                        formatCurrency(item.current_balance || 0),
+                        getAccountTypeLabel(item.account_type),
+                        getAccountStatusLabel(item.status)
+                    ]);
+                    break;
+                case 'all':
+                    headers = ['#', 'النوع', 'الاسم', 'الكود', 'الدولة/البنك', 'الرصيد', 'الحالة'];
+                    rows = data.map((item, idx) => {
+                        const isBank = item.bank_code !== undefined;
+                        return [
+                            idx + 1,
+                            isBank ? '🏦 بنك' : '💰 حساب',
+                            isBank ? (item.bank_name_ar || item.bank_name || '---') : (item.account_name_ar || item
+                                .account_name || '---'),
+                            isBank ? (item.bank_code || '---') : (item.account_code || '---'),
+                            isBank ? (item.country || '---') : (item.bank_name || '---'),
+                            formatCurrency(isBank ? (item.total_balance || 0) : (item.current_balance || 0)),
+                            isBank ? (item.is_active ? 'نشط' : 'غير نشط') : getAccountStatusLabel(item.status)
+                        ];
+                    });
+                    break;
+                case 'balance':
+                    headers = ['#', 'الحساب', 'البنك', 'الرصيد الحالي', 'الرصيد المتاح', 'الرصيد الافتتاحي', 'السحب على المكشوف'];
+                    rows = data.map((item, idx) => [
+                        idx + 1,
+                        item.account_name_ar || item.account_name || '---',
+                        item.bank_name || '---',
+                        formatCurrency(item.current_balance || 0),
+                        formatCurrency(item.available_balance || 0),
+                        formatCurrency(item.opening_balance || 0),
+                        formatCurrency(item.overdraft_limit || 0)
+                    ]);
+                    break;
+                case 'transactions':
+                    headers = ['#', 'التاريخ', 'الحساب', 'البنك', 'النوع', 'المبلغ', 'الوصف'];
+                    rows = data.map((item, idx) => [
+                        idx + 1,
+                        item.transaction_date || '---',
+                        item.account_name || '---',
+                        item.bank_name || '---',
+                        item.transaction_type || '---',
+                        formatCurrency(item.amount || 0),
+                        item.description || '---'
+                    ]);
+                    break;
+                default:
+                    headers = ['#', 'البيانات'];
+                    rows = data.map((item, idx) => [idx + 1, JSON.stringify(item)]);
+            }
+
+            let tableHtml = `
+                <table>
+                    <thead><tr>${headers.map(h => `<th style="color:var(--data-text-color);">${h}</th>`).join('')}</tr></thead>
+                    <tbody>
+            `;
+            rows.forEach(row => {
+                tableHtml += `<tr>${row.map(cell => `<td style="color:var(--data-text-color);">${cell}</td>`).join('')}</tr>`;
+            });
+            tableHtml += `</tbody></table>`;
+            container.innerHTML = tableHtml;
+        }
+
+        // ============================================================
+        // 11. متغيرات الحالة
+        // ============================================================
+        let currentEditId = 0;
+        let currentAccountEditId = 0;
+        let currentFilter = 'all';
+        let allBanks = [];
+        let allAccounts = [];
+        let allCurrencies = [];
+        let selectedBankId = null;
+        let selectedAccountId = null;
+        let isInitialLoad = true;
+
+        // ============================================================
+        // 12. تحميل البيانات مع Skeleton Loading
+        // ============================================================
+        function renderSkeleton() {
+            const container = document.getElementById('cardsContainer');
+            let skeleton = '';
+            for (let i = 0; i < 4; i++) {
+                skeleton += `
+                    <div class="skeleton-card">
+                        <div style="display:flex;align-items:center;margin-bottom:12px;">
+                            <div style="width:48px;height:48px;border-radius:14px;background:var(--skeleton-bg);flex-shrink:0;margin-left:12px;"></div>
+                            <div style="flex:1;">
+                                <div class="skeleton-row long"></div>
+                                <div class="skeleton-row medium" style="width:60%;"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-row"></div>
+                        <div class="skeleton-row"></div>
+                        <div style="display:flex;gap:10px;margin-top:12px;">
+                            <div class="skeleton-row" style="flex:1;height:40px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = `<div class="skeleton-grid">${skeleton}</div>`;
+        }
+
+        async function loadData() {
+            if (isInitialLoad) renderSkeleton();
+
+            showLoading(true);
+            try {
+                const [banksRes, accountsRes, currenciesRes] = await Promise.all([
+                    apiCall('getBanks', {}),
+                    apiCall('getBankAccounts', {}),
+                    apiCall('getCurrencies', {})
+                ]);
+
+                if (banksRes.success && banksRes.data) {
+                    allBanks = banksRes.data;
+                    LocalDB.setBanks(allBanks);
+                } else {
+                    allBanks = LocalDB.getBanks();
+                }
+
+                if (accountsRes.success && accountsRes.data) {
+                    allAccounts = accountsRes.data;
+                    LocalDB.setAccounts(allAccounts);
+                } else {
+                    allAccounts = LocalDB.getAccounts();
+                }
+
+                if (currenciesRes.success && currenciesRes.data) {
+                    allCurrencies = currenciesRes.data;
+                    LocalDB.setCurrencies(allCurrencies);
+                } else {
+                    allCurrencies = LocalDB.getCurrencies();
+                }
+
+                if (allBanks.length === 0 && allAccounts.length === 0) {
+                    showToast('⚠️ لا توجد بيانات', 'warning');
+                }
+
+            } catch (e) {
+                allBanks = LocalDB.getBanks();
+                allAccounts = LocalDB.getAccounts();
+                allCurrencies = LocalDB.getCurrencies();
+                if (allBanks.length === 0 && allAccounts.length === 0) {
+                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
+                }
+            }
+
+            populateBankSelects();
+            populateCurrencySelect();
+            renderCards();
+            updateStats();
+            analyzeAccounts();
+            isInitialLoad = false;
+            showLoading(false);
+        }
+
+        function populateBankSelects() {
+            const selects = ['accountBankSelect'];
+            selects.forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">اختر البنك</option>';
+                allBanks.forEach(b => {
+                    const name = b.bank_name_ar || b.bank_name || 'بنك';
+                    const opt = document.createElement('option');
+                    opt.value = b.id;
+                    opt.textContent = name + ' (' + (b.bank_code || '') + ')';
+                    sel.appendChild(opt);
+                });
+                if (currentVal) sel.value = currentVal;
+            });
+        }
+
+        function populateCurrencySelect() {
+            const sel = document.getElementById('currencyId');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">اختر العملة</option>';
+            allCurrencies.forEach(c => {
+                const name = c.currency_name_ar || c.currency_name || c.name || 'عملة';
+                const opt = document.createElement('option');
+                opt.value = c.id || c.currency_id;
+                opt.textContent = name + ' (' + (c.currency_code || '') + ')';
+                sel.appendChild(opt);
+            });
+            if (currentVal) sel.value = currentVal;
+        }
+
+        // ============================================================
+        // 13. عرض البطاقات
+        // ============================================================
+        function renderCards() {
+            const container = document.getElementById('cardsContainer');
+
+            let filteredBanks = [...allBanks];
+            let filteredAccounts = [...allAccounts];
+
+            if (currentFilter === 'active') {
+                filteredBanks = filteredBanks.filter(s => s.is_active == 1 || s.isActive == 1);
+                filteredAccounts = filteredAccounts.filter(s => s.status === 'active');
+            } else if (currentFilter === 'inactive') {
+                filteredBanks = filteredBanks.filter(s => s.is_active == 0 || s.isActive == 0);
+                filteredAccounts = filteredAccounts.filter(s => s.status !== 'active');
+            }
+
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (searchQuery) {
+                filteredBanks = filteredBanks.filter(s => {
+                    const name = (s.bank_name_ar || s.bank_name || '').toLowerCase();
+                    const code = (s.bank_code || '').toLowerCase();
+                    return name.includes(searchQuery) || code.includes(searchQuery);
+                });
+                filteredAccounts = filteredAccounts.filter(s => {
+                    const name = (s.account_name_ar || s.account_name || '').toLowerCase();
+                    const code = (s.account_code || '').toLowerCase();
+                    const num = (s.account_number || '').toLowerCase();
+                    const iban = (s.iban || '').toLowerCase();
+                    return name.includes(searchQuery) || code.includes(searchQuery) ||
+                        num.includes(searchQuery) || iban.includes(searchQuery);
+                });
+            }
+
+            const totalItems = filteredBanks.length + filteredAccounts.length;
+            document.getElementById('itemCount').textContent = totalItems;
+
+            if (totalItems === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-university"></i>
+                        <p>لا توجد بنوك أو حسابات مطابقة</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+
+            // عرض البنوك أولاً
+            filteredBanks.forEach((b, idx) => {
+                const bankAccounts = filteredAccounts.filter(a => a.bank_id == b.id);
+                const totalBalance = bankAccounts.reduce((sum, a) => sum + parseFloat(a.current_balance || 0), 0);
+                const isActive = b.is_active == 1 || b.isActive == 1;
+                const name = b.bank_name_ar || b.bank_name || '---';
+                const code = b.bank_code || '---';
+                const avatar = name.substring(0, 2);
+                const statusClass = isActive ? 'active' : 'inactive';
+                const statusText = isActive ? 'نشط' : 'غير نشط';
+
+                html += `
+                    <div class="bank-card animate-fade-up" style="animation-delay:${idx*0.04}s" data-id="${b.id}" data-type="bank" onclick="selectCard(this, ${b.id}, 'bank')">
+                        <div class="card-header">
+                            <div class="card-avatar">${avatar}</div>
+                            <span class="card-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="card-name">${escapeHtml(name)}</div>
+                        <div class="card-code">${escapeHtml(code)} ${b.swift_code ? '| SWIFT: ' + escapeHtml(b.swift_code) : ''}</div>
+                        <div class="card-details">
+                            <div class="detail-item"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(b.country || '---')} - ${escapeHtml(b.city || '---')}</div>
+                            <div class="detail-item"><i class="fas fa-wallet"></i> ${bankAccounts.length} حسابات</div>
+                            <div class="detail-item"><i class="fas fa-money-bill-wave"></i> ${formatCurrency(totalBalance)}</div>
+                            <div class="detail-item"><i class="fas fa-phone"></i> ${escapeHtml(b.phone || '---')}</div>
+                        </div>
+                        ${bankAccounts.length > 0 ? `
+                        <div style="margin:10px 0;">
+                            ${bankAccounts.slice(0, 3).map(a => `
+                                <div class="account-card" onclick="event.stopPropagation(); viewAccount(${a.id})">
+                                    <div class="account-header">
+                                        <span class="account-name">${escapeHtml(a.account_name_ar || a.account_name || 'حساب')}</span>
+                                        <span class="account-number">${escapeHtml(a.account_number || '')}</span>
+                                    </div>
+                                    <div class="account-balance">${formatCurrency(a.current_balance || 0)}</div>
+                                    <div class="account-details">
+                                        <span class="badge-type ${getAccountTypeClass(a.account_type)}">${getAccountTypeLabel(a.account_type)}</span>
+                                        <span>${a.status === 'active' ? 'نشط' : getAccountStatusLabel(a.status)}</span>
+                                        <span>${a.currency_code ? '(' + a.currency_code + ')' : ''}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            ${bankAccounts.length > 3 ? `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;">+ ${bankAccounts.length - 3} حسابات أخرى</div>` : ''}
+                        </div>
+                        ` : '<div style="font-size:0.8rem;color:var(--text-muted);margin:8px 0;">لا توجد حسابات لهذا البنك</div>'}
+
+                        <div class="card-actions">
+                            <button class="card-btn" onclick="event.stopPropagation(); viewBank(${b.id})">
+                                <i class="fas fa-eye"></i> تفاصيل
+                            </button>
+                            <button class="card-btn" onclick="event.stopPropagation(); editBank(${b.id})">
+                                <i class="fas fa-edit"></i> تعديل
+                            </button>
+                            <button class="card-btn" onclick="event.stopPropagation(); openAddAccount(${b.id})">
+                                <i class="fas fa-plus"></i> حساب
+                            </button>
+                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteBank(${b.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // عرض الحسابات بدون بنك (إذا وجدت)
+            const orphanAccounts = filteredAccounts.filter(a => !filteredBanks.some(b => b.id == a.bank_id));
+            orphanAccounts.forEach((a, idx) => {
+                const isActive = a.status === 'active';
+                const name = a.account_name_ar || a.account_name || '---';
+                const code = a.account_code || '---';
+                const avatar = name.substring(0, 2);
+
+                html += `
+                    <div class="bank-card animate-fade-up" style="animation-delay:${(idx + filteredBanks.length)*0.04}s" data-id="${a.id}" data-type="account" onclick="selectCard(this, ${a.id}, 'account')">
+                        <div class="card-header">
+                            <div class="card-avatar">${avatar}</div>
+                            <span class="card-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : getAccountStatusLabel(a.status)}</span>
+                        </div>
+                        <div class="card-name">${escapeHtml(name)}</div>
+                        <div class="card-code">${escapeHtml(code)} | ${escapeHtml(a.account_number || '---')}</div>
+                        <div class="card-details">
+                            <div class="detail-item"><i class="fas fa-university"></i> ${escapeHtml(a.bank_name || 'بنك غير محدد')}</div>
+                            <div class="detail-item"><i class="fas fa-money-bill-wave"></i> ${formatCurrency(a.current_balance || 0)}</div>
+                            <div class="detail-item"><i class="fas fa-tag"></i> ${getAccountTypeLabel(a.account_type)}</div>
+                            <div class="detail-item"><i class="fas fa-credit-card"></i> ${a.iban ? escapeHtml(a.iban) : '---'}</div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="card-btn" onclick="event.stopPropagation(); viewAccount(${a.id})">
+                                <i class="fas fa-eye"></i> تفاصيل
+                            </button>
+                            <button class="card-btn" onclick="event.stopPropagation(); editAccount(${a.id})">
+                                <i class="fas fa-edit"></i> تعديل
+                            </button>
+                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteAccount(${a.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function selectCard(card, id, type) {
+            document.querySelectorAll('.bank-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            if (type === 'bank') {
+                selectedBankId = id;
+                selectedAccountId = null;
+            } else {
+                selectedAccountId = id;
+                selectedBankId = null;
+            }
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 14. تحديث الإحصائيات
+        // ============================================================
+        function updateStats() {
+            const totalBanks = allBanks.length;
+            const totalAccounts = allAccounts.length;
+            const totalBalance = allAccounts.reduce((sum, a) => sum + parseFloat(a.current_balance || 0), 0);
+            const activeAccounts = allAccounts.filter(a => a.status === 'active').length;
+
+            document.getElementById('statTotalBanks').textContent = totalBanks;
+            document.getElementById('statTotalAccounts').textContent = totalAccounts;
+            document.getElementById('statTotalBalance').textContent = formatNumber(totalBalance);
+            document.getElementById('statActive').textContent = activeAccounts;
+
+            LocalDB.setStats({ totalBanks, totalAccounts, totalBalance, activeAccounts });
+        }
+
+        function showStatDetail(type) {
+            showToast('📊 عرض تفاصيل: ' + type, 'success');
+        }
+
+        // ============================================================
+        // 15. البحث والفلاتر
+        // ============================================================
+        function handleSearch(query) { renderCards(); }
+
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            renderCards();
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 16. نظام التنبيهات
+        // ============================================================
+        function generateAlerts() {
+            const alerts = [];
+
+            allAccounts.forEach(a => {
+                const balance = parseFloat(a.current_balance || 0);
+                const overdraft = parseFloat(a.overdraft_limit || 0);
+
+                if (balance < 0 && overdraft > 0) {
+                    alerts.push({
+                        type: 'danger',
+                        icon: 'fa-exclamation-circle',
+                        title: '⚠️ سحب على المكشوف',
+                        desc: (a.account_name_ar || a.account_name || 'حساب') + ' - الرصيد: ' + formatCurrency(balance),
+                        time: 'الآن'
+                    });
+                } else if (balance < 1000 && balance >= 0) {
+                    alerts.push({
+                        type: 'warning',
+                        icon: 'fa-clock',
+                        title: '⏳ رصيد منخفض',
+                        desc: (a.account_name_ar || a.account_name || 'حساب') + ' - الرصيد: ' + formatCurrency(balance),
+                        time: 'الآن'
+                    });
+                }
+            });
+
+            allBanks.forEach(b => {
+                if (b.is_active == 0 || b.isActive == 0) {
+                    alerts.push({
+                        type: 'info',
+                        icon: 'fa-university',
+                        title: '⏸️ بنك غير نشط',
+                        desc: b.bank_name_ar || b.bank_name || 'بنك',
+                        time: 'الآن'
+                    });
+                }
+            });
+
+            LocalDB.setNotifications(alerts);
+            renderAlerts(alerts);
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsContainer');
+            if (!container) return;
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
+                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
+                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
+                    <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
+                </div>
+            `).join('');
+        }
+
+        function showNotifications() {
+            const notifications = LocalDB.getNotifications();
+            if (notifications.length === 0) {
+                showToast('🔔 لا توجد إشعارات جديدة', 'info');
+                return;
+            }
+            showToast('🔔 لديك ' + notifications.length + ' إشعارات', 'success');
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 17. نافذة إضافة بنك
+        // ============================================================
+        function openAddModal(type) {
+            currentEditId = 0;
+            document.getElementById('formType').value = 'bank';
+            document.getElementById('modalTitle').textContent = '➕ إضافة بنك جديد';
+            document.getElementById('editId').value = '0';
+            document.getElementById('bankForm').reset();
+            document.getElementById('modalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+            setTimeout(() => { document.getElementById('bankCode').focus(); }, 400);
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('modalOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+            currentEditId = 0;
+        }
+
+        // ============================================================
+        // 18. حفظ البنك
+        // ============================================================
+        async function saveBank() {
+            const bankCode = document.getElementById('bankCode').value.trim();
+            const bankNameAr = document.getElementById('bankNameAr').value.trim();
+
+            if (!bankCode) {
+                showToast('❌ الرجاء إدخال كود البنك', 'error');
+                document.getElementById('bankCode').focus();
+                return;
+            }
+            if (!bankNameAr) {
+                showToast('❌ الرجاء إدخال اسم البنك', 'error');
+                document.getElementById('bankNameAr').focus();
+                return;
+            }
+
+            const data = {
+                id: currentEditId || 0,
+                bank_code: bankCode,
+                bank_name_ar: bankNameAr,
+                bank_name: document.getElementById('bankNameEn').value.trim(),
+                swift_code: document.getElementById('swiftCode').value.trim(),
+                country: document.getElementById('country').value.trim(),
+                city: document.getElementById('city').value.trim(),
+                address: document.getElementById('address').value.trim(),
+                phone: document.getElementById('phone').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                website: document.getElementById('website').value.trim(),
+                is_active: parseInt(document.getElementById('isActive').value),
+                notes: document.getElementById('notes').value.trim()
+            };
+
+            showLoading(true);
+
+            try {
+                const result = await apiCall('saveBank', data);
+                if (result.success) {
+                    showToast(result.message || '✅ تم حفظ البنك بنجاح', 'success');
+                    closeModal();
+                    await loadData();
+                } else {
+                    throw new Error(result.message || 'فشل في الحفظ');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({
+                        action: currentEditId ? 'updateBank' : 'saveBank',
+                        data: data
+                    });
+                    if (currentEditId) {
+                        const idx = allBanks.findIndex(s => s.id == currentEditId);
+                        if (idx >= 0) { allBanks[idx] = { ...allBanks[idx], ...data }; }
+                    } else {
+                        allBanks.push({ ...data, id: Date.now() });
+                    }
+                    LocalDB.setBanks(allBanks);
+                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
+                    closeModal();
+                    renderCards();
+                    updateStats();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 19. تعديل بنك
+        // ============================================================
+        async function editBank(id) {
+            const item = allBanks.find(s => s.id == id);
+            if (!item) {
+                showToast('❌ البنك غير موجود', 'error');
+                return;
+            }
+
+            currentEditId = id;
+            document.getElementById('formType').value = 'bank';
+            document.getElementById('modalTitle').textContent = '✏️ تعديل بنك';
+            document.getElementById('editId').value = id;
+
+            document.getElementById('bankCode').value = item.bank_code || '';
+            document.getElementById('bankNameAr').value = item.bank_name_ar || '';
+            document.getElementById('bankNameEn').value = item.bank_name || '';
+            document.getElementById('swiftCode').value = item.swift_code || '';
+            document.getElementById('country').value = item.country || '';
+            document.getElementById('city').value = item.city || '';
+            document.getElementById('address').value = item.address || '';
+            document.getElementById('phone').value = item.phone || '';
+            document.getElementById('email').value = item.email || '';
+            document.getElementById('website').value = item.website || '';
+            document.getElementById('isActive').value = (item.is_active || item.isActive || 1).toString();
+            document.getElementById('notes').value = item.notes || '';
+
+            document.getElementById('modalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+
+            setTimeout(() => { document.getElementById('bankCode').focus(); }, 400);
+        }
+
+        // ============================================================
+        // 20. حذف بنك
+        // ============================================================
+        async function deleteBank(id) {
+            const item = allBanks.find(s => s.id == id);
+            const name = item ? (item.bank_name_ar || item.bank_name || 'هذا البنك') : 'هذا البنك';
+
+            const confirmed = await Swal.fire({
+                title: '⚠️ هل أنت متأكد؟',
+                text: 'سيتم حذف البنك "' + name + '" - لا يمكن التراجع!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء',
+                background: '#1a2236',
+                color: '#f1f5f9'
+            });
+
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+
+            try {
+                const result = await apiCall('deleteBank', { id: id });
+                if (result.success) {
+                    showToast('✅ تم الحذف بنجاح', 'success');
+                    allBanks = allBanks.filter(s => s.id != id);
+                    LocalDB.setBanks(allBanks);
+                    renderCards();
+                    updateStats();
+                    hapticFeedback('success');
+                } else {
+                    throw new Error(result.message || 'فشل في الحذف');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({ action: 'deleteBank', data: { id: id } });
+                    allBanks = allBanks.filter(s => s.id != id);
+                    LocalDB.setBanks(allBanks);
+                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
+                    renderCards();
+                    updateStats();
+                    hapticFeedback('success');
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 21. نافذة إضافة حساب
+        // ============================================================
+        function openAddAccount(bankId) {
+            currentAccountEditId = 0;
+            document.getElementById('accountModalTitle').textContent = '➕ إضافة حساب جديد';
+            document.getElementById('accountEditId').value = '0';
+            document.getElementById('accountBankId').value = bankId || 0;
+            document.getElementById('accountForm').reset();
+            if (bankId) {
+                document.getElementById('accountBankSelect').value = bankId;
+            }
+            document.getElementById('accountModalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+            setTimeout(() => { document.getElementById('accountCode').focus(); }, 400);
+        }
+
+        function closeAccountModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('accountModalOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+            currentAccountEditId = 0;
+        }
+
+        // ============================================================
+        // 22. حفظ الحساب
+        // ============================================================
+        async function saveAccount() {
+            const accountCode = document.getElementById('accountCode').value.trim();
+            const accountNameAr = document.getElementById('accountNameAr').value.trim();
+            const accountNumber = document.getElementById('accountNumber').value.trim();
+            const bankId = document.getElementById('accountBankSelect').value;
+            const currencyId = document.getElementById('currencyId').value;
+
+            if (!accountCode) {
+                showToast('❌ الرجاء إدخال كود الحساب', 'error');
+                document.getElementById('accountCode').focus();
+                return;
+            }
+            if (!accountNameAr) {
+                showToast('❌ الرجاء إدخال اسم الحساب', 'error');
+                document.getElementById('accountNameAr').focus();
+                return;
+            }
+            if (!accountNumber) {
+                showToast('❌ الرجاء إدخال رقم الحساب', 'error');
+                document.getElementById('accountNumber').focus();
+                return;
+            }
+            if (!bankId) {
+                showToast('❌ الرجاء اختيار البنك', 'error');
+                document.getElementById('accountBankSelect').focus();
+                return;
+            }
+            if (!currencyId) {
+                showToast('❌ الرجاء اختيار العملة', 'error');
+                document.getElementById('currencyId').focus();
+                return;
+            }
+
+            const data = {
+                id: currentAccountEditId || 0,
+                account_code: accountCode,
+                account_name_ar: accountNameAr,
+                account_name: document.getElementById('accountNameEn').value.trim(),
+                bank_id: parseInt(bankId),
+                account_number: accountNumber,
+                iban: document.getElementById('iban').value.trim(),
+                account_type: document.getElementById('accountType').value,
+                currency_id: parseInt(currencyId),
+                opening_balance: parseFloat(document.getElementById('openingBalance').value) || 0,
+                current_balance: parseFloat(document.getElementById('openingBalance').value) || 0,
+                overdraft_limit: parseFloat(document.getElementById('overdraftLimit').value) || 0,
+                authorized_users: document.getElementById('authorizedUsers').value.trim(),
+                status: document.getElementById('accountStatus').value,
+                notes: document.getElementById('accountNotes').value.trim()
+            };
+
+            showLoading(true);
+
+            try {
+                const result = await apiCall('saveBankAccount', data);
+                if (result.success) {
+                    showToast(result.message || '✅ تم حفظ الحساب بنجاح', 'success');
+                    closeAccountModal();
+                    await loadData();
+                } else {
+                    throw new Error(result.message || 'فشل في الحفظ');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({
+                        action: currentAccountEditId ? 'updateAccount' : 'saveAccount',
+                        data: data
+                    });
+                    if (currentAccountEditId) {
+                        const idx = allAccounts.findIndex(s => s.id == currentAccountEditId);
+                        if (idx >= 0) { allAccounts[idx] = { ...allAccounts[idx], ...data }; }
+                    } else {
+                        allAccounts.push({ ...data, id: Date.now() });
+                    }
+                    LocalDB.setAccounts(allAccounts);
+                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
+                    closeAccountModal();
+                    renderCards();
+                    updateStats();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 23. تعديل حساب
+        // ============================================================
+        async function editAccount(id) {
+            const item = allAccounts.find(s => s.id == id);
+            if (!item) {
+                showToast('❌ الحساب غير موجود', 'error');
+                return;
+            }
+
+            currentAccountEditId = id;
+            document.getElementById('accountModalTitle').textContent = '✏️ تعديل حساب';
+            document.getElementById('accountEditId').value = id;
+            document.getElementById('accountBankId').value = item.bank_id || 0;
+
+            document.getElementById('accountCode').value = item.account_code || '';
+            document.getElementById('accountNameAr').value = item.account_name_ar || '';
+            document.getElementById('accountNameEn').value = item.account_name || '';
+            document.getElementById('accountBankSelect').value = item.bank_id || '';
+            document.getElementById('accountNumber').value = item.account_number || '';
+            document.getElementById('iban').value = item.iban || '';
+            document.getElementById('accountType').value = item.account_type || 'current';
+            document.getElementById('currencyId').value = item.currency_id || '';
+            document.getElementById('openingBalance').value = item.opening_balance || '';
+            document.getElementById('overdraftLimit').value = item.overdraft_limit || '';
+            document.getElementById('authorizedUsers').value = item.authorized_users || '';
+            document.getElementById('accountStatus').value = item.status || 'active';
+            document.getElementById('accountNotes').value = item.notes || '';
+
+            document.getElementById('accountModalOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+
+            setTimeout(() => { document.getElementById('accountCode').focus(); }, 400);
+        }
+
+        // ============================================================
+        // 24. حذف حساب
+        // ============================================================
+        async function deleteAccount(id) {
+            const item = allAccounts.find(s => s.id == id);
+            const name = item ? (item.account_name_ar || item.account_name || 'هذا الحساب') : 'هذا الحساب';
+
+            const confirmed = await Swal.fire({
+                title: '⚠️ هل أنت متأكد؟',
+                text: 'سيتم حذف الحساب "' + name + '" - لا يمكن التراجع!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء',
+                background: '#1a2236',
+                color: '#f1f5f9'
+            });
+
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+
+            try {
+                const result = await apiCall('deleteBankAccount', { id: id });
+                if (result.success) {
+                    showToast('✅ تم الحذف بنجاح', 'success');
+                    allAccounts = allAccounts.filter(s => s.id != id);
+                    LocalDB.setAccounts(allAccounts);
+                    renderCards();
+                    updateStats();
+                    hapticFeedback('success');
+                } else {
+                    throw new Error(result.message || 'فشل في الحذف');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({ action: 'deleteAccount', data: { id: id } });
+                    allAccounts = allAccounts.filter(s => s.id != id);
+                    LocalDB.setAccounts(allAccounts);
+                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
+                    renderCards();
+                    updateStats();
+                    hapticFeedback('success');
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 25. عرض تفاصيل البنك
+        // ============================================================
+        async function viewBank(id) {
+            const bank = allBanks.find(s => s.id == id);
+            if (!bank) {
+                showToast('❌ البنك غير موجود', 'error');
+                return;
+            }
+
+            const accounts = allAccounts.filter(a => a.bank_id == id);
+
+            const content = document.getElementById('detailsContent');
+            const isActive = bank.is_active == 1 || bank.isActive == 1;
+
+            content.innerHTML = `
+                <div class="details-header">
+                    <h3 class="details-title">🏦 تفاصيل البنك</h3>
+                    <button class="details-close" onclick="closeDetails()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="details-profile">
+                    <div class="details-avatar">${(bank.bank_name_ar || bank.bank_name || 'ب').substring(0, 2)}</div>
+                    <div class="details-name" style="color:var(--data-text-color);">${escapeHtml(bank.bank_name_ar || bank.bank_name || '---')}</div>
+                    <span class="details-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div>
+                    <div class="details-row"><span class="details-label">كود البنك</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.bank_code || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">اسم البنك (إنجليزي)</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.bank_name || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">رمز SWIFT</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.swift_code || '---')}</span></div>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-map-marker-alt"></i> العنوان والاتصال</div>
+                    <div class="details-row"><span class="details-label">الدولة</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.country || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">المدينة</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.city || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">العنوان</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.address || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.phone || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.email || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">الموقع</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank.website || '---')}</span></div>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-wallet"></i> الحسابات (${accounts.length})</div>
+                    ${accounts.length === 0 ? '<p style="color:var(--text-muted);">لا توجد حسابات لهذا البنك</p>' :
+                        accounts.map(a => `
+                            <div class="account-card" onclick="closeDetails();viewAccount(${a.id})" style="cursor:pointer;">
+                                <div class="account-header">
+                                    <span class="account-name">${escapeHtml(a.account_name_ar || a.account_name || 'حساب')}</span>
+                                    <span class="account-number">${escapeHtml(a.account_number || '')}</span>
+                                </div>
+                                <div class="account-balance">${formatCurrency(a.current_balance || 0)}</div>
+                                <div class="account-details">
+                                    <span class="badge-type ${getAccountTypeClass(a.account_type)}">${getAccountTypeLabel(a.account_type)}</span>
+                                    <span>${a.status === 'active' ? 'نشط' : getAccountStatusLabel(a.status)}</span>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+
+                ${bank.notes ? `
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div>
+                    <p style="font-size:0.85rem;color:var(--data-text-muted);line-height:1.8;">${escapeHtml(bank.notes)}</p>
+                </div>
+                ` : ''}
+
+                <div style="height:40px;"></div>
+            `;
+
+            document.getElementById('detailsOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 26. عرض تفاصيل الحساب
+        // ============================================================
+        async function viewAccount(id) {
+            const account = allAccounts.find(s => s.id == id);
+            if (!account) {
+                showToast('❌ الحساب غير موجود', 'error');
+                return;
+            }
+
+            const bank = allBanks.find(b => b.id == account.bank_id);
+            const currency = allCurrencies.find(c => (c.id || c.currency_id) == account.currency_id);
+
+            const content = document.getElementById('detailsContent');
+            const isActive = account.status === 'active';
+
+            content.innerHTML = `
+                <div class="details-header">
+                    <h3 class="details-title">💰 تفاصيل الحساب</h3>
+                    <button class="details-close" onclick="closeDetails()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="details-profile">
+                    <div class="details-avatar">${(account.account_name_ar || account.account_name || 'ح').substring(0, 2)}</div>
+                    <div class="details-name" style="color:var(--data-text-color);">${escapeHtml(account.account_name_ar || account.account_name || '---')}</div>
+                    <span class="details-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : getAccountStatusLabel(account.status)}</span>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div>
+                    <div class="details-row"><span class="details-label">كود الحساب</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(account.account_code || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">اسم الحساب (إنجليزي)</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(account.account_name || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">البنك</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(bank ? (bank.bank_name_ar || bank.bank_name || '---') : '---')}</span></div>
+                    <div class="details-row"><span class="details-label">رقم الحساب</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(account.account_number || '---')}</span></div>
+                    <div class="details-row"><span class="details-label">IBAN</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(account.iban || '---')}</span></div>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-tag"></i> نوع الحساب</div>
+                    <div class="details-row"><span class="details-label">النوع</span><span class="details-value" style="color:var(--data-text-color);">${getAccountTypeLabel(account.account_type)}</span></div>
+                    <div class="details-row"><span class="details-label">العملة</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(currency ? (currency.currency_name_ar || currency.currency_name || '---') + ' (' + (currency.currency_code || '') + ')' : '---')}</span></div>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المعلومات المالية</div>
+                    <div class="details-row"><span class="details-label">الرصيد الافتتاحي</span><span class="details-value" style="color:var(--text-muted);">${formatCurrency(account.opening_balance || 0)}</span></div>
+                    <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value" style="color:var(--primary-color);">${formatCurrency(account.current_balance || 0)}</span></div>
+                    <div class="details-row"><span class="details-label">الرصيد المتاح</span><span class="details-value" style="color:var(--success);">${formatCurrency(account.available_balance || 0)}</span></div>
+                    <div class="details-row"><span class="details-label">السحب على المكشوف</span><span class="details-value" style="color:var(--warning);">${formatCurrency(account.overdraft_limit || 0)}</span></div>
+                </div>
+
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-users"></i> المستخدمون المصرح لهم</div>
+                    <p style="font-size:0.85rem;color:var(--data-text-muted);">${escapeHtml(account.authorized_users || 'لا يوجد مستخدمون مصرح لهم')}</p>
+                </div>
+
+                ${account.notes ? `
+                <div class="details-section">
+                    <div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div>
+                    <p style="font-size:0.85rem;color:var(--data-text-muted);line-height:1.8;">${escapeHtml(account.notes)}</p>
+                </div>
+                ` : ''}
+
+                <div style="height:40px;"></div>
+            `;
+
+            document.getElementById('detailsOverlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ============================================================
+        // 27. معالج أزرار القائمة الجانبية
+        // ============================================================
+        function handleSidebarAction(action) {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.remove('open');
+            document.getElementById('sidebarToggle').classList.remove('hidden');
+
+            switch (action) {
+                case 'add_bank':
+                    openAddModal('bank');
+                    break;
+                case 'add_account':
+                    openAddAccount(0);
+                    break;
+                case 'save':
+                    if (document.getElementById('modalOverlay').classList.contains('show')) {
+                        saveBank();
+                    } else if (document.getElementById('accountModalOverlay').classList.contains('show')) {
+                        saveAccount();
+                    } else {
+                        showToast('⚠️ لا يوجد نموذج مفتوح للحفظ', 'warning');
+                    }
+                    break;
+                case 'search':
+                    document.getElementById('searchInput').focus();
+                    showToast('🔍 اكتب كلمة البحث في الحقل أعلاه', 'info');
+                    break;
+                case 'delete':
+                    if (selectedBankId) {
+                        deleteBank(selectedBankId);
+                    } else if (selectedAccountId) {
+                        deleteAccount(selectedAccountId);
+                    } else {
+                        showToast('❌ يرجى تحديد بنك أو حساب أولاً (انقر على البطاقة)', 'error');
+                    }
+                    break;
+                case 'export':
+                    showToast('📤 جاري تجهيز التصدير...', 'info');
+                    break;
+                case 'ai_advisor':
+                    openAIAdvisor();
+                    break;
+                case 'home':
+                    window.location.href = 'main.html';
+                    break;
+                default:
+                    showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        // ============================================================
+        // 28. إعداد القائمة الجانبية
+        // ============================================================
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden');
+                hapticFeedback('light');
+            });
+            document.addEventListener('click', (e) => {
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    toggle.classList.remove('hidden');
+                }
+            });
+        }
+
+        // ============================================================
+        // 29. التهيئة النهائية
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            setupSidebar();
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            updateOnlineStatus();
+            loadData();
+
+            document.getElementById('reportModal').addEventListener('click', function(e) {
+                if (e.target === this) closeReportModal();
+            });
+
+            document.getElementById('aiModal').addEventListener('click', function(e) {
+                if (e.target === this) closeAIModal();
+            });
+
+            // إغلاق مودال الحساب عند النقر خارجها
+            document.getElementById('accountModalOverlay').addEventListener('click', function(e) {
+                if (e.target === this) closeAccountModal();
+            });
+
+            if (isOnline) {
+                syncPendingOperations();
+            }
+
+            setTimeout(() => {
+                if (allBanks.length > 0 || allAccounts.length > 0) {
+                    const insights = LocalDB.getAIInsights();
+                    if (insights.length > 0) {
+                        showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
+                    }
+                }
+            }, 2000);
+        });
+    </script>
+
+</body>
+</html>

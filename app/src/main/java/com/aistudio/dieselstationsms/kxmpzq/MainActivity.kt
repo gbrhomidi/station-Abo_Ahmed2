@@ -977,7 +977,32 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        
+
         @JavascriptInterface
+        fun completeSale(jsonData: String): String {
+
+            return try {
+
+                val result =
+                    dbHelper.completeSale(
+                        JSONObject(jsonData)
+                    )
+
+                result.toString()
+
+            } catch(e:Exception){
+
+                JSONObject().apply {
+
+                    put("success",false)
+                    put("error",e.message)
+
+                }.toString()
+            }
+        }
+
+@JavascriptInterface
         fun getSales(): String {
             return try {
                 val sales = dbHelper.getSales()

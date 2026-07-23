@@ -1225,7 +1225,34 @@
         // ============================================================
         // دالة الاتصال الأساسية (مع دعم AndroidInterface ومعالجة الأخطاء)
         // ============================================================
-        async function apiCall(action, params = {}) {
+        
+function waitForAndroidBridge(timeout = 5000) {
+    return new Promise((resolve) => {
+        const start = Date.now();
+
+        const timer = setInterval(() => {
+            if (typeof AndroidInterface !== 'undefined' &&
+                AndroidInterface !== null) {
+                clearInterval(timer);
+                resolve(true);
+                return;
+            }
+
+            if (Date.now() - start >= timeout) {
+                clearInterval(timer);
+                resolve(false);
+            }
+        }, 100);
+    });
+}
+
+async function apiCall(action, params = {}) {
+    const bridgeReady = await waitForAndroidBridge();
+    if (!bridgeReady) {
+        console.error("AndroidInterface bridge not ready");
+        throw new Error("AndroidInterface not injected");
+    }
+
             const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
 
             if (hasBridge) {

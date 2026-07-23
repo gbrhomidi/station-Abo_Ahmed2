@@ -1,0 +1,2475 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام إدارة محطات الوقود – تقارير المبيعات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        /* ============================================================
+           المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
+           ============================================================ */
+        :root {
+            /* === الوضع الفاتح (Light Mode - افتراضي) === */
+            --bg-color: #f5efe6;
+            --surface-color: #faf3e8;
+            --surface-elevated: #fdf8f0;
+            --primary-color: #007ACC;
+            --primary-dim: rgba(0,122,204,0.12);
+            --accent-color: #d4a017;
+            --accent-dim: rgba(212,160,23,0.12);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #1a2a3a;
+            --text-muted: #6a7f94;
+            --border-color: #003366;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
+            --glass-bg: rgba(255,248,240,0.85);
+            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
+            --card-hover-bg: rgba(0,122,204,0.04);
+            --fab-shadow: rgba(0,122,204,0.3);
+            --toast-bg: #fdf8f0;
+            --scrollbar-track: #f5efe6;
+            --scrollbar-thumb: rgba(0,51,102,0.2);
+            --skeleton-bg: #e8e0d5;
+            --skeleton-shine: #f5efe6;
+            --modal-border-color: #003366;
+            --modal-border-style: dashed;
+            --input-bg: #fdf8f0;
+            --input-border: #003366;
+            --input-border-style: dashed;
+            --data-text-color: #1a2a3a;
+            --data-text-muted: #4a5a6a;
+            --readonly-color: #d32f2f;
+        }
+
+        [data-theme="dark"] {
+            /* === الوضع المظلم (Dark Mode) === */
+            --bg-color: #0a0e1a;
+            --surface-color: #111827;
+            --surface-elevated: #1a2236;
+            --primary-color: #00d4ff;
+            --primary-dim: rgba(0,212,255,0.15);
+            --accent-color: #f59e0b;
+            --accent-dim: rgba(245,158,11,0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #e8d48b;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
+            --glass-bg: rgba(22,34,64,0.85);
+            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-hover-bg: rgba(0,212,255,0.05);
+            --fab-shadow: rgba(0,212,255,0.3);
+            --toast-bg: #1a2236;
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255,255,255,0.1);
+            --skeleton-bg: #1e293b;
+            --skeleton-shine: #2d3a4f;
+            --modal-border-color: #e8d48b;
+            --modal-border-style: dashed;
+            --input-bg: #1e293b;
+            --input-border: #e8d48b;
+            --input-border-style: dashed;
+            --data-text-color: #f1f5f9;
+            --data-text-muted: #94a3b8;
+            --readonly-color: #ef5350;
+        }
+
+        /* ============================================================
+           الأنماط الأساسية
+           ============================================================ */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.4s ease, color 0.4s ease;
+            touch-action: pan-y;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+        /* ===== Pull-to-Refresh Indicator ===== */
+        .pull-indicator {
+            position: fixed;
+            top: -60px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            transition: top 0.2s ease;
+            z-index: 50;
+            background: var(--surface-elevated);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            pointer-events: none;
+        }
+        .pull-indicator.active { top: 0; }
+        .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
+        .pull-indicator.loading i { animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ===== Loading ===== */
+        .loading-indicator {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(0,212,255,0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        /* ===== Skeleton Loading ===== */
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        .skeleton-card {
+            background: var(--surface-elevated);
+            border-radius: 18px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--skeleton-shine) 50%,
+                transparent 100%);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .skeleton-row {
+            height: 12px;
+            background: var(--skeleton-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skeleton-row.short { width: 40%; }
+        .skeleton-row.medium { width: 60%; }
+        .skeleton-row.long { width: 80%; }
+
+        /* ===== Offline Banner ===== */
+        .offline-banner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: linear-gradient(90deg, var(--warning), #f97316);
+            color: #000;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show { transform: translateY(0); }
+
+        /* ============================================================
+           الشريط العلوي (Header)
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.4s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 6px; right: 6px;
+            width: 8px; height: 8px;
+            background: var(--error);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--error);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        .ai-badge {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* ============================================================
+           البحث والفلاتر
+           ============================================================ */
+        .search-wrap {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 44px 12px 16px;
+            border-radius: 14px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .filter-chips::-webkit-scrollbar { display: none; }
+        .filter-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .filter-chip:active { transform: scale(0.95); }
+        .filter-chip.active {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .filter-chip:hover:not(.active) {
+            border-color: var(--text-muted);
+            color: var(--text-color);
+        }
+
+        /* ============================================================
+           بطاقات الإحصائيات (مؤشرات المبيعات)
+           ============================================================ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        .stat-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .stat-card:active { transform: scale(0.96); }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-glow);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-icon {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
+        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
+        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
+        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: var(--data-text-color);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .stat-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+        .stat-trend.up { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-trend.down { background: rgba(239,68,68,0.15); color: var(--error); }
+
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ============================================================
+           محتوى التقارير
+           ============================================================ */
+        .reports-container {
+            padding: 0 16px 20px;
+        }
+
+        /* ===== محددات التقرير ===== */
+        .report-filters {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .report-filters .filter-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--data-text-color);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .report-filters .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .report-filters .filter-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        .report-filters .filter-group label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .report-filters .filter-group select,
+        .report-filters .filter-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+        }
+        .report-filters .filter-group select:focus,
+        .report-filters .filter-group input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .report-filters .filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .report-filters .filter-actions .btn {
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .report-filters .filter-actions .btn:active { transform: scale(0.97); }
+        .report-filters .filter-actions .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        .report-filters .filter-actions .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+        .report-filters .filter-actions .btn-secondary {
+            background: var(--surface-color);
+            color: var(--text-muted);
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .report-filters .filter-actions .btn-secondary:hover {
+            background: var(--border-color);
+        }
+        .report-filters .filter-actions .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .report-filters .filter-actions .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        /* ===== الرسوم البيانية ===== */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .chart-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            min-height: 200px;
+        }
+        .chart-card .chart-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--data-text-color);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chart-card .chart-container {
+            height: 180px;
+            position: relative;
+        }
+        .chart-card .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .chart-card .chart-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* ===== جدول المبيعات ===== */
+        .sales-table-wrapper {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .sales-table-wrapper .table-scroll {
+            overflow-x: auto;
+            max-height: 450px;
+            overflow-y: auto;
+        }
+        .sales-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        .sales-table th {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            padding: 10px 12px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 700;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            white-space: nowrap;
+        }
+        .sales-table td {
+            padding: 8px 12px;
+            text-align: center;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            color: var(--data-text-color);
+        }
+        .sales-table tr:hover td {
+            background: var(--card-hover-bg);
+        }
+        .sales-table .invoice-number {
+            font-weight: 600;
+            color: var(--readonly-color);
+            font-family: 'Arial', sans-serif;
+            direction: ltr;
+        }
+        .sales-table .amount { font-weight: 600; }
+        .sales-table .amount.debit { color: var(--success); }
+        .sales-table .amount.credit { color: var(--error); }
+        .sales-table .btn-view {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+        .sales-table .btn-view:hover { transform: scale(1.2); }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+        .total-summary {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--primary-dim);
+            border-radius: 0 0 16px 16px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--data-text-color);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .total-summary .total-item { display: flex; gap: 8px; align-items: center; }
+        .total-summary .total-item .label { color: var(--text-muted); font-weight: 600; }
+        .total-summary .total-item .value { font-weight: 800; }
+
+        /* ============================================================
+           الزر العائم (FAB) - تصدير
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px var(--fab-shadow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active { transform: scale(0.9); }
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px var(--fab-shadow);
+        }
+
+        /* ============================================================
+           القائمة الجانبية (Sidebar)
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, #4B0082, #5a1a9a);
+            color: white;
+            width: 35px; height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 70px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+        }
+        .sidebar.open { right: 0; opacity: 1; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-btn {
+            position: relative;
+            background: rgba(75, 0, 130, 0.8);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 8px 4px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 55px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active { transform: scale(0.95); }
+        .sidebar-btn:hover {
+            transform: scale(1.05);
+            background: rgba(75,0,130,0.35);
+            box-shadow: 0 0 15px rgba(0,212,255,0.2);
+        }
+        .sidebar-btn i { font-size: 1.1rem; }
+        .sidebar-btn span { font-size: 0.65rem; }
+
+        /* ============================================================
+           القائمة السفلية (Bottom Navigation)
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+            z-index: 300;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.55rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 4px 8px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active { transform: scale(0.9); }
+        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
+        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
+        .bottom-nav .nav-item.active { color: var(--primary-color); }
+        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           مودال تفاصيل الفاتورة
+           ============================================================ */
+        .details-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(12px);
+            z-index: 850;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            overflow-y: auto;
+        }
+        .details-overlay.show { display: block; opacity: 1; }
+        .details-content {
+            background: var(--surface-elevated);
+            min-height: 100vh;
+            padding: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-top: none;
+        }
+        .details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background: var(--surface-elevated);
+            padding: 10px 0;
+            z-index: 10;
+        }
+        .details-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .details-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .details-close:active { transform: scale(0.9); }
+        .details-close:hover { background: var(--error); color: white; border-color: var(--error); }
+        .details-profile { text-align: center; margin-bottom: 24px; }
+        .details-avatar {
+            width: 72px; height: 72px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: white;
+            margin: 0 auto 12px;
+        }
+        .details-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: var(--data-text-color); }
+        .details-status {
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-section {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-row:last-child { border-bottom: none; }
+        .details-label { font-size: 0.8rem; color: var(--text-muted); }
+        .details-value { font-size: 0.85rem; font-weight: 600; color: var(--data-text-color); }
+
+        .details-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .details-items-table th {
+            padding: 8px 10px;
+            text-align: center;
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            font-weight: 600;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-items-table td {
+            padding: 8px 10px;
+            text-align: center;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            color: var(--data-text-color);
+        }
+        .details-items-table .item-debit { color: var(--success); font-weight: 600; }
+        .details-items-table .item-credit { color: var(--error); font-weight: 600; }
+
+        /* ============================================================
+           مودال المستشار الذكي (AI Advisor)
+           ============================================================ */
+        .ai-modal .modal {
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+
+        /* ============================================================
+           Toast إشعارات
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+        .toast.warning { border-color: var(--warning); }
+        .toast-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
+        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
+        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+
+        /* ============================================================
+           الرسوم المتحركة
+           ============================================================ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 0.5s ease forwards;
+        }
+
+        /* ============================================================
+           تحسينات للهواتف
+           ============================================================ */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
+            .stat-card { padding: 12px; }
+            .stat-value { font-size: 1.1rem; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .report-filters .filter-row { flex-direction: column; }
+            .report-filters .filter-group { min-width: unset; }
+            .bottom-nav .nav-item i { font-size: 15px; }
+            .bottom-nav .nav-item span { font-size: 0.5rem; }
+            .sidebar { width: 60px; }
+            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
+            .sidebar-btn i { font-size: 0.9rem; }
+            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
+            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
+            .top-title h2 { font-size: 1rem; }
+            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
+            .sales-table { font-size: 0.7rem; }
+            .sales-table th, .sales-table td { padding: 6px 8px; }
+            .total-summary { font-size: 0.8rem; flex-direction: column; align-items: center; }
+            .chart-card .chart-container { height: 150px; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { gap: 6px; padding: 10px; }
+            .stat-card { padding: 10px; }
+            .stat-value { font-size: 0.95rem; }
+            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
+            .bottom-nav .nav-item { padding: 4px 4px; }
+            .bottom-nav .nav-item i { font-size: 13px; }
+            .bottom-nav .nav-item span { font-size: 0.45rem; }
+            .report-filters .filter-actions .btn { width: 100%; justify-content: center; }
+            .chart-card .chart-container { height: 120px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Pull-to-Refresh Indicator -->
+    <div class="pull-indicator" id="pullIndicator">
+        <i class="fas fa-arrow-down"></i>
+        <span>اسحب للتحديث</span>
+    </div>
+
+    <!-- Offline Banner -->
+    <div class="offline-banner" id="offlineBanner">
+        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- ============================================================
+    الشريط العلوي (Header)
+    ============================================================ -->
+    <header class="top-bar">
+        <div class="header-top">
+            <div class="top-title">
+                <h2>📊 تقارير المبيعات <span class="ai-badge">🤖 AI</span></h2>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
+                    <i class="fas fa-robot"></i>
+                </button>
+            </div>
+        </div>
+        <div class="search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" class="search-input" id="searchInput" placeholder="ابحث برقم الفاتورة، المنتج، أو العميل..." oninput="handleSearch(this.value)">
+        </div>
+        <div class="filter-chips">
+            <button class="filter-chip active" onclick="setFilter('all', this)">الكل</button>
+            <button class="filter-chip" onclick="setFilter('cash', this)">نقداً</button>
+            <button class="filter-chip" onclick="setFilter('credit', this)">آجل</button>
+            <button class="filter-chip" onclick="setFilter('bank_transfer', this)">تحويل بنكي</button>
+            <button class="filter-chip" onclick="setFilter('credit_card', this)">بطاقة ائتمان</button>
+        </div>
+    </header>
+
+    <!-- ============================================================
+    بطاقات الإحصائيات (مؤشرات المبيعات)
+    ============================================================ -->
+    <div class="stats-grid">
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('total_sales')">
+            <div class="stat-icon blue"><i class="fas fa-money-bill-wave"></i></div>
+            <div class="stat-value" id="statTotalSales">0</div>
+            <div class="stat-label">إجمالي المبيعات</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotalSales">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('transactions')">
+            <div class="stat-icon green"><i class="fas fa-receipt"></i></div>
+            <div class="stat-value" id="statTransactions">0</div>
+            <div class="stat-label">عدد الفواتير</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTransactions">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('avg_ticket')">
+            <div class="stat-icon orange"><i class="fas fa-calculator"></i></div>
+            <div class="stat-value" id="statAvgTicket">0</div>
+            <div class="stat-label">متوسط قيمة الفاتورة</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendAvgTicket">0%</span></div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('credit_sales')">
+            <div class="stat-icon purple"><i class="fas fa-credit-card"></i></div>
+            <div class="stat-value" id="statCreditSales">0</div>
+            <div class="stat-label">المبيعات الآجلة</div>
+            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendCreditSales">0%</span></div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    حاوية التنبيهات
+    ============================================================ -->
+    <div class="alerts-container" id="alertsContainer" style="padding:0 16px 16px;"></div>
+
+    <!-- ============================================================
+    محتوى التقارير
+    ============================================================ -->
+    <div class="reports-container">
+        <!-- محددات التقرير -->
+        <div class="report-filters">
+            <div class="filter-title">
+                <i class="fas fa-sliders-h"></i> خيارات التقرير
+            </div>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>📅 من تاريخ</label>
+                    <input type="date" id="filterDateFrom">
+                </div>
+                <div class="filter-group">
+                    <label>📅 إلى تاريخ</label>
+                    <input type="date" id="filterDateTo">
+                </div>
+                <div class="filter-group">
+                    <label>🛒 المنتج</label>
+                    <select id="filterProduct">
+                        <option value="">جميع المنتجات</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>👤 العميل</label>
+                    <select id="filterCustomer">
+                        <option value="">جميع العملاء</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>💳 طريقة الدفع</label>
+                    <select id="filterPaymentMethod">
+                        <option value="">الكل</option>
+                        <option value="cash">نقداً</option>
+                        <option value="credit">آجل</option>
+                        <option value="bank_transfer">تحويل بنكي</option>
+                        <option value="credit_card">بطاقة ائتمان</option>
+                        <option value="mobile_money">محفظة إلكترونية</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>📊 نوع التقرير</label>
+                    <select id="filterReportType">
+                        <option value="summary">ملخص</option>
+                        <option value="detailed">مفصل</option>
+                        <option value="by_product">حسب المنتج</option>
+                        <option value="by_customer">حسب العميل</option>
+                        <option value="by_payment">حسب طريقة الدفع</option>
+                        <option value="daily">يومي</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>📋 الحالة</label>
+                    <select id="filterStatus">
+                        <option value="">الكل</option>
+                        <option value="completed">مكتملة</option>
+                        <option value="cancelled">ملغية</option>
+                        <option value="refunded">مسترجعة</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>🔄 الوردية</label>
+                    <select id="filterShift">
+                        <option value="">جميع الورديات</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" onclick="generateReport()">
+                    <i class="fas fa-cog"></i> توليد التقرير
+                </button>
+                <button class="btn btn-secondary" onclick="resetFilters()">
+                    <i class="fas fa-undo"></i> إعادة تعيين
+                </button>
+                <button class="btn btn-success" onclick="exportReport()">
+                    <i class="fas fa-file-export"></i> تصدير CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- الرسوم البيانية -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-title">
+                    <span>📈 اتجاه المبيعات اليومية</span>
+                    <span style="font-size:0.65rem;color:var(--text-muted);">آخر 7 أيام</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="salesTrendChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">
+                    <span>🧩 توزيع المبيعات حسب طريقة الدفع</span>
+                    <span style="font-size:0.65rem;color:var(--text-muted);">النسبة المئوية</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="paymentDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- جدول المبيعات -->
+        <div class="sales-table-wrapper">
+            <div class="table-scroll">
+                <table class="sales-table" id="salesTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>رقم الفاتورة</th>
+                            <th>التاريخ</th>
+                            <th>العميل</th>
+                            <th>المنتج</th>
+                            <th>الكمية</th>
+                            <th>السعر</th>
+                            <th>الإجمالي</th>
+                            <th>طريقة الدفع</th>
+                            <th>الحالة</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody id="salesTableBody">
+                        <tr><td colspan="11" class="empty-state">اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="total-summary" id="totalSummary">
+                <span class="total-item"><span class="label">إجمالي المبيعات:</span><span class="value" id="summaryTotal">0.00</span></span>
+                <span class="total-item"><span class="label">عدد الفواتير:</span><span class="value" id="summaryCount">0</span></span>
+                <span class="total-item"><span class="label">متوسط الفاتورة:</span><span class="value" id="summaryAvg">0.00</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    الزر العائم (FAB) - تصدير PDF
+    ============================================================ -->
+    <button class="fab" onclick="exportPDF()">
+        <i class="fas fa-file-pdf"></i>
+    </button>
+
+    <!-- ============================================================
+    القائمة الجانبية (Sidebar)
+    ============================================================ -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <button class="sidebar-btn" onclick="handleSidebarAction('refresh')">
+                <i class="fas fa-sync-alt"></i> <span>تحديث</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('export_csv')">
+                <i class="fas fa-file-csv"></i> <span>CSV</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('export_pdf')">
+                <i class="fas fa-file-pdf"></i> <span>PDF</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('print')">
+                <i class="fas fa-print"></i> <span>طباعة</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('ai_advisor')" style="background:rgba(139,92,246,0.3);">
+                <i class="fas fa-robot"></i> <span>AI</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('home')">
+                <i class="fas fa-home"></i> <span>رجوع</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    القائمة السفلية (Bottom Navigation)
+    ============================================================ -->
+    <nav class="bottom-nav">
+        <button class="nav-item" onclick="switchTab('summary')">
+            <i class="fas fa-chart-pie"></i>
+            <span>ملخص</span>
+        </button>
+        <button class="nav-item active" onclick="switchTab('sales')">
+            <i class="fas fa-list"></i>
+            <span>المبيعات</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('by_product')">
+            <i class="fas fa-boxes"></i>
+            <span>حسب المنتج</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('by_customer')">
+            <i class="fas fa-users"></i>
+            <span>حسب العميل</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('daily')">
+            <i class="fas fa-calendar-day"></i>
+            <span>يومي</span>
+        </button>
+    </nav>
+
+    <!-- ============================================================
+    مودال تفاصيل الفاتورة
+    ============================================================ -->
+    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
+        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+            <!-- يتم تعبئتها عبر JavaScript -->
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال المستشار الذكي (AI Advisor)
+    ============================================================ -->
+    <div class="modal-overlay ai-modal" id="aiModal" onclick="closeAIModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-height:80vh;">
+            <div class="modal-header">
+                <h3 class="modal-title">🤖 المستشار الذكي - تقارير المبيعات</h3>
+                <button class="modal-close" onclick="closeAIModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="aiContent" style="padding:8px 0;">
+                <div style="text-align:center;color:var(--text-muted);padding:20px;">
+                    <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
+                    <p>جاري تحليل بيانات المبيعات...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    Toast إشعارات
+    ============================================================ -->
+    <div class="toast" id="toast">
+        <div class="toast-icon"><i class="fas fa-check"></i></div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ============================================================
+    JavaScript المتكامل
+    ============================================================ -->
+    <script>
+        // ============================================================
+        // 1. دالة apiCall الموحدة
+        // ============================================================
+        function apiCall(action, params) {
+            return new Promise((resolve, reject) => {
+                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+                    try {
+                        const jsonParams = JSON.stringify(params || {});
+                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        try {
+                            const parsed = JSON.parse(result);
+                            resolve(parsed);
+                        } catch (e) {
+                            resolve({ success: true, data: result });
+                        }
+                    } catch (e) {
+                        reject({ success: false, error: e.message });
+                    }
+                } else {
+                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                }
+            });
+        }
+
+        // ============================================================
+        // 2. نظام التخزين المحلي (Offline Mode)
+        // ============================================================
+        const LocalDB = {
+            prefix: 'fuel_station_',
+            set: function(key, value) {
+                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
+            },
+            get: function(key, defaultValue) {
+                try {
+                    const item = localStorage.getItem(this.prefix + key);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) { return defaultValue; }
+            },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); },
+            getSales: function() { return this.get('sales_data', []); },
+            setSales: function(data) { this.set('sales_data', data); },
+            getStats: function() { return this.get('sales_stats', {}); },
+            setStats: function(stats) { this.set('sales_stats', stats); },
+            getNotifications: function() { return this.get('sales_notifications', []); },
+            setNotifications: function(notifications) { this.set('sales_notifications', notifications); },
+            getAIInsights: function() { return this.get('sales_ai_insights', []); },
+            setAIInsights: function(insights) { this.set('sales_ai_insights', insights); }
+        };
+
+        // ============================================================
+        // 3. حالة الاتصال
+        // ============================================================
+        let isOnline = navigator.onLine;
+
+        function updateOnlineStatus() {
+            isOnline = navigator.onLine;
+            const banner = document.getElementById('offlineBanner');
+            if (!isOnline) {
+                banner.classList.add('show');
+                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+            } else {
+                banner.classList.remove('show');
+                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
+                syncPendingOperations();
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // ============================================================
+        // 4. مزامنة العمليات المعلقة (لا توجد عمليات كتابة)
+        // ============================================================
+        async function syncPendingOperations() {}
+
+        // ============================================================
+        // 5. Haptic Feedback
+        // ============================================================
+        function hapticFeedback(type) {
+            try {
+                if (navigator.vibrate) {
+                    if (type === 'success') navigator.vibrate(20);
+                    else if (type === 'error') navigator.vibrate([30, 50, 30]);
+                    else if (type === 'light') navigator.vibrate(10);
+                }
+            } catch (e) { /* تجاهل */ }
+        }
+
+        // ============================================================
+        // 6. دوال مساعدة
+        // ============================================================
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = toast.querySelector('.toast-icon i');
+            toast.className = 'toast ' + type;
+            msgEl.textContent = message;
+            if (type === 'success') { iconEl.className = 'fas fa-check';
+                hapticFeedback('success'); } else if (type === 'error') { iconEl.className = 'fas fa-times';
+                hapticFeedback('error'); } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle';
+                hapticFeedback('light'); }
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '0';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            else if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+            return num.toLocaleString('en');
+        }
+
+        function formatCurrency(num) {
+            if (num === null || num === undefined) return '0.00';
+            return parseFloat(num).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getField(obj, ...keys) {
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null) return obj[key];
+            }
+            return null;
+        }
+
+        function getPaymentMethodLabel(method) {
+            const map = {
+                'cash': 'نقداً',
+                'credit': 'آجل',
+                'bank_transfer': 'تحويل بنكي',
+                'credit_card': 'بطاقة ائتمان',
+                'mobile_money': 'محفظة إلكترونية',
+                'cheque': 'شيك'
+            };
+            return map[method] || method;
+        }
+
+        function getStatusLabel(status) {
+            const map = {
+                'completed': 'مكتملة',
+                'cancelled': 'ملغية',
+                'refunded': 'مسترجعة',
+                'pending': 'معلقة'
+            };
+            return map[status] || status;
+        }
+
+        // ============================================================
+        // 7. نظام تبديل الوضع (مع أيقونة شمس/هلال صحيحة)
+        // ============================================================
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const isDark = current === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            const icon = document.getElementById('themeIcon');
+            if (newTheme === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+            hapticFeedback('light');
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+
+            const icon = document.getElementById('themeIcon');
+            if (saved === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+
+        // ============================================================
+        // 8. Pull-to-Refresh
+        // ============================================================
+        let pullStartY = 0,
+            pullOffset = 0,
+            isPulling = false;
+
+        document.addEventListener('touchstart', function(e) {
+            const scrollTop = window.scrollY || document.documentElement.scrollTop;
+            if (scrollTop <= 0) {
+                pullStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function(e) {
+            if (!isPulling) return;
+            const currentY = e.touches[0].clientY;
+            const diff = currentY - pullStartY;
+            if (diff > 20) {
+                pullOffset = Math.min(diff, 80);
+                const indicator = document.getElementById('pullIndicator');
+                indicator.style.top = (pullOffset - 60) + 'px';
+                if (pullOffset > 60) {
+                    indicator.querySelector('i').className = 'fas fa-arrow-down';
+                    indicator.querySelector('span').textContent = 'حرر للتحديث';
+                } else {
+                    indicator.querySelector('i').className = 'fas fa-arrow-down';
+                    indicator.querySelector('span').textContent = 'اسحب للتحديث';
+                }
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', function() {
+            if (isPulling && pullOffset > 60) {
+                const indicator = document.getElementById('pullIndicator');
+                indicator.querySelector('i').className = 'fas fa-spinner fa-spin';
+                indicator.querySelector('span').textContent = 'جاري التحديث...';
+                setTimeout(() => {
+                    generateReport();
+                    setTimeout(() => {
+                        indicator.style.top = '-60px';
+                        isPulling = false;
+                        pullOffset = 0;
+                    }, 500);
+                }, 300);
+            } else {
+                document.getElementById('pullIndicator').style.top = '-60px';
+                isPulling = false;
+                pullOffset = 0;
+            }
+        }, { passive: true });
+
+        // ============================================================
+        // 9. AI Advisor - تحليل المبيعات
+        // ============================================================
+        function analyzeSalesData(sales) {
+            const insights = [];
+            if (!sales || sales.length === 0) return insights;
+
+            const totalSales = sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+            const avgTicket = totalSales / sales.length;
+            const totalItems = sales.reduce((sum, s) => sum + parseFloat(s.quantity || 0), 0);
+
+            insights.push({
+                type: 'info',
+                title: '📊 نظرة عامة',
+                suggestion: sales.length + ' فاتورة، ' + totalItems + ' منتج مباع',
+                reason: 'إجمالي المبيعات: ' + formatCurrency(totalSales) + ' | متوسط الفاتورة: ' + formatCurrency(
+                    avgTicket),
+                priority: 'low'
+            });
+
+            // تحليل المنتجات الأكثر مبيعاً
+            const productMap = {};
+            sales.forEach(s => {
+                const key = s.product_name || s.product || 'غير محدد';
+                if (!productMap[key]) productMap[key] = { qty: 0, total: 0 };
+                productMap[key].qty += parseFloat(s.quantity || 0);
+                productMap[key].total += parseFloat(s.total_amount || 0);
+            });
+            let topProduct = '',
+                topQty = 0;
+            for (const [name, data] of Object.entries(productMap)) {
+                if (data.qty > topQty) { topQty = data.qty;
+                    topProduct = name; }
+            }
+            if (topProduct) {
+                insights.push({
+                    type: 'info',
+                    title: '🏆 المنتج الأكثر مبيعاً',
+                    suggestion: topProduct + ' (' + topQty + ' وحدة)',
+                    reason: 'أعلى منتج من حيث الكمية المباعة',
+                    priority: 'low'
+                });
+            }
+
+            // تحليل العملاء الأكثر شراءً
+            const customerMap = {};
+            sales.forEach(s => {
+                const key = s.customer_name || s.customer || 'عميل نقدي';
+                if (!customerMap[key]) customerMap[key] = { count: 0, total: 0 };
+                customerMap[key].count++;
+                customerMap[key].total += parseFloat(s.total_amount || 0);
+            });
+            let topCustomer = '',
+                topCustomerTotal = 0;
+            for (const [name, data] of Object.entries(customerMap)) {
+                if (data.total > topCustomerTotal) { topCustomerTotal = data.total;
+                    topCustomer = name; }
+            }
+            if (topCustomer) {
+                insights.push({
+                    type: 'info',
+                    title: '👤 أفضل عميل',
+                    suggestion: topCustomer + ' (' + formatCurrency(topCustomerTotal) + ')',
+                    reason: 'أعلى عميل من حيث قيمة المشتريات',
+                    priority: 'low'
+                });
+            }
+
+            LocalDB.setAIInsights(insights);
+            return insights;
+        }
+
+        function getTopAIInsight() {
+            const insights = LocalDB.getAIInsights();
+            if (insights.length === 0) return null;
+            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+            return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
+        }
+
+        function openAIAdvisor() {
+            const modal = document.getElementById('aiModal');
+            const content = document.getElementById('aiContent');
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+
+            const sales = getCurrentSalesData();
+            const insights = analyzeSalesData(sales);
+
+            if (insights.length === 0) {
+                content.innerHTML = `
+                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
+                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
+                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
+                        <p style="font-size:0.8rem;">قم بتوليد تقرير المبيعات أولاً للحصول على توصيات</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const top = getTopAIInsight();
+            const allSuggestions = insights.slice(0, 5);
+
+            let html = `
+                <div style="background:var(--primary-dim);border-radius:16px;padding:16px;margin-bottom:16px;border:2px dashed var(--primary-color);">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <i class="fas fa-star" style="color:var(--accent-color);"></i>
+                        <span style="font-weight:700;font-size:1rem;color:var(--data-text-color);">التوصية الأولى</span>
+                        ${top && top.priority === 'high' ? '<span style="background:var(--error);color:white;padding:0 8px;border-radius:4px;font-size:0.6rem;">عاجل</span>' : ''}
+                    </div>
+                    <div style="font-size:0.95rem;font-weight:600;color:var(--primary-color);">${top ? top.suggestion : ''}</div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${top ? top.reason : ''}</div>
+                </div>
+                <div style="font-weight:700;font-size:0.9rem;margin-bottom:12px;color:var(--data-text-color);">📋 توصيات أخرى</div>
+            `;
+
+            allSuggestions.forEach((insight, idx) => {
+                const borderColor = insight.priority === 'high' ? 'var(--error)' : insight.priority === 'medium' ?
+                    'var(--warning)' : 'var(--success)';
+                html += `
+                    <div style="background:var(--surface-color);border-radius:12px;padding:12px;margin-bottom:8px;border:2px dashed ${borderColor};border-right:4px solid ${borderColor};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-weight:600;color:var(--data-text-color);">${insight.title}</span>
+                            <span style="font-size:0.7rem;color:var(--text-muted);">${insight.priority === 'high' ? 'عاجل' : insight.priority === 'medium' ? 'مهم' : 'عادي'}</span>
+                        </div>
+                        <div style="font-size:0.85rem;color:var(--data-text-color);">${insight.suggestion}</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${insight.reason}</div>
+                    </div>
+                `;
+            });
+
+            content.innerHTML = html;
+            hapticFeedback('light');
+        }
+
+        function closeAIModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('aiModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ============================================================
+        // 10. الحصول على بيانات المبيعات الحالية من الجدول
+        // ============================================================
+        function getCurrentSalesData() {
+            const data = [];
+            const rows = document.querySelectorAll('#salesTableBody tr');
+            rows.forEach(row => {
+                if (row.classList.contains('empty-state')) return;
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 10) {
+                    data.push({
+                        invoice_number: cells[1]?.textContent?.trim() || '',
+                        date: cells[2]?.textContent?.trim() || '',
+                        customer: cells[3]?.textContent?.trim() || '',
+                        product: cells[4]?.textContent?.trim() || '',
+                        quantity: parseFloat(cells[5]?.textContent?.trim() || 0),
+                        total_amount: parseFloat(cells[7]?.textContent?.trim() || 0),
+                        payment_method: cells[8]?.textContent?.trim() || '',
+                        status: cells[9]?.textContent?.trim() || ''
+                    });
+                }
+            });
+            return data;
+        }
+
+        // ============================================================
+        // 11. توليد التقرير
+        // ============================================================
+        async function generateReport() {
+            const from = document.getElementById('filterDateFrom').value;
+            const to = document.getElementById('filterDateTo').value;
+            const product = document.getElementById('filterProduct').value;
+            const customer = document.getElementById('filterCustomer').value;
+            const paymentMethod = document.getElementById('filterPaymentMethod').value;
+            const reportType = document.getElementById('filterReportType').value;
+            const status = document.getElementById('filterStatus').value;
+            const shift = document.getElementById('filterShift').value;
+
+            if (!from || !to) {
+                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const params = {
+                    start_date: from,
+                    end_date: to,
+                    product_id: product || null,
+                    customer_id: customer || null,
+                    payment_method: paymentMethod || null,
+                    report_type: reportType,
+                    status: status || null,
+                    shift_id: shift || null
+                };
+                const result = await apiCall('generateSalesReport', params);
+                if (result.success && result.data) {
+                    const sales = result.data;
+                    LocalDB.setSales(sales);
+                    renderSalesTable(sales);
+                    updateStats(sales);
+                    updateCharts(sales);
+                    updateSummary(sales);
+                    generateAlerts(sales);
+                    analyzeSalesData(sales);
+                    showToast('✅ تم توليد التقرير بنجاح', 'success');
+                    hapticFeedback('success');
+                } else {
+                    showToast(result.message || '❌ لا توجد بيانات للتقرير', 'warning');
+                    document.getElementById('salesTableBody').innerHTML =
+                        '<tr><td colspan="11" class="empty-state">لا توجد بيانات مطابقة للفترة المحددة</td></tr>';
+                    resetSummary();
+                }
+            } catch (e) {
+                showToast('❌ فشل توليد التقرير', 'error');
+                console.error(e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 12. عرض جدول المبيعات
+        // ============================================================
+        function renderSalesTable(sales) {
+            const tbody = document.getElementById('salesTableBody');
+            if (!sales || sales.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="empty-state">لا توجد بيانات لعرضها</td></tr>';
+                return;
+            }
+
+            // تطبيق التصفية حسب الفلتر المحدد في الشريط العلوي
+            let filtered = [...sales];
+            const filterType = currentPaymentFilter;
+            if (filterType && filterType !== 'all') {
+                filtered = filtered.filter(s => s.payment_method === filterType);
+            }
+
+            tbody.innerHTML = filtered.map((s, idx) => {
+                const paymentLabel = getPaymentMethodLabel(s.payment_method);
+                const statusLabel = getStatusLabel(s.status);
+                const statusClass = s.status === 'completed' ? 'success' :
+                    s.status === 'cancelled' ? 'error' :
+                    s.status === 'refunded' ? 'warning' : 'info';
+
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td class="invoice-number">${escapeHtml(s.invoice_number || '---')}</td>
+                        <td>${s.sale_date || s.date || '---'}</td>
+                        <td>${escapeHtml(s.customer_name || s.customer || '---')}</td>
+                        <td>${escapeHtml(s.product_name || s.product || '---')}</td>
+                        <td>${parseFloat(s.quantity || 0).toLocaleString('en')}</td>
+                        <td>${formatCurrency(s.unit_price || s.price || 0)}</td>
+                        <td class="amount debit">${formatCurrency(s.total_amount || s.total || 0)}</td>
+                        <td>${paymentLabel}</td>
+                        <td><span style="color:var(--${statusClass});font-weight:600;">${statusLabel}</span></td>
+                        <td>
+                            <button class="btn-view" onclick="viewInvoice('${s.invoice_number || s.id}')" title="عرض التفاصيل">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // ============================================================
+        // 13. تحديث الإحصائيات
+        // ============================================================
+        function updateStats(sales) {
+            const total = sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+            const count = sales.length;
+            const avg = count > 0 ? total / count : 0;
+            const creditSales = sales.filter(s => s.payment_method === 'credit')
+                .reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+
+            document.getElementById('statTotalSales').textContent = formatNumber(total);
+            document.getElementById('statTransactions').textContent = count;
+            document.getElementById('statAvgTicket').textContent = formatNumber(avg);
+            document.getElementById('statCreditSales').textContent = formatNumber(creditSales);
+        }
+
+        // ============================================================
+        // 14. تحديث الملخص
+        // ============================================================
+        function updateSummary(sales) {
+            const total = sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+            const count = sales.length;
+            const avg = count > 0 ? total / count : 0;
+
+            document.getElementById('summaryTotal').textContent = formatCurrency(total);
+            document.getElementById('summaryCount').textContent = count;
+            document.getElementById('summaryAvg').textContent = formatCurrency(avg);
+        }
+
+        function resetSummary() {
+            document.getElementById('summaryTotal').textContent = '0.00';
+            document.getElementById('summaryCount').textContent = '0';
+            document.getElementById('summaryAvg').textContent = '0.00';
+        }
+
+        // ============================================================
+        // 15. تحديث الرسوم البيانية
+        // ============================================================
+        let salesTrendChart = null;
+        let paymentDistributionChart = null;
+
+        function updateCharts(sales) {
+            // رسم اتجاه المبيعات اليومية (آخر 7 أيام)
+            const dailyMap = {};
+            sales.forEach(s => {
+                const date = s.sale_date || s.date;
+                if (date) {
+                    const d = date.substring(0, 10);
+                    if (!dailyMap[d]) dailyMap[d] = 0;
+                    dailyMap[d] += parseFloat(s.total_amount || 0);
+                }
+            });
+
+            const sortedDates = Object.keys(dailyMap).sort();
+            const last7Dates = sortedDates.slice(-7);
+            const last7Values = last7Dates.map(d => dailyMap[d] || 0);
+
+            const ctx1 = document.getElementById('salesTrendChart').getContext('2d');
+            if (salesTrendChart) salesTrendChart.destroy();
+            salesTrendChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: last7Dates.map(d => d.substring(5)),
+                    datasets: [{
+                        label: 'المبيعات اليومية',
+                        data: last7Values,
+                        borderColor: '#007ACC',
+                        backgroundColor: 'rgba(0,122,204,0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            // رسم توزيع المدفوعات
+            const paymentMap = {};
+            sales.forEach(s => {
+                const method = s.payment_method || 'other';
+                if (!paymentMap[method]) paymentMap[method] = 0;
+                paymentMap[method] += parseFloat(s.total_amount || 0);
+            });
+
+            const paymentLabels = Object.keys(paymentMap).map(k => getPaymentMethodLabel(k));
+            const paymentValues = Object.values(paymentMap);
+
+            const ctx2 = document.getElementById('paymentDistributionChart').getContext('2d');
+            if (paymentDistributionChart) paymentDistributionChart.destroy();
+            const colors = ['#007ACC', '#4CAF50', '#FF9800', '#9C27B0', '#f44336'];
+            paymentDistributionChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: paymentLabels,
+                    datasets: [{
+                        data: paymentValues,
+                        backgroundColor: colors.slice(0, paymentValues.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'left',
+                            labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ============================================================
+        // 16. نظام التنبيهات
+        // ============================================================
+        function generateAlerts(sales) {
+            const alerts = [];
+            if (!sales || sales.length === 0) return;
+
+            const total = sales.reduce((sum, s) => sum + parseFloat(s.total_amount || 0), 0);
+            const count = sales.length;
+            const avg = count > 0 ? total / count : 0;
+
+            if (total > 1000000) {
+                alerts.push({
+                    type: 'info',
+                    icon: 'fa-flag',
+                    title: '🚀 مبيعات عالية',
+                    desc: 'إجمالي المبيعات: ' + formatCurrency(total),
+                    time: 'الآن'
+                });
+            }
+
+            if (count > 100) {
+                alerts.push({
+                    type: 'info',
+                    icon: 'fa-fire',
+                    title: '🔥 نشاط مبيعات مرتفع',
+                    desc: count + ' فاتورة في الفترة المحددة',
+                    time: 'الآن'
+                });
+            }
+
+            if (avg < 1000 && count > 10) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-exclamation-triangle',
+                    title: '⚠️ متوسط فاتورة منخفض',
+                    desc: 'متوسط الفاتورة: ' + formatCurrency(avg),
+                    time: 'الآن'
+                });
+            }
+
+            LocalDB.setNotifications(alerts);
+            renderAlerts(alerts);
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsContainer');
+            if (!container) return;
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
+                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
+                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
+                    <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
+                </div>
+            `).join('');
+        }
+
+        function showNotifications() {
+            const notifications = LocalDB.getNotifications();
+            if (notifications.length === 0) {
+                showToast('🔔 لا توجد إشعارات جديدة', 'info');
+                return;
+            }
+            showToast('🔔 لديك ' + notifications.length + ' إشعارات', 'success');
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 17. عرض تفاصيل الفاتورة
+        // ============================================================
+        async function viewInvoice(invoiceNumber) {
+            if (!invoiceNumber) {
+                showToast('❌ لا توجد تفاصيل متاحة', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const result = await apiCall('getInvoiceDetails', { invoice_number: invoiceNumber });
+                if (result.success && result.data) {
+                    const invoice = result.data;
+                    const items = invoice.items || [];
+
+                    const content = document.getElementById('detailsContent');
+                    content.innerHTML = `
+                        <div class="details-header">
+                            <h3 class="details-title">🧾 تفاصيل الفاتورة</h3>
+                            <button class="details-close" onclick="closeDetails()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <div class="details-profile">
+                            <div class="details-avatar">${(invoice.invoice_number || 'ف').substring(0, 2)}</div>
+                            <div class="details-name" style="color:var(--data-text-color);">${escapeHtml(invoice.invoice_number || '---')}</div>
+                            <span class="details-status ${invoice.status === 'completed' ? 'posted' : 'draft'}">${getStatusLabel(invoice.status)}</span>
+                        </div>
+
+                        <div class="details-section">
+                            <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div>
+                            <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(invoice.sale_date || invoice.date || '---')}</span></div>
+                            <div class="details-row"><span class="details-label">العميل</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(invoice.customer_name || invoice.customer || '---')}</span></div>
+                            <div class="details-row"><span class="details-label">طريقة الدفع</span><span class="details-value" style="color:var(--data-text-color);">${getPaymentMethodLabel(invoice.payment_method)}</span></div>
+                            <div class="details-row"><span class="details-label">الحالة</span><span class="details-value" style="color:var(--data-text-color);">${getStatusLabel(invoice.status)}</span></div>
+                        </div>
+
+                        <div class="details-section">
+                            <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المبالغ</div>
+                            <div class="details-row"><span class="details-label">الإجمالي</span><span class="details-value" style="color:var(--primary-color);">${formatCurrency(invoice.total_amount || invoice.total || 0)}</span></div>
+                            <div class="details-row"><span class="details-label">المبلغ المدفوع</span><span class="details-value" style="color:var(--success);">${formatCurrency(invoice.paid_amount || 0)}</span></div>
+                            <div class="details-row"><span class="details-label">المتبقي</span><span class="details-value" style="color:${parseFloat(invoice.remaining_amount || 0) > 0 ? 'var(--error)' : 'var(--success)'};">${formatCurrency(invoice.remaining_amount || 0)}</span></div>
+                        </div>
+
+                        <div class="details-section">
+                            <div class="details-section-title"><i class="fas fa-list"></i> بنود الفاتورة (${items.length})</div>
+                            ${items.length === 0 ? '<p style="color:var(--text-muted);">لا توجد بنود</p>' : `
+                                <table class="details-items-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>المنتج</th>
+                                            <th>الكمية</th>
+                                            <th>السعر</th>
+                                            <th>الإجمالي</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${items.map((item, idx) => `
+                                            <tr>
+                                                <td>${idx + 1}</td>
+                                                <td style="color:var(--data-text-color);">${escapeHtml(item.product_name || item.product || '---')}</td>
+                                                <td>${parseFloat(item.quantity || 0).toLocaleString('en')}</td>
+                                                <td>${formatCurrency(item.unit_price || item.price || 0)}</td>
+                                                <td class="item-debit">${formatCurrency(item.total_price || item.total || 0)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            `}
+                        </div>
+
+                        ${invoice.notes ? `
+                        <div class="details-section">
+                            <div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div>
+                            <p style="font-size:0.85rem;color:var(--data-text-muted);line-height:1.8;">${escapeHtml(invoice.notes)}</p>
+                        </div>
+                        ` : ''}
+
+                        <div style="height:40px;"></div>
+                    `;
+
+                    document.getElementById('detailsOverlay').classList.add('show');
+                    document.body.style.overflow = 'hidden';
+                    hapticFeedback('light');
+                } else {
+                    showToast(result.message || '❌ فشل في جلب تفاصيل الفاتورة', 'error');
+                }
+            } catch (e) {
+                showToast('❌ حدث خطأ أثناء جلب التفاصيل', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function closeDetails() {
+            document.getElementById('detailsOverlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        // ============================================================
+        // 18. تصدير التقرير (CSV)
+        // ============================================================
+        function exportReport() {
+            const rows = document.querySelectorAll('#salesTableBody tr');
+            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+
+            let csv = 'الرقم,رقم الفاتورة,التاريخ,العميل,المنتج,الكمية,السعر,الإجمالي,طريقة الدفع,الحالة\n';
+            rows.forEach((row, idx) => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
+                    const data = [
+                        idx + 1,
+                        cells[1]?.textContent?.trim() || '',
+                        cells[2]?.textContent?.trim() || '',
+                        cells[3]?.textContent?.trim() || '',
+                        cells[4]?.textContent?.trim() || '',
+                        cells[5]?.textContent?.trim() || '',
+                        cells[6]?.textContent?.trim() || '',
+                        cells[7]?.textContent?.trim() || '',
+                        cells[8]?.textContent?.trim() || '',
+                        cells[9]?.textContent?.trim() || ''
+                    ];
+                    csv += data.join(',') + '\n';
+                }
+            });
+
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const from = document.getElementById('filterDateFrom').value || 'start';
+            const to = document.getElementById('filterDateTo').value || 'end';
+            link.download = `تقرير_المبيعات_${from}_${to}.csv`;
+            link.click();
+            showToast('✅ تم تصدير التقرير', 'success');
+            hapticFeedback('success');
+        }
+
+        // ============================================================
+        // 19. تصدير PDF
+        // ============================================================
+        function exportPDF() {
+            const rows = document.querySelectorAll('#salesTableBody tr');
+            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'pt', 'a4');
+
+            doc.setFontSize(18);
+            doc.setTextColor(0, 122, 204);
+            doc.text('📊 تقرير المبيعات', 40, 50);
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            const from = document.getElementById('filterDateFrom').value || 'البداية';
+            const to = document.getElementById('filterDateTo').value || 'النهاية';
+            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
+
+            const tableData = [];
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 10 && !row.classList.contains('empty-state')) {
+                    tableData.push([
+                        cells[1]?.textContent?.trim() || '',
+                        cells[2]?.textContent?.trim() || '',
+                        cells[3]?.textContent?.trim() || '',
+                        cells[4]?.textContent?.trim() || '',
+                        cells[5]?.textContent?.trim() || '',
+                        cells[7]?.textContent?.trim() || '',
+                        cells[8]?.textContent?.trim() || '',
+                        cells[9]?.textContent?.trim() || ''
+                    ]);
+                }
+            });
+
+            if (tableData.length === 0) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+
+            const headers = ['رقم الفاتورة', 'التاريخ', 'العميل', 'المنتج', 'الكمية', 'الإجمالي', 'طريقة الدفع', 'الحالة'];
+            doc.autoTable({
+                head: [headers],
+                body: tableData,
+                startY: 100,
+                styles: { fontSize: 8, font: 'helvetica', textColor: [40, 40, 40] },
+                headStyles: { fillColor: [0, 122, 204], textColor: [255, 255, 255], fontSize: 9 },
+                alternateRowStyles: { fillColor: [245, 245, 245] },
+                margin: { left: 30, right: 30 },
+                tableWidth: 'auto'
+            });
+
+            doc.save(`تقرير_المبيعات_${from}_${to}.pdf`);
+            showToast('✅ تم تصدير PDF', 'success');
+            hapticFeedback('success');
+        }
+
+        // ============================================================
+        // 20. إعادة تعيين الفلاتر
+        // ============================================================
+        function resetFilters() {
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            document.getElementById('filterProduct').value = '';
+            document.getElementById('filterCustomer').value = '';
+            document.getElementById('filterPaymentMethod').value = '';
+            document.getElementById('filterReportType').value = 'summary';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterShift').value = '';
+            // إعادة تعيين الشريط العلوي
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('.filter-chip[onclick*="all"]')?.classList.add('active');
+            currentPaymentFilter = 'all';
+            showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
+            generateReport();
+        }
+
+        // ============================================================
+        // 21. البحث والفلاتر
+        // ============================================================
+        function handleSearch(query) {
+            const search = query.trim().toLowerCase();
+            const rows = document.querySelectorAll('#salesTableBody tr');
+            rows.forEach(row => {
+                if (row.classList.contains('empty-state')) return;
+                const text = row.textContent.toLowerCase();
+                if (text.includes(search)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        let currentPaymentFilter = 'all';
+
+        function setFilter(filter, btn) {
+            currentPaymentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            // إعادة تطبيق التصفية على البيانات الحالية
+            const sales = LocalDB.getSales() || [];
+            if (sales.length > 0) {
+                let filtered = [...sales];
+                if (filter !== 'all') {
+                    filtered = filtered.filter(s => s.payment_method === filter);
+                }
+                renderSalesTable(filtered);
+                updateStats(filtered);
+                updateSummary(filtered);
+                updateCharts(filtered);
+            }
+            hapticFeedback('light');
+        }
+
+        function showStatDetail(type) {
+            showToast('📊 عرض تفاصيل: ' + type, 'success');
+        }
+
+        // ============================================================
+        // 22. تبديل التبويبات
+        // ============================================================
+        function switchTab(tab) {
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
+            const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
+            if (target) target.classList.add('active');
+
+            // تغيير نوع التقرير
+            const reportTypeMap = {
+                'summary': 'summary',
+                'sales': 'detailed',
+                'by_product': 'by_product',
+                'by_customer': 'by_customer',
+                'daily': 'daily'
+            };
+            document.getElementById('filterReportType').value = reportTypeMap[tab] || 'detailed';
+            generateReport();
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 23. تحميل البيانات الأولية للقوائم المنسدلة
+        // ============================================================
+        async function loadDropdownData() {
+            try {
+                const [productsRes, customersRes, shiftsRes] = await Promise.all([
+                    apiCall('getProducts', {}),
+                    apiCall('getCustomers', {}),
+                    apiCall('getShifts', {})
+                ]);
+
+                const productSelect = document.getElementById('filterProduct');
+                if (productsRes.success && productsRes.data) {
+                    productSelect.innerHTML = '<option value="">جميع المنتجات</option>';
+                    productsRes.data.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id || p.product_id;
+                        opt.textContent = p.product_name || p.name || 'منتج';
+                        productSelect.appendChild(opt);
+                    });
+                }
+
+                const customerSelect = document.getElementById('filterCustomer');
+                if (customersRes.success && customersRes.data) {
+                    customerSelect.innerHTML = '<option value="">جميع العملاء</option>';
+                    customersRes.data.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id || c.customer_id;
+                        opt.textContent = c.commercial_name || c.name || 'عميل';
+                        customerSelect.appendChild(opt);
+                    });
+                }
+
+                const shiftSelect = document.getElementById('filterShift');
+                if (shiftsRes.success && shiftsRes.data) {
+                    shiftSelect.innerHTML = '<option value="">جميع الورديات</option>';
+                    shiftsRes.data.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.id || s.shift_id;
+                        opt.textContent = s.shift_code || 'وردية ' + (s.shift_date || '');
+                        shiftSelect.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading dropdown data:', e);
+            }
+        }
+
+        // ============================================================
+        // 24. معالج أزرار القائمة الجانبية
+        // ============================================================
+        function handleSidebarAction(action) {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.remove('open');
+            document.getElementById('sidebarToggle').classList.remove('hidden');
+
+            switch (action) {
+                case 'refresh':
+                    generateReport();
+                    showToast('🔄 تم تحديث التقرير', 'success');
+                    break;
+                case 'export_csv':
+                    exportReport();
+                    break;
+                case 'export_pdf':
+                    exportPDF();
+                    break;
+                case 'print':
+                    window.print();
+                    break;
+                case 'ai_advisor':
+                    openAIAdvisor();
+                    break;
+                case 'home':
+                    window.location.href = 'main.html';
+                    break;
+                default:
+                    showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        // ============================================================
+        // 25. إعداد القائمة الجانبية
+        // ============================================================
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden');
+                hapticFeedback('light');
+            });
+            document.addEventListener('click', (e) => {
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    toggle.classList.remove('hidden');
+                }
+            });
+        }
+
+        // ============================================================
+        // 26. التهيئة النهائية
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            setupSidebar();
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            updateOnlineStatus();
+
+            // تعيين التواريخ الافتراضية
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+
+            // تحميل بيانات القوائم المنسدلة
+            loadDropdownData();
+
+            // توليد التقرير الافتراضي
+            setTimeout(generateReport, 500);
+
+            document.getElementById('aiModal').addEventListener('click', function(e) {
+                if (e.target === this) closeAIModal();
+            });
+
+            if (isOnline) {
+                syncPendingOperations();
+            }
+
+            setTimeout(() => {
+                const sales = LocalDB.getSales();
+                if (sales && sales.length > 0) {
+                    const insights = LocalDB.getAIInsights();
+                    if (insights.length > 0) {
+                        showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
+                    }
+                }
+            }, 3000);
+        });
+    </script>
+
+</body>
+</html>
