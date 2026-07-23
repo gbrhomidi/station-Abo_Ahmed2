@@ -4954,7 +4954,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
                 } else null
             } else null
         }
-    }
+    
 
     fun getUserByUsername(username: String): JSONObject? {
         val db = readableDatabase
