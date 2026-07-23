@@ -4892,6 +4892,37 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
             'محطة ابو أحمد لمشتقات الديزل\nشكراً لزيارتكم', 
             'مع خالص الشكر والتقدير\nأبو أحمد', 1)
         """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO screens
+            (id, uuid, screen_name, module, description, is_active)
+            VALUES
+            (1,'SCR-001-UUID','balance-sheet','accounting','الميزانية العمومية',1),
+            (2,'SCR-002-UUID','banks-accounts','accounting','الحسابات البنكية',1),
+            (3,'SCR-003-UUID','chart-of-accounts','accounting','دليل الحسابات',1),
+            (4,'SCR-004-UUID','contracts','crm','العقود',1),
+            (5,'SCR-005-UUID','crm','crm','إدارة علاقات العملاء',1),
+            (6,'SCR-006-UUID','customer-reports','reports','تقارير العملاء',1),
+            (7,'SCR-007-UUID','customers','customers','العملاء',1),
+            (8,'SCR-008-UUID','fuel-reports','reports','تقارير الوقود',1),
+            (9,'SCR-009-UUID','inventory-movements','inventory','حركات المخزون',1),
+            (10,'SCR-010-UUID','inventory-reports','inventory','تقارير المخزون',1),
+            (11,'SCR-011-UUID','journal-entries','accounting','القيود اليومية',1),
+            (12,'SCR-012-UUID','kpi','reports','مؤشرات الأداء',1),
+            (13,'SCR-013-UUID','ledger','accounting','دفتر الأستاذ',1),
+            (14,'SCR-014-UUID','party-types','customers','أنواع الأطراف',1),
+            (15,'SCR-015-UUID','pos','sales','نقطة البيع',1),
+            (16,'SCR-016-UUID','product-categories','inventory','تصنيفات المنتجات',1),
+            (17,'SCR-017-UUID','product_categories','inventory','تصنيفات المنتجات',1),
+            (18,'SCR-018-UUID','products','inventory','المنتجات',1),
+            (19,'SCR-019-UUID','sales-log','sales','سجل المبيعات',1),
+            (20,'SCR-020-UUID','sales-reports','reports','تقارير المبيعات',1),
+            (21,'SCR-021-UUID','stock-levels','inventory','مستويات المخزون',1),
+            (22,'SCR-022-UUID','suppliers','suppliers','الموردين',1),
+            (23,'SCR-023-UUID','users','users','المستخدمين',1),
+            (24,'SCR-024-UUID','login','security','تسجيل الدخول',1)
+        """)
+
     }
 
     // ================================================================
@@ -4954,35 +4985,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
 
-        db.execSQL("""
-            INSERT OR IGNORE INTO screens
-            (id, uuid, screen_name, module, description, is_active)
-            VALUES
-            (1,'SCR-001-UUID','balance-sheet','accounting','الميزانية العمومية',1),
-            (2,'SCR-002-UUID','banks-accounts','accounting','الحسابات البنكية',1),
-            (3,'SCR-003-UUID','chart-of-accounts','accounting','دليل الحسابات',1),
-            (4,'SCR-004-UUID','contracts','crm','العقود',1),
-            (5,'SCR-005-UUID','crm','crm','إدارة علاقات العملاء',1),
-            (6,'SCR-006-UUID','customer-reports','reports','تقارير العملاء',1),
-            (7,'SCR-007-UUID','customers','customers','العملاء',1),
-            (8,'SCR-008-UUID','fuel-reports','reports','تقارير الوقود',1),
-            (9,'SCR-009-UUID','inventory-movements','inventory','حركات المخزون',1),
-            (10,'SCR-010-UUID','inventory-reports','inventory','تقارير المخزون',1),
-            (11,'SCR-011-UUID','journal-entries','accounting','القيود اليومية',1),
-            (12,'SCR-012-UUID','kpi','reports','مؤشرات الأداء',1),
-            (13,'SCR-013-UUID','ledger','accounting','دفتر الأستاذ',1),
-            (14,'SCR-014-UUID','party-types','customers','أنواع الأطراف',1),
-            (15,'SCR-015-UUID','pos','sales','نقطة البيع',1),
-            (16,'SCR-016-UUID','product-categories','inventory','تصنيفات المنتجات',1),
-            (17,'SCR-017-UUID','product_categories','inventory','تصنيفات المنتجات',1),
-            (18,'SCR-018-UUID','products','inventory','المنتجات',1),
-            (19,'SCR-019-UUID','sales-log','sales','سجل المبيعات',1),
-            (20,'SCR-020-UUID','sales-reports','reports','تقارير المبيعات',1),
-            (21,'SCR-021-UUID','stock-levels','inventory','مستويات المخزون',1),
-            (22,'SCR-022-UUID','suppliers','suppliers','الموردين',1),
-            (23,'SCR-023-UUID','users','users','المستخدمين',1),
-            (24,'SCR-024-UUID','login','security','تسجيل الدخول',1)
-        """)
+        )
 
     // ================================================================
     // 23. PARTIES (CUSTOMERS / SUPPLIERS) - الموحدة

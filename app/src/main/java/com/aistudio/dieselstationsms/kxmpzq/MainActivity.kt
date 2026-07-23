@@ -643,7 +643,7 @@ class MainActivity : AppCompatActivity() {
 
         if (authResult != null) {
 
-            val userId = authResult.optLong("id", 0)
+            val userId = authResult.optLong("user_id", 0)
 
             val permissionsArray = dbHelper.getUserPermissions(userId)
 
@@ -671,6 +671,13 @@ class MainActivity : AppCompatActivity() {
             authResult.put(
                 "permissions",
                 permissionsObject
+            )
+
+            val screensArray = dbHelper.getUserScreens(userId)
+
+            authResult.put(
+                "screens",
+                screensArray
             )
 
             authResult.put(
