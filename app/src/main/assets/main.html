@@ -1668,8 +1668,29 @@ async function apiCall(action, params = {}) {
         function renderSidebar() {
             const nav = document.getElementById('sidebarNav');
             nav.innerHTML = '';
+            const filteredSidebar = sidebarNavData.map(item => {
+                if (!item.children || item.children.length === 0) {
+                    const route = subPageRouteMap[item.label] || null;
+                    return route && hasScreenAccess(route) ? item : null;
+                }
 
-            sidebarNavData.forEach((item, index) => {
+                const allowedChildren = item.children.filter(child => {
+                    const route = subPageRouteMap[child] || null;
+                    return route ? hasScreenAccess(route) : false;
+                });
+
+                if (allowedChildren.length === 0) {
+                    return null;
+                }
+
+                return {
+                    ...item,
+                    children: allowedChildren
+                };
+            }).filter(Boolean);
+
+
+            filteredSidebar.forEach((item, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'nav-item';
                 btn.setAttribute('role', 'menuitem');
@@ -1751,7 +1772,8 @@ async function apiCall(action, params = {}) {
                 const li = document.createElement('li');
                 li.textContent = item;
 
-                const hasPermission = true;
+                const route = subPageRouteMap[item] || null;
+                const hasPermission = route ? hasScreenAccess(route) : true;
                 if (!hasPermission) {
                     li.classList.add('disabled');
                 } else {
@@ -1870,8 +1892,15 @@ async function apiCall(action, params = {}) {
                 return;
             }
 
-            // إذا كان المسار يبدأ بـ screens/، نذهب مباشرة
+            // إذا كان المسار يبدأ بـ screens/، نتحقق من صلاحية الشاشة
             if (url.startsWith('screens/')) {
+
+                if (typeof hasScreenAccess === 'function' && !hasScreenAccess(url)) {
+                    showToast('ليس لديك صلاحية الوصول لهذه الشاشة', 'error');
+                    closePanels();
+                    return;
+                }
+
                 closePanels();
                 window.location.href = url;
                 return;
@@ -2217,6 +2246,7 @@ async function apiCall(action, params = {}) {
                 if (user) {
                     currentUser = user;
                     userPermissions = user.permissions || {};
+                    userScreens = user.screens || [];
                     updateUserInfo(user);
                 }
             } catch (e) {
