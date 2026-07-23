@@ -6362,6 +6362,68 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
         }
     }
 
+
+    fun getUserScreens(userId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+
+            val roleCursor = db.rawQuery(
+                "SELECT r.role_code FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?",
+                arrayOf(userId.toString())
+            )
+
+            var isAdmin = false
+
+            roleCursor.use {
+                if (it.moveToFirst()) {
+                    val role = it.getString(0)
+                    isAdmin = role == "SUPER_ADMIN" || role == "ADMIN"
+                }
+            }
+
+            val cursor = if (isAdmin) {
+                db.rawQuery(
+                    """
+                    SELECT screen_name, module, description
+                    FROM screens
+                    WHERE is_active=1
+                    ORDER BY id
+                    """,
+                    null
+                )
+            } else {
+                db.rawQuery(
+                    """
+                    SELECT DISTINCT s.screen_name, s.module, s.description
+                    FROM screens s
+                    JOIN permissions p ON p.module=s.module
+                    JOIN role_permissions rp ON rp.permission_id=p.id
+                    JOIN users u ON u.role_id=rp.role_id
+                    WHERE u.id=? AND s.is_active=1
+                    ORDER BY s.id
+                    """,
+                    arrayOf(userId.toString())
+                )
+            }
+
+            cursor.use {
+                while (it.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("screen_name", it.getString(0))
+                        put("module", it.getString(1))
+                        put("description", it.getString(2))
+                    })
+                }
+            }
+
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun getUserNotifications(userId: Long): JSONArray {
         dbLock.lock()
         return try {
