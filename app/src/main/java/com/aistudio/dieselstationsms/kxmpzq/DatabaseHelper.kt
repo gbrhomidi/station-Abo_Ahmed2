@@ -4985,7 +4985,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DB_NAME, null
     }
 
 
-        )
+        
 
     // ================================================================
     // 23. PARTIES (CUSTOMERS / SUPPLIERS) - الموحدة
