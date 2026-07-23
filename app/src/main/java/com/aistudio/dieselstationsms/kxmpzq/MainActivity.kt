@@ -634,33 +634,110 @@ class MainActivity : AppCompatActivity() {
 
         // ========== AUTHENTICATION ==========
         @JavascriptInterface
-        fun login(username: String, password: String): String {
-            Log.d(TAG, "login() called with username: $username")
-            return try {
-                val authResult = dbHelper.authenticateUser(username, password)
-                if (authResult != null) {
-                    val token = java.util.UUID.randomUUID().toString()
-                    val response = JSONObject().apply {
-                        put("success", true)
-                        put("user", authResult)
-                        put("token", token)
-                    }
-                    dbHelper.logActivity(username, "login", "تسجيل دخول ناجح عبر WebInterface")
-                    response.toString()
-                } else {
+        @JavascriptInterface
+       fun login(username: String, password: String): String {
+       Log.d(TAG, "login() called with username: $username")
+
+    return try {
+        val authResult = dbHelper.authenticateUser(username, password)
+
+        if (authResult != null) {
+
+            val userId = authResult.optLong("id", 0)
+
+            val permissionsArray = dbHelper.getUserPermissions(userId)
+
+            val permissionsObject = JSONObject()
+
+            for (i in 0 until permissionsArray.length()) {
+                val item = permissionsArray.getJSONObject(i)
+
+                val code = item.getString("permission_code")
+
+                permissionsObject.put(
+                    code,
                     JSONObject().apply {
-                        put("success", false)
-                        put("error", "بيانات خاطئة")
-                    }.toString()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Login error", e)
-                JSONObject().apply {
-                    put("success", false)
-                    put("error", "خطأ داخلي: ${e.message}")
-                }.toString()
+                        put("can_create", item.optBoolean("can_create"))
+                        put("can_read", item.optBoolean("can_read"))
+                        put("can_update", item.optBoolean("can_update"))
+                        put("can_delete", item.optBoolean("can_delete"))
+                        put("can_export", item.optBoolean("can_export"))
+                        put("can_print", item.optBoolean("can_print"))
+                        put("can_approve", item.optBoolean("can_approve"))
+                    }
+                )
             }
+
+            authResult.put(
+                "permissions",
+                permissionsObject
+            )
+
+            authResult.put(
+                "is_admin",
+                true
+            )
+
+            authResult.put(
+                "role",
+                "SUPER_ADMIN"
+            )
+
+
+            val token = java.util.UUID.randomUUID().toString()
+
+
+            JSONObject().apply {
+
+                put("success", true)
+
+                put(
+                    "user",
+                    authResult
+                )
+
+                put(
+                    "token",
+                    token
+                )
+
+            }.toString()
+
+
+        } else {
+
+            JSONObject().apply {
+
+                put("success", false)
+
+                put(
+                    "error",
+                    "بيانات خاطئة"
+                )
+
+            }.toString()
         }
+
+
+    } catch (e: Exception) {
+
+        Log.e(TAG, "Login error", e)
+
+        JSONObject().apply {
+
+            put(
+                "success",
+                false
+            )
+
+            put(
+                "error",
+                "خطأ داخلي: ${e.message}"
+            )
+
+        }.toString()
+    }
+}
 
         @JavascriptInterface
         fun requestBiometricAuth(): String {
