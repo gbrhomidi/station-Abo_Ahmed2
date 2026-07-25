@@ -1054,6 +1054,7 @@
             }
         }
     </style>
+<base target="_blank">
 </head>
 <body>
     <!-- Loading Overlay -->
@@ -1609,6 +1610,21 @@ async function apiCall(action, params = {}) {
         // تهيئة الصفحة
         // ============================================================
         document.addEventListener('DOMContentLoaded', function() {
+            // ============================================================
+            // فحص إذا كان المستخدم مسجلاً الدخول بالفعل
+            // ============================================================
+            (function checkAlreadyLoggedIn() {
+                const token = localStorage.getItem('authToken');
+                const user = localStorage.getItem('user');
+
+                // إذا كان المستخدم مسجلاً الدخول بالفعل → توجيه للرئيسية
+                if (token && user && token !== 'null' && token !== '' && user !== 'null' && user !== '') {
+                    window.location.replace('../main.html');
+                    return;
+                }
+            })();
+
+
             // عناصر DOM
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
@@ -1881,7 +1897,7 @@ async function apiCall(action, params = {}) {
                         'تم تسجيل الدخول بنجاح! جاري التوجيه...';
                         document.getElementById('successMessage').classList.add('show');
                         setTimeout(() => {
-                            window.location.href = 'main.html';
+                            window.location.replace('../main.html');
                         }, 1500);
                     } else {
                         loginAttempts++;

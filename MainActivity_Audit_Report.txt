@@ -1,0 +1,589 @@
+=========================================
+ MainActivity.kt Security & Architecture Audit
+=========================================
+
+1) Login implementation
+-----------------------------------------
+638:       fun login(username: String, password: String): String {
+642:        val authResult = dbHelper.authenticateUser(username, password)
+684:                "is_admin",
+689:                "role",
+690:                "SUPER_ADMIN"
+694:            val token = java.util.UUID.randomUUID().toString()
+707:                    "token",
+708:                    token
+1339:        fun getUsersByRole(role: String): String {
+1341:                val users = dbHelper.getUsersByRole(role)
+
+2) JavascriptInterface exposed functions
+-----------------------------------------
+Count:
+153
+Functions:
+636:        @JavascriptInterface
+637:        @JavascriptInterface
+749:        @JavascriptInterface
+773:        @JavascriptInterface
+778:        @JavascriptInterface
+822:        @JavascriptInterface
+846:        @JavascriptInterface
+865:        @JavascriptInterface
+884:        @JavascriptInterface
+902:        @JavascriptInterface
+920:        @JavascriptInterface
+931:        @JavascriptInterface
+934:        @JavascriptInterface
+937:        @JavascriptInterface
+940:        @JavascriptInterface
+951:        @JavascriptInterface
+969:        @JavascriptInterface
+988:        @JavascriptInterface
+999:        @JavascriptInterface
+1003:        @JavascriptInterface
+1022:        @JavascriptInterface
+1033:        @JavascriptInterface
+1045:        @JavascriptInterface
+1066:        @JavascriptInterface
+1089:@JavascriptInterface
+1100:        @JavascriptInterface
+1111:        @JavascriptInterface
+1131:        @JavascriptInterface
+1150:        @JavascriptInterface
+1161:        @JavascriptInterface
+1173:        @JavascriptInterface
+1192:        @JavascriptInterface
+1204:        @JavascriptInterface
+1223:        @JavascriptInterface
+1235:        @JavascriptInterface
+1254:        @JavascriptInterface
+1265:        @JavascriptInterface
+1277:        @JavascriptInterface
+1296:        @JavascriptInterface
+1308:        @JavascriptInterface
+1327:        @JavascriptInterface
+1338:        @JavascriptInterface
+1349:        @JavascriptInterface
+1368:        @JavascriptInterface
+1387:        @JavascriptInterface
+1406:        @JavascriptInterface
+1417:        @JavascriptInterface
+1436:        @JavascriptInterface
+1455:        @JavascriptInterface
+1474:        @JavascriptInterface
+1493:        @JavascriptInterface
+1510:        @JavascriptInterface
+1521:        @JavascriptInterface
+1540:        @JavascriptInterface
+1559:        @JavascriptInterface
+1578:        @JavascriptInterface
+1597:        @JavascriptInterface
+1609:        @JavascriptInterface
+1628:        @JavascriptInterface
+1639:        @JavascriptInterface
+1649:        @JavascriptInterface
+1667:        @JavascriptInterface
+1686:        @JavascriptInterface
+1697:        @JavascriptInterface
+1708:        @JavascriptInterface
+1719:        @JavascriptInterface
+1736:        @JavascriptInterface
+1747:        @JavascriptInterface
+1758:        @JavascriptInterface
+1777:        @JavascriptInterface
+1795:        @JavascriptInterface
+1813:        @JavascriptInterface
+1824:        @JavascriptInterface
+1848:        @JavascriptInterface
+1872:        @JavascriptInterface
+1891:        @JavascriptInterface
+1908:        @JavascriptInterface
+1925:        @JavascriptInterface
+1939:        @JavascriptInterface
+1951:        @JavascriptInterface
+1962:        @JavascriptInterface
+1973:        @JavascriptInterface
+1984:        @JavascriptInterface
+1996:        @JavascriptInterface
+2007:        @JavascriptInterface
+2026:        @JavascriptInterface
+2045:        @JavascriptInterface
+2063:        @JavascriptInterface
+2074:        @JavascriptInterface
+2086:        @JavascriptInterface
+2098:        @JavascriptInterface
+2109:        @JavascriptInterface
+2120:        @JavascriptInterface
+2131:        @JavascriptInterface
+2146:        @JavascriptInterface
+2157:        @JavascriptInterface
+2189:        @JavascriptInterface
+2217:        @JavascriptInterface
+2237:        @JavascriptInterface
+2248:        @JavascriptInterface
+2277:        @JavascriptInterface
+2306:        @JavascriptInterface
+2326:        @JavascriptInterface
+2338:        @JavascriptInterface
+2349:        @JavascriptInterface
+2360:        @JavascriptInterface
+2371:        @JavascriptInterface
+2386:        @JavascriptInterface
+2407:        @JavascriptInterface
+2418:        @JavascriptInterface
+2429:        @JavascriptInterface
+2456:        @JavascriptInterface
+2474:        @JavascriptInterface
+2491:        @JavascriptInterface
+2509:        @JavascriptInterface
+2527:        @JavascriptInterface
+2537:        @JavascriptInterface
+2548:        @JavascriptInterface
+2566:        @JavascriptInterface
+2573:        @JavascriptInterface
+2576:        @JavascriptInterface
+2585:        @JavascriptInterface
+2602:        @JavascriptInterface
+2611:        @JavascriptInterface
+2622:        @JavascriptInterface
+2633:        @JavascriptInterface
+2644:        @JavascriptInterface
+2655:        @JavascriptInterface
+2666:        @JavascriptInterface
+2677:        @JavascriptInterface
+2695:        @JavascriptInterface
+2705:        @JavascriptInterface
+2715:        @JavascriptInterface
+2725:        @JavascriptInterface
+2736:        @JavascriptInterface
+2747:        @JavascriptInterface
+2757:        @JavascriptInterface
+2774:        @JavascriptInterface
+2785:        @JavascriptInterface
+2824:        @JavascriptInterface
+2839:        @JavascriptInterface
+2850:        @JavascriptInterface
+2861:        @JavascriptInterface
+2872:        @JavascriptInterface
+2883:        @JavascriptInterface
+2894:        @JavascriptInterface
+2905:        @JavascriptInterface
+2924:        @JavascriptInterface
+2943:        @JavascriptInterface
+2960:        @JavascriptInterface
+2979:        @JavascriptInterface
+2998:        @JavascriptInterface
+3015:        @JavascriptInterface
+
+3) Database write operations exposed
+-----------------------------------------
+401:            update = { }
+662:                        put("can_update", item.optBoolean("can_update"))
+663:                        put("can_delete", item.optBoolean("can_delete"))
+850:                val id = dbHelper.insertParty(data)
+866:        fun updateParty(id: Long, jsonData: String): String {
+869:                val rows = dbHelper.updateParty(id, data)
+876:                Log.e(TAG, "updateParty error", e)
+885:        fun deleteParty(id: Long): String {
+887:                val rows = dbHelper.deleteParty(id)
+894:                Log.e(TAG, "deleteParty error", e)
+1112:        fun deleteSale(saleId: Long): String {
+1115:                val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
+1116:                val rows = dbWritable.update("sales_transactions", cv, "id=?", arrayOf(saleId.toString()))
+1119:                    if (rows > 0) dbHelper.logActivity("system", "delete_sale", "حذف مبيعة $saleId")
+1122:                Log.e(TAG, "deleteSale error", e)
+1309:        fun addUser(jsonData: String): String {
+1312:                val id = dbHelper.addUser(data)
+1319:                Log.e(TAG, "addUser error", e)
+1350:        fun updateUser(id: Long, jsonData: String): String {
+1353:                val rows = dbHelper.updateUser(id, data)
+1360:                Log.e(TAG, "updateUser error", e)
+1369:        fun deleteUser(id: Long): String {
+1371:                val rows = dbHelper.deleteUser(id)
+1378:                Log.e(TAG, "deleteUser error", e)
+1418:        fun updateEmployee(id: Long, jsonData: String): String {
+1421:                val rows = dbHelper.updateEmployee(id, data)
+1428:                Log.e(TAG, "updateEmployee error", e)
+1437:        fun deleteEmployee(id: Long): String {
+1439:                val rows = dbHelper.deleteEmployee(id.toInt())
+1446:                Log.e(TAG, "deleteEmployee error", e)
+1522:        fun deleteShift(shiftId: Long): String {
+1525:                val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
+1526:                val rows = dbWritable.update("shifts", cv, "id=?", arrayOf(shiftId.toString()))
+1529:                    if (rows > 0) dbHelper.logActivity("system", "delete_shift", "حذف وردية $shiftId")
+1532:                Log.e(TAG, "deleteShift error", e)
+1720:        fun updateSmsStatus(id: Long, status: String): String {
+1722:                val rows = dbHelper.updateSmsStatus(id, status)
+1728:                Log.e(TAG, "updateSmsStatus error", e)
+1778:        fun updateSmsTemplate(id: Long, jsonData: String): String {
+1781:                val rows = dbHelper.updateSmsTemplate(id, data)
+1787:                Log.e(TAG, "updateSmsTemplate error", e)
+1796:        fun deleteSmsTemplate(id: Long): String {
+1798:                val rows = dbHelper.deleteSmsTemplate(id)
+1804:                Log.e(TAG, "deleteSmsTemplate error", e)
+1892:        fun deleteSetting(key: String): String {
+1894:                val rows = dbHelper.deleteSetting(key)
+1900:                Log.e(TAG, "deleteSetting error", e)
+2011:                val id = dbHelper.insertProduct(data)
+2027:        fun updateProduct(id: Long, jsonData: String): String {
+2030:                val rows = dbHelper.updateProduct(id, data)
+2037:                Log.e(TAG, "updateProduct error", e)
+2046:        fun deleteProduct(id: Long): String {
+2048:                val rows = dbHelper.deleteProduct(id)
+2055:                Log.e(TAG, "deleteProduct error", e)
+2132:        fun updateTankQuantity(tankId: Int, quantity: Double): String {
+2134:                dbHelper.updateTankQuantity(tankId, quantity, "System")
+2137:                Log.e(TAG, "updateTankQuantity error", e)
+2190:        fun updateMaintenanceStatus(jsonData: String): String {
+2201:                    val rows = dbHelper.updateMaintenanceRequestStatus(requestId, status)
+2209:                Log.e(TAG, "updateMaintenanceStatus error", e)
+2218:        fun deleteMaintenance(requestId: Long): String {
+2221:                val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
+2222:                val rows = dbWritable.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
+2225:                    if (rows > 0) dbHelper.logActivity("system", "delete_maintenance", "حذف طلب صيانة $requestId")
+2228:                Log.e(TAG, "deleteMaintenance error", e)
+2307:        fun deletePayment(paymentId: Long): String {
+2310:                val cv = android.content.ContentValues().apply { put("is_deleted", 1) }
+2311:                val rows = dbWritable.update("payments", cv, "id=?", arrayOf(paymentId.toString()))
+2314:                    if (rows > 0) dbHelper.logActivity("system", "delete_payment", "حذف دفعة $paymentId")
+2317:                Log.e(TAG, "deletePayment error", e)
+2925:        fun updatePartyContact(jsonData: String): String {
+2929:                val rows = dbHelper.updatePartyContact(id, data)
+2935:                Log.e(TAG, "updatePartyContact error", e)
+2944:        fun deletePartyContact(contactId: Long): String {
+2946:                val rows = dbHelper.deletePartyContact(contactId)
+2952:                Log.e(TAG, "deletePartyContact error", e)
+2980:        fun updatePartyAddress(jsonData: String): String {
+2984:                val rows = dbHelper.updatePartyAddress(id, data)
+2990:                Log.e(TAG, "updatePartyAddress error", e)
+2999:        fun deletePartyAddress(addressId: Long): String {
+3001:                val rows = dbHelper.deletePartyAddress(addressId)
+3007:                Log.e(TAG, "deletePartyAddress error", e)
+
+4) Blocking synchronous operations
+-----------------------------------------
+831:                val response = geminiHelper.sendMessageSync(message)
+2441:                val insight = geminiHelper.sendMessageSync(prompt)
+2457:        fun backupDatabase(): String {
+2459:                val path = dbHelper.backupDatabase()
+2466:                Log.e(TAG, "backupDatabase error", e)
+2475:        fun restoreDatabase(path: String): String {
+2477:                val success = dbHelper.restoreDatabase(path)
+2483:                Log.e(TAG, "restoreDatabase error", e)
+2492:        fun exportToCSV(tableName: String): String {
+2494:                val path = dbHelper.exportToCSV(tableName)
+2501:                Log.e(TAG, "exportToCSV error", e)
+2510:        fun importFromCSV(tableName: String, path: String): String {
+2512:                val count = dbHelper.importFromCSV(tableName, path)
+2519:                Log.e(TAG, "importFromCSV error", e)
+2549:        fun vacuumDatabase(): String {
+2551:                dbHelper.vacuumDatabase()
+2557:                Log.e(TAG, "vacuumDatabase error", e)
+2825:        fun exportAllData(): String {
+2827:                val data = dbHelper.exportAllData()
+2830:                Log.e(TAG, "exportAllData error", e)
+
+5) Coroutine usage
+-----------------------------------------
+39:import androidx.lifecycle.lifecycleScope
+41:import kotlinx.coroutines.Dispatchers
+43:import kotlinx.coroutines.launch
+144:        lifecycleScope.launch {
+788:                lifecycleScope.launch(Dispatchers.IO) {
+791:                        withContext(Dispatchers.Main) {
+799:                        withContext(Dispatchers.Main) {
+3072:            lifecycleScope.launch {
+
+6) Activity lifecycle handling
+-----------------------------------------
+106:    override fun onCreate(savedInstanceState: Bundle?) {
+107:        super.onCreate(savedInstanceState)
+3079:    override fun onResume() {
+3080:        super.onResume()
+3093:    override fun onDestroy() {
+3094:        Log.d(TAG, "onDestroy called")
+3107:            Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
+3111:        super.onDestroy()
+
+7) WebView configuration
+-----------------------------------------
+20:import android.webkit.WebChromeClient
+23:import android.webkit.WebView
+24:import android.webkit.WebViewClient
+61: *   WebView (main.html)
+92:    private var webView: WebView? = null
+97:    private var isWebViewInitialized = false
+121:                WebView.setWebContentsDebuggingEnabled(true)
+124:                Log.w(TAG, "WebView debugging enable failed: ${e.message}")
+154:                    WebViewScreen(
+163:                loadWebViewFromAssets()
+183:    private fun loadWebViewFromAssets() {
+186:            Log.w(TAG, "WebView is null, cannot load from assets")
+195:                Log.w(TAG, "WebView not attached, retrying...")
+198:                        loadWebViewFromAssets()
+333:    fun WebViewScreen(modifier: Modifier = Modifier) {
+334:        val webViewRef = remember { mutableSetOf<WebView>() }
+338:                Log.d(TAG, "Disposing WebView references")
+339:                webViewRef.forEach { destroyWebView(it) }
+353:                    val wv = WebView(context).apply {
+359:                        setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+362:                            javaScriptEnabled = true
+368:                            allowFileAccess = true
+369:                            allowContentAccess = true
+371:                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+372:                            setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+373:                            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+379:                        webViewClient = createWebViewClient()
+380:                        webChromeClient = WebChromeClient()
+396:                    this@MainActivity.isWebViewInitialized = true
+398:                    Log.d(TAG, "WebView created and added to FrameLayout")
+405:    private fun createWebViewClient(): WebViewClient {
+406:        return object : WebViewClient() {
+408:            override fun onPageFinished(view: WebView?, url: String?) {
+413:                Log.d(TAG, "WebView page finished loading: $url")
+417:                view: WebView?,
+428:            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+437:                view: WebView?,
+443:                Log.w(TAG, "WebView error: ${error?.description}")
+448:                view: WebView?,
+455:                Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
+459:                view: WebView?,
+468:                view: WebView?,
+471:                Log.e(TAG, "WebView RenderProcess gone. didCrash: ${detail?.didCrash()}")
+472:                view?.let { destroyWebView(it) }
+475:                    isWebViewInitialized = false
+478:                            recreateWebView()
+487:    private fun recreateWebView() {
+489:        Log.d(TAG, "Recreating WebView...")
+493:                    WebViewScreen(
+502:                loadWebViewFromAssets()
+3083:                Log.w(TAG, "WebView not attached, reloading...")
+3086:                        loadWebViewFromAssets()
+3103:                destroyWebView(wv)
+3107:            Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
+3114:    private fun destroyWebView(webView: WebView?) {
+3128:            Log.d(TAG, "WebView destroyed successfully")
+3130:            Log.e(TAG, "Error destroying WebView", e)
+
+8) Permission handling
+-----------------------------------------
+142:        requestAllPermissions()
+269:    private fun requestAllPermissions() {
+288:            if (!isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+289:                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+299:            requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+3039:    override fun onRequestPermissionsResult(
+3044:        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+9) SMS Service startup
+-----------------------------------------
+147:                startSMSService()
+161:        handler.postDelayed({
+196:                handler.postDelayed({
+309:    private fun startSMSService() {
+476:                    handler.postDelayed({
+499:        handler.postDelayed({
+3074:                startSMSService()
+3084:                handler.postDelayed({
+
+10) Context / memory leak risks
+-----------------------------------------
+7:import android.content.Context
+38:import androidx.core.content.ContextCompat
+44:import kotlinx.coroutines.withContext
+58: *   MainActivity
+78:class MainActivity : AppCompatActivity() {
+81:        private const val TAG = "MainActivity"
+178:            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+306:        return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+384:                                WebAppInterface(context, this@MainActivity),
+395:                    this@MainActivity.webView = wv
+396:                    this@MainActivity.isWebViewInitialized = true
+581:            val executor = ContextCompat.getMainExecutor(this)
+630:    inner class WebAppInterface(
+631:        private val context: Context,
+632:        private val activity: MainActivity
+791:                        withContext(Dispatchers.Main) {
+799:                        withContext(Dispatchers.Main) {
+
+11) Hardcoded admin/security values
+-----------------------------------------
+121:                WebView.setWebContentsDebuggingEnabled(true)
+210:        isErrorPageShown = true
+362:                            javaScriptEnabled = true
+363:                            domStorageEnabled = true
+364:                            databaseEnabled = true
+365:                            setSupportZoom(true)
+366:                            builtInZoomControls = true
+368:                            allowFileAccess = true
+369:                            allowContentAccess = true
+374:                            loadsImagesAutomatically = true
+396:                    this@MainActivity.isWebViewInitialized = true
+411:                serverReady = true
+422:                    return true
+431:                    return true
+482:                return true
+513:                    true
+524:                    true
+535:                    true
+546:                    true
+556:                    true
+638:       fun login(username: String, password: String): String {
+642:        val authResult = dbHelper.authenticateUser(username, password)
+684:                "is_admin",
+685:                true
+690:                "SUPER_ADMIN"
+699:                put("success", true)
+755:                            put("success", true)
+793:                                put("success", true)
+810:                    put("success", true)
+833:                    put("success", true)
+852:                    put("success", true)
+975:                    put("success", true)
+1009:                    put("success", true)
+1051:                    put("success", true)
+1137:                    put("success", true)
+1179:                    put("success", true)
+1210:                    put("success", true)
+1241:                    put("success", true)
+1283:                    put("success", true)
+1314:                    put("success", true)
+1393:                    put("success", true)
+1461:                    put("success", true)
+1546:                    put("success", true)
+1565:                    put("success", true)
+1584:                    put("success", true)
+1615:                    put("success", true)
+1673:                    put("success", true)
+1764:                    put("success", true)
+1837:                    JSONObject().apply { put("success", true) }.toString()
+1860:                    JSONObject().apply { put("success", true) }.toString()
+1878:                    put("success", true)
+1913:                    put("success", true)
+1929:                JSONObject().apply { put("success", true) }.toString()
+2013:                    put("success", true)
+2135:                JSONObject().apply { put("success", true) }.toString()
+2175:                        put("success", true)
+2443:                    put("success", true)
+2461:                    put("success", true)
+2496:                    put("success", true)
+2514:                    put("success", true)
+2553:                    put("success", true)
+2682:                    put("success", true)
+2911:                    put("success", true)
+2966:                    put("success", true)
+3095:        isDestroyed.set(true)
+3123:            webView.clearCache(true)
+
+12) External URL loading
+-----------------------------------------
+193:                wv.loadUrl("file:///android_asset/main.html")
+416:            override fun shouldOverrideUrlLoading(
+428:            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+3121:            webView.loadUrl("about:blank")
+
+13) Error handling
+-----------------------------------------
+120:            try {
+123:            } catch (e: Exception) {
+128:        try {
+130:        } catch (e: Exception) {
+190:        try {
+195:                Log.w(TAG, "WebView not attached, retrying...")
+202:        } catch (e: Exception) {
+225:                    .btn-retry { background: #1976d2; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-top: 16px; font-size: 16px; transition: background 0.3s; }
+226:                    .btn-retry:hover { background: #1565c0; }
+234:                    <button class="btn-retry" onclick="window.location.reload()">🔄 إعادة المحاولة</button>
+240:        try {
+243:        } catch (e: Exception) {
+249:        return try {
+263:        } catch (e: Exception) {
+314:        try {
+322:        } catch (e: SecurityException) {
+323:            Log.e(TAG, "SecurityException starting SMSService", e)
+325:        } catch (e: Exception) {
+382:                        try {
+388:                        } catch (e: Exception) {
+510:                try {
+514:                } catch (e: Exception) {
+521:                try {
+525:                } catch (e: Exception) {
+532:                try {
+536:                } catch (e: Exception) {
+543:                try {
+547:                } catch (e: Exception) {
+553:                try {
+557:                } catch (e: Exception) {
+567:        try {
+569:        } catch (e: ClassNotFoundException) {
+580:        try {
+619:        } catch (e: Exception) {
+641:    return try {
+729:    } catch (e: Exception) {
+780:            return try {
+789:                    try {
+798:                    } catch (e: Exception) {
+813:            } catch (e: Exception) {
+824:            return try {
+836:            } catch (e: Exception) {
+848:            return try {
+856:            } catch (e: Exception) {
+867:            return try {
+875:            } catch (e: Exception) {
+886:            return try {
+893:            } catch (e: Exception) {
+904:            return try {
+911:            } catch (e: Exception) {
+922:            return try {
+925:            } catch (e: Exception) {
+942:            return try {
+945:            } catch (e: Exception) {
+953:            return try {
+959:            } catch (e: Exception) {
+971:            return try {
+979:            } catch (e: Exception) {
+990:            return try {
+993:            } catch (e: Exception) {
+1005:            return try {
+1013:            } catch (e: Exception) {
+1024:            return try {
+1027:            } catch (e: Exception) {
+1035:            return try {
+1038:            } catch (e: Exception) {
+1047:            return try {
+1055:            } catch (e: Exception) {
+1069:            return try {
+1078:            } catch(e:Exception){
+1091:            return try {
+1094:            } catch (e: Exception) {
+1102:            return try {
+1105:            } catch (e: Exception) {
+1113:            return try {
+1121:            } catch (e: Exception) {
+1133:            return try {
+1141:            } catch (e: Exception) {
+1152:            return try {
+1155:            } catch (e: Exception) {
+1163:            return try {
+1166:            } catch (e: Exception) {
+1175:            return try {
+1183:            } catch (e: Exception) {
+1194:            return try {
+1197:            } catch (e: Exception) {
+1206:            return try {
+1214:            } catch (e: Exception) {
+1225:            return try {
+1228:            } catch (e: Exception) {
+1237:            return try {
+1245:            } catch (e: Exception) {
+1256:            return try {
+1259:            } catch (e: Exception) {
+1267:            return try {
+1270:            } catch (e: Exception) {
+1279:            return try {
+1287:            } catch (e: Exception) {
+1298:            return try {
+1301:            } catch (e: Exception) {
+
+=========================================
+ Audit finished
+=========================================

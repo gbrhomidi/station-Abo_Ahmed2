@@ -899,6 +899,7 @@
         .w-full { width: 100%; }
         .hidden { display: none !important; }
     </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -1458,7 +1459,7 @@ async function apiCall(action, params = {}) {
                 if (refreshInterval) clearInterval(refreshInterval);
                 localStorage.clear();
                 // التوجيه إلى شاشة تسجيل الدخول
-                window.location.href = 'screens/login.html';
+                window.location.replace('screens/login.html');
             }
         }
 
@@ -2195,7 +2196,21 @@ async function apiCall(action, params = {}) {
         // ============================================================
         // بدء التطبيق
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
+                // ============================================================
+        // فحص المصادقة — إعادة توجيه إذا لم يكن مسجلاً الدخول
+        // ============================================================
+        (function checkAuth() {
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+
+            // إذا لم يكن هناك توكن أو بيانات مستخدم → إعادة توجيه فورية
+            if (!token || !user || token === 'null' || token === '' || user === 'null' || user === '') {
+                window.location.replace('screens/login.html');
+                return;
+            }
+        })();
+
+document.addEventListener('DOMContentLoaded', function() {
             // تهيئة القائمة الجانبية
             renderSidebar();
 

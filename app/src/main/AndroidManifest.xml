@@ -2,50 +2,58 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ==================== الأذونات ==================== -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- 📋 الأذونات المطلوبة لنظام SMS التفاعلي                   -->
+    <!-- ════════════════════════════════════════════════════════ -->
+
+    <!-- ✅ SMS Core Permissions -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
+
+    <!-- ✅ Phone Permissions -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+
+    <!-- ✅ Network Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- ✅ Foreground Service Permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- ✅ Boot Initialization Permission -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- ✅ Notifications Permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ✅ System Permissions -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- ==================== الميزات ==================== -->
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.autofocus"
-        android:required="false" />
+    <!-- ✅ Battery Optimization Permission -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- ✅ Media Permissions (إذا كان التطبيق يتعامل مع الوسائط) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- 📱 الميزات المطلوبة (Features)                            -->
+    <!-- ════════════════════════════════════════════════════════ -->
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="true" />
-    <uses-feature
-        android:name="android.hardware.fingerprint"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.biometrics.face"
-        android:required="false" />
 
     <!-- ════════════════════════════════════════════════════════ -->
-    <!-- ✅ تم التغيير: تم تعطيل Cleartext Traffic نهائياً       -->
-    <!--    لم نعد نستخدم خادم HTTP محلي (NanoHTTPD/8080)        -->
-    <!--    جميع الاتصالات الخارجية عبر HTTPS فقط               -->
+    <!-- 🛡️ إعدادات التطبيق                                       -->
     <!-- ════════════════════════════════════════════════════════ -->
     <application
         android:name=".MyApplication"
@@ -58,13 +66,17 @@
         android:label="@string/app_name"
         android:largeHeap="true"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:screenOrientation="portrait"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyApplication"
         android:usesCleartextTraffic="false"
-        tools:targetApi="31">
+        tools:targetApi="34">
 
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 🎯 MainActivity - نقطة الدخول الرئيسية                    -->
+        <!-- ════════════════════════════════════════════════════════ -->
         <activity
             android:name=".MainActivity"
             android:allowEmbedded="false"
@@ -84,6 +96,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Intent filters للتعامل مع روابط SMS و tel -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -99,6 +112,110 @@
             </intent-filter>
         </activity>
 
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 📡 SmsReceiver - نقطة الاستقبال الرئيسية للـ SMS          -->
+        <!--                                                        -->
+        <!-- ✅ exported="true" مطلوب لأن البث يأتي من نظام Android    -->
+        <!-- ✅ priority="999" للحصول على الأولوية العالية             -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".SmsReceiver"
+            android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 🔄 BootReceiver - إعادة التهيئة بعد إعادة تشغيل الجهاز   -->
+        <!--                                                        -->
+        <!-- ✅ exported="true" - مطلوب لاستقبال BOOT_COMPLETED        -->
+        <!-- ✅ يستدعي فقط SMSService (منسق النظام)                   -->
+        <!-- ❌ لا يتعامل مع قاعدة البيانات مباشرة                     -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 📦 PackageUpdatedReceiver - إعادة التهيئة بعد التحديث    -->
+        <!--                                                        -->
+        <!-- ✅ يُعيد تشغيل SMSService بعد تحديث التطبيق               -->
+        <!-- ❌ لا يتعامل مع قاعدة البيانات مباشرة                     -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".PackageUpdatedReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- ⏰ TimeChangedReceiver - التعامل مع تغيير الوقت           -->
+        <!--                                                        -->
+        <!-- ✅ يُعلم SMSService بضرورة إعادة الجدولة                  -->
+        <!-- ❌ لا يحتوي على منطق أعمال مستقل                        -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".TimeChangedReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIME_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 🌍 TimezoneReceiver - التعامل مع تغيير المنطقة الزمنية   -->
+        <!--                                                        -->
+        <!-- ✅ يُعلم SMSService بضرورة إعادة الجدولة                  -->
+        <!-- ❌ لا يحتوي على منطق أعمال مستقل                        -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".TimezoneReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- ⏰ AlarmReceiver - إعادة جدولة المهام المؤجلة            -->
+        <!--                                                        -->
+        <!-- ✅ يُرسل المهمة إلى SMSService للتنفيذ                   -->
+        <!-- ❌ لا يحتوي على منطق أعمال مستقل                        -->
+        <!-- ❌ exported="false" - يُستدعى برمجياً فقط                 -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 🛡️ SMSService - منسق النظام (Foreground Service)          -->
+        <!--                                                        -->
+        <!-- ✅ exported="false" - خدمة داخلية فقط                     -->
+        <!-- ✅ foregroundServiceType="dataSync"                       -->
+        <!-- ✅ stopWithTask="false" - تستمر بعد إغلاق التطبيق         -->
+        <!--                                                        -->
+        <!-- المسؤوليات:                                              -->
+        <!-- - تهيئة النظام (Database, Security, etc.)                -->
+        <!-- - التنظيف الدوري (cleanupOldData)                        -->
+        <!-- - جمع المقاييس (SmsMetrics)                              -->
+        <!-- - إعادة جدولة المهام                                     -->
+        <!-- - تنسيق المكونات: SmsProcessor, SmsSecurity, etc.       -->
+        <!-- ════════════════════════════════════════════════════════ -->
         <service
             android:name=".SMSService"
             android:directBootAware="false"
@@ -106,25 +223,41 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
-        <receiver
-            android:name=".SmsReceiver"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- ⚠️ ملاحظات هندسية مهمة                                    -->
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!--
+        ❌ لا تُضاف المكونات التالية كـ Components مستقلة:
+           - SmsProcessor (يتم استدعاؤه من SmsReceiver)
+           - SmsSecurity (يتم استدعاؤه من SmsProcessor)
+           - SmsSecurityOTP (يتم استدعاؤه من SmsProcessor)
+           - SmsConversationManager (يتم استدعاؤه من SmsProcessor)
+           - SmsCustomerResolver (يتم استدعاؤه من SmsProcessor)
+           - SmsIntentDetector (يتم استدعاؤه من SmsProcessor)
+           - SmsMetrics (يتم استدعاؤه من SmsProcessor / SMSService)
+           - SmsReplyManager (يتم استدعاؤه من SmsProcessor)
+           - SystemEventLogger (Object - لا يحتاج تعريف)
+           - PhoneUtils (Object - لا يحتاج تعريف)
 
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
+        ✅ الجداول لا تحتاج تعريف Manifest:
+           - sms_processed_hashes
+           - sms_rate_limits
+           - sms_conversation_context
+           - sms_customer_preferences
+           - sms_interaction_history
+           - sms_recurring_orders
+           - sms_metrics
+           - sms_otp_verifications
 
+        ✅ يجب التأكد من أن MyApplication يقوم بـ:
+           - تهيئة DatabaseHelper قبل استقبال أي SMS
+           - تهيئة Security keys
+           - إنشاء الجداول الجديدة
+        -->
+
+        <!-- ════════════════════════════════════════════════════════ -->
+        <!-- 📁 FileProvider - مشاركة الملفات بأمان                    -->
+        <!-- ════════════════════════════════════════════════════════ -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -136,5 +269,23 @@
         </provider>
 
     </application>
+
+    <!-- ════════════════════════════════════════════════════════ -->
+    <!-- 🔍 Queries - للتعامل مع تطبيقات أخرى                      -->
+    <!-- ════════════════════════════════════════════════════════ -->
+    <queries>
+        <!-- للتعامل مع تطبيقات الرسائل الافتراضية -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="sms" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+    </queries>
 
 </manifest>
