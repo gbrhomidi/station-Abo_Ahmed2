@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -23,7 +24,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفاتيح API من Secrets (متغيرات البيئة)
+        // مفاتيح API – تُقرأ من متغيرات البيئة أو project.properties
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
@@ -48,8 +49,13 @@ android {
     }
 
     signingConfigs {
-        // التوقيع الافتراضي للـ debug (موجود مسبقاً)
-        // لا نحتاج لتعريفه، لكننا نستخدمه مباشرة
+        // توقيع debug بسيط ويعمل على GitHub Actions
+        create("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -140,26 +146,25 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.androidx.compose.material.icons.extended)
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Room
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
-    // Network
+    // Network (Retrofit + Moshi)
     implementation(libs.retrofit)
     implementation(libs.converter.moshi)
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
     implementation(libs.moshi.kotlin)
-    ksp(libs.moshi.kotlin.codegen)
+    ksp(libs.moshi.kotlin.codegen)   // مطلوب لـ @JsonClass(generateAdapter = true)
 
     // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
+
+    // Serialization (Kotlinx)
+    implementation(libs.kotlinx.serialization.json)
 
     // WorkManager
     implementation(libs.androidx.work)
@@ -168,14 +173,10 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
 
     // Security
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("com.scottyab:rootbeer-lib:0.1.0")
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.rootbeer.lib)
 
-    // ═══════════════════════════════════════════════════════════
-    // ❌ تم إزالة NanoHTTPD لأنه لم يعد مستخدماً
-    //    (تم تعطيل الخادم المحلي نهائياً)
-    // ═══════════════════════════════════════════════════════════
-    // implementation(libs.nanohttpd)
+    // تم حذف NanoHTTPD و Firebase و Secrets Plugin
 
     // Material Components
     implementation("com.google.android.material:material:1.12.0")
@@ -183,7 +184,7 @@ dependencies {
     // QR Code Scanning (ZXing)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // Gemini AI
+    // Gemini AI – يستخدم فعلياً في التطبيق
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Testing
@@ -214,15 +215,11 @@ configurations.all {
         force("com.squareup.okio:okio:3.0.0")
         force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
         force("androidx.core:core-ktx:1.15.0")
-        // تثبيت إصدارات كوروتينات لمنع أي تعارض
         force("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
         force("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     }
 }
 
-// ============================================================
-//  مهمة فحص أمني – تمنع رفع المفاتيح الحساسة
-// ============================================================
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"

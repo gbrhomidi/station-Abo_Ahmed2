@@ -16,7 +16,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.Process
-import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -26,7 +25,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
-import com.aistudio.dieselstationsms.kxmpzq.receiver.SmsReceiver
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReceiver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsConversationManager
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsCustomerResolver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsIntentDetector
@@ -37,35 +36,9 @@ import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurity
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurityOTP
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import com.aistudio.dieselstationsms.kxmpzq.utils.SystemEventLogger
-import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.os.BatteryManager
-import android.os.Build
-import android.os.IBinder
-import android.os.PowerManager
-import android.os.Process
-import android.os.Debug
-import android.os.SystemClock
-import android.util.Log
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -502,7 +475,7 @@ class SMSService : Service() {
     private fun initializeSecurity() {
         try {
             val start = System.currentTimeMillis()
-            smsSecurity = SmsSecurity(dbHelper)
+            smsSecurity = SmsSecurity(applicationContext, dbHelper)
             moduleLoadTimes["security"] = System.currentTimeMillis() - start
             Log.d(TAG, "SmsSecurity initialized (${moduleLoadTimes["security"]}ms)")
         } catch (e: Exception) {
@@ -551,12 +524,7 @@ class SMSService : Service() {
     private fun initializeSmsProcessor() {
         try {
             val start = System.currentTimeMillis()
-            smsProcessor = SmsProcessor(
-                context = applicationContext,
-                dbHelper = dbHelper,
-                smsMetrics = smsMetrics,
-                smsSecurity = smsSecurity
-            )
+            smsProcessor = SmsProcessor(applicationContext, dbHelper)
             moduleLoadTimes["processor"] = System.currentTimeMillis() - start
             Log.d(TAG, "SmsProcessor initialized (${moduleLoadTimes["processor"]}ms)")
         } catch (e: Exception) {
@@ -601,7 +569,7 @@ class SMSService : Service() {
     private fun initializeIntentDetector() {
         try {
             val start = System.currentTimeMillis()
-            smsIntentDetector = SmsIntentDetector(dbHelper)
+            smsIntentDetector = SmsIntentDetector()
             moduleLoadTimes["intent"] = System.currentTimeMillis() - start
             Log.d(TAG, "SmsIntentDetector initialized (${moduleLoadTimes["intent"]}ms)")
         } catch (e: Exception) {

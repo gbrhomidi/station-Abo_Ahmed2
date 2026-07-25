@@ -2704,15 +2704,43 @@ class MainActivity : AppCompatActivity() {
         // ============================================================
 
         @JavascriptInterface
-        fun getMaintenanceRequests(): String {
-            if (!checkPermission("maintenance", "read")) return errorResponse("لا تملك صلاحية القراءة")
+        fun getMaintenanceRequests(jsonData: String): String {
+            if (!checkPermission("maintenance", "read")) {
+                return errorResponse("لا تملك صلاحية القراءة")
+            }
+
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+
             return try {
-                val requests = db.getMaintenanceRequests(1)
+                val data = JSONObject(jsonData)
+
+                val stationId = data.optInt("station_id", 0)
+                val status = data.optString("status")
+                    .takeIf { it.isNotBlank() }
+
+                if (stationId <= 0) {
+                    return errorResponse("رقم المحطة غير صحيح")
+                }
+
+                val requests = db.getMaintenanceRequests(
+                    stationId,
+                    status
+                )
+
                 dataResponse(requests)
+
             } catch (e: Exception) {
                 errorResponse(e.message)
             }
+        }
+
+        @JavascriptInterface
+        fun getMaintenanceRequests(): String {
+            return getMaintenanceRequests(
+                JSONObject().apply {
+                    put("station_id", 1)
+                }.toString()
+            )
         }
 
         @JavascriptInterface
@@ -3248,16 +3276,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun getAssetMaintenanceHistory(assetId: Long): String {
-            if (!checkPermission("assets", "read")) return errorResponse("لا تملك صلاحية القراءة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val history = db.getAssetMaintenanceHistory(assetId)
-                dataResponse(history)
-            } catch (e: Exception) {
-                errorResponse(e.message)
+        fun getAssetMaintenanceHistory(jsonData: String): String {
+            if (!checkPermission("maintenance", "read")) {
+            return errorResponse("لا تملك صلاحية القراءة")
             }
+
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+
+            return try {
+               val data = JSONObject(jsonData)
+
+            val assetType = data.optString("asset_type")
+            val assetId = data.optInt("asset_id")
+            val limit = data.optInt("limit", 20)
+
+            if (assetType.isBlank() || assetId <= 0) {
+                return errorResponse("بيانات الأصل غير صحيحة")
+            }
+
+            val history = db.getAssetMaintenanceHistory(
+                assetType,
+                assetId,
+                limit
+            )
+
+            dataResponse(history)
+
+        } catch (e: Exception) {
+            errorResponse(e.message)
         }
+    }
 
         @JavascriptInterface
         fun getUserNotifications(userId: Long): String {

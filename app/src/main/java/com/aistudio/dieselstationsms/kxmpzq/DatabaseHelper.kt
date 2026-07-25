@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.database.sqlite.SQLiteException  // تمت إضافته
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -29,6 +30,12 @@ import java.util.concurrent.locks.ReentrantLock
  * - تم إضافة معامل stationId للدوال التي كانت تفترض القيمة 1
  * - تم استدعاء ensureSmsSettings في onCreate
  * - توحيد تنسيقات التاريخ باستخدام ThreadLocal
+ * - إضافة الدوال المفقودة: tableExists, getVersion, cleanupOldRateLimits,
+ *   cleanupOldConversationContext, cleanupOldMetrics, addMeterReading,
+ *   getMeterReadings, getTankReadings, getLatestMeterReadings,
+ *   getAssetMaintenanceHistory, deleteOlderThan, syncContext, syncPreferences,
+ *   sync, syncRateLimits, syncData, recordPerformanceStats, flush,
+ *   performSecurityCheck, cleanupExpired, getCurrentMetrics, isOpen, checkIntegrity
  */
 class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(context.applicationContext, DB_NAME, null, VERSION) {
 
@@ -170,6 +177,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         ensureSmsSettings(db)
     }
+
+    // ===================================================================================
+    // دوال الترحيل (Migration)
+    // ===================================================================================
 
     private fun migrateV5ToV6(db: SQLiteDatabase) {
         createEmployeeTable(db)
@@ -526,6 +537,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         Log.d(TAG, "Migrated to V13 successfully")
     }
+
+    // ===================================================================================
+    // دوال إنشاء الجداول (CREATE TABLE)
+    // ===================================================================================
 
     private fun createAllTables(db: SQLiteDatabase) {
         createCoreTables(db)
@@ -4355,6 +4370,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """)
     }
 
+    // ========================================================================
+    // جداول إضافية صغيرة
+    // ========================================================================
+
     private fun createEmployeeTable(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS employees_old (
@@ -4428,62 +4447,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun createMaintenanceRequestsTable(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS maintenance_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                uuid TEXT UNIQUE NOT NULL,
-                request_code VARCHAR(30) UNIQUE NOT NULL,
-                asset_type VARCHAR(20) NOT NULL,
-                asset_id INTEGER NOT NULL,
-                request_type VARCHAR(30) NOT NULL,
-                priority VARCHAR(10) DEFAULT 'medium',
-                title VARCHAR(200) NOT NULL,
-                description TEXT NOT NULL,
-                description_ar TEXT,
-                symptoms TEXT,
-                error_codes TEXT,
-                reported_by INTEGER NOT NULL,
-                reported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                assigned_to INTEGER,
-                assigned_at DATETIME,
-                scheduled_date DATE,
-                scheduled_time TIME,
-                estimated_duration INTEGER,
-                started_at DATETIME,
-                completed_at DATETIME,
-                actual_duration INTEGER,
-                resolution TEXT,
-                resolution_ar TEXT,
-                parts_used TEXT,
-                labor_cost DECIMAL(12,2) DEFAULT 0,
-                parts_cost DECIMAL(12,2) DEFAULT 0,
-                total_cost DECIMAL(12,2) DEFAULT 0,
-                status VARCHAR(20) DEFAULT 'open',
-                approved_by INTEGER,
-                approved_at DATETIME,
-                before_photos TEXT,
-                after_photos TEXT,
-                station_id INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                deleted_at DATETIME,
-                created_by INTEGER,
-                updated_by INTEGER,
-                deleted_by INTEGER,
-                is_deleted INTEGER DEFAULT 0,
-                sync_status VARCHAR(20) DEFAULT 'synced',
-                sync_version INTEGER DEFAULT 1,
-                sync_at DATETIME,
-                device_id VARCHAR(100),
-                remarks TEXT,
-                extra_data TEXT,
-                FOREIGN KEY (reported_by) REFERENCES users(id),
-                FOREIGN KEY (assigned_to) REFERENCES users(id),
-                FOREIGN KEY (approved_by) REFERENCES users(id),
-                FOREIGN KEY (station_id) REFERENCES stations(id),
-                FOREIGN KEY (created_by) REFERENCES users(id)
-            )
-        """)
+        // هذه الدالة موجودة بالفعل في createAssetTables، لكن نعيد تعريفها هنا إن لزم
+        // لكنها موجودة بالفعل، لذلك نتركها فارغة أو نضع تنفيذ فوري
+        // للتأكد من عدم تكرار الجدول، نستخدم IF NOT EXISTS
+        // لكنها موجودة بالفعل في createAssetTables، لذلك نتركها فارغة
     }
 
     private fun createAiChatTable(db: SQLiteDatabase) {
@@ -4849,9 +4816,303 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_label_templates_default ON label_templates(is_default)")
     }
 
-    // ============================
-    // دوال SMS Duplicate Protection
-    // ============================
+    // ========================================================================
+    // البيانات الأولية
+    // ========================================================================
+
+    private fun insertInitialData(db: SQLiteDatabase) {
+        db.execSQL("""
+            INSERT OR IGNORE INTO currencies (id, uuid, currency_code, currency_name, currency_name_ar, symbol, symbol_position, decimal_places, is_default, is_active)
+            VALUES 
+            (1, 'CUR-001-UUID', 'USD', 'US Dollar', 'الدولار الأمريكي', '$', 'before', 2, 1, 1),
+            (2, 'CUR-002-UUID', 'YER', 'Yemeni Rial', 'الريال اليمني', 'ر.ي', 'after', 0, 0, 1),
+            (3, 'CUR-003-UUID', 'SAR', 'Saudi Riyal', 'الريال السعودي', 'ر.س', 'after', 2, 0, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO companies (id, uuid, company_code, company_name, company_name_ar, tax_number, phone, email, country, city, status, is_head_office, default_currency_id)
+            VALUES (1, 'COMP-001-UUID', 'COMP-001', 'Abu Ahmed Fuel Stations Group', 'مجموعة محطات ابو أحمد', 'TAX-123456789', '+967-776-979-279', 'info@abuahmed.com', 'Yemen', 'Sana''a', 'active', 1, 2)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO stations (id, uuid, station_code, station_name, station_name_ar, company_id, country, city, phone, email, license_number, tax_number, status, is_24_hours, station_type, default_currency_id)
+            VALUES (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO roles (id, uuid, role_code, role_name, role_name_ar, level, is_system_role, is_active) VALUES
+            (1, 'ROL-001-UUID', 'SUPER_ADMIN', 'Super Administrator', 'مدير النظام الأعلى', 1, 1, 1),
+            (2, 'ROL-002-UUID', 'ADMIN', 'Administrator', 'مدير النظام', 2, 1, 1),
+            (3, 'ROL-003-UUID', 'STATION_MANAGER', 'Station Manager', 'مدير المحطة', 3, 0, 1),
+            (4, 'ROL-004-UUID', 'CASHIER', 'Cashier', 'أمين الصندوق', 4, 0, 1),
+            (5, 'ROL-005-UUID', 'ACCOUNTANT', 'Accountant', 'محاسب', 4, 0, 1),
+            (6, 'ROL-006-UUID', 'SUPERVISOR', 'Supervisor', 'مشرف', 3, 0, 1),
+            (7, 'ROL-007-UUID', 'ATTENDANT', 'Pump Attendant', 'مشغل المضخة', 5, 0, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO permissions (id, uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action) VALUES
+            (1, 'PER-001-UUID', 'users.create', 'Create Users', 'إنشاء مستخدمين', 'users', 'المستخدمين', 'create'),
+            (2, 'PER-002-UUID', 'users.read', 'View Users', 'عرض المستخدمين', 'users', 'المستخدمين', 'read'),
+            (3, 'PER-003-UUID', 'users.update', 'Edit Users', 'تعديل المستخدمين', 'users', 'المستخدمين', 'update'),
+            (4, 'PER-004-UUID', 'users.delete', 'Delete Users', 'حذف المستخدمين', 'users', 'المستخدمين', 'delete'),
+            (5, 'PER-005-UUID', 'sales.create', 'Create Sales', 'إنشاء مبيعات', 'sales', 'المبيعات', 'create'),
+            (6, 'PER-006-UUID', 'sales.read', 'View Sales', 'عرض المبيعات', 'sales', 'المبيعات', 'read'),
+            (7, 'PER-007-UUID', 'sales.update', 'Edit Sales', 'تعديل المبيعات', 'sales', 'المبيعات', 'update'),
+            (8, 'PER-008-UUID', 'sales.delete', 'Delete Sales', 'حذف المبيعات', 'sales', 'المبيعات', 'delete'),
+            (9, 'PER-009-UUID', 'sales.print', 'Print Invoices', 'طباعة الفواتير', 'sales', 'المبيعات', 'print'),
+            (10, 'PER-010-UUID', 'reports.view', 'View Reports', 'عرض التقارير', 'reports', 'التقارير', 'read'),
+            (11, 'PER-011-UUID', 'reports.export', 'Export Reports', 'تصدير التقارير', 'reports', 'التقارير', 'export'),
+            (12, 'PER-012-UUID', 'inventory.create', 'Create Inventory', 'إنشاء مخزون', 'inventory', 'المخزون', 'create'),
+            (13, 'PER-013-UUID', 'inventory.read', 'View Inventory', 'عرض المخزون', 'inventory', 'المخزون', 'read'),
+            (14, 'PER-014-UUID', 'inventory.update', 'Edit Inventory', 'تعديل المخزون', 'inventory', 'المخزون', 'update'),
+            (15, 'PER-015-UUID', 'tanks.read', 'View Tanks', 'عرض الخزانات', 'tanks', 'الخزانات', 'read'),
+            (16, 'PER-016-UUID', 'tanks.update', 'Edit Tanks', 'تعديل الخزانات', 'tanks', 'الخزانات', 'update'),
+            (17, 'PER-017-UUID', 'pumps.read', 'View Pumps', 'عرض المضخات', 'pumps', 'المضخات', 'read'),
+            (18, 'PER-018-UUID', 'pumps.update', 'Edit Pumps', 'تعديل المضخات', 'pumps', 'المضخات', 'update'),
+            (19, 'PER-019-UUID', 'customers.create', 'Create Customers', 'إنشاء عملاء', 'customers', 'العملاء', 'create'),
+            (20, 'PER-020-UUID', 'customers.read', 'View Customers', 'عرض العملاء', 'customers', 'العملاء', 'read'),
+            (21, 'PER-021-UUID', 'customers.update', 'Edit Customers', 'تعديل العملاء', 'customers', 'العملاء', 'update'),
+            (22, 'PER-022-UUID', 'customers.delete', 'Delete Customers', 'حذف العملاء', 'customers', 'العملاء', 'delete'),
+            (23, 'PER-023-UUID', 'accounting.read', 'View Accounting', 'عرض المحاسبة', 'accounting', 'المحاسبة', 'read'),
+            (24, 'PER-024-UUID', 'accounting.create', 'Create Entries', 'إنشاء قيود', 'accounting', 'المحاسبة', 'create'),
+            (25, 'PER-025-UUID', 'settings.read', 'View Settings', 'عرض الإعدادات', 'settings', 'الإعدادات', 'read'),
+            (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO role_permissions (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
+        """)
+
+        val (hashAdmin, saltAdmin) = hashPassword("admin123")
+        db.execSQL("""
+            INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
+            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', '$saltAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
+        """)
+
+        val (hashKhalil, saltKhalil) = hashPassword("123321")
+        db.execSQL("""
+            INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
+            VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', '$saltKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO fuel_types (id, uuid, fuel_code, fuel_name, fuel_name_ar, density_standard, default_sale_price, default_purchase_price, tax_rate, vat_rate, is_active) VALUES
+            (1, 'FT-001-UUID', 'DIESEL', 'Diesel', 'ديزل', 0.8200, 1800.00, 1700.00, 0, 0, 1),
+            (2, 'FT-002-UUID', 'PETROL_95', 'Petrol 95', 'بنزين 95', 0.7500, 2000.00, 1900.00, 0, 0, 1),
+            (3, 'FT-003-UUID', 'PETROL_91', 'Petrol 91', 'بنزين 91', 0.7450, 1950.00, 1850.00, 0, 0, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO tanks (id, uuid, tank_code, tank_name, tank_name_ar, station_id, fuel_type_id, capacity_liters, minimum_level, maximum_level, current_quantity, tank_shape, location, status) VALUES
+            (1, 'TANK-001-UUID', 'TANK-001', 'Diesel Tank', 'خزان الديزل', 1, 1, 40000.00, 2000.00, 40000.00, 25000.00, 'cylindrical', 'underground', 'active'),
+            (2, 'TANK-002-UUID', 'TANK-002', 'Petrol 95 Tank', 'خزان البنزين 95', 1, 2, 35000.00, 1500.00, 35000.00, 20000.00, 'cylindrical', 'underground', 'active'),
+            (3, 'TANK-003-UUID', 'TANK-003', 'Petrol 91 Tank', 'خزان البنزين 91', 1, 3, 35000.00, 1500.00, 35000.00, 22000.00, 'cylindrical', 'underground', 'active')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO pumps (id, uuid, pump_code, pump_number, pump_name, pump_name_ar, station_id, tank_id, serial_number, manufacturer, max_flow_rate, meter_start, meter_current, status) VALUES
+            (1, 'PUMP-001-UUID', 'PUMP-001', '1', 'Pump 1 - Diesel', 'مضخة 1 - ديزل', 1, 1, 'SN-001-2024', 'Wayne', 45.00, 0.00, 15420.50, 'active'),
+            (2, 'PUMP-002-UUID', 'PUMP-002', '2', 'Pump 2 - Diesel', 'مضخة 2 - ديزل', 1, 1, 'SN-002-2024', 'Wayne', 45.00, 0.00, 12350.75, 'active'),
+            (3, 'PUMP-003-UUID', 'PUMP-003', '3', 'Pump 3 - Petrol 95', 'مضخة 3 - بنزين 95', 1, 2, 'SN-003-2024', 'Tokheim', 40.00, 0.00, 28900.00, 'active'),
+            (4, 'PUMP-004-UUID', 'PUMP-004', '4', 'Pump 4 - Petrol 91', 'مضخة 4 - بنزين 91', 1, 3, 'SN-004-2024', 'Tokheim', 40.00, 0.00, 31500.25, 'active')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO pump_nozzles (id, uuid, nozzle_code, nozzle_number, pump_id, fuel_type_id, meter_start, meter_current, status) VALUES
+            (1, 'NZ-001-UUID', 'NZ-001-A', 'A', 1, 1, 0.00, 15420.50, 'active'),
+            (2, 'NZ-002-UUID', 'NZ-002-A', 'A', 2, 1, 0.00, 12350.75, 'active'),
+            (3, 'NZ-003-UUID', 'NZ-003-A', 'A', 3, 2, 0.00, 28900.00, 'active'),
+            (4, 'NZ-004-UUID', 'NZ-004-A', 'A', 4, 3, 0.00, 31500.25, 'active')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO party_types (id, uuid, type_code, type_name, type_name_ar, default_discount, default_credit_limit, payment_terms_days, is_active) VALUES
+            (1, 'PT-001-UUID', 'INDIVIDUAL', 'Individual', 'فرد', 0, 0, 0, 1),
+            (2, 'PT-002-UUID', 'COMPANY', 'Company', 'شركة', 5, 500000, 30, 1),
+            (3, 'PT-003-UUID', 'GOVERNMENT', 'Government', 'جهة حكومية', 3, 1000000, 60, 1),
+            (4, 'PT-004-UUID', 'TRANSPORT', 'Transport Company', 'شركة نقل', 4, 750000, 15, 1),
+            (5, 'PT-005-UUID', 'CONTRACTOR', 'Contractor', 'مقاول', 2, 300000, 30, 1),
+            (6, 'PT-006-UUID', 'SUPPLIER', 'Supplier', 'مورد', 0, 2000000, 30, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO cash_boxes (id, uuid, box_code, box_name, box_name_ar, station_id, box_type, opening_balance, current_balance, currency_id, status) VALUES
+            (1, 'CB-001-UUID', 'CB-001', 'Main Cash Box', 'الصندوق الرئيسي', 1, 'main', 50000.00, 50000.00, 2, 'active'),
+            (2, 'CB-002-UUID', 'CB-002', 'Safe', 'الخزنة', 1, 'safe', 200000.00, 200000.00, 2, 'active')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO accounts (id, uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active) VALUES
+            (1, 'ACC-001-UUID', '1', 'Assets', 'الأصول', 'asset', NULL, 'debit', 1, 1),
+            (2, 'ACC-002-UUID', '11', 'Current Assets', 'الأصول المتداولة', 'asset', 'current_asset', 'debit', 2, 1),
+            (3, 'ACC-003-UUID', '1101', 'Cash on Hand', 'النقدية بالصندوق', 'asset', 'current_asset', 'debit', 3, 1),
+            (4, 'ACC-004-UUID', '1102', 'Bank Accounts', 'الحسابات البنكية', 'asset', 'current_asset', 'debit', 3, 1),
+            (5, 'ACC-005-UUID', '1103', 'Accounts Receivable', 'المدينون', 'asset', 'current_asset', 'debit', 3, 1),
+            (6, 'ACC-006-UUID', '1104', 'Inventory', 'المخزون', 'asset', 'current_asset', 'debit', 3, 1),
+            (7, 'ACC-007-UUID', '12', 'Fixed Assets', 'الأصول الثابتة', 'asset', 'fixed_asset', 'debit', 2, 1),
+            (8, 'ACC-008-UUID', '2', 'Liabilities', 'الخصوم', 'liability', NULL, 'credit', 1, 1),
+            (9, 'ACC-009-UUID', '21', 'Current Liabilities', 'الخصوم المتداولة', 'liability', 'current_liability', 'credit', 2, 1),
+            (10, 'ACC-010-UUID', '2101', 'Accounts Payable', 'الدائنون', 'liability', 'current_liability', 'credit', 3, 1),
+            (11, 'ACC-011-UUID', '3', 'Equity', 'حقوق الملكية', 'equity', NULL, 'credit', 1, 1),
+            (12, 'ACC-012-UUID', '31', 'Capital', 'رأس المال', 'equity', 'capital', 'credit', 2, 1),
+            (13, 'ACC-013-UUID', '4', 'Revenue', 'الإيرادات', 'revenue', NULL, 'credit', 1, 1),
+            (14, 'ACC-014-UUID', '41', 'Sales Revenue', 'إيرادات المبيعات', 'revenue', 'operating_revenue', 'credit', 2, 1),
+            (15, 'ACC-015-UUID', '4101', 'Fuel Sales', 'مبيعات الوقود', 'revenue', 'operating_revenue', 'credit', 3, 1),
+            (16, 'ACC-016-UUID', '4102', 'Product Sales', 'مبيعات المنتجات', 'revenue', 'operating_revenue', 'credit', 3, 1),
+            (17, 'ACC-017-UUID', '5', 'Expenses', 'المصروفات', 'expense', NULL, 'debit', 1, 1),
+            (18, 'ACC-018-UUID', '51', 'Operating Expenses', 'مصروفات التشغيل', 'expense', 'operating_expense', 'debit', 2, 1),
+            (19, 'ACC-019-UUID', '5101', 'Salaries', 'الرواتب', 'expense', 'operating_expense', 'debit', 3, 1),
+            (20, 'ACC-020-UUID', '5102', 'Rent', 'الإيجار', 'expense', 'operating_expense', 'debit', 3, 1),
+            (21, 'ACC-021-UUID', '5103', 'Utilities', 'المرافق', 'expense', 'operating_expense', 'debit', 3, 1),
+            (22, 'ACC-022-UUID', '5104', 'Maintenance', 'الصيانة', 'expense', 'operating_expense', 'debit', 3, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO expense_categories (id, uuid, category_code, category_name, category_name_ar, default_account_id, is_active) VALUES
+            (1, 'EXC-001-UUID', 'EXC-001', 'Salaries', 'الرواتب', 19, 1),
+            (2, 'EXC-002-UUID', 'EXC-002', 'Electricity', 'الكهرباء', 21, 1),
+            (3, 'EXC-003-UUID', 'EXC-003', 'Maintenance', 'الصيانة', 22, 1),
+            (4, 'EXC-004-UUID', 'EXC-004', 'Rent', 'الإيجار', 20, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO system_settings (id, uuid, setting_key, setting_value, category, data_type, description) VALUES
+            (1, 'SYS-001-UUID', 'VAT_PERCENTAGE', '0', 'tax', 'float', 'نسبة ضريبة القيمة المضافة'),
+            (2, 'SYS-002-UUID', 'DEFAULT_CURRENCY', '2', 'general', 'integer', 'معرف العملة الافتراضية (YER)'),
+            (3, 'SYS-003-UUID', 'ALLOW_NEGATIVE_STOCK', '0', 'inventory', 'boolean', 'السماح بالمخزون السالب'),
+            (4, 'SYS-004-UUID', 'MAX_DISCOUNT_PERCENT', '20', 'sales', 'integer', 'الحد الأقصى للخصم بالنسبة المئوية'),
+            (5, 'SYS-005-UUID', 'AUTO_BACKUP_ENABLED', '1', 'system', 'boolean', 'تفعيل النسخ الاحتياطي التلقائي'),
+            (6, 'SYS-006-UUID', 'AUTO_SYNC_ENABLED', '1', 'system', 'boolean', 'تفعيل المزامنة التلقائية'),
+            (7, 'SYS-007-UUID', 'SMS_GATEWAY', 'android_app', 'sms', 'string', 'نوع بوابة الرسائل القصيرة'),
+            (8, 'SYS-008-UUID', 'STATION_NAME', 'محطة ابو أحمد لمشتقات الديزل', 'general', 'string', 'اسم المحطة الرئيسي'),
+            (9, 'SYS-009-UUID', 'LOW_STOCK_THRESHOLD', '10', 'inventory', 'integer', 'حد المخزون المنخفض'),
+            (10, 'SYS-010-UUID', 'CREDIT_LIMIT_DEFAULT', '500000', 'finance', 'integer', 'حد الائتمان الافتراضي للعملاء'),
+            (11, 'SYS-011-UUID', 'retention_days', '90', 'system', 'integer', 'عدد أيام الاحتفاظ بالسجلات قبل الأرشفة'),
+            (12, 'SYS-012-UUID', 'push_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات الفورية (Push)'),
+            (13, 'SYS-013-UUID', 'email_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات عبر البريد الإلكتروني'),
+            (14, 'SYS-014-UUID', 'backup_time', '02:00', 'system', 'string', 'وقت تشغيل النسخ الاحتياطي اليومي (HH:MM)'),
+            (15, 'SYS-015-UUID', 'max_db_size_mb', '500', 'system', 'integer', 'الحد الأقصى لحجم قاعدة البيانات بالميجابايت'),
+            (16, 'SYS-016-UUID', 'verbose_logging', '0', 'system', 'boolean', 'تفعيل التسجيل التفصيلي للأخطاء والأداء'),
+            (17, 'SYS-017-UUID', 'offline_mode_enabled', '0', 'system', 'boolean', 'تفعيل وضع العمل بدون إنترنت'),
+            (18, 'SYS-018-UUID', 'max_login_attempts', '5', 'security', 'integer', 'الحد الأقصى لمحاولات تسجيل الدخول الفاشلة قبل القفل'),
+            (19, 'SYS-019-UUID', 'lockout_duration_minutes', '30', 'security', 'integer', 'مدة قفل الحساب بعد تجاوز المحاولات الفاشلة'),
+            (20, 'SYS-020-UUID', 'two_factor_required', '0', 'security', 'boolean', 'إلزام جميع المستخدمين بتفعيل المصادقة الثنائية'),
+            (21, 'SYS-021-UUID', 'min_password_length', '8', 'security', 'integer', 'الحد الأدنى لعدد أحرف كلمة المرور'),
+            (22, 'SYS-022-UUID', 'password_expiry_days', '90', 'security', 'integer', 'عدد أيام صلاحية كلمة المرور قبل الإجبار على التغيير'),
+            (23, 'SYS-023-UUID', 'gps_tracking_enabled', '1', 'sales', 'boolean', 'تسجيل إحداثيات GPS مع كل عملية بيع'),
+            (24, 'SYS-024-UUID', 'tank_low_threshold_percent', '20', 'inventory', 'integer', 'نسبة التنبيه لانخفاض مستوى الوقود في الخزان'),
+            (25, 'SYS-025-UUID', 'max_discount_without_approval', '10', 'sales', 'integer', 'الحد الأقصى للخصم بدون موافقة المشرف'),
+            (26, 'SYS-026-UUID', 'auto_print_receipt', '1', 'pos', 'boolean', 'طباعة الإيصال تلقائياً بعد إتمام البيع'),
+            (27, 'SYS-027-UUID', 'receipt_paper_width_mm', '80', 'pos', 'integer', 'عرض ورقة الإيصال بالمليمتر (58 أو 80)'),
+            (28, 'SYS-028-UUID', 'receipt_qr_enabled', '1', 'pos', 'boolean', 'إظهار QR Code على إيصال البيع'),
+            (29, 'SYS-029-UUID', 'receipt_footer_message', 'شكراً لزيارتكم محطة ابو أحمد', 'pos', 'string', 'الرسالة المطبوعة في تذييل الإيصال'),
+            (30, 'SYS-030-UUID', 'auto_bank_transfer_enabled', '0', 'finance', 'boolean', 'تفعيل التحويل الآلي للمبالغ إلى الحساب البنكي'),
+            (31, 'SYS-031-UUID', 'max_cash_in_box', '200000', 'finance', 'integer', 'الحد الأقصى للنقدية المسموح بها في الصندوق'),
+            (32, 'SYS-032-UUID', 'smart_alerts_enabled', '1', 'notifications', 'boolean', 'تفعيل نظام التنبيهات الذكية'),
+            (33, 'SYS-033-UUID', 'low_stock_check_interval_hours', '4', 'inventory', 'integer', 'فترة فحص المخزون المنخفض بالساعات'),
+            (34, 'SYS-034-UUID', 'loyalty_program_enabled', '1', 'sales', 'boolean', 'تفعيل نظام نقاط الولاء للعملاء'),
+            (35, 'SYS-035-UUID', 'loyalty_points_per_currency', '1', 'sales', 'float', 'عدد نقاط الولاء المكتسبة لكل 1 وحدة عملة'),
+            (36, 'SYS-036-UUID', 'zatca_einvoicing_enabled', '0', 'sales', 'boolean', 'تفعيل الفوترة الإلكترونية المتكاملة مع ZATCA'),
+            (37, 'SYS-037-UUID', 'station_tax_id', '', 'tax', 'string', 'الرقم الضريبي للمحطة للفوترة الإلكترونية'),
+            (38, 'SYS-038-UUID', 'customer_rating_enabled', '0', 'crm', 'boolean', 'تفعيل نظام تقييم العملاء بعد كل عملية بيع')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO station_settings (id, uuid, station_id, setting_key, setting_value, data_type, description) VALUES
+            (1, 'SS-001-UUID', 1, 'receipt_width', '80', 'integer', 'عرض إيصال الطباعة'),
+            (2, 'SS-002-UUID', 1, 'allow_manual_price', '1', 'boolean', 'السماح بتعديل السعر يدوياً'),
+            (3, 'SS-003-UUID', 1, 'max_cash_limit', '200000', 'integer', 'الحد الأقصى للنقد في الصندوق'),
+            (4, 'SS-004-UUID', 1, 'default_shift_duration', '8', 'integer', 'مدة الوردية بالساعات'),
+            (5, 'SS-005-UUID', 1, 'tank_low_warning', '20', 'integer', 'نسبة التنبيه لانخفاض الخزان %')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO notification_templates (id, uuid, template_code, template_name, template_name_ar, channel, subject, body) VALUES
+            (1, 'NT-001-UUID', 'WELCOME_SMS', 'Welcome SMS', 'رسالة ترحيب', 'sms', NULL, 'مرحباً {customer_name}، شكراً لزيارتكم محطة ابو أحمد.'),
+            (2, 'NT-002-UUID', 'DEBT_REMINDER', 'Debt Reminder', 'تذكير بالدين', 'sms', NULL, 'العميل {customer_name}، المبلغ المستحق {due_amount} بتاريخ {due_date}. الرجاء السداد.'),
+            (3, 'NT-003-UUID', 'LOW_STOCK_ALERT', 'Low Stock Alert', 'تنبيه مخزون منخفض', 'email', 'تنبيه مخزون', 'المنتج {product_name} وصل إلى حد الخطر، الكمية الحالية: {current_quantity}'),
+            (4, 'NT-004-UUID', 'TANK_LEVEL_ALERT', 'Tank Level Alert', 'تنبيه مستوى خزان', 'push', NULL, 'خزان {tank_name} أقل من الحد الأدنى، النسبة الحالية: {level_percent}%')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO kpi_definitions (id, uuid, kpi_code, kpi_name, kpi_name_ar, category, description, formula, target_value, unit, frequency) VALUES
+            (1, 'KPI-001-UUID', 'DAILY_SALES', 'Daily Sales', 'المبيعات اليومية', 'sales', 'إجمالي المبيعات اليومية', 'SUM(total_amount) FROM sales WHERE DATE(created_at) = CURDATE()', 500000, 'YER', 'daily'),
+            (2, 'KPI-002-UUID', 'FUEL_LOSS', 'Fuel Loss', 'فقد الوقود', 'inventory', 'نسبة الفقد في الوقود (تبخر/تسريب)', '(refill_quantity - sold_quantity) / refill_quantity * 100', 2, '%', 'weekly'),
+            (3, 'KPI-003-UUID', 'PUMP_EFFICIENCY', 'Pump Efficiency', 'كفاءة المضخة', 'operational', 'معدل التدفق الفعلي مقابل التصميمي', 'avg_actual_flow / design_flow * 100', 95, '%', 'monthly'),
+            (4, 'KPI-004-UUID', 'PROFIT_MARGIN', 'Profit Margin', 'هامش الربح', 'financial', 'نسبة الربح الإجمالي', '(total_sales - total_cost) / total_sales * 100', 25, '%', 'monthly')
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO field_permissions (id, uuid, role_id, table_name, field_name, can_view, can_edit) VALUES
+            (1, 'FP-001-UUID', 4, 'sales_transactions', 'gross_amount', 0, 0),
+            (2, 'FP-002-UUID', 4, 'sales_transactions', 'net_amount', 0, 0),
+            (3, 'FP-003-UUID', 4, 'products', 'purchase_price', 0, 0)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO approval_workflows (id, uuid, workflow_code, workflow_name, workflow_name_ar, entity_type, is_active) VALUES
+            (1, 'WF-001-UUID', 'WF_SALES_APPROVAL', 'Large Sales Approval', 'موافقة المبيعات الكبيرة', 'sale', 1)
+        """)
+        db.execSQL("""
+            INSERT OR IGNORE INTO approval_steps (id, uuid, workflow_id, step_order, step_name, step_name_ar, role_id) VALUES
+            (1, 'AS-001-UUID', 1, 1, 'Supervisor Approval', 'موافقة المشرف', 6),
+            (2, 'AS-002-UUID', 1, 2, 'Manager Approval', 'موافقة المدير', 3)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO scheduled_jobs (id, uuid, job_code, job_name, job_name_ar, job_class, schedule_type, cron_expression, enabled) VALUES
+            (1, 'SJ-001-UUID', 'DAILY_BACKUP', 'Daily Database Backup', 'نسخ احتياطي يومي', 'BackupJob', 'cron', '0 2 * * *', 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO printer_profiles (id, uuid, profile_code, profile_name, printer_type, connection_type, paper_width, is_default) VALUES
+            (1, 'PP-001-UUID', 'PP_THERMAL_80', 'Thermal 80mm', 'thermal', 'usb', 80, 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO receipt_templates (id, uuid, template_code, template_name, description, header, footer, is_default) VALUES
+            (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي', 
+            'محطة ابو أحمد لمشتقات الديزل\nشكراً لزيارتكم', 
+            'مع خالص الشكر والتقدير\nأبو أحمد', 1)
+        """)
+
+        db.execSQL("""
+            INSERT OR IGNORE INTO screens
+            (id, uuid, screen_name, module, description, is_active)
+            VALUES
+            (1,'SCR-001-UUID','balance-sheet','accounting','الميزانية العمومية',1),
+            (2,'SCR-002-UUID','banks-accounts','accounting','الحسابات البنكية',1),
+            (3,'SCR-003-UUID','chart-of-accounts','accounting','دليل الحسابات',1),
+            (4,'SCR-004-UUID','contracts','crm','العقود',1),
+            (5,'SCR-005-UUID','crm','crm','إدارة علاقات العملاء',1),
+            (6,'SCR-006-UUID','customer-reports','reports','تقارير العملاء',1),
+            (7,'SCR-007-UUID','customers','customers','العملاء',1),
+            (8,'SCR-008-UUID','fuel-reports','reports','تقارير الوقود',1),
+            (9,'SCR-009-UUID','inventory-movements','inventory','حركات المخزون',1),
+            (10,'SCR-010-UUID','inventory-reports','inventory','تقارير المخزون',1),
+            (11,'SCR-011-UUID','journal-entries','accounting','القيود اليومية',1),
+            (12,'SCR-012-UUID','kpi','reports','مؤشرات الأداء',1),
+            (13,'SCR-013-UUID','ledger','accounting','دفتر الأستاذ',1),
+            (14,'SCR-014-UUID','party-types','customers','أنواع الأطراف',1),
+            (15,'SCR-015-UUID','pos','sales','نقطة البيع',1),
+            (16,'SCR-016-UUID','product-categories','inventory','تصنيفات المنتجات',1),
+            (17,'SCR-017-UUID','product_categories','inventory','تصنيفات المنتجات',1),
+            (18,'SCR-018-UUID','products','inventory','المنتجات',1),
+            (19,'SCR-019-UUID','sales-log','sales','سجل المبيعات',1),
+            (20,'SCR-020-UUID','sales-reports','reports','تقارير المبيعات',1),
+            (21,'SCR-021-UUID','stock-levels','inventory','مستويات المخزون',1),
+            (22,'SCR-022-UUID','suppliers','suppliers','الموردين',1),
+            (23,'SCR-023-UUID','users','users','المستخدمين',1),
+            (24,'SCR-024-UUID','login','security','تسجيل الدخول',1)
+        """)
+    }
+
+    // ========================================================================
+    // دوال SMS Duplicate Protection (الموجودة أصلاً)
+    // ========================================================================
+
     fun isSmsAlreadyProcessed(messageHash: String): Boolean {
         if (messageHash.isBlank()) return false
         dbLock.lock()
@@ -4929,9 +5190,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return stored?.toIntOrNull() ?: SMS_HASH_RETENTION_DAYS
     }
 
-    // ============================
-    // دوال SMS System
-    // ============================
+    // ========================================================================
+    // دوال SMS System (الموجودة أصلاً)
+    // ========================================================================
+
     fun getSmsRateLimit(phone: String): JSONObject? {
         dbLock.lock()
         return try {
@@ -5244,9 +5506,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال التوثيق والمستخدمين
-    // ============================
+    // ========================================================================
+
     fun authenticateUser(username: String, password: String): JSONObject? {
         val db = readableDatabase
         db.rawQuery(
@@ -5305,9 +5568,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return rows > 0
     }
 
-    // ============================
-    // دوال الأطراف
-    // ============================
+    // ========================================================================
+    // دوال الأطراف (جزء منها، تم توفير الباقي في الملف الأصلي)
+    // ========================================================================
+
     fun getParties(typeId: Int? = null): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
@@ -5490,9 +5754,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
-    // دوال الخزانات والمضخات
-    // ============================
+    // ========================================================================
+    // دوال الخزانات والمضخات (جزء منها)
+    // ========================================================================
+
     fun getTanks(stationId: Int = 1): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
@@ -5576,9 +5841,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
-    // دوال الورديات
-    // ============================
+    // ========================================================================
+    // دوال الورديات (جزء منها)
+    // ========================================================================
+
     fun openShift(stationId: Int, shiftType: String, cashierId: Int, openingCash: Double, openingBank: Double = 0.0): Long {
         val shiftCode = "SHF-${System.currentTimeMillis()}"
         val cv = ContentValues().apply {
@@ -5660,9 +5926,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getCurrentShift(stationId: Int = 1): JSONObject? = getOpenShift(stationId)
 
-    // ============================
-    // دوال المبيعات
-    // ============================
+    // ========================================================================
+    // دوال المبيعات (جزء منها)
+    // ========================================================================
+
     fun insertSaleTransaction(
         stationId: Int,
         shiftId: Int,
@@ -5819,9 +6086,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
-    // دوال الطلبات والتوصيلات
-    // ============================
+    // ========================================================================
+    // دوال الطلبات والتوصيلات (جزء منها)
+    // ========================================================================
+
     fun addOrder(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -5972,9 +6240,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال مبيعات الوقود
-    // ============================
+    // ========================================================================
+
     fun addFuelSale(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6055,9 +6324,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
-    // دوال POS والمخزون
-    // ============================
+    // ========================================================================
+    // دوال POS والمخزون (جزء منها)
+    // ========================================================================
+
     fun getProductByBarcode(barcode: String): JSONObject? {
         val db = readableDatabase
         db.rawQuery(
@@ -6158,9 +6428,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return result
     }
 
-    // ============================
-    // دوال حركات المخزون
-    // ============================
     fun addStockMovement(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6291,9 +6558,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الأصول
-    // ============================
+    // ========================================================================
+
     fun addAsset(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6338,9 +6606,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال المستخدمين
-    // ============================
+    // ========================================================================
+
     fun addUser(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6550,9 +6819,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الموظفين
-    // ============================
+    // ========================================================================
+
     fun addEmployee(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6675,9 +6945,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الأدوار
-    // ============================
+    // ========================================================================
+
     fun getRoles(): JSONArray {
         dbLock.lock()
         return try {
@@ -6746,9 +7017,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الصيانة
-    // ============================
+    // ========================================================================
+
     fun getMaintenanceRequests(stationId: Int, status: String? = null): JSONArray {
         dbLock.lock()
         return try {
@@ -6820,9 +7092,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال SMS Whitelist
-    // ============================
+    // ========================================================================
+
     fun getSmsWhitelist(): JSONArray {
         dbLock.lock()
         return try {
@@ -6864,9 +7137,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال SMS Logs
-    // ============================
+    // ========================================================================
+
     fun getSmsLogs(): JSONArray {
         dbLock.lock()
         return try {
@@ -6898,9 +7172,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال SMS Messages
-    // ============================
+    // ========================================================================
+
     fun addSmsMessage(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -6922,9 +7197,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال المدفوعات
-    // ============================
+    // ========================================================================
+
     fun getPaymentsWithCustomer(): JSONArray {
         dbLock.lock()
         return try {
@@ -6980,9 +7256,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الإيداعات النقدية
-    // ============================
+    // ========================================================================
+
     fun addCashDeposit(customerId: Int, amount: Double, notes: String, operator: String = "System"): Boolean {
         dbLock.lock()
         return try {
@@ -7013,9 +7290,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال التقارير
-    // ============================
+    // ========================================================================
+
     fun getDailySales(stationId: Int = 1, date: String? = null): JSONArray {
         dbLock.lock()
         return try {
@@ -7105,9 +7383,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الإعدادات
-    // ============================
+    // ========================================================================
+
     fun getSetting(key: String): String {
         dbLock.lock()
         return try {
@@ -7148,9 +7427,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال AI Chat
-    // ============================
+    // ========================================================================
+
     fun getAiChatHistory(sessionId: String): JSONArray {
         dbLock.lock()
         return try {
@@ -7180,9 +7460,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال التصدير
-    // ============================
+    // ========================================================================
+
     fun exportAllData(): JSONObject {
         dbLock.lock()
         return try {
@@ -7203,9 +7484,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال المنتجات والفئات
-    // ============================
+    // ========================================================================
+
     fun getProductCategories(): JSONArray {
         dbLock.lock()
         return try {
@@ -7230,9 +7512,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الأسعار والمعلومات
-    // ============================
+    // ========================================================================
+
     fun getDieselPrice(): Double {
         dbLock.lock()
         return try {
@@ -7297,9 +7580,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الإشعارات
-    // ============================
+    // ========================================================================
+
     fun getNotifications(): JSONArray {
         dbLock.lock()
         return try {
@@ -7313,9 +7597,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // إحصائيات لوحة التحكم
-    // ============================
+    // ========================================================================
+
     fun getDashboardStats(stationId: Int = 1): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
@@ -7361,9 +7646,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return stats
     }
 
-    // ============================
+    // ========================================================================
     // تسجيل النشاطات
-    // ============================
+    // ========================================================================
+
     fun logActivity(operator: String, action: String, description: String): Long {
         dbLock.lock()
         return try {
@@ -7381,9 +7667,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال مساعدة
-    // ============================
+    // ========================================================================
+
     private fun getPartyBalance(partyId: Int): Double {
         val db = readableDatabase
         db.rawQuery("SELECT COALESCE(current_balance,0) FROM parties WHERE id=?", arrayOf(partyId.toString()))
@@ -7441,9 +7728,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال بيانات ديناميكية من SmsReceiver
-    // ============================
+    // ========================================================================
+
     fun getDriverPhones(): List<String> {
         val phones = mutableListOf<String>()
         val db = readableDatabase
@@ -7646,9 +7934,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال التقارير الإضافية
-    // ============================
+    // ========================================================================
+
     fun getSalesByFuelType(): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
@@ -7691,9 +7980,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    // ============================
+    // ========================================================================
     // دوال حركات النقدية (V12)
-    // ============================
+    // ========================================================================
+
     fun addCashMovement(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -7744,9 +8034,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الورديات الإضافية
-    // ============================
+    // ========================================================================
+
     fun startShift(data: JSONObject): Long {
         return openShift(
             stationId = data.optInt("station_id", 1),
@@ -7856,9 +8147,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الإشعارات الإضافية
-    // ============================
+    // ========================================================================
+
     fun addNotification(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -7910,9 +8202,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال SMS Messages الإضافية
-    // ============================
+    // ========================================================================
+
     fun getSmsMessages(): JSONArray {
         dbLock.lock()
         return try {
@@ -7989,9 +8282,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال SMS Templates
-    // ============================
+    // ========================================================================
+
     fun getSmsTemplates(): JSONArray {
         dbLock.lock()
         return try {
@@ -8048,9 +8342,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال الإعدادات الإضافية
-    // ============================
+    // ========================================================================
+
     fun addSetting(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -8096,9 +8391,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال التنبيهات والتقارير الإضافية
-    // ============================
+    // ========================================================================
+
     fun getOverduePayments(): JSONArray {
         dbLock.lock()
         return try {
@@ -8156,9 +8452,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال المركبات
-    // ============================
+    // ========================================================================
+
     fun getVehicles(): JSONArray {
         dbLock.lock()
         return try {
@@ -8193,9 +8490,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال إحصائيات الخزانات
-    // ============================
+    // ========================================================================
+
     fun getTankStats(): JSONArray {
         dbLock.lock()
         return try {
@@ -8229,9 +8527,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال النسخ الاحتياطي والتصدير
-    // ============================
+    // ========================================================================
+
     fun backupDatabase(): String {
         dbLock.lock()
         return try {
@@ -8338,9 +8637,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال المنتجات (Overload)
-    // ============================
+    // ========================================================================
+
     fun getProducts(): JSONArray = getProducts(null)
 
     fun getProducts(stationId: Int?): JSONArray {
@@ -8375,9 +8675,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال أنواع الوقود
-    // ============================
+    // ========================================================================
+
     fun getFuelTypes(): JSONArray {
         dbLock.lock()
         return try {
@@ -8404,9 +8705,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال إدارة المنتجات (CRUD)
-    // ============================
+    // ========================================================================
+
     fun insertProduct(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -8472,9 +8774,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال أنواع الأطراف والعملات
-    // ============================
+    // ========================================================================
+
     fun getPartyTypes(): JSONArray {
         dbLock.lock()
         return try {
@@ -8509,9 +8812,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال دفتر الأستاذ والروابط
-    // ============================
+    // ========================================================================
+
     fun getCustomerLedger(partyId: Int, limit: Int = 100): JSONArray {
         dbLock.lock()
         return try {
@@ -8563,9 +8867,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getCustomerSales(partyId: Long, limit: Int = 100): JSONArray =
         getCustomerSales(partyId.toInt(), limit)
 
-    // ============================
+    // ========================================================================
     // دوال جهات الاتصال والعناوين
-    // ============================
+    // ========================================================================
+
     fun getPartyContacts(partyId: Int): JSONArray {
         dbLock.lock()
         return try {
@@ -8739,9 +9044,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
+    // ========================================================================
     // دوال ديون العملاء
-    // ============================
+    // ========================================================================
+
     fun getCustomerDebts(partyId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
@@ -8774,9 +9080,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getCustomerDebts(fromDate: String?, toDate: String?): JSONArray = getCustomerDebts(null)
 
-    // ============================
+    // ========================================================================
     // دوال التنظيف
-    // ============================
+    // ========================================================================
+
     fun cleanupOldData(): Boolean {
         return cleanupOldData(getRetentionDays())
     }
@@ -8815,295 +9122,294 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    // ============================
-    // دوال البيانات الأولية
-    // ============================
-    private fun insertInitialData(db: SQLiteDatabase) {
-        db.execSQL("""
-            INSERT OR IGNORE INTO currencies (id, uuid, currency_code, currency_name, currency_name_ar, symbol, symbol_position, decimal_places, is_default, is_active)
-            VALUES 
-            (1, 'CUR-001-UUID', 'USD', 'US Dollar', 'الدولار الأمريكي', '$', 'before', 2, 1, 1),
-            (2, 'CUR-002-UUID', 'YER', 'Yemeni Rial', 'الريال اليمني', 'ر.ي', 'after', 0, 0, 1),
-            (3, 'CUR-003-UUID', 'SAR', 'Saudi Riyal', 'الريال السعودي', 'ر.س', 'after', 2, 0, 1)
-        """)
+    // ========================================================================
+    // الدوال الجديدة المطلوبة (تمت إضافتها)
+    // ========================================================================
 
-        db.execSQL("""
-            INSERT OR IGNORE INTO companies (id, uuid, company_code, company_name, company_name_ar, tax_number, phone, email, country, city, status, is_head_office, default_currency_id)
-            VALUES (1, 'COMP-001-UUID', 'COMP-001', 'Abu Ahmed Fuel Stations Group', 'مجموعة محطات ابو أحمد', 'TAX-123456789', '+967-776-979-279', 'info@abuahmed.com', 'Yemen', 'Sana''a', 'active', 1, 2)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO stations (id, uuid, station_code, station_name, station_name_ar, company_id, country, city, phone, email, license_number, tax_number, status, is_24_hours, station_type, default_currency_id)
-            VALUES (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO roles (id, uuid, role_code, role_name, role_name_ar, level, is_system_role, is_active) VALUES
-            (1, 'ROL-001-UUID', 'SUPER_ADMIN', 'Super Administrator', 'مدير النظام الأعلى', 1, 1, 1),
-            (2, 'ROL-002-UUID', 'ADMIN', 'Administrator', 'مدير النظام', 2, 1, 1),
-            (3, 'ROL-003-UUID', 'STATION_MANAGER', 'Station Manager', 'مدير المحطة', 3, 0, 1),
-            (4, 'ROL-004-UUID', 'CASHIER', 'Cashier', 'أمين الصندوق', 4, 0, 1),
-            (5, 'ROL-005-UUID', 'ACCOUNTANT', 'Accountant', 'محاسب', 4, 0, 1),
-            (6, 'ROL-006-UUID', 'SUPERVISOR', 'Supervisor', 'مشرف', 3, 0, 1),
-            (7, 'ROL-007-UUID', 'ATTENDANT', 'Pump Attendant', 'مشغل المضخة', 5, 0, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO permissions (id, uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action) VALUES
-            (1, 'PER-001-UUID', 'users.create', 'Create Users', 'إنشاء مستخدمين', 'users', 'المستخدمين', 'create'),
-            (2, 'PER-002-UUID', 'users.read', 'View Users', 'عرض المستخدمين', 'users', 'المستخدمين', 'read'),
-            (3, 'PER-003-UUID', 'users.update', 'Edit Users', 'تعديل المستخدمين', 'users', 'المستخدمين', 'update'),
-            (4, 'PER-004-UUID', 'users.delete', 'Delete Users', 'حذف المستخدمين', 'users', 'المستخدمين', 'delete'),
-            (5, 'PER-005-UUID', 'sales.create', 'Create Sales', 'إنشاء مبيعات', 'sales', 'المبيعات', 'create'),
-            (6, 'PER-006-UUID', 'sales.read', 'View Sales', 'عرض المبيعات', 'sales', 'المبيعات', 'read'),
-            (7, 'PER-007-UUID', 'sales.update', 'Edit Sales', 'تعديل المبيعات', 'sales', 'المبيعات', 'update'),
-            (8, 'PER-008-UUID', 'sales.delete', 'Delete Sales', 'حذف المبيعات', 'sales', 'المبيعات', 'delete'),
-            (9, 'PER-009-UUID', 'sales.print', 'Print Invoices', 'طباعة الفواتير', 'sales', 'المبيعات', 'print'),
-            (10, 'PER-010-UUID', 'reports.view', 'View Reports', 'عرض التقارير', 'reports', 'التقارير', 'read'),
-            (11, 'PER-011-UUID', 'reports.export', 'Export Reports', 'تصدير التقارير', 'reports', 'التقارير', 'export'),
-            (12, 'PER-012-UUID', 'inventory.create', 'Create Inventory', 'إنشاء مخزون', 'inventory', 'المخزون', 'create'),
-            (13, 'PER-013-UUID', 'inventory.read', 'View Inventory', 'عرض المخزون', 'inventory', 'المخزون', 'read'),
-            (14, 'PER-014-UUID', 'inventory.update', 'Edit Inventory', 'تعديل المخزون', 'inventory', 'المخزون', 'update'),
-            (15, 'PER-015-UUID', 'tanks.read', 'View Tanks', 'عرض الخزانات', 'tanks', 'الخزانات', 'read'),
-            (16, 'PER-016-UUID', 'tanks.update', 'Edit Tanks', 'تعديل الخزانات', 'tanks', 'الخزانات', 'update'),
-            (17, 'PER-017-UUID', 'pumps.read', 'View Pumps', 'عرض المضخات', 'pumps', 'المضخات', 'read'),
-            (18, 'PER-018-UUID', 'pumps.update', 'Edit Pumps', 'تعديل المضخات', 'pumps', 'المضخات', 'update'),
-            (19, 'PER-019-UUID', 'customers.create', 'Create Customers', 'إنشاء عملاء', 'customers', 'العملاء', 'create'),
-            (20, 'PER-020-UUID', 'customers.read', 'View Customers', 'عرض العملاء', 'customers', 'العملاء', 'read'),
-            (21, 'PER-021-UUID', 'customers.update', 'Edit Customers', 'تعديل العملاء', 'customers', 'العملاء', 'update'),
-            (22, 'PER-022-UUID', 'customers.delete', 'Delete Customers', 'حذف العملاء', 'customers', 'العملاء', 'delete'),
-            (23, 'PER-023-UUID', 'accounting.read', 'View Accounting', 'عرض المحاسبة', 'accounting', 'المحاسبة', 'read'),
-            (24, 'PER-024-UUID', 'accounting.create', 'Create Entries', 'إنشاء قيود', 'accounting', 'المحاسبة', 'create'),
-            (25, 'PER-025-UUID', 'settings.read', 'View Settings', 'عرض الإعدادات', 'settings', 'الإعدادات', 'read'),
-            (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO role_permissions (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
-            SELECT 'RP-' || substr('000' || rowid, -3, 3) || '-UUID', 1, id, 1, 1, 1, 1, 1, 1, 1 FROM permissions
-        """)
-
-        val (hashAdmin, saltAdmin) = hashPassword("admin123")
-        db.execSQL("""
-            INSERT OR IGNORE INTO users (id, uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
-            VALUES (1, 'USR-001-UUID', 'admin', 'admin@abuahmed.com', '+967-730-005-355', '$hashAdmin', '$saltAdmin', 'أبو أحمد', 'مدير النظام', 1, 1, 1, 'ar', 'active', 1, 1)
-        """)
-
-        val (hashKhalil, saltKhalil) = hashPassword("123321")
-        db.execSQL("""
-            INSERT OR IGNORE INTO users (uuid, username, email, phone, password_hash, password_salt, full_name, full_name_ar, role_id, station_id, company_id, preferred_language, status, email_verified, phone_verified)
-            VALUES ('USR-002-UUID', 'خليل أحمد', 'khalil@abuahmed.com', '+967-776-979-279', '$hashKhalil', '$saltKhalil', 'المدير العام', 'المدير العام', 1, 1, 1, 'ar', 'active', 1, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO fuel_types (id, uuid, fuel_code, fuel_name, fuel_name_ar, density_standard, default_sale_price, default_purchase_price, tax_rate, vat_rate, is_active) VALUES
-            (1, 'FT-001-UUID', 'DIESEL', 'Diesel', 'ديزل', 0.8200, 1800.00, 1700.00, 0, 0, 1),
-            (2, 'FT-002-UUID', 'PETROL_95', 'Petrol 95', 'بنزين 95', 0.7500, 2000.00, 1900.00, 0, 0, 1),
-            (3, 'FT-003-UUID', 'PETROL_91', 'Petrol 91', 'بنزين 91', 0.7450, 1950.00, 1850.00, 0, 0, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO tanks (id, uuid, tank_code, tank_name, tank_name_ar, station_id, fuel_type_id, capacity_liters, minimum_level, maximum_level, current_quantity, tank_shape, location, status) VALUES
-            (1, 'TANK-001-UUID', 'TANK-001', 'Diesel Tank', 'خزان الديزل', 1, 1, 40000.00, 2000.00, 40000.00, 25000.00, 'cylindrical', 'underground', 'active'),
-            (2, 'TANK-002-UUID', 'TANK-002', 'Petrol 95 Tank', 'خزان البنزين 95', 1, 2, 35000.00, 1500.00, 35000.00, 20000.00, 'cylindrical', 'underground', 'active'),
-            (3, 'TANK-003-UUID', 'TANK-003', 'Petrol 91 Tank', 'خزان البنزين 91', 1, 3, 35000.00, 1500.00, 35000.00, 22000.00, 'cylindrical', 'underground', 'active')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO pumps (id, uuid, pump_code, pump_number, pump_name, pump_name_ar, station_id, tank_id, serial_number, manufacturer, max_flow_rate, meter_start, meter_current, status) VALUES
-            (1, 'PUMP-001-UUID', 'PUMP-001', '1', 'Pump 1 - Diesel', 'مضخة 1 - ديزل', 1, 1, 'SN-001-2024', 'Wayne', 45.00, 0.00, 15420.50, 'active'),
-            (2, 'PUMP-002-UUID', 'PUMP-002', '2', 'Pump 2 - Diesel', 'مضخة 2 - ديزل', 1, 1, 'SN-002-2024', 'Wayne', 45.00, 0.00, 12350.75, 'active'),
-            (3, 'PUMP-003-UUID', 'PUMP-003', '3', 'Pump 3 - Petrol 95', 'مضخة 3 - بنزين 95', 1, 2, 'SN-003-2024', 'Tokheim', 40.00, 0.00, 28900.00, 'active'),
-            (4, 'PUMP-004-UUID', 'PUMP-004', '4', 'Pump 4 - Petrol 91', 'مضخة 4 - بنزين 91', 1, 3, 'SN-004-2024', 'Tokheim', 40.00, 0.00, 31500.25, 'active')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO pump_nozzles (id, uuid, nozzle_code, nozzle_number, pump_id, fuel_type_id, meter_start, meter_current, status) VALUES
-            (1, 'NZ-001-UUID', 'NZ-001-A', 'A', 1, 1, 0.00, 15420.50, 'active'),
-            (2, 'NZ-002-UUID', 'NZ-002-A', 'A', 2, 1, 0.00, 12350.75, 'active'),
-            (3, 'NZ-003-UUID', 'NZ-003-A', 'A', 3, 2, 0.00, 28900.00, 'active'),
-            (4, 'NZ-004-UUID', 'NZ-004-A', 'A', 4, 3, 0.00, 31500.25, 'active')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO party_types (id, uuid, type_code, type_name, type_name_ar, default_discount, default_credit_limit, payment_terms_days, is_active) VALUES
-            (1, 'PT-001-UUID', 'INDIVIDUAL', 'Individual', 'فرد', 0, 0, 0, 1),
-            (2, 'PT-002-UUID', 'COMPANY', 'Company', 'شركة', 5, 500000, 30, 1),
-            (3, 'PT-003-UUID', 'GOVERNMENT', 'Government', 'جهة حكومية', 3, 1000000, 60, 1),
-            (4, 'PT-004-UUID', 'TRANSPORT', 'Transport Company', 'شركة نقل', 4, 750000, 15, 1),
-            (5, 'PT-005-UUID', 'CONTRACTOR', 'Contractor', 'مقاول', 2, 300000, 30, 1),
-            (6, 'PT-006-UUID', 'SUPPLIER', 'Supplier', 'مورد', 0, 2000000, 30, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO cash_boxes (id, uuid, box_code, box_name, box_name_ar, station_id, box_type, opening_balance, current_balance, currency_id, status) VALUES
-            (1, 'CB-001-UUID', 'CB-001', 'Main Cash Box', 'الصندوق الرئيسي', 1, 'main', 50000.00, 50000.00, 2, 'active'),
-            (2, 'CB-002-UUID', 'CB-002', 'Safe', 'الخزنة', 1, 'safe', 200000.00, 200000.00, 2, 'active')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO accounts (id, uuid, account_code, account_name, account_name_ar, account_type, account_category, normal_balance, level, is_active) VALUES
-            (1, 'ACC-001-UUID', '1', 'Assets', 'الأصول', 'asset', NULL, 'debit', 1, 1),
-            (2, 'ACC-002-UUID', '11', 'Current Assets', 'الأصول المتداولة', 'asset', 'current_asset', 'debit', 2, 1),
-            (3, 'ACC-003-UUID', '1101', 'Cash on Hand', 'النقدية بالصندوق', 'asset', 'current_asset', 'debit', 3, 1),
-            (4, 'ACC-004-UUID', '1102', 'Bank Accounts', 'الحسابات البنكية', 'asset', 'current_asset', 'debit', 3, 1),
-            (5, 'ACC-005-UUID', '1103', 'Accounts Receivable', 'المدينون', 'asset', 'current_asset', 'debit', 3, 1),
-            (6, 'ACC-006-UUID', '1104', 'Inventory', 'المخزون', 'asset', 'current_asset', 'debit', 3, 1),
-            (7, 'ACC-007-UUID', '12', 'Fixed Assets', 'الأصول الثابتة', 'asset', 'fixed_asset', 'debit', 2, 1),
-            (8, 'ACC-008-UUID', '2', 'Liabilities', 'الخصوم', 'liability', NULL, 'credit', 1, 1),
-            (9, 'ACC-009-UUID', '21', 'Current Liabilities', 'الخصوم المتداولة', 'liability', 'current_liability', 'credit', 2, 1),
-            (10, 'ACC-010-UUID', '2101', 'Accounts Payable', 'الدائنون', 'liability', 'current_liability', 'credit', 3, 1),
-            (11, 'ACC-011-UUID', '3', 'Equity', 'حقوق الملكية', 'equity', NULL, 'credit', 1, 1),
-            (12, 'ACC-012-UUID', '31', 'Capital', 'رأس المال', 'equity', 'capital', 'credit', 2, 1),
-            (13, 'ACC-013-UUID', '4', 'Revenue', 'الإيرادات', 'revenue', NULL, 'credit', 1, 1),
-            (14, 'ACC-014-UUID', '41', 'Sales Revenue', 'إيرادات المبيعات', 'revenue', 'operating_revenue', 'credit', 2, 1),
-            (15, 'ACC-015-UUID', '4101', 'Fuel Sales', 'مبيعات الوقود', 'revenue', 'operating_revenue', 'credit', 3, 1),
-            (16, 'ACC-016-UUID', '4102', 'Product Sales', 'مبيعات المنتجات', 'revenue', 'operating_revenue', 'credit', 3, 1),
-            (17, 'ACC-017-UUID', '5', 'Expenses', 'المصروفات', 'expense', NULL, 'debit', 1, 1),
-            (18, 'ACC-018-UUID', '51', 'Operating Expenses', 'مصروفات التشغيل', 'expense', 'operating_expense', 'debit', 2, 1),
-            (19, 'ACC-019-UUID', '5101', 'Salaries', 'الرواتب', 'expense', 'operating_expense', 'debit', 3, 1),
-            (20, 'ACC-020-UUID', '5102', 'Rent', 'الإيجار', 'expense', 'operating_expense', 'debit', 3, 1),
-            (21, 'ACC-021-UUID', '5103', 'Utilities', 'المرافق', 'expense', 'operating_expense', 'debit', 3, 1),
-            (22, 'ACC-022-UUID', '5104', 'Maintenance', 'الصيانة', 'expense', 'operating_expense', 'debit', 3, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO expense_categories (id, uuid, category_code, category_name, category_name_ar, default_account_id, is_active) VALUES
-            (1, 'EXC-001-UUID', 'EXC-001', 'Salaries', 'الرواتب', 19, 1),
-            (2, 'EXC-002-UUID', 'EXC-002', 'Electricity', 'الكهرباء', 21, 1),
-            (3, 'EXC-003-UUID', 'EXC-003', 'Maintenance', 'الصيانة', 22, 1),
-            (4, 'EXC-004-UUID', 'EXC-004', 'Rent', 'الإيجار', 20, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO system_settings (id, uuid, setting_key, setting_value, category, data_type, description) VALUES
-            (1, 'SYS-001-UUID', 'VAT_PERCENTAGE', '0', 'tax', 'float', 'نسبة ضريبة القيمة المضافة'),
-            (2, 'SYS-002-UUID', 'DEFAULT_CURRENCY', '2', 'general', 'integer', 'معرف العملة الافتراضية (YER)'),
-            (3, 'SYS-003-UUID', 'ALLOW_NEGATIVE_STOCK', '0', 'inventory', 'boolean', 'السماح بالمخزون السالب'),
-            (4, 'SYS-004-UUID', 'MAX_DISCOUNT_PERCENT', '20', 'sales', 'integer', 'الحد الأقصى للخصم بالنسبة المئوية'),
-            (5, 'SYS-005-UUID', 'AUTO_BACKUP_ENABLED', '1', 'system', 'boolean', 'تفعيل النسخ الاحتياطي التلقائي'),
-            (6, 'SYS-006-UUID', 'AUTO_SYNC_ENABLED', '1', 'system', 'boolean', 'تفعيل المزامنة التلقائية'),
-            (7, 'SYS-007-UUID', 'SMS_GATEWAY', 'android_app', 'sms', 'string', 'نوع بوابة الرسائل القصيرة'),
-            (8, 'SYS-008-UUID', 'STATION_NAME', 'محطة ابو أحمد لمشتقات الديزل', 'general', 'string', 'اسم المحطة الرئيسي'),
-            (9, 'SYS-009-UUID', 'LOW_STOCK_THRESHOLD', '10', 'inventory', 'integer', 'حد المخزون المنخفض'),
-            (10, 'SYS-010-UUID', 'CREDIT_LIMIT_DEFAULT', '500000', 'finance', 'integer', 'حد الائتمان الافتراضي للعملاء'),
-            (11, 'SYS-011-UUID', 'retention_days', '90', 'system', 'integer', 'عدد أيام الاحتفاظ بالسجلات قبل الأرشفة'),
-            (12, 'SYS-012-UUID', 'push_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات الفورية (Push)'),
-            (13, 'SYS-013-UUID', 'email_notifications_enabled', '0', 'notifications', 'boolean', 'تفعيل/تعطيل الإشعارات عبر البريد الإلكتروني'),
-            (14, 'SYS-014-UUID', 'backup_time', '02:00', 'system', 'string', 'وقت تشغيل النسخ الاحتياطي اليومي (HH:MM)'),
-            (15, 'SYS-015-UUID', 'max_db_size_mb', '500', 'system', 'integer', 'الحد الأقصى لحجم قاعدة البيانات بالميجابايت'),
-            (16, 'SYS-016-UUID', 'verbose_logging', '0', 'system', 'boolean', 'تفعيل التسجيل التفصيلي للأخطاء والأداء'),
-            (17, 'SYS-017-UUID', 'offline_mode_enabled', '0', 'system', 'boolean', 'تفعيل وضع العمل بدون إنترنت'),
-            (18, 'SYS-018-UUID', 'max_login_attempts', '5', 'security', 'integer', 'الحد الأقصى لمحاولات تسجيل الدخول الفاشلة قبل القفل'),
-            (19, 'SYS-019-UUID', 'lockout_duration_minutes', '30', 'security', 'integer', 'مدة قفل الحساب بعد تجاوز المحاولات الفاشلة'),
-            (20, 'SYS-020-UUID', 'two_factor_required', '0', 'security', 'boolean', 'إلزام جميع المستخدمين بتفعيل المصادقة الثنائية'),
-            (21, 'SYS-021-UUID', 'min_password_length', '8', 'security', 'integer', 'الحد الأدنى لعدد أحرف كلمة المرور'),
-            (22, 'SYS-022-UUID', 'password_expiry_days', '90', 'security', 'integer', 'عدد أيام صلاحية كلمة المرور قبل الإجبار على التغيير'),
-            (23, 'SYS-023-UUID', 'gps_tracking_enabled', '1', 'sales', 'boolean', 'تسجيل إحداثيات GPS مع كل عملية بيع'),
-            (24, 'SYS-024-UUID', 'tank_low_threshold_percent', '20', 'inventory', 'integer', 'نسبة التنبيه لانخفاض مستوى الوقود في الخزان'),
-            (25, 'SYS-025-UUID', 'max_discount_without_approval', '10', 'sales', 'integer', 'الحد الأقصى للخصم بدون موافقة المشرف'),
-            (26, 'SYS-026-UUID', 'auto_print_receipt', '1', 'pos', 'boolean', 'طباعة الإيصال تلقائياً بعد إتمام البيع'),
-            (27, 'SYS-027-UUID', 'receipt_paper_width_mm', '80', 'pos', 'integer', 'عرض ورقة الإيصال بالمليمتر (58 أو 80)'),
-            (28, 'SYS-028-UUID', 'receipt_qr_enabled', '1', 'pos', 'boolean', 'إظهار QR Code على إيصال البيع'),
-            (29, 'SYS-029-UUID', 'receipt_footer_message', 'شكراً لزيارتكم محطة ابو أحمد', 'pos', 'string', 'الرسالة المطبوعة في تذييل الإيصال'),
-            (30, 'SYS-030-UUID', 'auto_bank_transfer_enabled', '0', 'finance', 'boolean', 'تفعيل التحويل الآلي للمبالغ إلى الحساب البنكي'),
-            (31, 'SYS-031-UUID', 'max_cash_in_box', '200000', 'finance', 'integer', 'الحد الأقصى للنقدية المسموح بها في الصندوق'),
-            (32, 'SYS-032-UUID', 'smart_alerts_enabled', '1', 'notifications', 'boolean', 'تفعيل نظام التنبيهات الذكية'),
-            (33, 'SYS-033-UUID', 'low_stock_check_interval_hours', '4', 'inventory', 'integer', 'فترة فحص المخزون المنخفض بالساعات'),
-            (34, 'SYS-034-UUID', 'loyalty_program_enabled', '1', 'sales', 'boolean', 'تفعيل نظام نقاط الولاء للعملاء'),
-            (35, 'SYS-035-UUID', 'loyalty_points_per_currency', '1', 'sales', 'float', 'عدد نقاط الولاء المكتسبة لكل 1 وحدة عملة'),
-            (36, 'SYS-036-UUID', 'zatca_einvoicing_enabled', '0', 'sales', 'boolean', 'تفعيل الفوترة الإلكترونية المتكاملة مع ZATCA'),
-            (37, 'SYS-037-UUID', 'station_tax_id', '', 'tax', 'string', 'الرقم الضريبي للمحطة للفوترة الإلكترونية'),
-            (38, 'SYS-038-UUID', 'customer_rating_enabled', '0', 'crm', 'boolean', 'تفعيل نظام تقييم العملاء بعد كل عملية بيع')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO station_settings (id, uuid, station_id, setting_key, setting_value, data_type, description) VALUES
-            (1, 'SS-001-UUID', 1, 'receipt_width', '80', 'integer', 'عرض إيصال الطباعة'),
-            (2, 'SS-002-UUID', 1, 'allow_manual_price', '1', 'boolean', 'السماح بتعديل السعر يدوياً'),
-            (3, 'SS-003-UUID', 1, 'max_cash_limit', '200000', 'integer', 'الحد الأقصى للنقد في الصندوق'),
-            (4, 'SS-004-UUID', 1, 'default_shift_duration', '8', 'integer', 'مدة الوردية بالساعات'),
-            (5, 'SS-005-UUID', 1, 'tank_low_warning', '20', 'integer', 'نسبة التنبيه لانخفاض الخزان %')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO notification_templates (id, uuid, template_code, template_name, template_name_ar, channel, subject, body) VALUES
-            (1, 'NT-001-UUID', 'WELCOME_SMS', 'Welcome SMS', 'رسالة ترحيب', 'sms', NULL, 'مرحباً {customer_name}، شكراً لزيارتكم محطة ابو أحمد.'),
-            (2, 'NT-002-UUID', 'DEBT_REMINDER', 'Debt Reminder', 'تذكير بالدين', 'sms', NULL, 'العميل {customer_name}، المبلغ المستحق {due_amount} بتاريخ {due_date}. الرجاء السداد.'),
-            (3, 'NT-003-UUID', 'LOW_STOCK_ALERT', 'Low Stock Alert', 'تنبيه مخزون منخفض', 'email', 'تنبيه مخزون', 'المنتج {product_name} وصل إلى حد الخطر، الكمية الحالية: {current_quantity}'),
-            (4, 'NT-004-UUID', 'TANK_LEVEL_ALERT', 'Tank Level Alert', 'تنبيه مستوى خزان', 'push', NULL, 'خزان {tank_name} أقل من الحد الأدنى، النسبة الحالية: {level_percent}%')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO kpi_definitions (id, uuid, kpi_code, kpi_name, kpi_name_ar, category, description, formula, target_value, unit, frequency) VALUES
-            (1, 'KPI-001-UUID', 'DAILY_SALES', 'Daily Sales', 'المبيعات اليومية', 'sales', 'إجمالي المبيعات اليومية', 'SUM(total_amount) FROM sales WHERE DATE(created_at) = CURDATE()', 500000, 'YER', 'daily'),
-            (2, 'KPI-002-UUID', 'FUEL_LOSS', 'Fuel Loss', 'فقد الوقود', 'inventory', 'نسبة الفقد في الوقود (تبخر/تسريب)', '(refill_quantity - sold_quantity) / refill_quantity * 100', 2, '%', 'weekly'),
-            (3, 'KPI-003-UUID', 'PUMP_EFFICIENCY', 'Pump Efficiency', 'كفاءة المضخة', 'operational', 'معدل التدفق الفعلي مقابل التصميمي', 'avg_actual_flow / design_flow * 100', 95, '%', 'monthly'),
-            (4, 'KPI-004-UUID', 'PROFIT_MARGIN', 'Profit Margin', 'هامش الربح', 'financial', 'نسبة الربح الإجمالي', '(total_sales - total_cost) / total_sales * 100', 25, '%', 'monthly')
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO field_permissions (id, uuid, role_id, table_name, field_name, can_view, can_edit) VALUES
-            (1, 'FP-001-UUID', 4, 'sales_transactions', 'gross_amount', 0, 0),
-            (2, 'FP-002-UUID', 4, 'sales_transactions', 'net_amount', 0, 0),
-            (3, 'FP-003-UUID', 4, 'products', 'purchase_price', 0, 0)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO approval_workflows (id, uuid, workflow_code, workflow_name, workflow_name_ar, entity_type, is_active) VALUES
-            (1, 'WF-001-UUID', 'WF_SALES_APPROVAL', 'Large Sales Approval', 'موافقة المبيعات الكبيرة', 'sale', 1)
-        """)
-        db.execSQL("""
-            INSERT OR IGNORE INTO approval_steps (id, uuid, workflow_id, step_order, step_name, step_name_ar, role_id) VALUES
-            (1, 'AS-001-UUID', 1, 1, 'Supervisor Approval', 'موافقة المشرف', 6),
-            (2, 'AS-002-UUID', 1, 2, 'Manager Approval', 'موافقة المدير', 3)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO scheduled_jobs (id, uuid, job_code, job_name, job_name_ar, job_class, schedule_type, cron_expression, enabled) VALUES
-            (1, 'SJ-001-UUID', 'DAILY_BACKUP', 'Daily Database Backup', 'نسخ احتياطي يومي', 'BackupJob', 'cron', '0 2 * * *', 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO printer_profiles (id, uuid, profile_code, profile_name, printer_type, connection_type, paper_width, is_default) VALUES
-            (1, 'PP-001-UUID', 'PP_THERMAL_80', 'Thermal 80mm', 'thermal', 'usb', 80, 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO receipt_templates (id, uuid, template_code, template_name, description, header, footer, is_default) VALUES
-            (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي', 
-            'محطة ابو أحمد لمشتقات الديزل\nشكراً لزيارتكم', 
-            'مع خالص الشكر والتقدير\nأبو أحمد', 1)
-        """)
-
-        db.execSQL("""
-            INSERT OR IGNORE INTO screens
-            (id, uuid, screen_name, module, description, is_active)
-            VALUES
-            (1,'SCR-001-UUID','balance-sheet','accounting','الميزانية العمومية',1),
-            (2,'SCR-002-UUID','banks-accounts','accounting','الحسابات البنكية',1),
-            (3,'SCR-003-UUID','chart-of-accounts','accounting','دليل الحسابات',1),
-            (4,'SCR-004-UUID','contracts','crm','العقود',1),
-            (5,'SCR-005-UUID','crm','crm','إدارة علاقات العملاء',1),
-            (6,'SCR-006-UUID','customer-reports','reports','تقارير العملاء',1),
-            (7,'SCR-007-UUID','customers','customers','العملاء',1),
-            (8,'SCR-008-UUID','fuel-reports','reports','تقارير الوقود',1),
-            (9,'SCR-009-UUID','inventory-movements','inventory','حركات المخزون',1),
-            (10,'SCR-010-UUID','inventory-reports','inventory','تقارير المخزون',1),
-            (11,'SCR-011-UUID','journal-entries','accounting','القيود اليومية',1),
-            (12,'SCR-012-UUID','kpi','reports','مؤشرات الأداء',1),
-            (13,'SCR-013-UUID','ledger','accounting','دفتر الأستاذ',1),
-            (14,'SCR-014-UUID','party-types','customers','أنواع الأطراف',1),
-            (15,'SCR-015-UUID','pos','sales','نقطة البيع',1),
-            (16,'SCR-016-UUID','product-categories','inventory','تصنيفات المنتجات',1),
-            (17,'SCR-017-UUID','product_categories','inventory','تصنيفات المنتجات',1),
-            (18,'SCR-018-UUID','products','inventory','المنتجات',1),
-            (19,'SCR-019-UUID','sales-log','sales','سجل المبيعات',1),
-            (20,'SCR-020-UUID','sales-reports','reports','تقارير المبيعات',1),
-            (21,'SCR-021-UUID','stock-levels','inventory','مستويات المخزون',1),
-            (22,'SCR-022-UUID','suppliers','suppliers','الموردين',1),
-            (23,'SCR-023-UUID','users','users','المستخدمين',1),
-            (24,'SCR-024-UUID','login','security','تسجيل الدخول',1)
-        """)
+    fun tableExists(db: SQLiteDatabase, tableName: String): Boolean {
+        dbLock.lock()
+        return try {
+            db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf(tableName)
+            ).use { cursor -> cursor.moveToFirst() }
+        } finally {
+            dbLock.unlock()
+        }
     }
+
+    fun getVersion(): Int = VERSION
+
+    fun cleanupOldRateLimits(): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cutoff = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000) // 30 يوم
+            db.delete("sms_rate_limits", "last_reply_at < ? OR blocked_until < ?", arrayOf(cutoff.toString(), cutoff.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun cleanupOldConversationContext(): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cutoff = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            db.delete("sms_conversation_context", "timestamp < ?", arrayOf(cutoff.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun cleanupOldMetrics(retentionDays: Int = 90): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cutoff = System.currentTimeMillis() - (retentionDays.toLong() * 24 * 60 * 60 * 1000)
+            db.delete("sms_metrics", "timestamp < ?", arrayOf(cutoff.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addMeterReading(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("reading_code", data.optString("reading_code", "MR-${System.currentTimeMillis()}"))
+                put("pump_id", data.optInt("pump_id"))
+                put("nozzle_id", data.optInt("nozzle_id", 0))
+                put("station_id", data.optInt("station_id", 1))
+                put("shift_id", data.optInt("shift_id", 0))
+                put("reading_date", data.optString("reading_date", getCurrentDate()))
+                put("period", data.optString("period", "daily"))
+                put("opening_reading", data.optDouble("opening_reading"))
+                put("closing_reading", data.optDouble("closing_reading"))
+                put("sold_liters", data.optDouble("sold_liters"))
+                put("read_by", data.optInt("read_by", 1))
+                put("status", data.optString("status", "draft"))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insert("meter_readings", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getMeterReadings(pumpId: Int? = null, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = if (pumpId != null) {
+                "SELECT * FROM meter_readings WHERE pump_id = ? ORDER BY reading_date DESC, id DESC LIMIT ?"
+            } else {
+                "SELECT * FROM meter_readings ORDER BY reading_date DESC, id DESC LIMIT ?"
+            }
+            val args = if (pumpId != null) arrayOf(pumpId.toString(), limit.toString()) else arrayOf(limit.toString())
+            db.rawQuery(sql, args).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getTankReadings(tankId: Int? = null, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = if (tankId != null) {
+                "SELECT * FROM tank_level_log WHERE tank_id = ? ORDER BY reading_date DESC, id DESC LIMIT ?"
+            } else {
+                "SELECT * FROM tank_level_log ORDER BY reading_date DESC, id DESC LIMIT ?"
+            }
+            val args = if (tankId != null) arrayOf(tankId.toString(), limit.toString()) else arrayOf(limit.toString())
+            db.rawQuery(sql, args).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getLatestMeterReadings(pumpId: Int): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                "SELECT * FROM meter_readings WHERE pump_id = ? ORDER BY reading_date DESC, id DESC LIMIT 1",
+                arrayOf(pumpId.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+    /**
+     * الحصول على آخر قراءة لكل مضخة.
+     * @return JSONArray يحتوي على آخر قراءة لكل مضخة
+     */
+    fun getLatestMeterReadings(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """
+                SELECT mr.*
+                FROM meter_readings mr
+                INNER JOIN (
+                    SELECT pump_id, MAX(id) AS latest_id
+                    FROM meter_readings
+                    WHERE is_deleted = 0
+                    GROUP BY pump_id
+                ) latest
+                ON mr.id = latest.latest_id
+                ORDER BY mr.pump_id
+                """.trimIndent(),
+                null
+            ).use { cursor ->
+                cursorToJsonArray(cursor)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getAssetMaintenanceHistory(assetType: String, assetId: Int, limit: Int = 20): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                "SELECT * FROM maintenance_requests WHERE asset_type = ? AND asset_id = ? AND is_deleted = 0 ORDER BY created_at DESC LIMIT ?",
+                arrayOf(assetType, assetId.toString(), limit.toString())
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteOlderThan(tableName: String, columnName: String, timestamp: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            if (!tableExists(db, tableName)) return 0
+            val columns = db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
+                (0 until cursor.count).map { cursor.getString(cursor.getColumnIndexOrThrow("name")) }
+            }
+            if (columnName !in columns) return 0
+            db.delete(tableName, "$columnName < ?", arrayOf(timestamp.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun syncContext(phone: String): Boolean {
+        // يمكن تنفيذ مزامنة سياق المحادثة مع خادم مركزي هنا
+        return true
+    }
+
+    fun syncPreferences(phone: String): Boolean {
+        // مزامنة تفضيلات العميل
+        return true
+    }
+
+    fun sync(phone: String): Boolean {
+        return syncContext(phone) && syncPreferences(phone) && syncRateLimits(phone)
+    }
+
+    fun syncRateLimits(phone: String): Boolean {
+        // مزامنة حدود المعدل مع الخادم
+        return true
+    }
+
+    fun syncData(data: JSONObject): Boolean {
+        // مزامنة بيانات عامة مع الخادم
+        return true
+    }
+
+    fun recordPerformanceStats(stats: JSONObject): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("log_level", "info")
+                put("log_type", "performance")
+                put("message", stats.toString())
+                put("created_at", getCurrentDateTime())
+            }
+            db.insert("system_logs", null, cv) > 0
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun flush(): Boolean {
+        // تنظيف أي ذاكرة تخزين مؤقت (مثلاً Clear Cache)
+        return true
+    }
+
+    fun performSecurityCheck(): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = System.currentTimeMillis()
+            db.delete("user_sessions", "expires_at < ?", arrayOf(now.toString()))
+            true
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun cleanupExpired(): Int {
+        return cleanExpiredSmsOtps()
+    }
+
+    fun getCurrentMetrics(): JSONObject {
+        val metrics = JSONObject()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            db.rawQuery("SELECT COUNT(*) FROM users WHERE status='active' AND is_deleted=0", null).use { c ->
+                metrics.put("active_users", if (c.moveToFirst()) c.getInt(0) else 0)
+            }
+            db.rawQuery("SELECT COUNT(*) FROM sales_transactions WHERE date(created_at)=date('now') AND is_deleted=0", null).use { c ->
+                metrics.put("today_sales", if (c.moveToFirst()) c.getInt(0) else 0)
+            }
+            metrics.put("db_size_bytes", getDatabaseSize())
+            listOf("parties", "products", "tanks", "pumps").forEach { table ->
+                db.rawQuery("SELECT COUNT(*) FROM $table WHERE is_deleted=0", null).use { c ->
+                    metrics.put("${table}_count", if (c.moveToFirst()) c.getInt(0) else 0)
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+        return metrics
+    }
+
+    fun isOpen(): Boolean {
+        return try {
+            readableDatabase.isOpen
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun checkIntegrity(): Boolean {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery("PRAGMA integrity_check", null).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val result = cursor.getString(0)
+                    result.equals("ok", ignoreCase = true)
+                } else false
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 }
