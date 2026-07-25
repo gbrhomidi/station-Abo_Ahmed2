@@ -225,12 +225,9 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("RATE_LIMIT_BLOCK", sender, "Daily limit exceeded: $currentCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "⚠️ $customerName،
-" +
-                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.
-" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
-" +
+                    "⚠️ $customerName،\n" +
+                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.\n" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
                     "للاستفسار العاجل: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
@@ -244,24 +241,18 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("REPEAT_BLOCK", sender, "Repeat warnings: $warningCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "🚫 $customerName،
-" +
-                    "لقد أرسلت رسائل متكررة كثيرة.
-" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
-" +
+                    "🚫 $customerName،\n" +
+                    "لقد أرسلت رسائل متكررة كثيرة.\n" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
                     "للاستفسار: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
             }
 
             return@withContext RateLimitResult.WARNING(
-                "⚠️ $customerName،
-" +
-                "لقد أرسلت رسائل متكررة.
-" +
-                "يرجى تحديد ما تريده في رسالة واحدة بدقة.
-" +
+                "⚠️ $customerName،\n" +
+                "لقد أرسلت رسائل متكررة.\n" +
+                "يرجى تحديد ما تريده في رسالة واحدة بدقة.\n" +
                 "تحذير $warningCount من $MAX_REPEAT_WARNINGS"
             )
         }
@@ -445,8 +436,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
 
             val entry = structuredLog.toString()
             val existing = prefs.getString(AUDIT_LOG, "") ?: ""
-            val updated = if (existing.length > 10000) entry else "$existing
-$entry"
+            val updated = if (existing.length > 10000) entry else "$existing\n$entry"
             prefs.edit().putString(AUDIT_LOG, updated).apply()
             Log.i(TAG, "SECURITY: $event | $phoneHash | $details")
         } catch (e: Exception) {
@@ -461,8 +451,10 @@ $entry"
     /**
      * توحيد جميع صيغ الأرقام إلى: 777123456
      */
-    import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
-        val normalized = PhoneUtils.normalize(phone)
+
+    private fun normalizePhone(phone: String): String {
+        return PhoneUtils.normalize(phone)
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ أدوات مساعدة ═══
