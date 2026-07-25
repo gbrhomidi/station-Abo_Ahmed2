@@ -256,10 +256,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         }
     }
 
-    import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
-        val normalized = PhoneUtils.normalize(phone)
 
-
+    private fun normalizePhone(phone: String): String {
+        return PhoneUtils.normalize(phone)
+    }
     fun safeMultiply(a: Double, b: Double): Double {
         require(a >= 0 && a <= 10000.0) { "Invalid quantity: $a" }
         require(b >= 0 && b <= 1000000.0) { "Invalid price: $b" }
