@@ -49,8 +49,8 @@ android {
     }
 
     signingConfigs {
-        // توقيع debug بسيط ويعمل على GitHub Actions
-        create("debug") {
+    // استخدام إعداد debug الموجود مسبقاً من Android Gradle Plugin
+        getByName("debug") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
