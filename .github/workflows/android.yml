@@ -26,7 +26,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # توليد debug.keystore في المجلد الصحيح
+      # ───────────────────────────────────────────────
+      # 🔐 فك تشفير Keystore الخاص بالـ Release
+      # ───────────────────────────────────────────────
+      - name: Decode Release Keystore
+        run: |
+          echo "🔐 Decoding release keystore from GitHub Secrets..."
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > diesel-station-release.keystore
+          ls -la diesel-station-release.keystore
+          echo "✅ Release keystore decoded successfully."
+
+      # ───────────────────────────────────────────────
+      # 🔑 توليد debug.keystore كاحتياطي (للـ Debug builds)
+      # ───────────────────────────────────────────────
       - name: Generate debug keystore (if missing)
         run: |
           mkdir -p ~/.android
@@ -45,10 +57,17 @@ jobs:
             echo "✅ debug.keystore already exists."
           fi
 
-      - name: Clean and Build Release APK (using debug signing)
+      # ───────────────────────────────────────────────
+      # 🏗️ بناء Release APK مع التوقيع الحقيقي
+      # ───────────────────────────────────────────────
+      - name: Clean and Build Release APK
         run: ./gradlew clean assembleRelease --no-daemon -PGEMINI_API_KEY=$GEMINI_API_KEY
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/diesel-station-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
 
       - name: List APK outputs
         run: |
