@@ -49,7 +49,7 @@ android {
     }
 
     signingConfigs {
-        create("release") {
+        getByName("debug") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
