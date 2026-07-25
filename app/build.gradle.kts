@@ -49,7 +49,7 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
+        create("release") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
@@ -66,13 +66,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            signingConfig = signingConfigs.getByName("debug")
+            // لا حاجة لتعيين signingConfig هنا – يُستخدم التوقيع الافتراضي تلقائياً
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
     }
