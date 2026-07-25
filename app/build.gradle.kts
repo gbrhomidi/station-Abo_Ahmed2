@@ -49,7 +49,6 @@ android {
     }
 
     signingConfigs {
-    // استخدام إعداد debug الموجود مسبقاً من Android Gradle Plugin
         getByName("debug") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
