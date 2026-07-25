@@ -48,12 +48,30 @@ android {
         buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
     }
 
+    // ───────────────────────────────────────────────────────────
+    // 🔐 إعدادات التوقيع (Signing Configs)
+    // ───────────────────────────────────────────────────────────
     signingConfigs {
+        // ✅ توقيع Debug الافتراضي
         getByName("debug") {
             storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+
+        // ✅ توقيع Release (يقرأ من متغيرات بيئة GitHub Actions)
+        create("release") {
+            val releaseStoreFile = System.getenv("RELEASE_KEYSTORE_PATH")
+                ?: "${System.getProperty("user.home")}/.android/debug.keystore"
+            val releaseStorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "android"
+            val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
+            val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "android"
+
+            storeFile = file(releaseStoreFile)
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -72,7 +90,7 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            // لا حاجة لتعيين signingConfig هنا – يُستخدم التوقيع الافتراضي تلقائياً
+            // يستخدم التوقيع الافتراضي تلقائياً
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
     }
