@@ -13,274 +13,740 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+
 /*
  * ═══════════════════════════════════════════════════════════════
  * BackupWorker - عامل النسخ الاحتياطي التلقائي
  * ═══════════════════════════════════════════════════════════════
  *
- * الإصدار 2.0 – مُحسَّن ومُصحَّح بالكامل مع:
- * 1. إصلاح خطأ منطقي حرج في cleanupOldBackups()
- * 2. التحقق من المساحة المتوفرة
- * 3. التحقق من حجم البيانات
- * 4. التحقق من صحة JSON
- * 5. معالجة أخطاء محسّنة
- * 6. إغلاق DatabaseHelper
- * 7. تسجيل مفصّل للعمليات
- * 8. دعم التشفير (هيكل جاهز مع androidx.security)
- * 9. استخدام EncryptedFile للتشفير الفعلي
+ * نسخة معالجة Production
+ *
+ * الميزات:
+ * - تصدير DatabaseHelper
+ * - تحقق JSON
+ * - تحقق الحجم
+ * - تشفير النسخة الاحتياطية
+ * - إدارة النسخ القديمة
+ * - معالجة أخطاء WorkManager
+ * - توافق مع DatabaseHelper Singleton
  *
  * ═══════════════════════════════════════════════════════════════
- * التوافق مع المعمارية الجديدة:
- * - هذا العامل (Worker) مستقل تماماً عن طبقة الاتصال.
- * - لا يعتمد على NanoHTTPD أو الخادم المحلي (تم تعطيلهما).
- * - يستخدم DatabaseHelper مباشرة لتصدير البيانات.
- * - جميع العمليات تتم محلياً وبشكل مستقل عن الواجهات أو الشاشات.
- * - متوافق تماماً مع المعمارية الجديدة (AndroidInterface + main.html + screens-*.html).
- * ═══════════════════════════════════════════════════════════════
  */
+
+
 class BackupWorker(
     context: Context,
     params: WorkerParameters
 ) : CoroutineWorker(context, params) {
 
+
     companion object {
+
         private const val TAG = "BackupWorker"
+
         private const val BACKUP_PREFIX = "auto_backup_"
+
         private const val MAX_BACKUPS = 10
+
         private const val MIN_FREE_SPACE_MB = 50L
+
         private const val MAX_DATA_SIZE_MB = 10L
-        private val DATE_FORMAT = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+
+
+        private val DATE_FORMAT =
+            SimpleDateFormat(
+                "yyyyMMdd_HHmmss",
+                Locale.getDefault()
+            )
     }
 
+
+
     override suspend fun doWork(): Result {
+
         Log.d(TAG, "Starting automatic backup...")
 
+
         return try {
-            // 1. التحقق من المساحة المتوفرة
+
+
+            // ========================================================
+            // 1. فحص المساحة
+            // ========================================================
+
             if (!hasEnoughSpace()) {
-                Log.e(TAG, "Insufficient storage space for backup")
+
+                Log.e(
+                    TAG,
+                    "Insufficient storage space"
+                )
+
+
                 return Result.failure(
                     androidx.work.Data.Builder()
-                        .putString("error", "Insufficient storage space")
+                        .putString(
+                            "error",
+                            "Insufficient storage space"
+                        )
                         .build()
                 )
             }
 
-            // 2. الحصول على DatabaseHelper Singleton
-            val db = DatabaseHelper.getInstance(applicationContext)
-            
+
+
+            // ========================================================
+            // 2. الحصول على قاعدة البيانات
+            // ========================================================
+
+            val db =
+                DatabaseHelper.getInstance(
+                    applicationContext
+                )
+
+
+
+            try {
+
+
+                // ====================================================
                 // 3. تصدير البيانات
-                val exportedData = db.exportAllData()
+                // ====================================================
 
-                // 4. التحقق من صحة البيانات
+                val exportedData =
+                    db.exportAllData()
+
+
+
+                // ====================================================
+                // 4. التحقق من صحة التصدير
+                // ====================================================
+
                 if (!isValidExport(exportedData)) {
-                    Log.e(TAG, "Invalid export data")
+
+
+                    Log.e(
+                        TAG,
+                        "Invalid export structure"
+                    )
+
+
                     return Result.failure(
                         androidx.work.Data.Builder()
-                            .putString("error", "Invalid export data")
+                            .putString(
+                                "error",
+                                "Invalid export data"
+                            )
                             .build()
                     )
                 }
 
-                // 5. التحقق من حجم البيانات
-                val jsonString = exportedData.toString(2)
-                if (jsonString.length > MAX_DATA_SIZE_MB * 1024 * 1024) {
-                    Log.e(TAG, "Backup data too large: ${jsonString.length} bytes")
+
+
+                // ====================================================
+                // 5. تحويل JSON والتحقق من الحجم
+                // ====================================================
+
+                val jsonString =
+                    exportedData.toString(2)
+
+
+
+                val dataSize =
+                    jsonString
+                        .toByteArray(Charsets.UTF_8)
+                        .size
+
+
+
+                if (dataSize >
+                    MAX_DATA_SIZE_MB * 1024 * 1024
+                ) {
+
+
+                    Log.e(
+                        TAG,
+                        "Backup size exceeded: $dataSize bytes"
+                    )
+
+
                     return Result.failure(
                         androidx.work.Data.Builder()
-                            .putString("error", "Backup data exceeds maximum size")
+                            .putString(
+                                "error",
+                                "Backup exceeds maximum size"
+                            )
                             .build()
                     )
                 }
 
-                // 6. تشفير البيانات باستخدام EncryptedFile
-                val encrypted = encryptBackup(jsonString)
 
-                // 7. إنشاء المجلد
-                val dir = File(applicationContext.filesDir, "backups")
-                if (!dir.exists() && !dir.mkdirs()) {
-                    throw IOException("Failed to create backup directory")
+
+                // ====================================================
+                // 6. تشفير البيانات
+                // ====================================================
+
+                val encrypted =
+                    encryptBackup(jsonString)
+
+
+
+                // ====================================================
+                // 7. إنشاء مجلد النسخ
+                // ====================================================
+
+                val dir =
+                    File(
+                        applicationContext.filesDir,
+                        "backups"
+                    )
+
+
+
+                if (!dir.exists()
+                    && !dir.mkdirs()
+                ) {
+
+                    throw IOException(
+                        "Cannot create backup directory"
+                    )
                 }
 
-                // 8. تنظيف النسخ القديمة (الإصلاح الحرج!)
+
+
+                // ====================================================
+                // 8. تنظيف النسخ القديمة
+                // ====================================================
+
                 cleanupOldBackups(dir)
 
-                // 9. حفظ الملف مع اسم منظم
-                val timestamp = DATE_FORMAT.format(Date())
-                val file = File(dir, "${BACKUP_PREFIX}${timestamp}.enc")
+
+
+                // ====================================================
+                // 9. إنشاء ملف النسخة
+                // ====================================================
+
+                val timestamp =
+                    DATE_FORMAT.format(Date())
+
+
+
+                val file =
+                    File(
+                        dir,
+                        "${BACKUP_PREFIX}${timestamp}.enc"
+                    )
+
+
+
                 file.writeText(encrypted)
 
-                // 10. التحقق من نجاح الكتابة
-                if (!file.exists() || file.length() == 0L) {
-                    throw IOException("Failed to write backup file")
+
+
+                // ====================================================
+                // 10. التحقق من الكتابة
+                // ====================================================
+
+                if (!file.exists()
+                    || file.length() == 0L
+                ) {
+
+                    throw IOException(
+                        "Backup file creation failed"
+                    )
                 }
 
-                Log.d(TAG, "✅ Auto backup completed: ${file.absolutePath}")
-                Log.d(TAG, "   Size: ${file.length()} bytes")
-                Log.d(TAG, "   Total backups: ${getBackupCount(dir)}")
 
-                Result.success(
+
+                Log.d(
+                    TAG,
+                    "Backup completed successfully"
+                )
+
+
+                Log.d(
+                    TAG,
+                    "Path: ${file.absolutePath}"
+                )
+
+
+                Log.d(
+                    TAG,
+                    "Size: ${file.length()} bytes"
+                )
+
+
+
+                return Result.success(
+
                     androidx.work.Data.Builder()
-                        .putString("backup_path", file.absolutePath)
-                        .putString("backup_size", file.length().toString())
-                        .putString("backup_timestamp", timestamp)
+
+                        .putString(
+                            "backup_path",
+                            file.absolutePath
+                        )
+
+                        .putString(
+                            "backup_size",
+                            file.length().toString()
+                        )
+
+                        .putString(
+                            "backup_timestamp",
+                            timestamp
+                        )
+
                         .build()
                 )
 
 
+            } finally {
+
+
+                // ====================================================
+                // إغلاق Singleton بالطريقة الصحيحة
+                // ====================================================
+
+                try {
+
+                    DatabaseHelper.closeInstance()
+
+                } catch (e: Exception) {
+
+
+                    Log.w(
+                        TAG,
+                        "Error closing database instance",
+                        e
+                    )
+                }
+            }
+
+
+
         } catch (e: OutOfMemoryError) {
-            Log.e(TAG, "OutOfMemoryError during backup", e)
+
+
+            Log.e(
+                TAG,
+                "Memory limit exceeded",
+                e
+            )
+
+
             Result.failure(
                 androidx.work.Data.Builder()
-                    .putString("error", "Memory limit exceeded")
+                    .putString(
+                        "error",
+                        "Memory limit exceeded"
+                    )
                     .build()
             )
+
+
+
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException during backup", e)
+
+
+            Log.e(
+                TAG,
+                "Permission error",
+                e
+            )
+
+
             Result.failure(
                 androidx.work.Data.Builder()
-                    .putString("error", "Permission denied")
+                    .putString(
+                        "error",
+                        "Permission denied"
+                    )
                     .build()
             )
+
+
+
         } catch (e: Exception) {
-            Log.e(TAG, "Auto backup failed: ${e.message}", e)
+
+
+            Log.e(
+                TAG,
+                "Backup failed",
+                e
+            )
+
+
             Result.failure(
                 androidx.work.Data.Builder()
-                    .putString("error", e.message ?: "Unknown error")
+                    .putString(
+                        "error",
+                        e.message ?: "Unknown error"
+                    )
                     .build()
             )
         }
     }
 
     // ================================================================
-    // دوال مساعدة
+    // التحقق من وجود مساحة كافية
     // ================================================================
 
-    /**
-     * التحقق من وجود مساحة كافية في التخزين الداخلي.
-     */
     private fun hasEnoughSpace(): Boolean {
+
         return try {
-            val stat = StatFs(applicationContext.filesDir.path)
-            val availableBytes = stat.availableBytes
-            val requiredBytes = MIN_FREE_SPACE_MB * 1024 * 1024
+
+            val stat =
+                StatFs(
+                    applicationContext.filesDir.path
+                )
+
+
+            val availableBytes =
+                stat.availableBytes
+
+
+            val requiredBytes =
+                MIN_FREE_SPACE_MB * 1024 * 1024
+
+
             availableBytes >= requiredBytes
+
+
         } catch (e: Exception) {
-            Log.w(TAG, "Could not check available space", e)
-            true
-        }
-    }
-    /**
-     * التحقق من صحة البيانات المُصدّرة.
-     */
-    private fun isValidExport(data: JSONObject): Boolean {
-        return try {
-            val requiredKeys = arrayOf(
-                "parties",
-                "tanks",
-                "pumps",
-                "sales",
-                "sms_logs",
-                "activity_logs",
-                "employees",
-                "stock_alerts",
-                "system_settings"
+
+
+            Log.e(
+                TAG,
+                "Unable to check storage space",
+                e
             )
-            requiredKeys.all { key -> data.has(key) && data.get(key) is JSONArray }
-        } catch (e: Exception) {
+
+
             false
         }
     }
 
-    /**
-     * تشفير البيانات باستخدام EncryptedFile من AndroidX Security.
-     * في حال عدم توفر المكتبة، نستخدم Base64 كخطوة مؤقتة.
-     */
-    private fun encryptBackup(data: String): String {
+
+
+
+    // ================================================================
+    // التحقق من صحة البيانات المصدرة
+    // ================================================================
+
+    private fun isValidExport(
+        data: JSONObject
+    ): Boolean {
+
+
         return try {
-            // محاولة استخدام EncryptedFile الحقيقي
-            val masterKey = androidx.security.crypto.MasterKey.Builder(applicationContext)
-                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
-                .build()
 
-            val tempFile = File(applicationContext.cacheDir, "temp_backup_${System.currentTimeMillis()}.json")
-            tempFile.writeText(data)
 
-            val encryptedFile = androidx.security.crypto.EncryptedFile.Builder(
-                applicationContext,
-                tempFile,
-                masterKey,
-                androidx.security.crypto.EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
-            ).build()
+            val requiredKeys =
+                arrayOf(
 
-            // قراءة الملف المشفر وتحويله إلى Base64 للنقل
-            val encryptedBytes = encryptedFile.openFileInput().use { it.readBytes() }
-            val base64 = android.util.Base64.encodeToString(encryptedBytes, android.util.Base64.DEFAULT)
+                    "parties",
+                    "tanks",
+                    "pumps",
+                    "sales",
+                    "sms_logs",
+                    "activity_logs",
+                    "employees",
+                    "stock_alerts",
+                    "system_settings"
 
-            // تنظيف الملف المؤقت
-            tempFile.delete()
+                )
 
-            base64
+
+
+            requiredKeys.all { key ->
+
+
+                data.has(key)
+                        &&
+                data.get(key) is JSONArray
+
+            }
+
+
+
         } catch (e: Exception) {
-            Log.w(TAG, "Encryption failed, using Base64 encoding", e)
-            android.util.Base64.encodeToString(
-                data.toByteArray(Charsets.UTF_8),
-                android.util.Base64.DEFAULT
+
+
+            Log.e(
+                TAG,
+                "Export validation failed",
+                e
+            )
+
+
+            false
+        }
+    }
+
+
+
+
+    // ================================================================
+    // تشفير النسخة الاحتياطية
+    // ================================================================
+
+    private fun encryptBackup(
+        data: String
+    ): String {
+
+
+        val tempFile =
+            File(
+                applicationContext.cacheDir,
+                "temp_backup_${System.currentTimeMillis()}.bin"
+            )
+
+
+
+        return try {
+
+
+            val masterKey =
+                androidx.security.crypto.MasterKey.Builder(
+                    applicationContext
+                )
+                    .setKeyScheme(
+                        androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM
+                    )
+                    .build()
+
+
+
+            val encryptedFile =
+                androidx.security.crypto.EncryptedFile.Builder(
+
+                    applicationContext,
+
+                    tempFile,
+
+                    masterKey,
+
+                    androidx.security.crypto.EncryptedFile
+                        .FileEncryptionScheme
+                        .AES256_GCM_HKDF_4KB
+
+                )
+                    .build()
+
+
+
+            // الكتابة عبر EncryptedFile
+            encryptedFile
+                .openFileOutput()
+                .use { output ->
+
+
+                    output.write(
+                        data.toByteArray(
+                            Charsets.UTF_8
+                        )
+                    )
+                }
+
+
+
+            // قراءة البيانات المشفرة
+
+            val encryptedBytes =
+                encryptedFile
+                    .openFileInput()
+                    .use { input ->
+
+                        input.readBytes()
+                    }
+
+
+
+            android.util.Base64
+                .encodeToString(
+                    encryptedBytes,
+                    android.util.Base64.NO_WRAP
+                )
+
+
+
+        } catch (e: Exception) {
+
+
+            Log.e(
+                TAG,
+                "Backup encryption failed",
+                e
+            )
+
+
+            throw IOException(
+                "Unable to encrypt backup",
+                e
+            )
+
+
+
+        } finally {
+
+
+            if (tempFile.exists()) {
+
+                tempFile.delete()
+            }
+        }
+    }
+
+
+
+
+    // ================================================================
+    // تنظيف النسخ القديمة
+    // ================================================================
+
+    private fun cleanupOldBackups(
+        dir: File
+    ) {
+
+
+        try {
+
+
+            val backups =
+                dir.listFiles { file ->
+
+
+                    file.isFile
+                            &&
+                    file.name.startsWith(
+                        BACKUP_PREFIX
+                    )
+
+                } ?: return
+
+
+
+
+            if (backups.size <= MAX_BACKUPS) {
+
+
+                Log.d(
+                    TAG,
+                    "Backup count within limit"
+                )
+
+
+                return
+            }
+
+
+
+
+            val toDelete =
+                backups
+
+                    .sortedByDescending {
+                        it.lastModified()
+                    }
+
+                    .drop(
+                        MAX_BACKUPS
+                    )
+
+
+
+
+            var deleted = 0
+
+            var failed = 0
+
+
+
+
+            toDelete.forEach { file ->
+
+
+                try {
+
+
+                    if (file.delete()) {
+
+
+                        deleted++
+
+
+                        Log.d(
+                            TAG,
+                            "Deleted old backup: ${file.name}"
+                        )
+
+
+                    } else {
+
+
+                        failed++
+
+
+                    }
+
+
+
+                } catch (e: SecurityException) {
+
+
+                    failed++
+
+
+                    Log.e(
+                        TAG,
+                        "Cannot delete ${file.name}",
+                        e
+                    )
+                }
+            }
+
+
+
+
+            Log.d(
+                TAG,
+                "Cleanup finished. Deleted=$deleted Failed=$failed"
+            )
+
+
+
+        } catch (e: Exception) {
+
+
+            Log.e(
+                TAG,
+                "Cleanup failed",
+                e
             )
         }
     }
 
-    /**
-     * تنظيف النسخ الاحتياطية القديمة – يحذف الأقدم مع الاحتفاظ بأحدث MAX_BACKUPS.
-     * الإصلاح الحرج: sortedByDescending ثم drop(MAX_BACKUPS)
-     */
-    private fun cleanupOldBackups(dir: File) {
-        try {
-            val backups = dir.listFiles { f ->
-                f.isFile && f.name.startsWith(BACKUP_PREFIX)
-            } ?: return
 
-            if (backups.size <= MAX_BACKUPS) {
-                Log.d(TAG, "Backup count (${backups.size}) within limit, skipping cleanup")
-                return
-            }
 
-            // الأحدث أولاً، ثم احتفظ بـ MAX_BACKUPS أحدث، واحذف الباقي
-            val toDelete = backups
-                .sortedByDescending { it.lastModified() }
-                .drop(MAX_BACKUPS)
 
-            var deletedCount = 0
-            var failedCount = 0
+    // ================================================================
+    // عدد النسخ الحالية
+    // ================================================================
 
-            toDelete.forEach { file ->
-                try {
-                    if (file.delete()) {
-                        deletedCount++
-                        Log.d(TAG, "Deleted old backup: ${file.name}")
-                    } else {
-                        failedCount++
-                        Log.w(TAG, "Failed to delete old backup: ${file.name}")
-                    }
-                } catch (e: SecurityException) {
-                    failedCount++
-                    Log.e(TAG, "SecurityException deleting ${file.name}", e)
-                }
-            }
+    private fun getBackupCount(
+        dir: File
+    ): Int {
 
-            Log.d(TAG, "Cleanup complete: $deletedCount deleted, $failedCount failed")
 
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during cleanup", e)
-        }
-    }
+        return dir.listFiles { file ->
 
-    /**
-     * يُرجع عدد النسخ الاحتياطية الحالية.
-     */
-    private fun getBackupCount(dir: File): Int {
-        return dir.listFiles { f ->
-            f.isFile && f.name.startsWith(BACKUP_PREFIX)
+
+            file.isFile
+                    &&
+            file.name.startsWith(
+                BACKUP_PREFIX
+            )
+
+
         }?.size ?: 0
     }
 }
