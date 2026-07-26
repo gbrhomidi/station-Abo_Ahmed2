@@ -9143,9 +9143,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // الدوال الجديدة المطلوبة (تمت إضافتها)
     // ========================================================================
 
-    fun tableExists(db: SQLiteDatabase, tableName: String): Boolean {
+    fun tableExists(tableName: String): Boolean {
         dbLock.lock()
         return try {
+            val db = readableDatabase
             db.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 arrayOf(tableName)
@@ -9310,9 +9311,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            if (!tableExists(db, tableName)) return 0
-            val columns = db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
-                (0 until cursor.count).map { cursor.getString(cursor.getColumnIndexOrThrow("name")) }
+            if (!tableExists(tableName)) return 0
+            val columns = mutableListOf<String>()
+            db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    columns.add(cursor.getString(cursor.getColumnIndexOrThrow("name")))
+                }
             }
             if (columnName !in columns) return 0
             db.delete(tableName, "$columnName < ?", arrayOf(timestamp.toString()))
@@ -9424,6 +9428,56 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     result.equals("ok", ignoreCase = true)
                 } else false
             }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+
+    fun addTankReading(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("tank_id", data.optInt("tank_id", 0))
+                put("reading_date", data.optString("reading_date", getCurrentDateTime()))
+                put("reading_type", data.optString("reading_type", "manual"))
+                put("opening_level", data.optDouble("opening_level", 0.0))
+                put("closing_level", data.optDouble("closing_level", 0.0))
+                put("measured_level", data.optDouble("measured_level", 0.0))
+                put("calculated_level", data.optDouble("calculated_level", 0.0))
+                put("difference", data.optDouble("difference", 0.0))
+                put("fuel_temperature", data.optDouble("fuel_temperature", 0.0))
+                put("fuel_density", data.optDouble("fuel_density", 0.0))
+                put("volume_at_15c", data.optDouble("volume_at_15c", 0.0))
+                put("refills_total", data.optDouble("refills_total", 0.0))
+                put("sales_total", data.optDouble("sales_total", 0.0))
+                put("evaporation_loss", data.optDouble("evaporation_loss", 0.0))
+                put("is_below_minimum", if (data.optBoolean("is_below_minimum", false)) 1 else 0)
+                put("is_near_maximum", if (data.optBoolean("is_near_maximum", false)) 1 else 0)
+                put("alert_triggered", if (data.optBoolean("alert_triggered", false)) 1 else 0)
+                put("created_at", getCurrentDateTime())
+                put("created_by", data.optInt("created_by", 1))
+            }
+            db.insert("tank_level_log", null, cv)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun checkUserPermission(userId: Long, permissionCode: String): Boolean {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT 1 FROM role_permissions rp
+                   JOIN users u ON u.role_id = rp.role_id
+                   JOIN permissions p ON p.id = rp.permission_id
+                   WHERE u.id = ? AND p.permission_code = ? AND rp.can_read = 1
+                   LIMIT 1""".trimIndent(),
+                arrayOf(userId.toString(), permissionCode)
+            ).use { cursor -> cursor.moveToFirst() }
         } finally {
             dbLock.unlock()
         }

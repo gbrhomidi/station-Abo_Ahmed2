@@ -1,5 +1,10 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
+import android.content.ContentValues
+import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import android.util.Log
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -31,6 +36,16 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     )
 
     // ═══════════════════════════════════════════════════════════════
+    // ═══ Helper properties to access database ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    private val writableDb: SQLiteDatabase
+        get() = db.writableDatabase
+
+    private val readableDb: SQLiteDatabase
+        get() = db.readableDatabase
+
+    // ═══════════════════════════════════════════════════════════════
     // ═══ توليد OTP ═══
     // ═══════════════════════════════════════════════════════════════
 
@@ -39,9 +54,9 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
         val now = System.currentTimeMillis()
         val expiresAt = now + OTP_EXPIRY_MS
 
-        db.writableDatabase.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
+        writableDb.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
 
-        val values = android.content.ContentValues().apply {
+        val values = ContentValues().apply {
             put("phone", phone)
             put("otp_code", code)
             put("timestamp", now)
@@ -50,7 +65,7 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
             put("expires_at", expiresAt)
         }
 
-        db.writableDatabase.insert(OTP_TABLE, null, values)
+        writableDb.insert(OTP_TABLE, null, values)
         code
     }
 
@@ -59,55 +74,61 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     // ═══════════════════════════════════════════════════════════════
 
     suspend fun verifyOTP(phone: String, code: String): Boolean = withContext(Dispatchers.IO) {
-        val cursor = db.readableDatabase.rawQuery(
-            """
-            SELECT otp_code, timestamp, attempts, max_attempts, expires_at 
-            FROM $OTP_TABLE 
-            WHERE phone = ? 
-            LIMIT 1
-            """.trimIndent(),
-            arrayOf(phone)
-        )
+        var cursor: Cursor? = null
+        var expiresAtCursor: Cursor? = null
 
-        val otpData = cursor.use {
-            if (it.moveToFirst()) {
-                OTPData(
-                    code = it.getString(it.getColumnIndexOrThrow("otp_code")),
-                    timestamp = it.getLong(it.getColumnIndexOrThrow("timestamp")),
-                    attempts = it.getInt(it.getColumnIndexOrThrow("attempts")),
-                    maxAttempts = it.getInt(it.getColumnIndexOrThrow("max_attempts"))
-                )
-            } else null
+        try {
+            cursor = readableDb.rawQuery(
+                """
+                SELECT otp_code, timestamp, attempts, max_attempts, expires_at 
+                FROM $OTP_TABLE 
+                WHERE phone = ? 
+                LIMIT 1
+                """.trimIndent(),
+                arrayOf(phone)
+            )
+
+            if (!cursor.moveToFirst()) return@withContext false
+
+            val otpCode = cursor.getString(cursor.getColumnIndexOrThrow("otp_code"))
+            val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow("timestamp"))
+            val attempts = cursor.getInt(cursor.getColumnIndexOrThrow("attempts"))
+            val maxAttempts = cursor.getInt(cursor.getColumnIndexOrThrow("max_attempts"))
+            val expiresAt = cursor.getLong(cursor.getColumnIndexOrThrow("expires_at"))
+
+            val otpData = OTPData(
+                code = otpCode,
+                timestamp = timestamp,
+                attempts = attempts,
+                maxAttempts = maxAttempts
+            )
+
+            if (System.currentTimeMillis() > expiresAt) {
+                writableDb.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
+                return@withContext false
+            }
+
+            if (otpData.attempts >= otpData.maxAttempts) {
+                writableDb.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
+                return@withContext false
+            }
+
+            val newAttempts = otpData.attempts + 1
+            val values = ContentValues().apply {
+                put("attempts", newAttempts)
+            }
+            writableDb.update(OTP_TABLE, values, "phone = ?", arrayOf(phone))
+
+            val isValid = code == otpData.code
+            if (isValid) {
+                writableDb.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
+            }
+
+            isValid
+        } finally {
+            cursor?.close()
+            expiresAtCursor?.close()
         }
-
-        if (otpData == null) return@withContext false
-
-        val expiresAt = cursor.use {
-            if (it.moveToFirst()) it.getLong(it.getColumnIndexOrThrow("expires_at")) else 0L
-        }
-
-        if (System.currentTimeMillis() > expiresAt) {
-            db.writableDatabase.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
-            return@withContext false
-        }
-
-        if (otpData.attempts >= otpData.maxAttempts) {
-            db.writableDatabase.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
-            return@withContext false
-        }
-
-        val newAttempts = otpData.attempts + 1
-        val values = android.content.ContentValues().apply {
-            put("attempts", newAttempts)
-        }
-        db.writableDatabase.update(OTP_TABLE, values, "phone = ?", arrayOf(phone))
-
-        val isValid = code == otpData.code
-        if (isValid) {
-            db.writableDatabase.delete(OTP_TABLE, "phone = ?", arrayOf(phone))
-        }
-
-        isValid
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -115,11 +136,16 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     // ═══════════════════════════════════════════════════════════════
 
     suspend fun hasActiveOTP(phone: String): Boolean = withContext(Dispatchers.IO) {
-        val cursor = db.readableDatabase.rawQuery(
-            "SELECT 1 FROM $OTP_TABLE WHERE phone = ? AND expires_at > ? LIMIT 1",
-            arrayOf(phone, System.currentTimeMillis().toString())
-        )
-        cursor.use { it.moveToFirst() }
+        var cursor: Cursor? = null
+        try {
+            cursor = readableDb.rawQuery(
+                "SELECT 1 FROM $OTP_TABLE WHERE phone = ? AND expires_at > ? LIMIT 1",
+                arrayOf(phone, System.currentTimeMillis().toString())
+            )
+            cursor.moveToFirst()
+        } finally {
+            cursor?.close()
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -127,11 +153,17 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     // ═══════════════════════════════════════════════════════════════
 
     suspend fun cleanupExpiredOTPs() = withContext(Dispatchers.IO) {
-        val deleted = db.writableDatabase.delete(
+        val deleted = writableDb.delete(
             OTP_TABLE,
             "expires_at < ?",
             arrayOf(System.currentTimeMillis().toString())
         )
-        android.util.Log.d(TAG, "Cleaned up $deleted expired OTPs")
+        Log.d(TAG, "Cleaned up $deleted expired OTPs")
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ تنظيف منتهية الصلاحية (alias for compatibility) ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun cleanupExpired() = cleanupExpiredOTPs()
 }

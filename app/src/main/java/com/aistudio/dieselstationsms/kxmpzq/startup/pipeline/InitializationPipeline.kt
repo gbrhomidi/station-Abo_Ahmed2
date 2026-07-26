@@ -45,7 +45,11 @@ class InitializationPipeline(
             }
 
             val results = if (policy.allowParallelExecution) {
-                ready.map { async { executePhase(ctx, it) } }.awaitAll()
+                coroutineScope {
+                    ready.map { phase ->
+                        async { executePhase(ctx, phase) }
+                    }.awaitAll()
+                }
             } else {
                 ready.map { executePhase(ctx, it) }
             }

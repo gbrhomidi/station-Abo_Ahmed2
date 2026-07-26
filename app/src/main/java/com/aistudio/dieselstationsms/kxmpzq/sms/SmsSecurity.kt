@@ -152,14 +152,14 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     fun isTrustedSmsc(smsc: String): Boolean {
         if (smsc.isEmpty()) return true
 
-        val normalizedSmsc = PhoneUtils.normalize(smsc)
+        val normalizedSmsc = PhoneUtils.normalize(smsc) ?: return true
         if (normalizedSmsc.isEmpty()) return true
 
         val trustedList = getTrustedSmscList()
         if (trustedList.isEmpty()) return true
 
         return trustedList.any { trusted ->
-            val normalizedTrusted = PhoneUtils.normalize(trusted)
+            val normalizedTrusted = PhoneUtils.normalize(trusted) ?: return@any false
             if (normalizedTrusted.isEmpty()) return@any false
 
             val smscSuffix = normalizedSmsc.takeLast(9)
@@ -178,7 +178,9 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
             null
         )
         cursor.use {
-            while (it.moveToNext()) phones.add(it.getString(0))
+            while (it.moveToNext()) {
+                it.getString(0)?.let { phone -> phones.add(phone) }
+            }
         }
         return phones
     }

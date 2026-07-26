@@ -1,7 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.startup.event
 
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupEvent
-import kotlinx.coroutines.flow.BufferOverflow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 
