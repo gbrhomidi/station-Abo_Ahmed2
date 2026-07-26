@@ -68,7 +68,7 @@ class BackupWorker(
 
             // 2. الحصول على DatabaseHelper Singleton
             val db = DatabaseHelper.getInstance(applicationContext)
-            try {
+            
                 // 3. تصدير البيانات
                 val exportedData = db.exportAllData()
 
@@ -168,8 +168,8 @@ class BackupWorker(
         } catch (e: Exception) {
             Log.w(TAG, "Could not check available space", e)
             true
+        }
     }
-}
     /**
      * التحقق من صحة البيانات المُصدّرة.
      */
