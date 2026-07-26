@@ -168,9 +168,8 @@ class BackupWorker(
         } catch (e: Exception) {
             Log.w(TAG, "Could not check available space", e)
             true
-        }
     }
-
+}
     /**
      * التحقق من صحة البيانات المُصدّرة.
      */

@@ -37,7 +37,7 @@ class SmsMetrics(private val db: DatabaseHelper) {
         SMS_WARNING,
         OTP_SENT,
         ORDER_CONFIRMED,
-        ORDER_CANCELLED
+        ORDER_CANCELLED,
         CRITICAL_ERROR
     }
 
