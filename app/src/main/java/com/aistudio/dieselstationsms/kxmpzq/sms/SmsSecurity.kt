@@ -51,8 +51,8 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     // ═══ Compiled Regex Patterns (Performance) ═══
     private val suspiciousPatterns = listOf(
         Regex("http", RegexOption.IGNORE_CASE),
-        Regex("www\.", RegexOption.IGNORE_CASE),
-        Regex("\.com", RegexOption.IGNORE_CASE),
+        Regex("""www\.""", RegexOption.IGNORE_CASE),
+        Regex("""\.com""", RegexOption.IGNORE_CASE),
         Regex("بطاقة", RegexOption.IGNORE_CASE),
         Regex("رقم سري", RegexOption.IGNORE_CASE),
         Regex("cvv", RegexOption.IGNORE_CASE),
@@ -89,7 +89,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
      * يستخدم SHA-256 بدلاً من الاعتماد على SMS ID
      */
     fun generateMessageHash(phone: String, message: String): String {
-        val normalizedPhone = normalizePhone(phone)
+        val normalizedPhone = PhoneUtils.normalize(phone)
         val normalizedMsg = message.trim().lowercase(Locale.getDefault())
         val timeWindow = System.currentTimeMillis() / 60000L
         val raw = "$normalizedPhone|$normalizedMsg|$timeWindow"
@@ -122,7 +122,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
 
         val values = android.content.ContentValues().apply {
             put("message_hash", hash)
-            put("phone", normalizePhone(phone))
+            put("phone", PhoneUtils.normalize(phone))
             put("message_preview", message.take(100))
             put("processed_at", System.currentTimeMillis())
         }
@@ -152,14 +152,14 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     fun isTrustedSmsc(smsc: String): Boolean {
         if (smsc.isEmpty()) return true
 
-        val normalizedSmsc = normalizePhone(smsc)
+        val normalizedSmsc = PhoneUtils.normalize(smsc)
         if (normalizedSmsc.isEmpty()) return true
 
         val trustedList = getTrustedSmscList()
         if (trustedList.isEmpty()) return true
 
         return trustedList.any { trusted ->
-            val normalizedTrusted = normalizePhone(trusted)
+            val normalizedTrusted = PhoneUtils.normalize(trusted)
             if (normalizedTrusted.isEmpty()) return@any false
 
             val smscSuffix = normalizedSmsc.takeLast(9)
@@ -211,7 +211,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
         customerName: String,
         isContextReply: Boolean
     ): RateLimitResult = withContext(Dispatchers.IO) {
-        val normalizedSender = normalizePhone(sender)
+        val normalizedSender = PhoneUtils.normalize(sender)
         val lastReply = getLastReplyTime(normalizedSender)
         val timeSinceLast = System.currentTimeMillis() - lastReply
 
@@ -268,7 +268,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     }
 
     fun isBlocked(phone: String): Boolean {
-        val normalized = normalizePhone(phone)
+        val normalized = PhoneUtils.normalize(phone)
         val blockEnd = blockedNumbers[normalized]
             ?: getBlockedUntilFromDb(normalized)
             ?: return false
@@ -452,9 +452,8 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
      * توحيد جميع صيغ الأرقام إلى: 777123456
      */
 
-    private fun normalizePhone(phone: String): String {
-        return PhoneUtils.normalize(phone)
-    }
+    
+
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ أدوات مساعدة ═══

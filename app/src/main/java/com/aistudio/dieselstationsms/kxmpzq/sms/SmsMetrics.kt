@@ -38,6 +38,7 @@ class SmsMetrics(private val db: DatabaseHelper) {
         OTP_SENT,
         ORDER_CONFIRMED,
         ORDER_CANCELLED
+        CRITICAL_ERROR
     }
 
     suspend fun recordEvent(eventType: EventType, phone: String = "", details: String = "") = withContext(Dispatchers.IO) {

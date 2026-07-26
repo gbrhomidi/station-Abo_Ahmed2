@@ -5601,10 +5601,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getParty(id: Int): JSONObject? {
         val db = readableDatabase
-        db.rawQuery("SELECT * FROM parties WHERE id=? AND is_deleted=0", arrayOf(id.toString()))
-            .use { cursor ->
-                if (cursor.moveToFirst()) return partyCursorToJson(cursor) else null
+
+        return db.rawQuery(
+            "SELECT * FROM parties WHERE id=? AND is_deleted=0",
+            arrayOf(id.toString())
+        ).use { cursor ->
+
+            if (cursor.moveToFirst()) {
+                partyCursorToJson(cursor)
+            } else {
+                null
             }
+        }
     }
 
     fun getPartyById(id: Long): JSONObject? = getParty(id.toInt())
@@ -6051,10 +6059,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSaleTransactionById(id: Int): JSONObject? {
         val db = readableDatabase
-        db.rawQuery("SELECT * FROM sales_transactions WHERE id=?", arrayOf(id.toString()))
-            .use { cursor ->
-                if (cursor.moveToFirst()) return saleCursorToJson(cursor) else null
+
+        return db.rawQuery(
+            "SELECT * FROM sales_transactions WHERE id=?",
+            arrayOf(id.toString())
+        ).use { cursor ->
+
+            if (cursor.moveToFirst()) {
+                saleCursorToJson(cursor)
+            } else {
+                null
             }
+        }
     }
 
     private fun saleCursorToJson(c: Cursor): JSONObject {
@@ -7717,15 +7733,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun execSQL(sql: String, bindArgs: Array<Any> = emptyArray()) {
-        writableDatabase.execSQL(sql, bindArgs)
+        dbLock.lock()
+        try {
+            writableDatabase.execSQL(sql, bindArgs)
+        } finally {
+            dbLock.unlock()
+        }
     }
 
     fun isClosed(): Boolean {
-        return try {
-            !writableDatabase.isOpen
-        } catch (e: Exception) {
-            true
-        }
+        return !isOpen()
     }
 
     // ========================================================================
@@ -9151,11 +9168,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun cleanupOldConversationContext(): Int {
+    fun cleanupOldConversationContext(days: Int = 30): Int {  
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val cutoff = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            val cutoff = System.currentTimeMillis() - (days.toLong() * 24 * 60 * 60 * 1000)
             db.delete("sms_conversation_context", "timestamp < ?", arrayOf(cutoff.toString()))
         } finally {
             dbLock.unlock()

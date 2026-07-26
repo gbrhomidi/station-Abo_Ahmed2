@@ -41,7 +41,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     )
 
     suspend fun findCustomer(phone: String): CustomerInfo? = withContext(Dispatchers.IO) {
-        val cleanSender = normalizePhone(phone)
+        val cleanSender = PhoneUtils.normalize(phone)
         if (cleanSender.isEmpty()) return@withContext null
 
         val cursor = db.readableDatabase.rawQuery(
@@ -68,7 +68,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     suspend fun getCustomerBalanceByPhone(phone: String): Double = withContext(Dispatchers.IO) {
-        val cleanPhone = normalizePhone(phone)
+        val cleanPhone = PhoneUtils.normalize(phone)
         val cursor = db.readableDatabase.rawQuery("""
             SELECT current_balance FROM parties
             WHERE phone = ? AND is_deleted = 0
@@ -81,7 +81,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     suspend fun getLastOrderByPhone(phone: String): JSONObject? = withContext(Dispatchers.IO) {
-        val cleanPhone = normalizePhone(phone)
+        val cleanPhone = PhoneUtils.normalize(phone)
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
@@ -103,7 +103,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     suspend fun getOrderHistoryByPhone(phone: String, limit: Int): JSONArray = withContext(Dispatchers.IO) {
-        val cleanPhone = normalizePhone(phone)
+        val cleanPhone = PhoneUtils.normalize(phone)
         val arr = JSONArray()
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
@@ -237,7 +237,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     private suspend fun getPartyIdByPhone(phone: String): Int? = withContext(Dispatchers.IO) {
-        val cleanPhone = normalizePhone(phone)
+        val cleanPhone = PhoneUtils.normalize(phone)
         val cursor = db.readableDatabase.rawQuery(
             "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
             arrayOf(cleanPhone)
@@ -257,9 +257,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
 
-    private fun normalizePhone(phone: String): String {
-        return PhoneUtils.normalize(phone)
-    }
+    
     fun safeMultiply(a: Double, b: Double): Double {
         require(a >= 0 && a <= 10000.0) { "Invalid quantity: $a" }
         require(b >= 0 && b <= 1000000.0) { "Invalid price: $b" }

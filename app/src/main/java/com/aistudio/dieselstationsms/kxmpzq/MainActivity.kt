@@ -141,8 +141,8 @@ class MainActivity : AppCompatActivity() {
         initEncryptedPrefs()
 
         // تهيئة قاعدة البيانات
-        dbHelper = DatabaseHelper(applicationContext)
-
+        dbHelper = DatabaseHelper.getInstance(applicationContext)
+        
         // تهيئة مساعد Gemini
         geminiHelper = GeminiAIHelper(this)
         geminiApiKey = loadEnvKey("GEMINI_API_KEY")
@@ -261,7 +261,7 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
         }
 
-        dbHelper.close()
+        
         super.onDestroy()
     }
 

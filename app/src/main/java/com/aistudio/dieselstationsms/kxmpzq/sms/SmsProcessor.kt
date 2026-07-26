@@ -134,7 +134,7 @@ class SmsProcessor(
             return false
         }
 
-        val ctx = conversationManager.getOrCreateContext(customerResolver.normalizePhone(sender))
+        val ctx = conversationManager.getOrCreateContext(PhoneUtils.normalize(sender))
         val isContextReply = ctx.awaitingResponse &&
                 (System.currentTimeMillis() - ctx.timestamp < CONTEXT_TIMEOUT_MS)
 
@@ -193,7 +193,7 @@ class SmsProcessor(
         rawBody: String
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val ctx = conversationManager.getOrCreateContext(normalizedPhone)
         val prefs = conversationManager.getOrCreatePreferences(normalizedPhone)
 
@@ -262,7 +262,7 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrCreateOrderDraft(normalizedPhone, "diesel")
         order.step = 1
         order.status = "draft"
@@ -295,11 +295,12 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
         if (order == null || order.step != 1) {
-            val regex = Regex("^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L)?\s*$", RegexOption.IGNORE_CASE)
+            Regex("""^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L)?\s*$""",
+            RegexOption.IGNORE_CASE)
             if (regex.matches(msgBody)) {
                 handleDieselRequestFlow(customer, ctx, prefs)
                 return true
@@ -348,7 +349,7 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
         if (order == null || order.step != 2) {
@@ -386,7 +387,7 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
         if (order == null || order.step != 3) {
@@ -437,7 +438,7 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val name = customer.commercialName
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
@@ -537,7 +538,7 @@ class SmsProcessor(
 
     private suspend fun handleOrderCancel(customer: SmsCustomerResolver.CustomerInfo): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
         if (order != null) {
@@ -621,7 +622,7 @@ class SmsProcessor(
         prefs: SmsConversationManager.CustomerPreferences
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
         val order = conversationManager.getOrCreateOrderDraft(normalizedPhone, "gasoline")
         order.unitPrice = customerResolver.getGasolinePrice()
         order.step = 1
@@ -988,7 +989,7 @@ class SmsProcessor(
             val (period, day) = parsed
             val nextDate = calculateNextDate(period, day)
             if (nextDate != null) {
-                val prefs = conversationManager.getOrCreatePreferences(customerResolver.normalizePhone(customer.phone))
+                val prefs = conversationManager.getOrCreatePreferences(PhoneUtils.normalize(customer.phone))
                 val recurring = SmsConversationManager.RecurringOrder(
                     customerId = customer.phone,
                     quantity = prefs.preferredQuantity,
@@ -1110,7 +1111,7 @@ class SmsProcessor(
         ctx: SmsConversationManager.ConversationContext
     ): Boolean {
         val sender = customer.phone
-        val normalizedPhone = customerResolver.normalizePhone(sender)
+        val normalizedPhone = PhoneUtils.normalize(sender)
 
         if (ctx.awaitingResponse && ctx.pendingAction.isNotEmpty()) {
             when (ctx.pendingAction) {

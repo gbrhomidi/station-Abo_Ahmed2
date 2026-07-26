@@ -66,8 +66,8 @@ class BackupWorker(
                 )
             }
 
-            // 2. إنشاء DatabaseHelper مع try-with-resources
-            val db = DatabaseHelper(applicationContext)
+            // 2. الحصول على DatabaseHelper Singleton
+            val db = DatabaseHelper.getInstance(applicationContext)
             try {
                 // 3. تصدير البيانات
                 val exportedData = db.exportAllData()
@@ -127,9 +127,6 @@ class BackupWorker(
                         .build()
                 )
 
-            } finally {
-                db.close()
-            }
 
         } catch (e: OutOfMemoryError) {
             Log.e(TAG, "OutOfMemoryError during backup", e)

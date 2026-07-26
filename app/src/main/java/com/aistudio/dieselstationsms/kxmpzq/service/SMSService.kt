@@ -374,10 +374,8 @@ class SMSService : Service() {
             SystemEventLogger.recordService(this, STATUS_SERVICE_STOPPED, "Service stopped")
 
             // 8. إغلاق قاعدة البيانات
-            if (::dbHelper.isInitialized) {
-                dbHelper.close()
-            }
-
+            // لا يتم إغلاق DatabaseHelper هنا لأنه Singleton مشترك
+            
             // 9. إلغاء جدولة العمل
             WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
             WorkManager.getInstance(this).cancelUniqueWork(MAINTENANCE_WORK_NAME)
@@ -741,9 +739,7 @@ class SMSService : Service() {
             cleanupScope.cancel()
 
             // إغلاق قاعدة البيانات
-            if (::dbHelper.isInitialized) {
-                dbHelper.close()
-            }
+            // لا يتم إغلاق DatabaseHelper هنا لأنه Singleton مشترك
 
             logServiceStopped()
             Log.i(TAG, "Graceful shutdown completed")
@@ -951,7 +947,7 @@ class SMSService : Service() {
      */
     private fun checkDatabase(): Boolean {
         return try {
-            if (!::dbHelper.isInitialized || dbHelper.isClosed) {
+            if (!::dbHelper.isInitialized || dbHelper.isClosed()) {
                 Log.w(TAG, "Database not initialized or closed")
                 initializeDatabase()
                 return false
@@ -1809,19 +1805,20 @@ class SMSService : Service() {
 
             // تسجيل في قاعدة البيانات
             if (::smsMetrics.isInitialized) {
-                smsMetrics.recordEvent(
-                    eventType = "CRITICAL_ERROR",
-                    details = report.toString(),
-                    timestamp = System.currentTimeMillis()
-                )
+                serviceScope.launch {
+                    smsMetrics.recordEvent(
+                        eventType = SmsMetrics.EventType.CRITICAL_ERROR,
+                        details = report.toString()
+                    )
+                }
             }
 
             Log.e(TAG, "Error reported: ${report.toString().take(500)}")
 
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reporting failed: ${e.message}", e)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reporting failed: ${e.message}", e)
+            }
         }
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ جدولة المهام (Task Scheduling) ═══
@@ -2125,7 +2122,7 @@ class SMSService : Service() {
         return try {
             JSONObject().apply {
                 put("initialized", ::dbHelper.isInitialized)
-                put("is_closed", if (::dbHelper.isInitialized) dbHelper.isClosed else true)
+                put("is_closed", if (::dbHelper.isInitialized) dbHelper.isClosed() else true)
                 put("is_healthy", checkDatabase())
                 put("tables_valid", validateTables())
             }
@@ -2292,7 +2289,7 @@ class SMSService : Service() {
                 isRunning.get() &&
                 !isPaused.get() &&
                 ::dbHelper.isInitialized &&
-                !dbHelper.isClosed &&
+                !dbHelper.isClosed() &&
                 ::smsProcessor.isInitialized &&
                 isReceiverRegistered()
     }
@@ -2458,7 +2455,7 @@ class SMSService : Service() {
      * الحصول على مرجع DatabaseHelper
      */
     fun getDatabaseHelper(): DatabaseHelper? {
-        return if (::dbHelper.isInitialized && !dbHelper.isClosed) dbHelper else null
+        return if (::dbHelper.isInitialized && !dbHelper.isClosed()) dbHelper else null
     }
 
     /**
