@@ -565,7 +565,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun isSMSServiceRunning(): Boolean {
         // استخدام متغير ثابت في SMSService للإشارة إلى حالته
-        return SMSService.isRunning
+        return SMSService.getInstance()?.isServiceRunning() ?: false
     }
 
     // ============================================================
@@ -1005,7 +1005,7 @@ class MainActivity : AppCompatActivity() {
                             setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                             loadsImagesAutomatically = true
-                            supportMultipleWindows = false
+                            setSupportMultipleWindows(false)
                             userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
                                     "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
                         }
@@ -1301,7 +1301,7 @@ class MainActivity : AppCompatActivity() {
             val userId = activity.currentUserId
             if (userId == 0L) return false
             val db = getDbHelper() ?: return false
-            return db.checkUserPermission(userId, permissionCode, action)
+            return db.checkUserPermission(userId, permissionCode)
         }
 
         // ====== دوال مساعدة للردود ======

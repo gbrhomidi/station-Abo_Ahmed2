@@ -98,21 +98,21 @@ class SmsProcessor(
         val messageHash = security.generateMessageHash(sender, rawBody)
         if (security.isSmsAlreadyProcessed(messageHash)) {
             Log.d(TAG, "Skipping duplicate SMS from $sender")
-            metrics.recordEvent(SmsMetrics.EventType.SMS_DUPLICATED, sender)
+            metrics.recordEvent(SmsMetrics.EventType.SMS_DUPLICATED, sender ?: "")
             return false
         }
 
         if (!security.isTrustedSmsc(smsc)) {
             security.logSecurityEvent("SPOOFING_ATTEMPT", sender, "Untrusted SMSC: $smsc")
             db.logSms(sender, msgBody, "received", "rejected: untrusted SMSC")
-            metrics.recordEvent(SmsMetrics.EventType.SMS_SPOOFED, sender, "SMSC: $smsc")
+            metrics.recordEvent(SmsMetrics.EventType.SMS_SPOOFED, sender ?: "", "SMSC: $smsc")
             return false
         }
 
         if (security.isBlocked(sender)) {
             security.logSecurityEvent("BLOCKED_MESSAGE", sender, "Rate limit exceeded")
             db.logSms(sender, msgBody, "received", "blocked: rate limit exceeded")
-            metrics.recordEvent(SmsMetrics.EventType.SMS_BLOCKED, sender)
+            metrics.recordEvent(SmsMetrics.EventType.SMS_BLOCKED, sender ?: "")
             return false
         }
 
@@ -120,7 +120,7 @@ class SmsProcessor(
             security.logSecurityEvent("SUSPICIOUS_MESSAGE", sender, "Suspicious content detected")
             val managerPhone = customerResolver.getManagerPhone()
             if (managerPhone != null) {
-                replyManager.notifyManager(managerPhone,
+                replyManager.notifyManager(managerPhone ?: return false,
                     "🚨 رسالة مشبوهة\nمن: $sender\nنص: ${rawBody.take(100)}")
             }
             metrics.recordEvent(SmsMetrics.EventType.SMS_REJECTED, sender, "Suspicious")
@@ -146,12 +146,12 @@ class SmsProcessor(
                     replyManager.notifyManager(rateLimitResult.managerPhone,
                         "🚫 حظر مؤقت\nالعميل: ${customer.commercialName}\nالسبب: تجاوز الحد")
                 }
-                metrics.recordEvent(SmsMetrics.EventType.SMS_BLOCKED, sender)
+                metrics.recordEvent(SmsMetrics.EventType.SMS_BLOCKED, sender ?: "")
                 return false
             }
             is SmsSecurity.RateLimitResult.WARNING -> {
                 replyManager.sendReplyOnce(sender, rateLimitResult.message)
-                metrics.recordEvent(SmsMetrics.EventType.SMS_WARNING, sender)
+                metrics.recordEvent(SmsMetrics.EventType.SMS_WARNING, sender ?: "")
                 return false
             }
             is SmsSecurity.RateLimitResult.ALLOWED -> {
@@ -159,7 +159,7 @@ class SmsProcessor(
         }
 
         db.logSms(sender, msgBody, "received", "success")
-        metrics.recordEvent(SmsMetrics.EventType.SMS_RECEIVED, sender)
+        metrics.recordEvent(SmsMetrics.EventType.SMS_RECEIVED, sender ?: "")
 
         val processed = handleSmartMessage(customer, msgBody, rawBody)
 
@@ -179,9 +179,9 @@ class SmsProcessor(
         }
 
         if (processed) {
-            metrics.recordEvent(SmsMetrics.EventType.SMS_PROCESSED, sender)
+            metrics.recordEvent(SmsMetrics.EventType.SMS_PROCESSED, sender ?: "")
         } else {
-            metrics.recordEvent(SmsMetrics.EventType.SMS_FAILED, sender)
+            metrics.recordEvent(SmsMetrics.EventType.SMS_FAILED, sender ?: "")
         }
 
         return processed
@@ -249,7 +249,7 @@ class SmsProcessor(
         } catch (e: Exception) {
             val errorId = UUID.randomUUID().toString().take(8)
             Log.e(TAG, "Error [$errorId] for $sender: ${e.javaClass.simpleName}")
-            security.logSecurityEvent("PROCESSING_ERROR", sender, "ErrorID: $errorId")
+            security.logSecurityEvent("PROCESSING_ERROR", sender ?: "", "ErrorID: $errorId")
             replyManager.safeSendReply(sender,
                 "عذراً ${customer.commercialName}، حدث خطأ. رمز: $errorId")
             false
@@ -299,7 +299,7 @@ class SmsProcessor(
         val order = conversationManager.getOrderDraft(normalizedPhone)
 
         if (order == null || order.step != 1) {
-            Regex("""^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L)?\s*$""",
+            val regex = Regex("""^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L)?\s*$""",
             RegexOption.IGNORE_CASE)
             if (regex.matches(msgBody)) {
                 handleDieselRequestFlow(customer, ctx, prefs)
@@ -458,8 +458,8 @@ class SmsProcessor(
             customerName = name,
             quantityLiters = order.quantityLiters,
             quantityDabbas = order.quantityDabbas,
-            location = order.deliveryLocation,
-            deliveryTime = order.deliveryTime,
+            location = order.deliveryLocation ?: "",
+            deliveryTime = order.deliveryTime ?: "",
             unitPrice = order.unitPrice,
             totalAmount = order.totalAmount,
             orderId = orderId
@@ -516,7 +516,7 @@ class SmsProcessor(
             "📞 للاستفسار: ${managerPhone ?: "غير متوفر"}")
 
         if (managerPhone != null) {
-            replyManager.notifyManager(managerPhone,
+            replyManager.notifyManager(managerPhone ?: return false,
                 "🛢️ طلب ديزل مؤكد!\n" +
                 "رقم: $orderId\n" +
                 "العميل: $name\n" +
@@ -532,7 +532,7 @@ class SmsProcessor(
         conversationManager.saveContext(normalizedPhone, ctx)
         conversationManager.removeOrderDraft(normalizedPhone)
 
-        metrics.recordEvent(SmsMetrics.EventType.ORDER_CONFIRMED, sender, orderId)
+        metrics.recordEvent(SmsMetrics.EventType.ORDER_CONFIRMED, sender ?: "", orderId)
         return true
     }
 
@@ -553,7 +553,7 @@ class SmsProcessor(
             conversationManager.saveContext(normalizedPhone, ctx)
             conversationManager.removeOrderDraft(normalizedPhone)
 
-            metrics.recordEvent(SmsMetrics.EventType.ORDER_CANCELLED, sender)
+            metrics.recordEvent(SmsMetrics.EventType.ORDER_CANCELLED, sender ?: "", "")
             return true
         } else {
             replyManager.sendReply(sender,
@@ -600,7 +600,7 @@ class SmsProcessor(
                 "${order.quantityLiters.toInt()} لتر"
             }
 
-            replyManager.sendReply(driverPhone,
+            replyManager.sendReply(driverPhone ?: return@launch,
                 "🚚 توريد ديزل\n" +
                 "═══════════════════\n" +
                 "رقم الطلب: $orderId\n" +
@@ -612,7 +612,7 @@ class SmsProcessor(
                 "⏰ يرجى التجهيز والتوصيل\n" +
                 "📞 للاستفسار: ${customer.phone}")
 
-            db.logSms(driverPhone, "Driver alert for order $orderId", "driver_alert", "sent")
+            db.logSms(driverPhone ?: "", "Driver alert for order $orderId", "driver_alert", "sent")
         }
     }
 
@@ -649,7 +649,7 @@ class SmsProcessor(
             "الرصيد الإجمالي لكم: ${kotlin.math.abs(bal).toInt()} ريال"
         }
 
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "💳 ${customer.commercialName}،\n" +
             "═══════════════════\n" +
             "$balanceText\n" +
@@ -664,7 +664,7 @@ class SmsProcessor(
     private suspend fun handlePaymentRequest(customer: SmsCustomerResolver.CustomerInfo, msgBody: String): Boolean {
         val amount = intentDetector.extractAmount(msgBody)
         if (amount > 0) {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "💳 ${customer.commercialName}،\n" +
                 "مبلغ الدفع: ${amount.toInt()} ريال\n\n" +
                 "طرق الدفع:\n" +
@@ -672,7 +672,7 @@ class SmsProcessor(
                 "2. تحويل بنكي - أرسل 'تحويل'\n" +
                 "3. تقسيط - أرسل 'تقسيط'")
         } else {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "💳 ${customer.commercialName}،\n" +
                 "الرصيد: ${customer.balance.toInt()} ريال\n\n" +
                 "أرسل 'دفع [المبلغ]'\n" +
@@ -682,7 +682,7 @@ class SmsProcessor(
     }
 
     private suspend fun handleBankTransfer(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🏦 ${customer.commercialName}،\n" +
             "معلومات التحويل:\n" +
             "═══════════════════\n" +
@@ -704,7 +704,7 @@ class SmsProcessor(
         }
         val dieselPrice = customerResolver.getDieselPrice()
         val gasolinePrice = customerResolver.getGasolinePrice()
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🎁 ${customer.commercialName}،\n" +
             "═══════════════════\n" +
             "⛽ ديزل: ${dieselPrice.toInt()} ريال/لتر\n" +
@@ -730,12 +730,12 @@ class SmsProcessor(
                     "⛽ ديزل: ${dieselPrice.toInt()} ريال/لتر\n" +
                     "⛽ بنزين: ${gasolinePrice.toInt()} ريال/لتر"
         }
-        replyManager.sendReply(customer.phone, message)
+        replyManager.sendReply(customer.phone ?: "", message)
         return true
     }
 
     private suspend fun handleLoyaltyQuery(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🏆 ${customer.commercialName}،\n" +
             "═══════════════════\n" +
             "النقاط: ${customer.points}\n" +
@@ -752,11 +752,11 @@ class SmsProcessor(
     private suspend fun handleRedeemPoints(customer: SmsCustomerResolver.CustomerInfo, msgBody: String): Boolean {
         val points = intentDetector.extractAmount(msgBody).toInt()
         if (points <= 0) {
-            replyManager.sendReply(customer.phone, "أرسل 'استبدال [النقاط]'")
+            replyManager.sendReply(customer.phone ?: "", "أرسل 'استبدال [النقاط]'")
             return false
         }
         if (customer.points < points) {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "❌ نقاطك غير كافية!\n" +
                 "المطلوب: $points\n" +
                 "متاح: ${customer.points}")
@@ -769,7 +769,7 @@ class SmsProcessor(
             points >= 500 -> points * 0.05
             else -> 0.0
         }
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🎉 تم استبدال $points نقطة!\n" +
             "القيمة: ${value.toInt()} ريال\n" +
             "تم الإضافة لرصيدك.")
@@ -786,7 +786,7 @@ class SmsProcessor(
                 "delivered" -> "🚚 تم التوصيل"
                 else -> "⏳ قيد المعالجة"
             }
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "📦 ${customer.commercialName}،\n" +
                 "آخر طلب:\n" +
                 "═══════════════════\n" +
@@ -796,7 +796,7 @@ class SmsProcessor(
                 "الحالة: $statusText\n" +
                 "═══════════════════")
         } else {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "📦 ${customer.commercialName}،\n" +
                 "لا توجد طلبات سابقة.\n" +
                 "أرسل 'اريد ديزل' للطلب")
@@ -817,15 +817,15 @@ class SmsProcessor(
                 sb.append("- ${order.optString("created_at", "")}\n")
             }
             sb.append("═══════════════════")
-            replyManager.sendReply(customer.phone, sb.toString())
+            replyManager.sendReply(customer.phone ?: "", sb.toString())
         } else {
-            replyManager.sendReply(customer.phone, "لا يوجد سجل طلبات.")
+            replyManager.sendReply(customer.phone ?: "", "لا يوجد سجل طلبات.")
         }
         return true
     }
 
     private suspend fun handleHelp(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "📋 ${customer.commercialName}،\n" +
             "قائمة الخدمات:\n" +
             "═══════════════════\n" +
@@ -847,14 +847,14 @@ class SmsProcessor(
     private suspend fun handleComplaint(customer: SmsCustomerResolver.CustomerInfo, msgBody: String): Boolean {
         val ticketId = System.currentTimeMillis() % 10000
         val managerPhone = customerResolver.getManagerPhone()
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "📝 ${customer.commercialName}،\n" +
             "تم استلام شكواك.\n" +
             "رقم التذكرة: #$ticketId\n" +
             "الرد خلال 24 ساعة.\n" +
             "📞 للعاجل: ${managerPhone ?: "غير متوفر"}")
         if (managerPhone != null) {
-            replyManager.notifyManager(managerPhone,
+            replyManager.notifyManager(managerPhone ?: return false,
                 "🚨 شكوى\n" +
                 "العميل: ${customer.commercialName}\n" +
                 "الرسالة: ${msgBody.take(200)}")
@@ -864,7 +864,7 @@ class SmsProcessor(
 
     private suspend fun handleEmergency(customer: SmsCustomerResolver.CustomerInfo): Boolean {
         val managerPhone = customerResolver.getManagerPhone() ?: "غير متوفر"
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🚨 ${customer.commercialName}،\n" +
             "تم تفعيل الطوارئ!\n" +
             "═══════════════════\n" +
@@ -872,7 +872,7 @@ class SmsProcessor(
             "═══════════════════\n" +
             "سيتم الاتصال بك خلال 2 دقيقة!")
         if (managerPhone != "غير متوفر") {
-            replyManager.notifyManager(managerPhone,
+            replyManager.notifyManager(managerPhone ?: return false,
                 "🚨 طوارئ!\n" +
                 "العميل: ${customer.commercialName}\n" +
                 "الرقم: ${customer.phone}\n" +
@@ -883,12 +883,12 @@ class SmsProcessor(
 
     private suspend fun handleCallbackRequest(customer: SmsCustomerResolver.CustomerInfo): Boolean {
         val managerPhone = customerResolver.getManagerPhone() ?: "غير متوفر"
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "📞 ${customer.commercialName}،\n" +
             "تم طلب الاتصال.\n" +
             "سيتم الاتصال خلال 15 دقيقة.")
         if (managerPhone != "غير متوفر") {
-            replyManager.notifyManager(managerPhone,
+            replyManager.notifyManager(managerPhone ?: return false,
                 "📞 طلب اتصال\n" +
                 "العميل: ${customer.commercialName}\n" +
                 "الرقم: ${customer.phone}")
@@ -897,7 +897,7 @@ class SmsProcessor(
     }
 
     private suspend fun handleLocationQuery(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "📍 ${customer.commercialName}،\n" +
             "محطة أبو أحمد:\n" +
             "═══════════════════\n" +
@@ -910,7 +910,7 @@ class SmsProcessor(
     }
 
     private suspend fun handleWorkingHours(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🕐 ${customer.commercialName}،\n" +
             "المحطة مفتوحة 24 ساعة\n" +
             "طوال أيام الأسبوع بما في ذلك الجمعة\n" +
@@ -921,7 +921,7 @@ class SmsProcessor(
     private suspend fun handleInvoiceRequest(customer: SmsCustomerResolver.CustomerInfo, msgBody: String): Boolean {
         when {
             msgBody.contains("آخر شهر") || msgBody.contains("last month") -> {
-                replyManager.sendReply(customer.phone,
+                replyManager.sendReply(customer.phone ?: "",
                     "📄 ${customer.commercialName}،\n" +
                     "فاتورة يونيو 2026:\n" +
                     "═══════════════════\n" +
@@ -931,7 +931,7 @@ class SmsProcessor(
                     "══════════════════")
             }
             else -> {
-                replyManager.sendReply(customer.phone,
+                replyManager.sendReply(customer.phone ?: "",
                     "📄 ${customer.commercialName}،\n" +
                     "أرسل 'فاتورة آخر شهر'\n" +
                     "أو 'فاتورة [الشهر]'")
@@ -949,7 +949,7 @@ class SmsProcessor(
             totalLiters += order.optDouble("liters", 0.0)
             totalCost += order.optDouble("net_amount", 0.0)
         }
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "📊 ${customer.commercialName}،\n" +
             "التقرير الأسبوعي:\n" +
             "═══════════════════\n" +
@@ -968,13 +968,13 @@ class SmsProcessor(
 
         val timeInfo = intentDetector.parseDeliveryTime(msgBody)
         if (timeInfo != null) {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "📅 ${customer.commercialName}،\n" +
                 "تم حجز موعد:\n" +
                 "الوقت: ${timeInfo.displayTime}\n" +
                 "سنرسل تذكير قبل ساعة.")
         } else {
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "📅 ${customer.commercialName}،\n" +
                 "أرسل 'حجز [الوقت]'\n" +
                 "مثال: 'حجز 10:00 ص'\n" +
@@ -998,13 +998,13 @@ class SmsProcessor(
                     nextDelivery = nextDate
                 )
                 conversationManager.saveRecurringOrder(recurring)
-                replyManager.sendReply(customer.phone,
+                replyManager.sendReply(customer.phone ?: "",
                     "📅 ${customer.commercialName}،\n" +
                     "تم جدولة طلبك:\n" +
                     "الكمية: ${recurring.quantity.toInt()} لتر\n" +
                     "الموقع: ${recurring.location}\n" +
                     "التاريخ القادم: ${dateFormat.format(Date(nextDate))}")
-                security.logSecurityEvent("RECURRING_ORDER", customer.phone, "Period: $period, Day: $day")
+                security.logSecurityEvent("RECURRING_ORDER", customer.phone ?: "", "Period: $period, Day: $day")
                 return true
             }
         }
@@ -1058,13 +1058,13 @@ class SmsProcessor(
                 5 -> "🤩 شكراً! أنت من أفضل عملائنا!"
                 else -> "شكراً!"
             }
-            replyManager.sendReply(customer.phone,
+            replyManager.sendReply(customer.phone ?: "",
                 "⭐ ${customer.commercialName}،\n" +
                 "تقييمك: $rating/5\n" +
                 "$response")
             val managerPhone = customerResolver.getManagerPhone()
             if (managerPhone != null) {
-                replyManager.notifyManager(managerPhone,
+                replyManager.notifyManager(managerPhone ?: return false,
                     "📊 تقييم\n" +
                     "العميل: ${customer.commercialName}\n" +
                     "التقييم: $rating/5")
@@ -1089,7 +1089,7 @@ class SmsProcessor(
             val days = (System.currentTimeMillis() - prefs.lastOrderDate) / 86400000
             if (days > 30) "\n💡 لم تطلب منذ $days يوم! عرض خاص بانتظارك 🎁" else ""
         } else ""
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "$greeting ${customer.commercialName}! 🌟\n" +
             "أهلاً بك في محطة أبو أحمد." +
             personalized +
@@ -1098,7 +1098,7 @@ class SmsProcessor(
     }
 
     private suspend fun handleThanks(customer: SmsCustomerResolver.CustomerInfo): Boolean {
-        replyManager.sendReply(customer.phone,
+        replyManager.sendReply(customer.phone ?: "",
             "🙏 ${customer.commercialName}،\n" +
             "شكراً لك! نسعد بخدمتك دائماً.\n\n" +
             "💡 للطلب السريع: 'اريد ديزل'")

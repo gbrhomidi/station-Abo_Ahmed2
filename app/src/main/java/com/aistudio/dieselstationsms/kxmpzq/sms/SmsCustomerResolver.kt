@@ -52,15 +52,15 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             if (it.moveToFirst()) {
                 CustomerInfo(
-                    name = it.getString(it.getColumnIndexOrThrow("name")) ?: "عميلنا العزيز",
+                    name = it.getString(it.getColumnIndexOrThrow("name")).orEmpty(),
                     phone = phone,
                     balance = it.getDouble(it.getColumnIndexOrThrow("current_balance")),
                     points = it.getInt(it.getColumnIndexOrThrow("loyalty_points")),
                     vipLevel = it.getInt(it.getColumnIndexOrThrow("vip_level")),
-                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name")) ?: "عميلنا العزيز",
-                    email = it.getString(it.getColumnIndexOrThrow("email")) ?: "",
-                    address = it.getString(it.getColumnIndexOrThrow("address")) ?: "",
-                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type")) ?: "",
+                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name")).orEmpty(),
+                    email = it.getString(it.getColumnIndexOrThrow("email")).orEmpty(),
+                    address = it.getString(it.getColumnIndexOrThrow("address")).orEmpty(),
+                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type")).orEmpty(),
                     fleetSize = it.getInt(it.getColumnIndexOrThrow("fleet_size"))
                 )
             } else null
@@ -92,11 +92,11 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             if (it.moveToFirst()) {
                 JSONObject().apply {
-                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")))
+                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")).orEmpty())
                     put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
-                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")) ?: "")
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")).orEmpty())
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")).orEmpty())
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")).orEmpty())
                 }
             } else null
         }
@@ -115,10 +115,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
-                    put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type")))
+                    put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type")).orEmpty())
                     put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
                     put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")).orEmpty())
                 })
             }
         }

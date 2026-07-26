@@ -159,8 +159,8 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
         if (trustedList.isEmpty()) return true
 
         return trustedList.any { trusted ->
-            val normalizedTrusted = PhoneUtils.normalize(trusted) ?: return@any false
-            if (normalizedTrusted.isEmpty()) return@any false
+            val normalizedTrusted = PhoneUtils.normalize(trusted)
+            if (normalizedTrusted.isNullOrEmpty()) return@any false
 
             val smscSuffix = normalizedSmsc.takeLast(9)
             val trustedSuffix = normalizedTrusted.takeLast(9)
@@ -419,7 +419,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     // ═══ 7. حفظ الأحداث الأمنية (Structured) ═══
     // ═══════════════════════════════════════════════════════════════
 
-    fun logSecurityEvent(event: String, phone: String, details: String) {
+    fun logSecurityEvent(event: String, phone: String?, details: String) {
         try {
             val prefs = getSecurePrefs()
             val timestamp = dateFormat.format(Date())
@@ -504,7 +504,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
             arrayOf(key)
         )
         return cursor.use {
-            if (it.moveToFirst()) it.getString(0) else defaultValue
+            if (it.moveToFirst()) it.getString(0).orEmpty() else defaultValue
         }
     }
 
