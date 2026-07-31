@@ -41,7 +41,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     )
 
     suspend fun findCustomer(phone: String): CustomerInfo? = withContext(Dispatchers.IO) {
-        val cleanSender = PhoneUtils.normalize(phone)
+        val cleanSender = PhoneUtils.normalize(phone) ?: ""
         if (cleanSender.isEmpty()) return@withContext null
 
         val cursor = db.readableDatabase.rawQuery(
@@ -52,15 +52,15 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             if (it.moveToFirst()) {
                 CustomerInfo(
-                    name = it.getString(it.getColumnIndexOrThrow("name")).orEmpty(),
+                    name = it.getString(it.getColumnIndexOrThrow("name"))?.orEmpty() ?: "",
                     phone = phone,
                     balance = it.getDouble(it.getColumnIndexOrThrow("current_balance")),
                     points = it.getInt(it.getColumnIndexOrThrow("loyalty_points")),
                     vipLevel = it.getInt(it.getColumnIndexOrThrow("vip_level")),
-                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name")).orEmpty(),
-                    email = it.getString(it.getColumnIndexOrThrow("email")).orEmpty(),
-                    address = it.getString(it.getColumnIndexOrThrow("address")).orEmpty(),
-                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type")).orEmpty(),
+                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name"))?.orEmpty() ?: "",
+                    email = it.getString(it.getColumnIndexOrThrow("email"))?.orEmpty() ?: "",
+                    address = it.getString(it.getColumnIndexOrThrow("address"))?.orEmpty() ?: "",
+                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type"))?.orEmpty() ?: "",
                     fleetSize = it.getInt(it.getColumnIndexOrThrow("fleet_size"))
                 )
             } else null
@@ -68,7 +68,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     suspend fun getCustomerBalanceByPhone(phone: String): Double = withContext(Dispatchers.IO) {
-        val cleanPhone = PhoneUtils.normalize(phone)
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
         val cursor = db.readableDatabase.rawQuery("""
             SELECT current_balance FROM parties
             WHERE phone = ? AND is_deleted = 0
@@ -81,7 +81,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     suspend fun getLastOrderByPhone(phone: String): JSONObject? = withContext(Dispatchers.IO) {
-        val cleanPhone = PhoneUtils.normalize(phone)
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
@@ -92,18 +92,18 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             if (it.moveToFirst()) {
                 JSONObject().apply {
-                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code")).orEmpty())
+                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code"))?.orEmpty() ?: "")
                     put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
-                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes")).orEmpty())
-                    put("status", it.getString(it.getColumnIndexOrThrow("status")).orEmpty())
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")).orEmpty())
+                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes"))?.orEmpty() ?: "")
+                    put("status", it.getString(it.getColumnIndexOrThrow("status"))?.orEmpty() ?: "")
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at"))?.orEmpty() ?: "")
                 }
             } else null
         }
     }
 
     suspend fun getOrderHistoryByPhone(phone: String, limit: Int): JSONArray = withContext(Dispatchers.IO) {
-        val cleanPhone = PhoneUtils.normalize(phone)
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
         val arr = JSONArray()
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
@@ -115,10 +115,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         cursor.use {
             while (it.moveToNext()) {
                 arr.put(JSONObject().apply {
-                    put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type")).orEmpty())
+                    put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type"))?.orEmpty() ?: "")
                     put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
                     put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
-                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at")).orEmpty())
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at"))?.orEmpty() ?: "")
                 })
             }
         }
@@ -237,7 +237,7 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
     }
 
     private suspend fun getPartyIdByPhone(phone: String): Int? = withContext(Dispatchers.IO) {
-        val cleanPhone = PhoneUtils.normalize(phone)
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
         val cursor = db.readableDatabase.rawQuery(
             "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
             arrayOf(cleanPhone)
@@ -256,8 +256,6 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         }
     }
 
-
-    
     fun safeMultiply(a: Double, b: Double): Double {
         require(a >= 0 && a <= 10000.0) { "Invalid quantity: $a" }
         require(b >= 0 && b <= 1000000.0) { "Invalid price: $b" }

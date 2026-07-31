@@ -26,11 +26,14 @@ class TimeChangedReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "TimeChangedReceiver"
+        // استخدام القيمة النصية المباشرة بدلاً من Intent.ACTION_TIME_SET
+        // لأنها غير متوفرة في Android 14+ API
+        private const val ACTION_TIME_SET_STRING = "android.intent.action.TIME_SET"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        if (action != Intent.ACTION_TIME_SET && action != Intent.ACTION_TIME_CHANGED) return
+        if (action != ACTION_TIME_SET_STRING && action != Intent.ACTION_TIME_CHANGED) return
 
         Log.i(TAG, "Time changed: $action")
 

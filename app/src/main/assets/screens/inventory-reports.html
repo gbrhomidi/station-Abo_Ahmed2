@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>نظام إدارة محطات الوقود – تقارير المخزون</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"/>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        /* ================================================================
+<html dir="rtl" lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <title>
+   نظام إدارة محطات الوقود – تقارير المخزون
+  </title>
+  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+  </script>
+  <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+  </script>
+  <style>
+   /* ================================================================
            التصميم المتطور - نظام ألوان (أزرق نيلي + تركوازي + ذهبي)
            ================================================================ */
         :root {
@@ -1025,307 +1030,518 @@
             .bottom-nav .nav-item i { font-size: 13px; }
             .bottom-nav .nav-item span { font-size: 0.4rem; }
         }
-    </style>
-</head>
-<body>
-
-    <!-- Pull-to-Refresh -->
-    <div class="pull-indicator" id="pullIndicator">
-        <i class="fas fa-arrow-down"></i>
-        <span>اسحب للتحديث</span>
-    </div>
-
-    <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
-    </div>
-
-    <!-- Loading -->
-    <div class="loading-indicator" id="loadingIndicator">
-        <div class="spinner"></div>
-    </div>
-
-    <!-- ================================================================
+  </style>
+ </head>
+ <body>
+  <!-- Pull-to-Refresh -->
+  <div class="pull-indicator" id="pullIndicator">
+   <i class="fas fa-arrow-down">
+   </i>
+   <span>
+    اسحب للتحديث
+   </span>
+  </div>
+  <!-- Offline Banner -->
+  <div class="offline-banner" id="offlineBanner">
+   <i class="fas fa-wifi-slash">
+   </i>
+   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+  </div>
+  <!-- Loading -->
+  <div class="loading-indicator" id="loadingIndicator">
+   <div class="spinner">
+   </div>
+  </div>
+  <!-- ================================================================
     الشريط العلوي
     ================================================================ -->
-    <header class="top-bar">
-        <div class="header-top">
-            <div class="top-title">
-                <h2><i class="fas fa-cubes"></i> تقارير المخزون <span class="ai-badge">AI</span></h2>
-                <span class="subtitle">تحليل شامل لمستويات وحركات المخزون</span>
-            </div>
-            <div class="header-actions">
-                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
-                    <i class="fas fa-bell"></i>
-                </button>
-                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-                    <i class="fas fa-moon" id="themeIcon"></i>
-                </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="border-color:rgba(139,92,246,0.3);">
-                    <i class="fas fa-robot" style="color:#8b5cf6;"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- الفلاتر -->
-        <div class="filter-bar">
-            <div class="filter-group">
-                <i class="fas fa-calendar-alt"></i>
-                <input type="date" id="filterDateFrom" placeholder="من">
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-calendar-alt"></i>
-                <input type="date" id="filterDateTo" placeholder="إلى">
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-warehouse"></i>
-                <select id="filterWarehouse">
-                    <option value="">جميع المستودعات</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-tags"></i>
-                <select id="filterCategory">
-                    <option value="">جميع الفئات</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-chart-simple"></i>
-                <select id="filterReportType">
-                    <option value="summary">ملخص</option>
-                    <option value="detailed">مفصل</option>
-                    <option value="by_product">حسب المنتج</option>
-                    <option value="movement">الحركات</option>
-                    <option value="valuation">تقييم المخزون</option>
-                </select>
-            </div>
-            <div class="filter-group" style="flex:0.6; min-width:90px;">
-                <i class="fas fa-filter"></i>
-                <select id="filterStatus">
-                    <option value="">الكل</option>
-                    <option value="active">نشط</option>
-                    <option value="low">منخفض</option>
-                    <option value="critical">حرج</option>
-                    <option value="inactive">غير نشط</option>
-                </select>
-            </div>
-            <div class="filter-actions">
-                <button class="btn-filter primary" onclick="generateReport()">
-                    <i class="fas fa-cog"></i> توليد
-                </button>
-                <button class="btn-filter" onclick="resetFilters()">
-                    <i class="fas fa-undo"></i>
-                </button>
-                <button class="btn-filter" onclick="exportCSV()">
-                    <i class="fas fa-file-csv"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- ================================================================
+  <header class="top-bar">
+   <div class="header-top">
+    <div class="top-title">
+     <h2>
+      <i class="fas fa-cubes">
+      </i>
+      تقارير المخزون
+      <span class="ai-badge">
+       AI
+      </span>
+     </h2>
+     <span class="subtitle">
+      تحليل شامل لمستويات وحركات المخزون
+     </span>
+    </div>
+    <div class="header-actions">
+     <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+      <i class="fas fa-bell">
+      </i>
+     </button>
+     <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+      <i class="fas fa-moon" id="themeIcon">
+      </i>
+     </button>
+     <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(139,92,246,0.3);" title="المستشار الذكي">
+      <i class="fas fa-robot" style="color:#8b5cf6;">
+      </i>
+     </button>
+    </div>
+   </div>
+   <!-- الفلاتر -->
+   <div class="filter-bar">
+    <div class="filter-group">
+     <i class="fas fa-calendar-alt">
+     </i>
+     <input id="filterDateFrom" placeholder="من" type="date">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-calendar-alt">
+     </i>
+     <input id="filterDateTo" placeholder="إلى" type="date">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-warehouse">
+     </i>
+     <select id="filterWarehouse">
+      <option value="">
+       جميع المستودعات
+      </option>
+     </select>
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-tags">
+     </i>
+     <select id="filterCategory">
+      <option value="">
+       جميع الفئات
+      </option>
+     </select>
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-chart-simple">
+     </i>
+     <select id="filterReportType">
+      <option value="summary">
+       ملخص
+      </option>
+      <option value="detailed">
+       مفصل
+      </option>
+      <option value="by_product">
+       حسب المنتج
+      </option>
+      <option value="movement">
+       الحركات
+      </option>
+      <option value="valuation">
+       تقييم المخزون
+      </option>
+     </select>
+    </div>
+    <div class="filter-group" style="flex:0.6; min-width:90px;">
+     <i class="fas fa-filter">
+     </i>
+     <select id="filterStatus">
+      <option value="">
+       الكل
+      </option>
+      <option value="active">
+       نشط
+      </option>
+      <option value="low">
+       منخفض
+      </option>
+      <option value="critical">
+       حرج
+      </option>
+      <option value="inactive">
+       غير نشط
+      </option>
+     </select>
+    </div>
+    <div class="filter-actions">
+     <button class="btn-filter primary" onclick="generateReport()">
+      <i class="fas fa-cog">
+      </i>
+      توليد
+     </button>
+     <button class="btn-filter" onclick="resetFilters()">
+      <i class="fas fa-undo">
+      </i>
+     </button>
+     <button class="btn-filter" onclick="exportCSV()">
+      <i class="fas fa-file-csv">
+      </i>
+     </button>
+    </div>
+   </div>
+  </header>
+  <!-- ================================================================
     بطاقات الإحصائيات
     ================================================================ -->
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-top">
-                <div class="kpi-icon"><i class="fas fa-boxes-stacked"></i></div>
-                <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotal">0%</span></div>
-            </div>
-            <div class="kpi-value" id="kpiTotalItems">0</div>
-            <div class="kpi-label">📦 إجمالي الأصناف</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-top">
-                <div class="kpi-icon gold"><i class="fas fa-money-bill-wave"></i></div>
-                <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendValue">0%</span></div>
-            </div>
-            <div class="kpi-value" id="kpiTotalValue">0.00</div>
-            <div class="kpi-label">💰 القيمة الإجمالية</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-top">
-                <div class="kpi-icon green"><i class="fas fa-arrow-trend-up"></i></div>
-                <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTurnover">0%</span></div>
-            </div>
-            <div class="kpi-value" id="kpiTurnover">0.0</div>
-            <div class="kpi-label">🔄 معدل الدوران</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-top">
-                <div class="kpi-icon red"><i class="fas fa-exclamation-triangle"></i></div>
-                <div class="kpi-trend down"><i class="fas fa-arrow-down"></i> <span id="trendLow">0%</span></div>
-            </div>
-            <div class="kpi-value" id="kpiLowStock">0</div>
-            <div class="kpi-label">⚠️ أصناف منخفضة</div>
-        </div>
+  <div class="kpi-grid">
+   <div class="kpi-card">
+    <div class="kpi-top">
+     <div class="kpi-icon">
+      <i class="fas fa-boxes-stacked">
+      </i>
+     </div>
+     <div class="kpi-trend up">
+      <i class="fas fa-arrow-up">
+      </i>
+      <span id="trendTotal">
+       0%
+      </span>
+     </div>
     </div>
-
-    <!-- ================================================================
+    <div class="kpi-value" id="kpiTotalItems">
+     0
+    </div>
+    <div class="kpi-label">
+     📦 إجمالي الأصناف
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-top">
+     <div class="kpi-icon gold">
+      <i class="fas fa-money-bill-wave">
+      </i>
+     </div>
+     <div class="kpi-trend up">
+      <i class="fas fa-arrow-up">
+      </i>
+      <span id="trendValue">
+       0%
+      </span>
+     </div>
+    </div>
+    <div class="kpi-value" id="kpiTotalValue">
+     0.00
+    </div>
+    <div class="kpi-label">
+     💰 القيمة الإجمالية
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-top">
+     <div class="kpi-icon green">
+      <i class="fas fa-arrow-trend-up">
+      </i>
+     </div>
+     <div class="kpi-trend up">
+      <i class="fas fa-arrow-up">
+      </i>
+      <span id="trendTurnover">
+       0%
+      </span>
+     </div>
+    </div>
+    <div class="kpi-value" id="kpiTurnover">
+     0.0
+    </div>
+    <div class="kpi-label">
+     🔄 معدل الدوران
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-top">
+     <div class="kpi-icon red">
+      <i class="fas fa-exclamation-triangle">
+      </i>
+     </div>
+     <div class="kpi-trend down">
+      <i class="fas fa-arrow-down">
+      </i>
+      <span id="trendLow">
+       0%
+      </span>
+     </div>
+    </div>
+    <div class="kpi-value" id="kpiLowStock">
+     0
+    </div>
+    <div class="kpi-label">
+     ⚠️ أصناف منخفضة
+    </div>
+   </div>
+  </div>
+  <!-- ================================================================
     التنبيهات
     ================================================================ -->
-    <div class="alerts-container" id="alertsContainer"></div>
-
-    <!-- ================================================================
+  <div class="alerts-container" id="alertsContainer">
+  </div>
+  <!-- ================================================================
     الرسوم البيانية
     ================================================================ -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title"><i class="fas fa-chart-area"></i> حركة المخزون</span>
-                <span class="chart-badge">آخر 7 أيام</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="movementChart"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title"><i class="fas fa-chart-pie"></i> توزيع القيمة حسب الفئة</span>
-                <span class="chart-badge">حسب الفئة</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="categoryChart"></canvas>
-            </div>
-        </div>
+  <div class="charts-grid">
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title">
+      <i class="fas fa-chart-area">
+      </i>
+      حركة المخزون
+     </span>
+     <span class="chart-badge">
+      آخر 7 أيام
+     </span>
     </div>
-
-    <!-- ================================================================
+    <div class="chart-container">
+     <canvas id="movementChart">
+     </canvas>
+    </div>
+   </div>
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title">
+      <i class="fas fa-chart-pie">
+      </i>
+      توزيع القيمة حسب الفئة
+     </span>
+     <span class="chart-badge">
+      حسب الفئة
+     </span>
+    </div>
+    <div class="chart-container">
+     <canvas id="categoryChart">
+     </canvas>
+    </div>
+   </div>
+  </div>
+  <!-- ================================================================
     جدول المخزون
     ================================================================ -->
-    <div class="table-section">
-        <div class="table-wrapper">
-            <div class="table-scroll">
-                <table class="data-table" id="inventoryTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>كود المنتج</th>
-                            <th>المنتج</th>
-                            <th>الفئة</th>
-                            <th>المستودع</th>
-                            <th>الكمية</th>
-                            <th>سعر الشراء</th>
-                            <th>سعر البيع</th>
-                            <th>القيمة</th>
-                            <th>الحالة</th>
-                            <th>إجراء</th>
-                        </tr>
-                    </thead>
-                    <tbody id="inventoryTableBody">
-                        <tr><td colspan="11"><div class="empty-state"><i class="fas fa-cubes"></i> اختر الفترة واضغط "توليد" لعرض التقرير</div></td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="table-footer">
-                <span class="total-item"><span class="label">إجمالي القيمة:</span><span class="value" id="footerTotal">0.00</span></span>
-                <span class="total-item"><span class="label">إجمالي الأصناف:</span><span class="value" id="footerItems">0</span></span>
-                <span class="total-item"><span class="label">متوسط السعر:</span><span class="value" id="footerAvg">0.00</span></span>
-            </div>
-        </div>
+  <div class="table-section">
+   <div class="table-wrapper">
+    <div class="table-scroll">
+     <table class="data-table" id="inventoryTable">
+      <thead>
+       <tr>
+        <th>
+         #
+        </th>
+        <th>
+         كود المنتج
+        </th>
+        <th>
+         المنتج
+        </th>
+        <th>
+         الفئة
+        </th>
+        <th>
+         المستودع
+        </th>
+        <th>
+         الكمية
+        </th>
+        <th>
+         سعر الشراء
+        </th>
+        <th>
+         سعر البيع
+        </th>
+        <th>
+         القيمة
+        </th>
+        <th>
+         الحالة
+        </th>
+        <th>
+         إجراء
+        </th>
+       </tr>
+      </thead>
+      <tbody id="inventoryTableBody">
+       <tr>
+        <td colspan="11">
+         <div class="empty-state">
+          <i class="fas fa-cubes">
+          </i>
+          اختر الفترة واضغط "توليد" لعرض التقرير
+         </div>
+        </td>
+       </tr>
+      </tbody>
+     </table>
     </div>
-
-    <!-- ================================================================
+    <div class="table-footer">
+     <span class="total-item">
+      <span class="label">
+       إجمالي القيمة:
+      </span>
+      <span class="value" id="footerTotal">
+       0.00
+      </span>
+     </span>
+     <span class="total-item">
+      <span class="label">
+       إجمالي الأصناف:
+      </span>
+      <span class="value" id="footerItems">
+       0
+      </span>
+     </span>
+     <span class="total-item">
+      <span class="label">
+       متوسط السعر:
+      </span>
+      <span class="value" id="footerAvg">
+       0.00
+      </span>
+     </span>
+    </div>
+   </div>
+  </div>
+  <!-- ================================================================
     الزر العائم (PDF)
     ================================================================ -->
-    <button class="fab" onclick="exportPDF()" style="position:fixed; bottom:90px; left:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--teal-primary), var(--teal-dark)); border:none; color:var(--bg-primary); font-size:1.5rem; cursor:pointer; box-shadow:0 4px 20px rgba(0,212,255,0.3); transition:var(--transition); z-index:200; display:flex; align-items:center; justify-content:center; touch-action:manipulation;">
-        <i class="fas fa-file-pdf"></i>
-    </button>
-
-    <!-- ================================================================
+  <button class="fab" onclick="exportPDF()" style="position:fixed; bottom:90px; left:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--teal-primary), var(--teal-dark)); border:none; color:var(--bg-primary); font-size:1.5rem; cursor:pointer; box-shadow:0 4px 20px rgba(0,212,255,0.3); transition:var(--transition); z-index:200; display:flex; align-items:center; justify-content:center; touch-action:manipulation;">
+   <i class="fas fa-file-pdf">
+   </i>
+  </button>
+  <!-- ================================================================
     القائمة الجانبية
     ================================================================ -->
-    <div class="sidebar-toggle" id="sidebarToggle">
-        <i class="fas fa-bars"></i>
-    </div>
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-content">
-            <button class="sidebar-btn" onclick="handleAction('refresh')">
-                <i class="fas fa-sync-alt"></i> <span>تحديث</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('csv')">
-                <i class="fas fa-file-csv"></i> <span>CSV</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('pdf')">
-                <i class="fas fa-file-pdf"></i> <span>PDF</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('print')">
-                <i class="fas fa-print"></i> <span>طباعة</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('ai')" style="border-color:rgba(139,92,246,0.3);">
-                <i class="fas fa-robot" style="color:#8b5cf6;"></i> <span>AI</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('home')">
-                <i class="fas fa-home"></i> <span>رجوع</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- ================================================================
+  <div class="sidebar-toggle" id="sidebarToggle">
+   <i class="fas fa-bars">
+   </i>
+  </div>
+  <div class="sidebar" id="sidebar">
+   <div class="sidebar-content">
+    <button class="sidebar-btn" onclick="handleAction('refresh')">
+     <i class="fas fa-sync-alt">
+     </i>
+     <span>
+      تحديث
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('csv')">
+     <i class="fas fa-file-csv">
+     </i>
+     <span>
+      CSV
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('pdf')">
+     <i class="fas fa-file-pdf">
+     </i>
+     <span>
+      PDF
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('print')">
+     <i class="fas fa-print">
+     </i>
+     <span>
+      طباعة
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('ai')" style="border-color:rgba(139,92,246,0.3);">
+     <i class="fas fa-robot" style="color:#8b5cf6;">
+     </i>
+     <span>
+      AI
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('home')">
+     <i class="fas fa-home">
+     </i>
+     <span>
+      رجوع
+     </span>
+    </button>
+   </div>
+  </div>
+  <!-- ================================================================
     القائمة السفلية
     ================================================================ -->
-    <nav class="bottom-nav">
-        <button class="nav-item" onclick="switchTab('summary')">
-            <i class="fas fa-chart-pie"></i> <span>ملخص</span>
-        </button>
-        <button class="nav-item active" onclick="switchTab('inventory')">
-            <i class="fas fa-list"></i> <span>المخزون</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('categories')">
-            <i class="fas fa-tags"></i> <span>حسب الفئة</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('movements')">
-            <i class="fas fa-exchange-alt"></i> <span>الحركات</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('valuation')">
-            <i class="fas fa-chart-bar"></i> <span>التقييم</span>
-        </button>
-    </nav>
-
-    <!-- ================================================================
+  <nav class="bottom-nav">
+   <button class="nav-item" onclick="switchTab('summary')">
+    <i class="fas fa-chart-pie">
+    </i>
+    <span>
+     ملخص
+    </span>
+   </button>
+   <button class="nav-item active" onclick="switchTab('inventory')">
+    <i class="fas fa-list">
+    </i>
+    <span>
+     المخزون
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('categories')">
+    <i class="fas fa-tags">
+    </i>
+    <span>
+     حسب الفئة
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('movements')">
+    <i class="fas fa-exchange-alt">
+    </i>
+    <span>
+     الحركات
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('valuation')">
+    <i class="fas fa-chart-bar">
+    </i>
+    <span>
+     التقييم
+    </span>
+   </button>
+  </nav>
+  <!-- ================================================================
     مودال تفاصيل المنتج
     ================================================================ -->
-    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
-        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-            <!-- يتم تعبئتها عبر JS -->
-        </div>
-    </div>
-
-    <!-- ================================================================
+  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
+   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+    <!-- يتم تعبئتها عبر JS -->
+   </div>
+  </div>
+  <!-- ================================================================
     مودال AI Advisor
     ================================================================ -->
-    <div class="ai-modal">
-        <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
-            <div class="modal" onclick="event.stopPropagation()">
-                <div class="modal-header">
-                    <h3 class="modal-title">🤖 المستشار الذكي - المخزون</h3>
-                    <button class="modal-close" onclick="closeAIModal()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="aiContent">
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i>
-                        <p>جاري تحليل بيانات المخزون...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <div class="ai-modal">
+   <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+     <div class="modal-header">
+      <h3 class="modal-title">
+       🤖 المستشار الذكي - المخزون
+      </h3>
+      <button class="modal-close" onclick="closeAIModal()">
+       <i class="fas fa-times">
+       </i>
+      </button>
+     </div>
+     <div id="aiContent">
+      <div style="text-align:center;color:var(--text-muted);padding:30px;">
+       <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;">
+       </i>
+       <p>
+        جاري تحليل بيانات المخزون...
+       </p>
+      </div>
+     </div>
     </div>
-
-    <!-- ================================================================
+   </div>
+  </div>
+  <!-- ================================================================
     Toast
     ================================================================ -->
-    <div class="toast" id="toast">
-        <div class="toast-icon"><i class="fas fa-check"></i></div>
-        <span id="toastMessage">تمت العملية بنجاح</span>
-    </div>
-
-    <!-- ================================================================
+  <div class="toast" id="toast">
+   <div class="toast-icon">
+    <i class="fas fa-check">
+    </i>
+   </div>
+   <span id="toastMessage">
+    تمت العملية بنجاح
+   </span>
+  </div>
+  <!-- ================================================================
     JavaScript
     ================================================================ -->
-    <script>
-        // ================================================================
+  <script>
+   // ================================================================
         // 1. دالة apiCall الموحدة
         // ================================================================
         function apiCall(action, params) {
@@ -2007,6 +2223,6 @@
                 if (e.target === this) closeDetails();
             });
         });
-    </script>
-</body>
+  </script>
+ </body>
 </html>

@@ -89,7 +89,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
      * يستخدم SHA-256 بدلاً من الاعتماد على SMS ID
      */
     fun generateMessageHash(phone: String, message: String): String {
-        val normalizedPhone = PhoneUtils.normalize(phone)
+        val normalizedPhone = PhoneUtils.normalize(phone) ?: ""
         val normalizedMsg = message.trim().lowercase(Locale.getDefault())
         val timeWindow = System.currentTimeMillis() / 60000L
         val raw = "$normalizedPhone|$normalizedMsg|$timeWindow"
@@ -122,7 +122,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
 
         val values = android.content.ContentValues().apply {
             put("message_hash", hash)
-            put("phone", PhoneUtils.normalize(phone))
+            put("phone", PhoneUtils.normalize(phone) ?: "")
             put("message_preview", message.take(100))
             put("processed_at", System.currentTimeMillis())
         }
@@ -152,15 +152,15 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     fun isTrustedSmsc(smsc: String): Boolean {
         if (smsc.isEmpty()) return true
 
-        val normalizedSmsc = PhoneUtils.normalize(smsc) ?: return true
+        val normalizedSmsc = PhoneUtils.normalize(smsc) ?: ""
         if (normalizedSmsc.isEmpty()) return true
 
         val trustedList = getTrustedSmscList()
         if (trustedList.isEmpty()) return true
 
         return trustedList.any { trusted ->
-            val normalizedTrusted = PhoneUtils.normalize(trusted)
-            if (normalizedTrusted.isNullOrEmpty()) return@any false
+            val normalizedTrusted = PhoneUtils.normalize(trusted) ?: ""
+            if (normalizedTrusted.isEmpty()) return@any false
 
             val smscSuffix = normalizedSmsc.takeLast(9)
             val trustedSuffix = normalizedTrusted.takeLast(9)
@@ -213,7 +213,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
         customerName: String,
         isContextReply: Boolean
     ): RateLimitResult = withContext(Dispatchers.IO) {
-        val normalizedSender = PhoneUtils.normalize(sender)
+        val normalizedSender = PhoneUtils.normalize(sender) ?: ""
         val lastReply = getLastReplyTime(normalizedSender)
         val timeSinceLast = System.currentTimeMillis() - lastReply
 
@@ -227,9 +227,12 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("RATE_LIMIT_BLOCK", sender, "Daily limit exceeded: $currentCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "⚠️ $customerName،\n" +
-                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.\n" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
+                    "⚠️ $customerName،
+" +
+                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.
+" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
+" +
                     "للاستفسار العاجل: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
@@ -243,18 +246,24 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("REPEAT_BLOCK", sender, "Repeat warnings: $warningCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "🚫 $customerName،\n" +
-                    "لقد أرسلت رسائل متكررة كثيرة.\n" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
+                    "🚫 $customerName،
+" +
+                    "لقد أرسلت رسائل متكررة كثيرة.
+" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
+" +
                     "للاستفسار: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
             }
 
             return@withContext RateLimitResult.WARNING(
-                "⚠️ $customerName،\n" +
-                "لقد أرسلت رسائل متكررة.\n" +
-                "يرجى تحديد ما تريده في رسالة واحدة بدقة.\n" +
+                "⚠️ $customerName،
+" +
+                "لقد أرسلت رسائل متكررة.
+" +
+                "يرجى تحديد ما تريده في رسالة واحدة بدقة.
+" +
                 "تحذير $warningCount من $MAX_REPEAT_WARNINGS"
             )
         }
@@ -270,7 +279,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
     }
 
     fun isBlocked(phone: String): Boolean {
-        val normalized = PhoneUtils.normalize(phone)
+        val normalized = PhoneUtils.normalize(phone) ?: ""
         val blockEnd = blockedNumbers[normalized]
             ?: getBlockedUntilFromDb(normalized)
             ?: return false
@@ -423,7 +432,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
         try {
             val prefs = getSecurePrefs()
             val timestamp = dateFormat.format(Date())
-            val phoneHash = sha256(phone).take(16)
+            val phoneHash = sha256(phone ?: "").take(16)
 
             val structuredLog = JSONObject().apply {
                 put("timestamp", timestamp)
@@ -438,24 +447,13 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
 
             val entry = structuredLog.toString()
             val existing = prefs.getString(AUDIT_LOG, "") ?: ""
-            val updated = if (existing.length > 10000) entry else "$existing\n$entry"
+            val updated = if (existing.length > 10000) entry else "$entry\n$entry"
             prefs.edit().putString(AUDIT_LOG, updated).apply()
             Log.i(TAG, "SECURITY: $event | $phoneHash | $details")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log security event")
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 8. إصلاح normalizePhone ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * توحيد جميع صيغ الأرقام إلى: 777123456
-     */
-
-    
-
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ أدوات مساعدة ═══
@@ -504,7 +502,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
             arrayOf(key)
         )
         return cursor.use {
-            if (it.moveToFirst()) it.getString(0).orEmpty() else defaultValue
+            if (it.moveToFirst()) it.getString(0)?.orEmpty() ?: defaultValue else defaultValue
         }
     }
 

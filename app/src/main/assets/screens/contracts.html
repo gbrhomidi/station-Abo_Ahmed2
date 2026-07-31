@@ -1,19 +1,25 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>نظام إدارة العقود – محطات الوقود</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-    <style>
-        /* ============================================================
+<html dir="rtl" lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <title>
+   نظام إدارة العقود – محطات الوقود
+  </title>
+  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+  </script>
+  <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/xlsx.full.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/fuse.js@7.0.0">
+  </script>
+  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+  </script>
+  <style>
+   /* ============================================================
            Cobalt / Ruby Theme – متغيرات مخصصة
            ============================================================ */
         :root {
@@ -1612,509 +1618,791 @@
                 display: none !important;
             }
         }
-    </style>
-</head>
-<body>
-
-    <!-- ============================================================
+  </style>
+ </head>
+ <body>
+  <!-- ============================================================
     Skip Link – للوصول السريع
     ============================================================ -->
-    <a class="skip-link" href="#main-content">تخطي إلى المحتوى الرئيسي</a>
-
-    <!-- ============================================================
+  <a class="skip-link" href="#main-content">
+   تخطي إلى المحتوى الرئيسي
+  </a>
+  <!-- ============================================================
     Offline Banner
     ============================================================ -->
-    <div class="offline-banner" id="offlineBanner" role="alert" aria-live="polite">
-        <i class="fas fa-wifi-slash" aria-hidden="true"></i> أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
-    </div>
-
-    <!-- ============================================================
+  <div aria-live="polite" class="offline-banner" id="offlineBanner" role="alert">
+   <i aria-hidden="true" class="fas fa-wifi-slash">
+   </i>
+   أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
+  </div>
+  <!-- ============================================================
     Loading Indicator
     ============================================================ -->
-    <div class="loading-indicator" id="loadingIndicator" role="status" aria-live="polite">
-        <div class="spinner" aria-label="جاري التحميل..."></div>
-        <span class="sr-only">جاري التحميل...</span>
-    </div>
-
-    <!-- ============================================================
+  <div aria-live="polite" class="loading-indicator" id="loadingIndicator" role="status">
+   <div aria-label="جاري التحميل..." class="spinner">
+   </div>
+   <span class="sr-only">
+    جاري التحميل...
+   </span>
+  </div>
+  <!-- ============================================================
     الرئيسية (main-content)
     ============================================================ -->
-    <main id="main-content">
-
-        <!-- ============================================================
+  <main id="main-content">
+   <!-- ============================================================
         Header – Cobalt/Ruby
         ============================================================ -->
-        <header class="top-bar" role="banner" aria-label="رأس الصفحة">
-            <div class="header-top">
-                <div class="top-title">
-                    <h2><i class="fas fa-file-signature" aria-hidden="true"></i> إدارة العقود <span class="badge-ruby">v3.0</span></h2>
-                </div>
-                <div class="header-actions">
-                    <button class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" aria-label="التنبيهات" title="التنبيهات">
-                        <i class="fas fa-bell" aria-hidden="true"></i>
-                        <span class="sr-only">التنبيهات</span>
-                    </button>
-                    <button class="icon-btn" id="themeToggle" aria-label="تبديل الوضع" title="تبديل الوضع">
-                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
-                        <span class="sr-only">تبديل الوضع</span>
-                    </button>
-                    <button class="icon-btn ruby-btn" onclick="openAIAdvisor()" aria-label="المستشار الذكي" title="المستشار الذكي">
-                        <i class="fas fa-robot" aria-hidden="true"></i>
-                        <span class="sr-only">المستشار الذكي</span>
-                    </button>
-                    <button class="icon-btn" onclick="openExportModal()" aria-label="تصدير" title="تصدير">
-                        <i class="fas fa-file-export" aria-hidden="true"></i>
-                        <span class="sr-only">تصدير</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="search-wrap" role="search">
-                <i class="fas fa-search" aria-hidden="true"></i>
-                <input type="text" class="search-input" id="searchInput" placeholder="ابحث باسم العقد، الكود، الطرف، أو القيمة..." aria-label="بحث في العقود" oninput="handleSearch(this.value)">
-                <span class="search-shortcut">Ctrl+K</span>
-            </div>
-
-            <div class="filter-chips" role="tablist" aria-label="فلاتر العقود">
-                <button class="filter-chip active" role="tab" aria-selected="true" onclick="setFilter('all', this)">الكل</button>
-                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('active', this)">نشط</button>
-                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('expiring', this)">قارب الانتهاء</button>
-                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('expired', this)">منتهي</button>
-                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('terminated', this)">ملغى</button>
-                <button class="filter-chip" role="tab" aria-selected="false" onclick="setFilter('draft', this)">مسودة</button>
-                <button class="filter-chip ai-chip" role="tab" aria-selected="false" onclick="setFilter('ai_suggest', this)">🤖 توصية AI</button>
-            </div>
-        </header>
-
-        <!-- ============================================================
+   <header aria-label="رأس الصفحة" class="top-bar" role="banner">
+    <div class="header-top">
+     <div class="top-title">
+      <h2>
+       <i aria-hidden="true" class="fas fa-file-signature">
+       </i>
+       إدارة العقود
+       <span class="badge-ruby">
+        v3.0
+       </span>
+      </h2>
+     </div>
+     <div class="header-actions">
+      <button aria-label="التنبيهات" class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" title="التنبيهات">
+       <i aria-hidden="true" class="fas fa-bell">
+       </i>
+       <span class="sr-only">
+        التنبيهات
+       </span>
+      </button>
+      <button aria-label="تبديل الوضع" class="icon-btn" id="themeToggle" title="تبديل الوضع">
+       <i aria-hidden="true" class="fas fa-moon" id="themeIcon">
+       </i>
+       <span class="sr-only">
+        تبديل الوضع
+       </span>
+      </button>
+      <button aria-label="المستشار الذكي" class="icon-btn ruby-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+       <i aria-hidden="true" class="fas fa-robot">
+       </i>
+       <span class="sr-only">
+        المستشار الذكي
+       </span>
+      </button>
+      <button aria-label="تصدير" class="icon-btn" onclick="openExportModal()" title="تصدير">
+       <i aria-hidden="true" class="fas fa-file-export">
+       </i>
+       <span class="sr-only">
+        تصدير
+       </span>
+      </button>
+     </div>
+    </div>
+    <div class="search-wrap" role="search">
+     <i aria-hidden="true" class="fas fa-search">
+     </i>
+     <input aria-label="بحث في العقود" class="search-input" id="searchInput" oninput="handleSearch(this.value)" placeholder="ابحث باسم العقد، الكود، الطرف، أو القيمة..." type="text">
+     <span class="search-shortcut">
+      Ctrl+K
+     </span>
+    </div>
+    <div aria-label="فلاتر العقود" class="filter-chips" role="tablist">
+     <button aria-selected="true" class="filter-chip active" onclick="setFilter('all', this)" role="tab">
+      الكل
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('active', this)" role="tab">
+      نشط
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('expiring', this)" role="tab">
+      قارب الانتهاء
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('expired', this)" role="tab">
+      منتهي
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('terminated', this)" role="tab">
+      ملغى
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('draft', this)" role="tab">
+      مسودة
+     </button>
+     <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">
+      🤖 توصية AI
+     </button>
+    </div>
+   </header>
+   <!-- ============================================================
         Stats
         ============================================================ -->
-        <section class="stats-grid" aria-label="إحصائيات العقود">
-            <div class="stat-card animate-fade-up" onclick="showStatDetail('total')" role="button" tabindex="0" aria-label="إجمالي العقود">
-                <div class="stat-icon cobalt"><i class="fas fa-file-contract" aria-hidden="true"></i></div>
-                <div class="stat-value" id="statTotal">0</div>
-                <div class="stat-label">إجمالي العقود</div>
-                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendTotal">0%</span></div>
-            </div>
-            <div class="stat-card animate-fade-up" onclick="showStatDetail('active')" role="button" tabindex="0" aria-label="العقود النشطة">
-                <div class="stat-icon green"><i class="fas fa-check-circle" aria-hidden="true"></i></div>
-                <div class="stat-value" id="statActive">0</div>
-                <div class="stat-label">عقود نشطة</div>
-                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendActive">0%</span></div>
-            </div>
-            <div class="stat-card animate-fade-up" onclick="showStatDetail('expiring')" role="button" tabindex="0" aria-label="العقود قاربة الانتهاء">
-                <div class="stat-icon gold"><i class="fas fa-clock" aria-hidden="true"></i></div>
-                <div class="stat-value" id="statExpiring">0</div>
-                <div class="stat-label">قارب الانتهاء</div>
-                <div class="stat-trend down"><i class="fas fa-arrow-down" aria-hidden="true"></i> <span id="trendExpiring">0%</span></div>
-            </div>
-            <div class="stat-card animate-fade-up" onclick="showStatDetail('total_value')" role="button" tabindex="0" aria-label="القيمة الإجمالية">
-                <div class="stat-icon ruby"><i class="fas fa-money-bill-wave" aria-hidden="true"></i></div>
-                <div class="stat-value" id="statTotalValue">0</div>
-                <div class="stat-label">القيمة الإجمالية</div>
-                <div class="stat-trend up"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span id="trendTotalValue">0%</span></div>
-            </div>
-        </section>
-
-        <!-- ============================================================
+   <section aria-label="إحصائيات العقود" class="stats-grid">
+    <div aria-label="إجمالي العقود" class="stat-card animate-fade-up" onclick="showStatDetail('total')" role="button" tabindex="0">
+     <div class="stat-icon cobalt">
+      <i aria-hidden="true" class="fas fa-file-contract">
+      </i>
+     </div>
+     <div class="stat-value" id="statTotal">
+      0
+     </div>
+     <div class="stat-label">
+      إجمالي العقود
+     </div>
+     <div class="stat-trend up">
+      <i aria-hidden="true" class="fas fa-arrow-up">
+      </i>
+      <span id="trendTotal">
+       0%
+      </span>
+     </div>
+    </div>
+    <div aria-label="العقود النشطة" class="stat-card animate-fade-up" onclick="showStatDetail('active')" role="button" tabindex="0">
+     <div class="stat-icon green">
+      <i aria-hidden="true" class="fas fa-check-circle">
+      </i>
+     </div>
+     <div class="stat-value" id="statActive">
+      0
+     </div>
+     <div class="stat-label">
+      عقود نشطة
+     </div>
+     <div class="stat-trend up">
+      <i aria-hidden="true" class="fas fa-arrow-up">
+      </i>
+      <span id="trendActive">
+       0%
+      </span>
+     </div>
+    </div>
+    <div aria-label="العقود قاربة الانتهاء" class="stat-card animate-fade-up" onclick="showStatDetail('expiring')" role="button" tabindex="0">
+     <div class="stat-icon gold">
+      <i aria-hidden="true" class="fas fa-clock">
+      </i>
+     </div>
+     <div class="stat-value" id="statExpiring">
+      0
+     </div>
+     <div class="stat-label">
+      قارب الانتهاء
+     </div>
+     <div class="stat-trend down">
+      <i aria-hidden="true" class="fas fa-arrow-down">
+      </i>
+      <span id="trendExpiring">
+       0%
+      </span>
+     </div>
+    </div>
+    <div aria-label="القيمة الإجمالية" class="stat-card animate-fade-up" onclick="showStatDetail('total_value')" role="button" tabindex="0">
+     <div class="stat-icon ruby">
+      <i aria-hidden="true" class="fas fa-money-bill-wave">
+      </i>
+     </div>
+     <div class="stat-value" id="statTotalValue">
+      0
+     </div>
+     <div class="stat-label">
+      القيمة الإجمالية
+     </div>
+     <div class="stat-trend up">
+      <i aria-hidden="true" class="fas fa-arrow-up">
+      </i>
+      <span id="trendTotalValue">
+       0%
+      </span>
+     </div>
+    </div>
+   </section>
+   <!-- ============================================================
         Charts
         ============================================================ -->
-        <div class="chart-grid-2" aria-label="المخططات التحليلية">
-            <div class="chart-container" role="img" aria-label="توزيع العقود حسب الحالة">
-                <canvas id="statusChart" aria-hidden="true"></canvas>
-            </div>
-            <div class="chart-container" role="img" aria-label="القيم الإجمالية حسب النوع">
-                <canvas id="valueChart" aria-hidden="true"></canvas>
-            </div>
-        </div>
-
-        <!-- ============================================================
+   <div aria-label="المخططات التحليلية" class="chart-grid-2">
+    <div aria-label="توزيع العقود حسب الحالة" class="chart-container" role="img">
+     <canvas aria-hidden="true" id="statusChart">
+     </canvas>
+    </div>
+    <div aria-label="القيم الإجمالية حسب النوع" class="chart-container" role="img">
+     <canvas aria-hidden="true" id="valueChart">
+     </canvas>
+    </div>
+   </div>
+   <!-- ============================================================
         Section Title + Pagination
         ============================================================ -->
-        <div class="section-title">
-            <h3>📋 قائمة العقود</h3>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <span class="count-badge" id="contractCount">0</span>
-                <span class="pagination-info" id="paginationInfo">صفحة 1 من 1</span>
-            </div>
-        </div>
-
-        <!-- ============================================================
+   <div class="section-title">
+    <h3>
+     📋 قائمة العقود
+    </h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <span class="count-badge" id="contractCount">
+      0
+     </span>
+     <span class="pagination-info" id="paginationInfo">
+      صفحة 1 من 1
+     </span>
+    </div>
+   </div>
+   <!-- ============================================================
         Alerts Container
         ============================================================ -->
-        <div class="alerts-container" id="alertsContainer" style="padding:0 16px 12px;" role="region" aria-label="التنبيهات"></div>
-
-        <!-- ============================================================
+   <div aria-label="التنبيهات" class="alerts-container" id="alertsContainer" role="region" style="padding:0 16px 12px;">
+   </div>
+   <!-- ============================================================
         Cards Container
         ============================================================ -->
-        <div class="cards-container" id="cardsContainer" role="list" aria-label="قائمة العقود"></div>
-
-        <!-- ============================================================
+   <div aria-label="قائمة العقود" class="cards-container" id="cardsContainer" role="list">
+   </div>
+   <!-- ============================================================
         Pagination
         ============================================================ -->
-        <div class="pagination-bar" id="paginationBar" role="navigation" aria-label="تصفح الصفحات">
-            <button id="prevPage" onclick="changePage(-1)" aria-label="الصفحة السابقة" disabled>
-                <i class="fas fa-chevron-right" aria-hidden="true"></i> السابقة
-            </button>
-            <span id="pageNumbers"></span>
-            <button id="nextPage" onclick="changePage(1)" aria-label="الصفحة التالية">
-                التالية <i class="fas fa-chevron-left" aria-hidden="true"></i>
-            </button>
-        </div>
-
-        <!-- ============================================================
+   <div aria-label="تصفح الصفحات" class="pagination-bar" id="paginationBar" role="navigation">
+    <button aria-label="الصفحة السابقة" disabled id="prevPage" onclick="changePage(-1)">
+     <i aria-hidden="true" class="fas fa-chevron-right">
+     </i>
+     السابقة
+    </button>
+    <span id="pageNumbers">
+    </span>
+    <button aria-label="الصفحة التالية" id="nextPage" onclick="changePage(1)">
+     التالية
+     <i aria-hidden="true" class="fas fa-chevron-left">
+     </i>
+    </button>
+   </div>
+   <!-- ============================================================
         FAB
         ============================================================ -->
-        <button class="fab" onclick="openAddModal()" aria-label="إضافة عقد جديد" title="إضافة عقد جديد">
-            <i class="fas fa-plus" aria-hidden="true"></i>
-            <span class="sr-only">إضافة عقد جديد</span>
-        </button>
-
-        <!-- ============================================================
+   <button aria-label="إضافة عقد جديد" class="fab" onclick="openAddModal()" title="إضافة عقد جديد">
+    <i aria-hidden="true" class="fas fa-plus">
+    </i>
+    <span class="sr-only">
+     إضافة عقد جديد
+    </span>
+   </button>
+   <!-- ============================================================
         Sidebar
         ============================================================ -->
-        <div class="sidebar-toggle" id="sidebarToggle" role="button" tabindex="0" aria-label="فتح القائمة الجانبية">
-            <i class="fas fa-bars" aria-hidden="true"></i>
-        </div>
-        <nav class="sidebar" id="sidebar" role="navigation" aria-label="القائمة الجانبية">
-            <div class="sidebar-content">
-                <button class="sidebar-btn" onclick="handleSidebarAction('add')" aria-label="إضافة عقد">
-                    <i class="fas fa-plus" aria-hidden="true"></i> <span>إضافة</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('save')" aria-label="حفظ">
-                    <i class="fas fa-save" aria-hidden="true"></i> <span>حفظ</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('search')" aria-label="بحث">
-                    <i class="fas fa-search" aria-hidden="true"></i> <span>استعلام</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('delete')" aria-label="حذف">
-                    <i class="fas fa-trash" aria-hidden="true"></i> <span>حذف</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('export')" aria-label="تصدير">
-                    <i class="fas fa-file-export" aria-hidden="true"></i> <span>تصدير</span>
-                </button>
-                <button class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')" aria-label="المستشار الذكي">
-                    <i class="fas fa-robot" aria-hidden="true"></i> <span>AI</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('backup')" aria-label="نسخ احتياطي">
-                    <i class="fas fa-database" aria-hidden="true"></i> <span>نسخ احتياطي</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('audit')" aria-label="سجل التغييرات">
-                    <i class="fas fa-history" aria-hidden="true"></i> <span>سجل</span>
-                </button>
-                <button class="sidebar-btn" onclick="handleSidebarAction('home')" aria-label="الرئيسية">
-                    <i class="fas fa-home" aria-hidden="true"></i> <span>رجوع</span>
-                </button>
-            </div>
-        </nav>
-
-        <!-- ============================================================
+   <div aria-label="فتح القائمة الجانبية" class="sidebar-toggle" id="sidebarToggle" role="button" tabindex="0">
+    <i aria-hidden="true" class="fas fa-bars">
+    </i>
+   </div>
+   <nav aria-label="القائمة الجانبية" class="sidebar" id="sidebar" role="navigation">
+    <div class="sidebar-content">
+     <button aria-label="إضافة عقد" class="sidebar-btn" onclick="handleSidebarAction('add')">
+      <i aria-hidden="true" class="fas fa-plus">
+      </i>
+      <span>
+       إضافة
+      </span>
+     </button>
+     <button aria-label="حفظ" class="sidebar-btn" onclick="handleSidebarAction('save')">
+      <i aria-hidden="true" class="fas fa-save">
+      </i>
+      <span>
+       حفظ
+      </span>
+     </button>
+     <button aria-label="بحث" class="sidebar-btn" onclick="handleSidebarAction('search')">
+      <i aria-hidden="true" class="fas fa-search">
+      </i>
+      <span>
+       استعلام
+      </span>
+     </button>
+     <button aria-label="حذف" class="sidebar-btn" onclick="handleSidebarAction('delete')">
+      <i aria-hidden="true" class="fas fa-trash">
+      </i>
+      <span>
+       حذف
+      </span>
+     </button>
+     <button aria-label="تصدير" class="sidebar-btn" onclick="handleSidebarAction('export')">
+      <i aria-hidden="true" class="fas fa-file-export">
+      </i>
+      <span>
+       تصدير
+      </span>
+     </button>
+     <button aria-label="المستشار الذكي" class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')">
+      <i aria-hidden="true" class="fas fa-robot">
+      </i>
+      <span>
+       AI
+      </span>
+     </button>
+     <button aria-label="نسخ احتياطي" class="sidebar-btn" onclick="handleSidebarAction('backup')">
+      <i aria-hidden="true" class="fas fa-database">
+      </i>
+      <span>
+       نسخ احتياطي
+      </span>
+     </button>
+     <button aria-label="سجل التغييرات" class="sidebar-btn" onclick="handleSidebarAction('audit')">
+      <i aria-hidden="true" class="fas fa-history">
+      </i>
+      <span>
+       سجل
+      </span>
+     </button>
+     <button aria-label="الرئيسية" class="sidebar-btn" onclick="handleSidebarAction('home')">
+      <i aria-hidden="true" class="fas fa-home">
+      </i>
+      <span>
+       رجوع
+      </span>
+     </button>
+    </div>
+   </nav>
+   <!-- ============================================================
         Bottom Navigation
         ============================================================ -->
-        <nav class="bottom-nav" role="navigation" aria-label="القائمة السفلية">
-            <button class="nav-item" onclick="openReport('contracts_summary')" aria-label="ملخص العقود">
-                <i class="fas fa-file-contract" aria-hidden="true"></i>
-                <span>ملخص</span>
-            </button>
-            <button class="nav-item" onclick="openReport('by_party')" aria-label="حسب الطرف">
-                <i class="fas fa-users" aria-hidden="true"></i>
-                <span>حسب الطرف</span>
-            </button>
-            <button class="nav-item" onclick="openReport('expiry_analysis')" aria-label="تحليل الانتهاء">
-                <i class="fas fa-calendar-times" aria-hidden="true"></i>
-                <span>تحليل</span>
-            </button>
-            <button class="nav-item active" onclick="openReport('contracts')" aria-label="عرض الكل">
-                <i class="fas fa-list" aria-hidden="true"></i>
-                <span>عرض الكل</span>
-            </button>
-            <button class="nav-item" onclick="openReport('value_analysis')" aria-label="تحليل القيم">
-                <i class="fas fa-chart-bar" aria-hidden="true"></i>
-                <span>القيم</span>
-            </button>
-        </nav>
-
-    </main>
-
-    <!-- ============================================================
+   <nav aria-label="القائمة السفلية" class="bottom-nav" role="navigation">
+    <button aria-label="ملخص العقود" class="nav-item" onclick="openReport('contracts_summary')">
+     <i aria-hidden="true" class="fas fa-file-contract">
+     </i>
+     <span>
+      ملخص
+     </span>
+    </button>
+    <button aria-label="حسب الطرف" class="nav-item" onclick="openReport('by_party')">
+     <i aria-hidden="true" class="fas fa-users">
+     </i>
+     <span>
+      حسب الطرف
+     </span>
+    </button>
+    <button aria-label="تحليل الانتهاء" class="nav-item" onclick="openReport('expiry_analysis')">
+     <i aria-hidden="true" class="fas fa-calendar-times">
+     </i>
+     <span>
+      تحليل
+     </span>
+    </button>
+    <button aria-label="عرض الكل" class="nav-item active" onclick="openReport('contracts')">
+     <i aria-hidden="true" class="fas fa-list">
+     </i>
+     <span>
+      عرض الكل
+     </span>
+    </button>
+    <button aria-label="تحليل القيم" class="nav-item" onclick="openReport('value_analysis')">
+     <i aria-hidden="true" class="fas fa-chart-bar">
+     </i>
+     <span>
+      القيم
+     </span>
+    </button>
+   </nav>
+  </main>
+  <!-- ============================================================
     Toast
     ============================================================ -->
-    <div class="toast" id="toast" role="alert" aria-live="assertive">
-        <div class="toast-icon"><i class="fas fa-check" aria-hidden="true"></i></div>
-        <span id="toastMessage">تمت العملية بنجاح</span>
-    </div>
-
-    <!-- ============================================================
+  <div aria-live="assertive" class="toast" id="toast" role="alert">
+   <div class="toast-icon">
+    <i aria-hidden="true" class="fas fa-check">
+    </i>
+   </div>
+   <span id="toastMessage">
+    تمت العملية بنجاح
+   </span>
+  </div>
+  <!-- ============================================================
     MODAL: إضافة / تعديل عقد
     ============================================================ -->
-    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="modalTitle">➕ إضافة عقد جديد</h3>
-                <button class="modal-close" onclick="closeModal()" aria-label="إغلاق النافذة">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <form id="contractForm" onsubmit="return false;" aria-label="نموذج العقد">
-                <input type="hidden" id="editId" value="0">
-
-                <div class="form-group">
-                    <label class="form-label" for="contractCode">كود العقد * <span style="color:var(--error);">(للقراءة فقط)</span></label>
-                    <input type="text" class="form-input" id="contractCode" placeholder="سيتولى النظام إنشاء الكود تلقائياً" readonly aria-readonly="true">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="contractName">اسم العقد *</label>
-                    <input type="text" class="form-input" id="contractName" placeholder="أدخل اسم العقد" required aria-required="true">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="partyId">الطرف / المورد *</label>
-                    <select class="form-input" id="partyId" required aria-required="true">
-                        <option value="">اختر الطرف</option>
-                    </select>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="contractType">نوع العقد *</label>
-                        <select class="form-input" id="contractType" required aria-required="true">
-                            <option value="purchase">شراء</option>
-                            <option value="sale">بيع</option>
-                            <option value="service">خدمات</option>
-                            <option value="rental">إيجار</option>
-                            <option value="maintenance">صيانة</option>
-                            <option value="other">أخرى</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="contractStatus">الحالة *</label>
-                        <select class="form-input" id="contractStatus" required aria-required="true">
-                            <option value="active">نشط</option>
-                            <option value="draft">مسودة</option>
-                            <option value="terminated">ملغى</option>
-                            <option value="expired">منتهي</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="startDate">📅 تاريخ البداية *</label>
-                        <input type="date" class="form-input" id="startDate" required aria-required="true">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="endDate">📅 تاريخ النهاية *</label>
-                        <input type="date" class="form-input" id="endDate" required aria-required="true">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label" for="totalValue">💵 القيمة الإجمالية</label>
-                        <input type="number" step="0.01" class="form-input" id="totalValue" placeholder="0.00">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="currencyId">💰 العملة</label>
-                        <select class="form-input" id="currencyId">
-                            <option value="">اختر العملة</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="autoRenew">التجديد التلقائي</label>
-                    <select class="form-input" id="autoRenew">
-                        <option value="0">لا</option>
-                        <option value="1">نعم</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="terms">شروط وأحكام</label>
-                    <textarea class="form-input" id="terms" rows="3" placeholder="أدخل شروط وأحكام العقد..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="specialConditions">شروط خاصة</label>
-                    <textarea class="form-input" id="specialConditions" rows="2" placeholder="أدخل الشروط الخاصة..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="notes">ملاحظات</label>
-                    <textarea class="form-input" id="notes" rows="2" placeholder="ملاحظات إضافية..."></textarea>
-                </div>
-
-                <!-- المرفقات -->
-                <div class="form-group">
-                    <label class="form-label">📎 المرفقات</label>
-                    <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="اسحب الملفات هنا أو انقر للاختيار">
-                        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
-                        <span>اسحب الملفات هنا أو انقر للاختيار</span>
-                        <input type="file" id="fileInput" multiple style="display:none;" aria-label="اختر ملفات مرفقة">
-                    </div>
-                    <div class="file-list" id="fileList" role="list" aria-label="قائمة الملفات المرفقة"></div>
-                </div>
-
-                <button type="button" class="submit-btn" onclick="saveContract()">
-                    <i class="fas fa-save" aria-hidden="true"></i> حفظ العقد
-                </button>
-            </form>
-        </div>
+  <div aria-labelledby="modalTitle" aria-modal="true" class="modal-overlay" id="modalOverlay" onclick="closeModal(event)" role="dialog">
+   <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="modalTitle">
+      ➕ إضافة عقد جديد
+     </h3>
+     <button aria-label="إغلاق النافذة" class="modal-close" onclick="closeModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <form aria-label="نموذج العقد" id="contractForm" onsubmit="return false;">
+     <input id="editId" type="hidden" value="0">
+     <div class="form-group">
+      <label class="form-label" for="contractCode">
+       كود العقد *
+       <span style="color:var(--error);">
+        (للقراءة فقط)
+       </span>
+      </label>
+      <input aria-readonly="true" class="form-input" id="contractCode" placeholder="سيتولى النظام إنشاء الكود تلقائياً" readonly type="text">
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="contractName">
+       اسم العقد *
+      </label>
+      <input aria-required="true" class="form-input" id="contractName" placeholder="أدخل اسم العقد" required="" type="text">
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="partyId">
+       الطرف / المورد *
+      </label>
+      <select aria-required="true" class="form-input" id="partyId" required="">
+       <option value="">
+        اختر الطرف
+       </option>
+      </select>
+     </div>
+     <div class="form-row">
+      <div class="form-group">
+       <label class="form-label" for="contractType">
+        نوع العقد *
+       </label>
+       <select aria-required="true" class="form-input" id="contractType" required="">
+        <option value="purchase">
+         شراء
+        </option>
+        <option value="sale">
+         بيع
+        </option>
+        <option value="service">
+         خدمات
+        </option>
+        <option value="rental">
+         إيجار
+        </option>
+        <option value="maintenance">
+         صيانة
+        </option>
+        <option value="other">
+         أخرى
+        </option>
+       </select>
+      </div>
+      <div class="form-group">
+       <label class="form-label" for="contractStatus">
+        الحالة *
+       </label>
+       <select aria-required="true" class="form-input" id="contractStatus" required="">
+        <option value="active">
+         نشط
+        </option>
+        <option value="draft">
+         مسودة
+        </option>
+        <option value="terminated">
+         ملغى
+        </option>
+        <option value="expired">
+         منتهي
+        </option>
+       </select>
+      </div>
+     </div>
+     <div class="form-row">
+      <div class="form-group">
+       <label class="form-label" for="startDate">
+        📅 تاريخ البداية *
+       </label>
+       <input aria-required="true" class="form-input" id="startDate" required="" type="date">
+      </div>
+      <div class="form-group">
+       <label class="form-label" for="endDate">
+        📅 تاريخ النهاية *
+       </label>
+       <input aria-required="true" class="form-input" id="endDate" required="" type="date">
+      </div>
+     </div>
+     <div class="form-row">
+      <div class="form-group">
+       <label class="form-label" for="totalValue">
+        💵 القيمة الإجمالية
+       </label>
+       <input class="form-input" id="totalValue" placeholder="0.00" step="0.01" type="number">
+      </div>
+      <div class="form-group">
+       <label class="form-label" for="currencyId">
+        💰 العملة
+       </label>
+       <select class="form-input" id="currencyId">
+        <option value="">
+         اختر العملة
+        </option>
+       </select>
+      </div>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="autoRenew">
+       التجديد التلقائي
+      </label>
+      <select class="form-input" id="autoRenew">
+       <option value="0">
+        لا
+       </option>
+       <option value="1">
+        نعم
+       </option>
+      </select>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="terms">
+       شروط وأحكام
+      </label>
+      <textarea class="form-input" id="terms" placeholder="أدخل شروط وأحكام العقد..." rows="3"></textarea>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="specialConditions">
+       شروط خاصة
+      </label>
+      <textarea class="form-input" id="specialConditions" placeholder="أدخل الشروط الخاصة..." rows="2"></textarea>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="notes">
+       ملاحظات
+      </label>
+      <textarea class="form-input" id="notes" placeholder="ملاحظات إضافية..." rows="2"></textarea>
+     </div>
+     <!-- المرفقات -->
+     <div class="form-group">
+      <label class="form-label">
+       📎 المرفقات
+      </label>
+      <div aria-label="اسحب الملفات هنا أو انقر للاختيار" class="dropzone" id="dropzone" role="button" tabindex="0">
+       <i aria-hidden="true" class="fas fa-cloud-upload-alt">
+       </i>
+       <span>
+        اسحب الملفات هنا أو انقر للاختيار
+       </span>
+       <input aria-label="اختر ملفات مرفقة" id="fileInput" multiple style="display:none;" type="file">
+      </div>
+      <div aria-label="قائمة الملفات المرفقة" class="file-list" id="fileList" role="list">
+      </div>
+     </div>
+     <button class="submit-btn" onclick="saveContract()" type="button">
+      <i aria-hidden="true" class="fas fa-save">
+      </i>
+      حفظ العقد
+     </button>
+    </form>
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: التقارير
     ============================================================ -->
-    <div class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
-        <div class="report-modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="reportModalTitle">📊 تقرير العقود</h3>
-                <button class="modal-close" onclick="closeReportModal()" aria-label="إغلاق التقرير">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div class="report-filter-row">
-                <div class="form-group">
-                    <label class="form-label" for="reportFrom">📅 من تاريخ</label>
-                    <input type="date" class="form-input" id="reportFrom">
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="reportTo">📅 إلى تاريخ</label>
-                    <input type="date" class="form-input" id="reportTo">
-                </div>
-            </div>
-            <div class="report-filter-row">
-                <div class="form-group">
-                    <label class="form-label" for="reportStatus">📊 الحالة</label>
-                    <select class="form-input" id="reportStatus">
-                        <option value="">الكل</option>
-                        <option value="active">نشط</option>
-                        <option value="expired">منتهي</option>
-                        <option value="expiring">قارب الانتهاء</option>
-                        <option value="terminated">ملغى</option>
-                        <option value="draft">مسودة</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" for="reportExtra">📋 نوع التقرير</label>
-                    <select class="form-input" id="reportExtra">
-                        <option value="">الكل</option>
-                        <option value="detailed">مفصل</option>
-                        <option value="summary">ملخص</option>
-                        <option value="stats">إحصائيات</option>
-                    </select>
-                </div>
-            </div>
-            <div class="report-actions" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
-                <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;">
-                    <i class="fas fa-cog" aria-hidden="true"></i> توليد التقرير
-                </button>
-                <button class="submit-btn" onclick="exportReport()" style="flex:1;min-width:100px;background:var(--cobalt);">
-                    <i class="fas fa-file-export" aria-hidden="true"></i> تصدير
-                </button>
-                <button class="submit-btn" onclick="closeReportModal()" style="flex:0 0 auto;background:var(--text-muted);">
-                    <i class="fas fa-times" aria-hidden="true"></i> إلغاء
-                </button>
-            </div>
-            <div class="report-results" id="reportResults" style="margin-top:12px;max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;">
-                <div class="empty-state">
-                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i>
-                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
-                </div>
-            </div>
-        </div>
+  <div aria-labelledby="reportModalTitle" aria-modal="true" class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)" role="dialog">
+   <div class="report-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="reportModalTitle">
+      📊 تقرير العقود
+     </h3>
+     <button aria-label="إغلاق التقرير" class="modal-close" onclick="closeReportModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <div class="report-filter-row">
+     <div class="form-group">
+      <label class="form-label" for="reportFrom">
+       📅 من تاريخ
+      </label>
+      <input class="form-input" id="reportFrom" type="date">
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="reportTo">
+       📅 إلى تاريخ
+      </label>
+      <input class="form-input" id="reportTo" type="date">
+     </div>
+    </div>
+    <div class="report-filter-row">
+     <div class="form-group">
+      <label class="form-label" for="reportStatus">
+       📊 الحالة
+      </label>
+      <select class="form-input" id="reportStatus">
+       <option value="">
+        الكل
+       </option>
+       <option value="active">
+        نشط
+       </option>
+       <option value="expired">
+        منتهي
+       </option>
+       <option value="expiring">
+        قارب الانتهاء
+       </option>
+       <option value="terminated">
+        ملغى
+       </option>
+       <option value="draft">
+        مسودة
+       </option>
+      </select>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="reportExtra">
+       📋 نوع التقرير
+      </label>
+      <select class="form-input" id="reportExtra">
+       <option value="">
+        الكل
+       </option>
+       <option value="detailed">
+        مفصل
+       </option>
+       <option value="summary">
+        ملخص
+       </option>
+       <option value="stats">
+        إحصائيات
+       </option>
+      </select>
+     </div>
+    </div>
+    <div class="report-actions" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+     <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;">
+      <i aria-hidden="true" class="fas fa-cog">
+      </i>
+      توليد التقرير
+     </button>
+     <button class="submit-btn" onclick="exportReport()" style="flex:1;min-width:100px;background:var(--cobalt);">
+      <i aria-hidden="true" class="fas fa-file-export">
+      </i>
+      تصدير
+     </button>
+     <button class="submit-btn" onclick="closeReportModal()" style="flex:0 0 auto;background:var(--text-muted);">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+      إلغاء
+     </button>
+    </div>
+    <div class="report-results" id="reportResults" style="margin-top:12px;max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;">
+     <div class="empty-state">
+      <i aria-hidden="true" class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;">
+      </i>
+      <p>
+       اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"
+      </p>
+     </div>
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: تفاصيل العقد
     ============================================================ -->
-    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog" aria-modal="true" aria-labelledby="detailsTitle">
-        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-            <!-- يتم تعبئتها عبر JavaScript -->
-        </div>
-    </div>
-
-    <!-- ============================================================
+  <div aria-labelledby="detailsTitle" aria-modal="true" class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog">
+   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+    <!-- يتم تعبئتها عبر JavaScript -->
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: المستشار الذكي
     ============================================================ -->
-    <div class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
-        <div class="ai-modal-content" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="aiTitle">🤖 المستشار الذكي – العقود</h3>
-                <button class="modal-close" onclick="closeAIModal()" aria-label="إغلاق المستشار الذكي">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div id="aiContent" style="padding:6px 0;"></div>
-        </div>
+  <div aria-labelledby="aiTitle" aria-modal="true" class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)" role="dialog">
+   <div class="ai-modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="aiTitle">
+      🤖 المستشار الذكي – العقود
+     </h3>
+     <button aria-label="إغلاق المستشار الذكي" class="modal-close" onclick="closeAIModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <div id="aiContent" style="padding:6px 0;">
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: تصدير
     ============================================================ -->
-    <div class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
-        <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="exportTitle">📤 تصدير البيانات</h3>
-                <button class="modal-close" onclick="closeExportModal()" aria-label="إغلاق التصدير">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <button class="submit-btn" onclick="exportData('xlsx')" style="background:var(--cobalt);">Excel (XLSX)</button>
-                <button class="submit-btn" onclick="exportData('pdf')" style="background:var(--ruby);">PDF</button>
-                <button class="submit-btn" onclick="exportData('json')" style="background:var(--gold);color:#000;">JSON</button>
-                <button class="submit-btn" onclick="exportData('csv')" style="background:var(--success);">CSV</button>
-            </div>
-            <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
-                <i class="fas fa-info-circle" aria-hidden="true"></i> سيتم تصدير جميع العقود مع المرفقات والبيانات المرتبطة
-            </div>
-        </div>
+  <div aria-labelledby="exportTitle" aria-modal="true" class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog">
+   <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="exportTitle">
+      📤 تصدير البيانات
+     </h3>
+     <button aria-label="إغلاق التصدير" class="modal-close" onclick="closeExportModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+     <button class="submit-btn" onclick="exportData('xlsx')" style="background:var(--cobalt);">
+      Excel (XLSX)
+     </button>
+     <button class="submit-btn" onclick="exportData('pdf')" style="background:var(--ruby);">
+      PDF
+     </button>
+     <button class="submit-btn" onclick="exportData('json')" style="background:var(--gold);color:#000;">
+      JSON
+     </button>
+     <button class="submit-btn" onclick="exportData('csv')" style="background:var(--success);">
+      CSV
+     </button>
+    </div>
+    <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
+     <i aria-hidden="true" class="fas fa-info-circle">
+     </i>
+     سيتم تصدير جميع العقود مع المرفقات والبيانات المرتبطة
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: نسخ احتياطي
     ============================================================ -->
-    <div class="modal-overlay" id="backupModal" onclick="closeBackupModal(event)" role="dialog" aria-modal="true" aria-labelledby="backupTitle">
-        <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="backupTitle">💾 النسخ الاحتياطي</h3>
-                <button class="modal-close" onclick="closeBackupModal()" aria-label="إغلاق النسخ الاحتياطي">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:10px;">
-                <button class="submit-btn" onclick="createBackup()" style="background:var(--cobalt);">
-                    <i class="fas fa-database" aria-hidden="true"></i> إنشاء نسخة احتياطية يدوية
-                </button>
-                <button class="submit-btn" onclick="restoreBackup()" style="background:var(--ruby);">
-                    <i class="fas fa-undo" aria-hidden="true"></i> استعادة من نسخة احتياطية
-                </button>
-                <input type="file" id="restoreFileInput" accept=".json,.db" style="display:none;" aria-label="اختر ملف النسخة الاحتياطية">
-                <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;">
-                    <i class="fas fa-info-circle" aria-hidden="true"></i> يتم إنشاء نسخة احتياطية يومية تلقائياً عند الساعة 2:00 صباحاً
-                </div>
-                <div id="backupList" style="max-height:150px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;font-size:0.75rem;">
-                    <div style="color:var(--text-muted);text-align:center;">جاري تحميل قائمة النسخ...</div>
-                </div>
-            </div>
-        </div>
+  <div aria-labelledby="backupTitle" aria-modal="true" class="modal-overlay" id="backupModal" onclick="closeBackupModal(event)" role="dialog">
+   <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="backupTitle">
+      💾 النسخ الاحتياطي
+     </h3>
+     <button aria-label="إغلاق النسخ الاحتياطي" class="modal-close" onclick="closeBackupModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <div style="display:flex;flex-direction:column;gap:10px;">
+     <button class="submit-btn" onclick="createBackup()" style="background:var(--cobalt);">
+      <i aria-hidden="true" class="fas fa-database">
+      </i>
+      إنشاء نسخة احتياطية يدوية
+     </button>
+     <button class="submit-btn" onclick="restoreBackup()" style="background:var(--ruby);">
+      <i aria-hidden="true" class="fas fa-undo">
+      </i>
+      استعادة من نسخة احتياطية
+     </button>
+     <input accept=".json,.db" aria-label="اختر ملف النسخة الاحتياطية" id="restoreFileInput" style="display:none;" type="file">
+     <div style="font-size:0.75rem;color:var(--text-muted);text-align:center;">
+      <i aria-hidden="true" class="fas fa-info-circle">
+      </i>
+      يتم إنشاء نسخة احتياطية يومية تلقائياً عند الساعة 2:00 صباحاً
+     </div>
+     <div id="backupList" style="max-height:150px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;font-size:0.75rem;">
+      <div style="color:var(--text-muted);text-align:center;">
+       جاري تحميل قائمة النسخ...
+      </div>
+     </div>
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================
     MODAL: سجل التغييرات (Audit Trail)
     ============================================================ -->
-    <div class="modal-overlay" id="auditModal" onclick="closeAuditModal(event)" role="dialog" aria-modal="true" aria-labelledby="auditTitle">
-        <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title" id="auditTitle">📜 سجل التغييرات</h3>
-                <button class="modal-close" onclick="closeAuditModal()" aria-label="إغلاق السجل">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div id="auditContent" style="max-height:400px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;">
-                <div style="color:var(--text-muted);text-align:center;">جاري تحميل سجل التغييرات...</div>
-            </div>
-        </div>
+  <div aria-labelledby="auditTitle" aria-modal="true" class="modal-overlay" id="auditModal" onclick="closeAuditModal(event)" role="dialog">
+   <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+     <h3 class="modal-title" id="auditTitle">
+      📜 سجل التغييرات
+     </h3>
+     <button aria-label="إغلاق السجل" class="modal-close" onclick="closeAuditModal()">
+      <i aria-hidden="true" class="fas fa-times">
+      </i>
+     </button>
     </div>
-
-    <!-- ============================================================
+    <div id="auditContent" style="max-height:400px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;">
+     <div style="color:var(--text-muted);text-align:center;">
+      جاري تحميل سجل التغييرات...
+     </div>
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================
     JavaScript المتكامل
     ============================================================ -->
-    <script>
-        /* ============================================================
+  <script>
+   /* ============================================================
            0. RBAC – دور المستخدم (افتراضي Admin)
            ============================================================ */
         const ROLES = {
@@ -3771,7 +4059,6 @@
         window.requirePermission = requirePermission;
         window.ROLES = ROLES;
         window.currentUserRole = currentUserRole;
-    </script>
-
-</body>
+  </script>
+ </body>
 </html>

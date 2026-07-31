@@ -1,18 +1,19 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>نظام إدارة محطات الوقود – الحركات المخزنية</title>
-  
+<html dir="rtl" lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <title>
+   نظام إدارة محطات الوقود – الحركات المخزنية
+  </title>
   <!-- المكتبات المطلوبة من CDN -->
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  
+  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/bootstrap.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+  </script>
   <style>
-    :root {
+   :root {
       --bg-color: #f8fafc;
       --card-color: #ffffff;
       --primary-color: #2563eb;
@@ -777,421 +778,722 @@
       100% { transform: rotate(360deg); }
     }
   </style>
-</head>
-<body>
-
-<!-- مؤشر التحميل -->
-<div class="loading-indicator" id="loadingIndicator">
-  <div class="spinner"></div>
-</div>
-
-<!-- الشريط العلوي الثابت -->
-<div class="top-bar">
-  <div class="page-title">
-    <span>📊 الحركات المخزنية</span>
-    <div class="theme-toggle">
-      <i class="fas fa-moon" id="moonIcon" onclick="toggleTheme('dark')"></i>
-      <i class="fas fa-sun" id="sunIcon" onclick="toggleTheme('light')" style="display: none;"></i>
-    </div>
+ </head>
+ <body>
+  <!-- مؤشر التحميل -->
+  <div class="loading-indicator" id="loadingIndicator">
+   <div class="spinner">
+   </div>
   </div>
-  <div class="action-buttons">
+  <!-- الشريط العلوي الثابت -->
+  <div class="top-bar">
+   <div class="page-title">
+    <span>
+     📊 الحركات المخزنية
+    </span>
+    <div class="theme-toggle">
+     <i class="fas fa-moon" id="moonIcon" onclick="toggleTheme('dark')">
+     </i>
+     <i class="fas fa-sun" id="sunIcon" onclick="toggleTheme('light')" style="display: none;">
+     </i>
+    </div>
+   </div>
+   <div class="action-buttons">
     <button class="btn btn-primary" onclick="showCreateModal()">
-      <i class="fas fa-plus-circle"></i> ➕ حركة جديدة
+     <i class="fas fa-plus-circle">
+     </i>
+     ➕ حركة جديدة
     </button>
     <button class="btn btn-back" onclick="goToDashboard()">
-      <i class="fas fa-arrow-circle-right"></i> ↩️ رجوع
+     <i class="fas fa-arrow-circle-right">
+     </i>
+     ↩️ رجوع
     </button>
+   </div>
   </div>
-</div>
-
-<div class="app-container">
-  <main class="main-content">
-
+  <div class="app-container">
+   <main class="main-content">
     <!-- التبويبات -->
     <div class="nav-tabs">
-      <div class="nav-tab active" data-tab="movements" onclick="switchTab('movements')">📈 الحركات</div>
-      <div class="nav-tab" data-tab="reports" onclick="switchTab('reports')">📋 التقارير</div>
-      <div class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">📊 التحليلات</div>
+     <div class="nav-tab active" data-tab="movements" onclick="switchTab('movements')">
+      📈 الحركات
+     </div>
+     <div class="nav-tab" data-tab="reports" onclick="switchTab('reports')">
+      📋 التقارير
+     </div>
+     <div class="nav-tab" data-tab="analytics" onclick="switchTab('analytics')">
+      📊 التحليلات
+     </div>
     </div>
-
     <!-- ========== تبويب الحركات ========== -->
     <div class="tab-content active" id="movements-tab">
-      <!-- إحصائيات -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value" id="total-movements">0</div>
-          <div class="stat-label">📊 إجمالي الحركات</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value numeric" id="total-value">0.00</div>
-          <div class="stat-label">💰 القيمة الإجمالية</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="today-movements">0</div>
-          <div class="stat-label">📅 حركات اليوم</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="pending-count">0</div>
-          <div class="stat-label">⏳ بانتظار المراجعة</div>
-        </div>
+     <!-- إحصائيات -->
+     <div class="stats-grid">
+      <div class="stat-card">
+       <div class="stat-value" id="total-movements">
+        0
+       </div>
+       <div class="stat-label">
+        📊 إجمالي الحركات
+       </div>
       </div>
-
-      <!-- فلترة -->
-      <div class="form-container">
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">🔍 بحث بالمنتج</label>
-            <input type="text" class="form-control" id="search-product" placeholder="اسم المنتج أو الباركود">
-          </div>
-          <div class="form-group">
-            <label class="form-label">📝 نوع الحركة</label>
-            <select class="form-control" id="filter-type">
-              <option value="">جميع الأنواع</option>
-              <option value="in">📥 دخول مخزني</option>
-              <option value="out">📤 خروج مخزني</option>
-              <option value="return_customer">🔄 إرجاع من عميل</option>
-              <option value="return_supplier">🔄 إرجاع لمورد</option>
-              <option value="waste">🗑️ هالك</option>
-              <option value="transfer">🔄 تحويل بين مستودعات</option>
-              <option value="adjustment">⚖️ تسوية مخزنية</option>
-              <option value="stocktake">📋 جرد</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row-compact">
-          <div class="form-group-half">
-            <label class="form-label">📅 من تاريخ</label>
-            <input type="date" class="form-control numeric" id="filter-from">
-          </div>
-          <div class="form-group-half">
-            <label class="form-label">📅 إلى تاريخ</label>
-            <input type="date" class="form-control numeric" id="filter-to">
-          </div>
-        </div>
-        <div class="form-row-compact">
-          <div class="form-group-half">
-            <label class="form-label">🏢 المستودع</label>
-            <select class="form-control" id="filter-warehouse">
-              <option value="">جميع المستودعات</option>
-            </select>
-          </div>
-          <div class="form-group-half">
-            <label class="form-label">📊 الحالة</label>
-            <select class="form-control" id="filter-status">
-              <option value="">جميع الحالات</option>
-              <option value="completed">✅ مكتمل</option>
-              <option value="pending">⏳ قيد الانتظار</option>
-              <option value="cancelled">❌ ملغى</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row-compact">
-          <div class="form-group-half">
-            <label class="form-label">🏭 المورد</label>
-            <select class="form-control" id="filter-supplier">
-              <option value="">جميع الموردين</option>
-            </select>
-          </div>
-          <div class="form-group-half">
-            <label class="form-label">👥 العميل</label>
-            <select class="form-control" id="filter-customer">
-              <option value="">جميع العملاء</option>
-            </select>
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
-          <button class="btn btn-primary" onclick="applyFilters()"><i class="fas fa-filter"></i> 🔍 تطبيق الفلترة</button>
-          <button class="btn btn-secondary" onclick="resetFilters()"><i class="fas fa-times"></i> 🗑️ إعادة الضبط</button>
-        </div>
+      <div class="stat-card">
+       <div class="stat-value numeric" id="total-value">
+        0.00
+       </div>
+       <div class="stat-label">
+        💰 القيمة الإجمالية
+       </div>
       </div>
-
-      <!-- جدول الحركات -->
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>#️⃣ #</th>
-              <th>📅 التاريخ</th>
-              <th>🛒 المنتج</th>
-              <th>📦 الكمية</th>
-              <th>📝 النوع</th>
-              <th>🏢 المستودع</th>
-              <th>🔄 المصدر/الهدف</th>
-              <th>👥 المورد/العميل</th>
-              <th>💰 السعر</th>
-              <th>💵 القيمة</th>
-              <th>📊 الحالة</th>
-              <th>🛠️ الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody id="movements-table-body">
-            <tr><td colspan="12" class="text-center">⏳ جاري التحميل...</td></tr>
-          </tbody>
-        </table>
+      <div class="stat-card">
+       <div class="stat-value" id="today-movements">
+        0
+       </div>
+       <div class="stat-label">
+        📅 حركات اليوم
+       </div>
       </div>
-
-      <!-- التصفح -->
-      <div style="margin-top: 15px; text-align: center;">
-        <nav>
-          <ul class="pagination" id="pagination-container">
-            <li class="page-item disabled"><a class="page-link" href="#">⬅️ السابق</a></li>
-            <li class="page-item active"><a class="page-link" href="#">1</a></li>
-            <li class="page-item"><a class="page-link" href="#">2</a></li>
-            <li class="page-item"><a class="page-link" href="#">3</a></li>
-            <li class="page-item"><a class="page-link" href="#">➡️ التالي</a></li>
-          </ul>
-        </nav>
+      <div class="stat-card">
+       <div class="stat-value" id="pending-count">
+        0
+       </div>
+       <div class="stat-label">
+        ⏳ بانتظار المراجعة
+       </div>
       </div>
+     </div>
+     <!-- فلترة -->
+     <div class="form-container">
+      <div class="form-row">
+       <div class="form-group">
+        <label class="form-label">
+         🔍 بحث بالمنتج
+        </label>
+        <input class="form-control" id="search-product" placeholder="اسم المنتج أو الباركود" type="text">
+       </div>
+       <div class="form-group">
+        <label class="form-label">
+         📝 نوع الحركة
+        </label>
+        <select class="form-control" id="filter-type">
+         <option value="">
+          جميع الأنواع
+         </option>
+         <option value="in">
+          📥 دخول مخزني
+         </option>
+         <option value="out">
+          📤 خروج مخزني
+         </option>
+         <option value="return_customer">
+          🔄 إرجاع من عميل
+         </option>
+         <option value="return_supplier">
+          🔄 إرجاع لمورد
+         </option>
+         <option value="waste">
+          🗑️ هالك
+         </option>
+         <option value="transfer">
+          🔄 تحويل بين مستودعات
+         </option>
+         <option value="adjustment">
+          ⚖️ تسوية مخزنية
+         </option>
+         <option value="stocktake">
+          📋 جرد
+         </option>
+        </select>
+       </div>
+      </div>
+      <div class="form-row-compact">
+       <div class="form-group-half">
+        <label class="form-label">
+         📅 من تاريخ
+        </label>
+        <input class="form-control numeric" id="filter-from" type="date">
+       </div>
+       <div class="form-group-half">
+        <label class="form-label">
+         📅 إلى تاريخ
+        </label>
+        <input class="form-control numeric" id="filter-to" type="date">
+       </div>
+      </div>
+      <div class="form-row-compact">
+       <div class="form-group-half">
+        <label class="form-label">
+         🏢 المستودع
+        </label>
+        <select class="form-control" id="filter-warehouse">
+         <option value="">
+          جميع المستودعات
+         </option>
+        </select>
+       </div>
+       <div class="form-group-half">
+        <label class="form-label">
+         📊 الحالة
+        </label>
+        <select class="form-control" id="filter-status">
+         <option value="">
+          جميع الحالات
+         </option>
+         <option value="completed">
+          ✅ مكتمل
+         </option>
+         <option value="pending">
+          ⏳ قيد الانتظار
+         </option>
+         <option value="cancelled">
+          ❌ ملغى
+         </option>
+        </select>
+       </div>
+      </div>
+      <div class="form-row-compact">
+       <div class="form-group-half">
+        <label class="form-label">
+         🏭 المورد
+        </label>
+        <select class="form-control" id="filter-supplier">
+         <option value="">
+          جميع الموردين
+         </option>
+        </select>
+       </div>
+       <div class="form-group-half">
+        <label class="form-label">
+         👥 العميل
+        </label>
+        <select class="form-control" id="filter-customer">
+         <option value="">
+          جميع العملاء
+         </option>
+        </select>
+       </div>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
+       <button class="btn btn-primary" onclick="applyFilters()">
+        <i class="fas fa-filter">
+        </i>
+        🔍 تطبيق الفلترة
+       </button>
+       <button class="btn btn-secondary" onclick="resetFilters()">
+        <i class="fas fa-times">
+        </i>
+        🗑️ إعادة الضبط
+       </button>
+      </div>
+     </div>
+     <!-- جدول الحركات -->
+     <div class="table-container">
+      <table class="data-table">
+       <thead>
+        <tr>
+         <th>
+          #️⃣ #
+         </th>
+         <th>
+          📅 التاريخ
+         </th>
+         <th>
+          🛒 المنتج
+         </th>
+         <th>
+          📦 الكمية
+         </th>
+         <th>
+          📝 النوع
+         </th>
+         <th>
+          🏢 المستودع
+         </th>
+         <th>
+          🔄 المصدر/الهدف
+         </th>
+         <th>
+          👥 المورد/العميل
+         </th>
+         <th>
+          💰 السعر
+         </th>
+         <th>
+          💵 القيمة
+         </th>
+         <th>
+          📊 الحالة
+         </th>
+         <th>
+          🛠️ الإجراءات
+         </th>
+        </tr>
+       </thead>
+       <tbody id="movements-table-body">
+        <tr>
+         <td class="text-center" colspan="12">
+          ⏳ جاري التحميل...
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
+     <!-- التصفح -->
+     <div style="margin-top: 15px; text-align: center;">
+      <nav>
+       <ul class="pagination" id="pagination-container">
+        <li class="page-item disabled">
+         <a class="page-link" href="#">
+          ⬅️ السابق
+         </a>
+        </li>
+        <li class="page-item active">
+         <a class="page-link" href="#">
+          1
+         </a>
+        </li>
+        <li class="page-item">
+         <a class="page-link" href="#">
+          2
+         </a>
+        </li>
+        <li class="page-item">
+         <a class="page-link" href="#">
+          3
+         </a>
+        </li>
+        <li class="page-item">
+         <a class="page-link" href="#">
+          ➡️ التالي
+         </a>
+        </li>
+       </ul>
+      </nav>
+     </div>
     </div>
-
     <!-- ========== تبويب التقارير ========== -->
     <div class="tab-content" id="reports-tab">
-      <div class="form-container">
-        <h4 style="text-align: center;">📋 تقارير الحركات المخزنية</h4>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">📊 نوع التقرير</label>
-            <select class="form-control" id="report-type">
-              <option value="stock_detail">📦 تفاصيل المخزون</option>
-              <option value="movements_summary">📈 ملخص الحركات</option>
-              <option value="profit_product">💰 الربح حسب المنتج</option>
-              <option value="profit_supplier">🏭 الربح حسب المورد</option>
-              <option value="profit_customer">👥 الربح حسب العميل</option>
-              <option value="below_min">📉 المنتجات تحت الحد الأدنى</option>
-              <option value="movements_detailed">📋 حركات مفصلة</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">⚙️ خيارات إضافية</label>
-            <input type="text" class="form-control" id="report-options" placeholder="خيارات التقرير">
-          </div>
-        </div>
-        <div class="form-row-compact">
-          <div class="form-group-half">
-            <label class="form-label">📅 من تاريخ</label>
-            <input type="date" class="form-control numeric" id="report-from">
-          </div>
-          <div class="form-group-half">
-            <label class="form-label">📅 إلى تاريخ</label>
-            <input type="date" class="form-control numeric" id="report-to">
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
-          <button class="btn btn-primary" onclick="generateReport()"><i class="fas fa-cog"></i> ⚙️ توليد التقرير</button>
-          <button class="btn btn-success" onclick="exportReport()"><i class="fas fa-file-export"></i> 📤 تصدير التقرير</button>
-        </div>
+     <div class="form-container">
+      <h4 style="text-align: center;">
+       📋 تقارير الحركات المخزنية
+      </h4>
+      <div class="form-row">
+       <div class="form-group">
+        <label class="form-label">
+         📊 نوع التقرير
+        </label>
+        <select class="form-control" id="report-type">
+         <option value="stock_detail">
+          📦 تفاصيل المخزون
+         </option>
+         <option value="movements_summary">
+          📈 ملخص الحركات
+         </option>
+         <option value="profit_product">
+          💰 الربح حسب المنتج
+         </option>
+         <option value="profit_supplier">
+          🏭 الربح حسب المورد
+         </option>
+         <option value="profit_customer">
+          👥 الربح حسب العميل
+         </option>
+         <option value="below_min">
+          📉 المنتجات تحت الحد الأدنى
+         </option>
+         <option value="movements_detailed">
+          📋 حركات مفصلة
+         </option>
+        </select>
+       </div>
+       <div class="form-group">
+        <label class="form-label">
+         ⚙️ خيارات إضافية
+        </label>
+        <input class="form-control" id="report-options" placeholder="خيارات التقرير" type="text">
+       </div>
       </div>
-
-      <div class="report-card">
-        <div class="report-header">
-          <h4 class="report-title" id="report-title">📊 تفاصيل التقرير</h4>
-          <span class="badge badge-info" id="report-date-range">📅 الفترة: -</span>
-        </div>
-        <div class="table-container">
-          <table class="data-table" id="report-table">
-            <thead id="report-table-head">
-              <tr><th>📝 اختر نوع التقرير واضغط على "توليد التقرير"</th></tr>
-            </thead>
-            <tbody id="report-table-body">
-              <tr><td>❌ لا توجد بيانات لعرضها</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="form-row-compact">
+       <div class="form-group-half">
+        <label class="form-label">
+         📅 من تاريخ
+        </label>
+        <input class="form-control numeric" id="report-from" type="date">
+       </div>
+       <div class="form-group-half">
+        <label class="form-label">
+         📅 إلى تاريخ
+        </label>
+        <input class="form-control numeric" id="report-to" type="date">
+       </div>
       </div>
+      <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
+       <button class="btn btn-primary" onclick="generateReport()">
+        <i class="fas fa-cog">
+        </i>
+        ⚙️ توليد التقرير
+       </button>
+       <button class="btn btn-success" onclick="exportReport()">
+        <i class="fas fa-file-export">
+        </i>
+        📤 تصدير التقرير
+       </button>
+      </div>
+     </div>
+     <div class="report-card">
+      <div class="report-header">
+       <h4 class="report-title" id="report-title">
+        📊 تفاصيل التقرير
+       </h4>
+       <span class="badge badge-info" id="report-date-range">
+        📅 الفترة: -
+       </span>
+      </div>
+      <div class="table-container">
+       <table class="data-table" id="report-table">
+        <thead id="report-table-head">
+         <tr>
+          <th>
+           📝 اختر نوع التقرير واضغط على "توليد التقرير"
+          </th>
+         </tr>
+        </thead>
+        <tbody id="report-table-body">
+         <tr>
+          <td>
+           ❌ لا توجد بيانات لعرضها
+          </td>
+         </tr>
+        </tbody>
+       </table>
+      </div>
+     </div>
     </div>
-
     <!-- ========== تبويب التحليلات ========== -->
     <div class="tab-content" id="analytics-tab">
-      <div class="stats-grid-analytics">
-        <div class="stat-card">
-          <div class="stat-value numeric" id="analytics-total-value">0.00</div>
-          <div class="stat-label">💰 إجمالي قيمة المخزون</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="analytics-total-products">0</div>
-          <div class="stat-label">🛒 عدد المنتجات</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="analytics-total-warehouses">0</div>
-          <div class="stat-label">🏢 عدد المستودعات</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="analytics-below-min">0</div>
-          <div class="stat-label">📉 منتجات تحت الحد الأدنى</div>
-        </div>
+     <div class="stats-grid-analytics">
+      <div class="stat-card">
+       <div class="stat-value numeric" id="analytics-total-value">
+        0.00
+       </div>
+       <div class="stat-label">
+        💰 إجمالي قيمة المخزون
+       </div>
       </div>
-
-      <div class="form-container">
-        <h4 style="text-align: center;">📈 تحليل حركة منتج</h4>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">🛒 اختر المنتج</label>
-            <select class="form-control" id="analytics-product">
-              <option value="">اختر منتجاً</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">📅 الفترة (أيام)</label>
-            <select class="form-control" id="analytics-days">
-              <option value="7">🗓️ أسبوع</option>
-              <option value="30" selected>🗓️ شهر</option>
-              <option value="90">🗓️ 3 أشهر</option>
-              <option value="180">🗓️ 6 أشهر</option>
-              <option value="365">🗓️ سنة</option>
-            </select>
-          </div>
-        </div>
-        <div style="text-align: center; margin-top: 10px;">
-          <button class="btn btn-primary" onclick="loadProductAnalytics()">
-            <i class="fas fa-chart-line"></i> 📊 عرض التحليل
-          </button>
-        </div>
+      <div class="stat-card">
+       <div class="stat-value" id="analytics-total-products">
+        0
+       </div>
+       <div class="stat-label">
+        🛒 عدد المنتجات
+       </div>
       </div>
-
-      <div class="report-card">
-        <div class="report-header">
-          <h4 class="report-title">📈 تحليل حركة المنتج</h4>
-          <span class="badge badge-info" id="product-analytics-range">📅 الفترة: 30 يوم</span>
-        </div>
-        <div id="product-analytics-chart">
-          <p class="text-center">❌ لم يتم تحميل بيانات التحليل بعد</p>
-        </div>
+      <div class="stat-card">
+       <div class="stat-value" id="analytics-total-warehouses">
+        0
+       </div>
+       <div class="stat-label">
+        🏢 عدد المستودعات
+       </div>
       </div>
+      <div class="stat-card">
+       <div class="stat-value" id="analytics-below-min">
+        0
+       </div>
+       <div class="stat-label">
+        📉 منتجات تحت الحد الأدنى
+       </div>
+      </div>
+     </div>
+     <div class="form-container">
+      <h4 style="text-align: center;">
+       📈 تحليل حركة منتج
+      </h4>
+      <div class="form-row">
+       <div class="form-group">
+        <label class="form-label">
+         🛒 اختر المنتج
+        </label>
+        <select class="form-control" id="analytics-product">
+         <option value="">
+          اختر منتجاً
+         </option>
+        </select>
+       </div>
+       <div class="form-group">
+        <label class="form-label">
+         📅 الفترة (أيام)
+        </label>
+        <select class="form-control" id="analytics-days">
+         <option value="7">
+          🗓️ أسبوع
+         </option>
+         <option selected value="30">
+          🗓️ شهر
+         </option>
+         <option value="90">
+          🗓️ 3 أشهر
+         </option>
+         <option value="180">
+          🗓️ 6 أشهر
+         </option>
+         <option value="365">
+          🗓️ سنة
+         </option>
+        </select>
+       </div>
+      </div>
+      <div style="text-align: center; margin-top: 10px;">
+       <button class="btn btn-primary" onclick="loadProductAnalytics()">
+        <i class="fas fa-chart-line">
+        </i>
+        📊 عرض التحليل
+       </button>
+      </div>
+     </div>
+     <div class="report-card">
+      <div class="report-header">
+       <h4 class="report-title">
+        📈 تحليل حركة المنتج
+       </h4>
+       <span class="badge badge-info" id="product-analytics-range">
+        📅 الفترة: 30 يوم
+       </span>
+      </div>
+      <div id="product-analytics-chart">
+       <p class="text-center">
+        ❌ لم يتم تحميل بيانات التحليل بعد
+       </p>
+      </div>
+     </div>
     </div>
-
-  </main>
-</div>
-
-<!-- ========== مودال إنشاء حركة ========== -->
-<div class="modal fade" id="createModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">➕ إضافة حركة مخزنية جديدة</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="movement-form">
-          <div class="form-grid">
-            <div class="form-row-compact">
-              <div class="form-group-half">
-                <label class="form-label">📝 نوع الحركة *</label>
-                <select class="form-control" id="movement-type" required onchange="toggleMovementFields()">
-                  <option value="">اختر نوع الحركة</option>
-                  <option value="in">📥 دخول مخزني (شراء)</option>
-                  <option value="out">📤 خروج مخزني (بيع)</option>
-                  <option value="return_customer">🔄 إرجاع من عميل</option>
-                  <option value="return_supplier">🔄 إرجاع لمورد</option>
-                  <option value="waste">🗑️ هالك</option>
-                  <option value="transfer">🔄 تحويل بين مستودعات</option>
-                  <option value="adjustment">⚖️ تسوية مخزنية</option>
-                  <option value="stocktake">📋 جرد</option>
-                </select>
-              </div>
-              <div class="form-group-half">
-                <label class="form-label">📅 التاريخ *</label>
-                <input type="datetime-local" class="form-control numeric" id="movement-date" required>
-              </div>
-            </div>
-            <div class="form-row-compact">
-              <div class="form-group-half">
-                <label class="form-label">🛒 المنتج *</label>
-                <select class="form-control" id="product-select" required onchange="loadProductInfo()">
-                  <option value="">اختر المنتج</option>
-                </select>
-              </div>
-              <div class="form-group-half">
-                <label class="form-label">📦 الكمية *</label>
-                <input type="number" step="0.001" class="form-control numeric" id="movement-quantity" required>
-              </div>
-            </div>
-            <div class="form-row-compact">
-              <div class="form-group-half">
-                <label class="form-label">💰 سعر الوحدة</label>
-                <input type="number" step="0.01" class="form-control numeric" id="unit-price">
-              </div>
-              <div class="form-group-half" id="source-warehouse-group" style="display:none;">
-                <label class="form-label">📤 المستودع المصدر</label>
-                <select class="form-control" id="source-warehouse">
-                  <option value="">اختر المستودع المصدر</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row-compact">
-              <div class="form-group-half" id="target-warehouse-group" style="display:none;">
-                <label class="form-label">📥 المستودع الهدف</label>
-                <select class="form-control" id="target-warehouse">
-                  <option value="">اختر المستودع الهدف</option>
-                </select>
-              </div>
-              <div class="form-group-half" id="supplier-group" style="display:none;">
-                <label class="form-label">🏭 المورد</label>
-                <select class="form-control" id="supplier-select">
-                  <option value="">اختر المورد</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row-compact">
-              <div class="form-group-half" id="customer-group" style="display:none;">
-                <label class="form-label">👥 العميل</label>
-                <select class="form-control" id="customer-select">
-                  <option value="">اختر العميل</option>
-                </select>
-              </div>
-              <div class="form-group-half">
-                <label class="form-label">📎 المرجع</label>
-                <input type="text" class="form-control" id="movement-reference" placeholder="رقم المرجع أو الوثيقة">
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">📝 ملاحظات</label>
-              <textarea class="form-control" id="movement-notes" rows="3" style="text-align: right;"></textarea>
-            </div>
-          </div>
-          <div class="inventory-info" id="product-info" style="display: none;">
-            <h4>📊 معلومات المخزون الحالية</h4>
-            <div class="info-grid">
-              <div class="info-item"><span>📦 الكمية المتاحة:</span><span id="current-quantity" class="numeric">0</span></div>
-              <div class="info-item"><span>💰 متوسط التكلفة:</span><span id="current-cost" class="numeric">0.00</span></div>
-              <div class="info-item"><span>📉 الحد الأدنى:</span><span id="min-stock" class="numeric">0</span></div>
-              <div class="info-item"><span>🕒 آخر حركة:</span><span id="last-movement">---</span></div>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ إلغاء</button>
-        <button type="button" class="btn btn-primary" onclick="saveMovement()">💾 حفظ الحركة</button>
-      </div>
-    </div>
+   </main>
   </div>
-</div>
-
-<!-- ========== مودال عرض الحركة ========== -->
-<div class="modal fade" id="viewModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <!-- ========== مودال إنشاء حركة ========== -->
+  <div class="modal fade" id="createModal" tabindex="-1">
+   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">👁️ تفاصيل الحركة</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body" id="movement-details">
-        <div class="text-center">⏳ جاري التحميل...</div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">❌ إغلاق</button>
-        <button type="button" class="btn btn-primary" onclick="printMovement()">🖨️ طباعة</button>
-      </div>
+     <div class="modal-header">
+      <h5 class="modal-title">
+       ➕ إضافة حركة مخزنية جديدة
+      </h5>
+      <button class="btn-close" data-bs-dismiss="modal" type="button">
+      </button>
+     </div>
+     <div class="modal-body">
+      <form id="movement-form">
+       <div class="form-grid">
+        <div class="form-row-compact">
+         <div class="form-group-half">
+          <label class="form-label">
+           📝 نوع الحركة *
+          </label>
+          <select class="form-control" id="movement-type" onchange="toggleMovementFields()" required="">
+           <option value="">
+            اختر نوع الحركة
+           </option>
+           <option value="in">
+            📥 دخول مخزني (شراء)
+           </option>
+           <option value="out">
+            📤 خروج مخزني (بيع)
+           </option>
+           <option value="return_customer">
+            🔄 إرجاع من عميل
+           </option>
+           <option value="return_supplier">
+            🔄 إرجاع لمورد
+           </option>
+           <option value="waste">
+            🗑️ هالك
+           </option>
+           <option value="transfer">
+            🔄 تحويل بين مستودعات
+           </option>
+           <option value="adjustment">
+            ⚖️ تسوية مخزنية
+           </option>
+           <option value="stocktake">
+            📋 جرد
+           </option>
+          </select>
+         </div>
+         <div class="form-group-half">
+          <label class="form-label">
+           📅 التاريخ *
+          </label>
+          <input class="form-control numeric" id="movement-date" required="" type="datetime-local">
+         </div>
+        </div>
+        <div class="form-row-compact">
+         <div class="form-group-half">
+          <label class="form-label">
+           🛒 المنتج *
+          </label>
+          <select class="form-control" id="product-select" onchange="loadProductInfo()" required="">
+           <option value="">
+            اختر المنتج
+           </option>
+          </select>
+         </div>
+         <div class="form-group-half">
+          <label class="form-label">
+           📦 الكمية *
+          </label>
+          <input class="form-control numeric" id="movement-quantity" required="" step="0.001" type="number">
+         </div>
+        </div>
+        <div class="form-row-compact">
+         <div class="form-group-half">
+          <label class="form-label">
+           💰 سعر الوحدة
+          </label>
+          <input class="form-control numeric" id="unit-price" step="0.01" type="number">
+         </div>
+         <div class="form-group-half" id="source-warehouse-group" style="display:none;">
+          <label class="form-label">
+           📤 المستودع المصدر
+          </label>
+          <select class="form-control" id="source-warehouse">
+           <option value="">
+            اختر المستودع المصدر
+           </option>
+          </select>
+         </div>
+        </div>
+        <div class="form-row-compact">
+         <div class="form-group-half" id="target-warehouse-group" style="display:none;">
+          <label class="form-label">
+           📥 المستودع الهدف
+          </label>
+          <select class="form-control" id="target-warehouse">
+           <option value="">
+            اختر المستودع الهدف
+           </option>
+          </select>
+         </div>
+         <div class="form-group-half" id="supplier-group" style="display:none;">
+          <label class="form-label">
+           🏭 المورد
+          </label>
+          <select class="form-control" id="supplier-select">
+           <option value="">
+            اختر المورد
+           </option>
+          </select>
+         </div>
+        </div>
+        <div class="form-row-compact">
+         <div class="form-group-half" id="customer-group" style="display:none;">
+          <label class="form-label">
+           👥 العميل
+          </label>
+          <select class="form-control" id="customer-select">
+           <option value="">
+            اختر العميل
+           </option>
+          </select>
+         </div>
+         <div class="form-group-half">
+          <label class="form-label">
+           📎 المرجع
+          </label>
+          <input class="form-control" id="movement-reference" placeholder="رقم المرجع أو الوثيقة" type="text">
+         </div>
+        </div>
+        <div class="form-group">
+         <label class="form-label">
+          📝 ملاحظات
+         </label>
+         <textarea class="form-control" id="movement-notes" rows="3" style="text-align: right;"></textarea>
+        </div>
+       </div>
+       <div class="inventory-info" id="product-info" style="display: none;">
+        <h4>
+         📊 معلومات المخزون الحالية
+        </h4>
+        <div class="info-grid">
+         <div class="info-item">
+          <span>
+           📦 الكمية المتاحة:
+          </span>
+          <span class="numeric" id="current-quantity">
+           0
+          </span>
+         </div>
+         <div class="info-item">
+          <span>
+           💰 متوسط التكلفة:
+          </span>
+          <span class="numeric" id="current-cost">
+           0.00
+          </span>
+         </div>
+         <div class="info-item">
+          <span>
+           📉 الحد الأدنى:
+          </span>
+          <span class="numeric" id="min-stock">
+           0
+          </span>
+         </div>
+         <div class="info-item">
+          <span>
+           🕒 آخر حركة:
+          </span>
+          <span id="last-movement">
+           ---
+          </span>
+         </div>
+        </div>
+       </div>
+      </form>
+     </div>
+     <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
+       ❌ إلغاء
+      </button>
+      <button class="btn btn-primary" onclick="saveMovement()" type="button">
+       💾 حفظ الحركة
+      </button>
+     </div>
     </div>
+   </div>
   </div>
-</div>
-
-<!-- مكتبات Bootstrap و Swal -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<script>
-// ============================================================
+  <!-- ========== مودال عرض الحركة ========== -->
+  <div class="modal fade" id="viewModal" tabindex="-1">
+   <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+     <div class="modal-header">
+      <h5 class="modal-title">
+       👁️ تفاصيل الحركة
+      </h5>
+      <button class="btn-close" data-bs-dismiss="modal" type="button">
+      </button>
+     </div>
+     <div class="modal-body" id="movement-details">
+      <div class="text-center">
+       ⏳ جاري التحميل...
+      </div>
+     </div>
+     <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">
+       ❌ إغلاق
+      </button>
+      <button class="btn btn-primary" onclick="printMovement()" type="button">
+       🖨️ طباعة
+      </button>
+     </div>
+    </div>
+   </div>
+  </div>
+  <!-- مكتبات Bootstrap و Swal -->
+  <script src="file:///android_asset/assets-local/js/bootstrap.bundle.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+  </script>
+  <script>
+   // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 function apiCall(action, params) {
@@ -2051,6 +2353,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('report-to').value = today;
     loadInitialData();
 });
-</script>
-</body>
+  </script>
+ </body>
 </html>

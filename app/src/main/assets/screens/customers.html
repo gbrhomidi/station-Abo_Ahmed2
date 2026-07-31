@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
     <title>أبو أحمد – النظام المتكامل</title>
     <!-- Font Awesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <style>
         /* ============================================================
            المتغيرات وإعادة الضبط
@@ -799,15 +799,15 @@
             </div>
             <div class="header-actions">
                 <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع" style="color: #f39c12;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
-                        <path d="M12 4a8 8 0 1 0 8 8 8 8 0 0 0-8-8zm0 14a6 6 0 1 1 6-6 6 6 0 0 1-6 6z"/>
-                        <circle cx="12" cy="12" r="2"/>
+                    <svg viewbox="0 0 24 24">
+                        <path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"></path>
+                        <path d="M12 4a8 8 0 1 0 8 8 8 8 0 0 0-8-8zm0 14a6 6 0 1 1 6-6 6 6 0 0 1-6 6z"></path>
+                        <circle cx="12" cy="12" r="2"></circle>
                     </svg>
                 </button>
                 <button class="icon-btn" onclick="window.location.href='../main.html'" title="الرئيسية" style="color: #3498db;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                    <svg viewbox="0 0 24 24">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path>
                     </svg>
                 </button>
             </div>
@@ -903,7 +903,7 @@
         <div class="modal" style="max-width:720px;">
             <div class="modal-header">
                 <h3><i class="fas fa-chart-bar"></i> التقارير</h3>
-                <button class="modal-close" onclick="closeModal('reportsModal')">&times;</button>
+                <button class="modal-close" onclick="closeModal('reportsModal')">×</button>
             </div>
             <div class="modal-body">
                 <p style="color:var(--text-secondary);margin-bottom:16px;">اختر التقرير المطلوب لعرض البيانات:</p>
@@ -953,18 +953,18 @@
         <div class="modal" style="max-width:1000px;">
             <div class="modal-header">
                 <h3 id="reportViewerTitle"><i class="fas fa-file-alt"></i> عرض التقرير</h3>
-                <button class="modal-close" onclick="closeModal('reportViewerModal')">&times;</button>
+                <button class="modal-close" onclick="closeModal('reportViewerModal')">×</button>
             </div>
             <div class="modal-body report-viewer">
                 <!-- فلاتر التقرير -->
                 <div class="report-filters">
                     <div class="filter-group">
                         <label>من تاريخ</label>
-                        <input type="date" id="reportFromDate" />
+                        <input type="date" id="reportFromDate">
                     </div>
                     <div class="filter-group">
                         <label>إلى تاريخ</label>
-                        <input type="date" id="reportToDate" />
+                        <input type="date" id="reportToDate">
                     </div>
                     <div class="filter-actions">
                         <button class="btn btn-primary" onclick="refreshReport()"><i class="fas fa-sync-alt"></i> عرض</button>
@@ -990,7 +990,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="customerModalTitle"><i class="fas fa-user-plus"></i> إضافة عميل جديد</h3>
-                <button class="modal-close" onclick="closeCustomerModal()">&times;</button>
+                <button class="modal-close" onclick="closeCustomerModal()">×</button>
             </div>
             <div class="modal-body">
                 <!-- التبويبات -->
@@ -1250,7 +1250,7 @@
         <div class="modal" style="max-width:480px;">
             <div class="modal-header">
                 <h3><i class="fas fa-hand-holding-usd"></i> تسجيل دفعة</h3>
-                <button class="modal-close" onclick="closeModal('paymentModal')">&times;</button>
+                <button class="modal-close" onclick="closeModal('paymentModal')">×</button>
             </div>
             <div class="modal-body">
                 <form id="paymentForm" onsubmit="savePayment(event)">

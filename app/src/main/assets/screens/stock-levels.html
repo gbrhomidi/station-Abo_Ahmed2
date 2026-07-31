@@ -1,22 +1,23 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>نظام إدارة محطات الوقود – مستويات المخزون</title>
-    
-    <!-- المكتبات المطلوبة من CDN -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet"/>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    
-    <!-- مكتبات JavaScript من CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
-    <style>
-        :root {
+<html dir="rtl" lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <title>
+   نظام إدارة محطات الوقود – مستويات المخزون
+  </title>
+  <!-- المكتبات المطلوبة من CDN -->
+  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/bootstrap.min.css" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/flatpickr.min.css" rel="stylesheet">
+  <!-- مكتبات JavaScript من CDN -->
+  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+  </script>
+  <style>
+   :root {
             --bg-color: #f2fbff;
             --card-color: #ffffff;
             --primary3-color: #4B0082;
@@ -906,518 +907,783 @@
         .badge-danger { background: var(--error); color: white; }
         .badge-info { background: var(--primary-color); color: white; }
         .badge-purple { background: #9c27b0; color: white; }
-    </style>
-</head>
-<body>
-
-<!-- شريط المعلومات العلوي -->
-<div class="top-bar">
-    <div class="top-title">
-        <h2>📊 مستويات المخزون</h2>
-    </div>
-    <button id="darkModeToggle" class="mode-toggle-btn">
-        <i class="fas fa-moon"></i>
+  </style>
+ </head>
+ <body>
+  <!-- شريط المعلومات العلوي -->
+  <div class="top-bar">
+   <div class="top-title">
+    <h2>
+     📊 مستويات المخزون
+    </h2>
+   </div>
+   <button class="mode-toggle-btn" id="darkModeToggle">
+    <i class="fas fa-moon">
+    </i>
+   </button>
+  </div>
+  <!-- القائمة الجانبية -->
+  <div class="sidebar-toggle" id="sidebarToggle">
+   <i class="fas fa-bars">
+   </i>
+  </div>
+  <div class="sidebar" id="sidebar">
+   <div class="sidebar-content">
+    <button class="sidebar-btn ripple" data-tooltip="إضافة صنف جديد" onclick="showAddModal()">
+     <div class="glow">
+     </div>
+     <i class="fas fa-plus">
+     </i>
+     <span>
+      ➕ إضافة
+     </span>
     </button>
-</div>
-
-<!-- القائمة الجانبية -->
-<div class="sidebar-toggle" id="sidebarToggle">
-    <i class="fas fa-bars"></i>
-</div>
-
-<div class="sidebar" id="sidebar">
-    <div class="sidebar-content">
-        <button class="sidebar-btn ripple" data-tooltip="إضافة صنف جديد" onclick="showAddModal()">
-            <div class="glow"></div>
-            <i class="fas fa-plus"></i>
-            <span>➕ إضافة</span>
+    <button class="sidebar-btn ripple" data-tooltip="بحث عن صنف" onclick="showSearchModal()">
+     <div class="glow">
+     </div>
+     <i class="fas fa-search">
+     </i>
+     <span>
+      👀 استعلام
+     </span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="إعدادات النظام" onclick="showSettings()">
+     <div class="glow">
+     </div>
+     <i class="fas fa-cog">
+     </i>
+     <span>
+      ⚙️ إعدادات
+     </span>
+    </button>
+    <button class="sidebar-btn ripple" data-tooltip="العودة للشاشة الرئيسية" onclick="goToMain()">
+     <div class="glow">
+     </div>
+     <i class="fas fa-home">
+     </i>
+     <span>
+      🏠 رجوع
+     </span>
+    </button>
+   </div>
+  </div>
+  <!-- مؤشر تحميل -->
+  <div class="loading-indicator" id="loadingIndicator">
+   <div class="spinner">
+   </div>
+  </div>
+  <!-- المحتوى الرئيسي -->
+  <div class="container">
+   <!-- ===== قسم الملخص ===== -->
+   <div class="section active" id="summarySection">
+    <!-- رأس الصفحة -->
+    <header class="glass-card page-header">
+     <div class="logo-container">
+      <i class="fas fa-warehouse logo">
+      </i>
+      <h1 class="page-title">
+       مستويات المخزون الشامل
+      </h1>
+     </div>
+     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <div class="refresh-btn" id="refreshBtn" title="تحديث">
+       <i class="fas fa-redo">
+       </i>
+      </div>
+     </div>
+    </header>
+    <!-- بطاقات المؤشرات -->
+    <div class="kpi-grid">
+     <div class="kpi-card">
+      <i class="fas fa-money-bill-wave kpi-icon">
+      </i>
+      <div class="kpi-content">
+       <div class="kpi-title">
+        القيمة الإجمالية للمخزون
+       </div>
+       <div class="kpi-value" id="totalInventoryValue">
+        0 ريال
+       </div>
+       <div class="kpi-trend trend-up">
+        <i class="fas fa-arrow-up">
+        </i>
+        <span id="inventoryTrend">
+         0% عن الشهر الماضي
+        </span>
+       </div>
+      </div>
+     </div>
+     <div class="kpi-card">
+      <i class="fas fa-exclamation-triangle kpi-icon">
+      </i>
+      <div class="kpi-content">
+       <div class="kpi-title">
+        وحدات تحت الحد الأدنى
+       </div>
+       <div class="kpi-value" id="lowStockCount">
+        0 منتج
+       </div>
+       <div class="kpi-trend trend-down">
+        <i class="fas fa-arrow-down">
+        </i>
+        <span id="criticalCount">
+         تحذير: 0 منتج حرج
+        </span>
+       </div>
+      </div>
+     </div>
+     <div class="kpi-card">
+      <i class="fas fa-hourglass-end kpi-icon">
+      </i>
+      <div class="kpi-content">
+       <div class="kpi-title">
+        قيمة منتهي الصلاحية
+       </div>
+       <div class="kpi-value" id="expiredValue">
+        0 ريال
+       </div>
+       <div class="kpi-trend trend-up">
+        <i class="fas fa-arrow-up">
+        </i>
+        <span id="expiryTrend">
+         زيادة 0%
+        </span>
+       </div>
+      </div>
+     </div>
+     <div class="kpi-card">
+      <i class="fas fa-retweet kpi-icon">
+      </i>
+      <div class="kpi-content">
+       <div class="kpi-title">
+        معدل دوران المخزون
+       </div>
+       <div class="kpi-value" id="turnoverRate">
+        0 مرة
+       </div>
+       <div class="kpi-trend trend-up">
+        <i class="fas fa-arrow-up">
+        </i>
+        <span id="turnoverStatus">
+         ممتاز (المعدل المثالي 3-5)
+        </span>
+       </div>
+      </div>
+     </div>
+    </div>
+    <!-- لوحة الفلاتر -->
+    <div class="glass-card">
+     <div class="filters-panel">
+      <div class="filter-group">
+       <label class="filter-label">
+        🏢 المخزن
+       </label>
+       <select class="filter-select" id="warehouseFilter">
+        <option value="all">
+         جميع المخازن
+        </option>
+       </select>
+      </div>
+      <div class="filter-group">
+       <label class="filter-label">
+        📂 الفئة
+       </label>
+       <select class="filter-select" id="categoryFilter">
+        <option value="all">
+         جميع الفئات
+        </option>
+       </select>
+      </div>
+      <div class="filter-group">
+       <label class="filter-label">
+        📅 نطاق التاريخ
+       </label>
+       <select class="filter-select" id="dateRangeFilter">
+        <option value="30">
+         آخر 30 يومًا
+        </option>
+        <option value="7">
+         الأسبوع الحالي
+        </option>
+        <option value="current">
+         الشهر الحالي
+        </option>
+        <option value="quarter">
+         ربع سنوي
+        </option>
+       </select>
+      </div>
+      <div class="filter-group">
+       <label class="filter-label">
+        ⏳ حالة الصلاحية
+       </label>
+       <select class="filter-select" id="expiryFilter">
+        <option value="all">
+         الكل
+        </option>
+        <option value="active">
+         نشط
+        </option>
+        <option value="soon">
+         قارب الانتهاء
+        </option>
+        <option value="expired">
+         منتهي
+        </option>
+       </select>
+      </div>
+      <button class="apply-btn" onclick="applyFilters()">
+       🔍 تطبيق الفلاتر
+      </button>
+      <button class="apply-btn apply-btn-secondary" onclick="showAdvancedFilter()">
+       ⚙️ تصفية متقدمة
+      </button>
+     </div>
+    </div>
+    <!-- الرسوم البيانية -->
+    <div class="dashboard-grid">
+     <div class="glass-card">
+      <div class="chart-header">
+       <h3 class="chart-title">
+        📈 حركة المخزون خلال 30 يومًا
+       </h3>
+       <div class="chart-actions">
+        <button class="chart-btn" onclick="downloadChart('movementChart')">
+         <i class="fas fa-download">
+         </i>
         </button>
-        <button class="sidebar-btn ripple" data-tooltip="بحث عن صنف" onclick="showSearchModal()">
-            <div class="glow"></div>
-            <i class="fas fa-search"></i>
-            <span>👀 استعلام</span>
+       </div>
+      </div>
+      <div class="chart-container">
+       <canvas id="movementChart">
+       </canvas>
+      </div>
+     </div>
+     <div class="glass-card">
+      <div class="chart-header">
+       <h3 class="chart-title">
+        📊 توزيع المخزون حسب الفئة
+       </h3>
+       <div class="chart-actions">
+        <button class="chart-btn" onclick="downloadChart('distributionChart')">
+         <i class="fas fa-download">
+         </i>
         </button>
-        <button class="sidebar-btn ripple" data-tooltip="إعدادات النظام" onclick="showSettings()">
-            <div class="glow"></div>
-            <i class="fas fa-cog"></i>
-            <span>⚙️ إعدادات</span>
+       </div>
+      </div>
+      <div class="chart-container">
+       <canvas id="distributionChart">
+       </canvas>
+      </div>
+     </div>
+     <div class="glass-card">
+      <div class="chart-header">
+       <h3 class="chart-title">
+        📉 اتجاهات المخزون خلال 6 أشهر
+       </h3>
+       <div class="chart-actions">
+        <button class="chart-btn" onclick="downloadChart('trendChart')">
+         <i class="fas fa-download">
+         </i>
         </button>
-        <button class="sidebar-btn ripple" data-tooltip="العودة للشاشة الرئيسية" onclick="goToMain()">
-            <div class="glow"></div>
-            <i class="fas fa-home"></i>
-            <span>🏠 رجوع</span>
+       </div>
+      </div>
+      <div class="chart-container">
+       <canvas id="trendChart">
+       </canvas>
+      </div>
+     </div>
+     <div class="glass-card">
+      <div class="chart-header">
+       <h3 class="chart-title">
+        ⏳ حالة صلاحية المخزون
+       </h3>
+       <div class="chart-actions">
+        <button class="chart-btn" onclick="downloadChart('expiryChart')">
+         <i class="fas fa-download">
+         </i>
         </button>
+       </div>
+      </div>
+      <div class="chart-container">
+       <canvas id="expiryChart">
+       </canvas>
+      </div>
+     </div>
     </div>
-</div>
-
-<!-- مؤشر تحميل -->
-<div class="loading-indicator" id="loadingIndicator">
-    <div class="spinner"></div>
-</div>
-
-<!-- المحتوى الرئيسي -->
-<div class="container">
-
-    <!-- ===== قسم الملخص ===== -->
-    <div class="section active" id="summarySection">
-        <!-- رأس الصفحة -->
-        <header class="glass-card page-header">
-            <div class="logo-container">
-                <i class="fas fa-warehouse logo"></i>
-                <h1 class="page-title">مستويات المخزون الشامل</h1>
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <div class="refresh-btn" id="refreshBtn" title="تحديث">
-                    <i class="fas fa-redo"></i>
-                </div>
-            </div>
-        </header>
-
-        <!-- بطاقات المؤشرات -->
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <i class="fas fa-money-bill-wave kpi-icon"></i>
-                <div class="kpi-content">
-                    <div class="kpi-title">القيمة الإجمالية للمخزون</div>
-                    <div class="kpi-value" id="totalInventoryValue">0 ريال</div>
-                    <div class="kpi-trend trend-up">
-                        <i class="fas fa-arrow-up"></i>
-                        <span id="inventoryTrend">0% عن الشهر الماضي</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="kpi-card">
-                <i class="fas fa-exclamation-triangle kpi-icon"></i>
-                <div class="kpi-content">
-                    <div class="kpi-title">وحدات تحت الحد الأدنى</div>
-                    <div class="kpi-value" id="lowStockCount">0 منتج</div>
-                    <div class="kpi-trend trend-down">
-                        <i class="fas fa-arrow-down"></i>
-                        <span id="criticalCount">تحذير: 0 منتج حرج</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="kpi-card">
-                <i class="fas fa-hourglass-end kpi-icon"></i>
-                <div class="kpi-content">
-                    <div class="kpi-title">قيمة منتهي الصلاحية</div>
-                    <div class="kpi-value" id="expiredValue">0 ريال</div>
-                    <div class="kpi-trend trend-up">
-                        <i class="fas fa-arrow-up"></i>
-                        <span id="expiryTrend">زيادة 0%</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="kpi-card">
-                <i class="fas fa-retweet kpi-icon"></i>
-                <div class="kpi-content">
-                    <div class="kpi-title">معدل دوران المخزون</div>
-                    <div class="kpi-value" id="turnoverRate">0 مرة</div>
-                    <div class="kpi-trend trend-up">
-                        <i class="fas fa-arrow-up"></i>
-                        <span id="turnoverStatus">ممتاز (المعدل المثالي 3-5)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- لوحة الفلاتر -->
-        <div class="glass-card">
-            <div class="filters-panel">
-                <div class="filter-group">
-                    <label class="filter-label">🏢 المخزن</label>
-                    <select class="filter-select" id="warehouseFilter">
-                        <option value="all">جميع المخازن</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">📂 الفئة</label>
-                    <select class="filter-select" id="categoryFilter">
-                        <option value="all">جميع الفئات</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">📅 نطاق التاريخ</label>
-                    <select class="filter-select" id="dateRangeFilter">
-                        <option value="30">آخر 30 يومًا</option>
-                        <option value="7">الأسبوع الحالي</option>
-                        <option value="current">الشهر الحالي</option>
-                        <option value="quarter">ربع سنوي</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">⏳ حالة الصلاحية</label>
-                    <select class="filter-select" id="expiryFilter">
-                        <option value="all">الكل</option>
-                        <option value="active">نشط</option>
-                        <option value="soon">قارب الانتهاء</option>
-                        <option value="expired">منتهي</option>
-                    </select>
-                </div>
-                <button class="apply-btn" onclick="applyFilters()">🔍 تطبيق الفلاتر</button>
-                <button class="apply-btn apply-btn-secondary" onclick="showAdvancedFilter()">⚙️ تصفية متقدمة</button>
-            </div>
-        </div>
-
-        <!-- الرسوم البيانية -->
-        <div class="dashboard-grid">
-            <div class="glass-card">
-                <div class="chart-header">
-                    <h3 class="chart-title">📈 حركة المخزون خلال 30 يومًا</h3>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="downloadChart('movementChart')"><i class="fas fa-download"></i></button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="movementChart"></canvas>
-                </div>
-            </div>
-
-            <div class="glass-card">
-                <div class="chart-header">
-                    <h3 class="chart-title">📊 توزيع المخزون حسب الفئة</h3>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="downloadChart('distributionChart')"><i class="fas fa-download"></i></button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="distributionChart"></canvas>
-                </div>
-            </div>
-
-            <div class="glass-card">
-                <div class="chart-header">
-                    <h3 class="chart-title">📉 اتجاهات المخزون خلال 6 أشهر</h3>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="downloadChart('trendChart')"><i class="fas fa-download"></i></button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="trendChart"></canvas>
-                </div>
-            </div>
-
-            <div class="glass-card">
-                <div class="chart-header">
-                    <h3 class="chart-title">⏳ حالة صلاحية المخزون</h3>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="downloadChart('expiryChart')"><i class="fas fa-download"></i></button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="expiryChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- جدول المنتجات المنخفضة -->
-        <div class="glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin: 0;">⚠️ المنتجات تحت الحد الأدنى</h3>
-                <div class="action-bar">
-                    <button class="action-btn action-btn-success" onclick="exportLowStockTable()">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </button>
-                </div>
-            </div>
-            <div class="table-container">
-                <table class="data-table" id="lowStockTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>كود المنتج</th>
-                            <th>اسم المنتج</th>
-                            <th>الكمية الحالية</th>
-                            <th>الحد الأدنى</th>
-                            <th>العجز</th>
-                            <th>الإجراءات</th>
-                        </tr>
-                    </thead>
-                    <tbody id="lowStockTableBody">
-                        <tr><td colspan="7" class="text-center">⏳ جاري التحميل...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- التنبيهات -->
-        <div class="glass-card alerts-container">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin: 0;">🔔 تنبيهات المخزون</h3>
-                <div class="action-bar">
-                    <button class="action-btn" onclick="exportAlerts()">
-                        <i class="fas fa-file-export"></i> تصدير التنبيهات
-                    </button>
-                </div>
-            </div>
-
-            <div class="alert-card" id="criticalAlertCard">
-                <div class="alert-icon"><i class="fas fa-exclamation-circle"></i></div>
-                <div class="alert-content">
-                    <div class="alert-title">نقص حاد في المخزون</div>
-                    <div class="alert-desc" id="criticalAlert">0 منتجات وصلت إلى أقل من 10% من الحد الأدنى</div>
-                </div>
-                <div class="alert-actions">
-                    <button class="action-btn" onclick="showCriticalProducts()">عرض المنتجات</button>
-                </div>
-            </div>
-
-            <div class="alert-card alert-card-warning" id="expiringAlertCard">
-                <div class="alert-icon"><i class="fas fa-hourglass-half"></i></div>
-                <div class="alert-content">
-                    <div class="alert-title">منتجات قاربت على الانتهاء</div>
-                    <div class="alert-desc" id="expiringAlert">0 منتج ستنتهي صلاحيته خلال الشهر القادم</div>
-                </div>
-                <div class="alert-actions">
-                    <button class="action-btn" onclick="showExpiringProducts()">اتخاذ إجراء</button>
-                </div>
-            </div>
-
-            <div class="alert-card alert-card-success" id="auditAlertCard">
-                <div class="alert-icon"><i class="fas fa-sync-alt"></i></div>
-                <div class="alert-content">
-                    <div class="alert-title">جرد تلقائي ناجح</div>
-                    <div class="alert-desc" id="auditAlert">تم إجراء جرد تلقائي لـ 0 منتج</div>
-                </div>
-                <div class="alert-actions">
-                    <button class="action-btn" onclick="showAuditReport()">عرض التقرير</button>
-                </div>
-            </div>
-        </div>
+    <!-- جدول المنتجات المنخفضة -->
+    <div class="glass-card">
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+      <h3 style="margin: 0;">
+       ⚠️ المنتجات تحت الحد الأدنى
+      </h3>
+      <div class="action-bar">
+       <button class="action-btn action-btn-success" onclick="exportLowStockTable()">
+        <i class="fas fa-file-excel">
+        </i>
+        Excel
+       </button>
+      </div>
+     </div>
+     <div class="table-container">
+      <table class="data-table" id="lowStockTable">
+       <thead>
+        <tr>
+         <th>
+          #
+         </th>
+         <th>
+          كود المنتج
+         </th>
+         <th>
+          اسم المنتج
+         </th>
+         <th>
+          الكمية الحالية
+         </th>
+         <th>
+          الحد الأدنى
+         </th>
+         <th>
+          العجز
+         </th>
+         <th>
+          الإجراءات
+         </th>
+        </tr>
+       </thead>
+       <tbody id="lowStockTableBody">
+        <tr>
+         <td class="text-center" colspan="7">
+          ⏳ جاري التحميل...
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
     </div>
-
-    <!-- ===== قسم الحركات ===== -->
-    <div class="section" id="movementsSection">
-        <div class="glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 class="page-title">🔄 حركات المخزون</h2>
-                <div class="action-bar">
-                    <button class="action-btn action-btn-success" onclick="exportMovements()">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </button>
-                </div>
-            </div>
-            <div class="table-container" style="max-height: 400px;">
-                <table class="data-table" id="movementsTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>التاريخ</th>
-                            <th>المنتج</th>
-                            <th>النوع</th>
-                            <th>الكمية</th>
-                            <th>القيمة</th>
-                            <th>الحالة</th>
-                        </tr>
-                    </thead>
-                    <tbody id="movementsTableBody">
-                        <tr><td colspan="7" class="text-center">⏳ جاري التحميل...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <!-- التنبيهات -->
+    <div class="glass-card alerts-container">
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+      <h3 style="margin: 0;">
+       🔔 تنبيهات المخزون
+      </h3>
+      <div class="action-bar">
+       <button class="action-btn" onclick="exportAlerts()">
+        <i class="fas fa-file-export">
+        </i>
+        تصدير التنبيهات
+       </button>
+      </div>
+     </div>
+     <div class="alert-card" id="criticalAlertCard">
+      <div class="alert-icon">
+       <i class="fas fa-exclamation-circle">
+       </i>
+      </div>
+      <div class="alert-content">
+       <div class="alert-title">
+        نقص حاد في المخزون
+       </div>
+       <div class="alert-desc" id="criticalAlert">
+        0 منتجات وصلت إلى أقل من 10% من الحد الأدنى
+       </div>
+      </div>
+      <div class="alert-actions">
+       <button class="action-btn" onclick="showCriticalProducts()">
+        عرض المنتجات
+       </button>
+      </div>
+     </div>
+     <div class="alert-card alert-card-warning" id="expiringAlertCard">
+      <div class="alert-icon">
+       <i class="fas fa-hourglass-half">
+       </i>
+      </div>
+      <div class="alert-content">
+       <div class="alert-title">
+        منتجات قاربت على الانتهاء
+       </div>
+       <div class="alert-desc" id="expiringAlert">
+        0 منتج ستنتهي صلاحيته خلال الشهر القادم
+       </div>
+      </div>
+      <div class="alert-actions">
+       <button class="action-btn" onclick="showExpiringProducts()">
+        اتخاذ إجراء
+       </button>
+      </div>
+     </div>
+     <div class="alert-card alert-card-success" id="auditAlertCard">
+      <div class="alert-icon">
+       <i class="fas fa-sync-alt">
+       </i>
+      </div>
+      <div class="alert-content">
+       <div class="alert-title">
+        جرد تلقائي ناجح
+       </div>
+       <div class="alert-desc" id="auditAlert">
+        تم إجراء جرد تلقائي لـ 0 منتج
+       </div>
+      </div>
+      <div class="alert-actions">
+       <button class="action-btn" onclick="showAuditReport()">
+        عرض التقرير
+       </button>
+      </div>
+     </div>
     </div>
-
-    <!-- ===== قسم القيم ===== -->
-    <div class="section" id="valuesSection">
-        <div class="glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 class="page-title">💰 قيم المخزون</h2>
-                <div class="action-bar">
-                    <button class="action-btn action-btn-success" onclick="exportValues()">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </button>
-                </div>
-            </div>
-            <div class="table-container" style="max-height: 400px;">
-                <table class="data-table" id="valuesTable">
-                    <thead>
-                        <tr>
-                            <th>المنتج</th>
-                            <th>المخزن</th>
-                            <th>الكمية</th>
-                            <th>متوسط التكلفة</th>
-                            <th>القيمة الإجمالية</th>
-                        </tr>
-                    </thead>
-                    <tbody id="valuesTableBody">
-                        <tr><td colspan="5" class="text-center">⏳ جاري التحميل...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+   </div>
+   <!-- ===== قسم الحركات ===== -->
+   <div class="section" id="movementsSection">
+    <div class="glass-card">
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <h2 class="page-title">
+       🔄 حركات المخزون
+      </h2>
+      <div class="action-bar">
+       <button class="action-btn action-btn-success" onclick="exportMovements()">
+        <i class="fas fa-file-excel">
+        </i>
+        Excel
+       </button>
+      </div>
+     </div>
+     <div class="table-container" style="max-height: 400px;">
+      <table class="data-table" id="movementsTable">
+       <thead>
+        <tr>
+         <th>
+          #
+         </th>
+         <th>
+          التاريخ
+         </th>
+         <th>
+          المنتج
+         </th>
+         <th>
+          النوع
+         </th>
+         <th>
+          الكمية
+         </th>
+         <th>
+          القيمة
+         </th>
+         <th>
+          الحالة
+         </th>
+        </tr>
+       </thead>
+       <tbody id="movementsTableBody">
+        <tr>
+         <td class="text-center" colspan="7">
+          ⏳ جاري التحميل...
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
     </div>
-
-    <!-- ===== قسم التنبيهات ===== -->
-    <div class="section" id="alertsSection">
-        <div class="glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                <h2 class="page-title">🔔 تنبيهات المخزون</h2>
-                <div class="action-bar">
-                    <button class="action-btn action-btn-success" onclick="exportAlerts()">
-                        <i class="fas fa-file-excel"></i> Excel
-                    </button>
-                </div>
-            </div>
-            <div class="table-container" style="max-height: 400px;">
-                <table class="data-table" id="alertsTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>المنتج</th>
-                            <th>نوع التنبيه</th>
-                            <th>المستوى</th>
-                            <th>التاريخ</th>
-                            <th>الحالة</th>
-                        </tr>
-                    </thead>
-                    <tbody id="alertsTableBody">
-                        <tr><td colspan="6" class="text-center">⏳ جاري التحميل...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+   </div>
+   <!-- ===== قسم القيم ===== -->
+   <div class="section" id="valuesSection">
+    <div class="glass-card">
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <h2 class="page-title">
+       💰 قيم المخزون
+      </h2>
+      <div class="action-bar">
+       <button class="action-btn action-btn-success" onclick="exportValues()">
+        <i class="fas fa-file-excel">
+        </i>
+        Excel
+       </button>
+      </div>
+     </div>
+     <div class="table-container" style="max-height: 400px;">
+      <table class="data-table" id="valuesTable">
+       <thead>
+        <tr>
+         <th>
+          المنتج
+         </th>
+         <th>
+          المخزن
+         </th>
+         <th>
+          الكمية
+         </th>
+         <th>
+          متوسط التكلفة
+         </th>
+         <th>
+          القيمة الإجمالية
+         </th>
+        </tr>
+       </thead>
+       <tbody id="valuesTableBody">
+        <tr>
+         <td class="text-center" colspan="5">
+          ⏳ جاري التحميل...
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
     </div>
-
-</div>
-
-<!-- القائمة السفلية -->
-<div class="footer-menu">
-    <div class="menu-item active" data-section="summary" onclick="switchSection('summary')">
-        <i class="fas fa-home"></i>
-        <span>الملخص</span>
+   </div>
+   <!-- ===== قسم التنبيهات ===== -->
+   <div class="section" id="alertsSection">
+    <div class="glass-card">
+     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <h2 class="page-title">
+       🔔 تنبيهات المخزون
+      </h2>
+      <div class="action-bar">
+       <button class="action-btn action-btn-success" onclick="exportAlerts()">
+        <i class="fas fa-file-excel">
+        </i>
+        Excel
+       </button>
+      </div>
+     </div>
+     <div class="table-container" style="max-height: 400px;">
+      <table class="data-table" id="alertsTable">
+       <thead>
+        <tr>
+         <th>
+          #
+         </th>
+         <th>
+          المنتج
+         </th>
+         <th>
+          نوع التنبيه
+         </th>
+         <th>
+          المستوى
+         </th>
+         <th>
+          التاريخ
+         </th>
+         <th>
+          الحالة
+         </th>
+        </tr>
+       </thead>
+       <tbody id="alertsTableBody">
+        <tr>
+         <td class="text-center" colspan="6">
+          ⏳ جاري التحميل...
+         </td>
+        </tr>
+       </tbody>
+      </table>
+     </div>
     </div>
-    <div class="menu-item" data-section="movements" onclick="switchSection('movements')">
-        <i class="fas fa-exchange-alt"></i>
-        <span>الحركات</span>
+   </div>
+  </div>
+  <!-- القائمة السفلية -->
+  <div class="footer-menu">
+   <div class="menu-item active" data-section="summary" onclick="switchSection('summary')">
+    <i class="fas fa-home">
+    </i>
+    <span>
+     الملخص
+    </span>
+   </div>
+   <div class="menu-item" data-section="movements" onclick="switchSection('movements')">
+    <i class="fas fa-exchange-alt">
+    </i>
+    <span>
+     الحركات
+    </span>
+   </div>
+   <div class="menu-item" data-section="values" onclick="switchSection('values')">
+    <i class="fas fa-chart-pie">
+    </i>
+    <span>
+     القيم
+    </span>
+   </div>
+   <div class="menu-item" data-section="alerts" onclick="switchSection('alerts')">
+    <i class="fas fa-bell">
+    </i>
+    <span>
+     التنبيهات
+    </span>
+   </div>
+  </div>
+  <!-- ===== النماذج المنبثقة ===== -->
+  <!-- نموذج البحث -->
+  <div class="modal" id="searchModal">
+   <div class="modal-content">
+    <div class="modal-title">
+     🔍 استعلام عن منتج
     </div>
-    <div class="menu-item" data-section="values" onclick="switchSection('values')">
-        <i class="fas fa-chart-pie"></i>
-        <span>القيم</span>
+    <p style="margin-bottom: 15px; color: #666;">
+     أدخل كود المنتج أو اسم المنتج للبحث
+    </p>
+    <div class="modal-input-group">
+     <input class="modal-input" id="searchCode" placeholder="كود المنتج" type="text">
+     <input class="modal-input" id="searchName" placeholder="اسم المنتج" type="text">
     </div>
-    <div class="menu-item" data-section="alerts" onclick="switchSection('alerts')">
-        <i class="fas fa-bell"></i>
-        <span>التنبيهات</span>
+    <div style="margin-top: 15px;">
+     <button class="modal-btn modal-btn-cancel" onclick="closeModal('searchModal')">
+      إلغاء
+     </button>
+     <button class="modal-btn modal-btn-primary" onclick="performSearch()">
+      🔍 استعلام
+     </button>
     </div>
-</div>
-
-<!-- ===== النماذج المنبثقة ===== -->
-
-<!-- نموذج البحث -->
-<div id="searchModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-title">🔍 استعلام عن منتج</div>
-        <p style="margin-bottom: 15px; color: #666;">أدخل كود المنتج أو اسم المنتج للبحث</p>
-        <div class="modal-input-group">
-            <input type="text" id="searchCode" class="modal-input" placeholder="كود المنتج">
-            <input type="text" id="searchName" class="modal-input" placeholder="اسم المنتج">
-        </div>
-        <div style="margin-top: 15px;">
-            <button class="modal-btn modal-btn-cancel" onclick="closeModal('searchModal')">إلغاء</button>
-            <button class="modal-btn modal-btn-primary" onclick="performSearch()">🔍 استعلام</button>
-        </div>
+   </div>
+  </div>
+  <!-- نموذج الإضافة -->
+  <div class="modal" id="addModal">
+   <div class="modal-content">
+    <div class="modal-title">
+     ➕ إضافة منتج جديد
     </div>
-</div>
-
-<!-- نموذج الإضافة -->
-<div id="addModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-title">➕ إضافة منتج جديد</div>
-        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
-            <input type="text" id="addCode" class="modal-input" placeholder="كود المنتج" required>
-            <input type="text" id="addName" class="modal-input" placeholder="اسم المنتج" required>
-            <input type="number" id="addQuantity" class="modal-input" placeholder="الكمية" required>
-            <input type="number" id="addMinStock" class="modal-input" placeholder="الحد الأدنى للمخزون" required>
-            <input type="number" id="addPrice" class="modal-input" placeholder="سعر الشراء" required>
-            <select id="addCategory" class="modal-input" required>
-                <option value="">اختر الفئة</option>
-            </select>
-            <select id="addWarehouse" class="modal-input" required>
-                <option value="">اختر المخزن</option>
-            </select>
-        </div>
-        <div style="margin-top: 15px;">
-            <button class="modal-btn modal-btn-cancel" onclick="closeModal('addModal')">إلغاء</button>
-            <button class="modal-btn modal-btn-primary" onclick="saveNewProduct()">💾 حفظ</button>
-        </div>
+    <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+     <input class="modal-input" id="addCode" placeholder="كود المنتج" required="" type="text">
+     <input class="modal-input" id="addName" placeholder="اسم المنتج" required="" type="text">
+     <input class="modal-input" id="addQuantity" placeholder="الكمية" required="" type="number">
+     <input class="modal-input" id="addMinStock" placeholder="الحد الأدنى للمخزون" required="" type="number">
+     <input class="modal-input" id="addPrice" placeholder="سعر الشراء" required="" type="number">
+     <select class="modal-input" id="addCategory" required="">
+      <option value="">
+       اختر الفئة
+      </option>
+     </select>
+     <select class="modal-input" id="addWarehouse" required="">
+      <option value="">
+       اختر المخزن
+      </option>
+     </select>
     </div>
-</div>
-
-<!-- نموذج الإعدادات -->
-<div id="settingsModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-title">⚙️ إعدادات النظام</div>
-        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
-            <div class="filter-group">
-                <label class="filter-label">اللغة</label>
-                <select class="modal-input" id="languageSetting">
-                    <option value="ar">العربية</option>
-                    <option value="en">الإنجليزية</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">السمة</label>
-                <select class="modal-input" id="themeSetting">
-                    <option value="light">فاتح</option>
-                    <option value="dark">داكن</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">تحديث تلقائي</label>
-                <select class="modal-input" id="autoRefreshSetting">
-                    <option value="5">كل 5 دقائق</option>
-                    <option value="15">كل 15 دقيقة</option>
-                    <option value="30">كل 30 دقيقة</option>
-                    <option value="0">معطل</option>
-                </select>
-            </div>
-        </div>
-        <div style="margin-top: 15px;">
-            <button class="modal-btn modal-btn-cancel" onclick="closeModal('settingsModal')">إلغاء</button>
-            <button class="modal-btn modal-btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
-        </div>
+    <div style="margin-top: 15px;">
+     <button class="modal-btn modal-btn-cancel" onclick="closeModal('addModal')">
+      إلغاء
+     </button>
+     <button class="modal-btn modal-btn-primary" onclick="saveNewProduct()">
+      💾 حفظ
+     </button>
     </div>
-</div>
-
-<!-- نموذج التصفية المتقدمة -->
-<div id="advancedFilterModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-title">⚙️ تصفية متقدمة</div>
-        <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
-            <div class="filter-group">
-                <label class="filter-label">نطاق القيمة</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="number" id="minValue" class="modal-input" placeholder="الحد الأدنى">
-                    <input type="number" id="maxValue" class="modal-input" placeholder="الحد الأقصى">
-                </div>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">نطاق الكمية</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="number" id="minQuantity" class="modal-input" placeholder="الحد الأدنى">
-                    <input type="number" id="maxQuantity" class="modal-input" placeholder="الحد الأقصى">
-                </div>
-            </div>
-            <div class="filter-group">
-                <label class="filter-label">تاريخ الإضافة</label>
-                <input type="date" id="addDate" class="modal-input">
-            </div>
-        </div>
-        <div style="margin-top: 15px;">
-            <button class="modal-btn modal-btn-cancel" onclick="closeModal('advancedFilterModal')">إلغاء</button>
-            <button class="modal-btn modal-btn-primary" onclick="applyAdvancedFilters()">تطبيق التصفية</button>
-        </div>
+   </div>
+  </div>
+  <!-- نموذج الإعدادات -->
+  <div class="modal" id="settingsModal">
+   <div class="modal-content">
+    <div class="modal-title">
+     ⚙️ إعدادات النظام
     </div>
-</div>
-
-<!-- ============================================================ -->
-<!-- JavaScript -->
-<!-- ============================================================ -->
-<script>
-// ============================================================
+    <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+     <div class="filter-group">
+      <label class="filter-label">
+       اللغة
+      </label>
+      <select class="modal-input" id="languageSetting">
+       <option value="ar">
+        العربية
+       </option>
+       <option value="en">
+        الإنجليزية
+       </option>
+      </select>
+     </div>
+     <div class="filter-group">
+      <label class="filter-label">
+       السمة
+      </label>
+      <select class="modal-input" id="themeSetting">
+       <option value="light">
+        فاتح
+       </option>
+       <option value="dark">
+        داكن
+       </option>
+      </select>
+     </div>
+     <div class="filter-group">
+      <label class="filter-label">
+       تحديث تلقائي
+      </label>
+      <select class="modal-input" id="autoRefreshSetting">
+       <option value="5">
+        كل 5 دقائق
+       </option>
+       <option value="15">
+        كل 15 دقيقة
+       </option>
+       <option value="30">
+        كل 30 دقيقة
+       </option>
+       <option value="0">
+        معطل
+       </option>
+      </select>
+     </div>
+    </div>
+    <div style="margin-top: 15px;">
+     <button class="modal-btn modal-btn-cancel" onclick="closeModal('settingsModal')">
+      إلغاء
+     </button>
+     <button class="modal-btn modal-btn-primary" onclick="saveSettings()">
+      💾 حفظ الإعدادات
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- نموذج التصفية المتقدمة -->
+  <div class="modal" id="advancedFilterModal">
+   <div class="modal-content">
+    <div class="modal-title">
+     ⚙️ تصفية متقدمة
+    </div>
+    <div class="modal-input-group" style="flex-direction: column; gap: 12px;">
+     <div class="filter-group">
+      <label class="filter-label">
+       نطاق القيمة
+      </label>
+      <div style="display: flex; gap: 10px;">
+       <input class="modal-input" id="minValue" placeholder="الحد الأدنى" type="number">
+       <input class="modal-input" id="maxValue" placeholder="الحد الأقصى" type="number">
+      </div>
+     </div>
+     <div class="filter-group">
+      <label class="filter-label">
+       نطاق الكمية
+      </label>
+      <div style="display: flex; gap: 10px;">
+       <input class="modal-input" id="minQuantity" placeholder="الحد الأدنى" type="number">
+       <input class="modal-input" id="maxQuantity" placeholder="الحد الأقصى" type="number">
+      </div>
+     </div>
+     <div class="filter-group">
+      <label class="filter-label">
+       تاريخ الإضافة
+      </label>
+      <input class="modal-input" id="addDate" type="date">
+     </div>
+    </div>
+    <div style="margin-top: 15px;">
+     <button class="modal-btn modal-btn-cancel" onclick="closeModal('advancedFilterModal')">
+      إلغاء
+     </button>
+     <button class="modal-btn modal-btn-primary" onclick="applyAdvancedFilters()">
+      تطبيق التصفية
+     </button>
+    </div>
+   </div>
+  </div>
+  <!-- ============================================================ -->
+  <!-- JavaScript -->
+  <!-- ============================================================ -->
+  <script>
+   // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 function apiCall(action, params) {
@@ -2473,6 +2739,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 30000);
     }
 });
-</script>
-</body>
+  </script>
+ </body>
 </html>

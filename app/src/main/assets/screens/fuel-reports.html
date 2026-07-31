@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>نظام إدارة محطات الوقود – تقارير الوقود</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        /* ===================================================================
+<html dir="rtl" lang="ar">
+ <head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <title>
+   نظام إدارة محطات الوقود – تقارير الوقود
+  </title>
+  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
+  </script>
+  <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
+  </script>
+  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
+  </script>
+  <style>
+   /* ===================================================================
            تصميم مميز – لوحة زمردية – ذهبية (Emerald - Gold)
            مع دعم الوضع الفاتح/المظلم وإطارات مختلفة
            =================================================================== */
@@ -1133,291 +1138,489 @@
             .sidebar-btn { min-height: 60px; font-size: 0.7rem; }
             .sidebar-btn i { font-size: 1.2rem; }
         }
-    </style>
-</head>
-<body>
-
-    <!-- Pull-to-Refresh -->
-    <div class="pull-indicator" id="pullIndicator">
-        <i class="fas fa-arrow-down"></i>
-        <span>اسحب للتحديث</span>
-    </div>
-
-    <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
-    </div>
-
-    <!-- Loading -->
-    <div class="loading-indicator" id="loadingIndicator">
-        <div class="spinner"></div>
-    </div>
-
-    <!-- ===================================================================
+  </style>
+ </head>
+ <body>
+  <!-- Pull-to-Refresh -->
+  <div class="pull-indicator" id="pullIndicator">
+   <i class="fas fa-arrow-down">
+   </i>
+   <span>
+    اسحب للتحديث
+   </span>
+  </div>
+  <!-- Offline Banner -->
+  <div class="offline-banner" id="offlineBanner">
+   <i class="fas fa-wifi-slash">
+   </i>
+   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+  </div>
+  <!-- Loading -->
+  <div class="loading-indicator" id="loadingIndicator">
+   <div class="spinner">
+   </div>
+  </div>
+  <!-- ===================================================================
     الشريط العلوي
     =================================================================== -->
-    <header class="top-bar">
-        <div class="header-top">
-            <div class="top-title">
-                <h2><i class="fas fa-gas-pump"></i> تقارير الوقود <span class="ai-badge">AI</span></h2>
-                <span class="subtitle">تحليل شامل لمبيعات ومراقبة الوقود</span>
-            </div>
-            <div class="header-actions">
-                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
-                    <i class="fas fa-bell"></i>
-                </button>
-                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
-                    <i class="fas fa-moon" id="themeIcon"></i>
-                </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="border-color:rgba(16,185,129,0.3);">
-                    <i class="fas fa-robot" style="color:var(--emerald-primary);"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- الفلاتر -->
-        <div class="filter-bar">
-            <div class="filter-group">
-                <i class="fas fa-calendar-alt"></i>
-                <input type="date" id="filterDateFrom" placeholder="من">
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-calendar-alt"></i>
-                <input type="date" id="filterDateTo" placeholder="إلى">
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-oil-can"></i>
-                <select id="filterFuelType">
-                    <option value="">جميع أنواع الوقود</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-tank"></i>
-                <select id="filterTank">
-                    <option value="">جميع الخزانات</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <i class="fas fa-filter"></i>
-                <select id="filterReportType">
-                    <option value="summary">ملخص</option>
-                    <option value="sales">المبيعات</option>
-                    <option value="refills">التزود</option>
-                    <option value="readings">القراءات</option>
-                    <option value="tanks">الخزانات</option>
-                </select>
-            </div>
-            <div class="filter-actions">
-                <button class="btn-filter primary" onclick="generateReport()">
-                    <i class="fas fa-cog"></i> توليد
-                </button>
-                <button class="btn-filter" onclick="resetFilters()">
-                    <i class="fas fa-undo"></i>
-                </button>
-                <button class="btn-filter" onclick="exportCSV()">
-                    <i class="fas fa-file-csv"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- ===================================================================
+  <header class="top-bar">
+   <div class="header-top">
+    <div class="top-title">
+     <h2>
+      <i class="fas fa-gas-pump">
+      </i>
+      تقارير الوقود
+      <span class="ai-badge">
+       AI
+      </span>
+     </h2>
+     <span class="subtitle">
+      تحليل شامل لمبيعات ومراقبة الوقود
+     </span>
+    </div>
+    <div class="header-actions">
+     <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+      <i class="fas fa-bell">
+      </i>
+     </button>
+     <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+      <i class="fas fa-moon" id="themeIcon">
+      </i>
+     </button>
+     <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(16,185,129,0.3);" title="المستشار الذكي">
+      <i class="fas fa-robot" style="color:var(--emerald-primary);">
+      </i>
+     </button>
+    </div>
+   </div>
+   <!-- الفلاتر -->
+   <div class="filter-bar">
+    <div class="filter-group">
+     <i class="fas fa-calendar-alt">
+     </i>
+     <input id="filterDateFrom" placeholder="من" type="date">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-calendar-alt">
+     </i>
+     <input id="filterDateTo" placeholder="إلى" type="date">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-oil-can">
+     </i>
+     <select id="filterFuelType">
+      <option value="">
+       جميع أنواع الوقود
+      </option>
+     </select>
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-tank">
+     </i>
+     <select id="filterTank">
+      <option value="">
+       جميع الخزانات
+      </option>
+     </select>
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-filter">
+     </i>
+     <select id="filterReportType">
+      <option value="summary">
+       ملخص
+      </option>
+      <option value="sales">
+       المبيعات
+      </option>
+      <option value="refills">
+       التزود
+      </option>
+      <option value="readings">
+       القراءات
+      </option>
+      <option value="tanks">
+       الخزانات
+      </option>
+     </select>
+    </div>
+    <div class="filter-actions">
+     <button class="btn-filter primary" onclick="generateReport()">
+      <i class="fas fa-cog">
+      </i>
+      توليد
+     </button>
+     <button class="btn-filter" onclick="resetFilters()">
+      <i class="fas fa-undo">
+      </i>
+     </button>
+     <button class="btn-filter" onclick="exportCSV()">
+      <i class="fas fa-file-csv">
+      </i>
+     </button>
+    </div>
+   </div>
+  </header>
+  <!-- ===================================================================
     بطاقات الإحصائيات (وسط‌چین)
     =================================================================== -->
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-icon"><i class="fas fa-gas-pump"></i></div>
-            <div class="kpi-value" id="kpiTotalLiters">0.0</div>
-            <div class="kpi-label">⛽ إجمالي اللترات</div>
-            <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendLiters">+0%</span></div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon gold"><i class="fas fa-money-bill-wave"></i></div>
-            <div class="kpi-value" id="kpiTotalAmount">0.00</div>
-            <div class="kpi-label">💰 إجمالي المبيعات</div>
-            <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendAmount">+0%</span></div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon green"><i class="fas fa-chart-line"></i></div>
-            <div class="kpi-value" id="kpiAvgPrice">0.00</div>
-            <div class="kpi-label">📊 متوسط السعر</div>
-            <div class="kpi-trend up"><i class="fas fa-arrow-up"></i> <span id="trendPrice">+0%</span></div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon red"><i class="fas fa-exchange-alt"></i></div>
-            <div class="kpi-value" id="kpiTransactions">0</div>
-            <div class="kpi-label">📄 عدد المعاملات</div>
-            <div class="kpi-trend down"><i class="fas fa-arrow-down"></i> <span id="trendTx">-0%</span></div>
-        </div>
+  <div class="kpi-grid">
+   <div class="kpi-card">
+    <div class="kpi-icon">
+     <i class="fas fa-gas-pump">
+     </i>
     </div>
-
-    <!-- ===================================================================
+    <div class="kpi-value" id="kpiTotalLiters">
+     0.0
+    </div>
+    <div class="kpi-label">
+     ⛽ إجمالي اللترات
+    </div>
+    <div class="kpi-trend up">
+     <i class="fas fa-arrow-up">
+     </i>
+     <span id="trendLiters">
+      +0%
+     </span>
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-icon gold">
+     <i class="fas fa-money-bill-wave">
+     </i>
+    </div>
+    <div class="kpi-value" id="kpiTotalAmount">
+     0.00
+    </div>
+    <div class="kpi-label">
+     💰 إجمالي المبيعات
+    </div>
+    <div class="kpi-trend up">
+     <i class="fas fa-arrow-up">
+     </i>
+     <span id="trendAmount">
+      +0%
+     </span>
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-icon green">
+     <i class="fas fa-chart-line">
+     </i>
+    </div>
+    <div class="kpi-value" id="kpiAvgPrice">
+     0.00
+    </div>
+    <div class="kpi-label">
+     📊 متوسط السعر
+    </div>
+    <div class="kpi-trend up">
+     <i class="fas fa-arrow-up">
+     </i>
+     <span id="trendPrice">
+      +0%
+     </span>
+    </div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-icon red">
+     <i class="fas fa-exchange-alt">
+     </i>
+    </div>
+    <div class="kpi-value" id="kpiTransactions">
+     0
+    </div>
+    <div class="kpi-label">
+     📄 عدد المعاملات
+    </div>
+    <div class="kpi-trend down">
+     <i class="fas fa-arrow-down">
+     </i>
+     <span id="trendTx">
+      -0%
+     </span>
+    </div>
+   </div>
+  </div>
+  <!-- ===================================================================
     التنبيهات
     =================================================================== -->
-    <div class="alerts-container" id="alertsContainer"></div>
-
-    <!-- ===================================================================
+  <div class="alerts-container" id="alertsContainer">
+  </div>
+  <!-- ===================================================================
     الرسوم البيانية
     =================================================================== -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title"><i class="fas fa-chart-area"></i> اتجاه المبيعات</span>
-                <span class="chart-badge">آخر 7 أيام</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="salesTrendChart"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title"><i class="fas fa-chart-pie"></i> توزيع الوقود</span>
-                <span class="chart-badge">حسب النوع</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="fuelTypeChart"></canvas>
-            </div>
-        </div>
+  <div class="charts-grid">
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title">
+      <i class="fas fa-chart-area">
+      </i>
+      اتجاه المبيعات
+     </span>
+     <span class="chart-badge">
+      آخر 7 أيام
+     </span>
     </div>
-
-    <!-- ===================================================================
+    <div class="chart-container">
+     <canvas id="salesTrendChart">
+     </canvas>
+    </div>
+   </div>
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title">
+      <i class="fas fa-chart-pie">
+      </i>
+      توزيع الوقود
+     </span>
+     <span class="chart-badge">
+      حسب النوع
+     </span>
+    </div>
+    <div class="chart-container">
+     <canvas id="fuelTypeChart">
+     </canvas>
+    </div>
+   </div>
+  </div>
+  <!-- ===================================================================
     جدول معاملات الوقود
     =================================================================== -->
-    <div class="table-section">
-        <div class="table-wrapper">
-            <div class="table-scroll">
-                <table class="data-table" id="fuelTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>كود المعاملة</th>
-                            <th>التاريخ</th>
-                            <th>نوع الوقود</th>
-                            <th>الكمية (لتر)</th>
-                            <th>سعر الوحدة</th>
-                            <th>الإجمالي</th>
-                            <th>نوع العملية</th>
-                            <th>المصدر</th>
-                            <th>الحالة</th>
-                            <th>إجراء</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fuelTableBody">
-                        <tr>
-                            <td colspan="11"><div class="empty-state"><i class="fas fa-gas-pump"></i> اختر الفترة واضغط "توليد" لعرض التقرير</div></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="table-footer">
-                <span class="total-item"><span class="label">إجمالي اللترات:</span><span class="value" id="footerLiters">0.0</span></span>
-                <span class="total-item"><span class="label">إجمالي المبيعات:</span><span class="value" id="footerAmount">0.00</span></span>
-                <span class="total-item"><span class="label">متوسط السعر:</span><span class="value" id="footerAvgPrice">0.00</span></span>
-            </div>
-        </div>
+  <div class="table-section">
+   <div class="table-wrapper">
+    <div class="table-scroll">
+     <table class="data-table" id="fuelTable">
+      <thead>
+       <tr>
+        <th>
+         #
+        </th>
+        <th>
+         كود المعاملة
+        </th>
+        <th>
+         التاريخ
+        </th>
+        <th>
+         نوع الوقود
+        </th>
+        <th>
+         الكمية (لتر)
+        </th>
+        <th>
+         سعر الوحدة
+        </th>
+        <th>
+         الإجمالي
+        </th>
+        <th>
+         نوع العملية
+        </th>
+        <th>
+         المصدر
+        </th>
+        <th>
+         الحالة
+        </th>
+        <th>
+         إجراء
+        </th>
+       </tr>
+      </thead>
+      <tbody id="fuelTableBody">
+       <tr>
+        <td colspan="11">
+         <div class="empty-state">
+          <i class="fas fa-gas-pump">
+          </i>
+          اختر الفترة واضغط "توليد" لعرض التقرير
+         </div>
+        </td>
+       </tr>
+      </tbody>
+     </table>
     </div>
-
-    <!-- ===================================================================
+    <div class="table-footer">
+     <span class="total-item">
+      <span class="label">
+       إجمالي اللترات:
+      </span>
+      <span class="value" id="footerLiters">
+       0.0
+      </span>
+     </span>
+     <span class="total-item">
+      <span class="label">
+       إجمالي المبيعات:
+      </span>
+      <span class="value" id="footerAmount">
+       0.00
+      </span>
+     </span>
+     <span class="total-item">
+      <span class="label">
+       متوسط السعر:
+      </span>
+      <span class="value" id="footerAvgPrice">
+       0.00
+      </span>
+     </span>
+    </div>
+   </div>
+  </div>
+  <!-- ===================================================================
     الزر العائم (PDF)
     =================================================================== -->
-    <button class="fab" onclick="exportPDF()">
-        <i class="fas fa-file-pdf"></i>
-    </button>
-
-    <!-- ===================================================================
+  <button class="fab" onclick="exportPDF()">
+   <i class="fas fa-file-pdf">
+   </i>
+  </button>
+  <!-- ===================================================================
     القائمة الجانبية (مكبّرة)
     =================================================================== -->
-    <div class="sidebar-toggle" id="sidebarToggle">
-        <i class="fas fa-chevron-left"></i>
-    </div>
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-content">
-            <button class="sidebar-btn" onclick="handleAction('refresh')">
-                <i class="fas fa-sync-alt"></i> <span>تحديث</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('csv')">
-                <i class="fas fa-file-csv"></i> <span>CSV</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('pdf')">
-                <i class="fas fa-file-pdf"></i> <span>PDF</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('print')">
-                <i class="fas fa-print"></i> <span>طباعة</span>
-            </button>
-            <button class="sidebar-btn ai-btn" onclick="handleAction('ai')">
-                <i class="fas fa-robot"></i> <span>AI</span>
-            </button>
-            <button class="sidebar-btn" onclick="handleAction('home')">
-                <i class="fas fa-home"></i> <span>رجوع</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- ===================================================================
+  <div class="sidebar-toggle" id="sidebarToggle">
+   <i class="fas fa-chevron-left">
+   </i>
+  </div>
+  <div class="sidebar" id="sidebar">
+   <div class="sidebar-content">
+    <button class="sidebar-btn" onclick="handleAction('refresh')">
+     <i class="fas fa-sync-alt">
+     </i>
+     <span>
+      تحديث
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('csv')">
+     <i class="fas fa-file-csv">
+     </i>
+     <span>
+      CSV
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('pdf')">
+     <i class="fas fa-file-pdf">
+     </i>
+     <span>
+      PDF
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('print')">
+     <i class="fas fa-print">
+     </i>
+     <span>
+      طباعة
+     </span>
+    </button>
+    <button class="sidebar-btn ai-btn" onclick="handleAction('ai')">
+     <i class="fas fa-robot">
+     </i>
+     <span>
+      AI
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('home')">
+     <i class="fas fa-home">
+     </i>
+     <span>
+      رجوع
+     </span>
+    </button>
+   </div>
+  </div>
+  <!-- ===================================================================
     القائمة السفلية (مكبّرة الخط)
     =================================================================== -->
-    <nav class="bottom-nav">
-        <button class="nav-item" onclick="switchTab('summary')">
-            <i class="fas fa-chart-pie"></i> <span>ملخص</span>
-        </button>
-        <button class="nav-item active" onclick="switchTab('sales')">
-            <i class="fas fa-shopping-cart"></i> <span>المبيعات</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('refills')">
-            <i class="fas fa-truck"></i> <span>التزود</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('readings')">
-            <i class="fas fa-gauge-high"></i> <span>القراءات</span>
-        </button>
-        <button class="nav-item" onclick="switchTab('tanks')">
-            <i class="fas fa-tank"></i> <span>الخزانات</span>
-        </button>
-    </nav>
-
-    <!-- ===================================================================
+  <nav class="bottom-nav">
+   <button class="nav-item" onclick="switchTab('summary')">
+    <i class="fas fa-chart-pie">
+    </i>
+    <span>
+     ملخص
+    </span>
+   </button>
+   <button class="nav-item active" onclick="switchTab('sales')">
+    <i class="fas fa-shopping-cart">
+    </i>
+    <span>
+     المبيعات
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('refills')">
+    <i class="fas fa-truck">
+    </i>
+    <span>
+     التزود
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('readings')">
+    <i class="fas fa-gauge-high">
+    </i>
+    <span>
+     القراءات
+    </span>
+   </button>
+   <button class="nav-item" onclick="switchTab('tanks')">
+    <i class="fas fa-tank">
+    </i>
+    <span>
+     الخزانات
+    </span>
+   </button>
+  </nav>
+  <!-- ===================================================================
     مودال تفاصيل المعاملة
     =================================================================== -->
-    <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
-        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-            <!-- يتم تعبئتها عبر JS -->
-        </div>
-    </div>
-
-    <!-- ===================================================================
+  <div class="details-overlay" id="detailsOverlay" onclick="closeDetails()">
+   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
+    <!-- يتم تعبئتها عبر JS -->
+   </div>
+  </div>
+  <!-- ===================================================================
     مودال AI Advisor
     =================================================================== -->
-    <div class="ai-modal">
-        <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
-            <div class="modal" onclick="event.stopPropagation()">
-                <div class="modal-header">
-                    <h3 class="modal-title">🤖 المستشار الذكي – الوقود</h3>
-                    <button class="modal-close" onclick="closeAIModal()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="aiContent">
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i>
-                        <p>جاري تحليل بيانات الوقود...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <div class="ai-modal">
+   <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+     <div class="modal-header">
+      <h3 class="modal-title">
+       🤖 المستشار الذكي – الوقود
+      </h3>
+      <button class="modal-close" onclick="closeAIModal()">
+       <i class="fas fa-times">
+       </i>
+      </button>
+     </div>
+     <div id="aiContent">
+      <div style="text-align:center;color:var(--text-muted);padding:30px;">
+       <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;">
+       </i>
+       <p>
+        جاري تحليل بيانات الوقود...
+       </p>
+      </div>
+     </div>
     </div>
-
-    <!-- ===================================================================
+   </div>
+  </div>
+  <!-- ===================================================================
     Toast
     =================================================================== -->
-    <div class="toast" id="toast">
-        <div class="toast-icon"><i class="fas fa-check"></i></div>
-        <span id="toastMessage">تمت العملية بنجاح</span>
-    </div>
-
-    <!-- ===================================================================
+  <div class="toast" id="toast">
+   <div class="toast-icon">
+    <i class="fas fa-check">
+    </i>
+   </div>
+   <span id="toastMessage">
+    تمت العملية بنجاح
+   </span>
+  </div>
+  <!-- ===================================================================
     JavaScript
     =================================================================== -->
-    <script>
-        // ===================================================================
+  <script>
+   // ===================================================================
         // 1. apiCall الموحدة
         // ===================================================================
         function apiCall(action, params) {
@@ -2165,6 +2368,6 @@
                 if (e.target === this) closeDetails();
             });
         });
-    </script>
-</body>
+  </script>
+ </body>
 </html>

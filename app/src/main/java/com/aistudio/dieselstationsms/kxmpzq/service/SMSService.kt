@@ -46,6 +46,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import com.aistudio.dieselstationsms.kxmpzq.BackupWorker
+import com.aistudio.dieselstationsms.kxmpzq.worker.MaintenanceWorker
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -2283,7 +2285,7 @@ class SMSService : Service() {
     /**
      * التحقق مما إذا كانت الخدمة تعمل
      */
-    private fun isServiceRunning(): Boolean {
+    fun isServiceRunning(): Boolean {
         return isRunning.get() && !isDestroyed.get() && isInitialized.get()
     }
 
@@ -2357,22 +2359,22 @@ class SMSService : Service() {
         try {
             if (::smsMetrics.isInitialized) {
                 serviceScope.launch {
-                    smsMetrics.recordEvent(
-                        eventType = eventType,
-                        phone = "system",
-                        details = details ?: ""
-                    )
+                    try {
+                        val type = SmsMetrics.EventType.valueOf(eventType.uppercase())
+                        smsMetrics.recordEvent(
+                            eventType = type,
+                            phone = "system",
+                            details = details ?: ""
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        Log.d(TAG, "Event type $eventType not in metrics enum, skipping")
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to record event: ${e.message}", e)
         }
     }
-
-    /**
-     * الحصول على Wake Lock لمنع إيقاف الخدمة
-     */
-    private fun acquireWakeLock() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
@@ -2643,21 +2645,3 @@ class SMSService : Service() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ═══ Stub Worker Classes (compile-time placeholders) ═══
-// ═══════════════════════════════════════════════════════════════
-
-class MaintenanceWorker(appContext: android.content.Context, params: androidx.work.WorkerParameters) :
-    androidx.work.CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): androidx.work.Result {
-        android.util.Log.d("MaintenanceWorker", "Maintenance stub executed")
-        return androidx.work.Result.success()
-    }
-}
-
-class BackupWorker(appContext: android.content.Context, params: androidx.work.WorkerParameters) :
-    androidx.work.CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): androidx.work.Result {
-        android.util.Log.d("BackupWorker", "Backup stub executed")
-        return androidx.work.Result.success()
-    }
-}

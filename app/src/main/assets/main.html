@@ -5,11 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
     <title>محطة أبو أحمد – لوحة التحكم</title>
-    <!-- Font Awesome 6 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Font Awesome محلي -->
+    <link rel="stylesheet" href="file:///android_asset/fontawesome/css/all.min.css" />
+    <!-- Google Fonts محلية -->
     <style>
+        @font-face {
+            font-family: 'Poppins';
+            src: url('file:///android_asset/fonts/Poppins-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Poppins';
+            src: url('file:///android_asset/fonts/Poppins-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Inter';
+            src: url('file:///android_asset/fonts/Inter-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'Inter';
+            src: url('file:///android_asset/fonts/Inter-Bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: 'IBM Plex Mono';
+            src: url('file:///android_asset/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+        }
         /* ============================================================
            المتغيرات وإعادة الضبط
            ============================================================ */
@@ -32,7 +61,7 @@
             --radius: 12px;
             --radius-sm: 6px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --sidebar-width: auto;
+            --sidebar-width: 220px;
             --header-height: 64px;
             --font-family: 'Inter', sans-serif;
             --font-heading: 'Poppins', sans-serif;
@@ -117,14 +146,8 @@
         .fade-in { animation: fadeIn 0.35s ease; }
         .slide-in { animation: slideInRight 0.3s ease; }
 
-        /* ============================================================
-           حاوية التطبيق
-           ============================================================ */
         .app-container { display: block; }
 
-        /* ============================================================
-           الرأس (Header)
-           ============================================================ */
         .app-header {
             position: sticky;
             top: 0;
@@ -186,9 +209,6 @@
         }
         .menu-toggle:hover { background: var(--border); }
 
-        /* ============================================================
-           القائمة الجانبية (Sidebar) – عرض ديناميكي حسب المحتوى
-           ============================================================ */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -233,7 +253,7 @@
                 border-left: 1px solid var(--border);
             }
             .sidebar-overlay { display: none !important; }
-            .main-content { margin-right: var(--sidebar-width, 220px); }
+            .main-content { margin-right: var(--sidebar-width); }
             .menu-toggle { display: none; }
             .sidebar-close { display: none; }
         }
@@ -283,7 +303,6 @@
         .sidebar-header .header-actions-side button:hover { background: var(--border); color: var(--text); }
         .sidebar-header .header-actions-side button.pinned { color: var(--gold-color); transform: rotate(-45deg); }
 
-        /* شريط البحث */
         .sidebar-search {
             padding: 6px 8px;
             border-bottom: 1px solid var(--border);
@@ -361,9 +380,6 @@
             pointer-events: none;
         }
 
-        /* ============================================================
-           القوائم الفرعية (Submenu) – عرض ديناميكي
-           ============================================================ */
         .submenu-panel {
             position: fixed;
             background: var(--card-bg);
@@ -441,9 +457,6 @@
             animation: fadeIn 0.3s ease;
         }
 
-        /* ============================================================
-           المحتوى الرئيسي – لوحة التحكم فقط
-           ============================================================ */
         .main-content {
             margin-right: 0;
             transition: margin-right 0.3s;
@@ -451,14 +464,11 @@
             min-height: calc(100vh - var(--header-height));
         }
         @media (min-width: 1024px) {
-            .main-content { margin-right: var(--sidebar-width, 220px); }
+            .main-content { margin-right: var(--sidebar-width); }
         }
 
         .page { display: block; animation: fadeIn 0.3s ease; }
 
-        /* ============================================================
-           البطاقات الإحصائية
-           ============================================================ */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -573,9 +583,6 @@
         }
         .card-title .card-icon { color: var(--primary); }
 
-        /* ============================================================
-           معلومات المستخدم والشعار – تظهر في أعلى الشاشة
-           ============================================================ */
         .user-info-card {
             display: flex;
             align-items: center;
@@ -654,9 +661,6 @@
             gap: 8px;
         }
 
-        /* ============================================================
-           الإشعارات (Toast)
-           ============================================================ */
         .toast-container {
             position: fixed;
             top: 16px;
@@ -690,9 +694,6 @@
         .toast.error { border-right-color: var(--danger); }
         .toast.warning { border-right-color: var(--warning); }
 
-        /* ============================================================
-           التحميل (Loading)
-           ============================================================ */
         .spinner {
             display: inline-block;
             width: 24px; height: 24px;
@@ -724,9 +725,6 @@
         .loading-overlay .loading-box .spinner { width: 40px; height: 40px; border-width: 4px; }
         .loading-overlay .loading-box p { margin-top: 12px; font-weight: 600; color: var(--text); }
 
-        /* ============================================================
-           النوافذ المنبثقة (Modal)
-           ============================================================ */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -793,9 +791,6 @@
             bottom: 0;
         }
 
-        /* ============================================================
-           فقاعات التنبيه (Bubbles)
-           ============================================================ */
         .bubble-container {
             position: fixed;
             top: 90px;
@@ -836,9 +831,6 @@
             animation: wave 15s infinite;
         }
 
-        /* ============================================================
-           استجابة للشاشات الصغيرة
-           ============================================================ */
         @media (max-width: 767px) {
             .sidebar { width: max-content; min-width: 140px; max-width: 220px; top: 0; transform: translateX(100%); }
             .sidebar.open { transform: translateX(0); }
@@ -847,11 +839,7 @@
             .stat-card .stat-value { font-size: 20px; }
             .stat-card { min-height: 80px; padding: 12px; }
             .stat-card .card-header h3 { font-size: 0.8rem; }
-            .submenu-panel {
-                min-width: 140px;
-                max-width: 200px;
-                font-size: 0.85rem;
-            }
+            .submenu-panel { min-width: 140px; max-width: 200px; font-size: 0.85rem; }
             .company-logo { height: 320px; }
             .user-info-card { flex-wrap: wrap; justify-content: center; text-align: center; }
         }
@@ -862,15 +850,8 @@
             .stat-card .stat-value { font-size: 17px; }
             .app-header .header-brand h1 { font-size: 14px; }
             .app-header .header-brand small { font-size: 10px; }
-            .submenu-panel {
-                min-width: 120px;
-                max-width: 180px;
-                padding: 0.5rem 0.3rem;
-            }
-            .submenu-panel ul li {
-                padding: 8px 10px;
-                font-size: 12px;
-            }
+            .submenu-panel { min-width: 120px; max-width: 180px; padding: 0.5rem 0.3rem; }
+            .submenu-panel ul li { padding: 8px 10px; font-size: 12px; }
             .company-logo { height: 280px; }
         }
         @media (max-width: 360px) {
@@ -881,9 +862,6 @@
             .company-logo { height: 250px; }
         }
 
-        /* ============================================================
-           أدوات مساعدة
-           ============================================================ */
         .text-center { text-align: center; }
         .text-muted { color: var(--text-secondary); }
         .mt-1 { margin-top: 6px; }
@@ -899,18 +877,11 @@
         .w-full { width: 100%; }
         .hidden { display: none !important; }
     </style>
-<base target="_blank">
 </head>
 <body>
 
-    <!-- ============================================================
-    حاوية الإشعارات (Toast)
-    ============================================================ -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- ============================================================
-    تغطية التحميل
-    ============================================================ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-box">
             <div class="spinner"></div>
@@ -918,12 +889,8 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    حاوية التطبيق
-    ============================================================ -->
     <div class="app-container" id="appContainer">
 
-        <!-- الرأس -->
         <header class="app-header">
             <div class="header-left">
                 <button class="menu-toggle" onclick="toggleSidebar()" aria-label="فتح القائمة">
@@ -938,7 +905,6 @@
                 </div>
             </div>
             <div class="header-actions">
-                <!-- زر تبديل المظهر (SVG ملون) -->
                 <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع" style="color: #f39c12;">
                     <svg viewBox="0 0 24 24">
                         <path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
@@ -946,13 +912,11 @@
                         <circle cx="12" cy="12" r="2"/>
                     </svg>
                 </button>
-                <!-- زر تسجيل الخروج (SVG ملون) -> توجيه إلى شاشة تسجيل الدخول -->
                 <button class="icon-btn" onclick="logout()" title="تسجيل الخروج" style="color: #e67e22;">
                     <svg viewBox="0 0 24 24">
                         <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
                     </svg>
                 </button>
-                <!-- زر عن التطبيق (SVG ملون) -->
                 <button class="icon-btn" onclick="showAboutModal()" title="عن التطبيق" style="color: #3498db;">
                     <svg viewBox="0 0 24 24">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
@@ -961,10 +925,8 @@
             </div>
         </header>
 
-        <!-- تغطية القائمة الجانبية -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-        <!-- القائمة الجانبية -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -977,41 +939,29 @@
                 </div>
             </div>
 
-            <!-- شريط البحث -->
             <div class="sidebar-search">
                 <input type="text" id="sidebarSearch" placeholder="بحث..." oninput="filterSidebar(event)" />
             </div>
 
             <nav class="sidebar-nav" id="sidebarNav">
-                <!-- سيتم إنشاؤها عبر JavaScript -->
+                <!-- سيتم إنشاؤها عبر JavaScript ديناميكياً -->
             </nav>
         </aside>
 
-        <!-- ============================================================
-        القائمة الفرعية (Submenu Panel)
-        ============================================================ -->
         <div class="submenu-panel" id="submenuPanel">
             <h4 id="submenuTitle"></h4>
             <ul id="submenuItems"></ul>
         </div>
 
-        <!-- تغطية القوائم الفرعية -->
         <div class="overlay" id="overlay" onclick="closePanels()"></div>
 
-        <!-- ============================================================
-        المحتوى الرئيسي – لوحة التحكم فقط
-        ============================================================ -->
         <main class="main-content" id="mainContent">
 
-            <!-- ============================================================
-            صفحة لوحة التحكم (Dashboard)
-            ============================================================ -->
             <div class="page" id="page-dashboard">
 
-                <!-- معلومات المستخدم – تظهر في الأعلى -->
                 <div class="user-info-card" id="userInfoCard">
                     <div class="avatar">
-                        <img id="userAvatar" src="https://ui-avatars.com/api/?name=Admin&background=1e40af&color=fff" alt="صورة المستخدم">
+                        <img id="userAvatar" src="file:///android_asset/images/default_avatar.png" alt="صورة المستخدم">
                     </div>
                     <div class="user-details">
                         <h4 id="userDisplayName">مدير النظام</h4>
@@ -1020,13 +970,11 @@
                     </div>
                 </div>
 
-                <!-- الشعار -->
                 <div class="logo-full">
-                    <img src="/static/images/shar11.jpg" alt="شعار الشركة" class="company-logo"
-                         onerror="this.src='https://via.placeholder.com/600x375/0066cc/ffffff?text=شعار+الشركة'">
+                    <img src="file:///android_asset/images/shar11.jpg" alt="شعار الشركة" class="company-logo"
+                         onerror="this.src='file:///android_asset/images/logo_fallback.png'">
                 </div>
 
-                <!-- البطاقات الإحصائية -->
                 <div class="stats-grid" id="dashStats">
                     <div class="stat-card" id="card-total-products">
                         <div class="card-header">
@@ -1095,8 +1043,8 @@
                             <i class="fas fa-undo"></i>
                             <h3>المنتجات المرتجعة</h3>
                         </div>
-                        <div class="stat-value" id="returned-products">0</div>
-                        <div class="stat-label">كمية اليوم</div>
+                        <div class="stat-value" id="returned-products">0.00</div>
+                        <div class="stat-label">كمية اليوم (لتر)</div>
                     </div>
 
                     <div class="stat-card damaged-card" id="card-damaged-products">
@@ -1104,8 +1052,8 @@
                             <i class="fas fa-ban"></i>
                             <h3>المنتجات التالفة</h3>
                         </div>
-                        <div class="stat-value" id="damaged-products">0</div>
-                        <div class="stat-label">كمية اليوم</div>
+                        <div class="stat-value" id="damaged-products">0.00</div>
+                        <div class="stat-label">كمية اليوم (لتر)</div>
                     </div>
 
                     <div class="stat-card warning-card" id="card-customer-debts">
@@ -1146,7 +1094,6 @@
                     </div>
                 </div>
 
-                <!-- معلومات تحديث البيانات -->
                 <div class="data-update-info">
                     <i class="fas fa-sync-alt"></i> تم تحديث البيانات في: <span id="last-update">يتم التحميل...</span>
                 </div>
@@ -1155,9 +1102,7 @@
         </main>
     </div>
 
-    <!-- ============================================================
-    نافذة "عن التطبيق" – محفوظة بنسبة 100% من الأصل
-    ============================================================ -->
+    <!-- نافذة "عن التطبيق" -->
     <div class="modal-overlay" id="aboutModal">
         <div class="modal">
             <div class="modal-header"><h3><i class="fas fa-info-circle"></i> عن التطبيق</h3><button class="modal-close" onclick="closeModal('aboutModal')">&times;</button></div>
@@ -1178,15 +1123,10 @@
         </div>
     </div>
 
-    <!-- ============================================================
-    جافاسكريبت – التطبيق الكامل مع دعم AndroidInterface ومعالجة الأخطاء
-    ============================================================ -->
     <script>
         // ============================================================
         // الإعدادات والحالة العامة
         // ============================================================
-        const API_BASE = 'http://127.0.0.1:8080/api';
-        let authToken = localStorage.getItem('authToken') || null;
         let currentUser = null;
         let userPermissions = {};
         let notificationQueue = [];
@@ -1194,10 +1134,41 @@
         let activeBubbles = [];
         let notificationsEnabled = true;
         let refreshInterval = null;
+        let dashboardCache = null; // تخزين مؤقت لبيانات Dashboard
 
-        // الكشف عن وجود AndroidInterface
-        const androidInterface = window.AndroidInterface;
-        const useAndroidInterface = typeof androidInterface !== 'undefined' && androidInterface !== null;
+        let androidInterface = null; // سيتم تهيئته لاحقاً
+        let useAndroidInterface = false;
+
+        // دالة تهيئة الجسر
+        function initAndroidBridge() {
+            if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
+                androidInterface = window.AndroidInterface;
+                useAndroidInterface = true;
+                console.log('AndroidInterface initialized successfully');
+                return true;
+            } else {
+                console.warn('AndroidInterface not available yet. Will retry...');
+                // محاولة ثانية بعد 500ms
+                setTimeout(() => {
+                    if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
+                        androidInterface = window.AndroidInterface;
+                        useAndroidInterface = true;
+                        console.log('AndroidInterface initialized after retry');
+                        // إعادة تهيئة التطبيق بعد نجاح الجسر
+                        if (currentUser) {
+                            loadDashboard();
+                            renderSidebar();
+                        } else {
+                            loadUserFromKotlin();
+                        }
+                    } else {
+                        // عرض وضع الصيانة الخفيف
+                        showMaintenanceMode();
+                    }
+                }, 500);
+                return false;
+            }
+        }
 
         // ============================================================
         // أدوات مساعدة
@@ -1223,242 +1194,152 @@
             document.getElementById(id).classList.add('active');
         }
 
+        // وضع الصيانة الخفيف (دون حذف الواجهة)
+        function showMaintenanceMode() {
+            const overlay = document.createElement('div');
+            overlay.id = 'maintenanceOverlay';
+            overlay.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+                display: flex; align-items: center; justify-content: center;
+                z-index: 9999; direction: rtl;
+            `;
+            overlay.innerHTML = `
+                <div style="background:var(--card-bg); padding:30px 40px; border-radius:16px; text-align:center; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+                    <i class="fas fa-wrench" style="font-size:48px; color:var(--warning); margin-bottom:16px;"></i>
+                    <h3 style="color:var(--text); margin-bottom:8px;">تعذر الاتصال بالخدمة</h3>
+                    <p style="color:var(--text-secondary); margin-bottom:16px;">يرجى التحقق من اتصال الجهاز وإعادة المحاولة</p>
+                    <button onclick="location.reload()" style="padding:10px 24px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-size:16px;">
+                        <i class="fas fa-sync-alt"></i> إعادة المحاولة
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
         // ============================================================
-        // دالة الاتصال الأساسية (مع دعم AndroidInterface ومعالجة الأخطاء)
+        // دالة الاتصال الأساسية عبر AndroidInterface (باستخدام JSON واحد)
         // ============================================================
-        
-function waitForAndroidBridge(timeout = 5000) {
-    return new Promise((resolve) => {
-        const start = Date.now();
-
-        const timer = setInterval(() => {
-            if (typeof AndroidInterface !== 'undefined' &&
-                AndroidInterface !== null) {
-                clearInterval(timer);
-                resolve(true);
-                return;
+        async function apiCall(action, params = {}) {
+            if (!useAndroidInterface || !androidInterface) {
+                throw new Error('AndroidInterface غير متاح');
             }
 
-            if (Date.now() - start >= timeout) {
-                clearInterval(timer);
-                resolve(false);
-            }
-        }, 100);
-    });
-}
-
-async function apiCall(action, params = {}) {
-    const bridgeReady = await waitForAndroidBridge();
-    if (!bridgeReady) {
-        console.error("AndroidInterface bridge not ready");
-        throw new Error("AndroidInterface not injected");
-    }
-
-            const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
-
-            if (hasBridge) {
-                try {
-                    // خريطة تحويل الـ actions إلى دوال AndroidInterface
-                    const actionMap = {
-                        'get_dashboard_stats': 'getDashboardStats',
-                        'get_daily_sales': 'getDailySales',
-                        'get_monthly_sales': 'getMonthlySales',
-                        'get_eod_report': 'getEodReport',
-                        'get_profit_report': 'getProfitReport',
-                        'get_ai_insight': 'getAIInsight',
-                        'get_customers': 'getCustomers',
-                        'add_customer': 'addParty',
-                        'update_customer': 'updateParty',
-                        'delete_customer': 'deleteParty',
-                        'get_suppliers': 'getSuppliers',
-                        'get_drivers': 'getDrivers',
-                        'get_products': 'getProducts',
-                        'add_product': 'addProduct',
-                        'update_product': 'updateProduct',
-                        'delete_product': 'deleteProduct',
-                        'get_fuel_types': 'getFuelTypes',
-                        'get_categories': 'getCategories',
-                        'get_low_stock_items': 'getLowStockItems',
-                        'get_sales': 'getSales',
-                        'execute_sale': 'addSale',
-                        'delete_sale': 'deleteSale',
-                        'get_shifts': 'getShifts',
-                        'add_shift': 'startShift',
-                        'delete_shift': 'deleteShift',
-                        'get_payments': 'getPayments',
-                        'make_payment': 'makePayment',
-                        'add_deposit': 'addDeposit',
-                        'delete_payment': 'deletePayment',
-                        'get_tanks': 'getTanks',
-                        'get_pumps': 'getPumps',
-                        'update_tank_quantity': 'updateTankQuantity',
-                        'get_tank_stats': 'getTankStats',
-                        'get_employees': 'getEmployees',
-                        'add_employee': 'addEmployee',
-                        'update_employee': 'updateEmployee',
-                        'delete_employee': 'deleteEmployee',
-                        'get_users': 'getUsers',
-                        'add_user': 'addUser',
-                        'update_user': 'updateUser',
-                        'delete_user': 'deleteUser',
-                        'get_roles': 'getRoles',
-                        'add_role': 'addRole',
-                        'update_role': 'updateRole',
-                        'delete_role': 'deleteRole',
-                        'get_maintenance_requests': 'getMaintenanceRequests',
-                        'add_maintenance_request': 'addMaintenanceRequest',
-                        'update_maintenance_status': 'updateMaintenanceStatus',
-                        'delete_maintenance': 'deleteMaintenance',
-                        'get_setting': 'getSetting',
-                        'set_setting': 'setSetting',
-                        'get_all_settings': 'getAllSettingsMap',
-                        'get_vehicles': 'getVehicles',
-                        'export_data': 'exportAllData'
-                    };
-
-                    const methodName = actionMap[action];
-                    if (!methodName) {
-                        // إذا كانت الدالة غير موجودة في الخريطة، نحاول استدعاءها مباشرة
-                        if (typeof AndroidInterface[action] === 'function') {
-                            const result = AndroidInterface[action]();
-                            return handleAndroidResult(result);
-                        }
-                        // إرجاع خطأ بدلاً من رمي استثناء
-                        console.warn(`الإجراء غير معروف: ${action}`);
-                        return { success: false, error: `Unsupported action: ${action}` };
-                    }
-
-                    const method = AndroidInterface[methodName];
-                    if (typeof method !== 'function') {
-                        console.warn(`الدالة ${methodName} غير موجودة في الجسر`);
-                        return { success: false, error: `Method ${methodName} not found in bridge` };
-                    }
-
-                    let result;
-                    // تنفيذ الدالة حسب نوع المعاملات
-                    switch (action) {
-                        case 'login':
-                            result = method(params.username || '', params.password || '');
-                            break;
-                        case 'add_customer':
-                        case 'update_customer':
-                        case 'add_product':
-                        case 'update_product':
-                        case 'add_employee':
-                        case 'update_employee':
-                        case 'add_user':
-                        case 'update_user':
-                        case 'add_role':
-                        case 'update_role':
-                        case 'add_maintenance_request':
-                        case 'make_payment':
-                        case 'add_deposit':
-                        case 'execute_sale':
-                        case 'add_shift':
-                            const jsonData = JSON.stringify(params);
-                            result = method(jsonData);
-                            break;
-                        case 'set_setting':
-                            result = method(params.key || '', params.value || '');
-                            break;
-                        case 'get_setting':
-                            result = method(params.key || '');
-                            break;
-                        case 'update_tank_quantity':
-                            result = method(parseInt(params.tank_id), parseFloat(params.quantity));
-                            break;
-                        case 'delete_customer':
-                        case 'delete_product':
-                        case 'delete_employee':
-                        case 'delete_user':
-                        case 'delete_role':
-                        case 'delete_payment':
-                        case 'delete_shift':
-                        case 'delete_sale':
-                        case 'delete_maintenance':
-                            const idKeys = Object.keys(params).filter(k => k.includes('id') || k === 'shift_id' || k === 'sale_id' || k === 'request_id');
-                            const idValue = idKeys.length ? parseInt(params[idKeys[0]]) : 0;
-                            result = method(idValue);
-                            break;
-                        default:
-                            result = method();
-                            break;
-                    }
-
-                    return handleAndroidResult(result);
-                } catch (e) {
-                    // في حالة حدوث أي خطأ، نعيد كائن خطأ بدلاً من رمي استثناء
-                    console.error('AndroidInterface error:', e);
-                    return { success: false, error: e.message || 'AndroidInterface error' };
-                }
+            const method = androidInterface[action];
+            if (typeof method !== 'function') {
+                console.warn(`الدالة ${action} غير موجودة في الجسر`);
+                return { success: false, error: `Method ${action} not found` };
             }
 
-            // ============================================================
-            // الاحتياطي: استخدام fetch في حال عدم وجود الجسر
-            // ============================================================
-            console.warn('AndroidInterface غير موجود، استخدام fetch الاحتياطي');
             try {
-                const url = new URL(API_BASE);
-                url.searchParams.append('action', action);
-                Object.keys(params).forEach(key => {
-                    if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-                        url.searchParams.append(key, params[key]);
-                    }
-                });
-                const response = await fetch(url.toString(), {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
+                const jsonParams = JSON.stringify(params);
+                const result = method(jsonParams);
+                return handleAndroidResult(result);
             } catch (e) {
-                console.error('API Error:', e);
-                showToast('خطأ في الاتصال بالخادم', 'error');
-                throw e;
+                console.error('AndroidInterface error:', e);
+                return { success: false, error: e.message || 'AndroidInterface error' };
             }
         }
 
-        /**
-         * معالجة النتيجة القادمة من AndroidInterface (Kotlin) لتوحيد الشكل
-         */
         function handleAndroidResult(result) {
-            // إذا كانت النتيجة سلسلة نصية، نحاول تحويلها إلى JSON
             if (typeof result === 'string') {
                 try {
                     result = JSON.parse(result);
                 } catch (e) {
-                    // ليست JSON صالحة
                     return { success: false, error: result };
                 }
             }
-
-            // إذا كانت النتيجة كائناً يحتوي على success
             if (result && typeof result === 'object' && 'success' in result) {
                 return result;
             }
-
-            // إذا كانت مصفوفة، نغلفها مع success: true
             if (Array.isArray(result)) {
                 return { success: true, data: result };
             }
-
-            // إذا كانت كائناً عادياً (مثل الإحصائيات القادمة من getDashboardStats)
             if (result && typeof result === 'object') {
                 return { success: true, data: result };
             }
-
-            // قيمة بسيطة
             return { success: true, data: result };
         }
 
         // ============================================================
-        // تسجيل الخروج (توجيه إلى شاشة تسجيل الدخول)
+        // جلب المستخدم من Kotlin (بدلاً من localStorage)
+        // ============================================================
+        async function loadUserFromKotlin() {
+            try {
+                showLoading(true);
+                const result = await apiCall('getCurrentUser');
+                if (result.success && result.data) {
+                    currentUser = result.data;
+                    if (currentUser.user_id) {
+                        // جلب الصلاحيات
+                        await loadUserPermissions(currentUser.user_id);
+                    }
+                    // تخزين نسخة مؤقتة في localStorage للاستخدام السريع (ولكن المصدر الأساسي هو Kotlin)
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    updateUserInfo(currentUser);
+                    renderSidebar();
+                    loadDashboard();
+                    return true;
+                } else {
+                    // محاولة القراءة من localStorage كنسخة احتياطية
+                    const cached = localStorage.getItem('user');
+                    if (cached) {
+                        currentUser = JSON.parse(cached);
+                        updateUserInfo(currentUser);
+                        renderSidebar();
+                        loadDashboard();
+                        return true;
+                    }
+                    // لا يوجد مستخدم، التوجيه إلى شاشة تسجيل الدخول
+                    window.location.replace('screens/login.html');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Error loading user from Kotlin:', e);
+                // محاولة القراءة من localStorage
+                const cached = localStorage.getItem('user');
+                if (cached) {
+                    currentUser = JSON.parse(cached);
+                    updateUserInfo(currentUser);
+                    renderSidebar();
+                    loadDashboard();
+                    return true;
+                }
+                window.location.replace('screens/login.html');
+                return false;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function loadUserPermissions(userId) {
+            try {
+                const result = await apiCall('getUserPermissions', { userId: userId });
+                if (result.success && result.data) {
+                    const perms = {};
+                    if (Array.isArray(result.data)) {
+                        result.data.forEach(p => {
+                            perms[p.permission_code] = true;
+                        });
+                    }
+                    userPermissions = perms;
+                    if (currentUser) {
+                        currentUser.permissions = perms;
+                        localStorage.setItem('user', JSON.stringify(currentUser));
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading permissions:', e);
+            }
+        }
+
+        // ============================================================
+        // تسجيل الخروج
         // ============================================================
         function logout() {
             if (confirm('تسجيل الخروج؟')) {
                 if (refreshInterval) clearInterval(refreshInterval);
                 localStorage.clear();
-                // التوجيه إلى شاشة تسجيل الدخول
                 window.location.replace('screens/login.html');
             }
         }
@@ -1479,99 +1360,33 @@ async function apiCall(action, params = {}) {
         })();
 
         // ============================================================
-        // القائمة الجانبية
+        // بيانات القائمة (سيتم تحميلها من JSON أو استخدام الاحتياطي)
         // ============================================================
-        const sidebarNavData = [{
-            id: 'security',
-            label: 'الأمان والمصادقة',
-            icon: 'fa-shield-alt',
-            children: ['إدارة المستخدمين', 'الأدوار والصلاحيات', 'سجل النشاطات']
-        }, {
-            id: 'admin',
-            label: 'الإدارة الأساسية',
-            icon: 'fa-building',
-            children: ['إعدادات الشركة', 'إدارة المحطات', 'إعدادات النظام', 'أسعار الصرف']
-        }, {
-            id: 'parties',
-            label: 'الأطراف والعملاء',
-            icon: 'fa-users',
-            children: ['إدارة العملاء', 'إدارة الموردين', 'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات']
-        }, {
-            id: 'vehicles',
-            label: 'المركبات والسائقين',
-            icon: 'fa-truck',
-            children: ['إدارة المركبات', 'إدارة السائقين', 'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات']
-        }, {
-            id: 'products',
-            label: 'المنتجات والوقود',
-            icon: 'fa-boxes',
-            children: ['أنواع الوقود', 'إدارة المنتجات', 'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار']
-        }, {
-            id: 'tanks',
-            label: 'الخزانات والمضخات',
-            icon: 'fa-oil-can',
-            children: ['إدارة الخزانات', 'إدارة المضخات', 'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات']
-        }, {
-            id: 'inventory',
-            label: 'المخزون والمستودعات',
-            icon: 'fa-warehouse',
-            children: ['إدارة المستودعات', 'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون']
-        }, {
-            id: 'sales',
-            label: 'المبيعات والورديات',
-            icon: 'fa-shopping-cart',
-            children: ['نقطة البيع (POS)', 'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود']
-        }, {
-            id: 'finance',
-            label: 'المالية والحسابات',
-            icon: 'fa-money-bill-wave',
-            children: ['إدارة المدفوعات', 'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات', 'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية', 'دفتر الأستاذ', 'الميزانية العمومية']
-        }, {
-            id: 'hr',
-            label: 'الموارد البشرية',
-            icon: 'fa-user-tie',
-            children: ['إدارة الموظفين', 'الحضور والانصراف', 'إدارة الرواتب', 'دفعات الموظفين']
-        }, {
-            id: 'assets',
-            label: 'الأصول والصيانة',
-            icon: 'fa-tools',
-            children: ['الأصول الثابتة', 'إدارة الأصول V12', 'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك']
-        }, {
-            id: 'notifications',
-            label: 'الإشعارات والرسائل',
-            icon: 'fa-bell',
-            children: ['قوالب الإشعارات', 'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء']
-        }, {
-            id: 'reports',
-            label: 'التقارير والتحليلات',
-            icon: 'fa-chart-bar',
-            children: ['لوحة التحكم', 'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود', 'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية']
-        }, {
-            id: 'system',
-            label: 'النظام والسجلات',
-            icon: 'fa-server',
-            children: ['سجلات النظام', 'سجلات التدقيق', 'إدارة الوثائق']
-        }, {
-            id: 'sync',
-            label: 'المزامنة والنسخ الاحتياطي',
-            icon: 'fa-sync',
-            children: ['إدارة الأجهزة', 'سجل المزامنة', 'النسخ الاحتياطي']
-        }, {
-            id: 'printing',
-            label: 'الطباعة والقوالب',
-            icon: 'fa-print',
-            children: ['إعدادات الطابعات', 'قوالب الإيصالات', 'قوالب الفواتير']
-        }, {
-            id: 'ai',
-            label: 'المساعد الذكي',
-            icon: 'fa-robot',
-            children: ['المساعد الذكي']
-        }];
+        let sidebarNavData = [];
+        let subPageRouteMap = {};
 
-        // ============================================================
-        // خريطة العنصر الفرعي → مسار الشاشة الفعلي
-        // ============================================================
-        const subPageRouteMap = {
+        // قائمة احتياطية (fallback) في حال فشل تحميل JSON
+        const fallbackSidebarData = [
+            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين', 'الأدوار والصلاحيات', 'سجل النشاطات'] },
+            { id: 'admin', label: 'الإدارة الأساسية', icon: 'fa-building', children: ['إعدادات الشركة', 'إدارة المحطات', 'إعدادات النظام', 'أسعار الصرف'] },
+            { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users', children: ['إدارة العملاء', 'إدارة الموردين', 'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'] },
+            { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck', children: ['إدارة المركبات', 'إدارة السائقين', 'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'] },
+            { id: 'products', label: 'المنتجات والوقود', icon: 'fa-boxes', children: ['أنواع الوقود', 'إدارة المنتجات', 'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'] },
+            { id: 'tanks', label: 'الخزانات والمضخات', icon: 'fa-oil-can', children: ['إدارة الخزانات', 'إدارة المضخات', 'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'] },
+            { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse', children: ['إدارة المستودعات', 'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'] },
+            { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['نقطة البيع (POS)', 'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'] },
+            { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات', 'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات', 'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية', 'دفتر الأستاذ', 'الميزانية العمومية'] },
+            { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie', children: ['إدارة الموظفين', 'الحضور والانصراف', 'إدارة الرواتب', 'دفعات الموظفين'] },
+            { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools', children: ['الأصول الثابتة', 'إدارة الأصول V12', 'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'] },
+            { id: 'notifications', label: 'الإشعارات والرسائل', icon: 'fa-bell', children: ['قوالب الإشعارات', 'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء'] },
+            { id: 'reports', label: 'التقارير والتحليلات', icon: 'fa-chart-bar', children: ['لوحة التحكم', 'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود', 'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'] },
+            { id: 'system', label: 'النظام والسجلات', icon: 'fa-server', children: ['سجلات النظام', 'سجلات التدقيق', 'إدارة الوثائق'] },
+            { id: 'sync', label: 'المزامنة والنسخ الاحتياطي', icon: 'fa-sync', children: ['إدارة الأجهزة', 'سجل المزامنة', 'النسخ الاحتياطي'] },
+            { id: 'printing', label: 'الطباعة والقوالب', icon: 'fa-print', children: ['إعدادات الطابعات', 'قوالب الإيصالات', 'قوالب الفواتير'] },
+            { id: 'ai', label: 'المساعد الذكي', icon: 'fa-robot', children: ['المساعد الذكي'] }
+        ];
+
+        const fallbackRouteMap = {
             'إدارة المستخدمين': 'screens/users.html',
             'الأدوار والصلاحيات': 'screens/roles.html',
             'سجل النشاطات': 'screens/activity-log.html',
@@ -1663,35 +1478,96 @@ async function apiCall(action, params = {}) {
             'المساعد الذكي': 'screens/ai-assistant.html'
         };
 
+        // تحميل البيانات من JSON
+        async function loadMenuData() {
+            try {
+                // محاولة تحميل الملف من assets
+                const response = await fetch('file:///android_asset/menu.json');
+                if (response.ok) {
+                    const data = await response.json();
+                    sidebarNavData = data.menu || fallbackSidebarData;
+                    subPageRouteMap = data.routes || fallbackRouteMap;
+                } else {
+                    sidebarNavData = fallbackSidebarData;
+                    subPageRouteMap = fallbackRouteMap;
+                }
+            } catch (e) {
+                console.warn('Failed to load menu.json, using fallback data', e);
+                sidebarNavData = fallbackSidebarData;
+                subPageRouteMap = fallbackRouteMap;
+            }
+        }
+
         // ============================================================
-        // بناء القائمة الجانبية مع حقل البحث
+        // بناء القائمة الجانبية ديناميكياً من بيانات المستخدم
         // ============================================================
-        function renderSidebar() {
-            const nav = document.getElementById('sidebarNav');
-            nav.innerHTML = '';
-            const filteredSidebar = sidebarNavData.map(item => {
+        function getSidebarData() {
+            if (!sidebarNavData.length) return [];
+
+            if (currentUser && currentUser.screens && Array.isArray(currentUser.screens)) {
+                const menuMap = {};
+                sidebarNavData.forEach(item => {
+                    if (item.children && item.children.length > 0) {
+                        item.children.forEach(child => {
+                            const route = subPageRouteMap[child];
+                            if (route) {
+                                if (!menuMap[item.id]) {
+                                    menuMap[item.id] = {
+                                        id: item.id,
+                                        label: item.label,
+                                        icon: item.icon,
+                                        children: []
+                                    };
+                                }
+                                if (currentUser.screens.includes(route) || currentUser.screens.includes(child)) {
+                                    menuMap[item.id].children.push(child);
+                                }
+                            }
+                        });
+                    } else {
+                        const route = subPageRouteMap[item.label];
+                        if (route && (currentUser.screens.includes(route) || currentUser.screens.includes(item.label))) {
+                            if (!menuMap[item.id]) {
+                                menuMap[item.id] = {
+                                    id: item.id,
+                                    label: item.label,
+                                    icon: item.icon,
+                                    children: []
+                                };
+                            }
+                        }
+                    }
+                });
+                const result = Object.values(menuMap).filter(item => {
+                    if (item.children && item.children.length > 0) return true;
+                    const route = subPageRouteMap[item.label];
+                    return route && (currentUser.screens.includes(route) || currentUser.screens.includes(item.label));
+                });
+                if (result.length > 0) return result;
+            }
+
+            // فلترة باستخدام الصلاحيات
+            return sidebarNavData.map(item => {
                 if (!item.children || item.children.length === 0) {
                     const route = subPageRouteMap[item.label] || null;
-                    return route && hasScreenAccess(route) ? item : null;
+                    return (route && hasScreenAccess(route)) ? item : null;
                 }
-
                 const allowedChildren = item.children.filter(child => {
                     const route = subPageRouteMap[child] || null;
                     return route ? hasScreenAccess(route) : false;
                 });
-
-                if (allowedChildren.length === 0) {
-                    return null;
-                }
-
-                return {
-                    ...item,
-                    children: allowedChildren
-                };
+                if (allowedChildren.length === 0) return null;
+                return { ...item, children: allowedChildren };
             }).filter(Boolean);
+        }
 
+        function renderSidebar() {
+            const nav = document.getElementById('sidebarNav');
+            nav.innerHTML = '';
 
-            filteredSidebar.forEach((item, index) => {
+            const sidebarData = getSidebarData();
+
+            sidebarData.forEach((item, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'nav-item';
                 btn.setAttribute('role', 'menuitem');
@@ -1699,12 +1575,17 @@ async function apiCall(action, params = {}) {
                 btn.innerHTML = `
                     <span class="nav-icon"><i class="fas ${item.icon}"></i></span>
                     <span class="nav-label">${item.label}</span>
-                    ${item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-left"></i></span>` : ''}
+                    ${item.children && item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-left"></i></span>` : ''}
                 `;
                 btn.onclick = function(e) {
                     e.stopPropagation();
-                    if (item.children.length) {
-                        showSubmenu(e, item.label, item.children);
+                    if (item.children && item.children.length) {
+                        const panel = document.getElementById('submenuPanel');
+                        if (panel.classList.contains('show') && panel.dataset.parent === item.id) {
+                            closeSubmenuPanel();
+                        } else {
+                            showSubmenu(e, item.label, item.children, item.id);
+                        }
                     } else {
                         const route = subPageRouteMap[item.label] || '/';
                         navigateTo(route);
@@ -1735,18 +1616,13 @@ async function apiCall(action, params = {}) {
             setTimeout(() => { ripple.remove(); }, 600);
         }
 
-        // ============================================================
-        // البحث في القائمة
-        // ============================================================
         function filterSidebar(event) {
             const query = event.target.value.toLowerCase().trim();
             const items = document.querySelectorAll('.nav-item');
-
             if (!query) {
                 items.forEach(item => { item.style.display = 'flex'; });
                 return;
             }
-
             items.forEach(item => {
                 const label = item.querySelector('.nav-label');
                 const text = label ? label.textContent.toLowerCase() : '';
@@ -1756,9 +1632,9 @@ async function apiCall(action, params = {}) {
         }
 
         // ============================================================
-        // عرض القائمة الفرعية (Submenu) مع مسارات صحيحة
+        // عرض القائمة الفرعية مع التبديل الذكي
         // ============================================================
-        function showSubmenu(event, title, items) {
+        function showSubmenu(event, title, items, parentId) {
             event.stopPropagation();
 
             const submenuPanel = document.getElementById('submenuPanel');
@@ -1768,17 +1644,16 @@ async function apiCall(action, params = {}) {
 
             submenuTitle.textContent = title;
             submenuItems.innerHTML = '';
+            submenuPanel.dataset.parent = parentId;
 
             items.forEach(item => {
                 const li = document.createElement('li');
                 li.textContent = item;
-
                 const route = subPageRouteMap[item] || null;
                 const hasPermission = route ? hasScreenAccess(route) : true;
                 if (!hasPermission) {
                     li.classList.add('disabled');
                 } else {
-                    const route = subPageRouteMap[item] || null;
                     li.onclick = function(e) {
                         e.stopPropagation();
                         if (this.classList.contains('disabled')) return;
@@ -1834,19 +1709,14 @@ async function apiCall(action, params = {}) {
             document.getElementById('submenuPanel').classList.remove('show');
             document.getElementById('overlay').classList.remove('show');
             document.removeEventListener('click', closeSubmenuOutside);
+            document.getElementById('submenuPanel').dataset.parent = '';
         }
 
-        // ============================================================
-        // إغلاق جميع اللوحات
-        // ============================================================
         function closePanels() {
             closeSubmenuPanel();
             closeSidebar();
         }
 
-        // ============================================================
-        // التحكم في القائمة الجانبية
-        // ============================================================
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1884,131 +1754,146 @@ async function apiCall(action, params = {}) {
         }
 
         // ============================================================
-        // التوجيه إلى الشاشات (مع مسار صحيح)
+        // دالة التوجيه مع التحقق من وجود الملف (باستخدام Kotlin)
         // ============================================================
-        function navigateTo(url) {
-            // إذا كان المسار يشير إلى dashboard، نبقى في الصفحة الحالية
+        async function navigateTo(url) {
             if (url === 'dashboard') {
                 closePanels();
                 return;
             }
-
-            // إذا كان المسار يبدأ بـ screens/، نتحقق من صلاحية الشاشة
             if (url.startsWith('screens/')) {
-
-                if (typeof hasScreenAccess === 'function' && !hasScreenAccess(url)) {
+                if (!hasScreenAccess(url)) {
                     showToast('ليس لديك صلاحية الوصول لهذه الشاشة', 'error');
                     closePanels();
                     return;
                 }
-
+                // التحقق من وجود الملف باستخدام Kotlin
+                try {
+                    const result = await apiCall('screenExists', { path: url });
+                    if (result.success && result.data === false) {
+                        showToast('الشاشة غير موجودة', 'error');
+                        return;
+                    }
+                } catch (e) {
+                    // في حال فشل التحقق، ننتقل مباشرة (قد يكون الملف موجوداً)
+                    console.warn('Screen existence check failed, proceeding anyway', e);
+                }
                 closePanels();
                 window.location.href = url;
                 return;
             }
-
-            // إذا كان المسار يبدأ بـ /، نحذف الشرطة المائلة
-            if (url.startsWith('/')) {
-                url = url.substring(1);
-            }
-
-            // إضافة screens/ إذا لم تكن موجودة
-            if (!url.startsWith('screens/')) {
-                url = 'screens/' + url;
-            }
-
-            // التأكد من وجود .html
-            if (!url.endsWith('.html')) {
-                url = url + '.html';
-            }
-
+            if (url.startsWith('/')) url = url.substring(1);
+            if (!url.startsWith('screens/')) url = 'screens/' + url;
+            if (!url.endsWith('.html')) url = url + '.html';
             closePanels();
             window.location.href = url;
         }
 
         // ============================================================
-        // تحميل بيانات لوحة التحكم (مع معالجة متقدمة للأخطاء)
+        // نظام الصلاحيات (يعتمد على البيانات من Kotlin)
         // ============================================================
-        async function loadDashboard() {
+        function hasScreenAccess(route) {
+            if (!currentUser) return false;
+            if (userPermissions[route] === true) return true;
+            if (currentUser.screens && Array.isArray(currentUser.screens)) {
+                if (currentUser.screens.includes(route)) return true;
+            }
+            return false;
+        }
+
+        // ============================================================
+        // تحميل لوحة التحكم مع Cache
+        // ============================================================
+        async function loadDashboard(forceRefresh = false) {
+            // إذا كان هناك Cache ولم نطلب تحديثاً قسرياً، نستخدمه
+            if (!forceRefresh && dashboardCache) {
+                updateStatsCards(dashboardCache);
+                document.getElementById('last-update').textContent = 'من التخزين المؤقت: ' + new Date().toLocaleString('ar-EG');
+                showToast('تم عرض البيانات المخزنة مؤقتاً', 'info');
+                return;
+            }
+
             showLoading(true);
             try {
-                const result = await apiCall('get_dashboard_stats');
-                if (result && result.success) {
-                    const stats = result.data || {};
+                const result = await apiCall('getDashboardStats');
+                if (result.success && result.data) {
+                    const stats = result.data;
+                    // تحديث Cache
+                    dashboardCache = stats;
+                    // تخزين في localStorage للاستخدام دون اتصال
+                    try {
+                        localStorage.setItem('dashboardCache', JSON.stringify(stats));
+                    } catch (e) { /* ignore */ }
+
                     updateStatsCards(stats);
-                    updateUserInfo(stats.user || currentUser);
-                    document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: 'numeric'
-                    });
-                    if (notificationsEnabled) {
+                    if (stats.notifications) {
                         showRealNotifications(stats);
                     }
-                    // إذا نجح التحميل، نعرض رسالة نجاح
+                    document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
+                        year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'
+                    });
                     showToast('تم تحديث لوحة التحكم', 'success');
                 } else {
-                    // في حالة فشل تحميل البيانات، نعرض رسالة تحذيرية ونضع قيماً افتراضية
-                    const errorMsg = result?.error || 'خطأ غير معروف';
-                    console.warn('Dashboard data loading failed:', errorMsg);
-                    showToast('فشل تحميل إحصائيات لوحة التحكم: ' + errorMsg, 'warning');
-                    // تعيين قيم افتراضية للبطاقات
-                    updateStatsCards({});
-                    document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG');
+                    // في حالة فشل التحميل، محاولة استخدام Cache من localStorage
+                    const cached = localStorage.getItem('dashboardCache');
+                    if (cached) {
+                        try {
+                            const stats = JSON.parse(cached);
+                            dashboardCache = stats;
+                            updateStatsCards(stats);
+                            document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
+                            showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
+                            return;
+                        } catch (e) { /* ignore */ }
+                    }
+                    showToast('فشل تحميل الإحصائيات', 'error');
                 }
             } catch (e) {
-                // في حالة حدوث استثناء غير متوقع
                 console.error('Dashboard error:', e);
-                showToast('فشل تحميل البيانات', 'error');
-                updateStatsCards({});
-                document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG');
+                // محاولة استخدام Cache
+                const cached = localStorage.getItem('dashboardCache');
+                if (cached) {
+                    try {
+                        const stats = JSON.parse(cached);
+                        dashboardCache = stats;
+                        updateStatsCards(stats);
+                        document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
+                        showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
+                        return;
+                    } catch (e2) { /* ignore */ }
+                }
+                showToast('خطأ في تحميل البيانات', 'error');
             } finally {
                 showLoading(false);
             }
         }
 
-        // ============================================================
-        // تحديث البطاقات الإحصائية (مع قيم افتراضية)
-        // ============================================================
         function updateStatsCards(stats) {
-            // التأكد من وجود stats وإلا استخدام كائن فارغ
             stats = stats || {};
-
             const fields = [
                 { id: 'total-products', val: stats.total_products || 0 },
-                { id: 'daily-sales', val: (stats.total_sales_today || 0).toFixed(2) + ' ر.ي' },
+                { id: 'daily-sales', val: (stats.daily_sales || 0).toFixed(2) + ' ر.ي' },
                 { id: 'active-customers', val: stats.active_customers || 0 },
                 { id: 'expiry-soon', val: stats.expiry_soon || 0 },
                 { id: 'low-stock', val: stats.low_stock || 0 },
-                { id: 'due-invoices', val: stats.due_soon || 0 },
-                { id: 'returned-products', val: stats.returned_products_today || 0 },
-                { id: 'damaged-products', val: stats.damaged_products_today || 0 },
+                { id: 'due-invoices', val: stats.due_invoices || 0 },
+                { id: 'returned-products', val: (stats.returned_products_today || 0).toFixed(2) },
+                { id: 'damaged-products', val: (stats.damaged_products_today || 0).toFixed(2) },
                 { id: 'customer-debts', val: (stats.customer_debts || 0).toFixed(2) + ' ر.ي' },
                 { id: 'supplier-debts', val: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي' },
-                { id: 'inventory-value', val: (stats.total_inventory_value || 0).toFixed(2) + ' ر.ي' },
+                { id: 'inventory-value', val: (stats.inventory_value || 0).toFixed(2) + ' ر.ي' },
                 { id: 'pending-tasks', val: stats.pending_tasks || 0 }
             ];
 
             fields.forEach(f => {
                 const el = document.getElementById(f.id);
-                if (el) {
-                    el.textContent = f.val;
-                }
+                if (el) el.textContent = f.val;
             });
 
-            // تحديث الشارات (badges)
-            const expiryBadge = document.getElementById('expiry-badge');
-            if (expiryBadge) expiryBadge.textContent = stats.expiry_soon || 0;
+            document.getElementById('expiry-badge').textContent = stats.expiry_soon || 0;
+            document.getElementById('low-stock-badge').textContent = stats.low_stock || 0;
+            document.getElementById('tasks-badge').textContent = stats.pending_tasks || 0;
 
-            const lowStockBadge = document.getElementById('low-stock-badge');
-            if (lowStockBadge) lowStockBadge.textContent = stats.low_stock || 0;
-
-            const tasksBadge = document.getElementById('tasks-badge');
-            if (tasksBadge) tasksBadge.textContent = stats.pending_tasks || 0;
-
-            // تحديث الاتجاهات (trends)
             updateTrend('products-trend-val', stats.products_trend || '+0%');
             updateTrend('sales-trend-val', stats.sales_trend || '+0%');
         }
@@ -2018,9 +1903,6 @@ async function apiCall(action, params = {}) {
             if (el) el.textContent = value;
         }
 
-        // ============================================================
-        // تحديث معلومات المستخدم
-        // ============================================================
         function updateUserInfo(user) {
             if (!user) return;
             const nameEl = document.getElementById('userDisplayName');
@@ -2031,19 +1913,12 @@ async function apiCall(action, params = {}) {
             if (nameEl) nameEl.textContent = user.full_name || user.username || 'مدير النظام';
             if (emailEl) emailEl.textContent = user.email || 'admin@example.com';
             if (roleEl) roleEl.textContent = user.role_name || user.role || 'مدير';
-            if (avatarEl) {
-                const name = user.full_name || user.username || 'Admin';
-                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=1e40af&color=fff`;
-            }
         }
 
         // ============================================================
-        // التنبيهات (فقاعات) – مع تحسينات
+        // التنبيهات (فقاعات)
         // ============================================================
         function showRealNotifications(stats) {
-            // التأكد من وجود stats
-            stats = stats || {};
-
             if (stats.expiry_soon > 0) {
                 addNotificationToQueue({
                     title: 'تنبيه انتهاء الصلاحية',
@@ -2069,15 +1944,6 @@ async function apiCall(action, params = {}) {
                     icon: 'fas fa-tasks',
                     type: 'info',
                     targetCard: 'card-pending-tasks'
-                });
-            }
-            if (stats.total_sales_today > 0) {
-                addNotificationToQueue({
-                    title: 'المبيعات اليومية',
-                    message: `إجمالي المبيعات اليوم: ${stats.total_sales_today.toFixed(2)} ر.ي`,
-                    icon: 'fas fa-chart-line',
-                    type: 'success',
-                    targetCard: 'card-daily-sales'
                 });
             }
             processNotificationQueue();
@@ -2165,14 +2031,8 @@ async function apiCall(action, params = {}) {
             notificationQueue = [];
         }
 
-        // ============================================================
-        // نافذة "عن التطبيق"
-        // ============================================================
         function showAboutModal() { openModal('aboutModal'); }
 
-        // ============================================================
-        // ربط أحداث النقر على البطاقات (حدث النقر المزدوج)
-        // ============================================================
         function initCardDoubleClick() {
             const cardRoutes = {
                 "card-pending-tasks": "screens/tasks.html",
@@ -2194,36 +2054,59 @@ async function apiCall(action, params = {}) {
         }
 
         // ============================================================
-        // بدء التطبيق
+        // تهيئة التطبيق
         // ============================================================
-                // ============================================================
-        // فحص المصادقة — إعادة توجيه إذا لم يكن مسجلاً الدخول
-        // ============================================================
-        (function checkAuth() {
-            const token = localStorage.getItem('authToken');
-            const user = localStorage.getItem('user');
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 1. تهيئة AndroidInterface
+            const bridgeReady = initAndroidBridge();
 
-            // إذا لم يكن هناك توكن أو بيانات مستخدم → إعادة توجيه فورية
-            if (!token || !user || token === 'null' || token === '' || user === 'null' || user === '') {
-                window.location.replace('screens/login.html');
+            // 2. تحميل بيانات القائمة (JSON)
+            await loadMenuData();
+
+            // 3. إذا كان الجسر جاهزاً، تحميل المستخدم من Kotlin
+            if (bridgeReady) {
+                await loadUserFromKotlin();
+            } else {
+                // الجسر غير جاهز، محاولة استخدام localStorage مؤقتاً
+                const cached = localStorage.getItem('user');
+                if (cached) {
+                    try {
+                        currentUser = JSON.parse(cached);
+                        updateUserInfo(currentUser);
+                        renderSidebar();
+                        // محاولة تحميل Dashboard من Cache
+                        const dashCache = localStorage.getItem('dashboardCache');
+                        if (dashCache) {
+                            try {
+                                const stats = JSON.parse(dashCache);
+                                dashboardCache = stats;
+                                updateStatsCards(stats);
+                                document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
+                            } catch (e) { /* ignore */ }
+                        }
+                        // محاولة إعادة تهيئة الجسر بعد فترة
+                        setTimeout(() => {
+                            if (!useAndroidInterface) {
+                                initAndroidBridge();
+                            }
+                        }, 2000);
+                        return;
+                    } catch (e) { /* ignore */ }
+                }
+                // لا يوجد مستخدم ولا جسر، عرض وضع الصيانة
+                showMaintenanceMode();
                 return;
             }
-        })();
 
-document.addEventListener('DOMContentLoaded', function() {
-            // تهيئة القائمة الجانبية
-            renderSidebar();
-
-            // تحميل لوحة التحكم
-            loadDashboard();
-
-            // تحديث دوري كل 5 دقائق
-            refreshInterval = setInterval(loadDashboard, 300000);
-
-            // ربط النقر المزدوج على البطاقات
+            // 4. ربط النقر المزدوج
             initCardDoubleClick();
 
-            // إغلاق القوائم عند النقر خارجها
+            // 5. تحديث دوري كل 5 دقائق (إجبار تحديث)
+            refreshInterval = setInterval(() => {
+                loadDashboard(true);
+            }, 300000);
+
+            // 6. إغلاق القوائم عند النقر خارجها
             document.addEventListener('click', function(e) {
                 const sidebar = document.getElementById('sidebar');
                 const submenuPanel = document.getElementById('submenuPanel');
@@ -2245,7 +2128,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
 
-            // النقر المزدوج لإخفاء الفقاعات
             let lastClick = 0;
             document.addEventListener('click', function(e) {
                 const now = new Date().getTime();
@@ -2255,17 +2137,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 lastClick = now;
             });
 
-            // تحميل بيانات المستخدم من localStorage إن وجدت
-            try {
-                const user = JSON.parse(localStorage.getItem('user') || 'null');
-                if (user) {
-                    currentUser = user;
-                    userPermissions = user.permissions || {};
-                    userScreens = user.screens || [];
-                    updateUserInfo(user);
-                }
-            } catch (e) {
-                currentUser = null;
+            if (currentUser) {
+                updateUserInfo(currentUser);
             }
         });
     </script>
