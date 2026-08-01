@@ -978,7 +978,7 @@ class SMSService : Service() {
     private fun syncConversationContext() {
         try {
             if (::smsConversationManager.isInitialized) {
-                try { smsConversationManager.syncContext() } catch (e: NoSuchMethodError) { /* stub */ }
+                try { runBlocking { smsConversationManager.syncContext() } } catch (e: NoSuchMethodError) { /* stub */ }
                 Log.d(TAG, "Conversation context synced")
             }
         } catch (e: Exception) {
@@ -989,7 +989,7 @@ class SMSService : Service() {
     private fun syncCustomerPreferences() {
         try {
             if (::smsCustomerResolver.isInitialized) {
-                try { smsCustomerResolver.syncPreferences() } catch (e: NoSuchMethodError) { /* stub */ }
+                try { runBlocking { smsCustomerResolver.syncPreferences() } } catch (e: NoSuchMethodError) { /* stub */ }
                 Log.d(TAG, "Customer preferences synced")
             }
         } catch (e: Exception) {
@@ -1000,7 +1000,7 @@ class SMSService : Service() {
     private fun syncMetrics() {
         try {
             if (::smsMetrics.isInitialized) {
-                try { smsMetrics.sync() } catch (e: NoSuchMethodError) { /* stub */ }
+                try { runBlocking { smsMetrics.sync() } } catch (e: NoSuchMethodError) { /* stub */ }
                 Log.d(TAG, "Metrics synced")
             }
         } catch (e: Exception) {
@@ -1011,7 +1011,7 @@ class SMSService : Service() {
     private fun syncRateLimits() {
         try {
             if (::smsSecurity.isInitialized) {
-                try { smsSecurity.syncRateLimits() } catch (e: NoSuchMethodError) { /* stub */ }
+                try { runBlocking { smsSecurity.syncRateLimits() } } catch (e: NoSuchMethodError) { /* stub */ }
                 Log.d(TAG, "Rate limits synced")
             }
         } catch (e: Exception) {
@@ -1022,7 +1022,7 @@ class SMSService : Service() {
     private fun syncOtpData() {
         try {
             if (::smsSecurityOTP.isInitialized) {
-                try { smsSecurityOTP.syncData() } catch (e: NoSuchMethodError) { /* stub */ }
+                try { runBlocking { smsSecurityOTP.syncData() } } catch (e: NoSuchMethodError) { /* stub */ }
                 Log.d(TAG, "OTP data synced")
             }
         } catch (e: Exception) {
@@ -1121,7 +1121,7 @@ class SMSService : Service() {
         }
     }
 
-    private fun collectStatistics() {
+    private suspend fun collectStatistics() {
         try {
             performanceStats["uptime_seconds"] = (System.currentTimeMillis() - startTime.get()) / 1000
             performanceStats["processed_messages"] = processedMessageCount.get()
@@ -1143,7 +1143,7 @@ class SMSService : Service() {
 
     private fun dumpStatistics(): JSONObject {
         return try {
-            collectStatistics()
+            runBlocking { collectStatistics() }
             val json = JSONObject()
             performanceStats.forEach { (key, value) ->
                 when (value) {
@@ -1539,7 +1539,7 @@ class SMSService : Service() {
     fun getCurrentMetrics(): JSONObject {
         return try {
             if (::smsMetrics.isInitialized) {
-                try { smsMetrics.getCurrentMetrics() } catch (e: NoSuchMethodError) { JSONObject().put("error", "not available") }
+                try { runBlocking { smsMetrics.getCurrentMetrics() } } catch (e: NoSuchMethodError) { JSONObject().put("error", "not available") }
             } else {
                 JSONObject().put("error", "Metrics not initialized")
             }
