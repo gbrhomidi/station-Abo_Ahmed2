@@ -207,7 +207,7 @@ class SMSService : Service() {
             scheduleMetricsFlush()
             scheduleSecurityChecks()
             logServiceStarted()
-            SystemEventLogger.recordService(this, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
             isInitialized.set(true)
             isRunning.set(true)
             Log.i(TAG, "Service initialization completed successfully")
@@ -258,7 +258,7 @@ class SMSService : Service() {
             cleanupScope.cancel()
             releaseWakeLock()
             logServiceStopped()
-            SystemEventLogger.recordService(this, STATUS_SERVICE_STOPPED, "Service stopped")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_STOPPED, "Service stopped")
             WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
             WorkManager.getInstance(this).cancelUniqueWork(MAINTENANCE_WORK_NAME)
             Log.i(TAG, "Service destroyed and resources cleaned successfully")
@@ -487,7 +487,7 @@ class SMSService : Service() {
             Log.i(TAG, "Pausing SMS engine...")
             isPaused.set(true)
             isRunning.set(false)
-            SystemEventLogger.recordService(this, STATUS_SERVICE_PAUSED, "Engine paused")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_PAUSED, "Engine paused")
             updateNotification("نظام SMS متوقف مؤقتًا")
             Log.i(TAG, "SMS engine paused")
         } catch (e: Exception) {
@@ -500,7 +500,7 @@ class SMSService : Service() {
             Log.i(TAG, "Resuming SMS engine...")
             isPaused.set(false)
             isRunning.set(true)
-            SystemEventLogger.recordService(this, STATUS_SERVICE_RESUMED, "Engine resumed")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_RESUMED, "Engine resumed")
             updateNotification("نظام SMS يعمل")
             Log.i(TAG, "SMS engine resumed")
         } catch (e: Exception) {
@@ -1167,7 +1167,7 @@ class SMSService : Service() {
             Log.i(TAG, "Mode: ${currentMode.get()}")
             Log.i(TAG, "Timestamp: ${DATETIME_FORMAT.format(Date())}")
             Log.i(TAG, "═══════════════════════════════════════════════")
-            SystemEventLogger.recordService(this, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log service start: ${e.message}", e)
         }
@@ -1182,7 +1182,7 @@ class SMSService : Service() {
             Log.i(TAG, "Messages processed: ${processedMessageCount.get()}")
             Log.i(TAG, "Errors: ${errorCount.get()}")
             Log.i(TAG, "═══════════════════════════════════════════════")
-            SystemEventLogger.recordService(this, STATUS_SERVICE_STOPPED, "Uptime: ${uptime}s, Messages: ${processedMessageCount.get()}")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_STOPPED, "Uptime: ${uptime}s, Messages: ${processedMessageCount.get()}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log service stop: ${e.message}", e)
         }
@@ -1195,7 +1195,7 @@ class SMSService : Service() {
             Log.w(TAG, "Service RESTARTED (attempt $attempt)")
             Log.w(TAG, "Timestamp: ${DATETIME_FORMAT.format(Date())}")
             Log.w(TAG, "═══════════════════════════════════════════════")
-            SystemEventLogger.recordService(this, STATUS_SERVICE_RESTARTED, "Restart attempt: $attempt")
+            SystemEventLogger.recordService(applicationContext, STATUS_SERVICE_RESTARTED, "Restart attempt: $attempt")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log service restart: ${e.message}", e)
         }
@@ -1208,7 +1208,8 @@ class SMSService : Service() {
             } else {
                 Log.i(TAG, "Health Status: $status")
             }
-            SystemEventLogger.recordService(this, status, details)
+            // FIX: details قد تكون null، لذا نمرر سلسلة فارغة عند null
+            SystemEventLogger.recordService(applicationContext, status, details ?: "")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log health status: ${e.message}", e)
         }
@@ -1223,7 +1224,7 @@ class SMSService : Service() {
             Log.e(TAG, "Message: ${error.message}")
             Log.e(TAG, "Stack trace:", error)
             Log.e(TAG, "═══════════════════════════════════════════════")
-            SystemEventLogger.recordError(this, "SMSService", "Critical: ${error.message}")
+            SystemEventLogger.recordError(applicationContext, "SMSService", "Critical: ${error.message}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log critical error: ${e.message}", e)
         }
@@ -1235,7 +1236,7 @@ class SMSService : Service() {
             Log.i(TAG, "RECOVERY ACTION: $action")
             Log.i(TAG, "Timestamp: ${DATETIME_FORMAT.format(Date())}")
             Log.i(TAG, "═══════════════════════════════════════════════")
-            SystemEventLogger.recordService(this, "RECOVERY", action)
+            SystemEventLogger.recordService(applicationContext, "RECOVERY", action)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log recovery: ${e.message}", e)
         }

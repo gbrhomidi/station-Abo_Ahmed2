@@ -227,10 +227,12 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("RATE_LIMIT_BLOCK", sender, "Daily limit exceeded: $currentCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "⚠️ $customerName،\n" +
-                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.\n" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
-                    "للاستفسار العاجل: ${managerPhone ?: "غير متوفر"}",
+                    """
+                    ⚠️ $customerName،
+                    لقد تجاوزت الحد المسموح من الرسائل اليوم.
+                    تم حظر رقمك مؤقتاً لمدة 24 ساعة.
+                    للاستفسار العاجل: ${managerPhone ?: "غير متوفر"}
+                    """.trimIndent(),
                     managerPhone
                 )
             }
@@ -243,19 +245,23 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("REPEAT_BLOCK", sender, "Repeat warnings: $warningCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "🚫 $customerName،\n" +
-                    "لقد أرسلت رسائل متكررة كثيرة.\n" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
-                    "للاستفسار: ${managerPhone ?: "غير متوفر"}",
+                    """
+                    🚫 $customerName،
+                    لقد أرسلت رسائل متكررة كثيرة.
+                    تم حظر رقمك مؤقتاً لمدة 24 ساعة.
+                    للاستفسار: ${managerPhone ?: "غير متوفر"}
+                    """.trimIndent(),
                     managerPhone
                 )
             }
 
             return@withContext RateLimitResult.WARNING(
-                "⚠️ $customerName،\n" +
-                "لقد أرسلت رسائل متكررة.\n" +
-                "يرجى تحديد ما تريده في رسالة واحدة بدقة.\n" +
-                "تحذير $warningCount من $MAX_REPEAT_WARNINGS"
+                """
+                ⚠️ $customerName،
+                لقد أرسلت رسائل متكررة.
+                يرجى تحديد ما تريده في رسالة واحدة بدقة.
+                تحذير $warningCount من $MAX_REPEAT_WARNINGS
+                """.trimIndent()
             )
         }
 
