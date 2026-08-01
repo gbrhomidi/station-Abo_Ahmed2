@@ -9432,6 +9432,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
     /**
     * الحصول على وضع دفتر اليومية (Journal Mode) لقاعدة البيانات.
     * @return وضع الـ journal (مثل "WAL", "DELETE") أو null في حال الفشل.
