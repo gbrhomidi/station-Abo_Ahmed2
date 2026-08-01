@@ -24,7 +24,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفاتيح API – تُقرأ من متغيرات البيئة أو project.properties
+        // مفاتيح API من Secrets (متغيرات البيئة)
         val geminiKey = project.properties["GEMINI_API_KEY"] as? String
             ?: System.getenv("GEMINI_API_KEY")
             ?: ""
@@ -48,31 +48,9 @@ android {
         buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
     }
 
-    // ───────────────────────────────────────────────────────────
-    // 🔐 إعدادات التوقيع (Signing Configs)
-    // ───────────────────────────────────────────────────────────
     signingConfigs {
-        // ✅ توقيع Debug الافتراضي
-        getByName("debug") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-
-        // ✅ توقيع Release (يقرأ من متغيرات بيئة GitHub Actions)
-        create("release") {
-            val releaseStoreFile = System.getenv("RELEASE_KEYSTORE_PATH")
-                ?: "${System.getProperty("user.home")}/.android/debug.keystore"
-            val releaseStorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: "android"
-            val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: "androiddebugkey"
-            val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: "android"
-
-            storeFile = file(releaseStoreFile)
-            storePassword = releaseStorePassword
-            keyAlias = releaseKeyAlias
-            keyPassword = releaseKeyPassword
-        }
+        // التوقيع الافتراضي للـ debug (موجود مسبقاً)
+        // لا نحتاج لتعريفه، لكننا نستخدمه مباشرة
     }
 
     buildTypes {
@@ -84,13 +62,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "false")
         }
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            // يستخدم التوقيع الافتراضي تلقائياً
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
     }
@@ -168,19 +146,24 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Network (Retrofit + Moshi)
+    // Room
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Network
     implementation(libs.retrofit)
     implementation(libs.converter.moshi)
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
     implementation(libs.moshi.kotlin)
-    ksp(libs.moshi.kotlin.codegen)   // مطلوب لـ @JsonClass(generateAdapter = true)
+    ksp(libs.moshi.kotlin.codegen)
 
-    // Coroutines
+    // Coroutines (موحدة عبر libs)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
 
-    // Serialization (Kotlinx)
+    // Serialization
     implementation(libs.kotlinx.serialization.json)
 
     // WorkManager
@@ -190,10 +173,14 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
 
     // Security
-    implementation(libs.androidx.security.crypto)
-    implementation(libs.rootbeer.lib)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.scottyab:rootbeer-lib:0.1.0")
 
-    // تم حذف NanoHTTPD و Firebase و Secrets Plugin
+    // ═══════════════════════════════════════════════════════════
+    // ❌ تم إزالة NanoHTTPD لأنه لم يعد مستخدماً
+    //    (تم تعطيل الخادم المحلي نهائياً)
+    // ═══════════════════════════════════════════════════════════
+    // implementation(libs.nanohttpd)
 
     // Material Components
     implementation("com.google.android.material:material:1.12.0")
@@ -201,7 +188,7 @@ dependencies {
     // QR Code Scanning (ZXing)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // Gemini AI – يستخدم فعلياً في التطبيق
+    // Gemini AI
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Testing
@@ -232,11 +219,15 @@ configurations.all {
         force("com.squareup.okio:okio:3.0.0")
         force("org.jetbrains.kotlin:kotlin-stdlib:${libs.versions.kotlin.get()}")
         force("androidx.core:core-ktx:1.15.0")
-        force("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-        force("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+        // تثبيت إصدارات كوروتينات موحدة عبر libs
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-android:${libs.versions.kotlinxCoroutinesAndroid.get()}")
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-core:${libs.versions.kotlinxCoroutinesCore.get()}")
     }
 }
 
+// ============================================================
+//  مهمة فحص أمني – تمنع رفع المفاتيح الحساسة
+// ============================================================
 tasks.register<Exec>("securityCheck") {
     group = "verification"
     description = "Check for sensitive data in APK"

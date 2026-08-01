@@ -32,6 +32,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -52,6 +53,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -213,6 +215,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume called")
+        // ✅ استئناف WebView لتجنب تجميد JavaScript
+        webView?.onResume()
         // تحديث الواجهة
         updateUIState()
         // مزامنة حالة SMS (التحقق من الخدمة)
@@ -233,6 +237,8 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         Log.d(TAG, "onPause called")
+        // ✅ إيقاف WebView مؤقتاً لتوفير الموارد
+        webView?.onPause()
         // حفظ الحالة إذا لزم الأمر
         logApplicationEvent("app_paused", "Application paused")
     }
@@ -249,7 +255,7 @@ class MainActivity : AppCompatActivity() {
 
         handler.removeCallbacksAndMessages(null)
 
-        stopSMSService()
+        
 
         try {
             val wv = webView
@@ -864,8 +870,9 @@ class MainActivity : AppCompatActivity() {
 
         try {
             if (wv.isAttachedToWindow) {
-                Log.d(TAG, "Loading main.html from assets")
-                wv.loadUrl("file:///android_asset/main.html")
+                Log.d(TAG, "Loading login.html from assets")
+                // ✅ تم التصحيح: تحميل login.html من الجذر (كما أشرت أنت)
+                wv.loadUrl("file:///android_asset/login.html")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
@@ -1001,7 +1008,8 @@ class MainActivity : AppCompatActivity() {
                             allowFileAccess = true
                             allowContentAccess = true
                             javaScriptCanOpenWindowsAutomatically = false
-                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            // ✅ للأمان: منع المحتوى المختلط (نظراً لأننا نستخدم local files)
+                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                             loadsImagesAutomatically = true
@@ -1036,6 +1044,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    // ✅ تم التعديل: إعادة حقن الواجهة في onPageFinished
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -1120,12 +1129,13 @@ class MainActivity : AppCompatActivity() {
     private fun recreateWebView() {
         if (isDestroyed.get()) return
         Log.d(TAG, "Recreating WebView...")
+        webView?.let { destroyWebView(it) }
+        webView = null
+        isWebViewInitialized = false
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    WebViewScreen(
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    WebViewScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -1280,6 +1290,7 @@ class MainActivity : AppCompatActivity() {
     // WebAppInterface - واجهة JavaScript الكاملة (جميع الدوال التجارية)
     // ============================================================
 
+    @Keep
     inner class WebAppInterface(
         context: Context,
         activity: MainActivity
@@ -1394,7 +1405,7 @@ class MainActivity : AppCompatActivity() {
                     authResult.put("role", role)
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
-                    val token = java.util.UUID.randomUUID().toString()
+                    val token = UUID.randomUUID().toString()
                     getActivity()?.let { act ->
                         act.currentAuthToken = token
                         act.currentUserId = userId
@@ -1441,6 +1452,105 @@ class MainActivity : AppCompatActivity() {
                 put("success", true)
                 put("status", "processing")
             }.toString()
+        }
+
+        // ============================================================
+        // 1.5 دوال استعادة كلمة المرور وإدارة المستخدمين (للـ login.html) ✅
+        // ============================================================
+
+        @JavascriptInterface
+        fun forgotPassword(username: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                // 1. التحقق من وجود المستخدم
+                val user = db.getUserByUsername(username)
+                if (user == null) {
+                    return errorResponse("المستخدم غير موجود")
+                }
+
+                // 2. إنشاء توكن عشوائي
+                val token = UUID.randomUUID().toString()
+
+                // 3. تخزين التوكن في قاعدة البيانات مع صلاحية 30 دقيقة (يتم في DatabaseHelper)
+                val stored = db.storeResetToken(username, token)
+                if (!stored) {
+                    return errorResponse("فشل تخزين التوكن")
+                }
+
+                // 4. إنشاء رابط الاستعادة (يتوافق مع مسار login.html في الجذر)
+                val resetUrl = "file:///android_asset/login.html?token=$token"
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("token", token)
+                    put("reset_url", resetUrl)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "forgotPassword error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun resetPassword(token: String, newPassword: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                // 1. التحقق من صحة التوكن وصلاحيته (يُعيد اسم المستخدم أو null)
+                val username = db.validateResetToken(token)
+                if (username == null) {
+                    return errorResponse("رابط الاستعادة غير صالح أو منتهي الصلاحية")
+                }
+
+                // 2. تحديث كلمة المرور (يتم التجزئة داخل الدالة في DatabaseHelper)
+                val updated = db.updateUserPassword(username, newPassword)
+                if (!updated) {
+                    return errorResponse("فشل تحديث كلمة المرور")
+                }
+
+                // 3. حذف التوكن بعد الاستخدام
+                db.clearResetToken(token)
+
+                successResponse(true, "تم تحديث كلمة المرور بنجاح")
+            } catch (e: Exception) {
+                Log.e(TAG, "resetPassword error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun verifyResetCode(phone: String, code: String): String {
+            // ✅ منطق حقيقي للتحقق عبر الرسائل النصية القصيرة SMS
+            // يفترض وجود جدول sms_otp_verifications يحتوي على (phone, code, expires_at)
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                // استدعاء دالة مساعدة في DatabaseHelper للتحقق من صحة الرمز
+                val isValid = db.validateOtpCode(phone, code)
+                if (isValid) {
+                    // حذف الرمز بعد الاستخدام
+                    db.clearOtpCode(phone, code)
+                    successResponse(true, "تم التحقق بنجاح")
+                } else {
+                    errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "verifyResetCode error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getUserData(username: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val user = db.getUserByUsername(username)
+                if (user == null) {
+                    return errorResponse("المستخدم غير موجود")
+                }
+                dataResponse(user)
+            } catch (e: Exception) {
+                Log.e(TAG, "getUserData error", e)
+                errorResponse(e.message)
+            }
         }
 
         // ============================================================
@@ -2080,7 +2190,10 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("employees", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteEmployee(id.toInt())
+                // استخدام id مباشرة كـ Int مع التحقق من الصلاحية
+                if (id > Int.MAX_VALUE || id < 0) return errorResponse("معرف غير صالح")
+                val intId = id.toInt()
+                val rows = db.deleteEmployee(intId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 errorResponse(e.message)
@@ -2700,11 +2813,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 20. طلبات الصيانة
+        // 20. طلبات الصيانة (مع إصلاح Overloading)
         // ============================================================
 
+        // ✅ دالة واحدة تقبل String? لتجنب مشاكل overloading مع JavaScript
         @JavascriptInterface
-        fun getMaintenanceRequests(jsonData: String): String {
+        fun getMaintenanceRequests(jsonData: String?): String {
             if (!checkPermission("maintenance", "read")) {
                 return errorResponse("لا تملك صلاحية القراءة")
             }
@@ -2732,15 +2846,6 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 errorResponse(e.message)
             }
-        }
-
-        @JavascriptInterface
-        fun getMaintenanceRequests(): String {
-            return getMaintenanceRequests(
-                JSONObject().apply {
-                    put("station_id", 1)
-                }.toString()
-            )
         }
 
         @JavascriptInterface
@@ -3278,34 +3383,34 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getAssetMaintenanceHistory(jsonData: String): String {
             if (!checkPermission("maintenance", "read")) {
-            return errorResponse("لا تملك صلاحية القراءة")
+                return errorResponse("لا تملك صلاحية القراءة")
             }
 
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
 
             return try {
-               val data = JSONObject(jsonData)
+                val data = JSONObject(jsonData)
 
-            val assetType = data.optString("asset_type")
-            val assetId = data.optInt("asset_id")
-            val limit = data.optInt("limit", 20)
+                val assetType = data.optString("asset_type")
+                val assetId = data.optInt("asset_id")
+                val limit = data.optInt("limit", 20)
 
-            if (assetType.isBlank() || assetId <= 0) {
-                return errorResponse("بيانات الأصل غير صحيحة")
+                if (assetType.isBlank() || assetId <= 0) {
+                    return errorResponse("بيانات الأصل غير صحيحة")
+                }
+
+                val history = db.getAssetMaintenanceHistory(
+                    assetType,
+                    assetId,
+                    limit
+                )
+
+                dataResponse(history)
+
+            } catch (e: Exception) {
+                errorResponse(e.message)
             }
-
-            val history = db.getAssetMaintenanceHistory(
-                assetType,
-                assetId,
-                limit
-            )
-
-            dataResponse(history)
-
-        } catch (e: Exception) {
-            errorResponse(e.message)
         }
-    }
 
         @JavascriptInterface
         fun getUserNotifications(userId: Long): String {
@@ -3481,7 +3586,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 25. دوال إضافية للشاشات الجديدة (من المنطق التجاري)
+        // 25. دوال إضافية للشاشات الجديدة
         // ============================================================
 
         @JavascriptInterface

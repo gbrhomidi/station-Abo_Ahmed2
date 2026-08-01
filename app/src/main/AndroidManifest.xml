@@ -119,10 +119,10 @@
         <!-- ✅ priority="999" للحصول على الأولوية العالية             -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".SmsReceiver"
+            android:name=".sms.SmsReceiver"
             android:exported="true">
             <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+                <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
             </intent-filter>
         </receiver>
 

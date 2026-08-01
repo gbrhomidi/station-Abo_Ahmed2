@@ -1,13 +1,12 @@
 package com.aistudio.dieselstationsms.kxmpzq.receiver
 
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-import com.aistudio.dieselstationsms.kxmpzq.utils.SystemEventLogger
-import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
-
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
+import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -23,32 +22,21 @@ import android.util.Log
  * ═══════════════════════════════════════════════════════════════
  */
 class TimeChangedReceiver : BroadcastReceiver() {
-
     companion object {
         private const val TAG = "TimeChangedReceiver"
-        // استخدام القيمة النصية المباشرة بدلاً من Intent.ACTION_TIME_SET
-        // لأنها غير متوفرة في Android 14+ API
-        private const val ACTION_TIME_SET_STRING = "android.intent.action.TIME_SET"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        if (action != ACTION_TIME_SET_STRING && action != Intent.ACTION_TIME_CHANGED) return
-
-        Log.i(TAG, "Time changed: $action")
-
-        try {
-            val serviceIntent = Intent(context, SMSService::class.java).apply {
-                putExtra("action", "reschedule_tasks")
-                putExtra("reason", action)
-            }
+        Log.d(TAG, "Time changed: $action")
+        val serviceIntent = Intent(context, SMSService::class.java).apply {
+            putExtra("action", "reschedule_tasks")
+            putExtra("reason", action)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } else {
             context.startService(serviceIntent)
-
-            SystemEventLogger.record(context, "TIME_CHANGED", action)
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to handle time change: ${e.message}")
-            SystemEventLogger.recordError(context, "TimeChangedReceiver", e.message)
         }
     }
 }

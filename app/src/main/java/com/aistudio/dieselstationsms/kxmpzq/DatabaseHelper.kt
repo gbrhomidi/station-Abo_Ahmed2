@@ -176,6 +176,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsRecurringOrdersTable(db)
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
+        createUserOtpVerificationsTable(db)
+        createUserOtpVerificationsTable(db)
         ensureSmsSettings(db)
     }
 
@@ -536,6 +538,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsRecurringOrdersTable(db)
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
+        createUserOtpVerificationsTable(db)
         Log.d(TAG, "Migrated to V13 successfully")
     }
 
@@ -577,6 +580,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsRecurringOrdersTable(db)
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
+        createUserOtpVerificationsTable(db)
         createIndexes(db)
     }
 
@@ -4652,6 +4656,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_otp_expires ON sms_otp_verifications(expires_at)")
         Log.d(TAG, "SMS OTP verifications table created successfully")
     }
+    private fun createUserOtpVerificationsTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS user_otp_verifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                otp_code TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                attempts INTEGER DEFAULT 0,
+                max_attempts INTEGER DEFAULT 3,
+                expires_at INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_otp_user ON user_otp_verifications(user_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_otp_expires ON user_otp_verifications(expires_at)")
+        Log.d(TAG, "User OTP verifications table created successfully")
+    }
+
 
     private fun ensureSmsSettings(db: SQLiteDatabase) {
         val smsSettings = listOf(
@@ -9497,6 +9519,244 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    LIMIT 1""".trimIndent(),
                 arrayOf(userId.toString(), permissionCode)
             ).use { cursor -> cursor.moveToFirst() }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+
+    // ========================================================================
+    // دوال إدارة رموز إعادة تعيين كلمة المرور (Password Reset Tokens)
+    // ========================================================================
+
+    /**
+     * تخزين رمز إعادة تعيين كلمة المرور للمستخدم
+     * @param userId معرف المستخدم
+     * @param token الرمز المميز
+     * @param expiryMinutes مدة صلاحية الرمز بالدقائق (افتراضي 60)
+     * @return true إذا نجحت العملية
+     */
+    fun storeResetToken(userId: Long, token: String, expiryMinutes: Int = 60): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val expiresAt = Calendar.getInstance().apply { add(Calendar.MINUTE, expiryMinutes) }
+            val cv = ContentValues().apply {
+                put("user_id", userId)
+                put("token", token)
+                put("expires_at", getDateFormat().format(expiresAt.time))
+                put("is_used", 0)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insertWithOnConflict("password_reset_tokens", null, cv, SQLiteDatabase.CONFLICT_REPLACE) > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error storing reset token: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * التحقق من صلاحية رمز إعادة تعيين كلمة المرور
+     * @param token الرمز المميز
+     * @return JSONObject يحتوي على بيانات المستخدم إذا كان الرمز صالحاً، أو null
+     */
+    fun validateResetToken(token: String): JSONObject? {
+        if (token.isBlank()) return null
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT t.id as token_id, t.user_id, t.expires_at, t.is_used,
+                          u.username, u.full_name, u.full_name_ar, u.email, u.phone
+                   FROM password_reset_tokens t
+                   JOIN users u ON t.user_id = u.id
+                   WHERE t.token = ? AND datetime(t.expires_at) > datetime('now') AND t.is_used = 0 AND u.is_deleted = 0
+                   LIMIT 1""".trimIndent(),
+                arrayOf(token)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    JSONObject().apply {
+                        put("token_id", cursor.getInt(cursor.getColumnIndexOrThrow("token_id")))
+                        put("user_id", cursor.getInt(cursor.getColumnIndexOrThrow("user_id")))
+                        put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")))
+                        put("full_name", cursor.getString(cursor.getColumnIndexOrThrow("full_name")))
+                        put("full_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("full_name_ar")))
+                        put("email", cursor.getString(cursor.getColumnIndexOrThrow("email")))
+                        put("phone", cursor.getString(cursor.getColumnIndexOrThrow("phone")))
+                        put("expires_at", cursor.getString(cursor.getColumnIndexOrThrow("expires_at")))
+                    }
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating reset token: ${e.message}", e)
+            null
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * إزالة رمز إعادة تعيين كلمة المرور (بعد الاستخدام أو الإلغاء)
+     * @param token الرمز المميز
+     * @return true إذا تم الحذف
+     */
+    fun clearResetToken(token: String): Boolean {
+        if (token.isBlank()) return false
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("password_reset_tokens", "token = ?", arrayOf(token)) > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing reset token: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * تحديث كلمة مرور المستخدم مع توليد salt و hash جديدين
+     * @param userId معرف المستخدم
+     * @param newPassword كلمة المرور الجديدة
+     * @return true إذا نجح التحديث
+     */
+    fun updateUserPassword(userId: Long, newPassword: String): Boolean {
+        if (newPassword.isBlank()) return false
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val (hash, salt) = hashPassword(newPassword)
+            val cv = ContentValues().apply {
+                put("password_hash", hash)
+                put("password_salt", salt)
+                put("last_password_change", getCurrentDateTime())
+                put("must_change_password", 0)
+                put("failed_login_attempts", 0)
+                put("account_locked", 0)
+                put("locked_until", null as String?)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("users", cv, "id = ? AND is_deleted = 0", arrayOf(userId.toString()))
+            if (rows > 0) {
+                // تعيين الرمز كمستخدم
+                val usedCv = ContentValues().apply {
+                    put("is_used", 1)
+                    put("used_at", getCurrentDateTime())
+                }
+                db.update("password_reset_tokens", usedCv, "user_id = ? AND is_used = 0", arrayOf(userId.toString()))
+                logActivity("system", "password_change", "تم تحديث كلمة المرور للمستخدم $userId")
+            }
+            rows > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating user password: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ========================================================================
+    // دوال OTP الخاصة بالمستخدمين (User OTP)
+    // ========================================================================
+
+    /**
+     * إنشاء/تخزين رمز OTP للمستخدم
+     * @param userId معرف المستخدم
+     * @param otpCode رمز OTP
+     * @param expirySeconds مدة الصلاحية بالثواني (افتراضي 300 = 5 دقائق)
+     * @return true إذا نجحت العملية
+     */
+    fun storeUserOtp(userId: Long, otpCode: String, expirySeconds: Int = 300): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = System.currentTimeMillis()
+            val expiresAt = now + (expirySeconds * 1000L)
+            val cv = ContentValues().apply {
+                put("user_id", userId)
+                put("otp_code", otpCode)
+                put("timestamp", now)
+                put("attempts", 0)
+                put("max_attempts", 3)
+                put("expires_at", expiresAt)
+                put("created_at", getCurrentDateTime())
+            }
+            db.insertWithOnConflict("user_otp_verifications", null, cv, SQLiteDatabase.CONFLICT_REPLACE) > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error storing user OTP: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * التحقق من رمز OTP للمستخدم
+     * @param userId معرف المستخدم
+     * @param otpCode رمز OTP المدخل
+     * @return true إذا كان الرمز صحيحاً ولم تنتهِ صلاحيته
+     */
+    fun validateOtpCode(userId: Long, otpCode: String): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = System.currentTimeMillis()
+            db.rawQuery(
+                "SELECT * FROM user_otp_verifications WHERE user_id = ? AND otp_code = ? AND expires_at > ?",
+                arrayOf(userId.toString(), otpCode, now.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    // نجاح: حذف الرمز بعد الاستخدام
+                    db.delete("user_otp_verifications", "user_id = ?", arrayOf(userId.toString()))
+                    logActivity("system", "otp_verified", "تم التحقق من OTP للمستخدم $userId")
+                    true
+                } else {
+                    // فشل: زيادة عدد المحاولات
+                    db.execSQL("UPDATE user_otp_verifications SET attempts = attempts + 1 WHERE user_id = ?", arrayOf(userId.toString()))
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating OTP code: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * إزالة/حذف رمز OTP للمستخدم (بعد الاستخدام أو الإلغاء)
+     * @param userId معرف المستخدم
+     * @return true إذا تم الحذف
+     */
+    fun clearOtpCode(userId: Long): Boolean {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.delete("user_otp_verifications", "user_id = ?", arrayOf(userId.toString())) > 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing OTP code: ${e.message}", e)
+            false
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * تنظيف رموز OTP منتهية الصلاحية للمستخدمين
+     * @return عدد السجلات المحذوفة
+     */
+    fun cleanupExpiredUserOtps(): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = System.currentTimeMillis()
+            db.delete("user_otp_verifications", "expires_at < ?", arrayOf(now.toString()))
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up expired user OTPs: ${e.message}", e)
+            0
         } finally {
             dbLock.unlock()
         }

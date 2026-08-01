@@ -1,13 +1,12 @@
 package com.aistudio.dieselstationsms.kxmpzq.receiver
 
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-import com.aistudio.dieselstationsms.kxmpzq.utils.SystemEventLogger
-import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
-
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
+import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -23,28 +22,21 @@ import android.util.Log
  * ═══════════════════════════════════════════════════════════════
  */
 class AlarmReceiver : BroadcastReceiver() {
-
     companion object {
         private const val TAG = "AlarmReceiver"
-        const val EXTRA_TASK_TYPE = "task_type"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        val taskType = intent.getStringExtra(EXTRA_TASK_TYPE) ?: "unknown"
-        Log.i(TAG, "Alarm triggered: task=$taskType")
-
-        try {
-            val serviceIntent = Intent(context, SMSService::class.java).apply {
-                putExtra("action", "execute_scheduled_task")
-                putExtra("task_type", taskType)
-            }
+        Log.d(TAG, "Alarm received: ${intent.action}")
+        val taskType = intent.getStringExtra("task_type") ?: "default"
+        val serviceIntent = Intent(context, SMSService::class.java).apply {
+            putExtra("action", "execute_scheduled_task")
+            putExtra("task_type", taskType)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(context, serviceIntent)
+        } else {
             context.startService(serviceIntent)
-
-            SystemEventLogger.record(context, "ALARM_EXECUTED", "task=$taskType")
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Alarm dispatch failed: ${e.message}")
-            SystemEventLogger.recordError(context, "AlarmReceiver", e.message)
         }
     }
 }

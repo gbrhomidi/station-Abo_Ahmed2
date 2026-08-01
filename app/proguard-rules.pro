@@ -14,7 +14,7 @@
 #  6. إزالة القواعد العامة الخطيرة
 #  7. إضافة تعليقات توثيقية
 #  8. ❌ إزالة قواعد NanoHTTPD لأن المكتبة لم تعد مستخدمة
-#     (تم تعطيل الخادم المحلي نهائياً في المعمارية الجديدة)
+#  9. ✅ إضافة قواعد صارمة للحفاظ على واجهة JavascriptInterface
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
@@ -158,7 +158,6 @@
 
 # ═══════════════════════════════════════════════════════════════
 #  ❌ تم إزالة قواعد NanoHTTPD - لم تعد المكتبة مستخدمة
-#     (تم تعطيل الخادم المحلي نهائياً في المعمارية الجديدة)
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
@@ -218,12 +217,22 @@
 -keep class kotlinx.coroutines.flow.StateFlow { *; }
 
 # ═══════════════════════════════════════════════════════════════
-#  WebView - JavaScript Interface
+#  WebView - JavaScript Interface (🔥 الأهم)
 # ═══════════════════════════════════════════════════════════════
 
-# الحفاظ على JavaScript Interface
--keepclassmembers class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
-    <methods>;
+# الحفاظ على جميع الطرق التي تحمل التعليق التوضيحي @JavascriptInterface
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# الحفاظ على الفئة الداخلية WebAppInterface بالكامل (بما فيها جميع الطرق)
+-keep class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
+    *;
+}
+
+# الحفاظ على اسم الواجهة كما هو (AndroidInterface) لمنع إعادة تسميتها
+-keep class com.aistudio.dieselstationsms.kxmpzq.MainActivity$WebAppInterface {
+    public <init>(...);
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -249,7 +258,3 @@
     static void checkReturnedValueIsNotNull(...);
     static void checkFieldIsNotNull(...);
 }
-
-# ═══════════════════════════════════════════════════════════════
-#  نهاية الملف
-# ═══════════════════════════════════════════════════════════════
