@@ -953,7 +953,7 @@ class SMSService : Service() {
      */
     private fun checkDatabase(): Boolean {
         return try {
-            if (!::dbHelper.isInitialized || dbHelper.isClosed) {
+            if (!::dbHelper.isInitialized || dbHelper.isClosed()) {
                 Log.w(TAG, "Database not initialized or closed")
                 initializeDatabase()
                 return false
@@ -1005,8 +1005,13 @@ class SMSService : Service() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                if (powerManager.isBackgroundRestricted) {
-                    Log.w(TAG, "Background restrictions are active")
+                try {
+                    val isRestricted = powerManager::class.java.getMethod("isBackgroundRestricted").invoke(powerManager) as Boolean
+                    if (isRestricted) {
+                        Log.w(TAG, "Background restrictions are active")
+                    }
+                } catch (reflectEx: Exception) {
+                    Log.d(TAG, "Could not check background restrictions via reflection: ${reflectEx.message}")
                 }
             }
         } catch (e: Exception) {
@@ -1199,12 +1204,24 @@ class SMSService : Service() {
     // ═══════════════════════════════════════════════════════════════
 
     /**
+     * تحويل تاريخ نصي إلى timestamp (مللي ثانية)
+     */
+    private fun dateToTimestamp(dateStr: String): Long {
+        return try {
+            DATE_FORMAT.parse(dateStr)?.time ?: 0L
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse date: $dateStr, using 0")
+            0L
+        }
+    }
+
+    /**
      * تنظيف جدول الهاشات المعالجة
      */
     private fun cleanupProcessedHashes() {
         try {
-            val cutoffDate = getDateBeforeDays(HASHES_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_PROCESSED_HASHES, "created_at", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(HASHES_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_PROCESSED_HASHES, "created_at", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old processed hashes")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup processed hashes: ${e.message}", e)
@@ -1216,8 +1233,8 @@ class SMSService : Service() {
      */
     private fun cleanupRateLimits() {
         try {
-            val cutoffDate = getDateBeforeDays(RATE_LIMITS_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_RATE_LIMITS, "timestamp", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(RATE_LIMITS_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_RATE_LIMITS, "timestamp", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old rate limits")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup rate limits: ${e.message}", e)
@@ -1229,8 +1246,8 @@ class SMSService : Service() {
      */
     private fun cleanupConversationContext() {
         try {
-            val cutoffDate = getDateBeforeDays(CONVERSATION_CONTEXT_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_CONVERSATION_CONTEXT, "last_updated", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(CONVERSATION_CONTEXT_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_CONVERSATION_CONTEXT, "last_updated", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old conversation contexts")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup conversation context: ${e.message}", e)
@@ -1242,8 +1259,8 @@ class SMSService : Service() {
      */
     private fun cleanupInteractionHistory() {
         try {
-            val cutoffDate = getDateBeforeDays(INTERACTION_HISTORY_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_INTERACTION_HISTORY, "interaction_time", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(INTERACTION_HISTORY_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_INTERACTION_HISTORY, "interaction_time", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old interaction history records")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup interaction history: ${e.message}", e)
@@ -1255,8 +1272,8 @@ class SMSService : Service() {
      */
     private fun cleanupOtpVerifications() {
         try {
-            val cutoffDate = getDateBeforeDays(OTP_VERIFICATIONS_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_OTP_VERIFICATIONS, "created_at", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(OTP_VERIFICATIONS_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_OTP_VERIFICATIONS, "created_at", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old OTP verifications")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup OTP verifications: ${e.message}", e)
@@ -1268,8 +1285,8 @@ class SMSService : Service() {
      */
     private fun cleanupRecurringOrders() {
         try {
-            val cutoffDate = getDateBeforeDays(RECURRING_ORDERS_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_RECURRING_ORDERS, "last_order_date", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(RECURRING_ORDERS_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_RECURRING_ORDERS, "last_order_date", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old recurring orders")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup recurring orders: ${e.message}", e)
@@ -1281,8 +1298,8 @@ class SMSService : Service() {
      */
     private fun cleanupMetrics() {
         try {
-            val cutoffDate = getDateBeforeDays(METRICS_RETENTION_DAYS)
-            val deleted = dbHelper.deleteOlderThan(TABLE_METRICS, "recorded_at", cutoffDate)
+            val cutoffTimestamp = dateToTimestamp(getDateBeforeDays(METRICS_RETENTION_DAYS))
+            val deleted = dbHelper.deleteOlderThan(TABLE_METRICS, "recorded_at", cutoffTimestamp)
             Log.d(TAG, "Cleaned up $deleted old metrics records")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cleanup metrics: ${e.message}", e)
@@ -1352,7 +1369,9 @@ class SMSService : Service() {
     private fun syncConversationContext() {
         try {
             if (::smsConversationManager.isInitialized) {
-                smsConversationManager.syncContext()
+                runBlocking {
+                    smsConversationManager.syncContext()
+                }
                 Log.d(TAG, "Conversation context synced")
             }
         } catch (e: Exception) {
@@ -1366,7 +1385,9 @@ class SMSService : Service() {
     private fun syncCustomerPreferences() {
         try {
             if (::smsCustomerResolver.isInitialized) {
-                smsCustomerResolver.syncPreferences()
+                runBlocking {
+                    smsCustomerResolver.syncPreferences()
+                }
                 Log.d(TAG, "Customer preferences synced")
             }
         } catch (e: Exception) {
@@ -1380,7 +1401,9 @@ class SMSService : Service() {
     private fun syncMetrics() {
         try {
             if (::smsMetrics.isInitialized) {
-                smsMetrics.sync()
+                runBlocking {
+                    smsMetrics.sync()
+                }
                 Log.d(TAG, "Metrics synced")
             }
         } catch (e: Exception) {
@@ -1394,7 +1417,9 @@ class SMSService : Service() {
     private fun syncRateLimits() {
         try {
             if (::smsSecurity.isInitialized) {
-                smsSecurity.syncRateLimits()
+                runBlocking {
+                    smsSecurity.syncRateLimits()
+                }
                 Log.d(TAG, "Rate limits synced")
             }
         } catch (e: Exception) {
@@ -1408,7 +1433,9 @@ class SMSService : Service() {
     private fun syncOtpData() {
         try {
             if (::smsSecurityOTP.isInitialized) {
-                smsSecurityOTP.syncData()
+                runBlocking {
+                    smsSecurityOTP.syncData()
+                }
                 Log.d(TAG, "OTP data synced")
             }
         } catch (e: Exception) {
@@ -1553,7 +1580,9 @@ class SMSService : Service() {
 
             // تسجيل المقاييس
             if (::smsMetrics.isInitialized) {
-                smsMetrics.recordPerformanceStats(performanceStats)
+                runBlocking {
+                    smsMetrics.recordPerformanceStats(performanceStats)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Statistics collection failed: ${e.message}", e)
@@ -1646,7 +1675,7 @@ class SMSService : Service() {
             } else {
                 Log.i(TAG, "Health Status: $status")
             }
-            SystemEventLogger.recordService(this, status, details)
+            SystemEventLogger.recordService(this, status, details ?: "")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log health status: ${e.message}", e)
         }
@@ -1811,11 +1840,13 @@ class SMSService : Service() {
 
             // تسجيل في قاعدة البيانات
             if (::smsMetrics.isInitialized) {
-                smsMetrics.recordEvent(
-                    eventType = "CRITICAL_ERROR",
-                    details = report.toString(),
-                    timestamp = System.currentTimeMillis()
-                )
+                runBlocking {
+                    smsMetrics.recordEvent(
+                        eventType = SmsMetrics.EventType.CRITICAL_ERROR,
+                        phone = "",
+                        details = report.toString()
+                    )
+                }
             }
 
             Log.e(TAG, "Error reported: ${report.toString().take(500)}")
@@ -1884,7 +1915,9 @@ class SMSService : Service() {
                     try {
                         collectStatistics()
                         if (::smsMetrics.isInitialized) {
-                            smsMetrics.flush()
+                            runBlocking {
+                                smsMetrics.flush()
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Metrics flush error: ${e.message}", e)
@@ -2078,7 +2111,9 @@ class SMSService : Service() {
     fun getCurrentMetrics(): JSONObject {
         return try {
             if (::smsMetrics.isInitialized) {
-                smsMetrics.getCurrentMetrics()
+                runBlocking {
+                    smsMetrics.getCurrentMetrics()
+                }
             } else {
                 JSONObject().put("error", "Metrics not initialized")
             }
