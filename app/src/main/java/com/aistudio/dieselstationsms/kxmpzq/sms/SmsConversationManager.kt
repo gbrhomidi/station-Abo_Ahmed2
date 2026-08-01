@@ -5,6 +5,7 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import android.util.Log
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -309,5 +310,18 @@ class SmsConversationManager(private val db: DatabaseHelper) {
     fun cleanupExpiredCache() {
         val now = System.currentTimeMillis()
         contextCache.entries.removeIf { now - it.value.timestamp > CONTEXT_TIMEOUT_MS }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 7. مزامنة سياق المحادثة (syncContext) – جديدة ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun syncContext() = withContext(Dispatchers.IO) {
+        try {
+            cleanupExpiredCache()
+            Log.d(TAG, "Conversation context synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync conversation context: ${e.message}", e)
+        }
     }
 }

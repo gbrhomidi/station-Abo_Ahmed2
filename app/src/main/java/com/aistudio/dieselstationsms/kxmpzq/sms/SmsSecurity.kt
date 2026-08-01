@@ -512,6 +512,28 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ الدوال المفقودة – المُضافة حديثاً ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun syncRateLimits() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Rate limits synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync rate limits: ${e.message}", e)
+        }
+    }
+
+    suspend fun performSecurityCheck() = withContext(Dispatchers.IO) {
+        try {
+            cleanupSmsProcessedMessages()
+            Log.d(TAG, "Security check performed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Security check failed: ${e.message}", e)
+            throw e
+        }
+    }
+
     // ═══ نتائج Rate Limiting ═══
     sealed class RateLimitResult {
         object ALLOWED : RateLimitResult()

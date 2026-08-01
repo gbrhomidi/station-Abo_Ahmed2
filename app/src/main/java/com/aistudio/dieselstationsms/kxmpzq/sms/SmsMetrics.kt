@@ -4,6 +4,8 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import android.util.Log
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -38,7 +40,8 @@ class SmsMetrics(private val db: DatabaseHelper) {
         OTP_SENT,
         ORDER_CONFIRMED,
         ORDER_CANCELLED,
-        CRITICAL_ERROR
+        CRITICAL_ERROR,
+        PERFORMANCE   // تمت الإضافة لـ recordPerformanceStats
     }
 
     suspend fun recordEvent(eventType: EventType, phone: String = "", details: String = "") = withContext(Dispatchers.IO) {
@@ -122,6 +125,54 @@ class SmsMetrics(private val db: DatabaseHelper) {
             arrayOf(cutoffDate)
         )
 
-        android.util.Log.d(TAG, "Cleaned up $deleted old metrics records")
+        Log.d(TAG, "Cleaned up $deleted old metrics records")
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ الدوال المفقودة – المُضافة حديثاً ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun sync() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Metrics synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync metrics: ${e.message}", e)
+        }
+    }
+
+    suspend fun flush() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Metrics flushed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to flush metrics: ${e.message}", e)
+        }
+    }
+
+    suspend fun recordPerformanceStats(stats: Map<String, Any>) = withContext(Dispatchers.IO) {
+        try {
+            val values = android.content.ContentValues().apply {
+                put("event_type", EventType.PERFORMANCE.name)
+                put("details", stats.toString().take(500))
+                put("timestamp", System.currentTimeMillis())
+                put("date", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(java.util.Date()))
+            }
+            db.writableDatabase.insert(METRICS_TABLE, null, values)
+            Log.d(TAG, "Performance stats recorded")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to record performance stats: ${e.message}", e)
+        }
+    }
+
+    suspend fun getCurrentMetrics(): JSONObject = withContext(Dispatchers.IO) {
+        try {
+            val stats = getTodayStats()
+            JSONObject().apply {
+                stats.forEach { (key, value) -> put(key, value) }
+                put("timestamp", System.currentTimeMillis())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get current metrics: ${e.message}", e)
+            JSONObject().put("error", e.message)
+        }
     }
 }

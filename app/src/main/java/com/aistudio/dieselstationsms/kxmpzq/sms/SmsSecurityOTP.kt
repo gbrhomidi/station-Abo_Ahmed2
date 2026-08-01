@@ -166,4 +166,17 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     // ═══════════════════════════════════════════════════════════════
 
     suspend fun cleanupExpired() = cleanupExpiredOTPs()
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ مزامنة بيانات OTP (syncData) – جديدة ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun syncData() = withContext(Dispatchers.IO) {
+        try {
+            cleanupExpiredOTPs()
+            Log.d(TAG, "OTP data synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync OTP data: ${e.message}", e)
+        }
+    }
 }

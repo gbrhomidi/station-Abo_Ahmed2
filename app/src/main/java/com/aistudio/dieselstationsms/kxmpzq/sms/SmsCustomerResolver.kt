@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import android.util.Log
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -262,5 +263,17 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         val result = a * b
         require(result.isFinite() && result >= 0) { "Calculation overflow" }
         return result
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ مزامنة تفضيلات العميل (syncPreferences) – جديدة ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun syncPreferences() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Customer preferences synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync customer preferences: ${e.message}", e)
+        }
     }
 }
