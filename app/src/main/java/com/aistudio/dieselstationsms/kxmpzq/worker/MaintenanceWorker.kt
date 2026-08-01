@@ -934,7 +934,7 @@ class MaintenanceWorker(
                 }
 
                 // ── التحقق من أن قاعدة البيانات مفتوحة ──
-                if (!db.isOpen) {
+                if (!db.isOpen()) {
                     logError("Database connection is closed")
                     return@withLock if (shouldRetry()) {
                         Result.retry()

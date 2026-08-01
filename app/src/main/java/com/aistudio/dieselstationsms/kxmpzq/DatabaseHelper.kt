@@ -42,6 +42,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
+        const val DATABASE_NAME = DB_NAME   // <-- هذا هو السطر المضاف
         const val VERSION = 13
 
         private const val HASH_ITERATIONS = 10000
@@ -9428,6 +9429,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     result.equals("ok", ignoreCase = true)
                 } else false
             }
+        } finally {
+            dbLock.unlock()
+        }
+    /**
+    * الحصول على وضع دفتر اليومية (Journal Mode) لقاعدة البيانات.
+    * @return وضع الـ journal (مثل "WAL", "DELETE") أو null في حال الفشل.
+    */
+    fun getJournalMode(): String? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery("PRAGMA journal_mode", null).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get journal mode: ${e.message}", e)
+            null
         } finally {
             dbLock.unlock()
         }
