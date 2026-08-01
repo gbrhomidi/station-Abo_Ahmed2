@@ -227,12 +227,9 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("RATE_LIMIT_BLOCK", sender, "Daily limit exceeded: $currentCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "⚠️ $customerName،
-" +
-                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.
-" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
-" +
+                    "⚠️ $customerName،\n" +
+                    "لقد تجاوزت الحد المسموح من الرسائل اليوم.\n" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
                     "للاستفسار العاجل: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
@@ -246,24 +243,18 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
                 val managerPhone = getManagerPhone()
                 logSecurityEvent("REPEAT_BLOCK", sender, "Repeat warnings: $warningCount")
                 return@withContext RateLimitResult.BLOCKED(
-                    "🚫 $customerName،
-" +
-                    "لقد أرسلت رسائل متكررة كثيرة.
-" +
-                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.
-" +
+                    "🚫 $customerName،\n" +
+                    "لقد أرسلت رسائل متكررة كثيرة.\n" +
+                    "تم حظر رقمك مؤقتاً لمدة 24 ساعة.\n" +
                     "للاستفسار: ${managerPhone ?: "غير متوفر"}",
                     managerPhone
                 )
             }
 
             return@withContext RateLimitResult.WARNING(
-                "⚠️ $customerName،
-" +
-                "لقد أرسلت رسائل متكررة.
-" +
-                "يرجى تحديد ما تريده في رسالة واحدة بدقة.
-" +
+                "⚠️ $customerName،\n" +
+                "لقد أرسلت رسائل متكررة.\n" +
+                "يرجى تحديد ما تريده في رسالة واحدة بدقة.\n" +
                 "تحذير $warningCount من $MAX_REPEAT_WARNINGS"
             )
         }
@@ -490,7 +481,7 @@ class SmsSecurity(private val context: Context, private val db: DatabaseHelper) 
             WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
               AND u.status = 'active' AND u.is_deleted = 0
             ORDER BY r.level ASC LIMIT 1
-        """, null)
+        """.trimIndent(), null)
         return cursor.use {
             if (it.moveToFirst()) it.getString(0) else null
         }

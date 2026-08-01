@@ -49,40 +49,6 @@ import java.util.concurrent.atomic.AtomicReference
 import com.aistudio.dieselstationsms.kxmpzq.BackupWorker
 import com.aistudio.dieselstationsms.kxmpzq.worker.MaintenanceWorker
 
-/**
- * ═══════════════════════════════════════════════════════════════
- * SMSService – خدمة الخلفية لإدارة دورة حياة نظام SMS التفاعلي
- * الإصدار 7.1.0 – Complete Orchestrator Architecture (Refactored)
- * ═══════════════════════════════════════════════════════════════
- *
- * تم إعادة بناء هذه الخدمة لتصبح منسقًا (Orchestrator) كاملًا:
- * 1. إدارة دورة حياة الخدمة (Service Lifecycle)
- * 2. تشغيل الخدمة في المقدمة (Foreground Service)
- * 3. تهيئة وإدارة جميع الوحدات المتخصصة
- * 4. مراقبة صحة النظام (Health Monitoring)
- * 5. تحميل وإدارة الإعدادات
- * 6. تنظيف قواعد البيانات الدوري
- * 7. مزامنة البيانات
- * 8. إدارة الأداء والإحصائيات
- * 9. إدارة السجلات والأخطاء
- * 10. جدولة المهام
- * 11. واجهة التشخيص العامة
- *
- * تم إزالة جميع المسؤوليات المتخصصة إلى:
- * - SmsProcessor.kt            ← معالجة الرسائل
- * - SmsSecurity.kt             ← الحماية والتحقق
- * - SmsSecurityOTP.kt          ← OTP
- * - SmsReplyManager.kt         ← الردود
- * - SmsConversationManager.kt  ← إدارة المحادثات
- * - SmsCustomerResolver.kt     ← العملاء
- * - SmsIntentDetector.kt       ← تحليل النية
- * - SmsMetrics.kt              ← المقاييس
- *
- * ═══════════════════════════════════════════════════════════════
- * @version 7.1.0 - Refactored with SystemEventLogger & PhoneUtils
- * @since 2026-07-24
- * ═══════════════════════════════════════════════════════════════
- */
 class SMSService : Service() {
 
     companion object {
@@ -91,27 +57,25 @@ class SMSService : Service() {
         private const val CHANNEL_ID = "station_sms_channel"
         private const val BACKUP_WORK_NAME = "auto_backup_work"
         private const val MAINTENANCE_WORK_NAME = "maintenance_work"
-        private const val HEARTBEAT_INTERVAL_MS = 300_000L // 5 دقائق
-        private const val HEALTH_CHECK_INTERVAL_MS = 600_000L // 10 دقائق
-        private const val PERFORMANCE_INTERVAL_MS = 180_000L // 3 دقائق
+        private const val HEARTBEAT_INTERVAL_MS = 300_000L
+        private const val HEALTH_CHECK_INTERVAL_MS = 600_000L
+        private const val PERFORMANCE_INTERVAL_MS = 180_000L
         private const val WAKE_LOCK_TAG = "SMSService::WakeLock"
         private const val MAX_RESTART_ATTEMPTS = 5
         private const val RESTART_BACKOFF_MS = 30_000L
-        private const val CLEANUP_INTERVAL_MS = 3_600_000L // 1 ساعة
-        private const val METRICS_FLUSH_INTERVAL_MS = 600_000L // 10 دقائق
-        private const val SECURITY_CHECK_INTERVAL_MS = 1_800_000L // 30 دقيقة
+        private const val CLEANUP_INTERVAL_MS = 3_600_000L
+        private const val METRICS_FLUSH_INTERVAL_MS = 600_000L
+        private const val SECURITY_CHECK_INTERVAL_MS = 1_800_000L
 
         private val DATETIME_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-        // ==================== إشعارات الأحداث ====================
         const val ACTION_SERVICE_STATUS_CHANGED = "com.aistudio.dieselstationsms.SERVICE_STATUS_CHANGED"
         const val ACTION_BACKUP_COMPLETED = "com.aistudio.dieselstationsms.BACKUP_COMPLETED"
         const val ACTION_HEALTH_STATUS = "com.aistudio.dieselstationsms.HEALTH_STATUS"
         const val ACTION_ERROR_REPORT = "com.aistudio.dieselstationsms.ERROR_REPORT"
         const val ACTION_PERFORMANCE_REPORT = "com.aistudio.dieselstationsms.PERFORMANCE_REPORT"
 
-        // ==================== حالات الخدمة ====================
         const val STATUS_SERVICE_STARTED = "SERVICE_STARTED"
         const val STATUS_SERVICE_STOPPED = "SERVICE_STOPPED"
         const val STATUS_SERVICE_ERROR = "SERVICE_ERROR"
@@ -123,12 +87,10 @@ class SMSService : Service() {
         const val STATUS_UNHEALTHY = "UNHEALTHY"
         const val STATUS_MAINTENANCE = "MAINTENANCE"
 
-        // ==================== أنماط التشغيل ====================
         const val MODE_OFFLINE = "offline"
         const val MODE_ONLINE = "online"
         const val MODE_HYBRID = "hybrid"
 
-        // ==================== أذونات ====================
         val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.RECEIVE_SMS,
             Manifest.permission.SEND_SMS,
@@ -139,7 +101,6 @@ class SMSService : Service() {
             Manifest.permission.WAKE_LOCK
         )
 
-        // ==================== أسماء الجداول ====================
         const val TABLE_PROCESSED_HASHES = "sms_processed_hashes"
         const val TABLE_RATE_LIMITS = "sms_rate_limits"
         const val TABLE_CONVERSATION_CONTEXT = "sms_conversation_context"
@@ -150,7 +111,6 @@ class SMSService : Service() {
         const val TABLE_OTP_VERIFICATIONS = "sms_otp_verifications"
         const val TABLE_SETTINGS = "sms_settings"
 
-        // ==================== إعدادات التنظيف ====================
         const val HASHES_RETENTION_DAYS = 7
         const val RATE_LIMITS_RETENTION_DAYS = 1
         const val CONVERSATION_CONTEXT_RETENTION_DAYS = 30
@@ -166,17 +126,11 @@ class SMSService : Service() {
         fun getInstance(): SMSService? = serviceInstance
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Coroutine Scopes ═══
-    // ═══════════════════════════════════════════════════════════════
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val healthScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val performanceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ حالة الخدمة ═══
-    // ═══════════════════════════════════════════════════════════════
     private val isDestroyed = AtomicBoolean(false)
     private val isInitialized = AtomicBoolean(false)
     private val isRunning = AtomicBoolean(false)
@@ -186,9 +140,6 @@ class SMSService : Service() {
     private val startTime = AtomicLong(0L)
     private val currentMode = AtomicReference(MODE_OFFLINE)
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Jobs ═══
-    // ═══════════════════════════════════════════════════════════════
     private var heartbeatJob: Job? = null
     private var healthMonitorJob: Job? = null
     private var performanceMonitorJob: Job? = null
@@ -197,20 +148,11 @@ class SMSService : Service() {
     private var securityCheckJob: Job? = null
     private var maintenanceJob: Job? = null
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Wake Lock ═══
-    // ═══════════════════════════════════════════════════════════════
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Receiver ═══
-    // ═══════════════════════════════════════════════════════════════
     private var smsReceiver: BroadcastReceiver? = null
     private val isReceiverRegisteredFlag = AtomicBoolean(false)
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ المكونات المعمارية (Modules) ═══
-    // ═══════════════════════════════════════════════════════════════
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var smsMetrics: SmsMetrics
     private lateinit var smsSecurity: SmsSecurity
@@ -222,9 +164,6 @@ class SMSService : Service() {
     private lateinit var smsReplyManager: SmsReplyManager
     private lateinit var smsReceiverInstance: SmsReceiver
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ الإعدادات ═══
-    // ═══════════════════════════════════════════════════════════════
     private val settings = mutableMapOf<String, String>()
     private val securitySettings = mutableMapOf<String, String>()
     private val conversationSettings = mutableMapOf<String, String>()
@@ -233,26 +172,16 @@ class SMSService : Service() {
     private val rateLimitSettings = mutableMapOf<String, String>()
     private val cleanupSettings = mutableMapOf<String, String>()
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إحصائيات الأداء ═══
-    // ═══════════════════════════════════════════════════════════════
     private val performanceStats = mutableMapOf<String, Any>()
     private val moduleLoadTimes = mutableMapOf<String, Long>()
     private val errorCount = AtomicInteger(0)
     private val processedMessageCount = AtomicInteger(0)
     private val lastHealthCheckResult = AtomicReference("")
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ دورة حياة الخدمة (Service Lifecycle) ═══
-    // ═══════════════════════════════════════════════════════════════
-
     override fun onCreate() {
         super.onCreate()
         serviceInstance = this
-        Log.i(TAG, "═══════════════════════════════════════════════")
-        Log.i(TAG, "SMSService onCreate - Complete Orchestrator v7.0.0")
-        Log.i(TAG, "═══════════════════════════════════════════════")
-
+        Log.i(TAG, "SMSService onCreate - v7.1.0")
         isDestroyed.set(false)
         isInitialized.set(false)
         isRunning.set(false)
@@ -261,53 +190,27 @@ class SMSService : Service() {
         restartAttempts.set(0)
         errorCount.set(0)
         processedMessageCount.set(0)
-
         try {
-            // 1. تهيئة Coroutine Scope
             initializeCoroutineScope()
-
-            // 2. تهيئة الخدمة
             initializeService()
-
-            // 3. تهيئة قاعدة البيانات
             initializeDatabase()
-
-            // 4. تهيئة الإشعارات
             initializeNotification()
-
-            // 5. تحميل الإعدادات
             loadSettings()
-
-            // 6. تهيئة الوحدات
             initializeSmsModules()
-
-            // 7. تسجيل مستقبل الرسائل
             registerSmsReceiver()
-
-            // 8. تشغيل محرك SMS
             startSmsEngine()
-
-            // 9. بدء مراقبة الصحة
             startHealthMonitor()
-
-            // 10. بدء مراقبة الأداء
             startPerformanceMonitor()
-
-            // 11. جدولة المهام
             scheduleMaintenance()
             scheduleHealthChecks()
             scheduleDatabaseCleanup()
             scheduleMetricsFlush()
             scheduleSecurityChecks()
-
-            // 12. تسجيل بدء الخدمة
             logServiceStarted()
             SystemEventLogger.recordService(this, STATUS_SERVICE_STARTED, "Service v7.1.0 started")
-
             isInitialized.set(true)
             isRunning.set(true)
             Log.i(TAG, "Service initialization completed successfully")
-
         } catch (e: Exception) {
             Log.e(TAG, "Fatal Error in service initialization: ${e.message}", e)
             handleFatalError(e)
@@ -316,20 +219,16 @@ class SMSService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "SMSService onStartCommand - START_STICKY")
-
         if (!isInitialized.get()) {
             Log.w(TAG, "Service not initialized yet, reinitializing...")
             initializeService()
         }
-
         if (isPaused.get()) {
             resumeSmsEngine()
         }
-
         if (!isDestroyed.get()) {
             startForeground(NOTIFICATION_ID, buildForegroundNotification())
         }
-
         sendServiceStatusBroadcast()
         return START_STICKY
     }
@@ -341,19 +240,11 @@ class SMSService : Service() {
         isDestroyed.set(true)
         isInitialized.set(false)
         isRunning.set(false)
-
         try {
-            // 1. إيقاف المحرك
             stopSmsEngine()
-
-            // 2. إلغاء تسجيل المستقبل
             unregisterSmsReceiver()
-
-            // 3. إيقاف المراقبة
             stopHealthMonitor()
             stopPerformanceMonitor()
-
-            // 4. إلغاء Coroutines
             heartbeatJob?.cancel()
             healthMonitorJob?.cancel()
             performanceMonitorJob?.cancel()
@@ -361,51 +252,27 @@ class SMSService : Service() {
             metricsFlushJob?.cancel()
             securityCheckJob?.cancel()
             maintenanceJob?.cancel()
-
-            // 5. إلغاء Scopes
             serviceScope.cancel()
             healthScope.cancel()
             performanceScope.cancel()
             cleanupScope.cancel()
-
-            // 6. تحرير Wake Lock
             releaseWakeLock()
-
-            // 7. تسجيل توقف الخدمة
             logServiceStopped()
             SystemEventLogger.recordService(this, STATUS_SERVICE_STOPPED, "Service stopped")
-
-            // 8. إغلاق قاعدة البيانات
-            // لا يتم إغلاق DatabaseHelper هنا لأنه Singleton مشترك
-            
-            // 9. إلغاء جدولة العمل
             WorkManager.getInstance(this).cancelUniqueWork(BACKUP_WORK_NAME)
             WorkManager.getInstance(this).cancelUniqueWork(MAINTENANCE_WORK_NAME)
-
             Log.i(TAG, "Service destroyed and resources cleaned successfully")
-
         } catch (e: Exception) {
             Log.e(TAG, "Error during service destruction: ${e.message}", e)
         }
-
         serviceInstance = null
         super.onDestroy()
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تهيئة الخدمة (Service Initialization) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تهيئة Coroutine Scope للخدمة
-     */
     private fun initializeCoroutineScope() {
         Log.d(TAG, "Coroutine scopes initialized")
     }
 
-    /**
-     * تهيئة الخدمة الأساسية
-     */
     private fun initializeService() {
         try {
             Log.d(TAG, "Initializing service...")
@@ -417,9 +284,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة الإشعارات
-     */
     private fun initializeNotification() {
         try {
             createNotificationChannel()
@@ -430,9 +294,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة قاعدة البيانات
-     */
     private fun initializeDatabase() {
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
@@ -444,13 +305,9 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة جميع وحدات SMS
-     */
     private fun initializeSmsModules() {
         try {
             val startTime = System.currentTimeMillis()
-
             initializeSecurity()
             initializeMetrics()
             initializeSmsProcessor()
@@ -459,19 +316,14 @@ class SMSService : Service() {
             initializeIntentDetector()
             initializeReplyManager()
             initializeOtpModule()
-
             val duration = System.currentTimeMillis() - startTime
             Log.i(TAG, "All SMS modules initialized in ${duration}ms")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize SMS modules: ${e.message}", e)
             throw e
         }
     }
 
-    /**
-     * تهيئة وحدة الأمان
-     */
     private fun initializeSecurity() {
         try {
             val start = System.currentTimeMillis()
@@ -484,9 +336,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة وحدة المقاييس
-     */
     private fun initializeMetrics() {
         try {
             val start = System.currentTimeMillis()
@@ -499,9 +348,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة مستقبل الرسائل
-     */
     private fun initializeReceivers() {
         try {
             val start = System.currentTimeMillis()
@@ -514,13 +360,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة الوحدات الجديدة (Module Management) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تهيئة معالج الرسائل
-     */
     private fun initializeSmsProcessor() {
         try {
             val start = System.currentTimeMillis()
@@ -533,9 +372,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة مدير المحادثات
-     */
     private fun initializeConversationManager() {
         try {
             val start = System.currentTimeMillis()
@@ -548,9 +384,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة محلل العملاء
-     */
     private fun initializeCustomerResolver() {
         try {
             val start = System.currentTimeMillis()
@@ -563,9 +396,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة كاشف النية
-     */
     private fun initializeIntentDetector() {
         try {
             val start = System.currentTimeMillis()
@@ -578,9 +408,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة مدير الردود
-     */
     private fun initializeReplyManager() {
         try {
             val start = System.currentTimeMillis()
@@ -593,17 +420,11 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة وحدة الأمان (الوحدة الكاملة)
-     */
     private fun initializeSecurityModule() {
         initializeSecurity()
         Log.d(TAG, "Security module fully initialized")
     }
 
-    /**
-     * تهيئة وحدة OTP
-     */
     private fun initializeOtpModule() {
         try {
             val start = System.currentTimeMillis()
@@ -616,21 +437,11 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة وحدة المقاييس (الوحدة الكاملة)
-     */
     private fun initializeMetricsModule() {
         initializeMetrics()
         Log.d(TAG, "Metrics module fully initialized")
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تشغيل وإيقاف النظام (Engine Control) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تشغيل محرك SMS
-     */
     private fun startSmsEngine() {
         try {
             Log.i(TAG, "Starting SMS engine...")
@@ -645,9 +456,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إيقاف محرك SMS
-     */
     private fun stopSmsEngine() {
         try {
             Log.i(TAG, "Stopping SMS engine...")
@@ -660,9 +468,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إعادة تشغيل محرك SMS
-     */
     private fun restartSmsEngine() {
         try {
             Log.i(TAG, "Restarting SMS engine...")
@@ -677,9 +482,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إيقاف مؤقت لمحرك SMS
-     */
     private fun pauseSmsEngine() {
         try {
             Log.i(TAG, "Pausing SMS engine...")
@@ -693,9 +495,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * استئناف محرك SMS
-     */
     private fun resumeSmsEngine() {
         try {
             Log.i(TAG, "Resuming SMS engine...")
@@ -709,128 +508,76 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إيقاف آمن للخدمة
-     */
     private fun shutdownGracefully() {
         try {
             Log.i(TAG, "Initiating graceful shutdown...")
             isRunning.set(false)
             isInitialized.set(false)
-
-            // إيقاف المراقبة
             stopHealthMonitor()
             stopPerformanceMonitor()
-
-            // إلغاء تسجيل المستقبل
             unregisterSmsReceiver()
-
-            // إيقاف المحرك
             stopSmsEngine()
-
-            // تنظيف البيانات
             runCleanupNow()
-
-            // تحرير الموارد
             releaseWakeLock()
-
-            // إلغاء Coroutines
             serviceScope.cancel()
             healthScope.cancel()
             performanceScope.cancel()
             cleanupScope.cancel()
-
-            // إغلاق قاعدة البيانات
-            // لا يتم إغلاق DatabaseHelper هنا لأنه Singleton مشترك
-
             logServiceStopped()
             Log.i(TAG, "Graceful shutdown completed")
-
         } catch (e: Exception) {
             Log.e(TAG, "Error during graceful shutdown: ${e.message}", e)
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة مستقبل الرسائل (Receiver Management) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تسجيل مستقبل الرسائل
-     */
     private fun registerSmsReceiver() {
         try {
             if (isReceiverRegistered()) {
                 Log.w(TAG, "SMS receiver already registered")
                 return
             }
-
             if (!::smsReceiverInstance.isInitialized) {
                 initializeReceivers()
             }
-
             val filter = IntentFilter().apply {
                 addAction("android.provider.Telephony.SMS_RECEIVED")
                 addAction("android.provider.Telephony.SMS_DELIVER")
                 priority = Int.MAX_VALUE
             }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(smsReceiverInstance, filter, Context.RECEIVER_EXPORTED)
             } else {
                 registerReceiver(smsReceiverInstance, filter)
             }
-
             isReceiverRegisteredFlag.set(true)
             Log.i(TAG, "SMS receiver registered successfully")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register SMS receiver: ${e.message}", e)
             isReceiverRegisteredFlag.set(false)
         }
     }
 
-    /**
-     * إلغاء تسجيل مستقبل الرسائل
-     */
     private fun unregisterSmsReceiver() {
         try {
             if (!isReceiverRegistered()) {
                 Log.w(TAG, "SMS receiver not registered")
                 return
             }
-
             smsReceiverInstance?.let {
                 unregisterReceiver(it)
                 Log.i(TAG, "SMS receiver unregistered")
             }
-
             isReceiverRegisteredFlag.set(false)
-
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering SMS receiver: ${e.message}", e)
         }
     }
 
-    /**
-     * التحقق من حالة تسجيل المستقبل
-     */
-    private fun isReceiverRegistered(): Boolean {
-        return isReceiverRegisteredFlag.get()
-    }
+    private fun isReceiverRegistered(): Boolean = isReceiverRegisteredFlag.get()
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ مراقبة حالة النظام (Health Monitoring) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * بدء مراقبة صحة النظام
-     */
     private fun startHealthMonitor() {
         try {
             Log.i(TAG, "Starting health monitor...")
-
-            // Heartbeat
             heartbeatJob = serviceScope.launch {
                 while (isActive && !isDestroyed.get()) {
                     try {
@@ -842,8 +589,6 @@ class SMSService : Service() {
                     delay(HEARTBEAT_INTERVAL_MS)
                 }
             }
-
-            // Health Check
             healthMonitorJob = healthScope.launch {
                 while (isActive && !isDestroyed.get()) {
                     try {
@@ -854,17 +599,12 @@ class SMSService : Service() {
                     delay(HEALTH_CHECK_INTERVAL_MS)
                 }
             }
-
             Log.i(TAG, "Health monitoring started")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start health monitor: ${e.message}", e)
         }
     }
 
-    /**
-     * إيقاف مراقبة صحة النظام
-     */
     private fun stopHealthMonitor() {
         try {
             heartbeatJob?.cancel()
@@ -875,54 +615,35 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إجراء فحص صحة شامل
-     */
     private suspend fun performHealthCheck() {
         try {
             Log.d(TAG, "Performing health check...")
             val issues = mutableListOf<String>()
-
-            // فحص قاعدة البيانات
             if (!checkDatabase()) {
                 issues.add("Database unhealthy")
                 checkDatabaseIntegrity()
             }
-
-            // فحص الأذونات
             if (!checkSmsPermissions()) {
                 issues.add("SMS permissions missing")
             }
-
             if (!checkNotificationPermission()) {
                 issues.add("Notification permission missing")
             }
-
-            // فحص القيود
             checkBackgroundRestrictions()
             checkBatteryOptimization()
-
-            // فحص المستقبل
             if (!checkReceiverStatus()) {
                 issues.add("Receiver not registered")
                 registerSmsReceiver()
             }
-
-            // فحص المكونات
             if (!validateModules()) {
                 issues.add("Modules validation failed")
             }
-
-            // فحص الإعدادات
             if (!validateSettings()) {
                 issues.add("Settings validation failed")
             }
-
-            // فحص الجداول
             if (!validateTables()) {
                 issues.add("Tables validation failed")
             }
-
             if (issues.isEmpty()) {
                 lastHealthCheckResult.set(STATUS_HEALTHY)
                 logHealthStatus(STATUS_HEALTHY)
@@ -937,16 +658,12 @@ class SMSService : Service() {
                 updateNotification("تنبيه: $issueText")
                 Log.w(TAG, "Health check failed: $issueText")
             }
-
         } catch (e: Exception) {
             Log.e(TAG, "Health check exception: ${e.message}", e)
             SystemEventLogger.recordError(applicationContext, "SMSService", "Health check failed: ${e.message}")
         }
     }
 
-    /**
-     * فحص قاعدة البيانات
-     */
     private fun checkDatabase(): Boolean {
         return try {
             if (!::dbHelper.isInitialized || !dbHelper.writableDatabase.isOpen) {
@@ -961,9 +678,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فحص أذونات SMS
-     */
     private fun checkSmsPermissions(): Boolean {
         return try {
             val missing = REQUIRED_PERMISSIONS.filter { permission ->
@@ -980,23 +694,14 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فحص إذن الإشعارات
-     */
     private fun checkNotificationPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         } else {
             true
         }
     }
 
-    /**
-     * فحص قيود التشغيل في الخلفية
-     */
     private fun checkBackgroundRestrictions() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -1016,9 +721,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فحص تحسين البطارية
-     */
     private fun checkBatteryOptimization() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -1027,7 +729,6 @@ class SMSService : Service() {
                     Log.w(TAG, "Battery optimization is enabled for this app")
                 }
             }
-
             val batteryStatus = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             batteryStatus?.let { intent ->
                 val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -1042,16 +743,8 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فحص حالة المستقبل
-     */
-    private fun checkReceiverStatus(): Boolean {
-        return isReceiverRegistered()
-    }
+    private fun checkReceiverStatus(): Boolean = isReceiverRegistered()
 
-    /**
-     * فحص سلامة قاعدة البيانات
-     */
     private fun checkDatabaseIntegrity() {
         try {
             if (::dbHelper.isInitialized) {
@@ -1064,13 +757,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تحميل الإعدادات (Settings Loading) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تحميل جميع الإعدادات
-     */
     private fun loadSettings() {
         try {
             Log.d(TAG, "Loading all settings...")
@@ -1086,9 +772,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إعادة تحميل الإعدادات
-     */
     private fun reloadSettings() {
         try {
             Log.d(TAG, "Reloading settings...")
@@ -1106,9 +789,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات الأمان
-     */
     private fun loadSecuritySettings() {
         try {
             securitySettings["spam_threshold"] = "5"
@@ -1121,9 +801,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات المحادثات
-     */
     private fun loadConversationSettings() {
         try {
             conversationSettings["max_context_messages"] = "20"
@@ -1136,9 +813,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات OTP
-     */
     private fun loadOtpSettings() {
         try {
             otpSettings["otp_length"] = "6"
@@ -1151,9 +825,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات المقاييس
-     */
     private fun loadMetricsSettings() {
         try {
             metricsSettings["enable_detailed_metrics"] = "true"
@@ -1166,9 +837,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات حدود المعدل
-     */
     private fun loadRateLimitSettings() {
         try {
             rateLimitSettings["max_messages_per_minute"] = "30"
@@ -1181,9 +849,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحميل إعدادات التنظيف
-     */
     private fun loadCleanupSettings() {
         try {
             cleanupSettings["auto_cleanup_enabled"] = "true"
@@ -1196,13 +861,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ تنظيف قواعد البيانات (Database Cleanup) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تنظيف جدول الهاشات المعالجة
-     */
     private fun cleanupProcessedHashes() {
         try {
             val cutoffDate = getDateBeforeDays(HASHES_RETENTION_DAYS)
@@ -1213,9 +871,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول حدود المعدل
-     */
     private fun cleanupRateLimits() {
         try {
             val cutoffDate = getDateBeforeDays(RATE_LIMITS_RETENTION_DAYS)
@@ -1226,9 +881,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول سياق المحادثات
-     */
     private fun cleanupConversationContext() {
         try {
             val cutoffDate = getDateBeforeDays(CONVERSATION_CONTEXT_RETENTION_DAYS)
@@ -1239,9 +891,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول تاريخ التفاعلات
-     */
     private fun cleanupInteractionHistory() {
         try {
             val cutoffDate = getDateBeforeDays(INTERACTION_HISTORY_RETENTION_DAYS)
@@ -1252,9 +901,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول تحققات OTP
-     */
     private fun cleanupOtpVerifications() {
         try {
             val cutoffDate = getDateBeforeDays(OTP_VERIFICATIONS_RETENTION_DAYS)
@@ -1265,9 +911,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول الطلبات المتكررة
-     */
     private fun cleanupRecurringOrders() {
         try {
             val cutoffDate = getDateBeforeDays(RECURRING_ORDERS_RETENTION_DAYS)
@@ -1278,9 +921,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جدول المقاييس
-     */
     private fun cleanupMetrics() {
         try {
             val cutoffDate = getDateBeforeDays(METRICS_RETENTION_DAYS)
@@ -1291,9 +931,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنظيف جميع البيانات المنتهية الصلاحية
-     */
     private fun cleanupExpiredData() {
         try {
             Log.i(TAG, "Starting expired data cleanup...")
@@ -1310,9 +947,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جدولة التنظيف الدوري
-     */
     private fun scheduleCleanup() {
         try {
             cleanupJob = cleanupScope.launch {
@@ -1331,9 +965,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تنفيذ التنظيف فورًا
-     */
     private fun runCleanupNow() {
         try {
             Log.i(TAG, "Running immediate cleanup...")
@@ -1344,13 +975,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ مزامنة البيانات (Data Sync) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * مزامنة سياق المحادثات
-     */
     private fun syncConversationContext() {
         try {
             if (::smsConversationManager.isInitialized) {
@@ -1362,9 +986,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مزامنة تفضيلات العملاء
-     */
     private fun syncCustomerPreferences() {
         try {
             if (::smsCustomerResolver.isInitialized) {
@@ -1376,9 +997,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مزامنة المقاييس
-     */
     private fun syncMetrics() {
         try {
             if (::smsMetrics.isInitialized) {
@@ -1390,9 +1008,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مزامنة حدود المعدل
-     */
     private fun syncRateLimits() {
         try {
             if (::smsSecurity.isInitialized) {
@@ -1404,9 +1019,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مزامنة بيانات OTP
-     */
     private fun syncOtpData() {
         try {
             if (::smsSecurityOTP.isInitialized) {
@@ -1418,17 +1030,9 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة الأداء (Performance Management) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * بدء مراقبة الأداء
-     */
     private fun startPerformanceMonitor() {
         try {
             Log.i(TAG, "Starting performance monitor...")
-
             performanceMonitorJob = performanceScope.launch {
                 while (isActive && !isDestroyed.get()) {
                     try {
@@ -1442,17 +1046,12 @@ class SMSService : Service() {
                     delay(PERFORMANCE_INTERVAL_MS)
                 }
             }
-
             Log.i(TAG, "Performance monitor started")
-
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start performance monitor: ${e.message}", e)
         }
     }
 
-    /**
-     * إيقاف مراقبة الأداء
-     */
     private fun stopPerformanceMonitor() {
         try {
             performanceMonitorJob?.cancel()
@@ -1462,9 +1061,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مراقبة استهلاك الذاكرة
-     */
     private fun monitorMemory() {
         try {
             val runtime = Runtime.getRuntime()
@@ -1473,12 +1069,10 @@ class SMSService : Service() {
             val freeMemory = runtime.freeMemory()
             val usedMemory = totalMemory - freeMemory
             val memoryUsagePercent = (usedMemory * 100 / maxMemory.toFloat())
-
             performanceStats["memory_max_mb"] = maxMemory / (1024 * 1024)
             performanceStats["memory_used_mb"] = usedMemory / (1024 * 1024)
             performanceStats["memory_free_mb"] = freeMemory / (1024 * 1024)
             performanceStats["memory_usage_percent"] = memoryUsagePercent
-
             if (memoryUsagePercent > 85) {
                 Log.w(TAG, "High memory usage: ${memoryUsagePercent.toInt()}%")
             }
@@ -1487,9 +1081,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مراقبة استهلاك المعالج
-     */
     private fun monitorCpu() {
         try {
             val pid = Process.myPid()
@@ -1501,9 +1092,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تقدير استخدام المعالج
-     */
     private fun estimateCpuUsage(): Double {
         return try {
             val startTime = SystemClock.elapsedRealtime()
@@ -1519,16 +1107,12 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * مراقبة عدد الخيوط
-     */
     private fun monitorThreads() {
         try {
             val threadCount = Thread.activeCount()
             val threadMap = Thread.getAllStackTraces()
             performanceStats["active_threads"] = threadCount
             performanceStats["total_threads"] = threadMap.size
-
             if (threadCount > 100) {
                 Log.w(TAG, "High thread count: $threadCount")
             }
@@ -1537,9 +1121,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جمع الإحصائيات
-     */
     private fun collectStatistics() {
         try {
             performanceStats["uptime_seconds"] = (System.currentTimeMillis() - startTime.get()) / 1000
@@ -1552,8 +1133,6 @@ class SMSService : Service() {
             performanceStats["last_health_check"] = lastHealthCheckResult.get()
             performanceStats["current_mode"] = currentMode.get()
             performanceStats["timestamp"] = System.currentTimeMillis()
-
-            // تسجيل المقاييس
             if (::smsMetrics.isInitialized) {
                 try { smsMetrics.recordPerformanceStats(performanceStats) } catch (e: NoSuchMethodError) { /* stub */ }
             }
@@ -1562,9 +1141,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تصدير الإحصائيات
-     */
     private fun dumpStatistics(): JSONObject {
         return try {
             collectStatistics()
@@ -1583,13 +1159,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة السجلات (Logging) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تسجيل بدء الخدمة
-     */
     private fun logServiceStarted() {
         try {
             Log.i(TAG, "═══════════════════════════════════════════════")
@@ -1604,9 +1173,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تسجيل توقف الخدمة
-     */
     private fun logServiceStopped() {
         try {
             val uptime = (System.currentTimeMillis() - startTime.get()) / 1000
@@ -1622,9 +1188,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تسجيل إعادة تشغيل الخدمة
-     */
     private fun logServiceRestarted() {
         try {
             val attempt = restartAttempts.incrementAndGet()
@@ -1638,9 +1201,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تسجيل حالة الصحة
-     */
     private fun logHealthStatus(status: String, details: String? = null) {
         try {
             if (details != null) {
@@ -1654,9 +1214,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تسجيل خطأ حرج
-     */
     private fun logCriticalError(error: Throwable) {
         try {
             errorCount.incrementAndGet()
@@ -1672,9 +1229,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تسجيل عملية الاسترداد
-     */
     private fun logRecovery(action: String) {
         try {
             Log.i(TAG, "═══════════════════════════════════════════════")
@@ -1687,26 +1241,15 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ معالجة الأخطاء (Error Handling) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * معالجة خطأ فادح
-     */
     private fun handleFatalError(error: Throwable) {
         try {
             logCriticalError(error)
-
             val currentAttempts = restartAttempts.get()
             val now = System.currentTimeMillis()
             val lastRestart = lastRestartTime.get()
-
-            // إعادة تعيين العداد إذا مر وقت كافٍ
             if (now - lastRestart > 600_000L) {
                 restartAttempts.set(0)
             }
-
             if (currentAttempts < MAX_RESTART_ATTEMPTS) {
                 lastRestartTime.set(now)
                 Log.w(TAG, "Attempting recovery (attempt ${currentAttempts + 1}/$MAX_RESTART_ATTEMPTS)")
@@ -1721,77 +1264,52 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * الاسترداد من الفشل
-     */
     private fun recoverFromFailure() {
         try {
             logRecovery("Starting recovery sequence")
-
-            // 1. إيقاف المكونات
             stopSmsEngine()
             unregisterSmsReceiver()
-
-            // 2. إلغاء المراقبة
             stopHealthMonitor()
             stopPerformanceMonitor()
-
-            // 3. تنظيف
             cleanupScope.launch {
                 runCleanupNow()
             }
-
-            // 4. إعادة تهيئة
             Thread.sleep(RESTART_BACKOFF_MS)
             initializeService()
             initializeDatabase()
             initializeSmsModules()
-
-            // 5. إعادة التشغيل
             registerSmsReceiver()
             startSmsEngine()
             startHealthMonitor()
             startPerformanceMonitor()
-
             logRecovery("Recovery completed successfully")
             notifyServiceHealthy()
-
         } catch (e: Exception) {
             Log.e(TAG, "Recovery failed: ${e.message}", e)
             restartAfterCrash()
         }
     }
 
-    /**
-     * إعادة التشغيل بعد تعطل
-     */
     private fun restartAfterCrash() {
         try {
             Log.w(TAG, "Initiating crash recovery restart...")
             logServiceRestarted()
-
             val restartIntent = Intent(applicationContext, SMSService::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("restart_reason", "crash_recovery")
                 putExtra("restart_attempt", restartAttempts.get())
             }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(restartIntent)
             } else {
                 startService(restartIntent)
             }
-
             Log.i(TAG, "Crash recovery restart initiated")
-
         } catch (e: Exception) {
             Log.e(TAG, "Crash recovery restart failed: ${e.message}", e)
         }
     }
 
-    /**
-     * الإبلاغ عن خطأ
-     */
     private fun reportError(error: Throwable) {
         try {
             val report = JSONObject().apply {
@@ -1804,14 +1322,10 @@ class SMSService : Service() {
                 put("restart_attempts", restartAttempts.get())
                 put("error_count", errorCount.get())
             }
-
-            // إرسال Broadcast
             val intent = Intent(ACTION_ERROR_REPORT).apply {
                 putExtra("error_report", report.toString())
             }
             sendBroadcast(intent)
-
-            // تسجيل في قاعدة البيانات
             if (::smsMetrics.isInitialized) {
                 serviceScope.launch {
                     smsMetrics.recordEvent(
@@ -1821,28 +1335,18 @@ class SMSService : Service() {
                     )
                 }
             }
-
             Log.e(TAG, "Error reported: ${report.toString().take(500)}")
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reporting failed: ${e.message}", e)
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reporting failed: ${e.message}", e)
         }
+    }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ جدولة المهام (Task Scheduling) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * جدولة صيانة دورية
-     */
     private fun scheduleMaintenance() {
         try {
             val maintenanceRequest = PeriodicWorkRequestBuilder<MaintenanceWorker>(
                 12L, TimeUnit.HOURS,
                 1L, TimeUnit.HOURS
             ).build()
-
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 MAINTENANCE_WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
@@ -1854,21 +1358,14 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جدولة فحوصات الصحة
-     */
     private fun scheduleHealthChecks() {
         try {
-            // يتم التنفيذ عبر Coroutines في startHealthMonitor()
             Log.i(TAG, "Health checks scheduled via coroutine")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule health checks: ${e.message}", e)
         }
     }
 
-    /**
-     * جدولة تنظيف قاعدة البيانات
-     */
     private fun scheduleDatabaseCleanup() {
         try {
             scheduleCleanup()
@@ -1878,9 +1375,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جدولة حفظ المقاييس
-     */
     private fun scheduleMetricsFlush() {
         try {
             metricsFlushJob = serviceScope.launch {
@@ -1902,9 +1396,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جدولة فحوصات الأمان
-     */
     private fun scheduleSecurityChecks() {
         try {
             securityCheckJob = serviceScope.launch {
@@ -1928,13 +1419,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة الإشعارات (Notification Management) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * إنشاء قناة الإشعارات (Android 8+)
-     */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -1953,9 +1437,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * بناء إشعار الخدمة العاملة في المقدمة
-     */
     private fun buildForegroundNotification(): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -1964,7 +1445,6 @@ class SMSService : Service() {
             this, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
             .setContentText("نظام SMS التفاعلي يعمل")
@@ -1976,12 +1456,8 @@ class SMSService : Service() {
             .build()
     }
 
-    /**
-     * تحديث نص الإشعار بشكل ديناميكي
-     */
     private fun updateNotification(text: String) {
         if (isDestroyed.get()) return
-
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("⛽ محطة أبو أحمد")
             .setContentText(text)
@@ -1990,14 +1466,10 @@ class SMSService : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
-
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, notification)
     }
 
-    /**
-     * إشعار بصحة الخدمة
-     */
     private fun notifyServiceHealthy() {
         try {
             updateNotification("نظام SMS يعمل بكفاءة")
@@ -2011,9 +1483,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إشعار بخطأ في الخدمة
-     */
     private fun notifyServiceError(message: String) {
         try {
             updateNotification("⚠️ $message")
@@ -2028,13 +1497,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ واجهة التشخيص (Diagnostics Interface) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * الحصول على حالة الخدمة الحالية
-     */
     fun getServiceStatus(): JSONObject {
         return JSONObject().apply {
             put("is_running", isRunning.get())
@@ -2054,9 +1516,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * الحصول على إحصائيات الخدمة
-     */
     fun getServiceStatistics(): JSONObject {
         return try {
             JSONObject().apply {
@@ -2076,9 +1535,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * الحصول على المقاييس الحالية
-     */
     fun getCurrentMetrics(): JSONObject {
         return try {
             if (::smsMetrics.isInitialized) {
@@ -2092,9 +1548,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * الحصول على الوحدات المحملة
-     */
     fun getLoadedModules(): JSONArray {
         return try {
             val modules = JSONArray()
@@ -2124,9 +1577,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * الحصول على حالة قاعدة البيانات
-     */
     fun getDatabaseStatus(): JSONObject {
         return try {
             JSONObject().apply {
@@ -2141,9 +1591,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فرض التنظيف
-     */
     fun forceCleanup() {
         try {
             Log.i(TAG, "Force cleanup requested")
@@ -2155,9 +1602,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فرض إعادة التحميل
-     */
     fun forceReload() {
         try {
             Log.i(TAG, "Force reload requested")
@@ -2173,9 +1617,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إعادة تشغيل الوحدات
-     */
     fun restartModules() {
         try {
             Log.i(TAG, "Restarting modules...")
@@ -2186,13 +1627,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ دوال التحقق (Validation) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * التحقق من قاعدة البيانات
-     */
     private fun validateDatabase(): Boolean {
         return try {
             if (!::dbHelper.isInitialized) {
@@ -2206,9 +1640,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * التحقق من المكونات
-     */
     private fun validateModules(): Boolean {
         return try {
             val requiredModules = listOf(
@@ -2232,16 +1663,8 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * التحقق من الأذونات
-     */
-    private fun validatePermissions(): Boolean {
-        return hasAllPermissions()
-    }
+    private fun validatePermissions(): Boolean = hasAllPermissions()
 
-    /**
-     * التحقق من الإعدادات
-     */
     private fun validateSettings(): Boolean {
         return try {
             settings.isNotEmpty() ||
@@ -2253,9 +1676,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * التحقق من الجداول
-     */
     private fun validateTables(): Boolean {
         return try {
             if (!::dbHelper.isInitialized) return false
@@ -2278,34 +1698,21 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ دوال المساعدة (Helpers) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * التحقق مما إذا كانت الخدمة تعمل
-     */
     fun isServiceRunning(): Boolean {
         return isRunning.get() && !isDestroyed.get() && isInitialized.get()
     }
 
-    /**
-     * التحقق من صحة الخدمة
-     */
     fun isHealthy(): Boolean {
         return !isDestroyed.get() &&
                 isInitialized.get() &&
                 isRunning.get() &&
                 !isPaused.get() &&
                 ::dbHelper.isInitialized &&
-                !!dbHelper.writableDatabase.isOpen &&
+                dbHelper.writableDatabase.isOpen &&
                 ::smsProcessor.isInitialized &&
                 isReceiverRegistered()
     }
 
-    /**
-     * التحقق من وجود جميع الأذونات
-     */
     private fun hasAllPermissions(): Boolean {
         return try {
             REQUIRED_PERMISSIONS.all { permission ->
@@ -2317,9 +1724,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * التحقق مما إذا كان يجب إعادة التشغيل
-     */
     private fun shouldRestart(): Boolean {
         val now = System.currentTimeMillis()
         val lastRestart = lastRestartTime.get()
@@ -2327,34 +1731,18 @@ class SMSService : Service() {
                 (now - lastRestart > RESTART_BACKOFF_MS)
     }
 
-    /**
-     * التحقق مما إذا كان يجب التنظيف
-     */
     private fun shouldCleanup(): Boolean {
         return cleanupSettings["auto_cleanup_enabled"] == "true"
     }
 
-    /**
-     * التحقق مما إذا كان يجب جمع المقاييس
-     */
     private fun shouldCollectMetrics(): Boolean {
         return metricsSettings["enable_detailed_metrics"] == "true"
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ أدوات مساعدة (Utilities) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * الحصول على تاريخ قبل عدد معين من الأيام
-     */
     private fun getDateBeforeDays(days: Int): Long {
         return System.currentTimeMillis() - (days * 24L * 60 * 60 * 1000)
     }
 
-    /**
-     * تسجيل حدث في جدول sms_metrics
-     */
     private fun recordServiceEvent(eventType: String, details: String? = null) {
         try {
             if (::smsMetrics.isInitialized) {
@@ -2375,6 +1763,8 @@ class SMSService : Service() {
             Log.e(TAG, "Failed to record event: ${e.message}", e)
         }
     }
+
+    private fun acquireWakeLock() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
@@ -2382,7 +1772,7 @@ class SMSService : Service() {
                 WAKE_LOCK_TAG
             ).apply {
                 setReferenceCounted(false)
-                acquire(10 * 60 * 1000L) // 10 دقائق
+                acquire(10 * 60 * 1000L)
             }
             Log.d(TAG, "WakeLock acquired")
         } catch (e: Exception) {
@@ -2390,9 +1780,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تحرير Wake Lock
-     */
     private fun releaseWakeLock() {
         try {
             wakeLock?.let {
@@ -2407,16 +1794,12 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * جدولة عملية النسخ الاحتياطي التلقائي
-     */
     private fun scheduleAutoBackup() {
         try {
             val backupRequest = PeriodicWorkRequestBuilder<BackupWorker>(
                 24L, TimeUnit.HOURS,
                 1L, TimeUnit.HOURS
             ).build()
-
             WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 BACKUP_WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
@@ -2428,9 +1811,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * إرسال Broadcast بحالة الخدمة
-     */
     private fun sendServiceStatusBroadcast() {
         try {
             val intent = Intent(ACTION_SERVICE_STATUS_CHANGED).apply {
@@ -2442,206 +1822,71 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ واجهات عامة (Public API) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * الحصول على مرجع SmsProcessor
-     */
     fun getSmsProcessor(): SmsProcessor? {
         return if (::smsProcessor.isInitialized) smsProcessor else null
     }
 
-    /**
-     * الحصول على مرجع SmsMetrics
-     */
     fun getSmsMetrics(): SmsMetrics? {
         return if (::smsMetrics.isInitialized) smsMetrics else null
     }
 
-    /**
-     * الحصول على مرجع DatabaseHelper
-     */
     fun getDatabaseHelper(): DatabaseHelper? {
-        return if (::dbHelper.isInitialized && !!dbHelper.writableDatabase.isOpen) dbHelper else null
+        return if (::dbHelper.isInitialized && dbHelper.writableDatabase.isOpen) dbHelper else null
     }
 
-    /**
-     * الحصول على مرجع SmsSecurity
-     */
     fun getSmsSecurity(): SmsSecurity? {
         return if (::smsSecurity.isInitialized) smsSecurity else null
     }
 
-    /**
-     * الحصول على مرجع SmsSecurityOTP
-     */
     fun getSmsSecurityOTP(): SmsSecurityOTP? {
         return if (::smsSecurityOTP.isInitialized) smsSecurityOTP else null
     }
 
-    /**
-     * الحصول على مرجع SmsConversationManager
-     */
     fun getSmsConversationManager(): SmsConversationManager? {
         return if (::smsConversationManager.isInitialized) smsConversationManager else null
     }
 
-    /**
-     * الحصول على مرجع SmsCustomerResolver
-     */
     fun getSmsCustomerResolver(): SmsCustomerResolver? {
         return if (::smsCustomerResolver.isInitialized) smsCustomerResolver else null
     }
 
-    /**
-     * الحصول على مرجع SmsIntentDetector
-     */
     fun getSmsIntentDetector(): SmsIntentDetector? {
         return if (::smsIntentDetector.isInitialized) smsIntentDetector else null
     }
 
-    /**
-     * الحصول على مرجع SmsReplyManager
-     */
     fun getSmsReplyManager(): SmsReplyManager? {
         return if (::smsReplyManager.isInitialized) smsReplyManager else null
     }
 
-    /**
-     * الحصول على مرجع SmsReceiver
-     */
     fun getSmsReceiver(): SmsReceiver? {
         return if (::smsReceiverInstance.isInitialized) smsReceiverInstance else null
     }
 
-    /**
-     * الحصول على الإعدادات
-     */
-    fun getSettings(): Map<String, String> {
-        return settings.toMap()
-    }
+    fun getSettings(): Map<String, String> = settings.toMap()
+    fun getSecuritySettings(): Map<String, String> = securitySettings.toMap()
+    fun getConversationSettings(): Map<String, String> = conversationSettings.toMap()
+    fun getOtpSettings(): Map<String, String> = otpSettings.toMap()
+    fun getMetricsSettings(): Map<String, String> = metricsSettings.toMap()
+    fun getRateLimitSettings(): Map<String, String> = rateLimitSettings.toMap()
+    fun getCleanupSettings(): Map<String, String> = cleanupSettings.toMap()
+    fun getPerformanceStats(): Map<String, Any> = performanceStats.toMap()
+    fun getModuleLoadTimes(): Map<String, Long> = moduleLoadTimes.toMap()
 
-    /**
-     * الحصول على إعدادات الأمان
-     */
-    fun getSecuritySettings(): Map<String, String> {
-        return securitySettings.toMap()
-    }
-
-    /**
-     * الحصول على إعدادات المحادثات
-     */
-    fun getConversationSettings(): Map<String, String> {
-        return conversationSettings.toMap()
-    }
-
-    /**
-     * الحصول على إعدادات OTP
-     */
-    fun getOtpSettings(): Map<String, String> {
-        return otpSettings.toMap()
-    }
-
-    /**
-     * الحصول على إعدادات المقاييس
-     */
-    fun getMetricsSettings(): Map<String, String> {
-        return metricsSettings.toMap()
-    }
-
-    /**
-     * الحصول على إعدادات حدود المعدل
-     */
-    fun getRateLimitSettings(): Map<String, String> {
-        return rateLimitSettings.toMap()
-    }
-
-    /**
-     * الحصول على إعدادات التنظيف
-     */
-    fun getCleanupSettings(): Map<String, String> {
-        return cleanupSettings.toMap()
-    }
-
-    /**
-     * الحصول على إحصائيات الأداء
-     */
-    fun getPerformanceStats(): Map<String, Any> {
-        return performanceStats.toMap()
-    }
-
-    /**
-     * الحصول على أوقات تحميل الوحدات
-     */
-    fun getModuleLoadTimes(): Map<String, Long> {
-        return moduleLoadTimes.toMap()
-    }
-
-    /**
-     * زيادة عداد الرسائل المعالجة
-     */
     fun incrementProcessedCount() {
         processedMessageCount.incrementAndGet()
     }
 
-    /**
-     * الحصول على عدد الرسائل المعالجة
-     */
-    fun getProcessedMessageCount(): Int {
-        return processedMessageCount.get()
-    }
+    fun getProcessedMessageCount(): Int = processedMessageCount.get()
+    fun getErrorCount(): Int = errorCount.get()
+    fun getUptimeSeconds(): Long = (System.currentTimeMillis() - startTime.get()) / 1000
+    fun getCurrentMode(): String = currentMode.get()
 
-    /**
-     * الحصول على عدد الأخطاء
-     */
-    fun getErrorCount(): Int {
-        return errorCount.get()
-    }
-
-    /**
-     * الحصول على وقت التشغيل
-     */
-    fun getUptimeSeconds(): Long {
-        return (System.currentTimeMillis() - startTime.get()) / 1000
-    }
-
-    /**
-     * الحصول على نمط التشغيل الحالي
-     */
-    fun getCurrentMode(): String {
-        return currentMode.get()
-    }
-
-    /**
-     * تعيين نمط التشغيل
-     */
     fun setMode(mode: String) {
         currentMode.set(mode)
         Log.i(TAG, "Mode changed to: $mode")
     }
 
-    /**
-     * التحقق مما إذا كانت الخدمة متوقفة مؤقتًا
-     */
-    fun isPaused(): Boolean {
-        return isPaused.get()
-    }
-
-    /**
-     * التحقق مما إذا كانت الخدمة مدمرة
-     */
-    fun isDestroyed(): Boolean {
-        return isDestroyed.get()
-    }
-
-    /**
-     * التحقق مما إذا كانت الخدمة مهيأة
-     */
-    fun isInitialized(): Boolean {
-        return isInitialized.get()
-    }
+    fun isPaused(): Boolean = isPaused.get()
+    fun isDestroyed(): Boolean = isDestroyed.get()
+    fun isInitialized(): Boolean = isInitialized.get()
 }
-
-// ═══════════════════════════════════════════════════════════════
