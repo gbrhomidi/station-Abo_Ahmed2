@@ -2392,10 +2392,16 @@ class SMSService : Service() {
         try {
             if (::smsMetrics.isInitialized) {
                 serviceScope.launch {
-                    smsMetrics.recordEvent(
-                        eventType = eventType,
-                        details = details
-                    )
+                    try {
+                        val eventEnum = SmsMetrics.EventType.valueOf(eventType)
+                        smsMetrics.recordEvent(
+                            eventType = eventEnum,
+                            phone = "",
+                            details = details ?: ""
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        Log.w(TAG, "Unknown event type for metrics: $eventType")
+                    }
                 }
             }
         } catch (e: Exception) {
