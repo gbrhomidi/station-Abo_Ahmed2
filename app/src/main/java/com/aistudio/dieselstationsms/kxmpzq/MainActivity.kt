@@ -872,7 +872,7 @@ class MainActivity : AppCompatActivity() {
             if (wv.isAttachedToWindow) {
                 Log.d(TAG, "Loading login.html from assets")
                 // ✅ تم التصحيح: تحميل login.html من الجذر (كما أشرت أنت)
-                wv.loadUrl("file:///android_asset/login.html")
+                wv.loadUrl("file:///android_asset/screens/login.html")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
