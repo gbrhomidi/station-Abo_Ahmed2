@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var geminiHelper: GeminiAIHelper
-    private lateinit var sharedPrefs: SharedPreferences
+    internal lateinit var sharedPrefs: SharedPreferences // تم تغييرها إلى internal للوصول من WebAppInterface
 
     // ====== متغيرات الجلسة (مخزنة بشكل آمن) ======
     private var currentAuthToken: String?
@@ -1468,16 +1468,22 @@ class MainActivity : AppCompatActivity() {
                     return errorResponse("المستخدم غير موجود")
                 }
 
-                // 2. إنشاء توكن عشوائي
+                // 2. استخراج معرف المستخدم (Long)
+                val userId = user.optLong("id", 0L)
+                if (userId == 0L) {
+                    return errorResponse("معرف المستخدم غير صالح")
+                }
+
+                // 3. إنشاء توكن عشوائي
                 val token = UUID.randomUUID().toString()
 
-                // 3. تخزين التوكن في قاعدة البيانات مع صلاحية 30 دقيقة (يتم في DatabaseHelper)
-                val stored = db.storeResetToken(username, token)
+                // 4. تخزين التوكن في قاعدة البيانات مع صلاحية 30 دقيقة (يتم في DatabaseHelper)
+                val stored = db.storeResetToken(userId, token)
                 if (!stored) {
                     return errorResponse("فشل تخزين التوكن")
                 }
 
-                // 4. إنشاء رابط الاستعادة (يتوافق مع مسار login.html في الجذر)
+                // 5. إنشاء رابط الاستعادة (يتوافق مع مسار login.html في الجذر)
                 val resetUrl = "file:///android_asset/login.html?token=$token"
 
                 JSONObject().apply {
@@ -1495,19 +1501,25 @@ class MainActivity : AppCompatActivity() {
         fun resetPassword(token: String, newPassword: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // 1. التحقق من صحة التوكن وصلاحيته (يُعيد اسم المستخدم أو null)
-                val username = db.validateResetToken(token)
-                if (username == null) {
+                // 1. التحقق من صحة التوكن وصلاحيته (يُعيد بيانات المستخدم أو null)
+                val userData = db.validateResetToken(token)
+                if (userData == null) {
                     return errorResponse("رابط الاستعادة غير صالح أو منتهي الصلاحية")
                 }
 
-                // 2. تحديث كلمة المرور (يتم التجزئة داخل الدالة في DatabaseHelper)
-                val updated = db.updateUserPassword(username, newPassword)
+                // 2. استخراج معرف المستخدم (Long)
+                val userId = userData.optLong("id", 0L)
+                if (userId == 0L) {
+                    return errorResponse("معرف المستخدم غير صالح")
+                }
+
+                // 3. تحديث كلمة المرور (يتم التجزئة داخل الدالة في DatabaseHelper)
+                val updated = db.updateUserPassword(userId, newPassword)
                 if (!updated) {
                     return errorResponse("فشل تحديث كلمة المرور")
                 }
 
-                // 3. حذف التوكن بعد الاستخدام
+                // 4. حذف التوكن بعد الاستخدام
                 db.clearResetToken(token)
 
                 successResponse(true, "تم تحديث كلمة المرور بنجاح")
@@ -1523,11 +1535,23 @@ class MainActivity : AppCompatActivity() {
             // يفترض وجود جدول sms_otp_verifications يحتوي على (phone, code, expires_at)
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // استدعاء دالة مساعدة في DatabaseHelper للتحقق من صحة الرمز
-                val isValid = db.validateOtpCode(phone, code)
+                // 1. البحث عن المستخدم برقم الهاتف للحصول على userId
+                val cursor = db.readableDatabase.rawQuery(
+                    "SELECT id FROM users WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+                    arrayOf(phone)
+                )
+                val userId = cursor.use {
+                    if (it.moveToFirst()) it.getLong(0) else null
+                }
+                if (userId == null) {
+                    return errorResponse("المستخدم غير موجود")
+                }
+
+                // 2. التحقق من صحة الرمز OTP
+                val isValid = db.validateOtpCode(userId, code)
                 if (isValid) {
-                    // حذف الرمز بعد الاستخدام
-                    db.clearOtpCode(phone)
+                    // 3. حذف الرمز بعد الاستخدام
+                    db.clearOtpCode(userId)
                     successResponse(true, "تم التحقق بنجاح")
                 } else {
                     errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
@@ -3749,7 +3773,183 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // نهاية WebAppInterface
+        // ============================================================
+        // 26. إدارة بيانات الاعتماد (Remember Me + Biometric Auto-Login) — مُحسَّن وأمن
+        // ============================================================
+
+        /**
+         * حفظ/تحديث بيانات "تذكرني"
+         * - لا تحفظ كلمة المرور الخام أبداً
+         * - تحفظ التوكن + الاسم فقط
+         */
+        @JavascriptInterface
+        fun saveCredentials(username: String, remember: Boolean): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.sharedPrefs.edit().apply {
+                    putBoolean("remember_me", remember)
+                    if (remember) {
+                        putString("saved_username", username)
+                        putString("saved_token", activity.currentAuthToken ?: "")
+                        putLong("saved_user_id", activity.currentUserId)
+                        putLong("saved_timestamp", System.currentTimeMillis())
+                    } else {
+                        remove("saved_username")
+                        remove("saved_token")
+                        remove("saved_user_id")
+                        remove("saved_timestamp")
+                    }
+                    apply()
+                }
+                successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
+            } catch (e: Exception) {
+                Log.e(TAG, "saveCredentials error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        /**
+         * التحقق من وجود بيانات محفوظة (للعرض فقط — لا تُرجع بيانات حساسة)
+         */
+        @JavascriptInterface
+        fun hasSavedCredentials(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val prefs = activity.sharedPrefs
+                val remember = prefs.getBoolean("remember_me", false)
+                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
+                val username = prefs.getString("saved_username", "") ?: ""
+                val userId = prefs.getLong("saved_user_id", 0)
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("hasCredentials", remember && hasToken && userId != 0L)
+                    put("username", username)  // فقط للعرض في الحقل
+                    put("userId", userId)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "hasSavedCredentials error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        /**
+         * تسجيل الدخول التلقائي عبر البصمة
+         * - تُظهر Biometric Prompt
+         * - عند النجاح: تُرجع بيانات المستخدم كاملة (بدون إعادة كلمة المرور)
+         */
+        @JavascriptInterface
+        fun biometricAutoLogin(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val prefs = activity.sharedPrefs
+
+            val token = prefs.getString("saved_token", "") ?: ""
+            val userId = prefs.getLong("saved_user_id", 0)
+            val savedUsername = prefs.getString("saved_username", "") ?: ""
+
+            if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
+                return errorResponse("لا توجد بيانات محفوظة")
+            }
+
+            activity.runOnUiThread {
+                activity.showBiometricPrompt(
+                    onSuccess = {
+                        val db = getDbHelper()
+                        if (db == null) {
+                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
+                            return@showBiometricPrompt
+                        }
+                        try {
+                            // إعادة تعيين التوكن في الجلسة الحالية
+                            activity.currentAuthToken = token
+                            activity.currentUserId = userId
+
+                            // استخدام getUserByUsername بدلاً من getUserById (للتوافق مع DatabaseHelper الحالي)
+                            val user = db.getUserByUsername(savedUsername)
+                            if (user != null) {
+                                val permissionsArray = db.getUserPermissions(userId)
+                                val permissionsObject = JSONObject()
+                                for (i in 0 until permissionsArray.length()) {
+                                    val item = permissionsArray.getJSONObject(i)
+                                    val code = item.getString("permission_code")
+                                    permissionsObject.put(code, JSONObject().apply {
+                                        put("can_create", item.optBoolean("can_create"))
+                                        put("can_read", item.optBoolean("can_read"))
+                                        put("can_update", item.optBoolean("can_update"))
+                                        put("can_delete", item.optBoolean("can_delete"))
+                                        put("can_export", item.optBoolean("can_export"))
+                                        put("can_print", item.optBoolean("can_print"))
+                                        put("can_approve", item.optBoolean("can_approve"))
+                                    })
+                                }
+                                user.put("permissions", permissionsObject)
+                                user.put("screens", db.getUserScreens(userId))
+                                val role = user.optString("role", "USER")
+                                user.put("role", role)
+                                user.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
+
+                                activity.currentUserRole = role
+                                activity.currentUserName = user.optString("username", "")
+
+                                val result = JSONObject().apply {
+                                    put("success", true)
+                                    put("user", user)
+                                    put("token", token)
+                                    put("message", "تم تسجيل الدخول عبر البصمة")
+                                }
+                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                            } else {
+                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "biometricAutoLogin error", e)
+                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
+                        }
+                    },
+                    onError = { error ->
+                        val result = JSONObject().apply {
+                            put("success", false)
+                            put("error", error)
+                        }
+                        safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                    }
+                )
+            }
+
+            return JSONObject().apply {
+                put("success", true)
+                put("status", "processing")
+            }.toString()
+        }
+
+        /**
+         * مسح جميع بيانات التذكر والجلسة
+         */
+        @JavascriptInterface
+        fun clearCredentials(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.sharedPrefs.edit().apply {
+                    remove("remember_me")
+                    remove("saved_username")
+                    remove("saved_token")
+                    remove("saved_user_id")
+                    remove("saved_timestamp")
+                    apply()
+                }
+                // مسح الجلسة الحالية أيضاً
+                activity.currentAuthToken = null
+                activity.currentUserId = 0
+                activity.currentUserRole = ""
+                activity.currentUserName = ""
+                successResponse(0, "تم مسح البيانات وجلسة التطبيق")
+            } catch (e: Exception) {
+                Log.e(TAG, "clearCredentials error", e)
+                errorResponse(e.message)
+            }
+        }
+
+// نهاية WebAppInterface
     }
 
     // دوال مساعدة داخل النشاط (safeEvaluateJs)

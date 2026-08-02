@@ -33,9 +33,19 @@
     <!-- ✅ Notifications Permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- ✅ Biometric Authentication Permission -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- ✅ System Permissions -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- ✅ Camera Permission -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- ✅ Location Permissions -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!-- ✅ Battery Optimization Permission -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -51,6 +61,22 @@
     <uses-feature
         android:name="android.hardware.telephony"
         android:required="true" />
+
+    <!-- ✅ Camera Feature (optional - app works without camera) -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- ✅ Location Feature (optional - app works without GPS) -->
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location.network"
+        android:required="false" />
 
     <!-- ════════════════════════════════════════════════════════ -->
     <!-- 🛡️ إعدادات التطبيق                                       -->

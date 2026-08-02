@@ -30,13 +30,10 @@
             --night-border-focus: #ff9900;
             --night-border-valid: #2c5282;
             --night-border-invalid: #e74c3c;
+            --tooltip-bg: rgba(0,0,0,0.85);
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: 'Tajawal', sans-serif;
@@ -133,7 +130,7 @@
 
         .input-group input {
             width: 100%;
-            padding: 15px 15px 15px 45px;
+            padding: 15px 15px 15px 75px;
             border: 2px solid #ddd;
             border-radius: 12px;
             font-size: 1rem;
@@ -178,25 +175,26 @@
             border-color: var(--night-border-invalid);
         }
 
-        .input-group i {
+        .input-group i.field-icon {
             position: absolute;
             left: 15px;
             top: 40px;
             color: var(--primary-color);
             font-size: 1.2rem;
             transition: all 0.3s ease;
+            z-index: 2;
         }
 
-        .dark-mode .input-group i {
+        .dark-mode .input-group i.field-icon {
             color: var(--dark-text);
         }
 
-        .input-group input:focus + i {
+        .input-group input:focus + i.field-icon {
             color: var(--secondary-color);
             transform: scale(1.2);
         }
 
-        .dark-mode .input-group input:focus + i {
+        .dark-mode .input-group input:focus + i.field-icon {
             color: var(--night-border-focus);
         }
 
@@ -289,6 +287,11 @@
             left: 100%;
         }
 
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
         .loader {
             width: 18px;
             height: 18px;
@@ -331,37 +334,7 @@
             position: relative;
         }
 
-        .password-toggle {
-            position: absolute;
-            left: 15px;
-            top: 40px;
-            cursor: pointer;
-            color: var(--primary-color);
-            font-size: 1.2rem;
-            z-index: 2;
-            transition: all 0.3s ease;
-        }
-
-        .dark-mode .password-toggle {
-            color: var(--dark-text);
-        }
-
-        .password-toggle:hover {
-            color: var(--secondary-color);
-            transform: scale(1.1);
-        }
-
-        .dark-mode .password-toggle:hover {
-            color: #63b3ed;
-        }
-
-        #thumbsUpIcon {
-            left: 40px;
-            color: #F1C27D;
-            display: none;
-            animation: pulse 1.5s infinite;
-            z-index: 3;
-        }
+        /* ====== أيقونات كلمة المرور الدائمة - تم إزالتها ====== */
 
         .modal {
             display: none;
@@ -609,6 +582,7 @@
             text-shadow: 0 0 5px rgba(99, 179, 237, 0.7);
         }
 
+        /* ====== عناصر التواصل - إطار خارجي فقط بدون خلفية ====== */
         .contact-info {
             background: linear-gradient(145deg, #f8f9fa, #e9ecef);
             padding: 20px;
@@ -658,24 +632,66 @@
             font-size: 1.05rem;
         }
 
-        .contact-info a {
+        .contact-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: transparent !important;
             color: var(--secondary-color);
+            padding: 8px 16px;
+            border-radius: 25px;
             text-decoration: none;
-            transition: all 0.3s ease;
             font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            border: 2px solid var(--secondary-color);
+            box-shadow: none !important;
         }
 
-        .dark-mode .contact-info a {
+        .dark-mode .contact-action-btn {
             color: #63b3ed;
+            border-color: #63b3ed;
         }
 
-        .contact-info a:hover {
-            text-decoration: underline;
-            color: var(--primary-color);
+        .contact-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2) !important;
+            background: rgba(52, 152, 219, 0.05) !important;
         }
 
-        .dark-mode .contact-info a:hover {
-            color: #90cdf4;
+        .dark-mode .contact-action-btn:hover {
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.2) !important;
+            background: rgba(99, 179, 237, 0.05) !important;
+        }
+
+        .contact-action-btn.phone-btn {
+            color: #27ae60;
+            border-color: #27ae60;
+        }
+
+        .contact-action-btn.phone-btn:hover {
+            box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.2) !important;
+            background: rgba(39, 174, 96, 0.05) !important;
+        }
+
+        .contact-action-btn.email-btn {
+            color: #e74c3c;
+            border-color: #e74c3c;
+        }
+
+        .contact-action-btn.email-btn:hover {
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2) !important;
+            background: rgba(231, 76, 60, 0.05) !important;
+        }
+
+        .contact-action-btn.whatsapp-btn {
+            color: #25D366;
+            border-color: #25D366;
+        }
+
+        .contact-action-btn.whatsapp-btn:hover {
+            box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.2) !important;
+            background: rgba(37, 211, 102, 0.05) !important;
         }
 
         .floating-elements {
@@ -696,33 +712,51 @@
             animation: float 15s infinite ease-in-out;
         }
 
-        .theme-toggle {
+        /* ====== الأزرار العائمة الجديدة ====== */
+        .floating-actions {
             position: fixed;
-            top: 20px;
+            bottom: 130px;  /* رفع للأعلى بمقدار زرين تقريباً (ارتفاع 33px + gap 10px)*2 = 86px، الإزاحة السابقة 20px -> 20+86=106، نزيد قليلاً للراحة */
             left: 20px;
-            width: 50px;
-            height: 50px;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .floating-actions .action-btn {
+            width: 34px;   /* تقليل الحجم بمقدار الثلث: 50px * 2/3 ≈ 33.3px */
+            height: 34px;
             border-radius: 50%;
+            border: none;
             background: linear-gradient(145deg, #2c3e50, #3498db);
             color: white;
-            border: none;
+            font-size: 1rem;   /* تقليل حجم الأيقونة متناسب */
             cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            z-index: 100;
-            transition: all 0.3s ease;
         }
-
-        .theme-toggle:hover {
-            transform: scale(1.1) rotate(15deg);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        .floating-actions .action-btn:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
-
-        .dark-mode .theme-toggle {
+        .floating-actions .action-btn:active {
+            transform: scale(0.95);
+        }
+        .dark-mode .floating-actions .action-btn {
             background: linear-gradient(145deg, #f39c12, #f1c40f);
+            color: #1a202c;
+        }
+        /* نهاية الأزرار العائمة */
+
+        .theme-toggle {
+            /* تم إزالة الزر القديم */
+            display: none;
+        }
+
+        .password-actions {
+            display: none; /* إخفاء الأيقونات القديمة */
         }
 
         .notification-container {
@@ -960,6 +994,262 @@
             animation: slideDown 0.3s;
         }
 
+        /* ====== Terms Modal Enhancements ====== */
+        .terms-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            border-radius: 12px;
+            background: rgba(52, 152, 219, 0.03);
+            border-right: 4px solid var(--secondary-color);
+            transition: all 0.3s ease;
+        }
+
+        .dark-mode .terms-section {
+            background: rgba(99, 179, 237, 0.05);
+            border-right: 4px solid #63b3ed;
+        }
+
+        .terms-section:hover {
+            background: rgba(52, 152, 219, 0.08);
+            transform: translateX(-3px);
+        }
+
+        .terms-section h3 {
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dark-mode .terms-section h3 {
+            color: #63b3ed;
+        }
+
+        .terms-section ul {
+            padding-right: 20px;
+            margin-top: 10px;
+        }
+
+        .terms-section ul li {
+            margin-bottom: 8px;
+            position: relative;
+            padding-right: 5px;
+        }
+
+        .terms-section ul li::marker {
+            color: var(--secondary-color);
+            font-size: 1.2rem;
+        }
+
+        .dark-mode .terms-section ul li::marker {
+            color: #63b3ed;
+        }
+
+        .terms-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .terms-intro {
+            background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(46, 204, 113, 0.1));
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            text-align: center;
+            border: 1px dashed var(--secondary-color);
+        }
+
+        .dark-mode .terms-intro {
+            background: linear-gradient(135deg, rgba(99, 179, 237, 0.1), rgba(72, 187, 120, 0.1));
+            border-color: #63b3ed;
+        }
+
+        .terms-intro i {
+            font-size: 2.5rem;
+            color: var(--secondary-color);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .dark-mode .terms-intro i {
+            color: #63b3ed;
+        }
+
+        .terms-footer-note {
+            text-align: center;
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(243, 156, 18, 0.1);
+            border-radius: 10px;
+            border: 1px dashed var(--warning-color);
+            font-size: 0.9rem;
+        }
+
+        .dark-mode .terms-footer-note {
+            background: rgba(243, 156, 18, 0.15);
+        }
+
+        /* ====== Fingerprint Modal ====== */
+        .fingerprint-modal .modal-content {
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .fingerprint-icon {
+            font-size: 5rem;
+            color: var(--secondary-color);
+            margin: 20px 0;
+            animation: fingerprintPulse 2s infinite ease-in-out;
+        }
+
+        @keyframes fingerprintPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+        }
+
+        .fingerprint-status {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 15px 0;
+            color: var(--text-color);
+        }
+
+        .dark-mode .fingerprint-status {
+            color: var(--dark-text);
+        }
+
+        .fingerprint-hint {
+            color: var(--text-light);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .dark-mode .fingerprint-hint {
+            color: #a0aec0;
+        }
+
+        /* ====== Quick Login Badge ====== */
+        .quick-login-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.15), rgba(46, 204, 113, 0.1));
+            color: var(--success-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            border: 1px dashed var(--success-color);
+            animation: fadeIn 0.5s ease;
+        }
+
+        .dark-mode .quick-login-badge {
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.2), rgba(46, 204, 113, 0.15));
+        }
+
+        /* ====== Tooltips System ====== */
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) scale(0.9);
+            background: var(--tooltip-bg);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        [data-tooltip]::before {
+            content: '';
+            position: absolute;
+            bottom: calc(100% + 2px);
+            left: 50%;
+            transform: translateX(-50%) scale(0.9);
+            border: 6px solid transparent;
+            border-top-color: var(--tooltip-bg);
+            opacity: 0;
+            transition: all 0.2s ease;
+            z-index: 10000;
+        }
+
+        [data-tooltip].tooltip-visible::after,
+        [data-tooltip].tooltip-visible::before {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+
+        /* Tooltip for RTL - show on top for mobile */
+        @media (max-width: 480px) {
+            [data-tooltip]::after {
+                white-space: normal;
+                max-width: 200px;
+                text-align: center;
+            }
+        }
+
+        /* ====== Lockout Banner ====== */
+        .lockout-banner {
+            background: linear-gradient(145deg, rgba(231, 76, 60, 0.15), rgba(192, 57, 43, 0.1));
+            border: 2px dashed var(--error-color);
+            color: var(--error-color);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 700;
+            display: none;
+            animation: shake 0.5s;
+        }
+
+        .dark-mode .lockout-banner {
+            background: linear-gradient(145deg, rgba(231, 76, 60, 0.2), rgba(192, 57, 43, 0.15));
+        }
+
+        .lockout-banner.show {
+            display: block;
+        }
+
+        .attempts-counter {
+            background: rgba(243, 156, 18, 0.15);
+            border: 1px solid var(--warning-color);
+            color: var(--warning-color);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: none;
+            text-align: center;
+        }
+
+        .attempts-counter.show {
+            display: block;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -1035,14 +1325,6 @@
                 padding: 15px;
             }
 
-            .theme-toggle {
-                top: 15px;
-                left: 15px;
-                width: 40px;
-                height: 40px;
-                font-size: 1.2rem;
-            }
-
             .notification-container {
                 width: 95%;
                 max-width: none;
@@ -1052,9 +1334,19 @@
                 width: 95%;
                 padding: 20px;
             }
+
+            .floating-actions {
+                bottom: 110px;  /* تعديل للشاشات الصغيرة */
+                left: 10px;
+                gap: 8px;
+            }
+            .floating-actions .action-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 0.9rem;
+            }
         }
     </style>
-<base target="_blank">
 </head>
 <body>
     <!-- Loading Overlay -->
@@ -1076,10 +1368,12 @@
     <!-- Floating background elements -->
     <div class="floating-elements" id="floatingElements"></div>
 
-    <!-- Theme Toggle Button -->
-    <button class="theme-toggle" id="themeToggle">
-        <i class="fas fa-moon"></i>
-    </button>
+    <!-- الأزرار العائمة الجديدة -->
+    <div class="floating-actions" id="floatingActions">
+        <button class="action-btn" id="btnBiometric" data-tooltip="تسجيل الدخول بالبصمة"><i class="fas fa-thumbs-up"></i></button>
+        <button class="action-btn" id="btnTogglePassword" data-tooltip="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
+        <button class="action-btn" id="btnThemeToggle" data-tooltip="تبديل الوضع الليلي/النهاري"><i class="fas fa-moon"></i></button>
+    </div>
 
     <!-- ============================================================ -->
     <!-- شاشة تسجيل الدخول (الرئيسية) -->
@@ -1093,41 +1387,77 @@
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
 
+            <!-- شارة تسجيل الدخول السريع -->
+            <div id="quickLoginBadge" class="quick-login-badge" style="display: none;">
+                <i class="fas fa-shield-alt"></i>
+                <span>بيانات محفوظة - تسجيل دخول سريع متاح</span>
+            </div>
+
+            <!-- عداد المحاولات -->
+            <div id="attemptsCounter" class="attempts-counter">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="attemptsText"></span>
+            </div>
+
+            <!-- لافتة القفل -->
+            <div id="lockoutBanner" class="lockout-banner">
+                <i class="fas fa-lock"></i>
+                <span id="lockoutText">تم قفل الحساب مؤقتاً. يرجى الانتظار.</span>
+            </div>
+
             <form id="loginForm" method="POST" action="#" novalidate>
                 <div class="input-group user-field">
                     <label for="username">اسم المستخدم</label>
-                    <i class="fas fa-user"></i>
-                    <input type="text" id="username" name="username" placeholder="أدخل اسم المستخدم" required autocomplete="username">
+                    <i class="fas fa-user field-icon"></i>
+                    <input type="text" id="username" name="username" placeholder="أدخل اسم المستخدم" required autocomplete="username" data-tooltip="أدخل اسم المستخدم المسجل في النظام">
                     <div class="error-message" id="usernameError"></div>
                 </div>
 
                 <div class="input-group">
                     <label for="password">كلمة المرور</label>
                     <div class="password-input-container">
-                        <i class="fas fa-lock"></i>
-                        <input type="password" id="password" name="password" placeholder="أدخل كلمة المرور" required autocomplete="current-password">
-                        <i class="fas fa-eye password-toggle" id="togglePassword"></i>
-                        <i class="fas fa-thumbs-up password-toggle" id="thumbsUpIcon"></i>
+                        <i class="fas fa-lock field-icon"></i>
+                        <input type="password" id="password" name="password" placeholder="أدخل كلمة المرور" required autocomplete="current-password" data-tooltip="أدخل كلمة المرور الخاصة بك">
+                        <!-- أيقونات كلمة المرور القديمة تم إزالتها -->
                     </div>
                     <div class="error-message" id="passwordError"></div>
                 </div>
 
                 <div class="remember-forgot">
-                    <div class="remember-me">
+                    <div class="remember-me" data-tooltip="حفظ بيانات الدخول بشكل آمن">
                         <input type="checkbox" id="remember" name="remember">
                         <label for="remember">تذكرني</label>
                     </div>
-                    <a href="#" class="forgot-password" id="forgotPassword">نسيت كلمة المرور؟</a>
+                    <a href="#" class="forgot-password" id="forgotPassword" data-tooltip="استعادة كلمة المرور">نسيت كلمة المرور؟</a>
                 </div>
 
-                <button type="submit" class="login-btn" id="submitBtn">
+                <button type="submit" class="login-btn" id="submitBtn" data-tooltip="النقر للدخول إلى النظام">
                     <span id="btnText">تسجيل الدخول</span>
                     <div class="loader" id="formLoader" style="display: none;"></div>
                 </button>
             </form>
 
             <div class="login-footer">
-                نظام إدارة محطات الوقود © <span id="currentYear"></span> | <a href="#" id="termsLink">الشروط والأحكام</a>
+                نظام إدارة محطات الوقود &copy; <span id="currentYear"></span> | <a href="#" id="termsLink">الشروط والأحكام</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- مودال البصمة -->
+    <!-- ============================================================ -->
+    <div class="modal fingerprint-modal" id="fingerprintModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-fingerprint"></i> تسجيل الدخول بالبصمة</h2>
+                <button class="close-modal" id="closeFingerprintModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="fingerprint-icon">
+                    <i class="fas fa-fingerprint"></i>
+                </div>
+                <div class="fingerprint-status" id="fingerprintStatus">ضع إصبعك على مستشعر البصمة</div>
+                <div class="fingerprint-hint">سيتم استخدام البصمة المسجلة في جهازك للتحقق من هويتك</div>
             </div>
         </div>
     </div>
@@ -1139,36 +1469,103 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-file-contract"></i> الشروط والأحكام</h2>
-                <button class="close-modal" id="closeTermsModal">×</button>
+                <button class="close-modal" id="closeTermsModal">&times;</button>
             </div>
             <div class="modal-body terms-content">
-                <h3><i class="fas fa-exclamation-triangle"></i> مقدمة</h3>
-                <p>مرحباً بك في نظام إدارة محطات الوقود. باستخدامك هذا النظام، توافق على الالتزام بهذه الشروط والأحكام. إذا كنت لا توافق، يرجى عدم استخدام النظام.</p>
 
-                <h3><i class="fas fa-ban"></i> حقوق الملكية</h3>
-                <ul>
-                    <li>النظام مملوك بالكامل للمهندس <span class="glowing-name">جبر الحميدي</span>.</li>
-                    <li>يمنع نسخ، تقليد، أو توزيع النظام دون إذن خطي.</li>
-                    <li>أي محاولة للهندسة العكسية أو الاختراق تخضع للمساءلة القانونية.</li>
-                </ul>
+                <div class="terms-intro">
+                    <i class="fas fa-shield-alt"></i>
+                    <p style="font-weight: 600; font-size: 1.1rem;">مرحباً بك في نظام إدارة محطات الوقود</p>
+                    <p style="margin-top: 8px; color: var(--text-light);">باستخدامك هذا النظام، فإنك توافق على الالتزام الكامل بهذه الشروط والأحكام. إذا كنت لا توافق على أي منها، يرجى عدم استخدام النظام.</p>
+                </div>
 
-                <h3><i class="fas fa-shield-alt"></i> الحماية والأمان</h3>
-                <p>يحتوي النظام على:</p>
-                <ul>
-                    <li>تتبع كامل للعمليات.</li>
-                    <li>حماية متقدمة ضد الاختراق.</li>
-                    <li>نسخ احتياطية يومية.</li>
-                </ul>
+                <div class="terms-section">
+                    <h3><i class="fas fa-copyright"></i> حقوق الملكية الفكرية <span class="terms-badge">مهم</span></h3>
+                    <ul>
+                        <li>النظام مملوك بالكامل للمهندس <span class="glowing-name">جبر الحميدي</span> وجميع حقوق الملكية الفكرية محفوظة.</li>
+                        <li>يمنع نسخ، تقليد، إعادة توزيع، أو تعديل النظام كلياً أو جزئياً دون إذن خطي رسمي من المالك.</li>
+                        <li>أي محاولة للهندسة العكسية، فك التشفير، أو الاختراق تخضع للمساءلة القانونية الكاملة.</li>
+                        <li>العلامات التجارية والشعارات والمحتوى الموجود في النظام محمية بموجب قوانين حقوق الملكية الفكرية.</li>
+                    </ul>
+                </div>
 
-                <h3><i class="fas fa-balance-scale"></i> المسؤولية</h3>
-                <p>أي انتهاك يؤدي إلى عقوبات قانونية وفق القوانين المحلية والدولية.</p>
+                <div class="terms-section">
+                    <h3><i class="fas fa-user-shield"></i> الخصوصية وحماية البيانات <span class="terms-badge">أساسي</span></h3>
+                    <ul>
+                        <li>جميع البيانات الشخصية والتجارية يتم تشفيرها وتخزينها بأعلى معايير الأمان.</li>
+                        <li>يحظر مشاركة بيانات تسجيل الدخول مع أي طرف ثالث تحت أي ظرف.</li>
+                        <li>النظام يجمع بيانات تشغيلية فقط لتحسين الأداء ولا يشاركها مع أي جهة خارجية.</li>
+                        <li>للمستخدم الحق في طلب حذف بياناته الشخصية وفقاً للسياسات المعمول بها.</li>
+                        <li>يتم تخزين بيانات الاعتماد (إن اختار المستخدم "تذكرني") في SharedPreferences المشفرة الخاصة بالتطبيق فقط.</li>
+                    </ul>
+                </div>
+
+                <div class="terms-section">
+                    <h3><i class="fas fa-lock"></i> الأمان والحماية <span class="terms-badge">أمني</span></h3>
+                    <ul>
+                        <li>يحتوي النظام على نظام تتبع كامل (Audit Trail) لجميع العمليات والتعديلات.</li>
+                        <li>حماية متقدمة ضد محاولات الاختراق والوصول غير المصرح به.</li>
+                        <li>نسخ احتياطية يومية وأسبوعية شهرية لضمان عدم فقدان البيانات.</li>
+                        <li>تسجيل الدخول متعدد العوامل (MFA) متاح لحسابات المديرين والمشرفين.</li>
+                        <li>إشعارات فورية عند أي نشاط مشبوه على الحساب.</li>
+                        <li>دعم تسجيل الدخول بالبصمة البيومترية للأجهزة المدعومة.</li>
+                    </ul>
+                </div>
+
+                <div class="terms-section">
+                    <h3><i class="fas fa-gavel"></i> المسؤولية القانونية <span class="terms-badge">قانوني</span></h3>
+                    <ul>
+                        <li>أي انتهاك لهذه الشروط يؤدي إلى عقوبات قانونية وفق القوانين المحلية والدولية.</li>
+                        <li>المستخدم مسؤول مسؤولية كاملة عن جميع العمليات التي تتم من خلال حسابه.</li>
+                        <li>يحق لمالك النظام تعليق أو إنهاء الوصول فوراً دون إشعار مسبق في حالة الانتهاك.</li>
+                        <li>النظام يخضع لقوانين حماية البيانات والخصوصية المعمول بها في الجمهورية اليمنية.</li>
+                    </ul>
+                </div>
+
+                <div class="terms-section">
+                    <h3><i class="fas fa-handshake"></i> الاستخدام المسموح <span class="terms-badge">تشغيلي</span></h3>
+                    <ul>
+                        <li>يقتصر استخدام النظام على الأغراض التجارية المصرح بها فقط.</li>
+                        <li>يمنع استخدام النظام لأي غرض غير قانوني أو مخالف للأخلاقيات المهنية.</li>
+                        <li>يجب على المستخدم الحفاظ على سرية بيانات الدخول وتحديثها بشكل دوري.</li>
+                        <li>يحق لمالك النظام إجراء تحديثات وصيانة دورية دون إشعار مسبق.</li>
+                        <li>يمنع محاولة الوصول إلى بيانات المستخدمين الآخرين أو تعديل صلاحياتهم دون تفويض.</li>
+                    </ul>
+                </div>
+
+                <div class="terms-section">
+                    <h3><i class="fas fa-sync-alt"></i> التحديثات والصيانة <span class="terms-badge">دوري</span></h3>
+                    <ul>
+                        <li>يحق لمالك النظام إصدار تحديثات وتحسينات بشكل دوري لتحسين الأداء والأمان.</li>
+                        <li>قد يتم إيقاف بعض الميزات مؤقتاً أثناء الصيانة الروتينية.</li>
+                        <li>يُنصح المستخدم بتحديث التطبيق باستمرار للاستفادة من أحدث الميزات والإصلاحات.</li>
+                        <li>قد تتضمن التحديثات تغييرات في هذه الشروط والأحكام.</li>
+                    </ul>
+                </div>
 
                 <div class="contact-info">
-                    <h3><i class="fas fa-headset"></i> التواصل</h3>
+                    <h3><i class="fas fa-headset"></i> التواصل والدعم الفني</h3>
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
-                    <p><i class="fas fa-phone"></i> +967106586714</p>
-                    <p><i class="fab fa-whatsapp"></i> واتساب: <a href="https://wa.me/967781038203">اضغط هنا</a></p>
-                    <p><i class="fas fa-envelope"></i> <a href="mailto:gbrhomidi@gmail.com">gbrhomidi@gmail.com</a></p>
+                    <p><i class="fas fa-phone"></i> 
+                        <a href="tel:+967106586714" class="contact-action-btn phone-btn">
+                            <i class="fas fa-phone-alt"></i> 📲 للاتصال: اضغــط هنا
+                        </a>
+                    </p>
+                    <p><i class="fab fa-whatsapp"></i> 
+                        <a href="https://wa.me/967781038203" target="_blank" rel="noopener noreferrer" class="contact-action-btn whatsapp-btn">
+                            <i class="fab fa-whatsapp"></i> 💬 واتساب: اضغـط هنــا
+                        </a>
+                    </p>
+                    <p><i class="fas fa-envelope"></i> 
+                        <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
+                            <i class="fas fa-envelope"></i> 📧 للبريد : اضغــط هنــا
+                        </a>
+                    </p>
+                </div>
+
+                <div class="terms-footer-note">
+                    <i class="fas fa-info-circle" style="color: var(--warning-color); margin-left: 8px;"></i>
+                    باستمرارك في استخدام النظام، فإنك تؤكد موافقتك الكاملة على هذه الشروط والأحكام.
                 </div>
 
                 <p style="text-align: center; margin-top: 20px; font-size: 0.9em; color: var(--text-light);">
@@ -1185,14 +1582,14 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-key"></i> استعادة كلمة المرور</h2>
-                <button class="close-modal" id="closeForgotModal">×</button>
+                <button class="close-modal" id="closeForgotModal">&times;</button>
             </div>
             <div class="modal-body">
                 <p>أدخل اسم المستخدم الخاص بك وسنرسل لك رابط إعادة تعيين كلمة المرور.</p>
 
                 <div class="input-group">
                     <label for="resetUsername">اسم المستخدم</label>
-                    <i class="fas fa-user"></i>
+                    <i class="fas fa-user field-icon"></i>
                     <input type="text" id="resetUsername" placeholder="أدخل اسم المستخدم" value="">
                 </div>
 
@@ -1221,7 +1618,7 @@
         <div class="modal-content modal-small">
             <div class="modal-header">
                 <h2><i class="fas fa-link"></i> رابط استعادة كلمة المرور</h2>
-                <button class="close-modal" id="closeRecoveryLinkModal">×</button>
+                <button class="close-modal" id="closeRecoveryLinkModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="reset-icon" style="text-align:center;margin-bottom:15px;">
@@ -1257,7 +1654,7 @@
         <div class="modal-content modal-small">
             <div class="modal-header">
                 <h2><i class="fas fa-lock"></i> إعادة تعيين كلمة المرور</h2>
-                <button class="close-modal" id="closeResetPasswordModal">×</button>
+                <button class="close-modal" id="closeResetPasswordModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="reset-icon" style="text-align:center;margin-bottom:15px;">
@@ -1271,9 +1668,9 @@
                     <div class="input-group">
                         <label for="newPassword">كلمة المرور الجديدة</label>
                         <div class="password-input-container">
-                            <i class="fas fa-lock"></i>
-                            <input type="password" id="newPassword" placeholder="أدخل كلمة مرور قوية (8 أحرف على الأقل)" required minlength="8" oninput="checkPasswordStrength(this.value)">
-                            <i class="fas fa-eye password-toggle" id="toggleNewPassword"></i>
+                            <i class="fas fa-lock field-icon"></i>
+                            <input type="password" id="newPassword" placeholder="أدخل كلمة مرور قوية (8 أحرف على الأقل)" required minlength="8" oninput="checkPasswordStrength(this.value)" data-tooltip="يجب أن تحتوي على 8 أحرف على الأقل">
+                            <!-- لا توجد أيقونات داخلية هنا -->
                         </div>
                         <div class="password-strength-container">
                             <div class="password-strength" id="passwordStrengthBar"></div>
@@ -1288,9 +1685,9 @@
                     <div class="input-group">
                         <label for="confirmPassword">تأكيد كلمة المرور</label>
                         <div class="password-input-container">
-                            <i class="fas fa-check-circle"></i>
-                            <input type="password" id="confirmPassword" placeholder="أعد إدخال كلمة المرور" required minlength="8" oninput="checkPasswordMatch()">
-                            <i class="fas fa-eye password-toggle" id="toggleConfirmPassword"></i>
+                            <i class="fas fa-check-circle field-icon"></i>
+                            <input type="password" id="confirmPassword" placeholder="أعد إدخال كلمة المرور" required minlength="8" oninput="checkPasswordMatch()" data-tooltip="أعد إدخال نفس كلمة المرور">
+                            <!-- لا توجد أيقونات داخلية هنا -->
                         </div>
                         <div class="invalid-feedback" id="passwordMatchError" style="display:none;">
                             <i class="fas fa-exclamation-circle"></i> كلمات المرور غير متطابقة
@@ -1311,46 +1708,232 @@
 
     <script>
         // ============================================================
-        // دالة apiCall الموحدة (مع دعم AndroidInterface)
+        // ثوابت وإعدادات النظام (مستوحاة من auth.py)
         // ============================================================
-        
-function waitForAndroidBridge(timeout = 5000) {
-    return new Promise((resolve) => {
-        const start = Date.now();
+        const APP_CONFIG = {
+            CREDENTIALS_MAX_AGE_DAYS: 7,
+            TOKEN_KEY: 'fs_auth_token',
+            USER_KEY: 'fs_user_data',
+            THEME_KEY: 'darkMode',
+            MAX_LOGIN_ATTEMPTS: 5,
+            LOCKOUT_DURATION_MINUTES: 15,
+            ATTEMPTS_KEY: 'login_attempts',
+            LOCKOUT_UNTIL_KEY: 'lockout_until'
+        };
 
-        const timer = setInterval(() => {
-            if (typeof AndroidInterface !== 'undefined' &&
-                AndroidInterface !== null) {
-                clearInterval(timer);
-                resolve(true);
-                return;
+        // ============================================================
+        // نظام التلميحات (Tooltips) - يظهر عند اللمس/التركيز
+        // ============================================================
+        function initTooltips() {
+            const tooltipElements = document.querySelectorAll('[data-tooltip]');
+            
+            tooltipElements.forEach(el => {
+                // للهاتف المحمول: touchstart/touchend
+                el.addEventListener('touchstart', function(e) {
+                    // إخفاء أي تلميحات أخرى
+                    document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
+                        if (t !== el) t.classList.remove('tooltip-visible');
+                    });
+                    el.classList.add('tooltip-visible');
+                });
+                
+                el.addEventListener('touchend', function() {
+                    setTimeout(() => el.classList.remove('tooltip-visible'), 2000);
+                });
+                
+                // للماوس: mouseenter/mouseleave
+                el.addEventListener('mouseenter', function() {
+                    document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
+                        if (t !== el) t.classList.remove('tooltip-visible');
+                    });
+                    el.classList.add('tooltip-visible');
+                });
+                
+                el.addEventListener('mouseleave', function() {
+                    el.classList.remove('tooltip-visible');
+                });
+                
+                // عند فقدان التركيز
+                el.addEventListener('blur', function() {
+                    el.classList.remove('tooltip-visible');
+                });
+            });
+            
+            // إخفاء التلميحات عند النقر خارجها
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('[data-tooltip]')) {
+                    document.querySelectorAll('[data-tooltip].tooltip-visible').forEach(t => {
+                        t.classList.remove('tooltip-visible');
+                    });
+                }
+            });
+        }
+
+        // ============================================================
+        // نظام Rate Limiting & Account Lockout (مستوحى من auth.py)
+        // ============================================================
+        function getLoginAttempts() {
+            try {
+                const data = localStorage.getItem(APP_CONFIG.ATTEMPTS_KEY);
+                return data ? JSON.parse(data) : {};
+            } catch(e) { return {}; }
+        }
+
+        function setLoginAttempts(attempts) {
+            localStorage.setItem(APP_CONFIG.ATTEMPTS_KEY, JSON.stringify(attempts));
+        }
+
+        function getLockoutUntil() {
+            return parseInt(localStorage.getItem(APP_CONFIG.LOCKOUT_UNTIL_KEY) || '0');
+        }
+
+        function setLockoutUntil(timestamp) {
+            if (timestamp) {
+                localStorage.setItem(APP_CONFIG.LOCKOUT_UNTIL_KEY, timestamp.toString());
+            } else {
+                localStorage.removeItem(APP_CONFIG.LOCKOUT_UNTIL_KEY);
             }
+        }
 
-            if (Date.now() - start >= timeout) {
-                clearInterval(timer);
-                resolve(false);
+        function isAccountLocked() {
+            const lockoutUntil = getLockoutUntil();
+            if (lockoutUntil && Date.now() < lockoutUntil) {
+                return true;
             }
-        }, 100);
-    });
-}
+            if (lockoutUntil && Date.now() >= lockoutUntil) {
+                // انتهى القفل
+                setLockoutUntil(null);
+                const attempts = getLoginAttempts();
+                const username = document.getElementById('username').value.trim();
+                if (attempts[username]) {
+                    attempts[username] = 0;
+                    setLoginAttempts(attempts);
+                }
+            }
+            return false;
+        }
 
-async function apiCall(action, params = {}) {
-    const bridgeReady = await waitForAndroidBridge();
-    if (!bridgeReady) {
-        console.error("AndroidInterface bridge not ready");
-        throw new Error("AndroidInterface not injected");
-    }
+        function getRemainingLockoutTime() {
+            const lockoutUntil = getLockoutUntil();
+            if (!lockoutUntil) return 0;
+            const remaining = Math.ceil((lockoutUntil - Date.now()) / 60000);
+            return remaining > 0 ? remaining : 0;
+        }
 
-            const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
+        function incrementLoginAttempt(username) {
+            const attempts = getLoginAttempts();
+            attempts[username] = (attempts[username] || 0) + 1;
+            setLoginAttempts(attempts);
+            
+            // إظهار عداد المحاولات
+            updateAttemptsCounter(username);
+            
+            // إظهار "نسيت كلمة المرور" بعد أول محاولة فاشلة
+            if (attempts[username] >= 1) {
+                const forgotLink = document.getElementById('forgotPassword');
+                forgotLink.classList.add('show');
+                if (attempts[username] >= 2) {
+                    forgotLink.classList.add('beam-active');
+                }
+            }
+            
+            // قفل الحساب بعد 5 محاولات
+            if (attempts[username] >= APP_CONFIG.MAX_LOGIN_ATTEMPTS) {
+                const lockoutTime = Date.now() + (APP_CONFIG.LOCKOUT_DURATION_MINUTES * 60 * 1000);
+                setLockoutUntil(lockoutTime);
+                showLockoutBanner();
+                
+                // إرسال سجل إلى Android
+                logToAndroid('ACCOUNT_LOCKED', `تم قفل الحساب ${username} بعد ${attempts[username]} محاولات`);
+            }
+            
+            return attempts[username];
+        }
 
-            if (hasBridge) {
+        function resetLoginAttempts(username) {
+            const attempts = getLoginAttempts();
+            if (attempts[username]) {
+                attempts[username] = 0;
+                setLoginAttempts(attempts);
+            }
+            setLockoutUntil(null);
+            hideLockoutBanner();
+            hideAttemptsCounter();
+        }
+
+        function updateAttemptsCounter(username) {
+            const attempts = getLoginAttempts();
+            const count = attempts[username] || 0;
+            const counter = document.getElementById('attemptsCounter');
+            const text = document.getElementById('attemptsText');
+            
+            if (count > 0 && count < APP_CONFIG.MAX_LOGIN_ATTEMPTS) {
+                text.innerHTML = `محاولات فاشلة: ${count} من ${APP_CONFIG.MAX_LOGIN_ATTEMPTS}`;
+                counter.classList.add('show');
+            } else {
+                counter.classList.remove('show');
+            }
+        }
+
+        function hideAttemptsCounter() {
+            document.getElementById('attemptsCounter').classList.remove('show');
+        }
+
+        function showLockoutBanner() {
+            const banner = document.getElementById('lockoutBanner');
+            const text = document.getElementById('lockoutText');
+            const remaining = getRemainingLockoutTime();
+            text.innerHTML = `تم قفل الحساب مؤقتاً. يرجى الانتظار ${remaining} دقيقة أو استخدم "نسيت كلمة المرور"`;
+            banner.classList.add('show');
+        }
+
+        function hideLockoutBanner() {
+            document.getElementById('lockoutBanner').classList.remove('show');
+        }
+
+        // ============================================================
+        // Android Interface Helpers
+        // ============================================================
+        function hasAndroidBridge() {
+            return (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
+        }
+
+        function logToAndroid(action, details) {
+            if (hasAndroidBridge() && typeof AndroidInterface.logEvent === 'function') {
+                try {
+                    AndroidInterface.logEvent(action, details || '');
+                } catch(e) { console.log('logEvent error:', e); }
+            }
+        }
+
+        function handleAndroidResult(result) {
+            if (typeof result === 'string') {
+                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
+            }
+            if (result && typeof result === 'object' && 'success' in result) return result;
+            if (Array.isArray(result)) return { success: true, data: result };
+            if (result && typeof result === 'object') return { success: true, data: result };
+            return { success: true, data: result };
+        }
+
+        // ============================================================
+        // دالة apiCall الموحدة (Android Native فقط - لا خادم داخلي)
+        // ============================================================
+        async function apiCall(action, params = {}) {
+            if (hasAndroidBridge()) {
                 try {
                     const actionMap = {
                         'login': 'login',
                         'forgot_password': 'forgotPassword',
                         'verify_reset_code': 'verifyResetCode',
                         'reset_password': 'resetPassword',
-                        'get_user_data': 'getUserData'
+                        'get_user_data': 'getUserData',
+                        'save_credentials': 'saveCredentials',
+                        'load_credentials': 'loadCredentials',
+                        'clear_credentials': 'clearCredentials',
+                        'has_saved_credentials': 'hasSavedCredentials',
+                        'biometric_auto_login': 'biometricAutoLogin',
+                        'authenticate_biometric': 'authenticateBiometric'
                     };
 
                     const methodName = actionMap[action];
@@ -1364,7 +1947,7 @@ async function apiCall(action, params = {}) {
 
                     const method = AndroidInterface[methodName];
                     if (typeof method !== 'function') {
-                        throw new Error(`الدالة ${methodName} غير موجودة`);
+                        throw new Error(`الدالة ${methodName} غير موجودة في AndroidInterface`);
                     }
 
                     let result;
@@ -1384,6 +1967,18 @@ async function apiCall(action, params = {}) {
                         case 'get_user_data':
                             result = method(params.username || '');
                             break;
+                        case 'save_credentials':
+                            result = method(params.username || '', params.password || '', params.remember || false);
+                            break;
+                        case 'load_credentials':
+                        case 'has_saved_credentials':
+                        case 'clear_credentials':
+                            result = method();
+                            break;
+                        case 'biometric_auto_login':
+                        case 'authenticate_biometric':
+                            result = method();
+                            break;
                         default:
                             result = method();
                             break;
@@ -1391,47 +1986,18 @@ async function apiCall(action, params = {}) {
                     return handleAndroidResult(result);
                 } catch (e) {
                     console.error('AndroidInterface error:', e);
-                    showNotification('حدث خطأ في الاتصال الداخلي', 'error');
+                    showNotification('حدث خطأ في الاتصال الداخلي: ' + e.message, 'error');
                     throw e;
                 }
             }
 
-            // ============================================================
-            // المسار الاحتياطي (للاختبار في بيئة المتصفح فقط)
-            // ============================================================
-            try {
-                const url = new URL(window.location.origin + '/api');
-                url.searchParams.append('action', action);
-                Object.keys(params).forEach(key => {
-                    if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-                        url.searchParams.append(key, params[key]);
-                    }
-                });
-                const response = await fetch(url.toString(), {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
-            } catch (e) {
-                console.error('Fallback API Error:', e);
-                showNotification('تعذر الاتصال بالواجهة الداخلية (بيئة تطوير)', 'error');
-                throw e;
-            }
-        }
-
-        function handleAndroidResult(result) {
-            if (typeof result === 'string') {
-                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
-            }
-            if (result && typeof result === 'object' && 'success' in result) return result;
-            if (Array.isArray(result)) return { success: true, data: result };
-            if (result && typeof result === 'object') return { success: true, data: result };
-            return { success: true, data: result };
+            // لا يوجد مسار احتياطي - التطبيق يعمل فقط عبر AndroidInterface
+            showNotification('النظام يتطلب تشغيله داخل تطبيق Android', 'error');
+            throw new Error('AndroidInterface غير متوفر');
         }
 
         // ============================================================
-        // دوال مساعدة
+        // دوال مساعدة (UI Utilities)
         // ============================================================
         function showNotification(message, type) {
             const container = document.getElementById('notificationContainer');
@@ -1511,24 +2077,17 @@ async function apiCall(action, params = {}) {
             el.style.borderRadius = '8px';
 
             if (type === 'success') {
-                setTimeout(() => {
-                    el.style.display = 'none';
-                }, 5000);
+                setTimeout(() => { el.style.display = 'none'; }, 5000);
             }
         }
 
-        function validateEmail(email) {
-            return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
-        }
-
         // ============================================================
-        // دوال تحليل قوة كلمة المرور
+        // دوال تحليل قوة كلمة المرور (مستوحاة من auth.py)
         // ============================================================
         function checkPasswordStrength(password) {
             const bar = document.getElementById('passwordStrengthBar');
             const text = document.getElementById('passwordStrengthText');
             let strength = 0;
-            let message = '';
 
             if (password.length >= 8) strength++;
             if (/[a-z]/.test(password)) strength++;
@@ -1547,18 +2106,16 @@ async function apiCall(action, params = {}) {
             if (strength < 2) {
                 bar.classList.add('strength-weak');
                 text.classList.add('strength-weak-text');
-                message = 'كلمة المرور ضعيفة';
+                text.textContent = 'كلمة المرور ضعيفة';
             } else if (strength < 4) {
                 bar.classList.add('strength-medium');
                 text.classList.add('strength-medium-text');
-                message = 'كلمة المرور متوسطة';
+                text.textContent = 'كلمة المرور متوسطة';
             } else {
                 bar.classList.add('strength-strong');
                 text.classList.add('strength-strong-text');
-                message = 'كلمة المرور قوية';
+                text.textContent = 'كلمة المرور قوية';
             }
-
-            text.textContent = message;
         }
 
         function checkPasswordMatch() {
@@ -1591,7 +2148,6 @@ async function apiCall(action, params = {}) {
                     showNotification('فشل في نسخ الرابط', 'error');
                 });
             } else {
-                // طريقة احتياطية للنسخ
                 const textArea = document.createElement('textarea');
                 textArea.value = link;
                 document.body.appendChild(textArea);
@@ -1607,36 +2163,222 @@ async function apiCall(action, params = {}) {
         }
 
         // ============================================================
-        // تهيئة الصفحة
+        // التدفق الجديد للبصمة (Biometric Auto Login)
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            // ============================================================
-            // فحص إذا كان المستخدم مسجلاً الدخول بالفعل
-            // ============================================================
-            (function checkAlreadyLoggedIn() {
-                const token = localStorage.getItem('authToken');
-                const user = localStorage.getItem('user');
-
-                // إذا كان المستخدم مسجلاً الدخول بالفعل → توجيه للرئيسية
-                if (token && user && token !== 'null' && token !== '' && user !== 'null' && user !== '') {
-                    window.location.replace('../main.html');
-                    return;
+        async function initBiometricFlow() {
+            try {
+                // 1. التحقق من وجود بيانات محفوظة
+                const credsResult = await apiCall('has_saved_credentials');
+                
+                if (credsResult.success && credsResult.hasCredentials) {
+                    // 2. إظهار زر البصمة دائمًا (الزر موجود بالفعل، لا حاجة لإخفائه)
+                    // لكن نضمن ظهوره (بما أنه موجود في الـ DOM)
+                    
+                    // 3. إظهار شارة تسجيل الدخول السريع
+                    const badge = document.getElementById('quickLoginBadge');
+                    if (badge) badge.style.display = 'flex';
+                    
+                    // 4. ملء الحقول تلقائياً إن أمكن
+                    if (credsResult.username) {
+                        document.getElementById('username').value = credsResult.username;
+                    }
+                    
+                    showNotification('بيانات محفوظة - يمكنك استخدام البصمة للدخول السريع', 'info');
                 }
-            })();
+            } catch (e) {
+                console.log('Biometric init skipped:', e.message);
+            }
+        }
 
+        async function requestFingerprintAuth() {
+            const fingerprintModal = document.getElementById('fingerprintModal');
+            const fingerprintStatus = document.getElementById('fingerprintStatus');
 
+            openModal(fingerprintModal);
+            fingerprintStatus.textContent = 'جاري التحقق من توفر البصمة...';
+            fingerprintStatus.style.color = 'var(--secondary-color)';
+
+            try {
+                // التدفق الجديد: biometricAutoLogin() عبر AndroidInterface
+                fingerprintStatus.textContent = 'ضع إصبعك على مستشعر البصمة...';
+                fingerprintStatus.style.color = 'var(--secondary-color)';
+
+                // استدعاء Android - النتيجة ستصل عبر window.onBiometricAutoLogin
+                if (hasAndroidBridge() && typeof AndroidInterface.biometricAutoLogin === 'function') {
+                    AndroidInterface.biometricAutoLogin();
+                    // النتيجة ستُعالج في onBiometricAutoLogin المُسجّل أدناه
+                } else {
+                    throw new Error('Biometric API غير متوفر');
+                }
+
+            } catch (error) {
+                console.error('Fingerprint error:', error);
+                fingerprintStatus.textContent = 'حدث خطأ أثناء التحقق';
+                fingerprintStatus.style.color = 'var(--error-color)';
+                showNotification('حدث خطأ أثناء التحقق من البصمة', 'error');
+                setTimeout(() => closeModal(fingerprintModal), 2000);
+            }
+        }
+
+        // ============================================================
+        // Callback عالمي لاستقبال نتيجة البصمة من Android
+        // ============================================================
+        window.onBiometricAutoLogin = function(result) {
+            const fingerprintModal = document.getElementById('fingerprintModal');
+            const fingerprintStatus = document.getElementById('fingerprintStatus');
+            
+            if (typeof result === 'string') {
+                try { result = JSON.parse(result); } catch(e) {}
+            }
+
+            if (result && result.success) {
+                fingerprintStatus.textContent = 'تم التحقق بنجاح!';
+                fingerprintStatus.style.color = 'var(--success-color)';
+                showNotification('تم التحقق من البصمة بنجاح', 'success');
+
+                // تخزين الجلسة
+                if (result.token) {
+                    localStorage.setItem('authToken', result.token);
+                }
+                if (result.user) {
+                    localStorage.setItem('user', JSON.stringify(result.user));
+                }
+
+                // إرسال سجل نشاط
+                logToAndroid('BIOMETRIC_LOGIN_SUCCESS', `مستخدم: ${result.user?.username || 'unknown'}`);
+
+                setTimeout(() => {
+                    closeModal(fingerprintModal);
+                    enterDashboard(result.user, result.token);
+                }, 800);
+            } else {
+                fingerprintStatus.textContent = 'فشل التحقق من البصمة أو تم الإلغاء';
+                fingerprintStatus.style.color = 'var(--error-color)';
+                showNotification(result.error || 'فشل التحقق من البصمة', 'error');
+                
+                logToAndroid('BIOMETRIC_LOGIN_FAILED', result.error || 'unknown error');
+                
+                setTimeout(() => closeModal(fingerprintModal), 2000);
+            }
+        };
+
+        // ============================================================
+        // الانتقال إلى لوحة التحكم
+        // ============================================================
+        function enterDashboard(user, token) {
+            document.getElementById('successMessage').textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+            document.getElementById('successMessage').classList.add('show');
+            
+            showLoading(true);
+            
+            setTimeout(() => {
+                window.location.replace('../main.html');
+            }, 1000);
+        }
+
+        // ============================================================
+        // نظام "تذكرني" - تكامل كامل مع Android SharedPreferences
+        // ============================================================
+        async function saveRememberMeCredentials(username, password, remember) {
+            try {
+                if (hasAndroidBridge()) {
+                    if (typeof AndroidInterface.saveCredentials === 'function') {
+                        const result = await apiCall('save_credentials', {
+                            username: username,
+                            password: password,
+                            remember: remember
+                        });
+
+                        if (result.success) {
+                            console.log('Credentials saved via AndroidInterface');
+                            return { success: true, method: 'android' };
+                        }
+                    }
+                }
+                return { success: false, error: 'AndroidInterface غير متوفر' };
+            } catch (e) {
+                console.error('Error saving credentials:', e);
+                return { success: false, error: e.message };
+            }
+        }
+
+        async function loadRememberMeCredentials() {
+            try {
+                if (hasAndroidBridge()) {
+                    if (typeof AndroidInterface.loadCredentials === 'function') {
+                        const result = await apiCall('load_credentials');
+
+                        if (result.success && result.hasCredentials) {
+                            const timestamp = result.timestamp || 0;
+                            const maxAge = APP_CONFIG.CREDENTIALS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+
+                            if (Date.now() - timestamp > maxAge) {
+                                console.log('Saved credentials expired');
+                                await clearRememberMeCredentials();
+                                return null;
+                            }
+
+                            return {
+                                username: result.username,
+                                password: result.password,
+                                source: 'android'
+                            };
+                        }
+                    }
+                }
+                return null;
+            } catch (e) {
+                console.error('Error loading credentials:', e);
+                return null;
+            }
+        }
+
+        async function clearRememberMeCredentials() {
+            try {
+                if (hasAndroidBridge()) {
+                    if (typeof AndroidInterface.clearCredentials === 'function') {
+                        await apiCall('clear_credentials');
+                    }
+                }
+                return true;
+            } catch (e) {
+                console.error('Error clearing credentials:', e);
+                return false;
+            }
+        }
+
+        // ============================================================
+        // التحقق التلقائي من الحقول ونقل التركيز
+        // ============================================================
+        function checkFieldsAndFocus() {
+            const username = document.getElementById('username');
+            const password = document.getElementById('password');
+            const submitBtn = document.getElementById('submitBtn');
+
+            // إذا كان كلا الحقلين ممتلئين، انقل التركيز إلى زر تسجيل الدخول
+            if (username.value.trim().length >= 3 && password.value.trim().length >= 6) {
+                submitBtn.focus();
+                submitBtn.style.transform = 'scale(1.02)';
+                setTimeout(() => { submitBtn.style.transform = ''; }, 300);
+            }
+        }
+
+        // ============================================================
+        // تهيئة الصفحة والأحداث الرئيسية
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', async function() {
             // عناصر DOM
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
             const passwordInput = document.getElementById('password');
-            const togglePassword = document.getElementById('togglePassword');
-            const thumbsUpIcon = document.getElementById('thumbsUpIcon');
             const rememberCheckbox = document.getElementById('remember');
             const forgotPasswordLink = document.getElementById('forgotPassword');
             const termsLink = document.getElementById('termsLink');
-            const themeToggle = document.getElementById('themeToggle');
-            const termsModal = document.getElementById('termsModal');
-            const closeTermsModal = document.getElementById('closeTermsModal');
+
+            // الأزرار العائمة الجديدة
+            const btnThemeToggle = document.getElementById('btnThemeToggle');
+            const btnTogglePassword = document.getElementById('btnTogglePassword');
+            const btnBiometric = document.getElementById('btnBiometric');
 
             // مودالات استعادة كلمة المرور
             const forgotPasswordModal = document.getElementById('forgotPasswordModal');
@@ -1646,6 +2388,10 @@ async function apiCall(action, params = {}) {
             const resetPasswordModal = document.getElementById('resetPasswordModal');
             const closeResetPasswordModal = document.getElementById('closeResetPasswordModal');
 
+            // مودال البصمة
+            const fingerprintModal = document.getElementById('fingerprintModal');
+            const closeFingerprintModal = document.getElementById('closeFingerprintModal');
+
             const sendResetLinkBtn = document.getElementById('sendResetLinkBtn');
             const resetUsernameInput = document.getElementById('resetUsername');
             const goToResetLinkBtn = document.getElementById('goToResetLinkBtn');
@@ -1653,11 +2399,7 @@ async function apiCall(action, params = {}) {
             const resetTokenInput = document.getElementById('resetToken');
             const newPasswordInput = document.getElementById('newPassword');
             const confirmPasswordInput = document.getElementById('confirmPassword');
-            const toggleNewPassword = document.getElementById('toggleNewPassword');
-            const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
 
-            let loginAttempts = 0;
-            let currentUsername = '';
             let currentResetToken = '';
 
             // التاريخ
@@ -1671,50 +2413,71 @@ async function apiCall(action, params = {}) {
             // العناصر العائمة
             createFloatingElements();
 
-            // الوضع الليلي
+            // تهيئة التلميحات
+            initTooltips();
+
+            // ============================================================
+            // الوضع الليلي - زر التبديل الجديد
+            // ============================================================
             if (localStorage.getItem('darkMode') === 'true') {
                 document.body.classList.add('dark-mode');
-                themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+                btnThemeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+            } else {
+                btnThemeToggle.innerHTML = '<i class="fas fa-moon"></i>';
             }
 
-            themeToggle.addEventListener('click', function() {
+            btnThemeToggle.addEventListener('click', function() {
                 document.body.classList.toggle('dark-mode');
                 localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
-                themeToggle.innerHTML = document.body.classList.contains('dark-mode') ? '<i class="fas fa-sun"></i>' :
+                btnThemeToggle.innerHTML = document.body.classList.contains('dark-mode') ? '<i class="fas fa-sun"></i>' :
                     '<i class="fas fa-moon"></i>';
                 showNotification(document.body.classList.contains('dark-mode') ? 'تم تفعيل الوضع الليلي' :
                     'تم تفعيل الوضع النهاري', 'info');
             });
 
-            // إظهار/إخفاء كلمة المرور (في نموذج تسجيل الدخول)
-            togglePassword.addEventListener('click', function() {
+            // ============================================================
+            // 👁 زر إظهار كلمة المرور الجديد
+            // ============================================================
+            btnTogglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
-                this.classList.toggle('fa-eye');
-                this.classList.toggle('fa-eye-slash');
+                const icon = this.querySelector('i');
+                icon.classList.toggle('fa-eye');
+                icon.classList.toggle('fa-eye-slash');
+                passwordInput.focus();
             });
 
-            // أيقونة الإبهام عند التركيز
-            passwordInput.addEventListener('focus', function() {
-                thumbsUpIcon.style.display = 'block';
-            });
-            passwordInput.addEventListener('blur', function() {
-                thumbsUpIcon.style.display = 'none';
-            });
-
-            // إظهار/إخفاء كلمة المرور (في نموذج إعادة التعيين)
-            toggleNewPassword.addEventListener('click', function() {
-                const type = newPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                newPasswordInput.setAttribute('type', type);
-                this.classList.toggle('fa-eye');
-                this.classList.toggle('fa-eye-slash');
+            // ============================================================
+            // 👍 زر الدخول بالبصمة الجديد
+            // ============================================================
+            btnBiometric.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                requestFingerprintAuth();
             });
 
-            toggleConfirmPassword.addEventListener('click', function() {
-                const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                confirmPasswordInput.setAttribute('type', type);
-                this.classList.toggle('fa-eye');
-                this.classList.toggle('fa-eye-slash');
+            // ============================================================
+            // التحقق التلقائي من الحقول ونقل التركيز
+            // ============================================================
+            usernameInput.addEventListener('input', checkFieldsAndFocus);
+            passwordInput.addEventListener('input', checkFieldsAndFocus);
+
+            // نقل التركيز عند الضغط على Enter
+            usernameInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    passwordInput.focus();
+                }
+            });
+
+            passwordInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const submitBtn = document.getElementById('submitBtn');
+                    submitBtn.focus();
+                    submitBtn.style.transform = 'scale(1.05)';
+                    setTimeout(() => { submitBtn.style.transform = ''; }, 200);
+                }
             });
 
             // فتح نافذة الشروط
@@ -1722,16 +2485,45 @@ async function apiCall(action, params = {}) {
                 e.preventDefault();
                 openModal(termsModal);
             });
-            closeTermsModal.addEventListener('click', function() {
+            document.getElementById('closeTermsModal').addEventListener('click', function() {
                 closeModal(termsModal);
             });
+
+            // إغلاق مودال البصمة
+            closeFingerprintModal.addEventListener('click', function() {
+                closeModal(fingerprintModal);
+            });
+
+            // ============================================================
+            // التدفق الجديد للبصمة عند فتح التطبيق
+            // ============================================================
+            await initBiometricFlow();
+
+            // ============================================================
+            // استرجاع بيانات "تذكرني" عند تحميل الصفحة
+            // ============================================================
+            const savedCredentials = await loadRememberMeCredentials();
+            if (savedCredentials && savedCredentials.username) {
+                usernameInput.value = savedCredentials.username;
+                if (savedCredentials.password) {
+                    passwordInput.value = savedCredentials.password;
+                }
+                rememberCheckbox.checked = true;
+                showNotification('تم استرجاع بيانات الدخول المحفوظة', 'info');
+            }
+
+            // التحقق من حالة القفل عند التحميل
+            if (isAccountLocked()) {
+                showLockoutBanner();
+                showNotification('الحساب مقفل مؤقتاً. استخدم "نسيت كلمة المرور"', 'warning');
+            }
 
             // ============================================================
             // 1. فتح مودال طلب استعادة كلمة المرور
             // ============================================================
             forgotPasswordLink.addEventListener('click', function(e) {
                 e.preventDefault();
-                currentUsername = usernameInput.value.trim();
+                const currentUsername = usernameInput.value.trim();
                 if (!currentUsername) {
                     showNotification('يرجى إدخال اسم المستخدم أولاً', 'error');
                     usernameInput.focus();
@@ -1747,7 +2539,7 @@ async function apiCall(action, params = {}) {
             });
 
             // ============================================================
-            // 2. إرسال طلب استعادة كلمة المرور (إنشاء الرابط)
+            // 2. إرسال طلب استعادة كلمة المرور
             // ============================================================
             sendResetLinkBtn.addEventListener('click', async function() {
                 const username = resetUsernameInput.value.trim();
@@ -1763,15 +2555,14 @@ async function apiCall(action, params = {}) {
                     const result = await apiCall('forgot_password', { username: username });
 
                     if (result.success) {
-                        const resetUrl = result.reset_url || (window.location.origin + '/reset-password/' + result
-                        .token);
+                        const resetUrl = result.reset_url || (result.token ? `reset-password://${result.token}` : '');
                         document.getElementById('recoveryLinkText').textContent = resetUrl;
                         currentResetToken = result.token || '';
 
                         closeModal(forgotPasswordModal);
                         openModal(viewRecoveryLinkModal);
 
-                        showStatusMessage('تم إنشاء رابط الاستعادة بنجاح.', 'success', 'resetRequestStatus');
+                        logToAndroid('PASSWORD_RESET_LINK_CREATED', `مستخدم: ${username}`);
                     } else {
                         showStatusMessage(result.error || 'فشل إنشاء رابط الاستعادة', 'error', 'resetRequestStatus');
                     }
@@ -1784,11 +2575,11 @@ async function apiCall(action, params = {}) {
             });
 
             // ============================================================
-            // 3. الانتقال إلى رابط الاستعادة (فتح مودال إعادة التعيين)
+            // 3. الانتقال إلى رابط الاستعادة
             // ============================================================
             goToResetLinkBtn.addEventListener('click', function() {
                 const link = document.getElementById('recoveryLinkText').textContent;
-                const tokenMatch = link.match(/\/reset-password\/([^\/]+)/);
+                const tokenMatch = link.match(/reset-password:\/\/(.+)/) || link.match(/token=([^&]+)/);
                 if (tokenMatch && tokenMatch[1]) {
                     currentResetToken = tokenMatch[1];
                     resetTokenInput.value = currentResetToken;
@@ -1809,7 +2600,7 @@ async function apiCall(action, params = {}) {
             });
 
             // ============================================================
-            // 4. إعادة تعيين كلمة المرور (تحديثها) - resetPasswordModal
+            // 4. إعادة تعيين كلمة المرور
             // ============================================================
             resetPasswordForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1845,6 +2636,12 @@ async function apiCall(action, params = {}) {
                         document.getElementById('successMessage').textContent =
                             'تم تحديث كلمة المرور! يمكنك تسجيل الدخول الآن.';
                         document.getElementById('successMessage').classList.add('show');
+                        
+                        // إعادة تعيين عداد المحاولات
+                        resetLoginAttempts(usernameInput.value.trim());
+                        
+                        logToAndroid('PASSWORD_RESET_SUCCESS', 'تم إعادة تعيين كلمة المرور');
+                        
                         setTimeout(() => {
                             document.getElementById('successMessage').classList.remove('show');
                         }, 3000);
@@ -1863,7 +2660,7 @@ async function apiCall(action, params = {}) {
             });
 
             // ============================================================
-            // 5. تسجيل الدخول
+            // 5. تسجيل الدخول (مع Rate Limiting & Account Lockout)
             // ============================================================
             loginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -1871,6 +2668,15 @@ async function apiCall(action, params = {}) {
 
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value;
+
+                // التحقق من القفل
+                if (isAccountLocked()) {
+                    const remaining = getRemainingLockoutTime();
+                    showError(`الحساب مقفل. انتظر ${remaining} دقيقة أو استخدم "نسيت كلمة المرور"`, 'usernameError');
+                    showNotification(`الحساب مقفل مؤقتاً (${remaining} دقيقة متبقية)`, 'warning');
+                    shakeForm();
+                    return;
+                }
 
                 if (username.length < 3) {
                     showError('اسم المستخدم يجب أن يكون 3 أحرف على الأقل', 'usernameError');
@@ -1886,45 +2692,42 @@ async function apiCall(action, params = {}) {
                 try {
                     const result = await apiCall('login', { username, password });
                     if (result.success) {
-                        if (rememberCheckbox.checked) {
-                            localStorage.setItem('username', username);
-                            localStorage.setItem('remember', 'true');
-                        } else {
-                            localStorage.removeItem('username');
-                            localStorage.removeItem('remember');
+                        // ✅ تسجيل الدخول الناجح - إعادة تعيين المحاولات
+                        resetLoginAttempts(username);
+
+                        // حفظ "تذكرني"
+                        const remember = rememberCheckbox.checked;
+                        await saveRememberMeCredentials(username, password, remember);
+
+                        // حفظ جلسة المصادقة
+                        if (result.token) {
+                            localStorage.setItem('authToken', result.token);
                         }
-                        document.getElementById('successMessage').textContent =
-                        'تم تسجيل الدخول بنجاح! جاري التوجيه...';
-                        document.getElementById('successMessage').classList.add('show');
-                        setTimeout(() => {
-                            window.location.replace('../main.html');
-                        }, 1500);
+                        if (result.user) {
+                            localStorage.setItem('user', JSON.stringify(result.user));
+                        }
+
+                        // سجل النشاط
+                        logToAndroid('LOGIN_SUCCESS', `مستخدم: ${username}`);
+
+                        enterDashboard(result.user, result.token);
                     } else {
-                        loginAttempts++;
-                        if (loginAttempts >= 1) {
-                            forgotPasswordLink.classList.add('show');
-                            forgotPasswordLink.classList.add('beam-active');
-                            showNotification('يمكنك استخدام "نسيت كلمة المرور" لاستعادة حسابك', 'info');
-                        }
+                        // ❌ تسجيل الدخول الفاشل
+                        const attemptCount = incrementLoginAttempt(username);
+                        
                         showError(result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', 'usernameError');
                         showNotification(result.error || 'فشل تسجيل الدخول', 'error');
                         shakeForm();
+                        
+                        logToAndroid('LOGIN_FAILED', `مستخدم: ${username}, محاولة: ${attemptCount}`);
                     }
                 } catch (error) {
                     showNotification('حدث خطأ أثناء الاتصال', 'error');
+                    logToAndroid('LOGIN_ERROR', error.message);
                 } finally {
                     showLoading(false);
                 }
             });
-
-            // تذكر المستخدم
-            if (localStorage.getItem('remember') === 'true') {
-                const saved = localStorage.getItem('username');
-                if (saved) {
-                    usernameInput.value = saved;
-                    rememberCheckbox.checked = true;
-                }
-            }
 
             // إغلاق المودالات عند النقر خارجها
             window.addEventListener('click', function(e) {
@@ -1932,6 +2735,7 @@ async function apiCall(action, params = {}) {
                 if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
                 if (e.target === viewRecoveryLinkModal) closeModal(viewRecoveryLinkModal);
                 if (e.target === resetPasswordModal) closeModal(resetPasswordModal);
+                if (e.target === fingerprintModal) closeModal(fingerprintModal);
             });
 
             // ============================================================
