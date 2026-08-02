@@ -2162,7 +2162,7 @@ class SMSService : Service() {
         return try {
             JSONObject().apply {
                 put("initialized", ::dbHelper.isInitialized)
-                put("is_closed", if (::dbHelper.isInitialized) dbHelper.isClosed else true)
+                put("is_closed", if (::dbHelper.isInitialized) dbHelper.isClosed() else true)
                 put("is_healthy", checkDatabase())
                 put("tables_valid", validateTables())
             }
@@ -2230,7 +2230,7 @@ class SMSService : Service() {
                 Log.w(TAG, "Database not initialized")
                 return false
             }
-            dbHelper.isOpen
+            dbHelper.isOpen()
         } catch (e: Exception) {
             Log.e(TAG, "Database validation failed: ${e.message}", e)
             false
@@ -2316,7 +2316,7 @@ class SMSService : Service() {
     /**
      * التحقق مما إذا كانت الخدمة تعمل
      */
-    private fun isServiceRunning(): Boolean {
+    fun isServiceRunning(): Boolean {
         return isRunning.get() && !isDestroyed.get() && isInitialized.get()
     }
 
@@ -2329,7 +2329,7 @@ class SMSService : Service() {
                 isRunning.get() &&
                 !isPaused.get() &&
                 ::dbHelper.isInitialized &&
-                !dbHelper.isClosed &&
+                !dbHelper.isClosed() &&
                 ::smsProcessor.isInitialized &&
                 isReceiverRegistered()
     }
@@ -2391,11 +2391,12 @@ class SMSService : Service() {
     private fun recordServiceEvent(eventType: String, details: String? = null) {
         try {
             if (::smsMetrics.isInitialized) {
-                smsMetrics.recordEvent(
-                    eventType = eventType,
-                    details = details,
-                    timestamp = System.currentTimeMillis()
-                )
+                serviceScope.launch {
+                    smsMetrics.recordEvent(
+                        eventType = eventType,
+                        details = details
+                    )
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to record event: ${e.message}", e)
@@ -2495,7 +2496,7 @@ class SMSService : Service() {
      * الحصول على مرجع DatabaseHelper
      */
     fun getDatabaseHelper(): DatabaseHelper? {
-        return if (::dbHelper.isInitialized && !dbHelper.isClosed) dbHelper else null
+        return if (::dbHelper.isInitialized && !dbHelper.isClosed()) dbHelper else null
     }
 
     /**

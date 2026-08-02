@@ -1527,7 +1527,7 @@ class MainActivity : AppCompatActivity() {
                 val isValid = db.validateOtpCode(phone, code)
                 if (isValid) {
                     // حذف الرمز بعد الاستخدام
-                    db.clearOtpCode(phone, code)
+                    db.clearOtpCode(phone)
                     successResponse(true, "تم التحقق بنجاح")
                 } else {
                     errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
@@ -3616,7 +3616,7 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val ledger = db.getCustomerLedger(partyId.toInt())
+                val ledger = db.getCustomerLedger(partyId)
                 dataResponse(ledger)
             } catch (e: Exception) {
                 errorResponse(e.message)
@@ -3628,7 +3628,7 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getCustomerSales(partyId.toInt())
+                val sales = db.getCustomerSales(partyId)
                 dataResponse(sales)
             } catch (e: Exception) {
                 errorResponse(e.message)
@@ -3640,7 +3640,7 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val contacts = db.getPartyContacts(partyId.toInt())
+                val contacts = db.getPartyContacts(partyId)
                 dataResponse(contacts)
             } catch (e: Exception) {
                 errorResponse(e.message)
@@ -3652,7 +3652,7 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val addresses = db.getPartyAddresses(partyId.toInt())
+                val addresses = db.getPartyAddresses(partyId)
                 dataResponse(addresses)
             } catch (e: Exception) {
                 errorResponse(e.message)
