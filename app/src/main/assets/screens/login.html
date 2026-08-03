@@ -1347,6 +1347,23 @@
     </style>
 </head>
 <body>
+    <!-- ============================================================ -->
+    <!-- VConsole & Error Tracking -->
+    <!-- ============================================================ -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var errorMsg = "خطأ: " + msg + "\nالملف: " + url + "\nالسطر: " + line + "\nالعمود: " + col;
+            console.error(errorMsg);
+            alert(errorMsg);
+            return true;
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/vconsole"></script>
+    <script>
+        var vConsole = new window.VConsole();
+        console.log('✅ VConsole جاهز - اضغط على الزر الأخضر في الزاوية السفلية اليمنى لفتح الـ console');
+    </script>
+
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div>
@@ -1460,7 +1477,6 @@
                 <button class="close-modal" id="closeTermsModal">&times;</button>
             </div>
             <div class="modal-body terms-content">
-                <!-- (نفس المحتوى السابق) -->
                 <div class="terms-intro">
                     <i class="fas fa-shield-alt"></i>
                     <p style="font-weight: 600; font-size: 1.1rem;">مرحباً بك في نظام إدارة محطات الوقود</p>
@@ -1536,17 +1552,17 @@
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
                     <p><i class="fas fa-phone"></i> 
                         <a href="tel:+967106586714" class="contact-action-btn phone-btn">
-                            <i class="fas fa-phone-alt"></i> 📲 للاتصال: اضغــط هنا
+                            <i class="fas fa-phone-alt"></i>  اضغـط هنــا
                         </a>
                     </p>
                     <p><i class="fab fa-whatsapp"></i> 
                         <a href="https://wa.me/967781038203" target="_blank" rel="noopener noreferrer" class="contact-action-btn whatsapp-btn">
-                            <i class="fab fa-whatsapp"></i> 💬 واتساب: اضغـط هنــا
+                            <i class="fab fa-whatsapp"></i>  اضغـط هنــا
                         </a>
                     </p>
                     <p><i class="fas fa-envelope"></i> 
                         <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
-                            <i class="fas fa-envelope"></i> 📧 للبريد : اضغــط هنــا
+                            <i class="fas fa-envelope"></i>  اضغـط هنــا
                         </a>
                     </p>
                 </div>
@@ -1700,37 +1716,6 @@
             ATTEMPTS_KEY: 'login_attempts',
             LOCKOUT_UNTIL_KEY: 'lockout_until'
         };
-
-        // ============================================================
-        // [التشخيص] فحص الصفحة و Bridge
-        // ============================================================
-
-        // 1. طباعة مسار الصفحة الحالية وعلامة البناء
-        console.log("CURRENT_PAGE:", window.location.href);
-        console.log("LOGIN_HTML_BUILD = 2026-08-04-FINAL");
-
-        // 2. دالة فحص Bridge (تُستدعى بعد تحميل الصفحة)
-        function checkBridge() {
-            console.log("===== BRIDGE CHECK START =====");
-            console.log("Bridge type:", typeof window.AndroidInterface);
-            if (typeof window.AndroidInterface !== "undefined") {
-                console.log("login type:", typeof window.AndroidInterface.login);
-                console.log("Bridge keys:", Object.keys(window.AndroidInterface));
-                try {
-                    // محاولة استدعاء ping إن وجدت
-                    if (typeof window.AndroidInterface.ping === "function") {
-                        console.log("PING RESULT:", window.AndroidInterface.ping());
-                    } else {
-                        console.log("ping() not available");
-                    }
-                } catch(e) {
-                    console.error("PING ERROR:", e.message);
-                }
-            } else {
-                console.error("Bridge is UNDEFINED!");
-            }
-            console.log("===== BRIDGE CHECK END =====");
-        }
 
         // ============================================================
         // نظام التلميحات (Tooltips)
@@ -1917,10 +1902,9 @@
         }
 
         // ============================================================
-        // دالة apiCall الموحدة (مع سجل تشخيصي)
+        // دالة apiCall الموحدة
         // ============================================================
         async function apiCall(action, params = {}) {
-            console.log(`[API_CALL] action: ${action}, params:`, params);
             if (hasAndroidBridge()) {
                 try {
                     const actionMap = {
@@ -1954,9 +1938,6 @@
                     if (typeof method !== 'function') {
                         throw new Error(`الدالة ${methodName} غير موجودة في AndroidInterface`);
                     }
-
-                    // [التشخيص] قبل استدعاء method
-                    console.log("CALLING ANDROID LOGIN");
 
                     let result;
                     try {
@@ -2368,20 +2349,6 @@
         // تهيئة الصفحة والأحداث الرئيسية
         // ============================================================
         document.addEventListener('DOMContentLoaded', async function() {
-            // ============================================================
-            // [LOG] فحص الجسر (Bridge) فور تحميل الصفحة
-            // ============================================================
-            console.log("BridgeDebug: Checking AndroidInterface availability");
-            console.log("AndroidInterface exists:", typeof window.AndroidInterface !== "undefined");
-            try {
-                console.log("login method type:", typeof AndroidInterface.login);
-            } catch(e) {
-                console.error("Bridge error during login method check:", e);
-            }
-
-            // ✅ فحص الجسر المتقدم (يتم بعد 2 ثانية للتأكد من اكتمال الحقن)
-            setTimeout(checkBridge, 2000);
-
             // عناصر DOM
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
@@ -2651,8 +2618,6 @@
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value;
 
-                console.log(`[LOGIN_ATTEMPT] username: ${username}`);
-
                 if (isAccountLocked()) {
                     const remaining = getRemainingLockoutTime();
                     showError(`الحساب مقفل. انتظر ${remaining} دقيقة أو استخدم "نسيت كلمة المرور"`, 'usernameError');
@@ -2674,8 +2639,6 @@
 
                 try {
                     const result = await apiCall('login', { username, password });
-                    console.log("[LOGIN_RESULT] success:", result.success);
-                    console.log("[LOGIN_RESULT] full:", result);
                     
                     if (result.success) {
                         resetLoginAttempts(username);
@@ -2703,7 +2666,7 @@
                         logToAndroid('LOGIN_FAILED', `مستخدم: ${username}, محاولة: ${attemptCount}`);
                     }
                 } catch (error) {
-                    console.error("[LOGIN_ERROR]", error);
+                    console.error('LOGIN_ERROR', error);
                     showNotification('حدث خطأ أثناء الاتصال', 'error');
                     logToAndroid('LOGIN_ERROR', error.message);
                 } finally {

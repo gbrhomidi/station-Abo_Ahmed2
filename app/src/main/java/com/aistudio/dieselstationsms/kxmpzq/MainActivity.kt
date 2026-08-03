@@ -22,7 +22,6 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -61,19 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * ═══════════════════════════════════════════════════════════════
  * MainActivity - النشاط الرئيسي لتطبيق محطة أبو أحمد
- * الإصدار V7.2 - متكامل مع جميع دوال الإدارة والمراقبة
  * ═══════════════════════════════════════════════════════════════
- *
- * المسؤوليات:
- *   - تهيئة التطبيق (قاعدة البيانات، الإعدادات، الخدمات)
- *   - إدارة الصلاحيات
- *   - تشغيل وإيقاف SMSService
- *   - توفير واجهة JavaScript للمنطق التجاري
- *   - مراقبة حالة النظام وصحة قاعدة البيانات
- *   - جدولة المهام الخلفية (تنظيف، صيانة)
- *   - تسجيل الأحداث والأخطاء
- *
- * لا يحتوي على أي منطق لمعالجة الرسائل النصية (SMS).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -103,22 +90,19 @@ class MainActivity : AppCompatActivity() {
     private var isWebViewInitialized = false
     private var isErrorPageShown = false
     private var backgroundJob: Job? = null
-    private var maintenanceJob: Job? = null   // للصيانة الدورية
+    private var maintenanceJob: Job? = null
 
-    // مرجع للواجهة لتتبع الحقن (للتشخيص)
     private var webAppInterface: WebAppInterface? = null
-
-    // Tag لتحديد ما إذا تم حقن Bridge في WebView (لتجنب الحقن المزدوج)
-    private val BRIDGE_INITIALIZED_TAG = View.generateViewId()
+    private val BRIDGE_INITIALIZED_TAG = 0x7F0F0001 // قيمة ثابتة آمنة
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     private lateinit var dbHelper: DatabaseHelper
     private lateinit var geminiHelper: GeminiAIHelper
-    internal lateinit var sharedPrefs: SharedPreferences // تم تغييرها إلى internal للوصول من WebAppInterface
+    internal lateinit var sharedPrefs: SharedPreferences
 
-    // ====== متغيرات الجلسة (مخزنة بشكل آمن) ======
+    // ====== متغيرات الجلسة ======
     private var currentAuthToken: String?
         get() = sharedPrefs.getString(KEY_TOKEN, null)
         set(value) {
@@ -141,48 +125,54 @@ class MainActivity : AppCompatActivity() {
         }
 
     // ============================================================
-    // 1. دورة حياة النشاط (Activity Lifecycle)
+    // 1. دورة حياة النشاط
     // ============================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // تهيئة التخزين المشفر
-        initEncryptedPrefs()
-
-        // تهيئة قاعدة البيانات
-        dbHelper = DatabaseHelper.getInstance(applicationContext)
-        
-        // تهيئة مساعد Gemini
-        geminiHelper = GeminiAIHelper(this)
-        geminiApiKey = loadEnvKey("GEMINI_API_KEY")
-        if (geminiApiKey.isNotEmpty()) {
-            geminiHelper.initialize(geminiApiKey)
-        }
-
-        // إنشاء قناة الإشعارات
-        createNotificationChannel()
-
-        // تفعيل تصحيح WebView في وضع التطوير
-        if (isDebugMode) {
-            try {
-                WebView.setWebContentsDebuggingEnabled(true)
-                Log.d(TAG, "Debug mode enabled")
-            } catch (e: Exception) {
-                Log.w(TAG, "WebView debugging enable failed: ${e.message}")
-            }
-        }
-
         try {
             enableEdgeToEdge()
         } catch (e: Exception) {
-            Log.e(TAG, "enableEdgeToEdge failed: ${e.message}", e)
+            // تجاهل
         }
 
-        // طلب الصلاحيات
+        try {
+            initEncryptedPrefs()
+        } catch (e: Exception) {
+            sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+
+        try {
+            dbHelper = DatabaseHelper.getInstance(applicationContext)
+        } catch (e: Exception) {
+            Toast.makeText(this, "فشل تهيئة قاعدة البيانات", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        try {
+            geminiHelper = GeminiAIHelper(this)
+            geminiApiKey = loadEnvKey("GEMINI_API_KEY")
+            if (geminiApiKey.isNotEmpty()) {
+                geminiHelper.initialize(geminiApiKey)
+            }
+        } catch (e: Exception) {
+            // تجاهل
+        }
+
+        createNotificationChannel()
+
+        if (isDebugMode) {
+            try {
+                WebView.setWebContentsDebuggingEnabled(true)
+            } catch (e: Exception) {
+                // تجاهل
+            }
+        }
+
         requestAllPermissions()
 
-        // إعداد Compose UI
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -193,28 +183,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // تحميل WebView بعد تأخير بسيط
         handler.postDelayed({
             if (!isDestroyed.get()) {
                 loadWebViewFromAssets()
             }
         }, 2000)
 
-        // تنفيذ سلسلة التهيئة الكاملة (غير متزامن)
         lifecycleScope.launch {
             initializeSystem()
         }
 
-        // جدولة المهام الخلفية
         scheduleBackgroundTasks()
     }
 
     override fun onStart() {
         super.onStart()
-        Log.d(TAG, "onStart called")
-        // تحديث حالة التطبيق
         updateUIState()
-        // إعادة فحص الاتصال بالخدمات إذا لزم الأمر
         if (!isDestroyed.get()) {
             checkSmsSystemHealth()
         }
@@ -222,15 +206,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.d(TAG, "onResume called")
-        // ✅ استئناف WebView لتجنب تجميد JavaScript
         webView?.onResume()
-        // تحديث الواجهة
         updateUIState()
-        // مزامنة حالة SMS (التحقق من الخدمة)
         if (!isDestroyed.get() && webView != null) {
             if (!webView!!.isAttachedToWindow) {
-                Log.w(TAG, "WebView not attached, reloading...")
                 handler.postDelayed({
                     if (!isDestroyed.get()) {
                         loadWebViewFromAssets()
@@ -238,24 +217,18 @@ class MainActivity : AppCompatActivity() {
                 }, 500)
             }
         }
-        // تسجيل حدث
         logApplicationEvent("app_resumed", "Application resumed")
     }
 
     override fun onPause() {
         super.onPause()
-        Log.d(TAG, "onPause called")
-        // ✅ إيقاف WebView مؤقتاً لتوفير الموارد
         webView?.onPause()
-        // حفظ الحالة إذا لزم الأمر
         logApplicationEvent("app_paused", "Application paused")
     }
 
     override fun onDestroy() {
-        Log.d(TAG, "onDestroy called")
         isDestroyed.set(true)
 
-        // إلغاء جميع المهام الخلفية
         backgroundJob?.cancel()
         backgroundJob = null
         maintenanceJob?.cancel()
@@ -270,48 +243,31 @@ class MainActivity : AppCompatActivity() {
                 webView = null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
+            // تجاهل
         }
 
         super.onDestroy()
     }
 
     // ============================================================
-    // 2. تهيئة قاعدة البيانات (Database Initialization)
+    // 2. تهيئة قاعدة البيانات
     // ============================================================
 
     private suspend fun initializeDatabase() {
         withContext(Dispatchers.IO) {
             try {
-                // التحقق من وجود الجداول الجديدة
                 val tables = dbHelper.getTableCounts()
-                if (tables.length() == 0) {
-                    Log.w(TAG, "No tables found? Database might be empty.")
-                } else {
-                    Log.d(TAG, "Database tables count: ${tables.length()}")
-                }
-
-                // التحقق من صحة الهيكل
                 validateDatabaseSchema()
-
-                // ترحيل الإصدارات إذا لزم الأمر
                 migrateDatabaseIfNeeded()
-
-                Log.d(TAG, "Database initialized successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Database initialization error", e)
                 handleApplicationError(e)
             }
         }
     }
 
-    /**
-     * التحقق من صحة هيكل قاعدة البيانات (الجداول، الأعمدة، الفهارس، القيود)
-     */
     private suspend fun validateDatabaseSchema() {
         withContext(Dispatchers.IO) {
             try {
-                // قائمة الجداول المطلوبة
                 val requiredTables = listOf(
                     "sms_processed_hashes",
                     "sms_rate_limits",
@@ -322,42 +278,23 @@ class MainActivity : AppCompatActivity() {
                     "sms_metrics",
                     "sms_otp_verifications"
                 )
-
-                // نتحقق من وجود كل جدول
                 for (table in requiredTables) {
-                    val exists = dbHelper.tableExists(table)
-                    if (!exists) {
-                        Log.e(TAG, "Table $table is missing!")
-                        // يمكننا إنشاؤه هنا إذا كنا نثق في DatabaseHelper
-                        // لكن يفترض أن DatabaseHelper يقوم بذلك في onCreate
-                    } else {
-                        Log.d(TAG, "Table $table exists")
-                    }
+                    dbHelper.tableExists(table)
                 }
-                Log.d(TAG, "Database schema validation passed")
             } catch (e: Exception) {
-                Log.e(TAG, "Schema validation failed", e)
                 handleApplicationError(e)
             }
         }
     }
 
-    /**
-     * ترحيل قاعدة البيانات من الإصدارات القديمة إلى الإصدار الحالي
-     */
     private suspend fun migrateDatabaseIfNeeded() {
         withContext(Dispatchers.IO) {
             try {
-                // التحقق من إصدار قاعدة البيانات الحالي
                 val currentVersion = dbHelper.getVersion()
                 if (currentVersion < DatabaseHelper.VERSION) {
-                    Log.d(TAG, "Migrating database from version $currentVersion to ${DatabaseHelper.VERSION}")
-                    // يقوم DatabaseHelper نفسه بالترحيل عبر onUpgrade
-                    // لكن يمكننا هنا تنفيذ أي إجراءات إضافية
+                    // يقوم DatabaseHelper بالترحيل
                 }
-                Log.d(TAG, "Database migration check completed")
             } catch (e: Exception) {
-                Log.e(TAG, "Migration check failed", e)
                 handleApplicationError(e)
             }
         }
@@ -370,7 +307,6 @@ class MainActivity : AppCompatActivity() {
     private suspend fun initializeSmsSettings() {
         withContext(Dispatchers.IO) {
             try {
-                // القيم الافتراضية للإعدادات
                 val defaultSettings = mapOf(
                     "sms_enabled" to "1",
                     "sms_security_mode" to "relaxed",
@@ -379,39 +315,27 @@ class MainActivity : AppCompatActivity() {
                     "sms_rate_limit" to "10",
                     "sms_otp_enabled" to "1"
                 )
-
                 for ((key, defaultValue) in defaultSettings) {
                     val current = dbHelper.getSetting(key)
                     if (current.isEmpty()) {
                         dbHelper.setSetting(key, defaultValue)
-                        Log.d(TAG, "Setting $key initialized to $defaultValue")
                     }
                 }
-
-                // تحميل الإعدادات في الذاكرة (إذا كانت هناك حاجة)
                 loadSmsConfiguration()
-
-                Log.d(TAG, "SMS settings initialized")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize SMS settings", e)
                 handleApplicationError(e)
             }
         }
     }
 
     private fun loadSmsConfiguration() {
-        // تحميل الإعدادات من قاعدة البيانات وتخزينها في متغيرات مؤقتة إذا لزم الأمر
         try {
-            val enabled = dbHelper.getSetting("sms_enabled") == "1"
-            val securityMode = dbHelper.getSetting("sms_security_mode")
-            val maxDaily = dbHelper.getSetting("sms_max_daily_messages").toIntOrNull() ?: 100
-            val rateLimit = dbHelper.getSetting("sms_rate_limit").toIntOrNull() ?: 10
-            val otpEnabled = dbHelper.getSetting("sms_otp_enabled") == "1"
-
-            // يمكن استخدام هذه القيم في أي مكان داخل النشاط
-            Log.d(TAG, "SMS config loaded: enabled=$enabled, mode=$securityMode, max=$maxDaily, limit=$rateLimit, otp=$otpEnabled")
+            dbHelper.getSetting("sms_enabled")
+            dbHelper.getSetting("sms_security_mode")
+            dbHelper.getSetting("sms_max_daily_messages")
+            dbHelper.getSetting("sms_rate_limit")
+            dbHelper.getSetting("sms_otp_enabled")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load SMS configuration", e)
             handleApplicationError(e)
         }
     }
@@ -421,21 +345,18 @@ class MainActivity : AppCompatActivity() {
             for ((key, value) in config) {
                 dbHelper.setSetting(key, value)
             }
-            Log.d(TAG, "SMS configuration saved")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save SMS configuration", e)
             handleApplicationError(e)
         }
     }
 
     // ============================================================
-    // 4. إدارة صلاحيات SMS
+    // 4. إدارة الصلاحيات
     // ============================================================
 
     private fun requestAllPermissions() {
         val permissions = mutableListOf<String>()
 
-        // الصلاحيات المطلوبة لـ SMS
         if (!isPermissionGranted(Manifest.permission.SEND_SMS)) {
             permissions.add(Manifest.permission.SEND_SMS)
         }
@@ -445,8 +366,6 @@ class MainActivity : AppCompatActivity() {
         if (!isPermissionGranted(Manifest.permission.READ_SMS)) {
             permissions.add(Manifest.permission.READ_SMS)
         }
-
-        // صلاحيات أخرى
         if (!isPermissionGranted(Manifest.permission.CAMERA)) {
             permissions.add(Manifest.permission.CAMERA)
         }
@@ -467,7 +386,6 @@ class MainActivity : AppCompatActivity() {
         if (permissions.isNotEmpty()) {
             requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
         } else {
-            Log.d(TAG, "All required permissions already granted")
             startSMSService()
         }
     }
@@ -490,17 +408,13 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
         if (requestCode != PERMISSION_REQUEST_CODE) return
-        if (grantResults.isEmpty()) {
-            Log.w(TAG, "Permission result is empty")
-            return
-        }
+        if (grantResults.isEmpty()) return
 
         val denied = permissions.zip(grantResults.toList())
             .filter { it.second != PackageManager.PERMISSION_GRANTED }
             .map { it.first }
 
         if (denied.isNotEmpty()) {
-            Log.w(TAG, "Denied permissions: $denied")
             val criticalPermissions = listOf(
                 Manifest.permission.SEND_SMS,
                 Manifest.permission.RECEIVE_SMS
@@ -515,7 +429,6 @@ class MainActivity : AppCompatActivity() {
                 ).show()
             }
         } else {
-            // تم منح جميع الأذونات، نبدأ الخدمة
             startSMSService()
         }
     }
@@ -525,27 +438,14 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
 
     private fun startSMSService() {
-        if (isDestroyed.get()) {
-            Log.w(TAG, "Activity is destroyed, not starting service")
-            return
-        }
-
-        if (isSMSServiceRunning()) {
-            Log.d(TAG, "SMSService already running, skipping start")
-            return
-        }
+        if (isDestroyed.get()) return
+        if (isSMSServiceRunning()) return
 
         try {
             val intent = Intent(this, SMSService::class.java)
             ContextCompat.startForegroundService(this, intent)
-            Log.d(TAG, "SMSService started successfully")
             logApplicationEvent("sms_service_started", "Service started")
-        } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException starting SMSService", e)
-            Toast.makeText(this, "فشل في بدء خدمة SMS: أذونات مفقودة", Toast.LENGTH_SHORT).show()
-            handleApplicationError(e)
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting SMSService", e)
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
             handleApplicationError(e)
         }
@@ -555,18 +455,14 @@ class MainActivity : AppCompatActivity() {
         try {
             val intent = Intent(this, SMSService::class.java)
             stopService(intent)
-            Log.d(TAG, "SMSService stopped")
             logApplicationEvent("sms_service_stopped", "Service stopped")
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping SMSService", e)
             handleApplicationError(e)
         }
     }
 
     private fun restartSMSService() {
-        Log.d(TAG, "Restarting SMSService")
         stopSMSService()
-        // تأخير بسيط ثم إعادة التشغيل
         handler.postDelayed({
             if (!isDestroyed.get()) {
                 startSMSService()
@@ -575,25 +471,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isSMSServiceRunning(): Boolean {
-        // استخدام متغير ثابت في SMSService للإشارة إلى حالته
         return SMSService.getInstance()?.isServiceRunning() ?: false
     }
 
     // ============================================================
-    // 6. إدارة إعدادات المستخدم (واجهة عامة للنظام)
+    // 6. إدارة إعدادات المستخدم
     // ============================================================
 
     fun getAllSettings(): Map<String, String> {
         return try {
             dbHelper.getAllSettingsMap()
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting all settings", e)
             emptyMap()
         }
     }
 
     // ============================================================
-    // 7. مراقبة حالة نظام SMS
+    // 7. مراقبة حالة النظام
     // ============================================================
 
     private fun getSmsSystemStatus(): JSONObject {
@@ -613,15 +507,10 @@ class MainActivity : AppCompatActivity() {
             val permOk = checkSmsPermissions()
             val result = dbOk && serviceOk && permOk
             if (!result) {
-                Log.w(TAG, "Health check failed: db=$dbOk, service=$serviceOk, permissions=$permOk")
-                // تسجيل حالة غير صحية
                 logApplicationEvent("health_check_failed", "db=$dbOk, service=$serviceOk, permissions=$permOk")
-            } else {
-                Log.d(TAG, "Health check passed")
             }
             result
         } catch (e: Exception) {
-            Log.e(TAG, "Health check error", e)
             handleApplicationError(e)
             false
         }
@@ -639,7 +528,6 @@ class MainActivity : AppCompatActivity() {
             }
             diagnostics.toString(2)
         } catch (e: Exception) {
-            Log.e(TAG, "Diagnostics error", e)
             "Error running diagnostics: ${e.message}"
         }
     }
@@ -648,13 +536,12 @@ class MainActivity : AppCompatActivity() {
         return try {
             dbHelper.getDatabaseSize() > 0
         } catch (e: Exception) {
-            Log.e(TAG, "Database health check failed", e)
             false
         }
     }
 
     // ============================================================
-    // 8. تنظيف البيانات (الصيانة)
+    // 8. تنظيف البيانات
     // ============================================================
 
     private suspend fun cleanupSmsDatabase() {
@@ -663,41 +550,33 @@ class MainActivity : AppCompatActivity() {
                 cleanupOldRateLimits()
                 cleanupOldConversationContext()
                 cleanupOldMetrics()
-                Log.d(TAG, "SMS database cleanup completed")
             } catch (e: Exception) {
-                Log.e(TAG, "Cleanup error", e)
                 handleApplicationError(e)
             }
         }
     }
 
-
     private fun cleanupOldRateLimits() {
         try {
-            val deleted = dbHelper.cleanupOldRateLimits()
-            Log.d(TAG, "Cleaned $deleted rate limit records")
+            dbHelper.cleanupOldRateLimits()
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning rate limits", e)
+            // تجاهل
         }
     }
 
     private fun cleanupOldConversationContext() {
         try {
-            // حذف سياقات المحادثة القديمة (أقدم من 30 يومًا)
-            val deleted = dbHelper.cleanupOldConversationContext(30)
-            Log.d(TAG, "Cleaned $deleted conversation contexts")
+            dbHelper.cleanupOldConversationContext(30)
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning conversation contexts", e)
+            // تجاهل
         }
     }
 
     private fun cleanupOldMetrics() {
         try {
-            // حذف المقاييس القديمة (أقدم من 90 يومًا)
-            val deleted = dbHelper.cleanupOldMetrics(90)
-            Log.d(TAG, "Cleaned $deleted metrics records")
+            dbHelper.cleanupOldMetrics(90)
         } catch (e: Exception) {
-            Log.e(TAG, "Error cleaning metrics", e)
+            // تجاهل
         }
     }
 
@@ -706,29 +585,23 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
 
     private fun scheduleBackgroundTasks() {
-        // جدولة مهام الصيانة الدورية
         startPeriodicMaintenance()
-        // يمكن إضافة مهام أخرى هنا (مثل تحديث الإحصائيات)
-        Log.d(TAG, "Background tasks scheduled")
     }
 
     private fun startPeriodicMaintenance() {
-        // إلغاء المهمة السابقة إن وجدت
         maintenanceJob?.cancel()
 
         maintenanceJob = lifecycleScope.launch {
             while (!isDestroyed.get()) {
-                delay(24 * 60 * 60 * 1000) // كل 24 ساعة
+                delay(24 * 60 * 60 * 1000)
                 try {
                     cleanupSmsDatabase()
                     logApplicationEvent("periodic_maintenance", "Maintenance run completed")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Periodic maintenance error", e)
                     handleApplicationError(e)
                 }
             }
         }
-        Log.d(TAG, "Periodic maintenance scheduled")
     }
 
     // ============================================================
@@ -751,8 +624,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSmsNotification(message: String) {
-        // يمكن استخدامها لعرض إشعارات من النشاط (مثلاً عند حدوث خطأ)
-        // يتم استخدام NotificationManagerCompat
         try {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -765,28 +636,18 @@ class MainActivity : AppCompatActivity() {
                 notificationManager.notify(System.currentTimeMillis().toInt(), notification)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to show notification", e)
+            // تجاهل
         }
     }
 
     // ============================================================
-    // 11. واجهة التحكم (UI)
+    // 11. واجهة التحكم
     // ============================================================
 
-    private fun setupUI() {
-        // يتم إعداد الواجهة عبر Compose في setContent
-        // هذه الدالة تُترك لتحديثات إضافية إن لزم الأمر
-    }
+    private fun setupUI() { }
+    private fun setupButtons() { }
 
-    private fun setupButtons() {
-        // لا توجد أزرار تقليدية، كل شيء في Compose
-    }
-
-    private fun updateUIState() {
-        // تحديث حالة الواجهة (مثلاً: إظهار/إخفاء عناصر)
-        // في Compose يتم ذلك عبر State، يمكن إرسال broadcast أو تحديث متغيرات
-        Log.d(TAG, "UI state updated")
-    }
+    private fun updateUIState() { }
 
     // ============================================================
     // 12. تسجيل الأحداث والأخطاء
@@ -795,20 +656,16 @@ class MainActivity : AppCompatActivity() {
     private fun logApplicationEvent(event: String, details: String) {
         try {
             dbHelper.logActivity("system", event, details)
-            Log.d(TAG, "Event logged: $event -> $details")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to log event", e)
+            // تجاهل
         }
     }
 
     private fun handleApplicationError(e: Exception) {
-        val errorMsg = e.message ?: "Unknown error"
-        Log.e(TAG, "Application error: $errorMsg", e)
-        logApplicationEvent("error", errorMsg)
-        // يمكن إظهار Toast للمستخدم في بعض الحالات
+        logApplicationEvent("error", e.message ?: "Unknown error")
         if (!isDestroyed.get()) {
             runOnUiThread {
-                Toast.makeText(this, "حدث خطأ: $errorMsg", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "حدث خطأ: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -825,42 +682,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkForUpdates() {
-        // يمكن تنفيذ منطق التحقق من التحديثات هنا
-        Log.d(TAG, "Update check: no updates available")
-    }
+    private fun checkForUpdates() { }
 
     // ============================================================
-    // 14. سلسلة التهيئة الأساسية (يتم استدعاؤها من onCreate)
+    // 14. سلسلة التهيئة الأساسية
     // ============================================================
 
     private suspend fun initializeSystem() {
         try {
-            // 1. تهيئة قاعدة البيانات
             initializeDatabase()
-
-            // 2. تهيئة إعدادات SMS
             initializeSmsSettings()
-
-            // 3. تسجيل بدء التشغيل
             logApplicationEvent("app_started", "Application started")
-
-            // 4. التحقق من الصحة
-            val health = checkSmsSystemHealth()
-            if (health) {
-                Log.d(TAG, "System initialized successfully")
-            } else {
-                Log.w(TAG, "System initialized with health issues")
-            }
-
-            // 5. بدء خدمة SMS (سيتم تشغيلها عند منح الصلاحيات)
-            // يتم استدعاؤها في onRequestPermissionsResult
+            checkSmsSystemHealth()
         } catch (e: Exception) {
-            Log.e(TAG, "System initialization failed", e)
             handleApplicationError(e)
         }
     }
-
 
     // ============================================================
     // دوال مساعدة (WebView، تحميل الأصول، إلخ)
@@ -868,20 +705,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
-        val wv = webView ?: run {
-            Log.w(TAG, "WebView is null, cannot load from assets")
-            return
-        }
+        val wv = webView ?: return
 
         try {
             if (wv.isAttachedToWindow) {
-                Log.d(TAG, "Loading login.html from assets")
-                // ✅ تم التصحيح: تحميل login.html من الجذر (كما أشرت أنت)
                 wv.loadUrl("file:///android_asset/screens/login.html")
-                // سجل إضافي لتأكيد تحميل URL
-                Log.e("BridgeDebug", "LOADING URL ON WebView: ${System.identityHashCode(wv)}")
             } else {
-                Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
                     if (!isDestroyed.get()) {
                         loadWebViewFromAssets()
@@ -889,7 +718,6 @@ class MainActivity : AppCompatActivity() {
                 }, 500)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading from assets: ${e.message}", e)
             showErrorPage()
         }
     }
@@ -928,9 +756,8 @@ class MainActivity : AppCompatActivity() {
 
         try {
             wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
-            Log.d(TAG, "Error page loaded")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load error page: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -950,7 +777,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not load .env key $key: ${e.message}")
             ""
         }
     }
@@ -966,24 +792,20 @@ class MainActivity : AppCompatActivity() {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to init encrypted prefs, falling back to regular", e)
             sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         }
     }
 
     // ============================================================
-    // WebView و Compose - الهيكل المعدل جذرياً مع إصلاحات التشخيص
+    // WebView و Compose
     // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
     fun WebViewScreen(modifier: Modifier = Modifier) {
-        // ✅ إصلاح هيكلي: إزالة webViewRef وجعل Activity المالك الوحيد
-        // ✅ DisposableEffect لا يدمر WebView الآن، فقط يسجل
         DisposableEffect(Unit) {
             onDispose {
-                // لا ندمر WebView هنا لأن Activity هي المالك
-                Log.d(TAG, "Compose disposed - WebView kept alive (managed by Activity)")
+                // WebView يتم إدارته بواسطة Activity
             }
         }
 
@@ -996,7 +818,6 @@ class MainActivity : AppCompatActivity() {
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
-                    // ✅ إصلاح هيكلي: إعادة استخدام WebView الموجود أو إنشاء جديد
                     val wv = if (this@MainActivity.webView == null) {
                         WebView(context).apply {
                             layoutParams = FrameLayout.LayoutParams(
@@ -1026,64 +847,35 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             webViewClient = createWebViewClient()
+                            webChromeClient = WebChromeClient()
 
-                            // ✅ WebChromeClient مخصص لإظهار console.log في Logcat
-                            webChromeClient = object : WebChromeClient() {
-                                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                                    val msg = "${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
-                                    when (consoleMessage.messageLevel()) {
-                                        ConsoleMessage.MessageLevel.ERROR -> Log.e("WEBVIEW_CONSOLE", msg)
-                                        ConsoleMessage.MessageLevel.WARNING -> Log.w("WEBVIEW_CONSOLE", msg)
-                                        else -> Log.d("WEBVIEW_CONSOLE", msg)
-                                    }
-                                    return super.onConsoleMessage(consoleMessage)
-                                }
-                            }
-
-                            // BridgeDebug: إنشاء WebView
-                            Log.e("BridgeDebug", "WEBVIEW CREATED ${System.identityHashCode(this)}")
-
-                            // ✅ حقن Bridge مع التحقق من التاغ لتجنب الحقن المزدوج
                             if (getTag(BRIDGE_INITIALIZED_TAG) != true) {
                                 webAppInterface = WebAppInterface(context, this@MainActivity)
                                 addJavascriptInterface(webAppInterface!!, "AndroidInterface")
                                 setTag(BRIDGE_INITIALIZED_TAG, true)
-                                Log.e("BridgeDebug", "INTERFACE INJECTED (with tag check) ${System.identityHashCode(this)}")
-                            } else {
-                                Log.w("BridgeDebug", "Bridge already injected for this WebView, skipping")
                             }
                         }
                     } else {
                         this@MainActivity.webView!!
                     }
 
-                    // إزالة من الأب السابق إن وجد
                     (wv.parent as? ViewGroup)?.removeView(wv)
-
                     addView(wv)
-
-                    // تحديث المرجع في النشاط
                     this@MainActivity.webView = wv
                     this@MainActivity.isWebViewInitialized = true
-
-                    Log.d(TAG, "WebView attached to FrameLayout")
                 }
             },
             update = { }
         )
     }
 
-    // ✅ تم التعديل: إعادة حقن الواجهة في onPageFinished
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // BridgeDebug: انتهاء تحميل الصفحة
-                Log.e("BridgeDebug", "PAGE FINISHED ${view?.let { System.identityHashCode(it) }} URL=$url")
                 if (isDestroyed.get()) return
                 serverReady = true
                 isErrorPageShown = false
-                Log.d(TAG, "WebView page finished loading: $url")
             }
 
             override fun shouldOverrideUrlLoading(
@@ -1113,7 +905,6 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (isDestroyed.get()) return
-                Log.w(TAG, "WebView error: ${error?.description}")
             }
 
             @Deprecated("Deprecated in Java")
@@ -1125,7 +916,6 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
-                Log.w(TAG, "WebView error $errorCode: $description on $failingUrl")
             }
 
             override fun onReceivedSslError(
@@ -1134,16 +924,12 @@ class MainActivity : AppCompatActivity() {
                 error: android.net.http.SslError?
             ) {
                 handler?.cancel()
-                Log.e(TAG, "SSL Error: ${error?.toString()}")
             }
 
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
             ): Boolean {
-                // BridgeDebug: انهيار عملية العرض
-                Log.e("BridgeDebug", "RENDER PROCESS GONE")
-                Log.e(TAG, "WebView RenderProcess gone. didCrash: ${detail?.didCrash()}")
                 view?.let { destroyWebView(it) }
                 if (!isDestroyed.get()) {
                     webView = null
@@ -1159,23 +945,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ✅ إصلاح هيكلي: لا تستدعي setContent، فقط تعيد تحميل الصفحة
     private fun recreateWebView() {
-        // BridgeDebug: استدعاء إعادة الإنشاء
-        Log.e("BridgeDebug", "RECREATE WEBVIEW")
         if (isDestroyed.get()) return
-        Log.d(TAG, "Recreating WebView...")
 
         val wv = webView
         if (wv != null && wv.isAttachedToWindow) {
-            // فقط أعد تحميل الصفحة، ولا تدمر الـ WebView
             wv.loadUrl("file:///android_asset/screens/login.html")
         } else {
-            // إذا كان WebView مفقوداً أو غير ملحق، أعد إنشاءه (نادراً ما يحدث)
-            Log.w(TAG, "WebView missing or not attached, reloading via assets")
-            // في هذه الحالة النادرة، نطلب إعادة إنشاء من خلال Compose
-            // ولكن لا نستدعي setContent هنا لتجنب إعادة تركيب كامل
-            // بدلاً من ذلك، نطلب إعادة تهيئة عبر handler
             handler.postDelayed({
                 if (!isDestroyed.get()) {
                     isErrorPageShown = false
@@ -1193,7 +969,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "WhatsApp not installed", e)
                     Toast.makeText(this, "تطبيق واتساب غير مثبت", Toast.LENGTH_SHORT).show()
                     false
                 }
@@ -1204,7 +979,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "Facebook not installed", e)
                     Toast.makeText(this, "تطبيق فيسبوك غير مثبت", Toast.LENGTH_SHORT).show()
                     false
                 }
@@ -1215,7 +989,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "No email app found", e)
                     Toast.makeText(this, "لا يوجد تطبيق بريد إلكتروني", Toast.LENGTH_SHORT).show()
                     false
                 }
@@ -1226,7 +999,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "No dialer found", e)
                     false
                 }
             }
@@ -1236,7 +1008,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "No browser found", e)
                     false
                 }
             }
@@ -1244,13 +1015,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ✅ إصلاح هيكلي: تصفير المرجع عند التدمير
     private fun destroyWebView(webView: WebView?) {
-        // BridgeDebug: تدمير WebView
-        Log.e("BridgeDebug", "WEBVIEW DESTROY ${webView?.let { System.identityHashCode(it) }}")
         if (webView == null) return
         try {
-            // إذا كان هذا هو الـ WebView النشط، أزل المرجع منه
             if (this.webView === webView) {
                 this.webView = null
                 isWebViewInitialized = false
@@ -1264,21 +1031,19 @@ class MainActivity : AppCompatActivity() {
             webView.removeJavascriptInterface("AndroidInterface")
             webView.removeAllViews()
             webView.destroy()
-            Log.d(TAG, "WebView destroyed successfully and reference cleared")
         } catch (e: Exception) {
-            Log.e(TAG, "Error destroying WebView", e)
+            // تجاهل
         }
     }
 
     // ============================================================
-    // المصادقة البيومترية (توفر واجهة للـ WebView)
+    // المصادقة البيومترية
     // ============================================================
 
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
-            Log.w(TAG, "Biometric library not available")
             onError("unsupported")
             return
         }
@@ -1328,13 +1093,12 @@ class MainActivity : AppCompatActivity() {
 
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
-            Log.e(TAG, "Biometric error", e)
             onError("unsupported")
         }
     }
 
     // ============================================================
-    // WebAppInterface - واجهة JavaScript الكاملة (جميع الدوال التجارية)
+    // WebAppInterface - واجهة JavaScript الكاملة
     // ============================================================
 
     @Keep
@@ -1351,7 +1115,6 @@ class MainActivity : AppCompatActivity() {
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
 
-        // ====== التحقق من الصلاحيات (خاص بالعمليات التجارية) ======
         private fun checkPermission(permissionCode: String, action: String): Boolean {
             val activity = getActivity() ?: return false
             val token = activity.currentAuthToken
@@ -1362,7 +1125,6 @@ class MainActivity : AppCompatActivity() {
             return db.checkUserPermission(userId, permissionCode)
         }
 
-        // ====== دوال مساعدة للردود ======
         private fun successResponse(id: Long, message: String): String {
             return JSONObject().apply {
                 put("success", true)
@@ -1399,29 +1161,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ تم حذف safeEvaluateJs المكررة - نستخدم activity.safeEvaluateJs
-
         // ============================================================
-        // 1. المصادقة (Login, Biometric)
+        // 1. المصادقة
         // ============================================================
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
-            // [LOGIN_DEBUG] سجل تشخيصي للتحقق من وصول الاستدعاء
-            Log.e("BridgeDebug", "ENTERED login()")
-            Log.e("LOGIN_DEBUG", "login() called username=$username")
-
-            val db = getDbHelper()
-            if (db == null) {
-                Log.e("LOGIN_DEBUG", "DatabaseHelper is null!")
-                return errorResponse("قاعدة البيانات غير متاحة")
-            }
-            Log.e("LOGIN_DEBUG", "DatabaseHelper obtained successfully")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
 
             return try {
                 val authResult = db.authenticateUser(username, password)
-                Log.e("LOGIN_DEBUG", "authenticate result=$authResult")
-
                 if (authResult != null) {
                     val userId = authResult.optLong("user_id", 0)
                     val permissionsArray = db.getUserPermissions(userId)
@@ -1465,11 +1214,9 @@ class MainActivity : AppCompatActivity() {
                         put("token", token)
                     }.toString()
                 } else {
-                    Log.e("LOGIN_DEBUG", "Authentication failed - invalid credentials")
                     errorResponse("بيانات خاطئة")
                 }
             } catch (e: Exception) {
-                Log.e("LOGIN_DEBUG", "LOGIN EXCEPTION", e)
                 errorResponse("خطأ داخلي: ${e.message}")
             }
         }
@@ -1502,35 +1249,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 1.5 دوال استعادة كلمة المرور وإدارة المستخدمين (للـ login.html) ✅
+        // دوال استعادة كلمة المرور
         // ============================================================
 
         @JavascriptInterface
         fun forgotPassword(username: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // 1. التحقق من وجود المستخدم
                 val user = db.getUserByUsername(username)
                 if (user == null) {
                     return errorResponse("المستخدم غير موجود")
                 }
 
-                // 2. استخراج معرف المستخدم (Long)
                 val userId = user.optLong("id", 0L)
                 if (userId == 0L) {
                     return errorResponse("معرف المستخدم غير صالح")
                 }
 
-                // 3. إنشاء توكن عشوائي
                 val token = UUID.randomUUID().toString()
-
-                // 4. تخزين التوكن في قاعدة البيانات مع صلاحية 30 دقيقة (يتم في DatabaseHelper)
                 val stored = db.storeResetToken(userId, token)
                 if (!stored) {
                     return errorResponse("فشل تخزين التوكن")
                 }
 
-                // 5. إنشاء رابط الاستعادة (يتوافق مع مسار login.html في الجذر)
                 val resetUrl = "file:///android_asset/login.html?token=$token"
 
                 JSONObject().apply {
@@ -1539,7 +1280,6 @@ class MainActivity : AppCompatActivity() {
                     put("reset_url", resetUrl)
                 }.toString()
             } catch (e: Exception) {
-                Log.e(TAG, "forgotPassword error", e)
                 errorResponse(e.message)
             }
         }
@@ -1548,41 +1288,33 @@ class MainActivity : AppCompatActivity() {
         fun resetPassword(token: String, newPassword: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // 1. التحقق من صحة التوكن وصلاحيته (يُعيد بيانات المستخدم أو null)
                 val userData = db.validateResetToken(token)
                 if (userData == null) {
                     return errorResponse("رابط الاستعادة غير صالح أو منتهي الصلاحية")
                 }
 
-                // 2. استخراج معرف المستخدم (Long)
                 val userId = userData.optLong("id", 0L)
                 if (userId == 0L) {
                     return errorResponse("معرف المستخدم غير صالح")
                 }
 
-                // 3. تحديث كلمة المرور (يتم التجزئة داخل الدالة في DatabaseHelper)
                 val updated = db.updateUserPassword(userId, newPassword)
                 if (!updated) {
                     return errorResponse("فشل تحديث كلمة المرور")
                 }
 
-                // 4. حذف التوكن بعد الاستخدام
                 db.clearResetToken(token)
 
                 successResponse(true, "تم تحديث كلمة المرور بنجاح")
             } catch (e: Exception) {
-                Log.e(TAG, "resetPassword error", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun verifyResetCode(phone: String, code: String): String {
-            // ✅ منطق حقيقي للتحقق عبر الرسائل النصية القصيرة SMS
-            // يفترض وجود جدول sms_otp_verifications يحتوي على (phone, code, expires_at)
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // 1. البحث عن المستخدم برقم الهاتف للحصول على userId
                 val cursor = db.readableDatabase.rawQuery(
                     "SELECT id FROM users WHERE phone = ? AND is_deleted = 0 LIMIT 1",
                     arrayOf(phone)
@@ -1594,17 +1326,14 @@ class MainActivity : AppCompatActivity() {
                     return errorResponse("المستخدم غير موجود")
                 }
 
-                // 2. التحقق من صحة الرمز OTP
                 val isValid = db.validateOtpCode(userId, code)
                 if (isValid) {
-                    // 3. حذف الرمز بعد الاستخدام
                     db.clearOtpCode(userId)
                     successResponse(true, "تم التحقق بنجاح")
                 } else {
                     errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "verifyResetCode error", e)
                 errorResponse(e.message)
             }
         }
@@ -1619,13 +1348,12 @@ class MainActivity : AppCompatActivity() {
                 }
                 dataResponse(user)
             } catch (e: Exception) {
-                Log.e(TAG, "getUserData error", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 2. الذكاء الاصطناعي (Gemini) - غير متزامن
+        // 2. الذكاء الاصطناعي (Gemini)
         // ============================================================
 
         @JavascriptInterface
@@ -2261,7 +1989,6 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("employees", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                // استخدام id مباشرة كـ Int مع التحقق من الصلاحية
                 if (id > Int.MAX_VALUE || id < 0) return errorResponse("معرف غير صالح")
                 val intId = id.toInt()
                 val rows = db.deleteEmployee(intId)
@@ -2448,7 +2175,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 14. الرسائل النصية (SMS) - دوال للقراءة فقط من الجدول
+        // 14. الرسائل النصية (SMS) - جزء مختصر للقراءة
         // ============================================================
 
         @JavascriptInterface
@@ -2575,7 +2302,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 15. القائمة البيضاء (whitelist)
+        // 15. القائمة البيضاء والإعدادات
         // ============================================================
 
         @JavascriptInterface
@@ -2620,10 +2347,6 @@ class MainActivity : AppCompatActivity() {
                 errorResponse(e.message)
             }
         }
-
-        // ============================================================
-        // 16. الإعدادات (توفر واجهة للقراءة والكتابة)
-        // ============================================================
 
         @JavascriptInterface
         fun addSetting(jsonData: String): String {
@@ -2820,7 +2543,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 19. المركبات، الخزانات والمضخات
+        // 19. المركبات، الخزانات والمضخات - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -2884,36 +2607,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 20. طلبات الصيانة (مع إصلاح Overloading)
+        // 20. طلبات الصيانة
         // ============================================================
 
-        // ✅ دالة واحدة تقبل String? لتجنب مشاكل overloading مع JavaScript
         @JavascriptInterface
         fun getMaintenanceRequests(jsonData: String?): String {
             if (!checkPermission("maintenance", "read")) {
                 return errorResponse("لا تملك صلاحية القراءة")
             }
-
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-
             return try {
                 val data = JSONObject(jsonData)
-
                 val stationId = data.optInt("station_id", 0)
-                val status = data.optString("status")
-                    .takeIf { it.isNotBlank() }
-
+                val status = data.optString("status").takeIf { it.isNotBlank() }
                 if (stationId <= 0) {
                     return errorResponse("رقم المحطة غير صحيح")
                 }
-
-                val requests = db.getMaintenanceRequests(
-                    stationId,
-                    status
-                )
-
+                val requests = db.getMaintenanceRequests(stationId, status)
                 dataResponse(requests)
-
             } catch (e: Exception) {
                 errorResponse(e.message)
             }
@@ -2973,7 +2684,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 21. المدفوعات والإيداعات
+        // 21. المدفوعات والإيداعات - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3040,7 +2751,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 22. تقارير إضافية
+        // 22. تقارير إضافية - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3142,7 +2853,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 23. النسخ الاحتياطي والتصدير (غير متزامن)
+        // 23. النسخ الاحتياطي والتصدير
         // ============================================================
 
         @JavascriptInterface
@@ -3456,28 +3167,17 @@ class MainActivity : AppCompatActivity() {
             if (!checkPermission("maintenance", "read")) {
                 return errorResponse("لا تملك صلاحية القراءة")
             }
-
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-
             return try {
                 val data = JSONObject(jsonData)
-
                 val assetType = data.optString("asset_type")
                 val assetId = data.optInt("asset_id")
                 val limit = data.optInt("limit", 20)
-
                 if (assetType.isBlank() || assetId <= 0) {
                     return errorResponse("بيانات الأصل غير صحيحة")
                 }
-
-                val history = db.getAssetMaintenanceHistory(
-                    assetType,
-                    assetId,
-                    limit
-                )
-
+                val history = db.getAssetMaintenanceHistory(assetType, assetId, limit)
                 dataResponse(history)
-
             } catch (e: Exception) {
                 errorResponse(e.message)
             }
@@ -3657,7 +3357,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 25. دوال إضافية للشاشات الجديدة
+        // 25. دوال إضافية للشاشات الجديدة - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3821,14 +3521,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 26. إدارة بيانات الاعتماد (Remember Me + Biometric Auto-Login) — مُحسَّن وأمن
+        // 26. إدارة بيانات الاعتماد (Remember Me + Biometric Auto-Login)
         // ============================================================
 
-        /**
-         * حفظ/تحديث بيانات "تذكرني"
-         * - لا تحفظ كلمة المرور الخام أبداً
-         * - تحفظ التوكن + الاسم فقط
-         */
         @JavascriptInterface
         fun saveCredentials(username: String, remember: Boolean): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3850,14 +3545,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
             } catch (e: Exception) {
-                Log.e(TAG, "saveCredentials error", e)
                 errorResponse(e.message)
             }
         }
 
-        /**
-         * التحقق من وجود بيانات محفوظة (للعرض فقط — لا تُرجع بيانات حساسة)
-         */
         @JavascriptInterface
         fun hasSavedCredentials(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3871,20 +3562,14 @@ class MainActivity : AppCompatActivity() {
                 JSONObject().apply {
                     put("success", true)
                     put("hasCredentials", remember && hasToken && userId != 0L)
-                    put("username", username)  // فقط للعرض في الحقل
+                    put("username", username)
                     put("userId", userId)
                 }.toString()
             } catch (e: Exception) {
-                Log.e(TAG, "hasSavedCredentials error", e)
                 errorResponse(e.message)
             }
         }
 
-        /**
-         * تسجيل الدخول التلقائي عبر البصمة
-         * - تُظهر Biometric Prompt
-         * - عند النجاح: تُرجع بيانات المستخدم كاملة (بدون إعادة كلمة المرور)
-         */
         @JavascriptInterface
         fun biometricAutoLogin(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3907,11 +3592,9 @@ class MainActivity : AppCompatActivity() {
                             return@showBiometricPrompt
                         }
                         try {
-                            // إعادة تعيين التوكن في الجلسة الحالية
                             activity.currentAuthToken = token
                             activity.currentUserId = userId
 
-                            // استخدام getUserByUsername بدلاً من getUserById (للتوافق مع DatabaseHelper الحالي)
                             val user = db.getUserByUsername(savedUsername)
                             if (user != null) {
                                 val permissionsArray = db.getUserPermissions(userId)
@@ -3949,7 +3632,6 @@ class MainActivity : AppCompatActivity() {
                                 activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
                             }
                         } catch (e: Exception) {
-                            Log.e(TAG, "biometricAutoLogin error", e)
                             activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
                         }
                     },
@@ -3969,9 +3651,6 @@ class MainActivity : AppCompatActivity() {
             }.toString()
         }
 
-        /**
-         * مسح جميع بيانات التذكر والجلسة
-         */
         @JavascriptInterface
         fun clearCredentials(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3984,14 +3663,12 @@ class MainActivity : AppCompatActivity() {
                     remove("saved_timestamp")
                     apply()
                 }
-                // مسح الجلسة الحالية أيضاً
                 activity.currentAuthToken = null
                 activity.currentUserId = 0
                 activity.currentUserRole = ""
                 activity.currentUserName = ""
                 successResponse(0, "تم مسح البيانات وجلسة التطبيق")
             } catch (e: Exception) {
-                Log.e(TAG, "clearCredentials error", e)
                 errorResponse(e.message)
             }
         }
@@ -4002,7 +3679,6 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun ping(): String {
-            Log.e("BridgeDebug", "PING FROM JS")
             return "PONG"
         }
 
@@ -4016,12 +3692,9 @@ class MainActivity : AppCompatActivity() {
             val wv = webView
             if (wv != null && wv.isAttachedToWindow) {
                 wv.evaluateJavascript(script, null)
-                Log.e("BridgeDebug", "SAFE EVALUATE JS (ACTIVITY) on ${System.identityHashCode(wv)}")
-            } else {
-                Log.w("BridgeDebug", "SAFE EVALUATE JS (ACTIVITY) FAILED: WebView not ready")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to evaluate JS: ${e.message}")
+            // تجاهل
         }
     }
 }
