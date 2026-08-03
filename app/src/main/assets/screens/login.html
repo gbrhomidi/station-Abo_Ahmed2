@@ -1348,7 +1348,7 @@
 </head>
 <body>
     <!-- ============================================================ -->
-    <!-- VConsole & Error Tracking -->
+    <!-- Error Tracking (بدون VConsole) -->
     <!-- ============================================================ -->
     <script>
         window.onerror = function(msg, url, line, col, error) {
@@ -1357,11 +1357,6 @@
             alert(errorMsg);
             return true;
         };
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/vconsole"></script>
-    <script>
-        var vConsole = new window.VConsole();
-        console.log('✅ VConsole جاهز - اضغط على الزر الأخضر في الزاوية السفلية اليمنى لفتح الـ console');
     </script>
 
     <!-- Loading Overlay -->
@@ -1552,17 +1547,17 @@
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
                     <p><i class="fas fa-phone"></i> 
                         <a href="tel:+967106586714" class="contact-action-btn phone-btn">
-                            <i class="fas fa-phone-alt"></i>  اضغـط هنــا
+                            <i class="fas fa-phone-alt"></i> 📲 للاتصال: اضغــط هنا
                         </a>
                     </p>
                     <p><i class="fab fa-whatsapp"></i> 
                         <a href="https://wa.me/967781038203" target="_blank" rel="noopener noreferrer" class="contact-action-btn whatsapp-btn">
-                            <i class="fab fa-whatsapp"></i>  اضغـط هنــا
+                            <i class="fab fa-whatsapp"></i> 💬 واتساب: اضغـط هنــا
                         </a>
                     </p>
                     <p><i class="fas fa-envelope"></i> 
                         <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
-                            <i class="fas fa-envelope"></i>  اضغـط هنــا
+                            <i class="fas fa-envelope"></i> 📧 للبريد : اضغــط هنــا
                         </a>
                     </p>
                 </div>
