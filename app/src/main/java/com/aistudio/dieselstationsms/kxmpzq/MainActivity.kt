@@ -671,6 +671,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     private fun cleanupOldRateLimits() {
         try {
             val deleted = dbHelper.cleanupOldRateLimits()
@@ -860,6 +861,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     // ============================================================
     // دوال مساعدة (WebView، تحميل الأصول، إلخ)
     // ============================================================
@@ -876,6 +878,8 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Loading login.html from assets")
                 // ✅ تم التصحيح: تحميل login.html من الجذر (كما أشرت أنت)
                 wv.loadUrl("file:///android_asset/screens/login.html")
+                // سجل إضافي لتأكيد تحميل URL
+                Log.e("BridgeDebug", "LOADING URL ON WebView: ${System.identityHashCode(wv)}")
             } else {
                 Log.w(TAG, "WebView not attached, retrying...")
                 handler.postDelayed({
@@ -1028,9 +1032,9 @@ class MainActivity : AppCompatActivity() {
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                                     val msg = "${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
                                     when (consoleMessage.messageLevel()) {
-                                        ConsoleMessage.MessageLevel.ERROR -> Log.e("WebViewConsole", msg)
-                                        ConsoleMessage.MessageLevel.WARNING -> Log.w("WebViewConsole", msg)
-                                        else -> Log.d("WebViewConsole", msg)
+                                        ConsoleMessage.MessageLevel.ERROR -> Log.e("WEBVIEW_CONSOLE", msg)
+                                        ConsoleMessage.MessageLevel.WARNING -> Log.w("WEBVIEW_CONSOLE", msg)
+                                        else -> Log.d("WEBVIEW_CONSOLE", msg)
                                     }
                                     return super.onConsoleMessage(consoleMessage)
                                 }
@@ -1404,6 +1408,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun login(username: String, password: String): String {
             // [LOGIN_DEBUG] سجل تشخيصي للتحقق من وصول الاستدعاء
+            Log.e("BridgeDebug", "ENTERED login()")
             Log.e("LOGIN_DEBUG", "login() called username=$username")
 
             val db = getDbHelper()
@@ -1411,6 +1416,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e("LOGIN_DEBUG", "DatabaseHelper is null!")
                 return errorResponse("قاعدة البيانات غير متاحة")
             }
+            Log.e("LOGIN_DEBUG", "DatabaseHelper obtained successfully")
 
             return try {
                 val authResult = db.authenticateUser(username, password)
@@ -3988,6 +3994,16 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "clearCredentials error", e)
                 errorResponse(e.message)
             }
+        }
+
+        // ============================================================
+        // دالة ping للتشخيص (اختبار Bridge)
+        // ============================================================
+
+        @JavascriptInterface
+        fun ping(): String {
+            Log.e("BridgeDebug", "PING FROM JS")
+            return "PONG"
         }
 
 // نهاية WebAppInterface
