@@ -258,8 +258,6 @@ class MainActivity : AppCompatActivity() {
 
         handler.removeCallbacksAndMessages(null)
 
-        
-
         try {
             val wv = webView
             if (wv != null) {
@@ -270,7 +268,6 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Error during WebView cleanup in onDestroy", e)
         }
 
-        
         super.onDestroy()
     }
 
@@ -968,19 +965,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    // WebView و Compose
+    // WebView و Compose - الهيكل المعدل جذرياً
     // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
     @Composable
     fun WebViewScreen(modifier: Modifier = Modifier) {
-        val webViewRef = remember { mutableSetOf<WebView>() }
-
+        // ✅ إصلاح هيكلي: إزالة webViewRef وجعل Activity المالك الوحيد
+        // ✅ DisposableEffect لا يدمر WebView الآن، فقط يسجل
         DisposableEffect(Unit) {
             onDispose {
-                Log.d(TAG, "Disposing WebView references")
-                webViewRef.forEach { destroyWebView(it) }
-                webViewRef.clear()
+                // لا ندمر WebView هنا لأن Activity هي المالك
+                Log.d(TAG, "Compose disposed - WebView kept alive (managed by Activity)")
             }
         }
 
@@ -993,54 +989,62 @@ class MainActivity : AppCompatActivity() {
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
 
-                    val wv = WebView(context).apply {
-                        layoutParams = FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
+                    // ✅ إصلاح هيكلي: إعادة استخدام WebView الموجود أو إنشاء جديد
+                    val wv = if (this@MainActivity.webView == null) {
+                        WebView(context).apply {
+                            layoutParams = FrameLayout.LayoutParams(
+                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                FrameLayout.LayoutParams.MATCH_PARENT
+                            )
 
-                        setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+                            setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            databaseEnabled = true
-                            setSupportZoom(true)
-                            builtInZoomControls = true
-                            displayZoomControls = false
-                            allowFileAccess = true
-                            allowContentAccess = true
-                            javaScriptCanOpenWindowsAutomatically = false
-                            // ✅ للأمان: منع المحتوى المختلط (نظراً لأننا نستخدم local files)
-                            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                            setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
-                            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                            loadsImagesAutomatically = true
-                            setSupportMultipleWindows(false)
-                            userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
-                                    "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                databaseEnabled = true
+                                setSupportZoom(true)
+                                builtInZoomControls = true
+                                displayZoomControls = false
+                                allowFileAccess = true
+                                allowContentAccess = true
+                                javaScriptCanOpenWindowsAutomatically = false
+                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+                                cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                loadsImagesAutomatically = true
+                                setSupportMultipleWindows(false)
+                                userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
+                                        "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+                            }
+
+                            webViewClient = createWebViewClient()
+                            webChromeClient = WebChromeClient()
+
+                            // BridgeDebug: إنشاء WebView
+                            Log.e("BridgeDebug", "WEBVIEW CREATED ${System.identityHashCode(this)}")
+
+                            // إنشاء الواجهة وحقنها
+                            webAppInterface = WebAppInterface(context, this@MainActivity)
+                            addJavascriptInterface(webAppInterface!!, "AndroidInterface")
+
+                            // BridgeDebug: إضافة الواجهة
+                            Log.e("BridgeDebug", "INTERFACE INJECTED ${System.identityHashCode(this)}")
                         }
-
-                        webViewClient = createWebViewClient()
-                        webChromeClient = WebChromeClient()
-
-                        // BridgeDebug: إنشاء WebView
-                        Log.e("BridgeDebug", "WEBVIEW CREATED ${System.identityHashCode(this)}")
-
-                        // إنشاء الواجهة وحقنها
-                        webAppInterface = WebAppInterface(context, this@MainActivity)
-                        addJavascriptInterface(webAppInterface!!, "AndroidInterface")
-
-                        // BridgeDebug: إضافة الواجهة
-                        Log.e("BridgeDebug", "INTERFACE INJECTED ${System.identityHashCode(this)}")
+                    } else {
+                        this@MainActivity.webView!!
                     }
 
+                    // إزالة من الأب السابق إن وجد
+                    (wv.parent as? ViewGroup)?.removeView(wv)
+
                     addView(wv)
-                    webViewRef.add(wv)
+
+                    // تحديث المرجع في النشاط
                     this@MainActivity.webView = wv
                     this@MainActivity.isWebViewInitialized = true
 
-                    Log.d(TAG, "WebView created and added to FrameLayout")
+                    Log.d(TAG, "WebView attached to FrameLayout")
                 }
             },
             update = { }
@@ -1133,27 +1137,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ✅ إصلاح هيكلي: لا تستدعي setContent، فقط تعيد تحميل الصفحة
     private fun recreateWebView() {
         // BridgeDebug: استدعاء إعادة الإنشاء
         Log.e("BridgeDebug", "RECREATE WEBVIEW")
         if (isDestroyed.get()) return
         Log.d(TAG, "Recreating WebView...")
-        webView?.let { destroyWebView(it) }
-        webView = null
-        isWebViewInitialized = false
-        setContent {
-            MyApplicationTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    WebViewScreen(modifier = Modifier.padding(innerPadding))
+
+        val wv = webView
+        if (wv != null && wv.isAttachedToWindow) {
+            // فقط أعد تحميل الصفحة، ولا تدمر الـ WebView
+            wv.loadUrl("file:///android_asset/screens/login.html")
+        } else {
+            // إذا كان WebView مفقوداً أو غير ملحق، أعد إنشاءه (نادراً ما يحدث)
+            Log.w(TAG, "WebView missing or not attached, reloading via assets")
+            // في هذه الحالة النادرة، نطلب إعادة إنشاء من خلال Compose
+            // ولكن لا نستدعي setContent هنا لتجنب إعادة تركيب كامل
+            // بدلاً من ذلك، نطلب إعادة تهيئة عبر handler
+            handler.postDelayed({
+                if (!isDestroyed.get()) {
+                    isErrorPageShown = false
+                    loadWebViewFromAssets()
                 }
-            }
+            }, 500)
         }
-        handler.postDelayed({
-            if (!isDestroyed.get()) {
-                isErrorPageShown = false
-                loadWebViewFromAssets()
-            }
-        }, 2000)
     }
 
     private fun handleCustomUrl(url: String): Boolean {
@@ -1215,11 +1222,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ✅ إصلاح هيكلي: تصفير المرجع عند التدمير
     private fun destroyWebView(webView: WebView?) {
         // BridgeDebug: تدمير WebView
         Log.e("BridgeDebug", "WEBVIEW DESTROY ${webView?.let { System.identityHashCode(it) }}")
         if (webView == null) return
         try {
+            // إذا كان هذا هو الـ WebView النشط، أزل المرجع منه
+            if (this.webView === webView) {
+                this.webView = null
+                isWebViewInitialized = false
+            }
+
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.stopLoading()
             webView.loadUrl("about:blank")
@@ -1228,7 +1242,7 @@ class MainActivity : AppCompatActivity() {
             webView.removeJavascriptInterface("AndroidInterface")
             webView.removeAllViews()
             webView.destroy()
-            Log.d(TAG, "WebView destroyed successfully")
+            Log.d(TAG, "WebView destroyed successfully and reference cleared")
         } catch (e: Exception) {
             Log.e(TAG, "Error destroying WebView", e)
         }
@@ -1363,21 +1377,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        private fun safeEvaluateJs(script: String) {
-            val activity = getActivity() ?: return
-            if (activity.isDestroyed.get()) return
-            try {
-                val wv = activity.webView
-                if (wv != null && wv.isAttachedToWindow) {
-                    wv.evaluateJavascript(script, null)
-                    Log.e("BridgeDebug", "SAFE EVALUATE JS on ${System.identityHashCode(wv)}")
-                } else {
-                    Log.w("BridgeDebug", "SAFE EVALUATE JS FAILED: WebView not ready")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to evaluate JS: ${e.message}")
-            }
-        }
+        // ✅ إصلاح هيكلي: إزالة safeEvaluateJs المكررة، والاعتماد على Activity
+        // يتم استخدام activity.safeEvaluateJs في جميع الاستدعاءات
 
         // ============================================================
         // 1. المصادقة (Login, Biometric)
@@ -1453,14 +1454,14 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "authenticated")
                         }
-                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                        activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     },
                     onError = { error ->
                         val result = JSONObject().apply {
                             put("success", false)
                             put("error", error)
                         }
-                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                        activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     }
                 )
             }
@@ -1617,7 +1618,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("response", response)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1625,7 +1626,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 }
             }
@@ -1653,7 +1654,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("response", response)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1661,7 +1662,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 }
             }
@@ -1697,7 +1698,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("insight", insight)
                         }
-                        safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
+                        activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1705,7 +1706,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
+                        activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
                 }
             }
@@ -3129,7 +3130,7 @@ class MainActivity : AppCompatActivity() {
                             put("path", path)
                             put("message", "تم إنشاء النسخة الاحتياطية بنجاح")
                         }
-                        safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
+                        activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3137,7 +3138,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
+                        activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
                 }
             }
@@ -3164,7 +3165,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", success)
                             put("message", if (success) "تم الاستعادة بنجاح" else "فشل الاستعادة")
                         }
-                        safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
+                        activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3172,7 +3173,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
+                        activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
                 }
             }
@@ -3200,7 +3201,7 @@ class MainActivity : AppCompatActivity() {
                             put("path", path)
                             put("message", "تم التصدير بنجاح")
                         }
-                        safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
+                        activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3208,7 +3209,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
+                        activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
                 }
             }
@@ -3236,7 +3237,7 @@ class MainActivity : AppCompatActivity() {
                             put("count", count)
                             put("message", "تم استيراد $count سجل بنجاح")
                         }
-                        safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
+                        activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3244,7 +3245,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
+                        activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
                 }
             }
@@ -3272,7 +3273,7 @@ class MainActivity : AppCompatActivity() {
                             put("data", data)
                             put("message", "تم تصدير جميع البيانات بنجاح")
                         }
-                        safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
+                        activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3280,7 +3281,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
+                        activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
                 }
             }
@@ -3307,7 +3308,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "تم تحسين قاعدة البيانات بنجاح")
                         }
-                        safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
+                        activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3315,7 +3316,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
+                        activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
                 }
             }
@@ -3872,7 +3873,7 @@ class MainActivity : AppCompatActivity() {
                     onSuccess = {
                         val db = getDbHelper()
                         if (db == null) {
-                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
+                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
                             return@showBiometricPrompt
                         }
                         try {
@@ -3913,13 +3914,13 @@ class MainActivity : AppCompatActivity() {
                                     put("token", token)
                                     put("message", "تم تسجيل الدخول عبر البصمة")
                                 }
-                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                             } else {
-                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
+                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "biometricAutoLogin error", e)
-                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
+                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
                         }
                     },
                     onError = { error ->
@@ -3927,7 +3928,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", error)
                         }
-                        safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                        activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                     }
                 )
             }
@@ -3968,8 +3969,8 @@ class MainActivity : AppCompatActivity() {
 // نهاية WebAppInterface
     }
 
-    // دوال مساعدة داخل النشاط (safeEvaluateJs)
-    private fun safeEvaluateJs(script: String) {
+    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs) - النسخة الوحيدة
+    fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
             val wv = webView

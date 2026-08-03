@@ -718,7 +718,6 @@
             gap: 10px;
             z-index: 1000;
         }
-
         .floating-actions .action-btn {
             width: 34px;
             height: 34px;
@@ -734,16 +733,13 @@
             align-items: center;
             justify-content: center;
         }
-
         .floating-actions .action-btn:hover {
             transform: scale(1.1) rotate(5deg);
             box-shadow: 0 6px 20px rgba(0,0,0,0.3);
         }
-
         .floating-actions .action-btn:active {
             transform: scale(0.95);
         }
-
         .dark-mode .floating-actions .action-btn {
             background: linear-gradient(145deg, #f39c12, #f1c40f);
             color: #1a202c;
@@ -1332,7 +1328,6 @@
                 left: 10px;
                 gap: 8px;
             }
-
             .floating-actions .action-btn {
                 width: 30px;
                 height: 30px;
@@ -1361,16 +1356,14 @@
     <!-- Floating background elements -->
     <div class="floating-elements" id="floatingElements"></div>
 
-    <!-- Floating actions -->
+    <!-- Floating Actions -->
     <div class="floating-actions" id="floatingActions">
         <button class="action-btn" id="btnBiometric" data-tooltip="تسجيل الدخول بالبصمة"><i class="fas fa-thumbs-up"></i></button>
         <button class="action-btn" id="btnTogglePassword" data-tooltip="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
         <button class="action-btn" id="btnThemeToggle" data-tooltip="تبديل الوضع الليلي/النهاري"><i class="fas fa-moon"></i></button>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- Main Login Screen -->
-    <!-- ============================================================ -->
+    <!-- Login Screen -->
     <div class="login-container">
         <div class="login-header">
             <h1>مرحباً بعودتك</h1>
@@ -1380,19 +1373,16 @@
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
 
-            <!-- Quick Login Badge -->
             <div id="quickLoginBadge" class="quick-login-badge" style="display: none;">
                 <i class="fas fa-shield-alt"></i>
                 <span>بيانات محفوظة - تسجيل دخول سريع متاح</span>
             </div>
 
-            <!-- Attempts Counter -->
             <div id="attemptsCounter" class="attempts-counter">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span id="attemptsText"></span>
             </div>
 
-            <!-- Lockout Banner -->
             <div id="lockoutBanner" class="lockout-banner">
                 <i class="fas fa-lock"></i>
                 <span id="lockoutText">تم قفل الحساب مؤقتاً. يرجى الانتظار.</span>
@@ -1435,9 +1425,7 @@
         </div>
     </div>
 
-    <!-- ============================================================ -->
     <!-- Fingerprint Modal -->
-    <!-- ============================================================ -->
     <div class="modal fingerprint-modal" id="fingerprintModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1454,9 +1442,7 @@
         </div>
     </div>
 
-    <!-- ============================================================ -->
     <!-- Terms Modal -->
-    <!-- ============================================================ -->
     <div class="modal" id="termsModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1540,17 +1526,17 @@
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
                     <p><i class="fas fa-phone"></i> 
                         <a href="tel:+967106586714" class="contact-action-btn phone-btn">
-                            <i class="fas fa-phone-alt"></i> 📲 للاتصال: اضغــط هنا
+                            <i class="fas fa-phone-alt"></i>  اضغــط هنــا
                         </a>
                     </p>
                     <p><i class="fab fa-whatsapp"></i> 
                         <a href="https://wa.me/967781038203" target="_blank" rel="noopener noreferrer" class="contact-action-btn whatsapp-btn">
-                            <i class="fab fa-whatsapp"></i> 💬 واتساب: اضغـط هنــا
+                            <i class="fab fa-whatsapp"></i>  اضغــط هنــا
                         </a>
                     </p>
                     <p><i class="fas fa-envelope"></i> 
                         <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
-                            <i class="fas fa-envelope"></i> 📧 للبريد : اضغــط هنــا
+                            <i class="fas fa-envelope"></i>  اضغــط هنــا
                         </a>
                     </p>
                 </div>
@@ -1567,9 +1553,7 @@
         </div>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- Modal 1: Forgot Password Request -->
-    <!-- ============================================================ -->
+    <!-- Forgot Password Modal 1 -->
     <div class="modal" id="forgotPasswordModal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1603,9 +1587,7 @@
         </div>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- Modal 2: Recovery Link Display -->
-    <!-- ============================================================ -->
+    <!-- Recovery Link Modal -->
     <div class="modal" id="viewRecoveryLinkModal">
         <div class="modal-content modal-small">
             <div class="modal-header">
@@ -1639,9 +1621,7 @@
         </div>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- Modal 3: Reset Password -->
-    <!-- ============================================================ -->
+    <!-- Reset Password Modal -->
     <div class="modal" id="resetPasswordModal">
         <div class="modal-content modal-small">
             <div class="modal-header">
@@ -1698,7 +1678,7 @@
 
     <script>
         // ============================================================
-        // Constants and System Configuration
+        // ثوابت وإعدادات النظام
         // ============================================================
         const APP_CONFIG = {
             CREDENTIALS_MAX_AGE_DAYS: 7,
@@ -1712,7 +1692,7 @@
         };
 
         // ============================================================
-        // Tooltips System
+        // نظام التلميحات (Tooltips)
         // ============================================================
         function initTooltips() {
             const tooltipElements = document.querySelectorAll('[data-tooltip]');
@@ -1755,7 +1735,7 @@
         }
 
         // ============================================================
-        // Rate Limiting & Account Lockout
+        // نظام Rate Limiting & Account Lockout
         // ============================================================
         function getLoginAttempts() {
             try {
@@ -1896,7 +1876,7 @@
         }
 
         // ============================================================
-        // Unified API Call Function
+        // دالة apiCall الموحدة
         // ============================================================
         async function apiCall(action, params = {}) {
             if (hasAndroidBridge()) {
@@ -1991,7 +1971,7 @@
         }
 
         // ============================================================
-        // UI Utilities
+        // دوال مساعدة (UI Utilities)
         // ============================================================
         function showNotification(message, type) {
             const container = document.getElementById('notificationContainer');
@@ -2076,7 +2056,7 @@
         }
 
         // ============================================================
-        // Password Strength Checker
+        // دوال تحليل قوة كلمة المرور
         // ============================================================
         function checkPasswordStrength(password) {
             const bar = document.getElementById('passwordStrengthBar');
@@ -2131,7 +2111,7 @@
         }
 
         // ============================================================
-        // Copy Recovery Link
+        // دوال نسخ الرابط
         // ============================================================
         function copyRecoveryLink() {
             const link = document.getElementById('recoveryLinkText').textContent;
@@ -2205,9 +2185,6 @@
             }
         }
 
-        // ============================================================
-        // Global Biometric Callback from Android
-        // ============================================================
         window.onBiometricAutoLogin = function(result) {
             const fingerprintModal = document.getElementById('fingerprintModal');
             const fingerprintStatus = document.getElementById('fingerprintStatus');
@@ -2245,9 +2222,6 @@
             }
         };
 
-        // ============================================================
-        // Dashboard Navigation
-        // ============================================================
         function enterDashboard(user, token) {
             document.getElementById('successMessage').textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
             document.getElementById('successMessage').classList.add('show');
@@ -2331,7 +2305,7 @@
         }
 
         // ============================================================
-        // Auto-focus and Field Validation
+        // التحقق التلقائي من الحقول
         // ============================================================
         function checkFieldsAndFocus() {
             const username = document.getElementById('username');
@@ -2346,12 +2320,10 @@
         }
 
         // ============================================================
-        // Main Page Initialization
+        // تهيئة الصفحة والأحداث الرئيسية
         // ============================================================
         document.addEventListener('DOMContentLoaded', async function() {
-            // ============================================================
-            // Bridge Debug: Check AndroidInterface Availability
-            // ============================================================
+            // ✅ BridgeDebug: فحص الجسر فور تحميل الصفحة
             console.log("BridgeDebug: Checking AndroidInterface availability");
             console.log("AndroidInterface exists:", typeof window.AndroidInterface !== "undefined");
             try {
@@ -2360,7 +2332,7 @@
                 console.error("Bridge error during login method check:", e);
             }
 
-            // DOM Elements
+            // عناصر DOM
             const loginForm = document.getElementById('loginForm');
             const usernameInput = document.getElementById('username');
             const passwordInput = document.getElementById('password');
@@ -2392,7 +2364,7 @@
 
             let currentResetToken = '';
 
-            // Date
+            // التاريخ
             document.getElementById('currentYear').textContent = new Date().getFullYear();
             document.getElementById('currentDate').textContent = new Date().toLocaleDateString('ar-EG', {
                 year: 'numeric',
@@ -2400,15 +2372,10 @@
                 day: 'numeric'
             });
 
-            // Floating elements
             createFloatingElements();
-
-            // Tooltips
             initTooltips();
 
-            // ============================================================
-            // Dark Mode Toggle
-            // ============================================================
+            // الوضع الليلي
             if (localStorage.getItem('darkMode') === 'true') {
                 document.body.classList.add('dark-mode');
                 btnThemeToggle.innerHTML = '<i class="fas fa-sun"></i>';
@@ -2425,9 +2392,7 @@
                     'تم تفعيل الوضع النهاري', 'info');
             });
 
-            // ============================================================
-            // Toggle Password Visibility
-            // ============================================================
+            // زر إظهار كلمة المرور
             btnTogglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
@@ -2437,18 +2402,13 @@
                 passwordInput.focus();
             });
 
-            // ============================================================
-            // Biometric Login Button
-            // ============================================================
+            // زر البصمة
             btnBiometric.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 requestFingerprintAuth();
             });
 
-            // ============================================================
-            // Auto-focus and Field Validation
-            // ============================================================
             usernameInput.addEventListener('input', checkFieldsAndFocus);
             passwordInput.addEventListener('input', checkFieldsAndFocus);
 
@@ -2469,7 +2429,7 @@
                 }
             });
 
-            // Terms Modal
+            // فتح نافذة الشروط
             termsLink.addEventListener('click', function(e) {
                 e.preventDefault();
                 openModal(termsModal);
@@ -2478,19 +2438,14 @@
                 closeModal(termsModal);
             });
 
-            // Close Fingerprint Modal
+            // إغلاق مودال البصمة
             closeFingerprintModal.addEventListener('click', function() {
                 closeModal(fingerprintModal);
             });
 
-            // ============================================================
-            // Biometric Flow Init
-            // ============================================================
             await initBiometricFlow();
 
-            // ============================================================
-            // Load Remember Me Credentials
-            // ============================================================
+            // استرجاع بيانات "تذكرني"
             const savedCredentials = await loadRememberMeCredentials();
             if (savedCredentials && savedCredentials.username) {
                 usernameInput.value = savedCredentials.username;
@@ -2501,15 +2456,12 @@
                 showNotification('تم استرجاع بيانات الدخول المحفوظة', 'info');
             }
 
-            // Check Lockout Status
             if (isAccountLocked()) {
                 showLockoutBanner();
                 showNotification('الحساب مقفل مؤقتاً. استخدم "نسيت كلمة المرور"', 'warning');
             }
 
-            // ============================================================
-            // 1. Forgot Password - Open Modal
-            // ============================================================
+            // 1. فتح مودال طلب استعادة كلمة المرور
             forgotPasswordLink.addEventListener('click', function(e) {
                 e.preventDefault();
                 const currentUsername = usernameInput.value.trim();
@@ -2527,9 +2479,7 @@
                 closeModal(forgotPasswordModal);
             });
 
-            // ============================================================
-            // 2. Send Reset Link
-            // ============================================================
+            // 2. إرسال طلب استعادة كلمة المرور
             sendResetLinkBtn.addEventListener('click', async function() {
                 const username = resetUsernameInput.value.trim();
                 if (!username) {
@@ -2563,9 +2513,7 @@
                 }
             });
 
-            // ============================================================
-            // 3. Navigate to Reset Link
-            // ============================================================
+            // 3. الانتقال إلى رابط الاستعادة
             goToResetLinkBtn.addEventListener('click', function() {
                 const link = document.getElementById('recoveryLinkText').textContent;
                 const tokenMatch = link.match(/reset-password:\/\/(.+)/) || link.match(/token=([^&]+)/);
@@ -2588,9 +2536,7 @@
                 closeModal(viewRecoveryLinkModal);
             });
 
-            // ============================================================
-            // 4. Reset Password
-            // ============================================================
+            // 4. إعادة تعيين كلمة المرور
             resetPasswordForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
 
@@ -2647,9 +2593,7 @@
                 closeModal(resetPasswordModal);
             });
 
-            // ============================================================
-            // 5. Login (with Rate Limiting & Account Lockout)
-            // ============================================================
+            // 5. تسجيل الدخول
             loginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 clearErrors();
@@ -2711,7 +2655,7 @@
                 }
             });
 
-            // Close modals on outside click
+            // إغلاق المودالات عند النقر خارجها
             window.addEventListener('click', function(e) {
                 if (e.target === termsModal) closeModal(termsModal);
                 if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
@@ -2720,9 +2664,7 @@
                 if (e.target === fingerprintModal) closeModal(fingerprintModal);
             });
 
-            // ============================================================
-            // Floating Elements
-            // ============================================================
+            // إنشاء العناصر العائمة
             function createFloatingElements() {
                 const floatingElements = document.getElementById('floatingElements');
                 const businessIcons = [

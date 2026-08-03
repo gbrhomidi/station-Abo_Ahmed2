@@ -1,0 +1,1894 @@
+[2026-08-03 19:30:43.368 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performCreate]
+
+[2026-08-03 19:30:43.372 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:30:43.377 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:30:43.416 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:30:44.542 Uid(value=10426):27250:27309 I/binder_sample]
+[android.app.IActivityManager,23,499,com.dp.logcatapp,99]
+
+[2026-08-03 19:30:45.179 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18178): avc: denied { read } for comm="DefaultDispatch" name="u:object_r:incremental_prop:s0" dev="tmpfs" ino=9357 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:incremental_prop:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.179 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18179): avc: denied { read } for comm="DefaultDispatch" name="filesystems" dev="proc" ino=4026532162 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:proc_filesystems:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.183 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18180): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/base.apk" dev="incremental-fs" ino=458879 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.191 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18181): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/split_config.ar.apk" dev="incremental-fs" ino=458882 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.203 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18182): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/split_config.xhdpi.apk" dev="incremental-fs" ino=458881 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.211 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18183): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/base.apk" dev="incremental-fs" ino=458879 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.211 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18184): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/base.apk" dev="incremental-fs" ino=458879 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.215 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18185): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/base.apk" dev="incremental-fs" ino=458879 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:45.219 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18186): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~HfclhnYyU6pJnQ1mpLP7Rw==/com.nocap.captions-kiyXlan-IR3DvGa3ONgv0Q==/base.apk" dev="incremental-fs" ino=458879 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:46.235 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18202): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~YwflzHdn1pzsEoXZb9Xxlw==/com.gamma.scan-KFFgnp15FqnQ7A8r03N_hA==/base.apk" dev="incremental-fs" ino=458899 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:46.235 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18203): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~YwflzHdn1pzsEoXZb9Xxlw==/com.gamma.scan-KFFgnp15FqnQ7A8r03N_hA==/split_config.ar.apk" dev="incremental-fs" ino=458902 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:46.243 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18204): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~YwflzHdn1pzsEoXZb9Xxlw==/com.gamma.scan-KFFgnp15FqnQ7A8r03N_hA==/split_config.xhdpi.apk" dev="incremental-fs" ino=458901 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:46.247 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18205): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~YwflzHdn1pzsEoXZb9Xxlw==/com.gamma.scan-KFFgnp15FqnQ7A8r03N_hA==/base.apk" dev="incremental-fs" ino=458899 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:46.251 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18206): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~YwflzHdn1pzsEoXZb9Xxlw==/com.gamma.scan-KFFgnp15FqnQ7A8r03N_hA==/base.apk" dev="incremental-fs" ino=458899 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:48.571 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18212): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~io9wrRkqwOLDhA-YxfaSxA==/io.faceapp-7zYb40qkg9V0x5DFJhhVJQ==/base.apk" dev="incremental-fs" ino=458781 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:48.571 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18213): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~io9wrRkqwOLDhA-YxfaSxA==/io.faceapp-7zYb40qkg9V0x5DFJhhVJQ==/split_config.ar.apk" dev="incremental-fs" ino=458784 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:48.579 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18214): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~io9wrRkqwOLDhA-YxfaSxA==/io.faceapp-7zYb40qkg9V0x5DFJhhVJQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458783 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:48.587 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18215): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~io9wrRkqwOLDhA-YxfaSxA==/io.faceapp-7zYb40qkg9V0x5DFJhhVJQ==/base.apk" dev="incremental-fs" ino=458781 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:51.391 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18224): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~G4bsBUItKG4pmv8dlz-1UQ==/authenticator.two.factor.authentication.otp-bk-6YpCNC2nPNARuAq9K1w==/base.apk" dev="incremental-fs" ino=458861 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:51.419 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18225): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~G4bsBUItKG4pmv8dlz-1UQ==/authenticator.two.factor.authentication.otp-bk-6YpCNC2nPNARuAq9K1w==/base.apk" dev="incremental-fs" ino=458861 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:51.423 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18226): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~G4bsBUItKG4pmv8dlz-1UQ==/authenticator.two.factor.authentication.otp-bk-6YpCNC2nPNARuAq9K1w==/base.apk" dev="incremental-fs" ino=458861 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:51.887 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18227): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~iTD50z1NxBvm_w1abDUmtA==/hr.palamida-qsAiUpMxjo6JXEwLPqUZQg==/base.apk" dev="incremental-fs" ino=2147068 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:51.899 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18228): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~iTD50z1NxBvm_w1abDUmtA==/hr.palamida-qsAiUpMxjo6JXEwLPqUZQg==/split_config.ar.apk" dev="incremental-fs" ino=2147074 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:52.527 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18233): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~2x1WU_HpMaiJjde11eNiKQ==/org.mozilla.firefox-6-ImZlVzfNex0vXGUvdTLw==/base.apk" dev="incremental-fs" ino=475164 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:52.627 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18234): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~2x1WU_HpMaiJjde11eNiKQ==/org.mozilla.firefox-6-ImZlVzfNex0vXGUvdTLw==/split_config.xhdpi.apk" dev="incremental-fs" ino=475167 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:52.639 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18235): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~2x1WU_HpMaiJjde11eNiKQ==/org.mozilla.firefox-6-ImZlVzfNex0vXGUvdTLw==/base.apk" dev="incremental-fs" ino=475164 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:52.643 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18236): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~2x1WU_HpMaiJjde11eNiKQ==/org.mozilla.firefox-6-ImZlVzfNex0vXGUvdTLw==/base.apk" dev="incremental-fs" ino=475164 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:52.647 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18237): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~2x1WU_HpMaiJjde11eNiKQ==/org.mozilla.firefox-6-ImZlVzfNex0vXGUvdTLw==/base.apk" dev="incremental-fs" ino=475164 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:53.947 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18251): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~N5L6RV8A4wwUzfTEjJmrsA==/com.google.android.apps.youtube.creator-Ley3jE_XLRgymCCrssP0jg==/base.apk" dev="incremental-fs" ino=1917336 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:53.995 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18252): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~N5L6RV8A4wwUzfTEjJmrsA==/com.google.android.apps.youtube.creator-Ley3jE_XLRgymCCrssP0jg==/split_config.xhdpi.apk" dev="incremental-fs" ino=1917341 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:54.003 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18253): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~N5L6RV8A4wwUzfTEjJmrsA==/com.google.android.apps.youtube.creator-Ley3jE_XLRgymCCrssP0jg==/base.apk" dev="incremental-fs" ino=1917336 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:54.007 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18254): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~N5L6RV8A4wwUzfTEjJmrsA==/com.google.android.apps.youtube.creator-Ley3jE_XLRgymCCrssP0jg==/base.apk" dev="incremental-fs" ino=1917336 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:55.043 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18277): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~JiJ12YOztFLNFvABsFrs7A==/com.linkbox.plus.android-nPr-gOQMO2N-B-9FLZqdZg==/base.apk" dev="incremental-fs" ino=475183 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:55.075 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18278): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~JiJ12YOztFLNFvABsFrs7A==/com.linkbox.plus.android-nPr-gOQMO2N-B-9FLZqdZg==/split_config.xhdpi.apk" dev="incremental-fs" ino=475186 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:55.087 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18279): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~JiJ12YOztFLNFvABsFrs7A==/com.linkbox.plus.android-nPr-gOQMO2N-B-9FLZqdZg==/base.apk" dev="incremental-fs" ino=475183 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:55.087 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18280): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~JiJ12YOztFLNFvABsFrs7A==/com.linkbox.plus.android-nPr-gOQMO2N-B-9FLZqdZg==/base.apk" dev="incremental-fs" ino=475183 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:55.091 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18281): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~JiJ12YOztFLNFvABsFrs7A==/com.linkbox.plus.android-nPr-gOQMO2N-B-9FLZqdZg==/base.apk" dev="incremental-fs" ino=475183 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:56.279 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18287): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~b2HX5TjN9-AEzqn5IRCScw==/com.wondershare.drfoneapp-Z8bU9OiFbFmnQbjIQK43_A==/base.apk" dev="incremental-fs" ino=458842 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:56.371 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18288): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~b2HX5TjN9-AEzqn5IRCScw==/com.wondershare.drfoneapp-Z8bU9OiFbFmnQbjIQK43_A==/split_config.xhdpi.apk" dev="incremental-fs" ino=458844 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:56.391 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18289): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~b2HX5TjN9-AEzqn5IRCScw==/com.wondershare.drfoneapp-Z8bU9OiFbFmnQbjIQK43_A==/base.apk" dev="incremental-fs" ino=458842 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:30:56.395 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18290): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~b2HX5TjN9-AEzqn5IRCScw==/com.wondershare.drfoneapp-Z8bU9OiFbFmnQbjIQK43_A==/base.apk" dev="incremental-fs" ino=458842 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:31:05.525 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:31:05.581 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:31:05.605 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:31:12.692 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:31:12.692 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:31:12.695 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:31:12.696 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:31:51.215 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18297): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:31:51.215 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18298): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:31:51.219 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18299): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:31:59.148 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:31:59.167 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:31:59.417 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:32:03.530 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:32:03.530 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:32:03.534 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:32:03.537 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:32:30.524 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:32:30.539 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:32:30.759 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:32:38.556 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:32:38.557 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:32:38.561 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:32:38.561 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:33:19.723 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18341): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:33:19.723 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18342): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:33:19.723 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18343): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:33:34.556 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:33:34.601 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:33:34.733 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:33:44.108 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:33:44.108 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:33:44.110 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:33:44.111 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:34:00.690 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:34:00.704 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:34:00.814 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:34:12.356 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:34:12.357 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:34:12.358 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:34:12.359 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:34:21.367 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18356): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:34:21.371 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18357): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:34:21.371 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18358): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:34:36.343 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:34:36.355 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:34:36.483 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:34:45.210 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:34:45.210 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:34:45.212 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:34:45.212 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:35:04.857 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:35:04.874 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:35:04.997 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:35:08.350 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:35:08.351 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:35:08.353 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:35:08.353 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:35:17.739 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18367): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:17.739 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18368): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:17.739 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18369): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:19.854 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:35:19.869 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:35:20.010 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:35:23.378 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:35:23.379 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:35:23.380 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:35:23.381 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:35:29.942 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:35:29.957 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:35:30.095 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:35:32.979 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:35:32.979 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:35:32.981 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:35:32.982 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:35:39.763 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:35:39.779 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:35:39.909 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:35:42.708 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:35:42.708 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:35:42.714 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:35:42.715 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:35:47.867 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18374): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:47.867 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18375): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:47.867 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18376): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:35:49.616 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:35:49.633 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:35:49.734 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:35:52.393 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:35:52.394 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:35:52.397 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:35:52.398 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:36:00.952 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:36:00.965 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:36:01.094 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:36:03.644 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:36:03.644 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:36:03.646 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:36:03.647 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:36:14.801 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:36:14.819 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:36:14.967 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:36:17.846 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:36:17.847 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:36:17.863 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:36:17.864 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:37:00.006 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:37:00.031 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:37:00.201 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:37:07.118 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:37:07.118 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:37:07.122 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:37:07.123 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:37:21.395 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:37:21.407 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:37:21.516 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:37:27.949 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:37:27.949 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:37:27.952 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:37:27.954 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:38:12.787 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18427): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:38:12.791 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18428): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:38:12.791 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18429): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:38:14.896 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:38:14.910 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:38:15.044 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:38:30.138 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:38:30.138 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:38:30.142 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:38:30.142 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:38:48.137 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:38:48.153 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:38:48.315 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:39:54.428 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:39:54.429 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:39:54.434 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:39:54.434 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:40:51.068 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:40:51.069 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:40:51.140 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,performCreate]
+
+[2026-08-03 19:40:51.141 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,handleStartActivity]
+
+[2026-08-03 19:40:51.141 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:40:51.152 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:40:51.400 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:41:18.942 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:41:18.942 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,performPause]
+
+[2026-08-03 19:41:18.959 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:41:18.959 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:41:18.961 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:41:18.962 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:41:19.093 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:41:19.102 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[112991963,com.dp.logcatapp.activities.SettingsActivity,performDestroy]
+
+[2026-08-03 19:41:28.653 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:41:28.670 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:41:28.772 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:41:35.164 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:41:35.165 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:41:35.165 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:41:35.169 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:41:35.173 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:41:35.212 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000002b,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:41:35.372 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#43](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28569910906702(auto) mPendingTransactions.size=0 graphicBufferId=117037858816508 transform=0
+
+[2026-08-03 19:41:35.483 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:41:35.548 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=true)
+
+[2026-08-03 19:41:43.022 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:41:44.041 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:41:44.752 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:41:44.961 Uid(value=10426):27250:27258 I/om.dp.logcatapp]
+Background young concurrent copying GC freed 20MB AllocSpace bytes, 0(0B) LOS objects, 65% free, 10MB/31MB, paused 250us,62us total 110.068ms
+
+[2026-08-03 19:41:48.391 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:41:55.250 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:41:55.263 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7b9b180
+
+[2026-08-03 19:41:55.277 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:41:55.298 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000002c,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:41:55.315 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#44](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28589854300780(auto) mPendingTransactions.size=0 graphicBufferId=117037858816520 transform=0
+
+[2026-08-03 19:41:55.316 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:42:01.555 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:42:01.556 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:42:01.583 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{8cde0d7 V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741870}
+
+[2026-08-03 19:42:01.586 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b9b180
+
+[2026-08-03 19:42:01.594 Uid(value=10426):27250:29209 D/libMEOW]
+meow new tls: 0xb4000071c8232730
+
+[2026-08-03 19:42:01.595 Uid(value=10426):27250:29209 D/libMEOW]
+applied 1 plugins for [com.dp.logcatapp]:
+
+[2026-08-03 19:42:01.595 Uid(value=10426):27250:29209 D/libMEOW]
+  plugin 1: [libMEOW_gift.so]: 0xb400007187b15820
+
+[2026-08-03 19:42:01.595 Uid(value=10426):27250:29209 D/libMEOW]
+rebuild call chain: 0xb4000071c7b82080
+
+[2026-08-03 19:42:01.595 Uid(value=10426):27250:29209 D/libMEOW]
+meow delete tls: 0xb4000071c8232730
+
+[2026-08-03 19:42:01.597 Uid(value=10426):27250:27974 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#44](f:0,a:3) destructor()
+
+[2026-08-03 19:42:01.597 Uid(value=10426):27250:27974 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#44(BLAST Consumer)44](id:6a720000002c,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:42:01.600 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,performCreate]
+
+[2026-08-03 19:42:01.601 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,handleStartActivity]
+
+[2026-08-03 19:42:01.601 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:42:01.604 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:42:01.610 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bbb400
+
+[2026-08-03 19:42:01.612 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:42:01.653 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000002d,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:42:01.674 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#45](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28596213486626(auto) mPendingTransactions.size=0 graphicBufferId=117037858816531 transform=0
+
+[2026-08-03 19:42:01.675 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:42:01.774 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#43](f:0,a:3) destructor()
+
+[2026-08-03 19:42:01.774 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#43(BLAST Consumer)43](id:6a720000002b,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:42:01.779 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18526): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18526): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18527): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18527): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18528): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:01.939 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18528): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:42:04.505 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:42:04.516 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7ba5f20
+
+[2026-08-03 19:42:04.532 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:42:04.549 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000002e,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:42:04.558 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#46](f:0,a:1) acquireNextBufferLocked size=288x192 mFrameNumber=1 applyTransaction=true mTimestamp=28599097350934(auto) mPendingTransactions.size=0 graphicBufferId=117037858816540 transform=0
+
+[2026-08-03 19:42:04.559 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:42:05.640 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{8e0e3b7 V.E...... ......ID 0,0-224,128 #1020002 android:id/content aid=1073741826}
+
+[2026-08-03 19:42:05.640 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#46](f:0,a:2) destructor()
+
+[2026-08-03 19:42:05.640 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#46(BLAST Consumer)46](id:6a720000002e,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:42:05.657 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7ba5f20
+
+[2026-08-03 19:42:06.222 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:42:06.227 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:42:06.238 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7b7fa90
+
+[2026-08-03 19:42:06.283 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000002f,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:42:06.299 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#47](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28600838802319(auto) mPendingTransactions.size=0 graphicBufferId=117037858816550 transform=0
+
+[2026-08-03 19:42:06.300 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:42:12.788 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:13.699 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:15.394 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:16.057 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:17.153 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:17.873 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:18.659 Uid(value=10426):27250:27258 I/om.dp.logcatapp]
+Background concurrent copying GC freed 21MB AllocSpace bytes, 1(20KB) LOS objects, 67% free, 11MB/35MB, paused 545us,104us total 381.296ms
+
+[2026-08-03 19:42:18.801 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:19.491 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:20.390 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:21.236 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:22.313 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:25.270 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:26.474 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:42:27.556 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=false)
+
+[2026-08-03 19:42:27.557 Uid(value=10426):27250:27250 D/InputMethodManager]
+showSoftInput() view=d6{9dd9844 VFED..... .F....ID 0,0-720,1612 aid=1073741827} flags=0 reason=SHOW_SOFT_INPUT_BY_INSETS_API
+
+[2026-08-03 19:42:27.569 Uid(value=10426):27250:27250 I/AssistStructure]
+Flattened final assist data: 676 bytes, containing 2 windows, 5 views
+
+[2026-08-03 19:42:27.580 Uid(value=10426):27250:27250 D/InputMethodManager]
+showSoftInput() view=d6{9dd9844 VFED..... .F...... 0,0-720,1612 aid=1073741827} flags=0 reason=SHOW_SOFT_INPUT
+
+[2026-08-03 19:42:27.599 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:42:27.636 Uid(value=10426):27250:27250 D/Autofill Status]
+Autofill popup isn't shown because autofill is not available.
+
+[2026-08-03 19:42:27.656 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=true)
+
+[2026-08-03 19:42:27.664 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=true)
+
+[2026-08-03 19:42:33.927 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@f8ed39b[FiltersActivity]
+
+[2026-08-03 19:42:33.927 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#47](f:0,a:3) destructor()
+
+[2026-08-03 19:42:33.928 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#47(BLAST Consumer)47](id:6a720000002f,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:42:33.947 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b7fa90
+
+[2026-08-03 19:42:34.051 Uid(value=10426):27250:27250 E/ImeBackDispatcher]
+Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 68904948
+
+[2026-08-03 19:42:38.819 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:42:38.820 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,performPause]
+
+[2026-08-03 19:42:38.837 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:42:38.837 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:42:38.838 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:42:38.839 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:42:38.839 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:42:38.861 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000030,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:42:38.880 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#48](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28633419164859(auto) mPendingTransactions.size=0 graphicBufferId=117037858816562 transform=0
+
+[2026-08-03 19:42:38.970 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#45](f:0,a:3) destructor()
+
+[2026-08-03 19:42:38.971 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#45(BLAST Consumer)45](id:6a720000002d,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:42:38.974 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:42:38.983 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[199123045,com.dp.logcatapp.activities.FiltersActivity,performDestroy]
+
+[2026-08-03 19:42:39.002 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@f215f3b[FiltersActivity]
+
+[2026-08-03 19:42:39.009 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bbb400
+
+[2026-08-03 19:43:30.478 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:43:30.492 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bf8f00
+
+[2026-08-03 19:43:30.505 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:30.529 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000031,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:43:30.546 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#49](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28685085389478(auto) mPendingTransactions.size=0 graphicBufferId=117037858816575 transform=0
+
+[2026-08-03 19:43:30.547 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:43:41.380 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{19a2e36 V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741872}
+
+[2026-08-03 19:43:41.381 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#49](f:0,a:2) destructor()
+
+[2026-08-03 19:43:41.381 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#49(BLAST Consumer)49](id:6a7200000031,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:43:41.399 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bf8f00
+
+[2026-08-03 19:43:47.157 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:43:47.172 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7b8c5a0
+
+[2026-08-03 19:43:47.186 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:47.222 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000032,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:43:47.241 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#50](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28701780685710(auto) mPendingTransactions.size=0 graphicBufferId=117037858816583 transform=0
+
+[2026-08-03 19:43:47.242 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:43:48.441 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{ffbaf59 V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741874}
+
+[2026-08-03 19:43:48.441 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#50](f:0,a:2) destructor()
+
+[2026-08-03 19:43:48.441 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#50(BLAST Consumer)50](id:6a7200000032,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:43:48.457 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b8c5a0
+
+[2026-08-03 19:43:49.333 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:43:49.334 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:43:49.633 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#48](f:0,a:3) destructor()
+
+[2026-08-03 19:43:49.633 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#48(BLAST Consumer)48](id:6a7200000030,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:43:49.641 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:43:49.651 Uid(value=10426):27250:27250 D/LogcatReader]
+[HomeScreen] LogcatService - unbind service
+
+[2026-08-03 19:43:49.657 Uid(value=10426):27250:27250 D/LogcatReader]
+[HomeScreen] LogcatService - stop service
+
+[2026-08-03 19:43:49.676 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[13097908,com.dp.logcatapp.activities.MainActivity,performDestroy]
+
+[2026-08-03 19:43:49.699 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@7e200ce[MainActivity]
+
+[2026-08-03 19:43:49.709 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b3ff80
+
+[2026-08-03 19:43:49.724 Uid(value=10426):27250:27269 I/GED]
+ged_boost_gpu_freq, level 100, eOrigin 2, final_idx 2, oppidx_max 2, oppidx_min 0
+
+[2026-08-03 19:43:49.724 Uid(value=10426):27250:27250 D/LogcatReader]
+[ku1] stopping
+
+[2026-08-03 19:43:49.727 Uid(value=10426):27250:27311 D/LogcatReader]
+[ku1] stopped logcat reader thread
+
+[2026-08-03 19:43:51.414 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performCreate]
+
+[2026-08-03 19:43:51.415 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:43:51.416 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:43:51.428 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:43:51.438 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:51.453 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:51.505 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:43:51.579 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18544): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18544): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/base.apk" dev="incremental-fs" ino=458801 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18545): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18545): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.ar.apk" dev="incremental-fs" ino=458803 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 I/auditd]
+type=1400 audit(0.0:18546): avc: denied { ioctl } for comm="DefaultDispatch" path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:51.823 Uid(value=10426):27250:27250 W/DefaultDispatch]
+type=1400 audit(0.0:18546): avc: denied { ioctl } for path="/data/app/~~QMGVnIIU5iZH1CV9x8pQCQ==/com.hundred.qibla.finder-BRK9NVOcK_X23POlFW2poQ==/split_config.xhdpi.apk" dev="incremental-fs" ino=458805 ioctlcmd=0x6722 scontext=u:r:untrusted_app:s0:c170,c257,c512,c768 tcontext=u:object_r:apk_data_file:s0 tclass=file permissive=0 app=com.dp.logcatapp
+
+[2026-08-03 19:43:53.153 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@d4d26d5[MainActivity]
+
+[2026-08-03 19:43:53.154 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#52](f:0,a:3) destructor()
+
+[2026-08-03 19:43:53.154 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#52(BLAST Consumer)52](id:6a7200000034,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:43:53.168 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b96c80
+
+[2026-08-03 19:43:53.169 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:53.172 Uid(value=10426):27250:27250 D/VRI[MainActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:43:53.196 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7be6ae0
+
+[2026-08-03 19:43:53.231 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000035,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:43:53.252 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#53](f:0,a:1) acquireNextBufferLocked size=768x1216 mFrameNumber=1 applyTransaction=true mTimestamp=28707791500171(auto) mPendingTransactions.size=0 graphicBufferId=117037858816613 transform=0
+
+[2026-08-03 19:43:53.253 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:43:56.949 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@2e4540c[MainActivity]
+
+[2026-08-03 19:43:56.949 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#53](f:0,a:2) destructor()
+
+[2026-08-03 19:43:56.949 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#53(BLAST Consumer)53](id:6a7200000035,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:43:56.967 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7be6ae0
+
+[2026-08-03 19:43:59.756 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:43:59.769 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bb5f10
+
+[2026-08-03 19:43:59.783 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:43:59.806 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000036,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:43:59.823 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#54](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28714362050633(auto) mPendingTransactions.size=0 graphicBufferId=117037858816621 transform=0
+
+[2026-08-03 19:43:59.823 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:01.412 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:44:01.413 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:44:01.443 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{104623f V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741830}
+
+[2026-08-03 19:44:01.443 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#54](f:0,a:3) destructor()
+
+[2026-08-03 19:44:01.443 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#54(BLAST Consumer)54](id:6a7200000036,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:01.448 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bb5f10
+
+[2026-08-03 19:44:01.455 Uid(value=10426):27250:29474 D/libMEOW]
+meow new tls: 0xb4000071c85a2aa0
+
+[2026-08-03 19:44:01.455 Uid(value=10426):27250:29474 D/libMEOW]
+applied 1 plugins for [com.dp.logcatapp]:
+
+[2026-08-03 19:44:01.455 Uid(value=10426):27250:29474 D/libMEOW]
+  plugin 1: [libMEOW_gift.so]: 0xb400007187b15820
+
+[2026-08-03 19:44:01.455 Uid(value=10426):27250:29474 D/libMEOW]
+rebuild call chain: 0xb4000071c84f29f0
+
+[2026-08-03 19:44:01.456 Uid(value=10426):27250:29474 D/libMEOW]
+meow delete tls: 0xb4000071c85a2aa0
+
+[2026-08-03 19:44:01.461 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,performCreate]
+
+[2026-08-03 19:44:01.462 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,handleStartActivity]
+
+[2026-08-03 19:44:01.462 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:44:01.464 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:01.471 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bb9b40
+
+[2026-08-03 19:44:01.475 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:44:01.509 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000037,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:01.527 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#55](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28716066885710(auto) mPendingTransactions.size=0 graphicBufferId=117037858816631 transform=0
+
+[2026-08-03 19:44:01.528 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:01.634 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#51](f:0,a:3) destructor()
+
+[2026-08-03 19:44:01.634 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#51(BLAST Consumer)51](id:6a7200000033,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:01.638 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:44:04.849 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:04.860 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bfefc0
+
+[2026-08-03 19:44:04.871 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:04.888 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000038,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:04.898 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#56](f:0,a:1) acquireNextBufferLocked size=288x192 mFrameNumber=1 applyTransaction=true mTimestamp=28719437743941(auto) mPendingTransactions.size=0 graphicBufferId=117037858816641 transform=0
+
+[2026-08-03 19:44:04.899 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:05.698 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{d5e8ef1 V.E...... ......ID 0,0-224,128 #1020002 android:id/content aid=1073741826}
+
+[2026-08-03 19:44:05.699 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#56](f:0,a:2) destructor()
+
+[2026-08-03 19:44:05.699 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#56(BLAST Consumer)56](id:6a7200000038,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:05.711 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bfefc0
+
+[2026-08-03 19:44:06.299 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:06.302 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:06.316 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c01930
+
+[2026-08-03 19:44:06.355 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000039,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:06.374 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#57](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28720913535865(auto) mPendingTransactions.size=0 graphicBufferId=117037858816650 transform=0
+
+[2026-08-03 19:44:06.375 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:09.764 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:44:09.799 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@dd8281f[FiltersActivity]
+
+[2026-08-03 19:44:09.816 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c01930
+
+[2026-08-03 19:44:09.852 Uid(value=10426):27250:27281 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#57](f:0,a:3) destructor()
+
+[2026-08-03 19:44:09.852 Uid(value=10426):27250:27281 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#57(BLAST Consumer)57](id:6a7200000039,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:11.782 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:44:11.782 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,performPause]
+
+[2026-08-03 19:44:11.801 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:44:11.802 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:44:11.802 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:11.803 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:44:11.803 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:44:11.815 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003a,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:11.826 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#58](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28726365374019(auto) mPendingTransactions.size=0 graphicBufferId=117037858816660 transform=0
+
+[2026-08-03 19:44:11.895 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#55](f:0,a:3) destructor()
+
+[2026-08-03 19:44:11.895 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#55(BLAST Consumer)55](id:6a7200000037,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:11.901 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:44:11.906 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[226762123,com.dp.logcatapp.activities.FiltersActivity,performDestroy]
+
+[2026-08-03 19:44:11.910 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@a51320[FiltersActivity]
+
+[2026-08-03 19:44:11.919 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bb9b40
+
+[2026-08-03 19:44:16.153 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:16.163 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c0ae70
+
+[2026-08-03 19:44:16.173 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:16.199 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003b,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:16.216 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#59](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28730755848481(auto) mPendingTransactions.size=0 graphicBufferId=117037858816676 transform=0
+
+[2026-08-03 19:44:16.217 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:17.598 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:44:17.599 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:44:17.635 Uid(value=10426):27250:29496 D/libMEOW]
+meow new tls: 0xb4000071c8492990
+
+[2026-08-03 19:44:17.635 Uid(value=10426):27250:29496 D/libMEOW]
+applied 1 plugins for [com.dp.logcatapp]:
+
+[2026-08-03 19:44:17.635 Uid(value=10426):27250:29496 D/libMEOW]
+  plugin 1: [libMEOW_gift.so]: 0xb400007187b15820
+
+[2026-08-03 19:44:17.636 Uid(value=10426):27250:29496 D/libMEOW]
+rebuild call chain: 0xb4000071c84b29b0
+
+[2026-08-03 19:44:17.636 Uid(value=10426):27250:29496 D/libMEOW]
+meow delete tls: 0xb4000071c8492990
+
+[2026-08-03 19:44:17.638 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,performCreate]
+
+[2026-08-03 19:44:17.639 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,handleStartActivity]
+
+[2026-08-03 19:44:17.640 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:44:17.643 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:17.647 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c10030
+
+[2026-08-03 19:44:17.649 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:44:17.659 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{add4399 V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741832}
+
+[2026-08-03 19:44:17.661 Uid(value=10426):27250:27281 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#59](f:0,a:3) destructor()
+
+[2026-08-03 19:44:17.661 Uid(value=10426):27250:27281 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#59(BLAST Consumer)59](id:6a720000003b,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:17.663 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c0ae70
+
+[2026-08-03 19:44:17.694 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003c,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:17.714 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#60](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28732253046096(auto) mPendingTransactions.size=0 graphicBufferId=117037858816686 transform=0
+
+[2026-08-03 19:44:17.715 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:17.832 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#58](f:0,a:3) destructor()
+
+[2026-08-03 19:44:17.832 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#58(BLAST Consumer)58](id:6a720000003a,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:17.838 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:44:20.521 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:20.525 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:20.537 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c203e0
+
+[2026-08-03 19:44:20.619 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003d,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:20.646 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#61](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28735185482096(auto) mPendingTransactions.size=0 graphicBufferId=117037858816698 transform=0
+
+[2026-08-03 19:44:20.647 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:37.660 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:44:41.975 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:44:42.047 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@2d3a9ec[FiltersActivity]
+
+[2026-08-03 19:44:42.062 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c203e0
+
+[2026-08-03 19:44:42.114 Uid(value=10426):27250:27281 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#61](f:0,a:3) destructor()
+
+[2026-08-03 19:44:42.114 Uid(value=10426):27250:27281 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#61(BLAST Consumer)61](id:6a720000003d,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:44.301 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:44.310 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c03130
+
+[2026-08-03 19:44:44.322 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:44.338 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003e,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:44.349 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#62](f:0,a:1) acquireNextBufferLocked size=288x192 mFrameNumber=1 applyTransaction=true mTimestamp=28758888563559(auto) mPendingTransactions.size=0 graphicBufferId=117037858816708 transform=0
+
+[2026-08-03 19:44:44.350 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:45.267 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{8401e6e V.E...... ......ID 0,0-224,128 #1020002 android:id/content aid=1073741828}
+
+[2026-08-03 19:44:45.267 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#62](f:0,a:2) destructor()
+
+[2026-08-03 19:44:45.267 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#62(BLAST Consumer)62](id:6a720000003e,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:45.284 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c03130
+
+[2026-08-03 19:44:46.015 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:46.017 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:46.027 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7be7890
+
+[2026-08-03 19:44:46.129 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a720000003f,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:46.159 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#63](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28760697986636(auto) mPendingTransactions.size=0 graphicBufferId=117037858816718 transform=0
+
+[2026-08-03 19:44:46.161 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:44:50.269 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:44:50.456 Uid(value=10426):27250:27258 I/om.dp.logcatapp]
+Background young concurrent copying GC freed 15MB AllocSpace bytes, 4(112KB) LOS objects, 48% free, 16MB/32MB, paused 226us,60us total 253.240ms
+
+[2026-08-03 19:44:56.660 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=false)
+
+[2026-08-03 19:44:56.661 Uid(value=10426):27250:27250 D/InputMethodManager]
+showSoftInput() view=d6{35a9384 VFED..... .F....ID 0,0-720,1612 aid=1073741829} flags=0 reason=SHOW_SOFT_INPUT_BY_INSETS_API
+
+[2026-08-03 19:44:56.680 Uid(value=10426):27250:27250 I/AssistStructure]
+Flattened final assist data: 1432 bytes, containing 2 windows, 10 views
+
+[2026-08-03 19:44:56.709 Uid(value=10426):27250:27250 D/InputMethodManager]
+showSoftInput() view=d6{35a9384 VFED..... .F...... 0,0-720,1612 aid=1073741829} flags=0 reason=SHOW_SOFT_INPUT
+
+[2026-08-03 19:44:56.773 Uid(value=10426):27250:27250 D/Autofill Status]
+Autofill popup isn't shown because autofill is not available.
+
+[2026-08-03 19:44:56.799 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:56.850 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=true)
+
+[2026-08-03 19:44:56.868 Uid(value=10426):27250:27250 D/InsetsController]
+show(ime(), fromIme=true)
+
+[2026-08-03 19:44:58.169 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:44:58.244 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@7f1984a[FiltersActivity]
+
+[2026-08-03 19:44:58.255 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7be7890
+
+[2026-08-03 19:44:58.300 Uid(value=10426):27250:27281 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#63](f:0,a:3) destructor()
+
+[2026-08-03 19:44:58.300 Uid(value=10426):27250:27281 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#63(BLAST Consumer)63](id:6a720000003f,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:44:58.332 Uid(value=10426):27250:27250 E/ImeBackDispatcher]
+Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 68904948
+
+[2026-08-03 19:44:59.631 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:44:59.635 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:44:59.647 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c2e570
+
+[2026-08-03 19:44:59.746 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000040,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:44:59.775 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#64](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28774314292560(auto) mPendingTransactions.size=0 graphicBufferId=117037858816730 transform=0
+
+[2026-08-03 19:44:59.776 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:45:04.787 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@621ace9[FiltersActivity]
+
+[2026-08-03 19:45:04.804 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c2e570
+
+[2026-08-03 19:45:04.844 Uid(value=10426):27250:27264 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#64](f:0,a:3) destructor()
+
+[2026-08-03 19:45:04.845 Uid(value=10426):27250:27264 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#64(BLAST Consumer)64](id:6a7200000040,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:45:05.922 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:45:05.925 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:45:05.938 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bdeef0
+
+[2026-08-03 19:45:06.034 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000041,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:45:06.061 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#65](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28780599855637(auto) mPendingTransactions.size=0 graphicBufferId=117037858816742 transform=0
+
+[2026-08-03 19:45:06.062 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:45:09.499 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@c3c6156[FiltersActivity]
+
+[2026-08-03 19:45:09.499 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#65](f:0,a:3) destructor()
+
+[2026-08-03 19:45:09.499 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#65(BLAST Consumer)65](id:6a7200000041,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:45:09.523 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bdeef0
+
+[2026-08-03 19:45:15.253 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:17.308 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:45:17.312 Uid(value=10426):27250:27250 D/VRI[FiltersActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:45:17.325 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bedc80
+
+[2026-08-03 19:45:17.400 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000042,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:45:17.426 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#66](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28791965723330(auto) mPendingTransactions.size=0 graphicBufferId=117037858816754 transform=0
+
+[2026-08-03 19:45:17.427 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:45:19.789 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@a684cbf[FiltersActivity]
+
+[2026-08-03 19:45:19.790 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#66](f:0,a:3) destructor()
+
+[2026-08-03 19:45:19.790 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#66(BLAST Consumer)66](id:6a7200000042,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:45:19.811 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7bedc80
+
+[2026-08-03 19:45:21.210 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:45:21.210 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,performPause]
+
+[2026-08-03 19:45:21.229 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:45:21.229 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:45:21.229 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:45:21.231 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:45:21.231 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:45:21.244 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000043,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:45:21.259 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#67](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28795798056254(auto) mPendingTransactions.size=0 graphicBufferId=117037858816762 transform=0
+
+[2026-08-03 19:45:21.518 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:45:21.527 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[197312550,com.dp.logcatapp.activities.FiltersActivity,performDestroy]
+
+[2026-08-03 19:45:21.533 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[FiltersActivity]#60](f:0,a:3) destructor()
+
+[2026-08-03 19:45:21.533 Uid(value=10426):27250:27269 D/BufferQueueConsumer]
+[VRI[FiltersActivity]#60(BLAST Consumer)60](id:6a720000003c,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:45:21.535 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@8ec6aa1[FiltersActivity]
+
+[2026-08-03 19:45:21.543 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c10030
+
+[2026-08-03 19:45:21.697 Uid(value=10426):27250:27258 I/om.dp.logcatapp]
+Background concurrent copying GC freed 19MB AllocSpace bytes, 10(312KB) LOS objects, 66% free, 13MB/41MB, paused 150us,58us total 253.697ms
+
+[2026-08-03 19:45:29.161 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:32.643 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:45:32.667 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:45:32.767 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:45:32.783 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#67](f:0,a:3) destructor()
+
+[2026-08-03 19:45:32.783 Uid(value=10426):27250:27269 D/BufferQueueConsumer]
+[VRI[MainActivity]#67(BLAST Consumer)67](id:6a7200000043,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:45:42.264 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:45:42.264 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:45:42.267 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:45:42.269 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:45:42.270 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:45:42.344 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000044,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:45:42.368 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#68](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28816906221486(auto) mPendingTransactions.size=0 graphicBufferId=117037858816775 transform=0
+
+[2026-08-03 19:45:45.093 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:45.979 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:48.968 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:50.624 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:45:54.844 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:45:54.858 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7b9c860
+
+[2026-08-03 19:45:54.872 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:45:54.899 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000045,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:45:54.915 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#69](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28829454559256(auto) mPendingTransactions.size=0 graphicBufferId=117037858816790 transform=0
+
+[2026-08-03 19:45:54.916 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:46:00.395 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:46:00.396 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performPause]
+
+[2026-08-03 19:46:00.423 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = nf2{c07431f V.E...... ......ID 0,0-320,704 #1020002 android:id/content aid=1073741834}
+
+[2026-08-03 19:46:00.423 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#69](f:0,a:3) destructor()
+
+[2026-08-03 19:46:00.423 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[نافذة منبثقة]#69(BLAST Consumer)69](id:6a7200000045,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:46:00.429 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7b9c860
+
+[2026-08-03 19:46:00.437 Uid(value=10426):27250:29647 D/libMEOW]
+meow new tls: 0xb4000071c84d29d0
+
+[2026-08-03 19:46:00.437 Uid(value=10426):27250:29647 D/libMEOW]
+applied 1 plugins for [com.dp.logcatapp]:
+
+[2026-08-03 19:46:00.437 Uid(value=10426):27250:29647 D/libMEOW]
+  plugin 1: [libMEOW_gift.so]: 0xb400007187b15820
+
+[2026-08-03 19:46:00.437 Uid(value=10426):27250:29647 D/libMEOW]
+rebuild call chain: 0xb4000071c84e29e0
+
+[2026-08-03 19:46:00.438 Uid(value=10426):27250:29647 D/libMEOW]
+meow delete tls: 0xb4000071c84d29d0
+
+[2026-08-03 19:46:00.442 Uid(value=10426):27250:27250 I/wm_on_create_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,performCreate]
+
+[2026-08-03 19:46:00.443 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,handleStartActivity]
+
+[2026-08-03 19:46:00.444 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:46:00.447 Uid(value=10426):27250:27250 D/VRI[SavedLogsActivity]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:46:00.453 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7c10240
+
+[2026-08-03 19:46:00.456 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:46:00.489 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000046,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:46:00.505 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[SavedLogsActivity]#70](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28835044310410(auto) mPendingTransactions.size=0 graphicBufferId=117037858816798 transform=0
+
+[2026-08-03 19:46:00.506 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
+
+[2026-08-03 19:46:00.607 Uid(value=10426):27250:27250 D/BLASTBufferQueue]
+[VRI[MainActivity]#68](f:0,a:3) destructor()
+
+[2026-08-03 19:46:00.607 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[VRI[MainActivity]#68(BLAST Consumer)68](id:6a7200000044,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:46:00.613 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,STOP_ACTIVITY_ITEM]
+
+[2026-08-03 19:46:09.682 Uid(value=10426):27250:27250 I/ScrollIdentify]
+on fling
+
+[2026-08-03 19:46:13.142 Uid(value=10426):27250:27250 I/wm_on_top_resumed_lost_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,topStateChangedWhenResumed]
+
+[2026-08-03 19:46:13.143 Uid(value=10426):27250:27250 I/wm_on_paused_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,performPause]
+
+[2026-08-03 19:46:13.161 Uid(value=10426):27250:27250 I/wm_on_restart_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,performRestartActivity]
+
+[2026-08-03 19:46:13.161 Uid(value=10426):27250:27250 I/wm_on_start_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,handleStartActivity]
+
+[2026-08-03 19:46:13.162 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:46:13.163 Uid(value=10426):27250:27250 I/wm_on_resume_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,RESUME_ACTIVITY]
+
+[2026-08-03 19:46:13.163 Uid(value=10426):27250:27250 I/wm_on_top_resumed_gained_called]
+[169420225,com.dp.logcatapp.activities.MainActivity,topWhenResuming]
+
+[2026-08-03 19:46:13.198 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000047,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:46:13.214 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[MainActivity]#71](f:0,a:1) acquireNextBufferLocked size=720x1612 mFrameNumber=1 applyTransaction=true mTimestamp=28847753288795(auto) mPendingTransactions.size=0 graphicBufferId=117037858816810 transform=0
+
+[2026-08-03 19:46:13.354 Uid(value=10426):27250:27250 I/wm_on_stop_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,LIFECYCLER_STOP_ACTIVITY]
+
+[2026-08-03 19:46:13.357 Uid(value=10426):27250:27250 I/wm_on_destroy_called]
+[88548641,com.dp.logcatapp.activities.SavedLogsActivity,performDestroy]
+
+[2026-08-03 19:46:13.363 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[SavedLogsActivity]#70](f:0,a:3) destructor()
+
+[2026-08-03 19:46:13.363 Uid(value=10426):27250:27269 D/BufferQueueConsumer]
+[VRI[SavedLogsActivity]#70(BLAST Consumer)70](id:6a7200000046,api:0,p:-1,c:27250) disconnect
+
+[2026-08-03 19:46:13.367 Uid(value=10426):27250:27250 D/View]
+[Warning] assignParent to null: this = DecorView@77faa04[SavedLogsActivity]
+
+[2026-08-03 19:46:13.375 Uid(value=10426):27250:27250 D/InputTransport]
+Destroy ARC handle: 0xb400006fe7c10240
+
+[2026-08-03 19:46:14.582 Uid(value=10426):27250:27250 D/VRI[نافذة منبثقة]]
+hardware acceleration = true, forceHwAccelerated = false
+
+[2026-08-03 19:46:14.595 Uid(value=10426):27250:27250 D/InputTransport]
+Create ARC handle: 0xb400006fe7bc4fd0
+
+[2026-08-03 19:46:14.611 Uid(value=10426):27250:27250 W/OnBackInvokedCallback]
+OnBackInvokedCallback is not enabled for the application.
+Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+
+[2026-08-03 19:46:14.647 Uid(value=10426):27250:27250 D/BufferQueueConsumer]
+[](id:6a7200000048,api:0,p:-1,c:27250) connect: controlledByApp=false
+
+[2026-08-03 19:46:14.665 Uid(value=10426):27250:27269 D/BLASTBufferQueue]
+[VRI[نافذة منبثقة]#72](f:0,a:1) acquireNextBufferLocked size=384x768 mFrameNumber=1 applyTransaction=true mTimestamp=28849204407565(auto) mPendingTransactions.size=0 graphicBufferId=117037858816825 transform=0
+
+[2026-08-03 19:46:14.666 Uid(value=10426):27250:27269 W/Parcel]
+Expecting binder but got null!
