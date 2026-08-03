@@ -20,7 +20,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -105,6 +107,9 @@ class MainActivity : AppCompatActivity() {
 
     // مرجع للواجهة لتتبع الحقن (للتشخيص)
     private var webAppInterface: WebAppInterface? = null
+
+    // Tag لتحديد ما إذا تم حقن Bridge في WebView (لتجنب الحقن المزدوج)
+    private val BRIDGE_INITIALIZED_TAG = View.generateViewId()
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -666,7 +671,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun cleanupOldRateLimits() {
         try {
             val deleted = dbHelper.cleanupOldRateLimits()
@@ -856,7 +860,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     // ============================================================
     // دوال مساعدة (WebView، تحميل الأصول، إلخ)
     // ============================================================
@@ -965,7 +968,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    // WebView و Compose - الهيكل المعدل جذرياً
+    // WebView و Compose - الهيكل المعدل جذرياً مع إصلاحات التشخيص
     // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -1019,17 +1022,32 @@ class MainActivity : AppCompatActivity() {
                             }
 
                             webViewClient = createWebViewClient()
-                            webChromeClient = WebChromeClient()
+
+                            // ✅ WebChromeClient مخصص لإظهار console.log في Logcat
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                                    val msg = "${consoleMessage.message()} (${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                                    when (consoleMessage.messageLevel()) {
+                                        ConsoleMessage.MessageLevel.ERROR -> Log.e("WebViewConsole", msg)
+                                        ConsoleMessage.MessageLevel.WARNING -> Log.w("WebViewConsole", msg)
+                                        else -> Log.d("WebViewConsole", msg)
+                                    }
+                                    return super.onConsoleMessage(consoleMessage)
+                                }
+                            }
 
                             // BridgeDebug: إنشاء WebView
                             Log.e("BridgeDebug", "WEBVIEW CREATED ${System.identityHashCode(this)}")
 
-                            // إنشاء الواجهة وحقنها
-                            webAppInterface = WebAppInterface(context, this@MainActivity)
-                            addJavascriptInterface(webAppInterface!!, "AndroidInterface")
-
-                            // BridgeDebug: إضافة الواجهة
-                            Log.e("BridgeDebug", "INTERFACE INJECTED ${System.identityHashCode(this)}")
+                            // ✅ حقن Bridge مع التحقق من التاغ لتجنب الحقن المزدوج
+                            if (getTag(BRIDGE_INITIALIZED_TAG) != true) {
+                                webAppInterface = WebAppInterface(context, this@MainActivity)
+                                addJavascriptInterface(webAppInterface!!, "AndroidInterface")
+                                setTag(BRIDGE_INITIALIZED_TAG, true)
+                                Log.e("BridgeDebug", "INTERFACE INJECTED (with tag check) ${System.identityHashCode(this)}")
+                            } else {
+                                Log.w("BridgeDebug", "Bridge already injected for this WebView, skipping")
+                            }
                         }
                     } else {
                         this@MainActivity.webView!!
@@ -1377,8 +1395,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ إصلاح هيكلي: إزالة safeEvaluateJs المكررة، والاعتماد على Activity
-        // يتم استخدام activity.safeEvaluateJs في جميع الاستدعاءات
+        // ✅ تم حذف safeEvaluateJs المكررة - نستخدم activity.safeEvaluateJs
 
         // ============================================================
         // 1. المصادقة (Login, Biometric)
@@ -1386,13 +1403,19 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
-            // BridgeDebug: استدعاء login من JavaScript
-            Log.e("BridgeDebug", "LOGIN CALLED FROM JS")
-            Log.d(TAG, "login() called with username: $username")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            // [LOGIN_DEBUG] سجل تشخيصي للتحقق من وصول الاستدعاء
+            Log.e("LOGIN_DEBUG", "login() called username=$username")
+
+            val db = getDbHelper()
+            if (db == null) {
+                Log.e("LOGIN_DEBUG", "DatabaseHelper is null!")
+                return errorResponse("قاعدة البيانات غير متاحة")
+            }
 
             return try {
                 val authResult = db.authenticateUser(username, password)
+                Log.e("LOGIN_DEBUG", "authenticate result=$authResult")
+
                 if (authResult != null) {
                     val userId = authResult.optLong("user_id", 0)
                     val permissionsArray = db.getUserPermissions(userId)
@@ -1436,10 +1459,11 @@ class MainActivity : AppCompatActivity() {
                         put("token", token)
                     }.toString()
                 } else {
+                    Log.e("LOGIN_DEBUG", "Authentication failed - invalid credentials")
                     errorResponse("بيانات خاطئة")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Login error", e)
+                Log.e("LOGIN_DEBUG", "LOGIN EXCEPTION", e)
                 errorResponse("خطأ داخلي: ${e.message}")
             }
         }
