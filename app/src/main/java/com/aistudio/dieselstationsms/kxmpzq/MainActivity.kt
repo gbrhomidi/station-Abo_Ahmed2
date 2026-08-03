@@ -103,6 +103,9 @@ class MainActivity : AppCompatActivity() {
     private var backgroundJob: Job? = null
     private var maintenanceJob: Job? = null   // للصيانة الدورية
 
+    // مرجع للواجهة لتتبع الحقن (للتشخيص)
+    private var webAppInterface: WebAppInterface? = null
+
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
@@ -1021,15 +1024,15 @@ class MainActivity : AppCompatActivity() {
                         webViewClient = createWebViewClient()
                         webChromeClient = WebChromeClient()
 
-                        try {
-                            addJavascriptInterface(
-                                WebAppInterface(context, this@MainActivity),
-                                "AndroidInterface"
-                            )
-                            Log.d(TAG, "AndroidInterface bridge registered successfully")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to add JS interface: ${e.message}")
-                        }
+                        // BridgeDebug: إنشاء WebView
+                        Log.e("BridgeDebug", "WEBVIEW CREATED ${System.identityHashCode(this)}")
+
+                        // إنشاء الواجهة وحقنها
+                        webAppInterface = WebAppInterface(context, this@MainActivity)
+                        addJavascriptInterface(webAppInterface!!, "AndroidInterface")
+
+                        // BridgeDebug: إضافة الواجهة
+                        Log.e("BridgeDebug", "INTERFACE INJECTED ${System.identityHashCode(this)}")
                     }
 
                     addView(wv)
@@ -1049,6 +1052,8 @@ class MainActivity : AppCompatActivity() {
         return object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                // BridgeDebug: انتهاء تحميل الصفحة
+                Log.e("BridgeDebug", "PAGE FINISHED ${view?.let { System.identityHashCode(it) }} URL=$url")
                 if (isDestroyed.get()) return
                 serverReady = true
                 isErrorPageShown = false
@@ -1110,6 +1115,8 @@ class MainActivity : AppCompatActivity() {
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
             ): Boolean {
+                // BridgeDebug: انهيار عملية العرض
+                Log.e("BridgeDebug", "RENDER PROCESS GONE")
                 Log.e(TAG, "WebView RenderProcess gone. didCrash: ${detail?.didCrash()}")
                 view?.let { destroyWebView(it) }
                 if (!isDestroyed.get()) {
@@ -1127,6 +1134,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun recreateWebView() {
+        // BridgeDebug: استدعاء إعادة الإنشاء
+        Log.e("BridgeDebug", "RECREATE WEBVIEW")
         if (isDestroyed.get()) return
         Log.d(TAG, "Recreating WebView...")
         webView?.let { destroyWebView(it) }
@@ -1207,6 +1216,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun destroyWebView(webView: WebView?) {
+        // BridgeDebug: تدمير WebView
+        Log.e("BridgeDebug", "WEBVIEW DESTROY ${webView?.let { System.identityHashCode(it) }}")
         if (webView == null) return
         try {
             (webView.parent as? ViewGroup)?.removeView(webView)
@@ -1359,6 +1370,9 @@ class MainActivity : AppCompatActivity() {
                 val wv = activity.webView
                 if (wv != null && wv.isAttachedToWindow) {
                     wv.evaluateJavascript(script, null)
+                    Log.e("BridgeDebug", "SAFE EVALUATE JS on ${System.identityHashCode(wv)}")
+                } else {
+                    Log.w("BridgeDebug", "SAFE EVALUATE JS FAILED: WebView not ready")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to evaluate JS: ${e.message}")
@@ -1371,6 +1385,8 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
+            // BridgeDebug: استدعاء login من JavaScript
+            Log.e("BridgeDebug", "LOGIN CALLED FROM JS")
             Log.d(TAG, "login() called with username: $username")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
 
@@ -3959,6 +3975,9 @@ class MainActivity : AppCompatActivity() {
             val wv = webView
             if (wv != null && wv.isAttachedToWindow) {
                 wv.evaluateJavascript(script, null)
+                Log.e("BridgeDebug", "SAFE EVALUATE JS (ACTIVITY) on ${System.identityHashCode(wv)}")
+            } else {
+                Log.w("BridgeDebug", "SAFE EVALUATE JS (ACTIVITY) FAILED: WebView not ready")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to evaluate JS: ${e.message}")
