@@ -715,7 +715,7 @@
         /* ====== الأزرار العائمة الجديدة ====== */
         .floating-actions {
             position: fixed;
-            bottom: 130px;  /* رفع للأعلى بمقدار زرين تقريباً (ارتفاع 33px + gap 10px)*2 = 86px، الإزاحة السابقة 20px -> 20+86=106، نزيد قليلاً للراحة */
+            bottom: 130px;  /* رفع للأعلى بمقدار زرين تقريباً */
             left: 20px;
             display: flex;
             flex-direction: column-reverse;
@@ -723,13 +723,13 @@
             z-index: 1000;
         }
         .floating-actions .action-btn {
-            width: 34px;   /* تقليل الحجم بمقدار الثلث: 50px * 2/3 ≈ 33.3px */
+            width: 34px;
             height: 34px;
             border-radius: 50%;
             border: none;
             background: linear-gradient(145deg, #2c3e50, #3498db);
             color: white;
-            font-size: 1rem;   /* تقليل حجم الأيقونة متناسب */
+            font-size: 1rem;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             transition: all 0.3s ease;
@@ -751,12 +751,11 @@
         /* نهاية الأزرار العائمة */
 
         .theme-toggle {
-            /* تم إزالة الزر القديم */
             display: none;
         }
 
         .password-actions {
-            display: none; /* إخفاء الأيقونات القديمة */
+            display: none;
         }
 
         .notification-container {
@@ -1336,7 +1335,7 @@
             }
 
             .floating-actions {
-                bottom: 110px;  /* تعديل للشاشات الصغيرة */
+                bottom: 110px;
                 left: 10px;
                 gap: 8px;
             }
@@ -1917,7 +1916,7 @@
         }
 
         // ============================================================
-        // دالة apiCall الموحدة (Android Native فقط - لا خادم داخلي)
+        // دالة apiCall الموحدة (مع معالجة محسّنة للأخطاء)
         // ============================================================
         async function apiCall(action, params = {}) {
             if (hasAndroidBridge()) {
@@ -1938,9 +1937,14 @@
 
                     const methodName = actionMap[action];
                     if (!methodName) {
+                        // محاولة استدعاء مباشر إذا كان الاسم مطابقاً
                         if (typeof AndroidInterface[action] === 'function') {
-                            const result = AndroidInterface[action]();
-                            return handleAndroidResult(result);
+                            try {
+                                const result = AndroidInterface[action]();
+                                return handleAndroidResult(result);
+                            } catch (e) {
+                                throw new Error(`فشل استدعاء ${action}: ${e.message}`);
+                            }
                         }
                         throw new Error(`الإجراء غير معروف: ${action}`);
                     }
@@ -1951,42 +1955,55 @@
                     }
 
                     let result;
-                    switch (action) {
-                        case 'login':
-                            result = method(params.username || '', params.password || '');
-                            break;
-                        case 'forgot_password':
-                            result = method(params.username || '');
-                            break;
-                        case 'verify_reset_code':
-                            result = method(params.phone || '', params.code || '');
-                            break;
-                        case 'reset_password':
-                            result = method(params.token || '', params.new_password || '');
-                            break;
-                        case 'get_user_data':
-                            result = method(params.username || '');
-                            break;
-                        case 'save_credentials':
-                            result = method(params.username || '', params.password || '', params.remember || false);
-                            break;
-                        case 'load_credentials':
-                        case 'has_saved_credentials':
-                        case 'clear_credentials':
-                            result = method();
-                            break;
-                        case 'biometric_auto_login':
-                        case 'authenticate_biometric':
-                            result = method();
-                            break;
-                        default:
-                            result = method();
-                            break;
+                    try {
+                        switch (action) {
+                            case 'login':
+                                result = method(params.username || '', params.password || '');
+                                break;
+                            case 'forgot_password':
+                                result = method(params.username || '');
+                                break;
+                            case 'verify_reset_code':
+                                result = method(params.phone || '', params.code || '');
+                                break;
+                            case 'reset_password':
+                                result = method(params.token || '', params.new_password || '');
+                                break;
+                            case 'get_user_data':
+                                result = method(params.username || '');
+                                break;
+                            case 'save_credentials':
+                                result = method(params.username || '', params.password || '', params.remember || false);
+                                break;
+                            case 'load_credentials':
+                            case 'has_saved_credentials':
+                            case 'clear_credentials':
+                                result = method();
+                                break;
+                            case 'biometric_auto_login':
+                            case 'authenticate_biometric':
+                                result = method();
+                                break;
+                            default:
+                                result = method();
+                                break;
+                        }
+                    } catch (e) {
+                        // خطأ أثناء الاستدعاء (مثل "non-injected object")
+                        console.error('Error invoking Android method:', e);
+                        throw new Error(`فشل تنفيذ العملية: ${e.message}`);
                     }
+
                     return handleAndroidResult(result);
                 } catch (e) {
                     console.error('AndroidInterface error:', e);
-                    showNotification('حدث خطأ في الاتصال الداخلي: ' + e.message, 'error');
+                    let userMsg = 'حدث خطأ في الاتصال الداخلي.';
+                    if (e.message && e.message.includes('non-injected')) {
+                        userMsg = 'لم يتم تهيئة الاتصال مع التطبيق بشكل صحيح. يرجى إعادة تشغيل التطبيق.';
+                    } else {
+                        userMsg = 'حدث خطأ في الاتصال الداخلي: ' + e.message;
+                    }
+                    showNotification(userMsg, 'error');
                     throw e;
                 }
             }
