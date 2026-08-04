@@ -334,8 +334,6 @@
             position: relative;
         }
 
-        /* ====== أيقونات كلمة المرور الدائمة - تم إزالتها ====== */
-
         .modal {
             display: none;
             position: fixed;
@@ -582,7 +580,6 @@
             text-shadow: 0 0 5px rgba(99, 179, 237, 0.7);
         }
 
-        /* ====== عناصر التواصل - إطار خارجي فقط بدون خلفية ====== */
         .contact-info {
             background: linear-gradient(145deg, #f8f9fa, #e9ecef);
             padding: 20px;
@@ -712,7 +709,6 @@
             animation: float 15s infinite ease-in-out;
         }
 
-        /* ====== الأزرار العائمة الجديدة ====== */
         .floating-actions {
             position: fixed;
             bottom: 130px;
@@ -992,7 +988,6 @@
             animation: slideDown 0.3s;
         }
 
-        /* ====== Terms Modal Enhancements ====== */
         .terms-section {
             margin-bottom: 25px;
             padding: 15px;
@@ -1096,7 +1091,6 @@
             background: rgba(243, 156, 18, 0.15);
         }
 
-        /* ====== Fingerprint Modal ====== */
         .fingerprint-modal .modal-content {
             max-width: 400px;
             text-align: center;
@@ -1135,7 +1129,6 @@
             color: #a0aec0;
         }
 
-        /* ====== Quick Login Badge ====== */
         .quick-login-badge {
             display: inline-flex;
             align-items: center;
@@ -1155,7 +1148,6 @@
             background: linear-gradient(135deg, rgba(39, 174, 96, 0.2), rgba(46, 204, 113, 0.15));
         }
 
-        /* ====== Tooltips System ====== */
         [data-tooltip] {
             position: relative;
             cursor: pointer;
@@ -1200,7 +1192,6 @@
             transform: translateX(-50%) scale(1);
         }
 
-        /* Tooltip for RTL - show on top for mobile */
         @media (max-width: 480px) {
             [data-tooltip]::after {
                 white-space: normal;
@@ -1209,7 +1200,6 @@
             }
         }
 
-        /* ====== Lockout Banner ====== */
         .lockout-banner {
             background: linear-gradient(145deg, rgba(231, 76, 60, 0.15), rgba(192, 57, 43, 0.1));
             border: 2px dashed var(--error-color);
@@ -1547,17 +1537,17 @@
                     <p><i class="fas fa-user"></i> المهندس <span class="glowing-text">جبر الحميدي</span></p>
                     <p><i class="fas fa-phone"></i> 
                         <a href="tel:+967106586714" class="contact-action-btn phone-btn">
-                            <i class="fas fa-phone-alt"></i> 📲 للاتصال: اضغــط هنا
+                            <i class="fas fa-phone-alt"></i>  اضغــط هنــا
                         </a>
                     </p>
                     <p><i class="fab fa-whatsapp"></i> 
                         <a href="https://wa.me/967781038203" target="_blank" rel="noopener noreferrer" class="contact-action-btn whatsapp-btn">
-                            <i class="fab fa-whatsapp"></i> 💬 واتساب: اضغـط هنــا
+                            <i class="fab fa-whatsapp"></i>  اضغــط هنــا
                         </a>
                     </p>
                     <p><i class="fas fa-envelope"></i> 
                         <a href="mailto:gbrhomidi@gmail.com" class="contact-action-btn email-btn">
-                            <i class="fas fa-envelope"></i> 📧 للبريد : اضغــط هنــا
+                            <i class="fas fa-envelope"></i>  اضغــط هنــا
                         </a>
                     </p>
                 </div>
@@ -1897,98 +1887,77 @@
         }
 
         // ============================================================
-        // دالة apiCall الموحدة
+        // ✅ دالة apiCall الموحدة (محدثة)
         // ============================================================
         async function apiCall(action, params = {}) {
-            if (hasAndroidBridge()) {
-                try {
-                    const actionMap = {
-                        'login': 'login',
-                        'forgot_password': 'forgotPassword',
-                        'verify_reset_code': 'verifyResetCode',
-                        'reset_password': 'resetPassword',
-                        'get_user_data': 'getUserData',
-                        'save_credentials': 'saveCredentials',
-                        'load_credentials': 'loadCredentials',
-                        'clear_credentials': 'clearCredentials',
-                        'has_saved_credentials': 'hasSavedCredentials',
-                        'biometric_auto_login': 'biometricAutoLogin',
-                        'authenticate_biometric': 'authenticateBiometric'
-                    };
-
-                    const methodName = actionMap[action];
-                    if (!methodName) {
-                        if (typeof AndroidInterface[action] === 'function') {
-                            try {
-                                const result = AndroidInterface[action]();
-                                return handleAndroidResult(result);
-                            } catch (e) {
-                                throw new Error(`فشل استدعاء ${action}: ${e.message}`);
-                            }
-                        }
-                        throw new Error(`الإجراء غير معروف: ${action}`);
-                    }
-
-                    const method = AndroidInterface[methodName];
-                    if (typeof method !== 'function') {
-                        throw new Error(`الدالة ${methodName} غير موجودة في AndroidInterface`);
-                    }
-
-                    let result;
-                    try {
-                        switch (action) {
-                            case 'login':
-                                result = method(params.username || '', params.password || '');
-                                break;
-                            case 'forgot_password':
-                                result = method(params.username || '');
-                                break;
-                            case 'verify_reset_code':
-                                result = method(params.phone || '', params.code || '');
-                                break;
-                            case 'reset_password':
-                                result = method(params.token || '', params.new_password || '');
-                                break;
-                            case 'get_user_data':
-                                result = method(params.username || '');
-                                break;
-                            case 'save_credentials':
-                                result = method(params.username || '', params.password || '', params.remember || false);
-                                break;
-                            case 'load_credentials':
-                            case 'has_saved_credentials':
-                            case 'clear_credentials':
-                                result = method();
-                                break;
-                            case 'biometric_auto_login':
-                            case 'authenticate_biometric':
-                                result = method();
-                                break;
-                            default:
-                                result = method();
-                                break;
-                        }
-                    } catch (e) {
-                        console.error('Error invoking Android method:', e);
-                        throw new Error(`فشل تنفيذ العملية: ${e.message}`);
-                    }
-
-                    return handleAndroidResult(result);
-                } catch (e) {
-                    console.error('AndroidInterface error:', e);
-                    let userMsg = 'حدث خطأ في الاتصال الداخلي.';
-                    if (e.message && e.message.includes('non-injected')) {
-                        userMsg = 'لم يتم تهيئة الاتصال مع التطبيق بشكل صحيح. يرجى إعادة تشغيل التطبيق.';
-                    } else {
-                        userMsg = 'حدث خطأ في الاتصال الداخلي: ' + e.message;
-                    }
-                    showNotification(userMsg, 'error');
-                    throw e;
-                }
+            if (!hasAndroidBridge()) {
+                showNotification('النظام يتطلب تشغيله داخل تطبيق Android', 'error');
+                throw new Error('AndroidInterface غير متوفر');
             }
 
-            showNotification('النظام يتطلب تشغيله داخل تطبيق Android', 'error');
-            throw new Error('AndroidInterface غير متوفر');
+            try {
+                // ✅ تحديث actionMap
+                const actionMap = {
+                    'login': 'login',
+                    'forgot_password': 'forgotPassword',
+                    'verify_reset_code': 'verifyResetCode',
+                    'reset_password': 'resetPassword',
+                    'get_user_data': 'getUserData',
+                    'save_credentials': 'saveCredentials',
+                    'load_credentials': 'loadCredentials',      // ✅ أضيفت
+                    'clear_credentials': 'clearCredentials',
+                    'has_saved_credentials': 'hasSavedCredentials',
+                    'biometric_auto_login': 'biometricAutoLogin'
+                    // ❌ أُزيلت 'authenticate_biometric' — غير مستخدمة في الكود
+                };
+
+                const methodName = actionMap[action] || action;
+                const method = AndroidInterface[methodName];
+
+                if (typeof method !== 'function') {
+                    throw new Error(`الدالة ${methodName} غير موجودة في AndroidInterface`);
+                }
+
+                let result;
+                switch (action) {
+                    case 'login':
+                        result = method(params.username || '', params.password || '');
+                        break;
+                    case 'forgot_password':
+                        result = method(params.username || '');
+                        break;
+                    case 'verify_reset_code':
+                        result = method(params.phone || '', params.code || '');
+                        break;
+                    case 'reset_password':
+                        result = method(params.token || '', params.new_password || '');
+                        break;
+                    case 'get_user_data':
+                        result = method(params.username || '');
+                        break;
+                    case 'save_credentials':
+                        // ✅ 3 معاملات للتوافق مع Kotlin الجديد
+                        result = method(params.username || '', params.password || '', params.remember || false);
+                        break;
+                    case 'load_credentials':
+                    case 'has_saved_credentials':
+                    case 'clear_credentials':
+                        result = method();
+                        break;
+                    case 'biometric_auto_login':
+                        result = method();
+                        break;
+                    default:
+                        result = method();
+                        break;
+                }
+
+                return handleAndroidResult(result);
+            } catch (e) {
+                console.error('AndroidInterface error:', e);
+                showNotification('حدث خطأ في الاتصال الداخلي: ' + e.message, 'error');
+                throw e;
+            }
         }
 
         // ============================================================
@@ -2255,27 +2224,19 @@
         }
 
         // ============================================================
-        // Remember Me System
+        // ✅ Remember Me System (محدث)
         // ============================================================
         async function saveRememberMeCredentials(username, password, remember) {
             try {
                 if (hasAndroidBridge()) {
-                    if (typeof AndroidInterface.saveCredentials === 'function') {
-                        const result = await apiCall('save_credentials', {
-                            username: username,
-                            password: password,
-                            remember: remember
-                        });
-
-                        if (result.success) {
-                            console.log('Credentials saved via AndroidInterface');
-                            return { success: true, method: 'android' };
-                        }
-                    }
+                    const result = await apiCall('save_credentials', {
+                        username: username,
+                        password: password,   // يُرسل للتوافق مع التوقيع لكن Kotlin لا يحفظه
+                        remember: remember
+                    });
+                    return result;
                 }
-                return { success: false, error: 'AndroidInterface غير متوفر' };
             } catch (e) {
-                console.error('Error saving credentials:', e);
                 return { success: false, error: e.message };
             }
         }
@@ -2283,30 +2244,19 @@
         async function loadRememberMeCredentials() {
             try {
                 if (hasAndroidBridge()) {
-                    if (typeof AndroidInterface.loadCredentials === 'function') {
-                        const result = await apiCall('load_credentials');
-
-                        if (result.success && result.hasCredentials) {
-                            const timestamp = result.timestamp || 0;
-                            const maxAge = APP_CONFIG.CREDENTIALS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-
-                            if (Date.now() - timestamp > maxAge) {
-                                console.log('Saved credentials expired');
-                                await clearRememberMeCredentials();
-                                return null;
-                            }
-
-                            return {
-                                username: result.username,
-                                password: result.password,
-                                source: 'android'
-                            };
+                    const result = await apiCall('load_credentials'); // ✅ كانت مفقودة
+                    if (result.success && result.hasCredentials) {
+                        const timestamp = result.timestamp || 0;
+                        const maxAge = APP_CONFIG.CREDENTIALS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+                        if (Date.now() - timestamp > maxAge) {
+                            await clearRememberMeCredentials();
+                            return null;
                         }
+                        return { username: result.username, source: 'android' };
                     }
                 }
                 return null;
             } catch (e) {
-                console.error('Error loading credentials:', e);
                 return null;
             }
         }
@@ -2314,9 +2264,7 @@
         async function clearRememberMeCredentials() {
             try {
                 if (hasAndroidBridge()) {
-                    if (typeof AndroidInterface.clearCredentials === 'function') {
-                        await apiCall('clear_credentials');
-                    }
+                    await apiCall('clear_credentials');
                 }
                 return true;
             } catch (e) {
@@ -2461,9 +2409,6 @@
             const savedCredentials = await loadRememberMeCredentials();
             if (savedCredentials && savedCredentials.username) {
                 usernameInput.value = savedCredentials.username;
-                if (savedCredentials.password) {
-                    passwordInput.value = savedCredentials.password;
-                }
                 rememberCheckbox.checked = true;
                 showNotification('تم استرجاع بيانات الدخول المحفوظة', 'info');
             }
