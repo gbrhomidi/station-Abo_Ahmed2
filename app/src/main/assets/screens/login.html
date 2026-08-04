@@ -334,8 +334,6 @@
             position: relative;
         }
 
-        /* ====== أيقونات كلمة المرور الدائمة - تم إزالتها ====== */
-
         .modal {
             display: none;
             position: fixed;
@@ -582,7 +580,6 @@
             text-shadow: 0 0 5px rgba(99, 179, 237, 0.7);
         }
 
-        /* ====== عناصر التواصل - إطار خارجي فقط بدون خلفية ====== */
         .contact-info {
             background: linear-gradient(145deg, #f8f9fa, #e9ecef);
             padding: 20px;
@@ -712,7 +709,6 @@
             animation: float 15s infinite ease-in-out;
         }
 
-        /* ====== الأزرار العائمة الجديدة ====== */
         .floating-actions {
             position: fixed;
             bottom: 130px;
@@ -747,14 +743,6 @@
         .dark-mode .floating-actions .action-btn {
             background: linear-gradient(145deg, #f39c12, #f1c40f);
             color: #1a202c;
-        }
-
-        .theme-toggle {
-            display: none;
-        }
-
-        .password-actions {
-            display: none;
         }
 
         .notification-container {
@@ -992,7 +980,6 @@
             animation: slideDown 0.3s;
         }
 
-        /* ====== Terms Modal Enhancements ====== */
         .terms-section {
             margin-bottom: 25px;
             padding: 15px;
@@ -1096,7 +1083,6 @@
             background: rgba(243, 156, 18, 0.15);
         }
 
-        /* ====== Fingerprint Modal ====== */
         .fingerprint-modal .modal-content {
             max-width: 400px;
             text-align: center;
@@ -1135,7 +1121,6 @@
             color: #a0aec0;
         }
 
-        /* ====== Quick Login Badge ====== */
         .quick-login-badge {
             display: inline-flex;
             align-items: center;
@@ -1155,7 +1140,6 @@
             background: linear-gradient(135deg, rgba(39, 174, 96, 0.2), rgba(46, 204, 113, 0.15));
         }
 
-        /* ====== Tooltips System ====== */
         [data-tooltip] {
             position: relative;
             cursor: pointer;
@@ -1200,7 +1184,6 @@
             transform: translateX(-50%) scale(1);
         }
 
-        /* Tooltip for RTL - show on top for mobile */
         @media (max-width: 480px) {
             [data-tooltip]::after {
                 white-space: normal;
@@ -1209,7 +1192,6 @@
             }
         }
 
-        /* ====== Lockout Banner ====== */
         .lockout-banner {
             background: linear-gradient(145deg, rgba(231, 76, 60, 0.15), rgba(192, 57, 43, 0.1));
             border: 2px dashed var(--error-color);
@@ -1352,10 +1334,18 @@
     <script src="../assets-local/js/vconsole.min.js"></script>
     <script>
         // ==============================
-        // Global JavaScript Error Logger
+        // Global JavaScript Error Logger (بدون Alert لتجنب الحلقات اللانهائية)
         // ==============================
+        var errorCount = 0;
+        var maxErrors = 10;
 
         window.onerror = function(msg, url, line, col, error) {
+            errorCount++;
+            if (errorCount > maxErrors) {
+                console.error("⚠️ تجاوز الحد الأقصى للأخطاء، تم إيقاف التسجيل.");
+                return true;
+            }
+
             var errorMsg =
                 "JavaScript Error:\n\n" +
                 "Message: " + msg +
@@ -1365,27 +1355,35 @@
 
             console.error(errorMsg);
 
-            // إرسال إلى Kotlin DebugLogger
+            // إرسال إلى Kotlin DebugLogger إذا كان الجسر متاحاً
             try {
                 if (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null) {
-                    AndroidInterface.logFromJS('ERROR', errorMsg);
+                    if (typeof AndroidInterface.logFromJS === 'function') {
+                        AndroidInterface.logFromJS('ERROR', errorMsg);
+                    }
                 }
-            } catch(e) {}
+            } catch(e) {
+                // تجاهل
+            }
 
             return true;
         };
 
         // ==============================
-        // Initialize VConsole
+        // Initialize VConsole (مع حماية من الأخطاء)
         // ==============================
 
         try {
-            window.vConsole = new VConsole();
-            console.log("================================");
-            console.log("✅ VConsole Started Successfully");
-            console.log("Login Page:", window.location.href);
-            console.log("AndroidInterface:", typeof AndroidInterface);
-            console.log("================================");
+            if (typeof VConsole !== 'undefined') {
+                window.vConsole = new VConsole();
+                console.log("================================");
+                console.log("✅ VConsole Started Successfully");
+                console.log("Login Page:", window.location.href);
+                console.log("AndroidInterface:", typeof AndroidInterface);
+                console.log("================================");
+            } else {
+                console.warn("⚠️ VConsole library not loaded");
+            }
         } catch(e) {
             console.error("❌ VConsole initialization failed:", e.message);
         }
@@ -1395,33 +1393,28 @@
         // ==============================
 
         setTimeout(function(){
-            console.log("========== Bridge Check ==========");
-            console.log("AndroidInterface:", typeof window.AndroidInterface);
-            if(typeof window.AndroidInterface !== "undefined"){
-                console.log("login:", typeof AndroidInterface.login);
-                console.log("hasSavedCredentials:", typeof AndroidInterface.hasSavedCredentials);
-            } else {
-                console.error("❌ AndroidInterface NOT FOUND");
+            try {
+                console.log("========== Bridge Check ==========");
+                console.log("AndroidInterface:", typeof window.AndroidInterface);
+                if(typeof window.AndroidInterface !== "undefined"){
+                    console.log("login:", typeof AndroidInterface.login);
+                    console.log("hasSavedCredentials:", typeof AndroidInterface.hasSavedCredentials);
+                } else {
+                    console.error("❌ AndroidInterface NOT FOUND");
+                }
+                console.log("==================================");
+            } catch(e) {
+                console.error("Bridge check error:", e.message);
             }
-            console.log("==================================");
         }, 2000);
     </script>
 
     <!-- ============================================================ -->
-    <!-- Error Tracking (بدون VConsole) -->
+    <!-- Error Tracking (بدون Alert) -->
     <!-- ============================================================ -->
     <script>
-        window.onerror = function(msg, url, line, col, error) {
-            var errorMsg = "خطأ: " + msg + "\nالملف: " + url + "\nالسطر: " + line + "\nالعمود: " + col;
-            console.error(errorMsg);
-            alert(errorMsg);
-            try {
-                if (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null) {
-                    AndroidInterface.logFromJS('ERROR', errorMsg);
-                }
-            } catch(e) {}
-            return true;
-        };
+        // استخدام نفس المعالج السابق، ولكن نضمن عدم وجود alert
+        // تم بالفعل تعريف window.onerror أعلاه
     </script>
 
     <!-- Loading Overlay -->
@@ -1940,32 +1933,29 @@
         // Android Interface Helpers
         // ============================================================
         function hasAndroidBridge() {
-            const exists = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
-            console.log('>>> JS Bridge CHECK:', exists, 'methods:', exists ? Object.keys(AndroidInterface).slice(0,5) : 'none');
-            // إرسال إلى Kotlin للتسجيل
-            if (exists) {
-                try {
+            try {
+                const exists = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
+                console.log('>>> JS Bridge CHECK:', exists, 'methods:', exists ? Object.keys(AndroidInterface).slice(0,5) : 'none');
+                if (exists && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('INFO', 'Bridge exists: ' + Object.keys(AndroidInterface).slice(0,5).join(','));
-                } catch(e) {}
-            } else {
-                try {
-                    // لا يمكن استدعاء AndroidInterface لأنه غير موجود
-                } catch(e) {}
+                }
+                return exists;
+            } catch(e) {
+                console.warn('Bridge check error:', e.message);
+                return false;
             }
-            return exists;
         }
 
         function logToAndroid(action, details) {
-            if (hasAndroidBridge() && typeof AndroidInterface.logEvent === 'function') {
-                try {
+            try {
+                if (hasAndroidBridge() && typeof AndroidInterface.logEvent === 'function') {
                     AndroidInterface.logEvent(action, details || '');
-                } catch(e) { console.log('logEvent error:', e); }
-            }
-            // إرسال إلى Kotlin DebugLogger عبر logFromJS
-            if (hasAndroidBridge() && typeof AndroidInterface.logFromJS === 'function') {
-                try {
+                }
+                if (hasAndroidBridge() && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('INFO', `[${action}] ${details}`);
-                } catch(e) {}
+                }
+            } catch(e) {
+                console.log('logToAndroid error:', e);
             }
         }
 
@@ -1983,10 +1973,9 @@
         // دالة apiCall الموحدة
         // ============================================================
         async function apiCall(action, params = {}) {
-            console.log('>>> JS Bridge CALL:', action, '| AndroidInterface exists:', hasAndroidBridge());
-            // إرسال إلى Kotlin
             try {
-                if (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null && typeof AndroidInterface.logFromJS === 'function') {
+                console.log('>>> JS Bridge CALL:', action, '| AndroidInterface exists:', hasAndroidBridge());
+                if (hasAndroidBridge() && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('INFO', `apiCall: ${action} params=${JSON.stringify(params)}`);
                 }
             } catch(e) {}

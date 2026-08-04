@@ -46,7 +46,6 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -120,7 +119,6 @@ class MainActivity : AppCompatActivity() {
             private fun sendToVConsole(level: String, message: String) {
                 if (!isVConsoleReady) return
                 val wv = webViewRef?.get() ?: return
-                // Escape message for JavaScript
                 val escaped = message.replace("\\", "\\\\")
                     .replace("\"", "\\\"")
                     .replace("\n", "\\n")
@@ -147,12 +145,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // إرسال استثناء مباشر
             fun logException(tag: String, throwable: Throwable) {
                 error(tag, throwable.message ?: "Exception occurred", throwable)
             }
 
-            // تسجيل أحداث النظام
             fun logEvent(event: String, details: String = "") {
                 info("EVENT", "$event | $details")
             }
@@ -166,7 +162,6 @@ class MainActivity : AppCompatActivity() {
         fun installGlobalExceptionHandler() {
             Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
                 DebugLogger.logException("GlobalException", throwable)
-                // إعادة توجيه إلى المعالج الافتراضي
                 defaultExceptionHandler?.uncaughtException(thread, throwable)
             }
         }
@@ -222,7 +217,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // تثبيت معالج الأخطاء العام
         installGlobalExceptionHandler()
 
         try {
@@ -260,7 +254,6 @@ class MainActivity : AppCompatActivity() {
 
         createNotificationChannel()
 
-        // تفعيل تصحيح أخطاء WebView
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
@@ -365,7 +358,6 @@ class MainActivity : AppCompatActivity() {
                 validateDatabaseSchema()
                 migrateDatabaseIfNeeded()
                 DebugLogger.info("Database", "DATABASE_CREATE_SUCCESS")
-                // فحص وجود الجداول الأساسية
                 checkEssentialTables()
             } catch (e: Exception) {
                 DebugLogger.logException("Database", e)
@@ -403,7 +395,6 @@ class MainActivity : AppCompatActivity() {
                 val currentVersion = dbHelper.getVersion()
                 if (currentVersion < DatabaseHelper.VERSION) {
                     DebugLogger.info("Database", "Migrating from $currentVersion to ${DatabaseHelper.VERSION}")
-                    // يقوم DatabaseHelper بالترحيل
                 }
             } catch (e: Exception) {
                 DebugLogger.logException("Database", e)
@@ -997,9 +988,7 @@ class MainActivity : AppCompatActivity() {
                                     val msg = consoleMessage.message()
                                     val line = consoleMessage.lineNumber()
                                     val source = consoleMessage.sourceId()
-                                    // إرسال إلى Logcat
                                     Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
-                                    // إرسال إلى DebugLogger
                                     DebugLogger.info("WebViewConsole", "$msg")
                                     return true
                                 }
@@ -1021,7 +1010,6 @@ class MainActivity : AppCompatActivity() {
                     this@MainActivity.webView = wv
                     this@MainActivity.isWebViewInitialized = true
 
-                    // ربط DebugLogger بالـ WebView
                     DebugLogger.attachWebView(wv)
 
                     val instanceId = ++webViewInstanceId
@@ -4100,7 +4088,6 @@ class MainActivity : AppCompatActivity() {
             return "PONG"
         }
 
-        // دالة لإرسال السجلات من JavaScript إلى DebugLogger
         @JavascriptInterface
         fun logFromJS(level: String, message: String) {
             when (level.uppercase()) {
@@ -4110,11 +4097,9 @@ class MainActivity : AppCompatActivity() {
                 else -> DebugLogger.info("JS", message)
             }
         }
-
-    // نهاية WebAppInterface
     }
 
-    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs) - النسخة الوحيدة
+    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs)
     fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
