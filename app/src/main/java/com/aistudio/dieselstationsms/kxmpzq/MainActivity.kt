@@ -31,13 +31,23 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -69,6 +79,9 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_ROLE = "user_role"
         private const val KEY_USER_NAME = "user_name"
+        
+        // متتبع للـ WebView instance
+        private var webViewInstanceId = 0
     }
 
     // ====== مكونات النشاط ======
@@ -77,11 +90,13 @@ class MainActivity : AppCompatActivity() {
     private var serverReady = false
     private val isDestroyed = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
+    private var isWebViewInitialized = false
     private var isErrorPageShown = false
     private var backgroundJob: Job? = null
     private var maintenanceJob: Job? = null
 
     private var webAppInterface: WebAppInterface? = null
+    private val BRIDGE_INITIALIZED_TAG = 0x7F0F0001 // قيمة ثابتة آمنة
 
     private val isDebugMode: Boolean
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -161,17 +176,21 @@ class MainActivity : AppCompatActivity() {
 
         requestAllPermissions()
 
-        // ✅ إزالة Compose وإدارة WebView يدوياً
-        val rootLayout = FrameLayout(this).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+        setContent {
+            MyApplicationTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    WebViewScreen(
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+            }
         }
-        setContentView(rootLayout)
 
-        // إنشاء WebView مباشرة
-        createWebView(rootLayout)
+        handler.postDelayed({
+            if (!isDestroyed.get()) {
+                loadWebViewFromAssets()
+            }
+        }, 2000)
 
         lifecycleScope.launch {
             initializeSystem()
@@ -781,87 +800,80 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    // ✅ إدارة WebView الجديدة (بدون Compose)
+    // WebView و Compose
     // ============================================================
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(container: FrameLayout) {
-        // تدمير القديم إن وجد
-        webView?.let { destroyWebView(it) }
-        webView = null
-        isErrorPageShown = false
-
-        val wv = WebView(this).apply {
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-            setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
-
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-                setSupportZoom(true)
-                builtInZoomControls = true
-                displayZoomControls = false
-                allowFileAccess = true
-                allowContentAccess = true
-                javaScriptCanOpenWindowsAutomatically = false
-                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
-                cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                loadsImagesAutomatically = true
-                setSupportMultipleWindows(false)
-                userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+    @Composable
+    fun WebViewScreen(modifier: Modifier = Modifier) {
+        DisposableEffect(Unit) {
+            onDispose {
+                // WebView يتم إدارته بواسطة Activity
             }
-
-            webViewClient = createWebViewClient()
-            webChromeClient = WebChromeClient()
-
-            // ✅ حقن الجسر مرة واحدة فقط عند الإنشاء
-            addJavascriptInterface(
-                WebAppInterface(this, this@MainActivity),
-                "AndroidInterface"
-            )
         }
 
-        container.addView(wv)
-        webView = wv
+        AndroidView(
+            modifier = modifier.fillMaxSize(),
+            factory = { context ->
+                FrameLayout(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
 
-        handler.postDelayed({
-            if (!isDestroyed.get()) loadWebViewFromAssets()
-        }, 2000)
-    }
+                    val wv = if (this@MainActivity.webView == null) {
+                        WebView(context).apply {
+                            layoutParams = FrameLayout.LayoutParams(
+                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                FrameLayout.LayoutParams.MATCH_PARENT
+                            )
 
-    // ✅ إعادة إنشاء WebView بدون setContent()
-    private fun recreateWebView() {
-        if (isDestroyed.get()) return
-        Log.d(TAG, "Recreating WebView...")
+                            setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
-        val container = webView?.parent as? FrameLayout
-        if (container != null) {
-            createWebView(container)
-        } else {
-            val root = findViewById<View>(android.R.id.content) as? FrameLayout
-            root?.let { createWebView(it) }
-        }
-    }
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                databaseEnabled = true
+                                setSupportZoom(true)
+                                builtInZoomControls = true
+                                displayZoomControls = false
+                                allowFileAccess = true
+                                allowContentAccess = true
+                                javaScriptCanOpenWindowsAutomatically = false
+                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
+                                cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                loadsImagesAutomatically = true
+                                setSupportMultipleWindows(false)
+                                userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
+                                        "(KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+                            }
 
-    // ✅ دالة موحدة لتنفيذ JavaScript مع التحقق من الصحة
-    fun safeEvaluateJs(script: String) {
-        if (isDestroyed.get()) return
-        try {
-            val wv = webView
-            if (wv != null && wv.isAttachedToWindow) {
-                wv.evaluateJavascript(script, null)
-            } else {
-                Log.w(TAG, "WebView not attached, cannot evaluate JS")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to evaluate JS: ${e.message}")
-        }
+                            webViewClient = createWebViewClient()
+                            webChromeClient = WebChromeClient()
+
+                            if (getTag(BRIDGE_INITIALIZED_TAG) != true) {
+                                webAppInterface = WebAppInterface(context, this@MainActivity)
+                                addJavascriptInterface(webAppInterface!!, "AndroidInterface")
+                                setTag(BRIDGE_INITIALIZED_TAG, true)
+                            }
+                        }
+                    } else {
+                        this@MainActivity.webView!!
+                    }
+
+                    (wv.parent as? ViewGroup)?.removeView(wv)
+                    addView(wv)
+                    this@MainActivity.webView = wv
+                    this@MainActivity.isWebViewInitialized = true
+                    
+                    // تسجيل إنشاء WebView
+                    val instanceId = ++webViewInstanceId
+                    Log.w(TAG, ">>> WebView CREATED instance=$instanceId hash=${wv.hashCode()}")
+                }
+            },
+            update = { }
+        )
     }
 
     private fun createWebViewClient(): WebViewClient {
@@ -928,6 +940,7 @@ class MainActivity : AppCompatActivity() {
                 view?.let { destroyWebView(it) }
                 if (!isDestroyed.get()) {
                     webView = null
+                    isWebViewInitialized = false
                     handler.postDelayed({
                         if (!isDestroyed.get()) {
                             recreateWebView()
@@ -936,6 +949,22 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
+        }
+    }
+
+    private fun recreateWebView() {
+        if (isDestroyed.get()) return
+
+        val wv = webView
+        if (wv != null && wv.isAttachedToWindow) {
+            wv.loadUrl("file:///android_asset/screens/login.html")
+        } else {
+            handler.postDelayed({
+                if (!isDestroyed.get()) {
+                    isErrorPageShown = false
+                    loadWebViewFromAssets()
+                }
+            }, 500)
         }
     }
 
@@ -995,9 +1024,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun destroyWebView(webView: WebView?) {
         if (webView == null) return
+        
+        // تسجيل تدمير WebView
+        Log.w(TAG, ">>> WebView DESTROYED instance hash=${webView.hashCode()}")
+        
         try {
             if (this.webView === webView) {
                 this.webView = null
+                isWebViewInitialized = false
             }
 
             (webView.parent as? ViewGroup)?.removeView(webView)
@@ -1075,7 +1109,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ============================================================
-    // WebAppInterface - واجهة JavaScript الكاملة (محدثة)
+    // WebAppInterface - واجهة JavaScript الكاملة
     // ============================================================
 
     @Keep
@@ -1091,11 +1125,6 @@ class MainActivity : AppCompatActivity() {
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
-
-        // ✅ دالة مساعدة لتنفيذ JS عبر النشاط
-        private fun safeEvaluateJs(script: String) {
-            getActivity()?.safeEvaluateJs(script)
-        }
 
         private fun checkPermission(permissionCode: String, action: String): Boolean {
             val activity = getActivity() ?: return false
@@ -1149,6 +1178,9 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
+            val activity = getActivity()
+            Log.w(TAG, ">>> JS Bridge CALL: login() | activity=${activity?.hashCode()} | webView=${activity?.webView?.hashCode()} | attached=${activity?.webView?.isAttachedToWindow}")
+            
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
 
             return try {
@@ -1183,7 +1215,7 @@ class MainActivity : AppCompatActivity() {
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
                     val token = UUID.randomUUID().toString()
-                    getActivity()?.let { act ->
+                    activity?.let { act ->
                         act.currentAuthToken = token
                         act.currentUserId = userId
                         act.currentUserRole = role
@@ -1213,14 +1245,14 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "authenticated")
                         }
-                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                        activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     },
                     onError = { error ->
                         val result = JSONObject().apply {
                             put("success", false)
                             put("error", error)
                         }
-                        safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
+                        activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     }
                 )
             }
@@ -1335,212 +1367,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // ✅ دوال إدارة بيانات الاعتماد (Remember Me + Biometric)
-        // ============================================================
-
-        @JavascriptInterface
-        fun loadCredentials(): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try {
-                val prefs = activity.sharedPrefs
-                val remember = prefs.getBoolean("remember_me", false)
-                val username = prefs.getString("saved_username", "") ?: ""
-                val userId = prefs.getLong("saved_user_id", 0)
-                val timestamp = prefs.getLong("saved_timestamp", 0)
-                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
-
-                JSONObject().apply {
-                    put("success", true)
-                    put("hasCredentials", remember && hasToken && userId != 0L && username.isNotEmpty())
-                    put("username", username)
-                    put("userId", userId)
-                    put("timestamp", timestamp)
-                }.toString()
-            } catch (e: Exception) {
-                Log.e(TAG, "loadCredentials error", e)
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
-        fun saveCredentials(username: String, password: String, remember: Boolean): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try {
-                // ✅ password يُستقبل للتوافق مع JS لكن لا يُحفظ (أمان)
-                activity.sharedPrefs.edit().apply {
-                    putBoolean("remember_me", remember)
-                    if (remember) {
-                        putString("saved_username", username)
-                        putLong("saved_user_id", activity.currentUserId)
-                        putString("saved_token", activity.currentAuthToken ?: "")
-                        putLong("saved_timestamp", System.currentTimeMillis())
-                    } else {
-                        remove("saved_username")
-                        remove("saved_user_id")
-                        remove("saved_token")
-                        remove("saved_timestamp")
-                    }
-                    apply()
-                }
-                successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
-            } catch (e: Exception) {
-                Log.e(TAG, "saveCredentials error", e)
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
-        fun hasSavedCredentials(): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try {
-                val prefs = activity.sharedPrefs
-                val remember = prefs.getBoolean("remember_me", false)
-                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
-                val username = prefs.getString("saved_username", "") ?: ""
-                val userId = prefs.getLong("saved_user_id", 0)
-
-                JSONObject().apply {
-                    put("success", true)
-                    put("hasCredentials", remember && hasToken && userId != 0L)
-                    put("username", username)
-                    put("userId", userId)
-                }.toString()
-            } catch (e: Exception) {
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
-        fun clearCredentials(): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try {
-                activity.sharedPrefs.edit().apply {
-                    remove("remember_me")
-                    remove("saved_username")
-                    remove("saved_token")
-                    remove("saved_user_id")
-                    remove("saved_timestamp")
-                    apply()
-                }
-                activity.currentAuthToken = null
-                activity.currentUserId = 0
-                activity.currentUserRole = ""
-                activity.currentUserName = ""
-                successResponse(0, "تم مسح البيانات وجلسة التطبيق")
-            } catch (e: Exception) {
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
-        fun biometricAutoLogin(): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            val prefs = activity.sharedPrefs
-
-            val token = prefs.getString("saved_token", "") ?: ""
-            val userId = prefs.getLong("saved_user_id", 0)
-            val savedUsername = prefs.getString("saved_username", "") ?: ""
-
-            if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
-                return errorResponse("لا توجد بيانات محفوظة")
-            }
-
-            activity.runOnUiThread {
-                activity.showBiometricPrompt(
-                    onSuccess = {
-                        val db = getDbHelper()
-                        if (db == null) {
-                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
-                            return@showBiometricPrompt
-                        }
-                        try {
-                            activity.currentAuthToken = token
-                            activity.currentUserId = userId
-
-                            val user = db.getUserByUsername(savedUsername)
-                            if (user != null) {
-                                val permissionsArray = db.getUserPermissions(userId)
-                                val permissionsObject = JSONObject()
-                                for (i in 0 until permissionsArray.length()) {
-                                    val item = permissionsArray.getJSONObject(i)
-                                    val code = item.getString("permission_code")
-                                    permissionsObject.put(code, JSONObject().apply {
-                                        put("can_create", item.optBoolean("can_create"))
-                                        put("can_read", item.optBoolean("can_read"))
-                                        put("can_update", item.optBoolean("can_update"))
-                                        put("can_delete", item.optBoolean("can_delete"))
-                                        put("can_export", item.optBoolean("can_export"))
-                                        put("can_print", item.optBoolean("can_print"))
-                                        put("can_approve", item.optBoolean("can_approve"))
-                                    })
-                                }
-                                user.put("permissions", permissionsObject)
-                                user.put("screens", db.getUserScreens(userId))
-                                val role = user.optString("role", "USER")
-                                user.put("role", role)
-                                user.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
-
-                                activity.currentUserRole = role
-                                activity.currentUserName = user.optString("username", "")
-
-                                val result = JSONObject().apply {
-                                    put("success", true)
-                                    put("user", user)
-                                    put("token", token)
-                                    put("message", "تم تسجيل الدخول عبر البصمة")
-                                }
-                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
-                            } else {
-                                safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
-                            }
-                        } catch (e: Exception) {
-                            safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
-                        }
-                    },
-                    onError = { error ->
-                        val result = JSONObject().apply {
-                            put("success", false)
-                            put("error", error)
-                        }
-                        safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
-                    }
-                )
-            }
-
-            return JSONObject().apply {
-                put("success", true)
-                put("status", "processing")
-            }.toString()
-        }
-
-        @JavascriptInterface
-        fun authenticateBiometric(): String {
-            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            activity.runOnUiThread {
-                activity.showBiometricPrompt(
-                    onSuccess = {
-                        val result = JSONObject().apply {
-                            put("success", true)
-                            put("message", "authenticated")
-                        }
-                        safeEvaluateJs("""window.onBiometricResult && window.onBiometricResult($result)""")
-                    },
-                    onError = { error ->
-                        val result = JSONObject().apply {
-                            put("success", false)
-                            put("error", error)
-                        }
-                        safeEvaluateJs("""window.onBiometricResult && window.onBiometricResult($result)""")
-                    }
-                )
-            }
-            return JSONObject().apply {
-                put("success", true)
-                put("status", "processing")
-            }.toString()
-        }
-
-        // ============================================================
         // 2. الذكاء الاصطناعي (Gemini)
         // ============================================================
 
@@ -1564,7 +1390,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("response", response)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1572,7 +1398,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 }
             }
@@ -1600,7 +1426,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("response", response)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1608,7 +1434,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
+                        activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
                 }
             }
@@ -1644,7 +1470,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("insight", insight)
                         }
-                        safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
+                        activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1652,7 +1478,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
+                        activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
                 }
             }
@@ -2363,7 +2189,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 14. الرسائل النصية (SMS)
+        // 14. الرسائل النصية (SMS) - جزء مختصر للقراءة
         // ============================================================
 
         @JavascriptInterface
@@ -2601,7 +2427,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 16. لوحة التحكم والتقارير
+        // 17. لوحة التحكم والتقارير
         // ============================================================
 
         @JavascriptInterface
@@ -2653,7 +2479,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 17. المنتجات والوقود
+        // 18. المنتجات والوقود
         // ============================================================
 
         @JavascriptInterface
@@ -2731,7 +2557,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 18. المركبات، الخزانات والمضخات
+        // 19. المركبات، الخزانات والمضخات - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -2795,7 +2621,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 19. طلبات الصيانة
+        // 20. طلبات الصيانة
         // ============================================================
 
         @JavascriptInterface
@@ -2872,7 +2698,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 20. المدفوعات والإيداعات
+        // 21. المدفوعات والإيداعات - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -2939,7 +2765,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 21. تقارير إضافية
+        // 22. تقارير إضافية - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3041,7 +2867,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 22. النسخ الاحتياطي والتصدير
+        // 23. النسخ الاحتياطي والتصدير
         // ============================================================
 
         @JavascriptInterface
@@ -3059,7 +2885,7 @@ class MainActivity : AppCompatActivity() {
                             put("path", path)
                             put("message", "تم إنشاء النسخة الاحتياطية بنجاح")
                         }
-                        safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
+                        activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3067,7 +2893,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
+                        activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
                 }
             }
@@ -3094,7 +2920,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", success)
                             put("message", if (success) "تم الاستعادة بنجاح" else "فشل الاستعادة")
                         }
-                        safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
+                        activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3102,7 +2928,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
+                        activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
                 }
             }
@@ -3130,7 +2956,7 @@ class MainActivity : AppCompatActivity() {
                             put("path", path)
                             put("message", "تم التصدير بنجاح")
                         }
-                        safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
+                        activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3138,7 +2964,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
+                        activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
                 }
             }
@@ -3166,7 +2992,7 @@ class MainActivity : AppCompatActivity() {
                             put("count", count)
                             put("message", "تم استيراد $count سجل بنجاح")
                         }
-                        safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
+                        activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3174,7 +3000,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
+                        activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
                 }
             }
@@ -3202,7 +3028,7 @@ class MainActivity : AppCompatActivity() {
                             put("data", data)
                             put("message", "تم تصدير جميع البيانات بنجاح")
                         }
-                        safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
+                        activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3210,7 +3036,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
+                        activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
                 }
             }
@@ -3237,7 +3063,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "تم تحسين قاعدة البيانات بنجاح")
                         }
-                        safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
+                        activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -3245,7 +3071,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", e.message)
                         }
-                        safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
+                        activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
                 }
             }
@@ -3259,7 +3085,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 23. دوال مساعدة وأدوات
+        // 24. دوال مساعدة وأدوات
         // ============================================================
 
         @JavascriptInterface
@@ -3545,7 +3371,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 24. دوال إضافية للشاشات الجديدة
+        // 25. دوال إضافية للشاشات الجديدة - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3709,6 +3535,184 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
+        // 26. إدارة بيانات الاعتماد (Remember Me + Biometric Auto-Login)
+        // ============================================================
+
+        @JavascriptInterface
+        fun saveCredentials(username: String, password: String, remember: Boolean): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.sharedPrefs.edit().apply {
+                    putBoolean("remember_me", remember)
+                    if (remember) {
+                        putString("saved_username", username)
+                        putString("saved_token", activity.currentAuthToken ?: "")
+                        putLong("saved_user_id", activity.currentUserId)
+                        putLong("saved_timestamp", System.currentTimeMillis())
+                    } else {
+                        remove("saved_username")
+                        remove("saved_token")
+                        remove("saved_user_id")
+                        remove("saved_timestamp")
+                    }
+                    apply()
+                }
+                successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
+            } catch (e: Exception) {
+                Log.e(TAG, "saveCredentials error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun loadCredentials(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val prefs = activity.sharedPrefs
+                val remember = prefs.getBoolean("remember_me", false)
+                val username = prefs.getString("saved_username", "") ?: ""
+                val userId = prefs.getLong("saved_user_id", 0)
+                val timestamp = prefs.getLong("saved_timestamp", 0)
+                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("hasCredentials", remember && hasToken && userId != 0L && username.isNotEmpty())
+                    put("username", username)
+                    put("userId", userId)
+                    put("timestamp", timestamp)
+                }.toString()
+            } catch (e: Exception) {
+                Log.e(TAG, "loadCredentials error", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun hasSavedCredentials(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val prefs = activity.sharedPrefs
+                val remember = prefs.getBoolean("remember_me", false)
+                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
+                val username = prefs.getString("saved_username", "") ?: ""
+                val userId = prefs.getLong("saved_user_id", 0)
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("hasCredentials", remember && hasToken && userId != 0L)
+                    put("username", username)
+                    put("userId", userId)
+                }.toString()
+            } catch (e: Exception) {
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun biometricAutoLogin(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val prefs = activity.sharedPrefs
+
+            val token = prefs.getString("saved_token", "") ?: ""
+            val userId = prefs.getLong("saved_user_id", 0)
+            val savedUsername = prefs.getString("saved_username", "") ?: ""
+
+            if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
+                return errorResponse("لا توجد بيانات محفوظة")
+            }
+
+            activity.runOnUiThread {
+                activity.showBiometricPrompt(
+                    onSuccess = {
+                        val db = getDbHelper()
+                        if (db == null) {
+                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
+                            return@showBiometricPrompt
+                        }
+                        try {
+                            activity.currentAuthToken = token
+                            activity.currentUserId = userId
+
+                            val user = db.getUserByUsername(savedUsername)
+                            if (user != null) {
+                                val permissionsArray = db.getUserPermissions(userId)
+                                val permissionsObject = JSONObject()
+                                for (i in 0 until permissionsArray.length()) {
+                                    val item = permissionsArray.getJSONObject(i)
+                                    val code = item.getString("permission_code")
+                                    permissionsObject.put(code, JSONObject().apply {
+                                        put("can_create", item.optBoolean("can_create"))
+                                        put("can_read", item.optBoolean("can_read"))
+                                        put("can_update", item.optBoolean("can_update"))
+                                        put("can_delete", item.optBoolean("can_delete"))
+                                        put("can_export", item.optBoolean("can_export"))
+                                        put("can_print", item.optBoolean("can_print"))
+                                        put("can_approve", item.optBoolean("can_approve"))
+                                    })
+                                }
+                                user.put("permissions", permissionsObject)
+                                user.put("screens", db.getUserScreens(userId))
+                                val role = user.optString("role", "USER")
+                                user.put("role", role)
+                                user.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
+
+                                activity.currentUserRole = role
+                                activity.currentUserName = user.optString("username", "")
+
+                                val result = JSONObject().apply {
+                                    put("success", true)
+                                    put("user", user)
+                                    put("token", token)
+                                    put("message", "تم تسجيل الدخول عبر البصمة")
+                                }
+                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                            } else {
+                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
+                            }
+                        } catch (e: Exception) {
+                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
+                        }
+                    },
+                    onError = { error ->
+                        val result = JSONObject().apply {
+                            put("success", false)
+                            put("error", error)
+                        }
+                        activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                    }
+                )
+            }
+
+            return JSONObject().apply {
+                put("success", true)
+                put("status", "processing")
+            }.toString()
+        }
+
+        @JavascriptInterface
+        fun clearCredentials(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.sharedPrefs.edit().apply {
+                    remove("remember_me")
+                    remove("saved_username")
+                    remove("saved_token")
+                    remove("saved_user_id")
+                    remove("saved_timestamp")
+                    apply()
+                }
+                activity.currentAuthToken = null
+                activity.currentUserId = 0
+                activity.currentUserRole = ""
+                activity.currentUserName = ""
+                successResponse(0, "تم مسح البيانات وجلسة التطبيق")
+            } catch (e: Exception) {
+                errorResponse(e.message)
+            }
+        }
+
+        // ============================================================
         // دالة ping للتشخيص (اختبار Bridge)
         // ============================================================
 
@@ -3717,8 +3721,22 @@ class MainActivity : AppCompatActivity() {
             return "PONG"
         }
 
-        // ============================================================
-        // نهاية WebAppInterface
-        // ============================================================
+    // نهاية WebAppInterface
+    }
+
+    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs) - النسخة الوحيدة
+    fun safeEvaluateJs(script: String) {
+        if (isDestroyed.get()) return
+        try {
+            val wv = webView
+            if (wv != null && wv.isAttachedToWindow) {
+                Log.w(TAG, ">>> safeEvaluateJs called on instance=${wv.hashCode()} attached=${wv.isAttachedToWindow}")
+                wv.evaluateJavascript(script, null)
+            } else {
+                Log.w(TAG, ">>> safeEvaluateJs: WebView not available or not attached")
+            }
+        } catch (e: Exception) {
+            // تجاهل
+        }
     }
 }
