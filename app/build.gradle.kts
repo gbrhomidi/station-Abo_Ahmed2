@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.roborazzi)
     alias(libs.plugins.kotlin.serialization)
 }
@@ -146,18 +145,10 @@ dependencies {
     // Navigation
     implementation(libs.androidx.navigation.compose)
 
-    // Room
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-
     // Network
     implementation(libs.retrofit)
-    implementation(libs.converter.moshi)
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
-    implementation(libs.moshi.kotlin)
-    ksp(libs.moshi.kotlin.codegen)
 
     // Coroutines (موحدة عبر libs)
     implementation(libs.kotlinx.coroutines.android)

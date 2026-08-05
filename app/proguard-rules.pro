@@ -56,27 +56,6 @@
 }
 
 # ═══════════════════════════════════════════════════════════════
-#  Moshi - JSON Serialization
-# ═══════════════════════════════════════════════════════════════
-
-# الحفاظ على محولات Moshi
--keep class * extends com.squareup.moshi.JsonAdapter {
-    <init>(...);
-    <methods>;
-}
-
-# الحفاظ على التعليقات التوضيحية للـ JSON
--keepclassmembers class * {
-    @com.squareup.moshi.Json <fields>;
-    @com.squareup.moshi.FromJson <methods>;
-    @com.squareup.moshi.ToJson <methods>;
-}
-
-# الحفاظ على فئات Moshi نفسها
--keep class com.squareup.moshi.** { *; }
--dontwarn com.squareup.moshi.**
-
-# ═══════════════════════════════════════════════════════════════
 #  Retrofit - Networking
 # ═══════════════════════════════════════════════════════════════
 
@@ -91,27 +70,6 @@
 # الحفاظ على فئات Retrofit
 -keep class retrofit2.** { *; }
 -dontwarn retrofit2.**
-
-# ═══════════════════════════════════════════════════════════════
-#  Room - Database
-# ═══════════════════════════════════════════════════════════════
-
-# الحفاظ على فئات Room Database
--keep class * extends androidx.room.RoomDatabase {
-    <init>(...);
-    <methods>;
-}
-
-# الحفاظ على الـ DAOs
--keep class com.aistudio.dieselstationsms.kxmpzq.data.db.dao.** {
-    <methods>;
-}
-
-# الحفاظ على الـ TypeConverters
--keep class com.aistudio.dieselstationsms.kxmpzq.data.db.converter.** { *; }
-
-# Room uses RuntimeExceptions
--dontwarn androidx.room.paging.**
 
 # ═══════════════════════════════════════════════════════════════
 #  Compose - UI Framework

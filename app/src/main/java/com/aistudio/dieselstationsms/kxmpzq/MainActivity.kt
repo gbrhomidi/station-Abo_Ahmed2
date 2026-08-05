@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                 isVConsoleReady = false
             }
 
-            // دوال التسجيل العامة - ترسل إلى Logcat فقط، لا ترسل إلى VConsole
+            // دوال التسجيل العامة - ترسل إلى Logcat فقط
             fun info(tag: String, message: String) {
                 val full = "[$tag] $message"
                 Log.i(TAG, full)
@@ -975,6 +975,7 @@ class MainActivity : AppCompatActivity() {
                             webChromeClient = object : WebChromeClient() {
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                                     // نمرر رسائل Console إلى Logcat فقط، وليس إلى VConsole
+                                    // لأن VConsole يعرضها بالفعل
                                     return true
                                 }
                             }
