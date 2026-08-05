@@ -1437,6 +1437,65 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun getCurrentUser(): String {
+
+            DebugLogger.info(
+                "WebAppInterface",
+                "getCurrentUser called"
+            )
+
+            val activity = getActivity()
+                ?: return errorResponse("النشاط غير متاح")
+
+            val db = getDbHelper()
+                ?: return errorResponse("قاعدة البيانات غير متاحة")
+
+
+            return try {
+
+                val userId = activity.currentUserId
+
+                if (userId == 0L) {
+                    return errorResponse("لا توجد جلسة مستخدم")
+                }
+
+
+                val user = db.getUserById(userId)
+
+                    ?: return errorResponse("المستخدم غير موجود")
+
+
+                val permissions = db.getUserPermissions(userId)
+
+                val screens = db.getUserScreens(userId)
+
+
+                user.put(
+                    "permissions",
+                    permissions
+                )
+
+                user.put(
+                    "screens",
+                    screens
+                )
+
+
+                dataResponse(user)
+
+
+            } catch (e: Exception) {
+
+                DebugLogger.logException(
+                    "CurrentUser",
+                    e
+                )
+
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun requestBiometricAuth(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             DebugLogger.info("Biometric", "requestBiometricAuth called")

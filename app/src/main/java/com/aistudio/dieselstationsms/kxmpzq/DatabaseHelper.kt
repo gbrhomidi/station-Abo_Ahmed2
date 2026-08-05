@@ -4900,7 +4900,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             (23, 'PER-023-UUID', 'accounting.read', 'View Accounting', 'عرض المحاسبة', 'accounting', 'المحاسبة', 'read'),
             (24, 'PER-024-UUID', 'accounting.create', 'Create Entries', 'إنشاء قيود', 'accounting', 'المحاسبة', 'create'),
             (25, 'PER-025-UUID', 'settings.read', 'View Settings', 'عرض الإعدادات', 'settings', 'الإعدادات', 'read'),
-            (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update')
+            (26, 'PER-026-UUID', 'settings.update', 'Edit Settings', 'تعديل الإعدادات', 'settings', 'الإعدادات', 'update'),
+            (27, 'PER-027-UUID', 'dashboard.read', 'View Dashboard', 'عرض لوحة التحكم', 'dashboard', 'لوحة التحكم', 'read')
         """)
 
         db.execSQL("""
@@ -5589,6 +5590,62 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
         val rows = writableDatabase.update("users", cv, "username=?", arrayOf(username))
         return rows > 0
+    }
+
+    fun getUserById(userId: Long): JSONObject? {
+
+        val db = readableDatabase
+
+        val cursor = db.rawQuery(
+            """
+            SELECT 
+                u.id,
+                u.uuid,
+                u.username,
+                u.full_name,
+                u.full_name_ar,
+                u.display_name,
+                u.role_id,
+                r.role_code AS role,
+                u.station_id,
+                u.company_id,
+                u.preferred_language,
+                u.theme,
+                u.status
+            FROM users u
+            LEFT JOIN roles r ON r.id = u.role_id
+            WHERE u.id = ?
+            AND u.is_deleted = 0
+            LIMIT 1
+            """,
+            arrayOf(userId.toString())
+        )
+
+        return cursor.use {
+
+            if (it.moveToFirst()) {
+
+                JSONObject().apply {
+
+                    put("user_id", it.getLong(it.getColumnIndexOrThrow("id")))
+                    put("uuid", it.getString(it.getColumnIndexOrThrow("uuid")))
+                    put("username", it.getString(it.getColumnIndexOrThrow("username")))
+                    put("full_name", it.getString(it.getColumnIndexOrThrow("full_name")))
+                    put("full_name_ar", it.getString(it.getColumnIndexOrThrow("full_name_ar")))
+                    put("display_name", it.getString(it.getColumnIndexOrThrow("display_name")))
+                    put("role", it.getString(it.getColumnIndexOrThrow("role")))
+                    put("role_id", it.getLong(it.getColumnIndexOrThrow("role_id")))
+                    put("station_id", it.getLong(it.getColumnIndexOrThrow("station_id")))
+                    put("company_id", it.getLong(it.getColumnIndexOrThrow("company_id")))
+                    put("language", it.getString(it.getColumnIndexOrThrow("preferred_language")))
+                    put("theme", it.getString(it.getColumnIndexOrThrow("theme")))
+                    put("status", it.getString(it.getColumnIndexOrThrow("status")))
+                }
+
+            } else {
+                null
+            }
+        }
     }
 
     // ========================================================================
