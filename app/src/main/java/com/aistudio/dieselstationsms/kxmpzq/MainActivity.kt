@@ -17,13 +17,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -35,7 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -53,7 +46,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -82,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         private var webViewInstanceId = 0
 
         // ============================
-        // DebugLogger - نظام التشخيص المركزي (معدل للتصفية)
+        // DebugLogger - نظام التشخيص المركزي
         // ============================
         object DebugLogger {
             private const val TAG = "DebugLogger"
@@ -92,6 +85,7 @@ class MainActivity : AppCompatActivity() {
             fun attachWebView(webView: WebView?) {
                 webViewRef = WeakReference(webView)
                 isVConsoleReady = true
+                info("DebugLogger", "Attached to WebView")
             }
 
             fun detachWebView() {
@@ -100,15 +94,16 @@ class MainActivity : AppCompatActivity() {
                 isVConsoleReady = false
             }
 
-            // دوال التسجيل العامة - ترسل إلى Logcat فقط
             fun info(tag: String, message: String) {
                 val full = "[$tag] $message"
                 Log.i(TAG, full)
+                sendToVConsole("INFO", full)
             }
 
             fun warn(tag: String, message: String) {
                 val full = "[$tag] $message"
                 Log.w(TAG, full)
+                sendToVConsole("WARN", full)
             }
 
             fun error(tag: String, message: String, throwable: Throwable? = null) {
@@ -118,37 +113,7 @@ class MainActivity : AppCompatActivity() {
                     message
                 }
                 Log.e(TAG, "[$tag] $full")
-            }
-
-            // دوال خاصة لتسجيل أحداث تسجيل الدخول فقط (ترسل إلى VConsole و Logcat)
-            fun logLogin(message: String) {
-                val full = "[LOGIN] $message"
-                Log.i(TAG, full)
-                sendToVConsole("INFO", full)
-            }
-
-            fun logDatabase(message: String) {
-                val full = "[DATABASE] $message"
-                Log.i(TAG, full)
-                sendToVConsole("INFO", full)
-            }
-
-            fun logSession(message: String) {
-                val full = "[SESSION] $message"
-                Log.i(TAG, full)
-                sendToVConsole("INFO", full)
-            }
-
-            fun logNavigation(message: String) {
-                val full = "[NAVIGATION] $message"
-                Log.i(TAG, full)
-                sendToVConsole("INFO", full)
-            }
-
-            fun logError(message: String) {
-                val full = "[ERROR] $message"
-                Log.e(TAG, full)
-                sendToVConsole("ERROR", full)
+                sendToVConsole("ERROR", "[$tag] $full")
             }
 
             private fun sendToVConsole(level: String, message: String) {
@@ -196,7 +161,7 @@ class MainActivity : AppCompatActivity() {
 
         fun installGlobalExceptionHandler() {
             Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-                Log.e(TAG, "Uncaught exception", throwable)
+                DebugLogger.logException("GlobalException", throwable)
                 defaultExceptionHandler?.uncaughtException(thread, throwable)
             }
         }
@@ -257,18 +222,21 @@ class MainActivity : AppCompatActivity() {
         try {
             enableEdgeToEdge()
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("onCreate", "enableEdgeToEdge failed: ${e.message}")
         }
 
         try {
             initEncryptedPrefs()
         } catch (e: Exception) {
             sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            DebugLogger.warn("onCreate", "Encrypted prefs fallback to regular")
         }
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
+            DebugLogger.info("Database", "DatabaseHelper initialized")
         } catch (e: Exception) {
+            DebugLogger.logException("Database", e)
             Toast.makeText(this, "فشل تهيئة قاعدة البيانات", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -281,7 +249,7 @@ class MainActivity : AppCompatActivity() {
                 geminiHelper.initialize(geminiApiKey)
             }
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Gemini", "Gemini initialization failed: ${e.message}")
         }
 
         createNotificationChannel()
@@ -289,8 +257,9 @@ class MainActivity : AppCompatActivity() {
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
+                DebugLogger.info("WebView", "Debugging enabled")
             } catch (e: Exception) {
-                // تجاهل
+                DebugLogger.warn("WebView", "Could not enable debugging: ${e.message}")
             }
         }
 
@@ -317,6 +286,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         scheduleBackgroundTasks()
+
+        DebugLogger.info("MainActivity", "onCreate finished")
     }
 
     override fun onStart() {
@@ -368,10 +339,11 @@ class MainActivity : AppCompatActivity() {
                 webView = null
             }
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("onDestroy", "Error destroying WebView: ${e.message}")
         }
 
         super.onDestroy()
+        DebugLogger.info("MainActivity", "onDestroy finished")
     }
 
     // ============================================================
@@ -381,10 +353,14 @@ class MainActivity : AppCompatActivity() {
     private suspend fun initializeDatabase() {
         withContext(Dispatchers.IO) {
             try {
+                DebugLogger.info("Database", "DATABASE_CREATE_STARTED")
                 val tables = dbHelper.getTableCounts()
                 validateDatabaseSchema()
                 migrateDatabaseIfNeeded()
+                DebugLogger.info("Database", "DATABASE_CREATE_SUCCESS")
+                checkEssentialTables()
             } catch (e: Exception) {
+                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
         }
@@ -407,6 +383,7 @@ class MainActivity : AppCompatActivity() {
                     dbHelper.tableExists(table)
                 }
             } catch (e: Exception) {
+                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
         }
@@ -417,11 +394,35 @@ class MainActivity : AppCompatActivity() {
             try {
                 val currentVersion = dbHelper.getVersion()
                 if (currentVersion < DatabaseHelper.VERSION) {
-                    // يقوم DatabaseHelper بالترحيل
+                    DebugLogger.info("Database", "Migrating from $currentVersion to ${DatabaseHelper.VERSION}")
                 }
             } catch (e: Exception) {
+                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
+        }
+    }
+
+    private fun checkEssentialTables() {
+        try {
+            val essential = listOf("users", "roles", "permissions", "role_permissions", "screens")
+            val db = dbHelper.readableDatabase
+            val cursor = db.query("sqlite_master", arrayOf("name"), "type='table' AND name IN (${essential.joinToString(",") { "'$it'" }})", null, null, null, null)
+            val existing = mutableSetOf<String>()
+            cursor.use {
+                while (it.moveToNext()) {
+                    existing.add(it.getString(0))
+                }
+            }
+            for (table in essential) {
+                if (table in existing) {
+                    DebugLogger.info("Database", "TABLE $table EXISTS")
+                } else {
+                    DebugLogger.error("Database", "TABLE $table MISSING")
+                }
+            }
+        } catch (e: Exception) {
+            DebugLogger.logException("Database", e)
         }
     }
 
@@ -448,6 +449,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 loadSmsConfiguration()
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 handleApplicationError(e)
             }
         }
@@ -461,7 +463,7 @@ class MainActivity : AppCompatActivity() {
             dbHelper.getSetting("sms_rate_limit")
             dbHelper.getSetting("sms_otp_enabled")
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("SMS", "loadSmsConfiguration error: ${e.message}")
         }
     }
 
@@ -471,7 +473,7 @@ class MainActivity : AppCompatActivity() {
                 dbHelper.setSetting(key, value)
             }
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("SMS", "saveSmsConfiguration error: ${e.message}")
         }
     }
 
@@ -552,6 +554,7 @@ class MainActivity : AppCompatActivity() {
                     "بعض الأذونات الأساسية مفقودة. قد لا تعمل بعض الميزات.",
                     Toast.LENGTH_LONG
                 ).show()
+                DebugLogger.warn("Permissions", "Critical permissions denied: $denied")
             }
         } else {
             startSMSService()
@@ -572,6 +575,7 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.logEvent("sms_service_started", "Service started")
         } catch (e: Exception) {
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
+            DebugLogger.logException("SMS", e)
             handleApplicationError(e)
         }
     }
@@ -582,7 +586,7 @@ class MainActivity : AppCompatActivity() {
             stopService(intent)
             DebugLogger.logEvent("sms_service_stopped", "Service stopped")
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("SMS", "stopSMSService error: ${e.message}")
         }
     }
 
@@ -607,6 +611,7 @@ class MainActivity : AppCompatActivity() {
         return try {
             dbHelper.getAllSettingsMap()
         } catch (e: Exception) {
+            DebugLogger.warn("Settings", "getAllSettings error: ${e.message}")
             emptyMap()
         }
     }
@@ -636,7 +641,7 @@ class MainActivity : AppCompatActivity() {
             }
             result
         } catch (e: Exception) {
-            handleApplicationError(e)
+            DebugLogger.logException("Health", e)
             false
         }
     }
@@ -676,7 +681,7 @@ class MainActivity : AppCompatActivity() {
                 cleanupOldConversationContext()
                 cleanupOldMetrics()
             } catch (e: Exception) {
-                // تجاهل
+                DebugLogger.warn("Cleanup", "cleanupSmsDatabase error: ${e.message}")
             }
         }
     }
@@ -685,7 +690,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldRateLimits()
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Cleanup", "cleanupOldRateLimits error: ${e.message}")
         }
     }
 
@@ -693,7 +698,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldConversationContext(30)
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Cleanup", "cleanupOldConversationContext error: ${e.message}")
         }
     }
 
@@ -701,7 +706,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldMetrics(90)
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Cleanup", "cleanupOldMetrics error: ${e.message}")
         }
     }
 
@@ -723,7 +728,7 @@ class MainActivity : AppCompatActivity() {
                     cleanupSmsDatabase()
                     DebugLogger.logEvent("periodic_maintenance", "Maintenance run completed")
                 } catch (e: Exception) {
-                    // تجاهل
+                    DebugLogger.warn("Maintenance", "Periodic maintenance error: ${e.message}")
                 }
             }
         }
@@ -761,7 +766,7 @@ class MainActivity : AppCompatActivity() {
                 notificationManager.notify(System.currentTimeMillis().toInt(), notification)
             }
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Notification", "showSmsNotification error: ${e.message}")
         }
     }
 
@@ -782,7 +787,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.logActivity("system", event, details)
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("Log", "logApplicationEvent error: ${e.message}")
         }
     }
 
@@ -820,6 +825,7 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.logEvent("app_started", "Application started")
             checkSmsSystemHealth()
         } catch (e: Exception) {
+            DebugLogger.logException("Init", e)
             handleApplicationError(e)
         }
     }
@@ -834,6 +840,7 @@ class MainActivity : AppCompatActivity() {
 
         try {
             if (wv.isAttachedToWindow) {
+                DebugLogger.info("WebView", "Loading login.html")
                 wv.loadUrl("file:///android_asset/screens/login.html")
             } else {
                 handler.postDelayed({
@@ -843,6 +850,7 @@ class MainActivity : AppCompatActivity() {
                 }, 500)
             }
         } catch (e: Exception) {
+            DebugLogger.logException("WebView", e)
             showErrorPage()
         }
     }
@@ -882,7 +890,7 @@ class MainActivity : AppCompatActivity() {
         try {
             wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("WebView", "showErrorPage failed: ${e.message}")
         }
     }
 
@@ -902,6 +910,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
+            DebugLogger.warn("Env", "loadEnvKey($key) failed: ${e.message}")
             ""
         }
     }
@@ -916,8 +925,10 @@ class MainActivity : AppCompatActivity() {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
+            DebugLogger.info("Prefs", "Encrypted prefs initialized")
         } catch (e: Exception) {
             sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            DebugLogger.warn("Prefs", "Encrypted prefs fallback: ${e.message}")
         }
     }
 
@@ -974,8 +985,15 @@ class MainActivity : AppCompatActivity() {
                             webViewClient = createWebViewClient()
                             webChromeClient = object : WebChromeClient() {
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                                    // نمرر رسائل Console إلى Logcat فقط، وليس إلى VConsole
-                                    // لأن VConsole يعرضها بالفعل
+                                    val msg = consoleMessage.message()
+                                    val line = consoleMessage.lineNumber()
+                                    val source = consoleMessage.sourceId()
+                                    Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
+                                    DebugLogger.info("WebViewConsole", "$msg")
+                                    // إضافة تسجيل إضافي للأخطاء
+                                    if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                                        DebugLogger.error("WebViewConsole", "JS Error: $msg at $source:$line")
+                                    }
                                     return true
                                 }
                             }
@@ -984,6 +1002,7 @@ class MainActivity : AppCompatActivity() {
                                 webAppInterface = WebAppInterface(context, this@MainActivity)
                                 addJavascriptInterface(webAppInterface!!, "AndroidInterface")
                                 setTag(BRIDGE_INITIALIZED_TAG, true)
+                                DebugLogger.info("Bridge", "AndroidInterface injected")
                             }
                         }
                     } else {
@@ -998,8 +1017,7 @@ class MainActivity : AppCompatActivity() {
                     DebugLogger.attachWebView(wv)
 
                     val instanceId = ++webViewInstanceId
-                    // لا نرسل إلى VConsole
-                    Log.d(TAG, "WebView CREATED instance=$instanceId hash=${wv.hashCode()}")
+                    DebugLogger.info("WebView", "CREATED instance=$instanceId hash=${wv.hashCode()}")
                 }
             },
             update = { }
@@ -1008,11 +1026,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun createWebViewClient(): WebViewClient {
         return object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                DebugLogger.info("WebView", "PAGE_STARTED: $url")
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (isDestroyed.get()) return
                 serverReady = true
                 isErrorPageShown = false
+                DebugLogger.info("WebView", "PAGE_FINISHED: $url")
             }
 
             override fun shouldOverrideUrlLoading(
@@ -1021,6 +1045,7 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
                 if (handleCustomUrl(url)) {
+                    DebugLogger.info("WebView", "URL_OVERRIDDEN: $url")
                     return true
                 }
                 return false
@@ -1030,6 +1055,7 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                 if (url == null) return false
                 if (handleCustomUrl(url)) {
+                    DebugLogger.info("WebView", "URL_OVERRIDDEN: $url")
                     return true
                 }
                 return false
@@ -1042,6 +1068,9 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (isDestroyed.get()) return
+                val desc = error?.description?.toString() ?: "Unknown error"
+                val code = error?.errorCode ?: -1
+                DebugLogger.error("WebView", "RECEIVED_ERROR: code=$code, description=$desc, url=${request?.url}")
             }
 
             @Deprecated("Deprecated in Java")
@@ -1053,6 +1082,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
+                DebugLogger.error("WebView", "RECEIVED_ERROR: code=$errorCode, description=$description, url=$failingUrl")
             }
 
             override fun onReceivedSslError(
@@ -1061,12 +1091,14 @@ class MainActivity : AppCompatActivity() {
                 error: android.net.http.SslError?
             ) {
                 handler?.cancel()
+                DebugLogger.warn("WebView", "SSL_ERROR: ${error?.primaryError}, url=${error?.url}")
             }
 
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
             ): Boolean {
+                DebugLogger.error("WebView", "RENDER_PROCESS_GONE: ${detail?.didCrash()}")
                 view?.let { destroyWebView(it) }
                 if (!isDestroyed.get()) {
                     webView = null
@@ -1079,6 +1111,15 @@ class MainActivity : AppCompatActivity() {
                 }
                 return true
             }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: WebResourceResponse?
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                DebugLogger.warn("WebView", "HTTP_ERROR: ${errorResponse?.statusCode} ${errorResponse?.reasonPhrase} for ${request?.url}")
+            }
         }
     }
 
@@ -1088,6 +1129,7 @@ class MainActivity : AppCompatActivity() {
         val wv = webView
         if (wv != null && wv.isAttachedToWindow) {
             wv.loadUrl("file:///android_asset/screens/login.html")
+            DebugLogger.info("WebView", "RELOADED via existing WebView")
         } else {
             handler.postDelayed({
                 if (!isDestroyed.get()) {
@@ -1107,6 +1149,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "تطبيق واتساب غير مثبت", Toast.LENGTH_SHORT).show()
+                    DebugLogger.warn("CustomUrl", "WhatsApp not installed")
                     false
                 }
             }
@@ -1117,6 +1160,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "تطبيق فيسبوك غير مثبت", Toast.LENGTH_SHORT).show()
+                    DebugLogger.warn("CustomUrl", "Facebook not installed")
                     false
                 }
             }
@@ -1127,6 +1171,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "لا يوجد تطبيق بريد إلكتروني", Toast.LENGTH_SHORT).show()
+                    DebugLogger.warn("CustomUrl", "Email app not found")
                     false
                 }
             }
@@ -1136,6 +1181,7 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
+                    DebugLogger.warn("CustomUrl", "Dial failed: ${e.message}")
                     false
                 }
             }
@@ -1145,6 +1191,7 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
+                    DebugLogger.warn("CustomUrl", "External link failed: ${e.message}")
                     false
                 }
             }
@@ -1154,6 +1201,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun destroyWebView(webView: WebView?) {
         if (webView == null) return
+
+        DebugLogger.info("WebView", "DESTROYED hash=${webView.hashCode()}")
 
         try {
             if (this.webView === webView) {
@@ -1170,23 +1219,26 @@ class MainActivity : AppCompatActivity() {
             webView.removeAllViews()
             webView.destroy()
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("WebView", "destroyWebView error: ${e.message}")
         }
     }
 
     // ============================================================
-    // المصادقة البيومترية
+    // المصادقة البيومترية – مع تسجيل إضافي
     // ============================================================
 
     fun showBiometricPrompt(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        DebugLogger.info("Biometric", "showBiometricPrompt START")
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
+            DebugLogger.warn("Biometric", "BiometricPrompt not available")
             onError("unsupported")
             return
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            DebugLogger.warn("Biometric", "Android version < P")
             onError("unsupported")
             return
         }
@@ -1201,16 +1253,19 @@ class MainActivity : AppCompatActivity() {
                         result: androidx.biometric.BiometricPrompt.AuthenticationResult
                     ) {
                         super.onAuthenticationSucceeded(result)
+                        DebugLogger.info("Biometric", "Authentication SUCCEEDED")
                         onSuccess()
                     }
 
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
+                        DebugLogger.warn("Biometric", "Authentication FAILED")
                         onError("failed")
                     }
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
+                        DebugLogger.warn("Biometric", "Authentication ERROR: code=$errorCode, message=$errString")
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
                             androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
@@ -1229,14 +1284,16 @@ class MainActivity : AppCompatActivity() {
                 .setConfirmationRequired(false)
                 .build()
 
+            DebugLogger.info("Biometric", "PromptInfo built, calling authenticate")
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
+            DebugLogger.logException("Biometric", e)
             onError("unsupported")
         }
     }
 
     // ============================================================
-    // WebAppInterface - واجهة JavaScript الكاملة
+    // WebAppInterface - واجهة JavaScript الكاملة مع تسجيل محسّن
     // ============================================================
 
     @Keep
@@ -1300,43 +1357,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 1. المصادقة (مع سجلات تسجيل الدخول)
+        // 1. المصادقة – مع تسجيل محسن
         // ============================================================
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
-            DebugLogger.logLogin("Request received")
-            DebugLogger.logLogin("Username: $username")
-            DebugLogger.logLogin("Password received: ${password.isNotEmpty()}")
-
+            val startTime = System.currentTimeMillis()
+            DebugLogger.info("LOGIN", "LOGIN_REQUEST_RECEIVED username=$username")
             val activity = getActivity()
-            if (activity == null) {
-                DebugLogger.logError("Activity is null")
-                return errorResponse("النشاط غير متاح")
-            }
-            DebugLogger.logLogin("Activity exists: ${activity.hashCode()}")
-
-            val wv = activity.webView
-            if (wv == null) {
-                DebugLogger.logError("WebView is null")
-                return errorResponse("WebView غير متاح")
-            }
-            DebugLogger.logLogin("WebView exists, attached: ${wv.isAttachedToWindow}")
-
-            DebugLogger.logLogin("AndroidInterface is working")
+            DebugLogger.info("LOGIN", "activity=${activity?.hashCode()} webView=${activity?.webView?.hashCode()} attached=${activity?.webView?.isAttachedToWindow}")
 
             val db = getDbHelper()
             if (db == null) {
-                DebugLogger.logError("DatabaseHelper is null")
+                DebugLogger.error("LOGIN", "DatabaseHelper is null")
                 return errorResponse("قاعدة البيانات غير متاحة")
             }
 
-            DebugLogger.logDatabase("Authenticating user...")
-
             return try {
+                DebugLogger.info("LOGIN", "AUTHENTICATE_USER_STARTED")
                 val authResult = db.authenticateUser(username, password)
                 if (authResult != null) {
-                    DebugLogger.logLogin("Authentication success")
+                    DebugLogger.info("LOGIN", "AUTHENTICATION_RESULT success=true")
                     val userId = authResult.optLong("user_id", 0)
                     val permissionsArray = db.getUserPermissions(userId)
                     val permissionsObject = JSONObject()
@@ -1366,13 +1407,16 @@ class MainActivity : AppCompatActivity() {
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
                     val token = UUID.randomUUID().toString()
-                    activity.currentAuthToken = token
-                    activity.currentUserId = userId
-                    activity.currentUserRole = role
-                    activity.currentUserName = authResult.optString("username", "")
+                    activity?.let { act ->
+                        act.currentAuthToken = token
+                        act.currentUserId = userId
+                        act.currentUserRole = role
+                        act.currentUserName = authResult.optString("username", "")
+                        DebugLogger.info("LOGIN", "Session updated for user ${authResult.optString("username")}")
+                    }
 
-                    DebugLogger.logSession("Session created for user: ${authResult.optString("username")}")
-                    DebugLogger.logNavigation("Navigating to main screen...")
+                    val duration = System.currentTimeMillis() - startTime
+                    DebugLogger.info("LOGIN", "SUCCESS duration=${duration}ms")
 
                     JSONObject().apply {
                         put("success", true)
@@ -1380,13 +1424,13 @@ class MainActivity : AppCompatActivity() {
                         put("token", token)
                     }.toString()
                 } else {
-                    DebugLogger.logLogin("Authentication failed - invalid credentials")
+                    val duration = System.currentTimeMillis() - startTime
+                    DebugLogger.warn("LOGIN", "AUTHENTICATION_RESULT success=false duration=${duration}ms")
                     errorResponse("بيانات خاطئة")
                 }
             } catch (e: Exception) {
-                val exceptionType = e.javaClass.simpleName
-                val errorMessage = e.message ?: "Unknown error"
-                DebugLogger.logError("$exceptionType: $errorMessage in authenticateUser()")
+                val duration = System.currentTimeMillis() - startTime
+                DebugLogger.logException("LOGIN_EXCEPTION", e)
                 errorResponse("خطأ داخلي: ${e.message}")
             }
         }
@@ -1394,7 +1438,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun requestBiometricAuth(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            DebugLogger.logLogin("Biometric authentication requested")
+            DebugLogger.info("Biometric", "requestBiometricAuth called")
             activity.runOnUiThread {
                 activity.showBiometricPrompt(
                     onSuccess = {
@@ -1402,6 +1446,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "authenticated")
                         }
+                        DebugLogger.info("Biometric", "Authentication success")
                         activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     },
                     onError = { error ->
@@ -1409,6 +1454,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", error)
                         }
+                        DebugLogger.warn("Biometric", "Authentication error: $error")
                         activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     }
                 )
@@ -1420,19 +1466,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // دوال استعادة كلمة المرور
+        // دوال استعادة كلمة المرور – مع تسجيل محسن
         // ============================================================
 
         @JavascriptInterface
         fun forgotPassword(username: String): String {
+            val startTime = System.currentTimeMillis()
+            DebugLogger.info("ForgotPassword", "Request for $username")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val user = db.getUserByUsername(username)
                 if (user == null) {
+                    DebugLogger.warn("ForgotPassword", "User not found: $username")
                     return errorResponse("المستخدم غير موجود")
                 }
 
-                val userId = user.optLong("id", 0L)
+                val userId = user.optLong("user_id", 0L)
                 if (userId == 0L) {
                     return errorResponse("معرف المستخدم غير صالح")
                 }
@@ -1444,6 +1493,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val resetUrl = "file:///android_asset/login.html?token=$token"
+                DebugLogger.info("ForgotPassword", "Reset token created for $username, duration=${System.currentTimeMillis()-startTime}ms")
 
                 JSONObject().apply {
                     put("success", true)
@@ -1451,6 +1501,7 @@ class MainActivity : AppCompatActivity() {
                     put("reset_url", resetUrl)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("ForgotPassword", e)
                 errorResponse(e.message)
             }
         }
@@ -1458,13 +1509,15 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun resetPassword(token: String, newPassword: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            DebugLogger.info("ResetPassword", "Attempt with token")
             return try {
                 val userData = db.validateResetToken(token)
                 if (userData == null) {
+                    DebugLogger.warn("ResetPassword", "Invalid or expired token")
                     return errorResponse("رابط الاستعادة غير صالح أو منتهي الصلاحية")
                 }
 
-                val userId = userData.optLong("id", 0L)
+                val userId = userData.optLong("user_id", 0L)
                 if (userId == 0L) {
                     return errorResponse("معرف المستخدم غير صالح")
                 }
@@ -1475,9 +1528,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 db.clearResetToken(token)
-
+                DebugLogger.info("ResetPassword", "Password updated for user ${userData.optString("username")}")
                 successResponse(true, "تم تحديث كلمة المرور بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("ResetPassword", e)
                 errorResponse(e.message)
             }
         }
@@ -1485,6 +1539,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun verifyResetCode(phone: String, code: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            DebugLogger.info("VerifyCode", "Phone: $phone")
             return try {
                 val cursor = db.readableDatabase.rawQuery(
                     "SELECT id FROM users WHERE phone = ? AND is_deleted = 0 LIMIT 1",
@@ -1494,17 +1549,21 @@ class MainActivity : AppCompatActivity() {
                     if (it.moveToFirst()) it.getLong(0) else null
                 }
                 if (userId == null) {
+                    DebugLogger.warn("VerifyCode", "User not found for phone $phone")
                     return errorResponse("المستخدم غير موجود")
                 }
 
                 val isValid = db.validateOtpCode(userId, code)
                 if (isValid) {
                     db.clearOtpCode(userId)
+                    DebugLogger.info("VerifyCode", "Code verified for user $userId")
                     successResponse(true, "تم التحقق بنجاح")
                 } else {
+                    DebugLogger.warn("VerifyCode", "Invalid or expired code")
                     errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
                 }
             } catch (e: Exception) {
+                DebugLogger.logException("VerifyCode", e)
                 errorResponse(e.message)
             }
         }
@@ -1512,13 +1571,16 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getUserData(username: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            DebugLogger.info("GetUserData", "Username: $username")
             return try {
                 val user = db.getUserByUsername(username)
                 if (user == null) {
+                    DebugLogger.warn("GetUserData", "User not found: $username")
                     return errorResponse("المستخدم غير موجود")
                 }
                 dataResponse(user)
             } catch (e: Exception) {
+                DebugLogger.logException("GetUserData", e)
                 errorResponse(e.message)
             }
         }
@@ -1538,6 +1600,7 @@ class MainActivity : AppCompatActivity() {
             if (geminiApiKey.isEmpty()) {
                 return errorResponse("مفتاح Gemini API غير مُهيأ")
             }
+            DebugLogger.info("AI", "sendToAI: $message")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -1557,6 +1620,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
+                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1574,6 +1638,7 @@ class MainActivity : AppCompatActivity() {
             if (geminiApiKey.isEmpty()) {
                 return errorResponse("مفتاح Gemini API غير مُهيأ")
             }
+            DebugLogger.info("AI", "getAIResponse: $message")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -1593,6 +1658,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
+                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1637,6 +1703,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
+                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1654,19 +1721,23 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addParty(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addParty called")
             if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.insertParty(data)
+                DebugLogger.info("Party", "Added party id=$id")
                 successResponse(id, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateParty(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateParty called")
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -1674,42 +1745,49 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateParty(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteParty(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteParty called")
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteParty(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun archiveParty(id: Long): String {
+            DebugLogger.info("WebAppInterface", "archiveParty called")
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.archiveParty(id)
                 successResponse(rows > 0, if (rows > 0) "تم الأرشفة بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getParties(type: String?): String {
+            DebugLogger.info("WebAppInterface", "getParties called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val parties = db.getParties(type ?: "")
                 dataResponse(parties)
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1723,24 +1801,28 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun searchParties(query: String): String {
+            DebugLogger.info("WebAppInterface", "searchParties called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val results = db.searchParties(query)
                 dataResponse(results)
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getPartyById(id: Long): String {
+            DebugLogger.info("WebAppInterface", "getPartyById called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val party = db.getPartyById(id)
                 party?.toString() ?: errorResponse("العميل غير موجود")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1751,25 +1833,30 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addOrder(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addOrder called")
             if (!checkPermission("orders", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addOrder(data)
+                DebugLogger.info("Order", "Added order id=$id")
                 successResponse(id, "تم إضافة الطلب بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getOrders(status: String?): String {
+            DebugLogger.info("WebAppInterface", "getOrders called")
             if (!checkPermission("orders", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val orders = db.getOrders(status)
                 dataResponse(orders)
             } catch (e: Exception) {
+                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
@@ -1783,37 +1870,44 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addDelivery(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addDelivery called")
             if (!checkPermission("deliveries", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addDelivery(data)
+                DebugLogger.info("Delivery", "Added delivery id=$id")
                 successResponse(id, "تم إضافة التسليم بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getDeliveries(): String {
+            DebugLogger.info("WebAppInterface", "getDeliveries called")
             if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val deliveries = db.getDeliveries()
                 dataResponse(deliveries)
             } catch (e: Exception) {
+                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTodayDeliveries(): String {
+            DebugLogger.info("WebAppInterface", "getTodayDeliveries called")
             if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val deliveries = db.getTodayDeliveries()
                 dataResponse(deliveries)
             } catch (e: Exception) {
+                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
@@ -1824,55 +1918,65 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addSale(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addSale called")
             if (!checkPermission("sales", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addFuelSale(data)
+                DebugLogger.info("Sale", "Added sale id=$id")
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun completeSale(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "completeSale called")
             if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val result = db.completeSale(JSONObject(jsonData))
                 dataResponse(result)
             } catch (e: Exception) {
+                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSales(): String {
+            DebugLogger.info("WebAppInterface", "getSales called")
             if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getSales()
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTodaySales(): String {
+            DebugLogger.info("WebAppInterface", "getTodaySales called")
             if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getTodaySales()
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteSale(saleId: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteSale called")
             if (!checkPermission("sales", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -1882,6 +1986,7 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_sale", "حذف مبيعة $saleId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1892,37 +1997,44 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addCashMovement(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addCashMovement called")
             if (!checkPermission("cash", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addCashMovement(data)
+                DebugLogger.info("Cash", "Added cash movement id=$id")
                 successResponse(id, "تم إضافة الحركة المالية بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCashMovements(): String {
+            DebugLogger.info("WebAppInterface", "getCashMovements called")
             if (!checkPermission("cash", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val movements = db.getCashMovements()
                 dataResponse(movements)
             } catch (e: Exception) {
+                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTodayCash(): String {
+            DebugLogger.info("WebAppInterface", "getTodayCash called")
             if (!checkPermission("cash", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val cash = db.getTodayCash()
                 dataResponse(cash)
             } catch (e: Exception) {
+                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
@@ -1933,50 +2045,60 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addMeterReading(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addMeterReading called")
             if (!checkPermission("meter", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addMeterReading(data)
+                DebugLogger.info("Meter", "Added meter reading id=$id")
                 successResponse(id, "تم إضافة قراءة العداد بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getMeterReadings(): String {
+            DebugLogger.info("WebAppInterface", "getMeterReadings called")
             if (!checkPermission("meter", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val readings = db.getMeterReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
+                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addTankReading(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addTankReading called")
             if (!checkPermission("tanks", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addTankReading(data)
+                DebugLogger.info("Tank", "Added tank reading id=$id")
                 successResponse(id, "تم إضافة قراءة الخزان بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTankReadings(): String {
+            DebugLogger.info("WebAppInterface", "getTankReadings called")
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val readings = db.getTankReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
+                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
@@ -1987,37 +2109,44 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addStockMovement(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addStockMovement called")
             if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addStockMovement(data)
+                DebugLogger.info("Stock", "Added stock movement id=$id")
                 successResponse(id, "تم إضافة حركة المخزون بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getStockMovements(): String {
+            DebugLogger.info("WebAppInterface", "getStockMovements called")
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val movements = db.getStockMovements()
                 dataResponse(movements)
             } catch (e: Exception) {
+                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getLowStockItems(): String {
+            DebugLogger.info("WebAppInterface", "getLowStockItems called")
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val items = db.getLowStockItems()
                 dataResponse(items)
             } catch (e: Exception) {
+                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -2028,25 +2157,30 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addAsset(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addAsset called")
             if (!checkPermission("assets", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addAsset(data)
+                DebugLogger.info("Asset", "Added asset id=$id")
                 successResponse(id, "تم إضافة الأصل بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Asset", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getAssets(): String {
+            DebugLogger.info("WebAppInterface", "getAssets called")
             if (!checkPermission("assets", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val assets = db.getAssets()
                 dataResponse(assets)
             } catch (e: Exception) {
+                DebugLogger.logException("Asset", e)
                 errorResponse(e.message)
             }
         }
@@ -2057,43 +2191,51 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addUser(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addUser called")
             if (!checkPermission("users", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addUser(data)
+                DebugLogger.info("User", "Added user id=$id")
                 successResponse(id, "تم إضافة المستخدم بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getUsers(): String {
+            DebugLogger.info("WebAppInterface", "getUsers called")
             if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val users = db.getUsers()
                 dataResponse(users)
             } catch (e: Exception) {
+                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getUsersByRole(role: String): String {
+            DebugLogger.info("WebAppInterface", "getUsersByRole called")
             if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val users = db.getUsersByRole(role)
                 dataResponse(users)
             } catch (e: Exception) {
+                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateUser(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateUser called")
             if (!checkPermission("users", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2101,49 +2243,58 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateUser(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteUser(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteUser called")
             if (!checkPermission("users", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteUser(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addEmployee(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addEmployee called")
             if (!checkPermission("employees", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addEmployee(data)
+                DebugLogger.info("Employee", "Added employee id=$id")
                 successResponse(id, "تم إضافة الموظف بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getEmployees(): String {
+            DebugLogger.info("WebAppInterface", "getEmployees called")
             if (!checkPermission("employees", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val employees = db.getEmployees(1)
                 dataResponse(employees)
             } catch (e: Exception) {
+                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateEmployee(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateEmployee called")
             if (!checkPermission("employees", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2151,12 +2302,14 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateEmployee(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteEmployee(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteEmployee called")
             if (!checkPermission("employees", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2165,6 +2318,7 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteEmployee(intId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
@@ -2175,19 +2329,23 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun startShift(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "startShift called")
             if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية بدء الوردية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.startShift(data)
+                DebugLogger.info("Shift", "Started shift id=$id")
                 successResponse(id, "تم بدء الوردية بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun endShift(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "endShift called")
             if (!checkPermission("shifts", "update")) return errorResponse("لا تملك صلاحية إنهاء الوردية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2195,36 +2353,42 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.endShift(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم إنهاء الوردية بنجاح" else "لم يتم العثور على الوردية")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCurrentShift(): String {
+            DebugLogger.info("WebAppInterface", "getCurrentShift called")
             if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val shift = db.getCurrentShift()
                 shift?.toString() ?: errorResponse("لا توجد وردية نشطة")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getShifts(): String {
+            DebugLogger.info("WebAppInterface", "getShifts called")
             if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val shifts = db.getShifts(1)
                 dataResponse(shifts)
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteShift(shiftId: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteShift called")
             if (!checkPermission("shifts", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2234,57 +2398,69 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_shift", "حذف وردية $shiftId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addShiftSale(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addShiftSale called")
             if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftSale(data)
+                DebugLogger.info("Shift", "Added shift sale id=$id")
                 successResponse(id, "تم إضافة بيع الوردية بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addShiftDelivery(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addShiftDelivery called")
             if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftDelivery(data)
+                DebugLogger.info("Shift", "Added shift delivery id=$id")
                 successResponse(id, "تم إضافة تسليم الوردية بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addShiftExpense(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addShiftExpense called")
             if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftExpense(data)
+                DebugLogger.info("Shift", "Added shift expense id=$id")
                 successResponse(id, "تم إضافة مصروف الوردية بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getShiftReport(shiftId: Long): String {
+            DebugLogger.info("WebAppInterface", "getShiftReport called")
             if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val report = db.getShiftReport(shiftId)
                 dataResponse(report)
             } catch (e: Exception) {
+                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2295,31 +2471,37 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun addNotification(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addNotification called")
             if (!checkPermission("notifications", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addNotification(data)
+                DebugLogger.info("Notification", "Added notification id=$id")
                 successResponse(id, "تم إضافة الإشعار بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getNotifications(): String {
+            DebugLogger.info("WebAppInterface", "getNotifications called")
             if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val notifications = db.getNotifications()
                 dataResponse(notifications)
             } catch (e: Exception) {
+                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getUnreadNotificationsCount(): String {
+            DebugLogger.info("WebAppInterface", "getUnreadNotificationsCount called")
             if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2329,126 +2511,148 @@ class MainActivity : AppCompatActivity() {
                     put("count", count)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun markNotificationRead(id: Long): String {
+            DebugLogger.info("WebAppInterface", "markNotificationRead called")
             if (!checkPermission("notifications", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.markNotificationRead(id)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الإشعار")
             } catch (e: Exception) {
+                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 14. الرسائل النصية (SMS)
+        // 14. الرسائل النصية (SMS) - جزء مختصر للقراءة
         // ============================================================
 
         @JavascriptInterface
         fun addSmsMessage(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addSmsMessage called")
             if (!checkPermission("sms", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSmsMessage(data)
+                DebugLogger.info("SMS", "Added SMS id=$id")
                 successResponse(id, "تم إضافة الرسالة بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSmsMessages(): String {
+            DebugLogger.info("WebAppInterface", "getSmsMessages called")
             if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessages()
                 dataResponse(messages)
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSmsMessagesByPhone(phone: String): String {
+            DebugLogger.info("WebAppInterface", "getSmsMessagesByPhone called")
             if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessagesByPhone(phone)
                 dataResponse(messages)
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSmsMessagesByStatus(status: String): String {
+            DebugLogger.info("WebAppInterface", "getSmsMessagesByStatus called")
             if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessagesByStatus(status)
                 dataResponse(messages)
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateSmsStatus(id: Long, status: String): String {
+            DebugLogger.info("WebAppInterface", "updateSmsStatus called")
             if (!checkPermission("sms", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.updateSmsStatus(id, status)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الرسالة")
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSmsStats(): String {
+            DebugLogger.info("WebAppInterface", "getSmsStats called")
             if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stats = db.getSmsStats()
                 dataResponse(stats)
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSmsTemplates(): String {
+            DebugLogger.info("WebAppInterface", "getSmsTemplates called")
             if (!checkPermission("sms_templates", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val templates = db.getSmsTemplates()
                 dataResponse(templates)
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addSmsTemplate(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addSmsTemplate called")
             if (!checkPermission("sms_templates", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSmsTemplate(data)
+                DebugLogger.info("SMS", "Added template id=$id")
                 successResponse(id, "تم إضافة القالب بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateSmsTemplate(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateSmsTemplate called")
             if (!checkPermission("sms_templates", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2456,18 +2660,21 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateSmsTemplate(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على القالب")
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteSmsTemplate(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteSmsTemplate called")
             if (!checkPermission("sms_templates", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteSmsTemplate(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على القالب")
             } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2478,18 +2685,21 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getWhitelist(): String {
+            DebugLogger.info("WebAppInterface", "getWhitelist called")
             if (!checkPermission("whitelist", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val whitelist = db.getSmsWhitelist()
                 dataResponse(whitelist)
             } catch (e: Exception) {
+                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addWhitelist(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addWhitelist called")
             if (!checkPermission("whitelist", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2498,14 +2708,17 @@ class MainActivity : AppCompatActivity() {
                 val name = data.optString("name", "")
                 if (phone.isBlank()) return errorResponse("رقم الهاتف مطلوب")
                 db.addToSmsWhitelist(phone, name)
+                DebugLogger.info("Whitelist", "Added $phone")
                 successResponse(0, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun removeWhitelist(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "removeWhitelist called")
             if (!checkPermission("whitelist", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2513,39 +2726,47 @@ class MainActivity : AppCompatActivity() {
                 val phone = data.optString("phone", "")
                 if (phone.isBlank()) return errorResponse("رقم الهاتف مطلوب")
                 db.removeFromSmsWhitelist(phone)
+                DebugLogger.info("Whitelist", "Removed $phone")
                 successResponse(0, "تم الحذف بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addSetting(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addSetting called")
             if (!checkPermission("settings", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSetting(data)
+                DebugLogger.info("Setting", "Added setting id=$id")
                 successResponse(id, "تم إضافة الإعداد بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteSetting(key: String): String {
+            DebugLogger.info("WebAppInterface", "deleteSetting called")
             if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteSetting(key)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الإعداد")
             } catch (e: Exception) {
+                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getSetting(key: String): String {
+            DebugLogger.info("WebAppInterface", "getSetting called")
             if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2555,30 +2776,36 @@ class MainActivity : AppCompatActivity() {
                     put("value", value)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun setSetting(key: String, value: String): String {
+            DebugLogger.info("WebAppInterface", "setSetting called")
             if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 db.setSetting(key, value)
+                DebugLogger.info("Setting", "Updated $key=$value")
                 successResponse(0, "تم التحديث")
             } catch (e: Exception) {
+                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getAllSettingsMap(): String {
+            DebugLogger.info("WebAppInterface", "getAllSettingsMap called")
             if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val settings = db.getAllSettingsMap()
                 dataResponse(settings)
             } catch (e: Exception) {
+                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2589,48 +2816,56 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getDashboardStats(): String {
+            DebugLogger.info("WebAppInterface", "getDashboardStats called")
             if (!checkPermission("dashboard", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stats = db.getDashboardStats(1)
                 dataResponse(stats)
             } catch (e: Exception) {
+                DebugLogger.logException("Dashboard", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getOverduePayments(): String {
+            DebugLogger.info("WebAppInterface", "getOverduePayments called")
             if (!checkPermission("payments", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val payments = db.getOverduePayments()
                 dataResponse(payments)
             } catch (e: Exception) {
+                DebugLogger.logException("Payments", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getActiveAlerts(): String {
+            DebugLogger.info("WebAppInterface", "getActiveAlerts called")
             if (!checkPermission("alerts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val alerts = db.getActiveAlerts()
                 dataResponse(alerts)
             } catch (e: Exception) {
+                DebugLogger.logException("Alerts", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getRecentActivity(limit: Int): String {
+            DebugLogger.info("WebAppInterface", "getRecentActivity called")
             if (!checkPermission("activity", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = db.getRecentActivity(limit)
                 dataResponse(activity)
             } catch (e: Exception) {
+                DebugLogger.logException("Activity", e)
                 errorResponse(e.message)
             }
         }
@@ -2641,31 +2876,37 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getProducts(): String {
+            DebugLogger.info("WebAppInterface", "getProducts called")
             if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val products = db.getProducts()
                 dataResponse(products)
             } catch (e: Exception) {
+                DebugLogger.logException("Products", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addProduct(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addProduct called")
             if (!checkPermission("products", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.insertProduct(data)
+                DebugLogger.info("Product", "Added product id=$id")
                 successResponse(id, "تم إضافة المنتج بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateProduct(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateProduct called")
             if (!checkPermission("products", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2673,106 +2914,124 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateProduct(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على المنتج")
             } catch (e: Exception) {
+                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteProduct(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteProduct called")
             if (!checkPermission("products", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteProduct(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على المنتج")
             } catch (e: Exception) {
+                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getFuelTypes(): String {
+            DebugLogger.info("WebAppInterface", "getFuelTypes called")
             if (!checkPermission("fuel", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val types = db.getFuelTypes()
                 dataResponse(types)
             } catch (e: Exception) {
+                DebugLogger.logException("Fuel", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCategories(): String {
+            DebugLogger.info("WebAppInterface", "getCategories called")
             if (!checkPermission("categories", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val categories = db.getProductCategories()
                 dataResponse(categories)
             } catch (e: Exception) {
+                DebugLogger.logException("Categories", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 19. المركبات، الخزانات والمضخات
+        // 19. المركبات، الخزانات والمضخات - مختصر
         // ============================================================
 
         @JavascriptInterface
         fun getVehicles(): String {
+            DebugLogger.info("WebAppInterface", "getVehicles called")
             if (!checkPermission("vehicles", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val vehicles = db.getVehicles()
                 dataResponse(vehicles)
             } catch (e: Exception) {
+                DebugLogger.logException("Vehicles", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTanks(): String {
+            DebugLogger.info("WebAppInterface", "getTanks called")
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val tanks = db.getTanks()
                 dataResponse(tanks)
             } catch (e: Exception) {
+                DebugLogger.logException("Tanks", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getPumps(): String {
+            DebugLogger.info("WebAppInterface", "getPumps called")
             if (!checkPermission("pumps", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val pumps = db.getPumps()
                 dataResponse(pumps)
             } catch (e: Exception) {
+                DebugLogger.logException("Pumps", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getTankStats(): String {
+            DebugLogger.info("WebAppInterface", "getTankStats called")
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stats = db.getTankStats()
                 dataResponse(stats)
             } catch (e: Exception) {
+                DebugLogger.logException("Tanks", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateTankQuantity(tankId: Int, quantity: Double): String {
+            DebugLogger.info("WebAppInterface", "updateTankQuantity called")
             if (!checkPermission("tanks", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 db.updateTankQuantity(tankId, quantity, "System")
+                DebugLogger.info("Tank", "Updated quantity for tank $tankId")
                 successResponse(0, "تم التحديث")
             } catch (e: Exception) {
+                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
@@ -2783,6 +3042,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getMaintenanceRequests(jsonData: String?): String {
+            DebugLogger.info("WebAppInterface", "getMaintenanceRequests called")
             if (!checkPermission("maintenance", "read")) {
                 return errorResponse("لا تملك صلاحية القراءة")
             }
@@ -2797,12 +3057,14 @@ class MainActivity : AppCompatActivity() {
                 val requests = db.getMaintenanceRequests(stationId, status)
                 dataResponse(requests)
             } catch (e: Exception) {
+                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addMaintenanceRequest(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addMaintenanceRequest called")
             if (!checkPermission("maintenance", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2817,14 +3079,17 @@ class MainActivity : AppCompatActivity() {
                     return errorResponse("بيانات غير صالحة")
                 }
                 val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, 1, 1)
+                DebugLogger.info("Maintenance", "Added request id=$id")
                 successResponse(id, "تم إضافة طلب الصيانة بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updateMaintenanceStatus(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateMaintenanceStatus called")
             if (!checkPermission("maintenance", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2835,12 +3100,14 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateMaintenanceRequestStatus(requestId, status)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الطلب")
             } catch (e: Exception) {
+                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deleteMaintenance(requestId: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteMaintenance called")
             if (!checkPermission("maintenance", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2850,28 +3117,32 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_maintenance", "حذف طلب صيانة $requestId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الطلب")
             } catch (e: Exception) {
+                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 21. المدفوعات والإيداعات
+        // 21. المدفوعات والإيداعات - مختصر
         // ============================================================
 
         @JavascriptInterface
         fun getPayments(): String {
+            DebugLogger.info("WebAppInterface", "getPayments called")
             if (!checkPermission("payments", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val payments = db.getPaymentsWithCustomer()
                 dataResponse(payments)
             } catch (e: Exception) {
+                DebugLogger.logException("Payments", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun makePayment(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "makePayment called")
             if (!checkPermission("payments", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2884,12 +3155,14 @@ class MainActivity : AppCompatActivity() {
                 val success = db.processPayment(customerId, amount, method, operator)
                 successResponse(success, if (success) "تم التسديد بنجاح" else "فشل التسديد")
             } catch (e: Exception) {
+                DebugLogger.logException("Payment", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addDeposit(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addDeposit called")
             if (!checkPermission("payments", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2902,12 +3175,14 @@ class MainActivity : AppCompatActivity() {
                 val success = db.addCashDeposit(customerId, amount, notes, operator)
                 successResponse(success, if (success) "تم الإيداع بنجاح" else "فشل الإيداع")
             } catch (e: Exception) {
+                DebugLogger.logException("Deposit", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deletePayment(paymentId: Long): String {
+            DebugLogger.info("WebAppInterface", "deletePayment called")
             if (!checkPermission("payments", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2917,52 +3192,60 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_payment", "حذف دفعة $paymentId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الدفعة")
             } catch (e: Exception) {
+                DebugLogger.logException("Payment", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 22. تقارير إضافية
+        // 22. تقارير إضافية - مختصر
         // ============================================================
 
         @JavascriptInterface
         fun getMonthlySales(): String {
+            DebugLogger.info("WebAppInterface", "getMonthlySales called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getMonthlySales(1)
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getDailySales(date: String?): String {
+            DebugLogger.info("WebAppInterface", "getDailySales called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getDailySales(1, date)
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getEodReport(): String {
+            DebugLogger.info("WebAppInterface", "getEodReport called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val report = db.getEodReport(1)
                 dataResponse(report)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getProfitReport(fromDate: String?, toDate: String?): String {
+            DebugLogger.info("WebAppInterface", "getProfitReport called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2973,12 +3256,14 @@ class MainActivity : AppCompatActivity() {
                 report.put("cost", report.optDouble("total_payments", 0.0))
                 dataResponse(report)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getInventoryReport(): String {
+            DebugLogger.info("WebAppInterface", "getInventoryReport called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -2995,30 +3280,35 @@ class MainActivity : AppCompatActivity() {
                 }
                 dataResponse(result)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getOverdueReport(): String {
+            DebugLogger.info("WebAppInterface", "getOverdueReport called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val overdue = db.getOverduePayments()
                 dataResponse(overdue)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getFuelSales(): String {
+            DebugLogger.info("WebAppInterface", "getFuelSales called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getSalesByFuelType()
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3029,6 +3319,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun backupDatabase(): String {
+            DebugLogger.info("WebAppInterface", "backupDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية النسخ الاحتياطي")
@@ -3052,6 +3343,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
+                    DebugLogger.logException("Backup", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3065,6 +3357,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun restoreDatabase(path: String): String {
+            DebugLogger.info("WebAppInterface", "restoreDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية الاستعادة")
@@ -3087,6 +3380,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
+                    DebugLogger.logException("Restore", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3100,6 +3394,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun exportToCSV(tableName: String): String {
+            DebugLogger.info("WebAppInterface", "exportToCSV called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("export", "export")) return errorResponse("لا تملك صلاحية التصدير")
@@ -3123,6 +3418,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
+                    DebugLogger.logException("Export", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3136,6 +3432,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun importFromCSV(tableName: String, path: String): String {
+            DebugLogger.info("WebAppInterface", "importFromCSV called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("import", "import")) return errorResponse("لا تملك صلاحية الاستيراد")
@@ -3159,6 +3456,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
+                    DebugLogger.logException("Import", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3172,6 +3470,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun exportAllData(): String {
+            DebugLogger.info("WebAppInterface", "exportAllData called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("export", "export")) return errorResponse("لا تملك صلاحية التصدير")
@@ -3195,6 +3494,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
+                    DebugLogger.logException("ExportAll", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3208,6 +3508,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun vacuumDatabase(): String {
+            DebugLogger.info("WebAppInterface", "vacuumDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             if (!checkPermission("maintenance", "update")) return errorResponse("لا تملك صلاحية الصيانة")
@@ -3230,6 +3531,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
+                    DebugLogger.logException("Vacuum", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3276,6 +3578,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 dataResponse(json)
             } catch (e: Exception) {
+                DebugLogger.logException("DatabaseInfo", e)
                 errorResponse(e.message)
             }
         }
@@ -3289,6 +3592,7 @@ class MainActivity : AppCompatActivity() {
                     put("size", db.getDatabaseSize())
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("DatabaseSize", e)
                 errorResponse(e.message)
             }
         }
@@ -3300,6 +3604,7 @@ class MainActivity : AppCompatActivity() {
                 val counts = db.getTableCounts()
                 dataResponse(counts)
             } catch (e: Exception) {
+                DebugLogger.logException("TableCounts", e)
                 errorResponse(e.message)
             }
         }
@@ -3314,6 +3619,7 @@ class MainActivity : AppCompatActivity() {
                     put("count", count)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("CustomerCount", e)
                 errorResponse(e.message)
             }
         }
@@ -3329,12 +3635,14 @@ class MainActivity : AppCompatActivity() {
                 val readings = db.getLatestMeterReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
+                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getAssetMaintenanceHistory(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "getAssetMaintenanceHistory called")
             if (!checkPermission("maintenance", "read")) {
                 return errorResponse("لا تملك صلاحية القراءة")
             }
@@ -3350,54 +3658,64 @@ class MainActivity : AppCompatActivity() {
                 val history = db.getAssetMaintenanceHistory(assetType, assetId, limit)
                 dataResponse(history)
             } catch (e: Exception) {
+                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getUserNotifications(userId: Long): String {
+            DebugLogger.info("WebAppInterface", "getUserNotifications called")
             if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val notifications = db.getUserNotifications(userId)
                 dataResponse(notifications)
             } catch (e: Exception) {
+                DebugLogger.logException("Notifications", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getUserPermissions(userId: Long): String {
+            DebugLogger.info("WebAppInterface", "getUserPermissions called")
             if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val permissions = db.getUserPermissions(userId)
                 dataResponse(permissions)
             } catch (e: Exception) {
+                DebugLogger.logException("Permissions", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun checkLowStock(): String {
+            DebugLogger.info("WebAppInterface", "checkLowStock called")
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val items = db.checkLowStock()
                 dataResponse(items)
             } catch (e: Exception) {
+                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun createStockAlert(productId: Long, threshold: Double): String {
+            DebugLogger.info("WebAppInterface", "createStockAlert called")
             if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val id = db.createStockAlert(productId, threshold)
+                DebugLogger.info("Stock", "Created alert id=$id")
                 successResponse(id, "تم إنشاء التنبيه بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -3412,6 +3730,7 @@ class MainActivity : AppCompatActivity() {
                     put("price", price)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Price", e)
                 errorResponse(e.message)
             }
         }
@@ -3426,6 +3745,7 @@ class MainActivity : AppCompatActivity() {
                     put("price", price)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Price", e)
                 errorResponse(e.message)
             }
         }
@@ -3440,6 +3760,7 @@ class MainActivity : AppCompatActivity() {
                     put("phone", phone)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("ManagerPhone", e)
                 errorResponse(e.message)
             }
         }
@@ -3451,6 +3772,7 @@ class MainActivity : AppCompatActivity() {
                 val phones = db.getDriverPhones()
                 dataResponse(phones)
             } catch (e: Exception) {
+                DebugLogger.logException("DriverPhones", e)
                 errorResponse(e.message)
             }
         }
@@ -3462,6 +3784,7 @@ class MainActivity : AppCompatActivity() {
                 val list = db.getTrustedSmscList()
                 dataResponse(list)
             } catch (e: Exception) {
+                DebugLogger.logException("SmscList", e)
                 errorResponse(e.message)
             }
         }
@@ -3476,6 +3799,7 @@ class MainActivity : AppCompatActivity() {
                     put("balance", balance)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Balance", e)
                 errorResponse(e.message)
             }
         }
@@ -3487,6 +3811,7 @@ class MainActivity : AppCompatActivity() {
                 val order = db.getLastOrderByPhone(phone)
                 order?.toString() ?: errorResponse("لا توجد طلبات")
             } catch (e: Exception) {
+                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
@@ -3498,12 +3823,14 @@ class MainActivity : AppCompatActivity() {
                 val history = db.getOrderHistoryByPhone(phone)
                 dataResponse(history)
             } catch (e: Exception) {
+                DebugLogger.logException("OrderHistory", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun recordDieselDelivery(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "recordDieselDelivery called")
             if (!checkPermission("deliveries", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -3523,12 +3850,13 @@ class MainActivity : AppCompatActivity() {
                 )
                 successResponse(success, if (success) "تم تسجيل التسليم بنجاح" else "فشل تسجيل التسليم")
             } catch (e: Exception) {
+                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 25. دوال إضافية للشاشات الجديدة
+        // 25. دوال إضافية للشاشات الجديدة - مختصر
         // ============================================================
 
         @JavascriptInterface
@@ -3538,6 +3866,7 @@ class MainActivity : AppCompatActivity() {
                 val types = db.getPartyTypes()
                 dataResponse(types)
             } catch (e: Exception) {
+                DebugLogger.logException("PartyTypes", e)
                 errorResponse(e.message)
             }
         }
@@ -3549,73 +3878,86 @@ class MainActivity : AppCompatActivity() {
                 val currencies = db.getCurrencies()
                 dataResponse(currencies)
             } catch (e: Exception) {
+                DebugLogger.logException("Currencies", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCustomerLedger(partyId: Long): String {
+            DebugLogger.info("WebAppInterface", "getCustomerLedger called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val ledger = db.getCustomerLedger(partyId)
                 dataResponse(ledger)
             } catch (e: Exception) {
+                DebugLogger.logException("Ledger", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCustomerSales(partyId: Long): String {
+            DebugLogger.info("WebAppInterface", "getCustomerSales called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getCustomerSales(partyId)
                 dataResponse(sales)
             } catch (e: Exception) {
+                DebugLogger.logException("CustomerSales", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getPartyContacts(partyId: Long): String {
+            DebugLogger.info("WebAppInterface", "getPartyContacts called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val contacts = db.getPartyContacts(partyId)
                 dataResponse(contacts)
             } catch (e: Exception) {
+                DebugLogger.logException("Contacts", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getPartyAddresses(partyId: Long): String {
+            DebugLogger.info("WebAppInterface", "getPartyAddresses called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val addresses = db.getPartyAddresses(partyId)
                 dataResponse(addresses)
             } catch (e: Exception) {
+                DebugLogger.logException("Addresses", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addPartyContact(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addPartyContact called")
             if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addPartyContact(data)
+                DebugLogger.info("Party", "Added contact id=$id")
                 successResponse(id, "تم إضافة جهة الاتصال بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updatePartyContact(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updatePartyContact called")
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -3624,37 +3966,44 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updatePartyContact(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deletePartyContact(contactId: Long): String {
+            DebugLogger.info("WebAppInterface", "deletePartyContact called")
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deletePartyContact(contactId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun addPartyAddress(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addPartyAddress called")
             if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addPartyAddress(data)
+                DebugLogger.info("Party", "Added address id=$id")
                 successResponse(id, "تم إضافة العنوان بنجاح")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun updatePartyAddress(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updatePartyAddress called")
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -3663,30 +4012,35 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updatePartyAddress(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun deletePartyAddress(addressId: Long): String {
+            DebugLogger.info("WebAppInterface", "deletePartyAddress called")
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deletePartyAddress(addressId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
+                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun getCustomerDebts(fromDate: String?, toDate: String?): String {
+            DebugLogger.info("WebAppInterface", "getCustomerDebts called")
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val debts = db.getCustomerDebts()
                 dataResponse(debts)
             } catch (e: Exception) {
+                DebugLogger.logException("Debts", e)
                 errorResponse(e.message)
             }
         }
@@ -3697,6 +4051,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun saveCredentials(username: String, password: String, remember: Boolean): String {
+            DebugLogger.info("WebAppInterface", "saveCredentials called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
                 activity.sharedPrefs.edit().apply {
@@ -3714,14 +4069,17 @@ class MainActivity : AppCompatActivity() {
                     }
                     apply()
                 }
+                DebugLogger.info("Credentials", "Saved credentials for $username (remember=$remember)")
                 successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
             } catch (e: Exception) {
+                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun loadCredentials(): String {
+            DebugLogger.info("WebAppInterface", "loadCredentials called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
                 val prefs = activity.sharedPrefs
@@ -3729,21 +4087,24 @@ class MainActivity : AppCompatActivity() {
                 val username = prefs.getString("saved_username", "") ?: ""
                 val userId = prefs.getLong("saved_user_id", 0)
                 val timestamp = prefs.getLong("saved_timestamp", 0)
+                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
 
                 JSONObject().apply {
                     put("success", true)
-                    put("hasCredentials", remember && userId != 0L && username.isNotEmpty())
+                    put("hasCredentials", remember && hasToken && userId != 0L && username.isNotEmpty())
                     put("username", username)
                     put("userId", userId)
                     put("timestamp", timestamp)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun hasSavedCredentials(): String {
+            DebugLogger.info("WebAppInterface", "hasSavedCredentials called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
                 val prefs = activity.sharedPrefs
@@ -3759,12 +4120,14 @@ class MainActivity : AppCompatActivity() {
                     put("userId", userId)
                 }.toString()
             } catch (e: Exception) {
+                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
 
         @JavascriptInterface
         fun biometricAutoLogin(): String {
+            DebugLogger.info("WebAppInterface", "biometricAutoLogin called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val prefs = activity.sharedPrefs
 
@@ -3773,6 +4136,7 @@ class MainActivity : AppCompatActivity() {
             val savedUsername = prefs.getString("saved_username", "") ?: ""
 
             if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
+                DebugLogger.warn("Biometric", "No saved credentials found")
                 return errorResponse("لا توجد بيانات محفوظة")
             }
 
@@ -3820,11 +4184,14 @@ class MainActivity : AppCompatActivity() {
                                     put("token", token)
                                     put("message", "تم تسجيل الدخول عبر البصمة")
                                 }
+                                DebugLogger.info("Biometric", "Auto-login success for $savedUsername")
                                 activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                             } else {
+                                DebugLogger.warn("Biometric", "User not found: $savedUsername")
                                 activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
                             }
                         } catch (e: Exception) {
+                            DebugLogger.logException("Biometric", e)
                             activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
                         }
                     },
@@ -3833,6 +4200,7 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", error)
                         }
+                        DebugLogger.warn("Biometric", "Auto-login error: $error")
                         activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                     }
                 )
@@ -3846,6 +4214,7 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun clearCredentials(): String {
+            DebugLogger.info("WebAppInterface", "clearCredentials called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
                 activity.sharedPrefs.edit().apply {
@@ -3860,8 +4229,10 @@ class MainActivity : AppCompatActivity() {
                 activity.currentUserId = 0
                 activity.currentUserRole = ""
                 activity.currentUserName = ""
+                DebugLogger.info("Credentials", "Cleared all credentials")
                 successResponse(0, "تم مسح البيانات وجلسة التطبيق")
             } catch (e: Exception) {
+                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
@@ -3872,39 +4243,34 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun ping(): String {
+            DebugLogger.info("Bridge", "Ping received")
             return "PONG"
         }
 
-        // دالة لإرسال السجلات من JavaScript إلى DebugLogger
         @JavascriptInterface
         fun logFromJS(level: String, message: String) {
-            // نرسل فقط الرسائل التي تبدأ ببادئات تسجيل الدخول
-            if (message.startsWith("[LOGIN]") || message.startsWith("[ERROR]") || message.startsWith("[DATABASE]") || message.startsWith("[SESSION]") || message.startsWith("[NAVIGATION]")) {
-                when (level.uppercase()) {
-                    "INFO" -> DebugLogger.logLogin(message.replace("[LOGIN] ", ""))
-                    "WARN" -> DebugLogger.logLogin("[WARN] " + message)
-                    "ERROR" -> DebugLogger.logError(message.replace("[ERROR] ", ""))
-                    else -> DebugLogger.logLogin(message)
-                }
+            when (level.uppercase()) {
+                "INFO" -> DebugLogger.info("JS", message)
+                "WARN" -> DebugLogger.warn("JS", message)
+                "ERROR" -> DebugLogger.error("JS", message)
+                else -> DebugLogger.info("JS", message)
             }
         }
-
-    // نهاية WebAppInterface
     }
 
-    // ============================================================
-    // دوال مساعدة داخل النشاط
-    // ============================================================
-
+    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs)
     fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
             val wv = webView
             if (wv != null && wv.isAttachedToWindow) {
+                DebugLogger.info("WebView", "safeEvaluateJs called on instance=${wv.hashCode()}")
                 wv.evaluateJavascript(script, null)
+            } else {
+                DebugLogger.warn("WebView", "safeEvaluateJs: WebView not available or not attached")
             }
         } catch (e: Exception) {
-            // تجاهل
+            DebugLogger.warn("WebView", "safeEvaluateJs error: ${e.message}")
         }
     }
 }
