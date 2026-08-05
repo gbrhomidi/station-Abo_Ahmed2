@@ -17,7 +17,13 @@ import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.*
+import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -29,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -46,7 +53,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
-import java.util.*
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -75,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         private var webViewInstanceId = 0
 
         // ============================
-        // DebugLogger - نظام التشخيص المركزي
+        // DebugLogger - نظام التشخيص المركزي (معدل للتصفية)
         // ============================
         object DebugLogger {
             private const val TAG = "DebugLogger"
@@ -85,7 +92,6 @@ class MainActivity : AppCompatActivity() {
             fun attachWebView(webView: WebView?) {
                 webViewRef = WeakReference(webView)
                 isVConsoleReady = true
-                info("DebugLogger", "Attached to WebView")
             }
 
             fun detachWebView() {
@@ -94,16 +100,15 @@ class MainActivity : AppCompatActivity() {
                 isVConsoleReady = false
             }
 
+            // دوال التسجيل العامة - ترسل إلى Logcat فقط، لا ترسل إلى VConsole
             fun info(tag: String, message: String) {
                 val full = "[$tag] $message"
                 Log.i(TAG, full)
-                sendToVConsole("INFO", full)
             }
 
             fun warn(tag: String, message: String) {
                 val full = "[$tag] $message"
                 Log.w(TAG, full)
-                sendToVConsole("WARN", full)
             }
 
             fun error(tag: String, message: String, throwable: Throwable? = null) {
@@ -113,7 +118,37 @@ class MainActivity : AppCompatActivity() {
                     message
                 }
                 Log.e(TAG, "[$tag] $full")
-                sendToVConsole("ERROR", "[$tag] $full")
+            }
+
+            // دوال خاصة لتسجيل أحداث تسجيل الدخول فقط (ترسل إلى VConsole و Logcat)
+            fun logLogin(message: String) {
+                val full = "[LOGIN] $message"
+                Log.i(TAG, full)
+                sendToVConsole("INFO", full)
+            }
+
+            fun logDatabase(message: String) {
+                val full = "[DATABASE] $message"
+                Log.i(TAG, full)
+                sendToVConsole("INFO", full)
+            }
+
+            fun logSession(message: String) {
+                val full = "[SESSION] $message"
+                Log.i(TAG, full)
+                sendToVConsole("INFO", full)
+            }
+
+            fun logNavigation(message: String) {
+                val full = "[NAVIGATION] $message"
+                Log.i(TAG, full)
+                sendToVConsole("INFO", full)
+            }
+
+            fun logError(message: String) {
+                val full = "[ERROR] $message"
+                Log.e(TAG, full)
+                sendToVConsole("ERROR", full)
             }
 
             private fun sendToVConsole(level: String, message: String) {
@@ -161,7 +196,7 @@ class MainActivity : AppCompatActivity() {
 
         fun installGlobalExceptionHandler() {
             Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-                DebugLogger.logException("GlobalException", throwable)
+                Log.e(TAG, "Uncaught exception", throwable)
                 defaultExceptionHandler?.uncaughtException(thread, throwable)
             }
         }
@@ -222,21 +257,18 @@ class MainActivity : AppCompatActivity() {
         try {
             enableEdgeToEdge()
         } catch (e: Exception) {
-            DebugLogger.warn("onCreate", "enableEdgeToEdge failed: ${e.message}")
+            // تجاهل
         }
 
         try {
             initEncryptedPrefs()
         } catch (e: Exception) {
             sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            DebugLogger.warn("onCreate", "Encrypted prefs fallback to regular")
         }
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
-            DebugLogger.info("Database", "DatabaseHelper initialized")
         } catch (e: Exception) {
-            DebugLogger.logException("Database", e)
             Toast.makeText(this, "فشل تهيئة قاعدة البيانات", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -249,7 +281,7 @@ class MainActivity : AppCompatActivity() {
                 geminiHelper.initialize(geminiApiKey)
             }
         } catch (e: Exception) {
-            DebugLogger.warn("Gemini", "Gemini initialization failed: ${e.message}")
+            // تجاهل
         }
 
         createNotificationChannel()
@@ -257,9 +289,8 @@ class MainActivity : AppCompatActivity() {
         if (isDebugMode) {
             try {
                 WebView.setWebContentsDebuggingEnabled(true)
-                DebugLogger.info("WebView", "Debugging enabled")
             } catch (e: Exception) {
-                DebugLogger.warn("WebView", "Could not enable debugging: ${e.message}")
+                // تجاهل
             }
         }
 
@@ -286,8 +317,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         scheduleBackgroundTasks()
-
-        DebugLogger.info("MainActivity", "onCreate finished")
     }
 
     override fun onStart() {
@@ -339,11 +368,10 @@ class MainActivity : AppCompatActivity() {
                 webView = null
             }
         } catch (e: Exception) {
-            DebugLogger.warn("onDestroy", "Error destroying WebView: ${e.message}")
+            // تجاهل
         }
 
         super.onDestroy()
-        DebugLogger.info("MainActivity", "onDestroy finished")
     }
 
     // ============================================================
@@ -353,14 +381,10 @@ class MainActivity : AppCompatActivity() {
     private suspend fun initializeDatabase() {
         withContext(Dispatchers.IO) {
             try {
-                DebugLogger.info("Database", "DATABASE_CREATE_STARTED")
                 val tables = dbHelper.getTableCounts()
                 validateDatabaseSchema()
                 migrateDatabaseIfNeeded()
-                DebugLogger.info("Database", "DATABASE_CREATE_SUCCESS")
-                checkEssentialTables()
             } catch (e: Exception) {
-                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
         }
@@ -383,7 +407,6 @@ class MainActivity : AppCompatActivity() {
                     dbHelper.tableExists(table)
                 }
             } catch (e: Exception) {
-                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
         }
@@ -394,35 +417,11 @@ class MainActivity : AppCompatActivity() {
             try {
                 val currentVersion = dbHelper.getVersion()
                 if (currentVersion < DatabaseHelper.VERSION) {
-                    DebugLogger.info("Database", "Migrating from $currentVersion to ${DatabaseHelper.VERSION}")
+                    // يقوم DatabaseHelper بالترحيل
                 }
             } catch (e: Exception) {
-                DebugLogger.logException("Database", e)
                 handleApplicationError(e)
             }
-        }
-    }
-
-    private fun checkEssentialTables() {
-        try {
-            val essential = listOf("users", "roles", "permissions", "role_permissions", "screens")
-            val db = dbHelper.readableDatabase
-            val cursor = db.query("sqlite_master", arrayOf("name"), "type='table' AND name IN (${essential.joinToString(",") { "'$it'" }})", null, null, null, null)
-            val existing = mutableSetOf<String>()
-            cursor.use {
-                while (it.moveToNext()) {
-                    existing.add(it.getString(0))
-                }
-            }
-            for (table in essential) {
-                if (table in existing) {
-                    DebugLogger.info("Database", "TABLE $table EXISTS")
-                } else {
-                    DebugLogger.error("Database", "TABLE $table MISSING")
-                }
-            }
-        } catch (e: Exception) {
-            DebugLogger.logException("Database", e)
         }
     }
 
@@ -449,7 +448,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 loadSmsConfiguration()
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 handleApplicationError(e)
             }
         }
@@ -463,7 +461,7 @@ class MainActivity : AppCompatActivity() {
             dbHelper.getSetting("sms_rate_limit")
             dbHelper.getSetting("sms_otp_enabled")
         } catch (e: Exception) {
-            DebugLogger.warn("SMS", "loadSmsConfiguration error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -473,7 +471,7 @@ class MainActivity : AppCompatActivity() {
                 dbHelper.setSetting(key, value)
             }
         } catch (e: Exception) {
-            DebugLogger.warn("SMS", "saveSmsConfiguration error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -554,7 +552,6 @@ class MainActivity : AppCompatActivity() {
                     "بعض الأذونات الأساسية مفقودة. قد لا تعمل بعض الميزات.",
                     Toast.LENGTH_LONG
                 ).show()
-                DebugLogger.warn("Permissions", "Critical permissions denied: $denied")
             }
         } else {
             startSMSService()
@@ -575,7 +572,6 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.logEvent("sms_service_started", "Service started")
         } catch (e: Exception) {
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
-            DebugLogger.logException("SMS", e)
             handleApplicationError(e)
         }
     }
@@ -586,7 +582,7 @@ class MainActivity : AppCompatActivity() {
             stopService(intent)
             DebugLogger.logEvent("sms_service_stopped", "Service stopped")
         } catch (e: Exception) {
-            DebugLogger.warn("SMS", "stopSMSService error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -611,7 +607,6 @@ class MainActivity : AppCompatActivity() {
         return try {
             dbHelper.getAllSettingsMap()
         } catch (e: Exception) {
-            DebugLogger.warn("Settings", "getAllSettings error: ${e.message}")
             emptyMap()
         }
     }
@@ -641,7 +636,7 @@ class MainActivity : AppCompatActivity() {
             }
             result
         } catch (e: Exception) {
-            DebugLogger.logException("Health", e)
+            handleApplicationError(e)
             false
         }
     }
@@ -681,7 +676,7 @@ class MainActivity : AppCompatActivity() {
                 cleanupOldConversationContext()
                 cleanupOldMetrics()
             } catch (e: Exception) {
-                DebugLogger.warn("Cleanup", "cleanupSmsDatabase error: ${e.message}")
+                // تجاهل
             }
         }
     }
@@ -690,7 +685,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldRateLimits()
         } catch (e: Exception) {
-            DebugLogger.warn("Cleanup", "cleanupOldRateLimits error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -698,7 +693,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldConversationContext(30)
         } catch (e: Exception) {
-            DebugLogger.warn("Cleanup", "cleanupOldConversationContext error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -706,7 +701,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.cleanupOldMetrics(90)
         } catch (e: Exception) {
-            DebugLogger.warn("Cleanup", "cleanupOldMetrics error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -728,7 +723,7 @@ class MainActivity : AppCompatActivity() {
                     cleanupSmsDatabase()
                     DebugLogger.logEvent("periodic_maintenance", "Maintenance run completed")
                 } catch (e: Exception) {
-                    DebugLogger.warn("Maintenance", "Periodic maintenance error: ${e.message}")
+                    // تجاهل
                 }
             }
         }
@@ -766,7 +761,7 @@ class MainActivity : AppCompatActivity() {
                 notificationManager.notify(System.currentTimeMillis().toInt(), notification)
             }
         } catch (e: Exception) {
-            DebugLogger.warn("Notification", "showSmsNotification error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -787,7 +782,7 @@ class MainActivity : AppCompatActivity() {
         try {
             dbHelper.logActivity("system", event, details)
         } catch (e: Exception) {
-            DebugLogger.warn("Log", "logApplicationEvent error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -825,7 +820,6 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.logEvent("app_started", "Application started")
             checkSmsSystemHealth()
         } catch (e: Exception) {
-            DebugLogger.logException("Init", e)
             handleApplicationError(e)
         }
     }
@@ -840,7 +834,6 @@ class MainActivity : AppCompatActivity() {
 
         try {
             if (wv.isAttachedToWindow) {
-                DebugLogger.info("WebView", "Loading login.html")
                 wv.loadUrl("file:///android_asset/screens/login.html")
             } else {
                 handler.postDelayed({
@@ -850,7 +843,6 @@ class MainActivity : AppCompatActivity() {
                 }, 500)
             }
         } catch (e: Exception) {
-            DebugLogger.logException("WebView", e)
             showErrorPage()
         }
     }
@@ -890,7 +882,7 @@ class MainActivity : AppCompatActivity() {
         try {
             wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
         } catch (e: Exception) {
-            DebugLogger.warn("WebView", "showErrorPage failed: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -910,7 +902,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (e: Exception) {
-            DebugLogger.warn("Env", "loadEnvKey($key) failed: ${e.message}")
             ""
         }
     }
@@ -925,10 +916,8 @@ class MainActivity : AppCompatActivity() {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-            DebugLogger.info("Prefs", "Encrypted prefs initialized")
         } catch (e: Exception) {
             sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            DebugLogger.warn("Prefs", "Encrypted prefs fallback: ${e.message}")
         }
     }
 
@@ -985,11 +974,7 @@ class MainActivity : AppCompatActivity() {
                             webViewClient = createWebViewClient()
                             webChromeClient = object : WebChromeClient() {
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                                    val msg = consoleMessage.message()
-                                    val line = consoleMessage.lineNumber()
-                                    val source = consoleMessage.sourceId()
-                                    Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
-                                    DebugLogger.info("WebViewConsole", "$msg")
+                                    // نمرر رسائل Console إلى Logcat فقط، وليس إلى VConsole
                                     return true
                                 }
                             }
@@ -998,7 +983,6 @@ class MainActivity : AppCompatActivity() {
                                 webAppInterface = WebAppInterface(context, this@MainActivity)
                                 addJavascriptInterface(webAppInterface!!, "AndroidInterface")
                                 setTag(BRIDGE_INITIALIZED_TAG, true)
-                                DebugLogger.info("Bridge", "AndroidInterface injected")
                             }
                         }
                     } else {
@@ -1013,7 +997,8 @@ class MainActivity : AppCompatActivity() {
                     DebugLogger.attachWebView(wv)
 
                     val instanceId = ++webViewInstanceId
-                    DebugLogger.info("WebView", "CREATED instance=$instanceId hash=${wv.hashCode()}")
+                    // لا نرسل إلى VConsole
+                    Log.d(TAG, "WebView CREATED instance=$instanceId hash=${wv.hashCode()}")
                 }
             },
             update = { }
@@ -1027,7 +1012,6 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed.get()) return
                 serverReady = true
                 isErrorPageShown = false
-                DebugLogger.info("WebView", "Page finished: $url")
             }
 
             override fun shouldOverrideUrlLoading(
@@ -1057,7 +1041,6 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 if (isDestroyed.get()) return
-                DebugLogger.error("WebView", "Received error: ${error?.description}")
             }
 
             @Deprecated("Deprecated in Java")
@@ -1069,7 +1052,6 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 if (isDestroyed.get()) return
-                DebugLogger.error("WebView", "Received error: $description (code $errorCode)")
             }
 
             override fun onReceivedSslError(
@@ -1078,14 +1060,12 @@ class MainActivity : AppCompatActivity() {
                 error: android.net.http.SslError?
             ) {
                 handler?.cancel()
-                DebugLogger.warn("WebView", "SSL error: ${error?.primaryError}")
             }
 
             override fun onRenderProcessGone(
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
             ): Boolean {
-                DebugLogger.error("WebView", "Render process gone")
                 view?.let { destroyWebView(it) }
                 if (!isDestroyed.get()) {
                     webView = null
@@ -1126,7 +1106,6 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "تطبيق واتساب غير مثبت", Toast.LENGTH_SHORT).show()
-                    DebugLogger.warn("CustomUrl", "WhatsApp not installed")
                     false
                 }
             }
@@ -1137,7 +1116,6 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "تطبيق فيسبوك غير مثبت", Toast.LENGTH_SHORT).show()
-                    DebugLogger.warn("CustomUrl", "Facebook not installed")
                     false
                 }
             }
@@ -1148,7 +1126,6 @@ class MainActivity : AppCompatActivity() {
                     true
                 } catch (e: Exception) {
                     Toast.makeText(this, "لا يوجد تطبيق بريد إلكتروني", Toast.LENGTH_SHORT).show()
-                    DebugLogger.warn("CustomUrl", "Email app not found")
                     false
                 }
             }
@@ -1158,7 +1135,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    DebugLogger.warn("CustomUrl", "Dial failed: ${e.message}")
                     false
                 }
             }
@@ -1168,7 +1144,6 @@ class MainActivity : AppCompatActivity() {
                     startActivity(intent)
                     true
                 } catch (e: Exception) {
-                    DebugLogger.warn("CustomUrl", "External link failed: ${e.message}")
                     false
                 }
             }
@@ -1178,8 +1153,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun destroyWebView(webView: WebView?) {
         if (webView == null) return
-
-        DebugLogger.info("WebView", "DESTROYED hash=${webView.hashCode()}")
 
         try {
             if (this.webView === webView) {
@@ -1196,7 +1169,7 @@ class MainActivity : AppCompatActivity() {
             webView.removeAllViews()
             webView.destroy()
         } catch (e: Exception) {
-            DebugLogger.warn("WebView", "destroyWebView error: ${e.message}")
+            // تجاهل
         }
     }
 
@@ -1208,13 +1181,11 @@ class MainActivity : AppCompatActivity() {
         try {
             Class.forName("androidx.biometric.BiometricPrompt")
         } catch (e: ClassNotFoundException) {
-            DebugLogger.warn("Biometric", "BiometricPrompt not available")
             onError("unsupported")
             return
         }
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            DebugLogger.warn("Biometric", "Android version < P")
             onError("unsupported")
             return
         }
@@ -1229,19 +1200,16 @@ class MainActivity : AppCompatActivity() {
                         result: androidx.biometric.BiometricPrompt.AuthenticationResult
                     ) {
                         super.onAuthenticationSucceeded(result)
-                        DebugLogger.info("Biometric", "Authentication succeeded")
                         onSuccess()
                     }
 
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
-                        DebugLogger.warn("Biometric", "Authentication failed")
                         onError("failed")
                     }
 
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
-                        DebugLogger.warn("Biometric", "Error: $errString (code $errorCode)")
                         when (errorCode) {
                             androidx.biometric.BiometricPrompt.ERROR_USER_CANCELED,
                             androidx.biometric.BiometricPrompt.ERROR_NEGATIVE_BUTTON -> {
@@ -1262,7 +1230,6 @@ class MainActivity : AppCompatActivity() {
 
             biometricPrompt.authenticate(promptInfo)
         } catch (e: Exception) {
-            DebugLogger.logException("Biometric", e)
             onError("unsupported")
         }
     }
@@ -1332,26 +1299,43 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
-        // 1. المصادقة
+        // 1. المصادقة (مع سجلات تسجيل الدخول)
         // ============================================================
 
         @JavascriptInterface
         fun login(username: String, password: String): String {
-            DebugLogger.info("LOGIN", "LOGIN_REQUEST_RECEIVED username=$username")
+            DebugLogger.logLogin("Request received")
+            DebugLogger.logLogin("Username: $username")
+            DebugLogger.logLogin("Password received: ${password.isNotEmpty()}")
+
             val activity = getActivity()
-            DebugLogger.info("LOGIN", "activity=${activity?.hashCode()} webView=${activity?.webView?.hashCode()} attached=${activity?.webView?.isAttachedToWindow}")
+            if (activity == null) {
+                DebugLogger.logError("Activity is null")
+                return errorResponse("النشاط غير متاح")
+            }
+            DebugLogger.logLogin("Activity exists: ${activity.hashCode()}")
+
+            val wv = activity.webView
+            if (wv == null) {
+                DebugLogger.logError("WebView is null")
+                return errorResponse("WebView غير متاح")
+            }
+            DebugLogger.logLogin("WebView exists, attached: ${wv.isAttachedToWindow}")
+
+            DebugLogger.logLogin("AndroidInterface is working")
 
             val db = getDbHelper()
             if (db == null) {
-                DebugLogger.error("LOGIN", "DatabaseHelper is null")
+                DebugLogger.logError("DatabaseHelper is null")
                 return errorResponse("قاعدة البيانات غير متاحة")
             }
 
+            DebugLogger.logDatabase("Authenticating user...")
+
             return try {
-                DebugLogger.info("LOGIN", "AUTHENTICATE_USER_STARTED")
                 val authResult = db.authenticateUser(username, password)
                 if (authResult != null) {
-                    DebugLogger.info("LOGIN", "AUTHENTICATION_RESULT success=true")
+                    DebugLogger.logLogin("Authentication success")
                     val userId = authResult.optLong("user_id", 0)
                     val permissionsArray = db.getUserPermissions(userId)
                     val permissionsObject = JSONObject()
@@ -1381,13 +1365,13 @@ class MainActivity : AppCompatActivity() {
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
                     val token = UUID.randomUUID().toString()
-                    activity?.let { act ->
-                        act.currentAuthToken = token
-                        act.currentUserId = userId
-                        act.currentUserRole = role
-                        act.currentUserName = authResult.optString("username", "")
-                        DebugLogger.info("LOGIN", "Session updated for user ${authResult.optString("username")}")
-                    }
+                    activity.currentAuthToken = token
+                    activity.currentUserId = userId
+                    activity.currentUserRole = role
+                    activity.currentUserName = authResult.optString("username", "")
+
+                    DebugLogger.logSession("Session created for user: ${authResult.optString("username")}")
+                    DebugLogger.logNavigation("Navigating to main screen...")
 
                     JSONObject().apply {
                         put("success", true)
@@ -1395,11 +1379,13 @@ class MainActivity : AppCompatActivity() {
                         put("token", token)
                     }.toString()
                 } else {
-                    DebugLogger.warn("LOGIN", "AUTHENTICATION_RESULT success=false")
+                    DebugLogger.logLogin("Authentication failed - invalid credentials")
                     errorResponse("بيانات خاطئة")
                 }
             } catch (e: Exception) {
-                DebugLogger.logException("LOGIN_EXCEPTION", e)
+                val exceptionType = e.javaClass.simpleName
+                val errorMessage = e.message ?: "Unknown error"
+                DebugLogger.logError("$exceptionType: $errorMessage in authenticateUser()")
                 errorResponse("خطأ داخلي: ${e.message}")
             }
         }
@@ -1407,7 +1393,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun requestBiometricAuth(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            DebugLogger.info("Biometric", "requestBiometricAuth called")
+            DebugLogger.logLogin("Biometric authentication requested")
             activity.runOnUiThread {
                 activity.showBiometricPrompt(
                     onSuccess = {
@@ -1415,7 +1401,6 @@ class MainActivity : AppCompatActivity() {
                             put("success", true)
                             put("message", "authenticated")
                         }
-                        DebugLogger.info("Biometric", "Authentication success")
                         activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     },
                     onError = { error ->
@@ -1423,7 +1408,6 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", error)
                         }
-                        DebugLogger.warn("Biometric", "Authentication error: $error")
                         activity.safeEvaluateJs("window.onBiometricResult && window.onBiometricResult(${result})")
                     }
                 )
@@ -1441,11 +1425,9 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun forgotPassword(username: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("ForgotPassword", "Request for $username")
             return try {
                 val user = db.getUserByUsername(username)
                 if (user == null) {
-                    DebugLogger.warn("ForgotPassword", "User not found: $username")
                     return errorResponse("المستخدم غير موجود")
                 }
 
@@ -1461,7 +1443,6 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val resetUrl = "file:///android_asset/login.html?token=$token"
-                DebugLogger.info("ForgotPassword", "Reset token created for $username")
 
                 JSONObject().apply {
                     put("success", true)
@@ -1469,7 +1450,6 @@ class MainActivity : AppCompatActivity() {
                     put("reset_url", resetUrl)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("ForgotPassword", e)
                 errorResponse(e.message)
             }
         }
@@ -1477,11 +1457,9 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun resetPassword(token: String, newPassword: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("ResetPassword", "Attempt with token")
             return try {
                 val userData = db.validateResetToken(token)
                 if (userData == null) {
-                    DebugLogger.warn("ResetPassword", "Invalid or expired token")
                     return errorResponse("رابط الاستعادة غير صالح أو منتهي الصلاحية")
                 }
 
@@ -1496,10 +1474,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 db.clearResetToken(token)
-                DebugLogger.info("ResetPassword", "Password updated for user ${userData.optString("username")}")
+
                 successResponse(true, "تم تحديث كلمة المرور بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("ResetPassword", e)
                 errorResponse(e.message)
             }
         }
@@ -1507,7 +1484,6 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun verifyResetCode(phone: String, code: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("VerifyCode", "Phone: $phone")
             return try {
                 val cursor = db.readableDatabase.rawQuery(
                     "SELECT id FROM users WHERE phone = ? AND is_deleted = 0 LIMIT 1",
@@ -1517,21 +1493,17 @@ class MainActivity : AppCompatActivity() {
                     if (it.moveToFirst()) it.getLong(0) else null
                 }
                 if (userId == null) {
-                    DebugLogger.warn("VerifyCode", "User not found for phone $phone")
                     return errorResponse("المستخدم غير موجود")
                 }
 
                 val isValid = db.validateOtpCode(userId, code)
                 if (isValid) {
                     db.clearOtpCode(userId)
-                    DebugLogger.info("VerifyCode", "Code verified for user $userId")
                     successResponse(true, "تم التحقق بنجاح")
                 } else {
-                    DebugLogger.warn("VerifyCode", "Invalid or expired code")
                     errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
                 }
             } catch (e: Exception) {
-                DebugLogger.logException("VerifyCode", e)
                 errorResponse(e.message)
             }
         }
@@ -1539,16 +1511,13 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun getUserData(username: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("GetUserData", "Username: $username")
             return try {
                 val user = db.getUserByUsername(username)
                 if (user == null) {
-                    DebugLogger.warn("GetUserData", "User not found: $username")
                     return errorResponse("المستخدم غير موجود")
                 }
                 dataResponse(user)
             } catch (e: Exception) {
-                DebugLogger.logException("GetUserData", e)
                 errorResponse(e.message)
             }
         }
@@ -1568,7 +1537,6 @@ class MainActivity : AppCompatActivity() {
             if (geminiApiKey.isEmpty()) {
                 return errorResponse("مفتاح Gemini API غير مُهيأ")
             }
-            DebugLogger.info("AI", "sendToAI: $message")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -1588,7 +1556,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
-                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1606,7 +1573,6 @@ class MainActivity : AppCompatActivity() {
             if (geminiApiKey.isEmpty()) {
                 return errorResponse("مفتاح Gemini API غير مُهيأ")
             }
-            DebugLogger.info("AI", "getAIResponse: $message")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -1626,7 +1592,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIResponse && window.onAIResponse(${result})")
                     }
-                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1671,7 +1636,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onAIInsight && window.onAIInsight(${result})")
                     }
-                    DebugLogger.logException("AI", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -1694,10 +1658,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.insertParty(data)
-                DebugLogger.info("Party", "Added party id=$id")
                 successResponse(id, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1711,7 +1673,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateParty(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1724,7 +1685,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteParty(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1737,7 +1697,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.archiveParty(id)
                 successResponse(rows > 0, if (rows > 0) "تم الأرشفة بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1750,7 +1709,6 @@ class MainActivity : AppCompatActivity() {
                 val parties = db.getParties(type ?: "")
                 dataResponse(parties)
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1770,7 +1728,6 @@ class MainActivity : AppCompatActivity() {
                 val results = db.searchParties(query)
                 dataResponse(results)
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1783,7 +1740,6 @@ class MainActivity : AppCompatActivity() {
                 val party = db.getPartyById(id)
                 party?.toString() ?: errorResponse("العميل غير موجود")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -1799,10 +1755,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addOrder(data)
-                DebugLogger.info("Order", "Added order id=$id")
                 successResponse(id, "تم إضافة الطلب بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
@@ -1815,7 +1769,6 @@ class MainActivity : AppCompatActivity() {
                 val orders = db.getOrders(status)
                 dataResponse(orders)
             } catch (e: Exception) {
-                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
@@ -1834,10 +1787,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addDelivery(data)
-                DebugLogger.info("Delivery", "Added delivery id=$id")
                 successResponse(id, "تم إضافة التسليم بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
@@ -1850,7 +1801,6 @@ class MainActivity : AppCompatActivity() {
                 val deliveries = db.getDeliveries()
                 dataResponse(deliveries)
             } catch (e: Exception) {
-                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
@@ -1863,7 +1813,6 @@ class MainActivity : AppCompatActivity() {
                 val deliveries = db.getTodayDeliveries()
                 dataResponse(deliveries)
             } catch (e: Exception) {
-                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
@@ -1879,10 +1828,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addFuelSale(data)
-                DebugLogger.info("Sale", "Added sale id=$id")
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1895,7 +1842,6 @@ class MainActivity : AppCompatActivity() {
                 val result = db.completeSale(JSONObject(jsonData))
                 dataResponse(result)
             } catch (e: Exception) {
-                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1908,7 +1854,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getSales()
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1921,7 +1866,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getTodaySales()
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1937,7 +1881,6 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_sale", "حذف مبيعة $saleId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Sale", e)
                 errorResponse(e.message)
             }
         }
@@ -1953,10 +1896,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addCashMovement(data)
-                DebugLogger.info("Cash", "Added cash movement id=$id")
                 successResponse(id, "تم إضافة الحركة المالية بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
@@ -1969,7 +1910,6 @@ class MainActivity : AppCompatActivity() {
                 val movements = db.getCashMovements()
                 dataResponse(movements)
             } catch (e: Exception) {
-                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
@@ -1982,7 +1922,6 @@ class MainActivity : AppCompatActivity() {
                 val cash = db.getTodayCash()
                 dataResponse(cash)
             } catch (e: Exception) {
-                DebugLogger.logException("Cash", e)
                 errorResponse(e.message)
             }
         }
@@ -1998,10 +1937,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addMeterReading(data)
-                DebugLogger.info("Meter", "Added meter reading id=$id")
                 successResponse(id, "تم إضافة قراءة العداد بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
@@ -2014,7 +1951,6 @@ class MainActivity : AppCompatActivity() {
                 val readings = db.getMeterReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
-                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
@@ -2026,10 +1962,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addTankReading(data)
-                DebugLogger.info("Tank", "Added tank reading id=$id")
                 successResponse(id, "تم إضافة قراءة الخزان بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
@@ -2042,7 +1976,6 @@ class MainActivity : AppCompatActivity() {
                 val readings = db.getTankReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
-                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
@@ -2058,10 +1991,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addStockMovement(data)
-                DebugLogger.info("Stock", "Added stock movement id=$id")
                 successResponse(id, "تم إضافة حركة المخزون بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -2074,7 +2005,6 @@ class MainActivity : AppCompatActivity() {
                 val movements = db.getStockMovements()
                 dataResponse(movements)
             } catch (e: Exception) {
-                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -2087,7 +2017,6 @@ class MainActivity : AppCompatActivity() {
                 val items = db.getLowStockItems()
                 dataResponse(items)
             } catch (e: Exception) {
-                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -2103,10 +2032,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addAsset(data)
-                DebugLogger.info("Asset", "Added asset id=$id")
                 successResponse(id, "تم إضافة الأصل بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Asset", e)
                 errorResponse(e.message)
             }
         }
@@ -2119,7 +2046,6 @@ class MainActivity : AppCompatActivity() {
                 val assets = db.getAssets()
                 dataResponse(assets)
             } catch (e: Exception) {
-                DebugLogger.logException("Asset", e)
                 errorResponse(e.message)
             }
         }
@@ -2135,10 +2061,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addUser(data)
-                DebugLogger.info("User", "Added user id=$id")
                 successResponse(id, "تم إضافة المستخدم بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
@@ -2151,7 +2075,6 @@ class MainActivity : AppCompatActivity() {
                 val users = db.getUsers()
                 dataResponse(users)
             } catch (e: Exception) {
-                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
@@ -2164,7 +2087,6 @@ class MainActivity : AppCompatActivity() {
                 val users = db.getUsersByRole(role)
                 dataResponse(users)
             } catch (e: Exception) {
-                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
@@ -2178,7 +2100,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateUser(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
@@ -2191,7 +2112,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteUser(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("User", e)
                 errorResponse(e.message)
             }
         }
@@ -2203,10 +2123,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addEmployee(data)
-                DebugLogger.info("Employee", "Added employee id=$id")
                 successResponse(id, "تم إضافة الموظف بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
@@ -2219,7 +2137,6 @@ class MainActivity : AppCompatActivity() {
                 val employees = db.getEmployees(1)
                 dataResponse(employees)
             } catch (e: Exception) {
-                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
@@ -2233,7 +2150,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateEmployee(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
@@ -2248,7 +2164,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteEmployee(intId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Employee", e)
                 errorResponse(e.message)
             }
         }
@@ -2264,10 +2179,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.startShift(data)
-                DebugLogger.info("Shift", "Started shift id=$id")
                 successResponse(id, "تم بدء الوردية بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2281,7 +2194,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.endShift(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم إنهاء الوردية بنجاح" else "لم يتم العثور على الوردية")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2294,7 +2206,6 @@ class MainActivity : AppCompatActivity() {
                 val shift = db.getCurrentShift()
                 shift?.toString() ?: errorResponse("لا توجد وردية نشطة")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2307,7 +2218,6 @@ class MainActivity : AppCompatActivity() {
                 val shifts = db.getShifts(1)
                 dataResponse(shifts)
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2323,7 +2233,6 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_shift", "حذف وردية $shiftId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2335,10 +2244,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftSale(data)
-                DebugLogger.info("Shift", "Added shift sale id=$id")
                 successResponse(id, "تم إضافة بيع الوردية بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2350,10 +2257,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftDelivery(data)
-                DebugLogger.info("Shift", "Added shift delivery id=$id")
                 successResponse(id, "تم إضافة تسليم الوردية بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2365,10 +2270,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addShiftExpense(data)
-                DebugLogger.info("Shift", "Added shift expense id=$id")
                 successResponse(id, "تم إضافة مصروف الوردية بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2381,7 +2284,6 @@ class MainActivity : AppCompatActivity() {
                 val report = db.getShiftReport(shiftId)
                 dataResponse(report)
             } catch (e: Exception) {
-                DebugLogger.logException("Shift", e)
                 errorResponse(e.message)
             }
         }
@@ -2397,10 +2299,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addNotification(data)
-                DebugLogger.info("Notification", "Added notification id=$id")
                 successResponse(id, "تم إضافة الإشعار بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
@@ -2413,7 +2313,6 @@ class MainActivity : AppCompatActivity() {
                 val notifications = db.getNotifications()
                 dataResponse(notifications)
             } catch (e: Exception) {
-                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
@@ -2429,7 +2328,6 @@ class MainActivity : AppCompatActivity() {
                     put("count", count)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
@@ -2442,13 +2340,12 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.markNotificationRead(id)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الإشعار")
             } catch (e: Exception) {
-                DebugLogger.logException("Notification", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 14. الرسائل النصية (SMS) - جزء مختصر للقراءة
+        // 14. الرسائل النصية (SMS)
         // ============================================================
 
         @JavascriptInterface
@@ -2458,10 +2355,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSmsMessage(data)
-                DebugLogger.info("SMS", "Added SMS id=$id")
                 successResponse(id, "تم إضافة الرسالة بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2474,7 +2369,6 @@ class MainActivity : AppCompatActivity() {
                 val messages = db.getSmsMessages()
                 dataResponse(messages)
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2487,7 +2381,6 @@ class MainActivity : AppCompatActivity() {
                 val messages = db.getSmsMessagesByPhone(phone)
                 dataResponse(messages)
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2500,7 +2393,6 @@ class MainActivity : AppCompatActivity() {
                 val messages = db.getSmsMessagesByStatus(status)
                 dataResponse(messages)
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2513,7 +2405,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateSmsStatus(id, status)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الرسالة")
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2526,7 +2417,6 @@ class MainActivity : AppCompatActivity() {
                 val stats = db.getSmsStats()
                 dataResponse(stats)
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2539,7 +2429,6 @@ class MainActivity : AppCompatActivity() {
                 val templates = db.getSmsTemplates()
                 dataResponse(templates)
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2551,10 +2440,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSmsTemplate(data)
-                DebugLogger.info("SMS", "Added template id=$id")
                 successResponse(id, "تم إضافة القالب بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2568,7 +2455,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateSmsTemplate(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على القالب")
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2581,7 +2467,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteSmsTemplate(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على القالب")
             } catch (e: Exception) {
-                DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
             }
         }
@@ -2598,7 +2483,6 @@ class MainActivity : AppCompatActivity() {
                 val whitelist = db.getSmsWhitelist()
                 dataResponse(whitelist)
             } catch (e: Exception) {
-                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
@@ -2613,10 +2497,8 @@ class MainActivity : AppCompatActivity() {
                 val name = data.optString("name", "")
                 if (phone.isBlank()) return errorResponse("رقم الهاتف مطلوب")
                 db.addToSmsWhitelist(phone, name)
-                DebugLogger.info("Whitelist", "Added $phone")
                 successResponse(0, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
@@ -2630,10 +2512,8 @@ class MainActivity : AppCompatActivity() {
                 val phone = data.optString("phone", "")
                 if (phone.isBlank()) return errorResponse("رقم الهاتف مطلوب")
                 db.removeFromSmsWhitelist(phone)
-                DebugLogger.info("Whitelist", "Removed $phone")
                 successResponse(0, "تم الحذف بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Whitelist", e)
                 errorResponse(e.message)
             }
         }
@@ -2645,10 +2525,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addSetting(data)
-                DebugLogger.info("Setting", "Added setting id=$id")
                 successResponse(id, "تم إضافة الإعداد بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2661,7 +2539,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteSetting(key)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الإعداد")
             } catch (e: Exception) {
-                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2677,7 +2554,6 @@ class MainActivity : AppCompatActivity() {
                     put("value", value)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2688,10 +2564,8 @@ class MainActivity : AppCompatActivity() {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 db.setSetting(key, value)
-                DebugLogger.info("Setting", "Updated $key=$value")
                 successResponse(0, "تم التحديث")
             } catch (e: Exception) {
-                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2704,7 +2578,6 @@ class MainActivity : AppCompatActivity() {
                 val settings = db.getAllSettingsMap()
                 dataResponse(settings)
             } catch (e: Exception) {
-                DebugLogger.logException("Setting", e)
                 errorResponse(e.message)
             }
         }
@@ -2721,7 +2594,6 @@ class MainActivity : AppCompatActivity() {
                 val stats = db.getDashboardStats(1)
                 dataResponse(stats)
             } catch (e: Exception) {
-                DebugLogger.logException("Dashboard", e)
                 errorResponse(e.message)
             }
         }
@@ -2734,7 +2606,6 @@ class MainActivity : AppCompatActivity() {
                 val payments = db.getOverduePayments()
                 dataResponse(payments)
             } catch (e: Exception) {
-                DebugLogger.logException("Payments", e)
                 errorResponse(e.message)
             }
         }
@@ -2747,7 +2618,6 @@ class MainActivity : AppCompatActivity() {
                 val alerts = db.getActiveAlerts()
                 dataResponse(alerts)
             } catch (e: Exception) {
-                DebugLogger.logException("Alerts", e)
                 errorResponse(e.message)
             }
         }
@@ -2760,7 +2630,6 @@ class MainActivity : AppCompatActivity() {
                 val activity = db.getRecentActivity(limit)
                 dataResponse(activity)
             } catch (e: Exception) {
-                DebugLogger.logException("Activity", e)
                 errorResponse(e.message)
             }
         }
@@ -2777,7 +2646,6 @@ class MainActivity : AppCompatActivity() {
                 val products = db.getProducts()
                 dataResponse(products)
             } catch (e: Exception) {
-                DebugLogger.logException("Products", e)
                 errorResponse(e.message)
             }
         }
@@ -2789,10 +2657,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.insertProduct(data)
-                DebugLogger.info("Product", "Added product id=$id")
                 successResponse(id, "تم إضافة المنتج بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
@@ -2806,7 +2672,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateProduct(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على المنتج")
             } catch (e: Exception) {
-                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
@@ -2819,7 +2684,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deleteProduct(id)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على المنتج")
             } catch (e: Exception) {
-                DebugLogger.logException("Product", e)
                 errorResponse(e.message)
             }
         }
@@ -2832,7 +2696,6 @@ class MainActivity : AppCompatActivity() {
                 val types = db.getFuelTypes()
                 dataResponse(types)
             } catch (e: Exception) {
-                DebugLogger.logException("Fuel", e)
                 errorResponse(e.message)
             }
         }
@@ -2845,13 +2708,12 @@ class MainActivity : AppCompatActivity() {
                 val categories = db.getProductCategories()
                 dataResponse(categories)
             } catch (e: Exception) {
-                DebugLogger.logException("Categories", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 19. المركبات، الخزانات والمضخات - مختصر
+        // 19. المركبات، الخزانات والمضخات
         // ============================================================
 
         @JavascriptInterface
@@ -2862,7 +2724,6 @@ class MainActivity : AppCompatActivity() {
                 val vehicles = db.getVehicles()
                 dataResponse(vehicles)
             } catch (e: Exception) {
-                DebugLogger.logException("Vehicles", e)
                 errorResponse(e.message)
             }
         }
@@ -2875,7 +2736,6 @@ class MainActivity : AppCompatActivity() {
                 val tanks = db.getTanks()
                 dataResponse(tanks)
             } catch (e: Exception) {
-                DebugLogger.logException("Tanks", e)
                 errorResponse(e.message)
             }
         }
@@ -2888,7 +2748,6 @@ class MainActivity : AppCompatActivity() {
                 val pumps = db.getPumps()
                 dataResponse(pumps)
             } catch (e: Exception) {
-                DebugLogger.logException("Pumps", e)
                 errorResponse(e.message)
             }
         }
@@ -2901,7 +2760,6 @@ class MainActivity : AppCompatActivity() {
                 val stats = db.getTankStats()
                 dataResponse(stats)
             } catch (e: Exception) {
-                DebugLogger.logException("Tanks", e)
                 errorResponse(e.message)
             }
         }
@@ -2912,10 +2770,8 @@ class MainActivity : AppCompatActivity() {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 db.updateTankQuantity(tankId, quantity, "System")
-                DebugLogger.info("Tank", "Updated quantity for tank $tankId")
                 successResponse(0, "تم التحديث")
             } catch (e: Exception) {
-                DebugLogger.logException("Tank", e)
                 errorResponse(e.message)
             }
         }
@@ -2940,7 +2796,6 @@ class MainActivity : AppCompatActivity() {
                 val requests = db.getMaintenanceRequests(stationId, status)
                 dataResponse(requests)
             } catch (e: Exception) {
-                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
@@ -2961,10 +2816,8 @@ class MainActivity : AppCompatActivity() {
                     return errorResponse("بيانات غير صالحة")
                 }
                 val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, 1, 1)
-                DebugLogger.info("Maintenance", "Added request id=$id")
                 successResponse(id, "تم إضافة طلب الصيانة بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
@@ -2981,7 +2834,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updateMaintenanceRequestStatus(requestId, status)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الطلب")
             } catch (e: Exception) {
-                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
@@ -2997,13 +2849,12 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_maintenance", "حذف طلب صيانة $requestId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الطلب")
             } catch (e: Exception) {
-                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 21. المدفوعات والإيداعات - مختصر
+        // 21. المدفوعات والإيداعات
         // ============================================================
 
         @JavascriptInterface
@@ -3014,7 +2865,6 @@ class MainActivity : AppCompatActivity() {
                 val payments = db.getPaymentsWithCustomer()
                 dataResponse(payments)
             } catch (e: Exception) {
-                DebugLogger.logException("Payments", e)
                 errorResponse(e.message)
             }
         }
@@ -3033,7 +2883,6 @@ class MainActivity : AppCompatActivity() {
                 val success = db.processPayment(customerId, amount, method, operator)
                 successResponse(success, if (success) "تم التسديد بنجاح" else "فشل التسديد")
             } catch (e: Exception) {
-                DebugLogger.logException("Payment", e)
                 errorResponse(e.message)
             }
         }
@@ -3052,7 +2901,6 @@ class MainActivity : AppCompatActivity() {
                 val success = db.addCashDeposit(customerId, amount, notes, operator)
                 successResponse(success, if (success) "تم الإيداع بنجاح" else "فشل الإيداع")
             } catch (e: Exception) {
-                DebugLogger.logException("Deposit", e)
                 errorResponse(e.message)
             }
         }
@@ -3068,13 +2916,12 @@ class MainActivity : AppCompatActivity() {
                 if (rows > 0) db.logActivity("system", "delete_payment", "حذف دفعة $paymentId")
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على الدفعة")
             } catch (e: Exception) {
-                DebugLogger.logException("Payment", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 22. تقارير إضافية - مختصر
+        // 22. تقارير إضافية
         // ============================================================
 
         @JavascriptInterface
@@ -3085,7 +2932,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getMonthlySales(1)
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3098,7 +2944,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getDailySales(1, date)
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3111,7 +2956,6 @@ class MainActivity : AppCompatActivity() {
                 val report = db.getEodReport(1)
                 dataResponse(report)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3128,7 +2972,6 @@ class MainActivity : AppCompatActivity() {
                 report.put("cost", report.optDouble("total_payments", 0.0))
                 dataResponse(report)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3151,7 +2994,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 dataResponse(result)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3164,7 +3006,6 @@ class MainActivity : AppCompatActivity() {
                 val overdue = db.getOverduePayments()
                 dataResponse(overdue)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3177,7 +3018,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getSalesByFuelType()
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
             }
         }
@@ -3211,7 +3051,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onBackupResult && window.onBackupResult(${result})")
                     }
-                    DebugLogger.logException("Backup", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3247,7 +3086,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onRestoreResult && window.onRestoreResult(${result})")
                     }
-                    DebugLogger.logException("Restore", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3284,7 +3122,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onExportResult && window.onExportResult(${result})")
                     }
-                    DebugLogger.logException("Export", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3321,7 +3158,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onImportResult && window.onImportResult(${result})")
                     }
-                    DebugLogger.logException("Import", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3358,7 +3194,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onExportAllResult && window.onExportAllResult(${result})")
                     }
-                    DebugLogger.logException("ExportAll", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3394,7 +3229,6 @@ class MainActivity : AppCompatActivity() {
                         }
                         activity.safeEvaluateJs("window.onVacuumResult && window.onVacuumResult(${result})")
                     }
-                    DebugLogger.logException("Vacuum", e)
                 }
             }
             activity.backgroundJob?.cancel()
@@ -3441,7 +3275,6 @@ class MainActivity : AppCompatActivity() {
                 }
                 dataResponse(json)
             } catch (e: Exception) {
-                DebugLogger.logException("DatabaseInfo", e)
                 errorResponse(e.message)
             }
         }
@@ -3455,7 +3288,6 @@ class MainActivity : AppCompatActivity() {
                     put("size", db.getDatabaseSize())
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("DatabaseSize", e)
                 errorResponse(e.message)
             }
         }
@@ -3467,7 +3299,6 @@ class MainActivity : AppCompatActivity() {
                 val counts = db.getTableCounts()
                 dataResponse(counts)
             } catch (e: Exception) {
-                DebugLogger.logException("TableCounts", e)
                 errorResponse(e.message)
             }
         }
@@ -3482,7 +3313,6 @@ class MainActivity : AppCompatActivity() {
                     put("count", count)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("CustomerCount", e)
                 errorResponse(e.message)
             }
         }
@@ -3498,7 +3328,6 @@ class MainActivity : AppCompatActivity() {
                 val readings = db.getLatestMeterReadings()
                 dataResponse(readings)
             } catch (e: Exception) {
-                DebugLogger.logException("Meter", e)
                 errorResponse(e.message)
             }
         }
@@ -3520,7 +3349,6 @@ class MainActivity : AppCompatActivity() {
                 val history = db.getAssetMaintenanceHistory(assetType, assetId, limit)
                 dataResponse(history)
             } catch (e: Exception) {
-                DebugLogger.logException("Maintenance", e)
                 errorResponse(e.message)
             }
         }
@@ -3533,7 +3361,6 @@ class MainActivity : AppCompatActivity() {
                 val notifications = db.getUserNotifications(userId)
                 dataResponse(notifications)
             } catch (e: Exception) {
-                DebugLogger.logException("Notifications", e)
                 errorResponse(e.message)
             }
         }
@@ -3546,7 +3373,6 @@ class MainActivity : AppCompatActivity() {
                 val permissions = db.getUserPermissions(userId)
                 dataResponse(permissions)
             } catch (e: Exception) {
-                DebugLogger.logException("Permissions", e)
                 errorResponse(e.message)
             }
         }
@@ -3559,7 +3385,6 @@ class MainActivity : AppCompatActivity() {
                 val items = db.checkLowStock()
                 dataResponse(items)
             } catch (e: Exception) {
-                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -3570,10 +3395,8 @@ class MainActivity : AppCompatActivity() {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val id = db.createStockAlert(productId, threshold)
-                DebugLogger.info("Stock", "Created alert id=$id")
                 successResponse(id, "تم إنشاء التنبيه بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
         }
@@ -3588,7 +3411,6 @@ class MainActivity : AppCompatActivity() {
                     put("price", price)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Price", e)
                 errorResponse(e.message)
             }
         }
@@ -3603,7 +3425,6 @@ class MainActivity : AppCompatActivity() {
                     put("price", price)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Price", e)
                 errorResponse(e.message)
             }
         }
@@ -3618,7 +3439,6 @@ class MainActivity : AppCompatActivity() {
                     put("phone", phone)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("ManagerPhone", e)
                 errorResponse(e.message)
             }
         }
@@ -3630,7 +3450,6 @@ class MainActivity : AppCompatActivity() {
                 val phones = db.getDriverPhones()
                 dataResponse(phones)
             } catch (e: Exception) {
-                DebugLogger.logException("DriverPhones", e)
                 errorResponse(e.message)
             }
         }
@@ -3642,7 +3461,6 @@ class MainActivity : AppCompatActivity() {
                 val list = db.getTrustedSmscList()
                 dataResponse(list)
             } catch (e: Exception) {
-                DebugLogger.logException("SmscList", e)
                 errorResponse(e.message)
             }
         }
@@ -3657,7 +3475,6 @@ class MainActivity : AppCompatActivity() {
                     put("balance", balance)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Balance", e)
                 errorResponse(e.message)
             }
         }
@@ -3669,7 +3486,6 @@ class MainActivity : AppCompatActivity() {
                 val order = db.getLastOrderByPhone(phone)
                 order?.toString() ?: errorResponse("لا توجد طلبات")
             } catch (e: Exception) {
-                DebugLogger.logException("Order", e)
                 errorResponse(e.message)
             }
         }
@@ -3681,7 +3497,6 @@ class MainActivity : AppCompatActivity() {
                 val history = db.getOrderHistoryByPhone(phone)
                 dataResponse(history)
             } catch (e: Exception) {
-                DebugLogger.logException("OrderHistory", e)
                 errorResponse(e.message)
             }
         }
@@ -3707,13 +3522,12 @@ class MainActivity : AppCompatActivity() {
                 )
                 successResponse(success, if (success) "تم تسجيل التسليم بنجاح" else "فشل تسجيل التسليم")
             } catch (e: Exception) {
-                DebugLogger.logException("Delivery", e)
                 errorResponse(e.message)
             }
         }
 
         // ============================================================
-        // 25. دوال إضافية للشاشات الجديدة - مختصر
+        // 25. دوال إضافية للشاشات الجديدة
         // ============================================================
 
         @JavascriptInterface
@@ -3723,7 +3537,6 @@ class MainActivity : AppCompatActivity() {
                 val types = db.getPartyTypes()
                 dataResponse(types)
             } catch (e: Exception) {
-                DebugLogger.logException("PartyTypes", e)
                 errorResponse(e.message)
             }
         }
@@ -3735,7 +3548,6 @@ class MainActivity : AppCompatActivity() {
                 val currencies = db.getCurrencies()
                 dataResponse(currencies)
             } catch (e: Exception) {
-                DebugLogger.logException("Currencies", e)
                 errorResponse(e.message)
             }
         }
@@ -3748,7 +3560,6 @@ class MainActivity : AppCompatActivity() {
                 val ledger = db.getCustomerLedger(partyId)
                 dataResponse(ledger)
             } catch (e: Exception) {
-                DebugLogger.logException("Ledger", e)
                 errorResponse(e.message)
             }
         }
@@ -3761,7 +3572,6 @@ class MainActivity : AppCompatActivity() {
                 val sales = db.getCustomerSales(partyId)
                 dataResponse(sales)
             } catch (e: Exception) {
-                DebugLogger.logException("CustomerSales", e)
                 errorResponse(e.message)
             }
         }
@@ -3774,7 +3584,6 @@ class MainActivity : AppCompatActivity() {
                 val contacts = db.getPartyContacts(partyId)
                 dataResponse(contacts)
             } catch (e: Exception) {
-                DebugLogger.logException("Contacts", e)
                 errorResponse(e.message)
             }
         }
@@ -3787,7 +3596,6 @@ class MainActivity : AppCompatActivity() {
                 val addresses = db.getPartyAddresses(partyId)
                 dataResponse(addresses)
             } catch (e: Exception) {
-                DebugLogger.logException("Addresses", e)
                 errorResponse(e.message)
             }
         }
@@ -3799,10 +3607,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addPartyContact(data)
-                DebugLogger.info("Party", "Added contact id=$id")
                 successResponse(id, "تم إضافة جهة الاتصال بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3817,7 +3623,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updatePartyContact(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3830,7 +3635,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deletePartyContact(contactId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3842,10 +3646,8 @@ class MainActivity : AppCompatActivity() {
             return try {
                 val data = JSONObject(jsonData)
                 val id = db.addPartyAddress(data)
-                DebugLogger.info("Party", "Added address id=$id")
                 successResponse(id, "تم إضافة العنوان بنجاح")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3860,7 +3662,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.updatePartyAddress(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3873,7 +3674,6 @@ class MainActivity : AppCompatActivity() {
                 val rows = db.deletePartyAddress(addressId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
-                DebugLogger.logException("Party", e)
                 errorResponse(e.message)
             }
         }
@@ -3886,7 +3686,6 @@ class MainActivity : AppCompatActivity() {
                 val debts = db.getCustomerDebts()
                 dataResponse(debts)
             } catch (e: Exception) {
-                DebugLogger.logException("Debts", e)
                 errorResponse(e.message)
             }
         }
@@ -3914,10 +3713,8 @@ class MainActivity : AppCompatActivity() {
                     }
                     apply()
                 }
-                DebugLogger.info("Credentials", "Saved credentials for $username (remember=$remember)")
                 successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
             } catch (e: Exception) {
-                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
@@ -3931,17 +3728,15 @@ class MainActivity : AppCompatActivity() {
                 val username = prefs.getString("saved_username", "") ?: ""
                 val userId = prefs.getLong("saved_user_id", 0)
                 val timestamp = prefs.getLong("saved_timestamp", 0)
-                val hasToken = !prefs.getString("saved_token", "").isNullOrEmpty()
 
                 JSONObject().apply {
                     put("success", true)
-                    put("hasCredentials", remember && hasToken && userId != 0L && username.isNotEmpty())
+                    put("hasCredentials", remember && userId != 0L && username.isNotEmpty())
                     put("username", username)
                     put("userId", userId)
                     put("timestamp", timestamp)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
@@ -3963,7 +3758,6 @@ class MainActivity : AppCompatActivity() {
                     put("userId", userId)
                 }.toString()
             } catch (e: Exception) {
-                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
@@ -3978,7 +3772,6 @@ class MainActivity : AppCompatActivity() {
             val savedUsername = prefs.getString("saved_username", "") ?: ""
 
             if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
-                DebugLogger.warn("Biometric", "No saved credentials found")
                 return errorResponse("لا توجد بيانات محفوظة")
             }
 
@@ -4026,14 +3819,11 @@ class MainActivity : AppCompatActivity() {
                                     put("token", token)
                                     put("message", "تم تسجيل الدخول عبر البصمة")
                                 }
-                                DebugLogger.info("Biometric", "Auto-login success for $savedUsername")
                                 activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                             } else {
-                                DebugLogger.warn("Biometric", "User not found: $savedUsername")
                                 activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
                             }
                         } catch (e: Exception) {
-                            DebugLogger.logException("Biometric", e)
                             activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
                         }
                     },
@@ -4042,7 +3832,6 @@ class MainActivity : AppCompatActivity() {
                             put("success", false)
                             put("error", error)
                         }
-                        DebugLogger.warn("Biometric", "Auto-login error: $error")
                         activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
                     }
                 )
@@ -4070,10 +3859,8 @@ class MainActivity : AppCompatActivity() {
                 activity.currentUserId = 0
                 activity.currentUserRole = ""
                 activity.currentUserName = ""
-                DebugLogger.info("Credentials", "Cleared all credentials")
                 successResponse(0, "تم مسح البيانات وجلسة التطبيق")
             } catch (e: Exception) {
-                DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)
             }
         }
@@ -4084,34 +3871,39 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun ping(): String {
-            DebugLogger.info("Bridge", "Ping received")
             return "PONG"
         }
 
+        // دالة لإرسال السجلات من JavaScript إلى DebugLogger
         @JavascriptInterface
         fun logFromJS(level: String, message: String) {
-            when (level.uppercase()) {
-                "INFO" -> DebugLogger.info("JS", message)
-                "WARN" -> DebugLogger.warn("JS", message)
-                "ERROR" -> DebugLogger.error("JS", message)
-                else -> DebugLogger.info("JS", message)
+            // نرسل فقط الرسائل التي تبدأ ببادئات تسجيل الدخول
+            if (message.startsWith("[LOGIN]") || message.startsWith("[ERROR]") || message.startsWith("[DATABASE]") || message.startsWith("[SESSION]") || message.startsWith("[NAVIGATION]")) {
+                when (level.uppercase()) {
+                    "INFO" -> DebugLogger.logLogin(message.replace("[LOGIN] ", ""))
+                    "WARN" -> DebugLogger.logLogin("[WARN] " + message)
+                    "ERROR" -> DebugLogger.logError(message.replace("[ERROR] ", ""))
+                    else -> DebugLogger.logLogin(message)
+                }
             }
         }
+
+    // نهاية WebAppInterface
     }
 
-    // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs)
+    // ============================================================
+    // دوال مساعدة داخل النشاط
+    // ============================================================
+
     fun safeEvaluateJs(script: String) {
         if (isDestroyed.get()) return
         try {
             val wv = webView
             if (wv != null && wv.isAttachedToWindow) {
-                DebugLogger.info("WebView", "safeEvaluateJs called on instance=${wv.hashCode()}")
                 wv.evaluateJavascript(script, null)
-            } else {
-                DebugLogger.warn("WebView", "safeEvaluateJs: WebView not available or not attached")
             }
         } catch (e: Exception) {
-            DebugLogger.warn("WebView", "safeEvaluateJs error: ${e.message}")
+            // تجاهل
         }
     }
 }
