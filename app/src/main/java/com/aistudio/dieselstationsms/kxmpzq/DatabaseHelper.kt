@@ -176,8 +176,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsRecurringOrdersTable(db)
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
-        createUserOtpVerificationsTable(db)
-        createUserOtpVerificationsTable(db)
+        createUserOtpVerificationsTable(db)        
         ensureSmsSettings(db)
     }
 
