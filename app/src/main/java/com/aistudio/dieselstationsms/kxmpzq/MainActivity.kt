@@ -1311,15 +1311,25 @@ class MainActivity : AppCompatActivity() {
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
 
-        private fun checkPermission(permissionCode: String, action: String): Boolean {
-            val activity = getActivity() ?: return false
-            val token = activity.currentAuthToken
-            if (token.isNullOrEmpty()) return false
-            val userId = activity.currentUserId
-            if (userId == 0L) return false
-            val db = getDbHelper() ?: return false
-            return db.checkUserPermission(userId, permissionCode)
-        }
+        private fun checkPermission(
+        permissionCode: String,
+        action: String
+    ): Boolean {
+
+        val activity = getActivity() ?: return false
+
+        val userId = activity.currentUserId
+
+        if (userId == 0L)
+            return false
+
+        val db = getDbHelper() ?: return false
+
+        return db.checkUserPermission(
+            userId,
+            "$permissionCode.$action"
+        )
+    }
 
         private fun successResponse(id: Long, message: String): String {
             return JSONObject().apply {
@@ -3739,9 +3749,15 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getUserPermissions(userId: Long): String {
-            DebugLogger.info("WebAppInterface", "getUserPermissions called")
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+
+            DebugLogger.info(
+                "WebAppInterface",
+                "getUserPermissions called for user=$userId"
+            )
+
+            val db = getDbHelper()
+                ?: return errorResponse("قاعدة البيانات غير متاحة")
+
             return try {
                 val permissions = db.getUserPermissions(userId)
                 dataResponse(permissions)
