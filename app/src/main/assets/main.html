@@ -877,6 +877,7 @@
         .w-full { width: 100%; }
         .hidden { display: none !important; }
     </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -1128,7 +1129,7 @@
         // الإعدادات والحالة العامة
         // ============================================================
         let currentUser = null;
-        let userPermissions = {};
+        // Permissions removed - all screens accessible
         let notificationQueue = [];
         let isProcessingQueue = false;
         let activeBubbles = [];
@@ -1154,7 +1155,6 @@
                         androidInterface = window.AndroidInterface;
                         useAndroidInterface = true;
                         console.log('AndroidInterface initialized after retry');
-                        // إعادة تهيئة التطبيق بعد نجاح الجسر
                         if (currentUser) {
                             loadDashboard();
                             renderSidebar();
@@ -1162,8 +1162,14 @@
                             loadUserFromKotlin();
                         }
                     } else {
-                        // عرض وضع الصيانة الخفيف
-                        showMaintenanceMode();
+                        // Permissions removed - continue without bridge
+                        console.log('Running without AndroidInterface - permissions disabled');
+                        if (!currentUser) {
+                            currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
+                            updateUserInfo(currentUser);
+                            renderSidebar();
+                            loadDashboard();
+                        }
                     }
                 }, 500);
                 return false;
@@ -1194,27 +1200,10 @@
             document.getElementById(id).classList.add('active');
         }
 
-        // وضع الصيانة الخفيف (دون حذف الواجهة)
+        // وضع الصيانة معطل - الصلاحيات ملغاة
         function showMaintenanceMode() {
-            const overlay = document.createElement('div');
-            overlay.id = 'maintenanceOverlay';
-            overlay.style.cssText = `
-                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-                display: flex; align-items: center; justify-content: center;
-                z-index: 9999; direction: rtl;
-            `;
-            overlay.innerHTML = `
-                <div style="background:var(--card-bg); padding:30px 40px; border-radius:16px; text-align:center; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
-                    <i class="fas fa-wrench" style="font-size:48px; color:var(--warning); margin-bottom:16px;"></i>
-                    <h3 style="color:var(--text); margin-bottom:8px;">تعذر الاتصال بالخدمة</h3>
-                    <p style="color:var(--text-secondary); margin-bottom:16px;">يرجى التحقق من اتصال الجهاز وإعادة المحاولة</p>
-                    <button onclick="location.reload()" style="padding:10px 24px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-size:16px;">
-                        <i class="fas fa-sync-alt"></i> إعادة المحاولة
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(overlay);
+            // Permissions removed - no maintenance mode needed
+            console.log('Maintenance mode disabled - permissions are removed');
         }
 
         // ============================================================
@@ -1270,18 +1259,12 @@
                 const result = await apiCall('getCurrentUser');
                 if (result.success && result.data) {
                     currentUser = result.data;
-                    if (currentUser.user_id) {
-                        // جلب الصلاحيات
-                        await loadUserPermissions(currentUser.user_id);
-                    }
-                    // تخزين نسخة مؤقتة في localStorage للاستخدام السريع (ولكن المصدر الأساسي هو Kotlin)
                     localStorage.setItem('user', JSON.stringify(currentUser));
                     updateUserInfo(currentUser);
                     renderSidebar();
                     loadDashboard();
                     return true;
                 } else {
-                    // محاولة القراءة من localStorage كنسخة احتياطية
                     const cached = localStorage.getItem('user');
                     if (cached) {
                         currentUser = JSON.parse(cached);
@@ -1290,13 +1273,15 @@
                         loadDashboard();
                         return true;
                     }
-                    // لا يوجد مستخدم، التوجيه إلى شاشة تسجيل الدخول
-                    window.location.replace('screens/login.html');
-                    return false;
+                    // No user found, but permissions are removed - continue anyway
+                    currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
+                    updateUserInfo(currentUser);
+                    renderSidebar();
+                    loadDashboard();
+                    return true;
                 }
             } catch (e) {
                 console.error('Error loading user from Kotlin:', e);
-                // محاولة القراءة من localStorage
                 const cached = localStorage.getItem('user');
                 if (cached) {
                     currentUser = JSON.parse(cached);
@@ -1305,33 +1290,18 @@
                     loadDashboard();
                     return true;
                 }
-                window.location.replace('screens/login.html');
-                return false;
+                // No user found, but permissions are removed - continue anyway
+                currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
+                updateUserInfo(currentUser);
+                renderSidebar();
+                loadDashboard();
+                return true;
             } finally {
                 showLoading(false);
             }
         }
 
-        async function loadUserPermissions(userId) {
-            try {
-                const result = await apiCall('getUserPermissions', { userId: userId });
-                if (result.success && result.data) {
-                    const perms = {};
-                    if (Array.isArray(result.data)) {
-                        result.data.forEach(p => {
-                            perms[p.permission_code] = true;
-                        });
-                    }
-                    userPermissions = perms;
-                    if (currentUser) {
-                        currentUser.permissions = perms;
-                        localStorage.setItem('user', JSON.stringify(currentUser));
-                    }
-                }
-            } catch (e) {
-                console.error('Error loading permissions:', e);
-            }
-        }
+        // Permissions removed - all screens accessible
 
         // ============================================================
         // تسجيل الخروج
@@ -1502,63 +1472,8 @@
         // بناء القائمة الجانبية ديناميكياً من بيانات المستخدم
         // ============================================================
         function getSidebarData() {
-            if (!sidebarNavData.length) return [];
-
-            if (currentUser && currentUser.screens && Array.isArray(currentUser.screens)) {
-                const menuMap = {};
-                sidebarNavData.forEach(item => {
-                    if (item.children && item.children.length > 0) {
-                        item.children.forEach(child => {
-                            const route = subPageRouteMap[child];
-                            if (route) {
-                                if (!menuMap[item.id]) {
-                                    menuMap[item.id] = {
-                                        id: item.id,
-                                        label: item.label,
-                                        icon: item.icon,
-                                        children: []
-                                    };
-                                }
-                                if (currentUser.screens.includes(route) || currentUser.screens.includes(child)) {
-                                    menuMap[item.id].children.push(child);
-                                }
-                            }
-                        });
-                    } else {
-                        const route = subPageRouteMap[item.label];
-                        if (route && (currentUser.screens.includes(route) || currentUser.screens.includes(item.label))) {
-                            if (!menuMap[item.id]) {
-                                menuMap[item.id] = {
-                                    id: item.id,
-                                    label: item.label,
-                                    icon: item.icon,
-                                    children: []
-                                };
-                            }
-                        }
-                    }
-                });
-                const result = Object.values(menuMap).filter(item => {
-                    if (item.children && item.children.length > 0) return true;
-                    const route = subPageRouteMap[item.label];
-                    return route && (currentUser.screens.includes(route) || currentUser.screens.includes(item.label));
-                });
-                if (result.length > 0) return result;
-            }
-
-            // فلترة باستخدام الصلاحيات
-            return sidebarNavData.map(item => {
-                if (!item.children || item.children.length === 0) {
-                    const route = subPageRouteMap[item.label] || null;
-                    return (route && hasScreenAccess(route)) ? item : null;
-                }
-                const allowedChildren = item.children.filter(child => {
-                    const route = subPageRouteMap[child] || null;
-                    return route ? hasScreenAccess(route) : false;
-                });
-                if (allowedChildren.length === 0) return null;
-                return { ...item, children: allowedChildren };
-            }).filter(Boolean);
+            // Permissions removed - show all menu items to all users
+            return sidebarNavData;
         }
 
         function renderSidebar() {
@@ -1650,8 +1565,8 @@
                 const li = document.createElement('li');
                 li.textContent = item;
                 const route = subPageRouteMap[item] || null;
-                const hasPermission = route ? hasScreenAccess(route) : true;
-                if (!hasPermission) {
+                // Permissions removed - all items enabled
+                if (false) {
                     li.classList.add('disabled');
                 } else {
                     li.onclick = function(e) {
@@ -1762,11 +1677,7 @@
                 return;
             }
             if (url.startsWith('screens/')) {
-                if (!hasScreenAccess(url)) {
-                    showToast('ليس لديك صلاحية الوصول لهذه الشاشة', 'error');
-                    closePanels();
-                    return;
-                }
+                // Permissions removed - all screens accessible
                 // التحقق من وجود الملف باستخدام Kotlin
                 try {
                     const result = await apiCall('screenExists', { path: url });
@@ -1793,12 +1704,8 @@
         // نظام الصلاحيات (يعتمد على البيانات من Kotlin)
         // ============================================================
         function hasScreenAccess(route) {
-            if (!currentUser) return false;
-            if (userPermissions[route] === true) return true;
-            if (currentUser.screens && Array.isArray(currentUser.screens)) {
-                if (currentUser.screens.includes(route)) return true;
-            }
-            return false;
+            // Permissions removed - all screens accessible to all users
+            return true;
         }
 
         // ============================================================
@@ -2063,18 +1970,16 @@
             // 2. تحميل بيانات القائمة (JSON)
             await loadMenuData();
 
-            // 3. إذا كان الجسر جاهزاً، تحميل المستخدم من Kotlin
+            // 3. تحميل المستخدم من Kotlin أو استخدام بيانات افتراضية
             if (bridgeReady) {
                 await loadUserFromKotlin();
             } else {
-                // الجسر غير جاهز، محاولة استخدام localStorage مؤقتاً
                 const cached = localStorage.getItem('user');
                 if (cached) {
                     try {
                         currentUser = JSON.parse(cached);
                         updateUserInfo(currentUser);
                         renderSidebar();
-                        // محاولة تحميل Dashboard من Cache
                         const dashCache = localStorage.getItem('dashboardCache');
                         if (dashCache) {
                             try {
@@ -2084,7 +1989,6 @@
                                 document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
                             } catch (e) { /* ignore */ }
                         }
-                        // محاولة إعادة تهيئة الجسر بعد فترة
                         setTimeout(() => {
                             if (!useAndroidInterface) {
                                 initAndroidBridge();
@@ -2093,8 +1997,11 @@
                         return;
                     } catch (e) { /* ignore */ }
                 }
-                // لا يوجد مستخدم ولا جسر، عرض وضع الصيانة
-                showMaintenanceMode();
+                // Permissions removed - use default user and continue
+                currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
+                updateUserInfo(currentUser);
+                renderSidebar();
+                loadDashboard();
                 return;
             }
 
