@@ -5,7 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import android.database.sqlite.SQLiteException  // تمت إضافته
+import android.database.sqlite.SQLiteException
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -42,7 +42,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     companion object {
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
-        const val DATABASE_NAME = DB_NAME   // <-- هذا هو السطر المضاف
+        const val DATABASE_NAME = DB_NAME
         const val VERSION = 13
 
         private const val HASH_ITERATIONS = 10000
@@ -176,7 +176,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsRecurringOrdersTable(db)
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
-        createUserOtpVerificationsTable(db)        
+        createUserOtpVerificationsTable(db)
         ensureSmsSettings(db)
     }
 
@@ -1103,6 +1103,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 barcode VARCHAR(50),
                 qr_code VARCHAR(500),
                 party_type_id INTEGER NOT NULL,
+                station_id INTEGER REFERENCES stations(id),
                 legal_name VARCHAR(200),
                 commercial_name VARCHAR(200),
                 commercial_name_ar VARCHAR(200),
@@ -2029,6 +2030,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 product_id INTEGER NOT NULL,
                 warehouse_id INTEGER,
                 tank_id INTEGER,
+                station_id INTEGER REFERENCES stations(id),
                 quantity REAL NOT NULL CHECK(quantity > 0),
                 reason TEXT,
                 notes TEXT,
@@ -4451,10 +4453,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun createMaintenanceRequestsTable(db: SQLiteDatabase) {
-        // هذه الدالة موجودة بالفعل في createAssetTables، لكن نعيد تعريفها هنا إن لزم
-        // لكنها موجودة بالفعل، لذلك نتركها فارغة أو نضع تنفيذ فوري
-        // للتأكد من عدم تكرار الجدول، نستخدم IF NOT EXISTS
-        // لكنها موجودة بالفعل في createAssetTables، لذلك نتركها فارغة
+        // تم إنشاؤه بالفعل في createAssetTables، نتركه فارغاً
     }
 
     private fun createAiChatTable(db: SQLiteDatabase) {
@@ -7693,13 +7692,164 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // ========================================================================
-    // إحصائيات لوحة التحكم
+    // إحصائيات لوحة التحكم (تم تحديثها بالكامل لتكون دقيقة ومحسوبة فعلياً)
     // ========================================================================
 
+    /**
+     * الحصول على إحصائيات لوحة التحكم للمحطة المحددة.
+     * جميع القيم محسوبة باستعلامات SQL حقيقية وتراعي station_id.
+     * @param stationId معرف المحطة (افتراضي 1)
+     * @return JSONObject يحتوي على جميع الإحصائيات المطلوبة
+     */
     fun getDashboardStats(stationId: Int = 1): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
 
+        // 1. إجمالي المنتجات النشطة في المحطة
+        db.rawQuery(
+            "SELECT COUNT(*) FROM products WHERE station_id = ? AND is_deleted = 0 AND status = 'active'",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("total_products", cursor.getInt(0))
+        }
+
+        // 2. المبيعات اليومية (صافي المبلغ)
+        db.rawQuery(
+            "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
+        }
+
+        // 3. العملاء النشطون في المحطة (من خلال المبيعات)
+        db.rawQuery(
+            "SELECT COUNT(DISTINCT p.id) FROM parties p " +
+                    "JOIN sales_transactions s ON s.customer_party_id = p.id " +
+                    "WHERE s.station_id = ? AND p.is_active = 1 AND p.is_deleted = 0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("active_customers", cursor.getInt(0))
+        }
+
+        // 4. المنتجات المنتهية قريباً (خلال 30 يوم) في المحطة
+        db.rawQuery(
+            "SELECT COUNT(*) FROM products WHERE station_id = ? AND has_expiry=1 AND expiry_date BETWEEN date('now') AND date('now', '+30 days') AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("expiry_soon", cursor.getInt(0))
+        }
+
+        // 5. المنتجات منخفضة المخزون في المحطة
+        db.rawQuery(
+            """
+            SELECT COUNT(*) FROM products p
+            LEFT JOIN inventory_levels il ON p.id = il.product_id
+            LEFT JOIN warehouses w ON il.warehouse_id = w.id
+            WHERE p.station_id = ? AND p.is_deleted=0 AND p.status='active'
+            AND (il.quantity_on_hand <= p.minimum_stock OR il.quantity_on_hand IS NULL)
+            AND (w.station_id = ? OR w.station_id IS NULL)
+            """.trimIndent(),
+            arrayOf(stationId.toString(), stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("low_stock", cursor.getInt(0))
+        }
+
+        // 6. الفواتير المستحقة (خلال أسبوع) في المحطة
+        db.rawQuery(
+            """SELECT COUNT(*) FROM sales_transactions
+               WHERE station_id=? AND remaining_amount > 0
+               AND date(due_date) BETWEEN date('now') AND date('now', '+7 days')
+               AND is_deleted=0""",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
+        }
+
+        // 7. كمية المنتجات المرتجعة اليوم في المحطة
+        db.rawQuery(
+            """SELECT COALESCE(SUM(quantity),0) FROM inventory_movements
+               WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("returned_products_today", cursor.getDouble(0))
+        }
+
+        // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
+        db.rawQuery(
+            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
+        }
+
+        // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
+        db.rawQuery(
+            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("customer_debts", cursor.getDouble(0))
+        }
+
+        // 10. مديونية الموردين المرتبطين بالمحطة (من خلال عمليات التعبئة)
+        db.rawQuery(
+            "SELECT COALESCE(SUM(p.current_balance),0) FROM parties p " +
+                    "JOIN tank_refills tr ON tr.supplier_id = p.id " +
+                    "WHERE tr.station_id = ? AND p.party_type_id = 6 AND p.is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("supplier_debts", cursor.getDouble(0))
+        }
+
+        // 11. قيمة المخزون في المحطة (من خلال المنتجات والمستودعات)
+        db.rawQuery(
+            """
+            SELECT COALESCE(SUM(il.quantity_on_hand * p.purchase_price),0)
+            FROM inventory_levels il
+            JOIN products p ON il.product_id = p.id
+            JOIN warehouses w ON il.warehouse_id = w.id
+            WHERE p.station_id = ? AND w.station_id = ? AND p.is_deleted=0
+            """.trimIndent(),
+            arrayOf(stationId.toString(), stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("inventory_value", cursor.getDouble(0))
+        }
+
+        // 12. المهام المعلقة (طلبات الصيانة المفتوحة) في المحطة
+        db.rawQuery(
+            "SELECT COUNT(*) FROM maintenance_requests WHERE station_id=? AND status='open' AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("pending_tasks", cursor.getInt(0))
+        }
+
+        // 13. حساب اتجاه المبيعات (مقارنة بالأمس)
+        val today = getCurrentDate()
+        val yesterday = getDateOnlyFormat().format(Date(System.currentTimeMillis() - 86400000))
+        val todaySales = getDailySalesAmount(stationId, today)
+        val yesterdaySales = getDailySalesAmount(stationId, yesterday)
+        val salesTrend = if (yesterdaySales > 0) {
+            "%.1f%%".format(((todaySales - yesterdaySales) / yesterdaySales) * 100)
+        } else if (todaySales > 0) {
+            "+100%"
+        } else {
+            "+0%"
+        }
+        stats.put("sales_trend", salesTrend)
+
+        // 14. حساب اتجاه عدد المنتجات (مقارنة بالشهر الماضي)
+        val currentProducts = getActiveProductsCount(stationId)
+        val lastMonthProducts = getActiveProductsCount(stationId, 30)
+        val productsTrend = if (lastMonthProducts > 0) {
+            "%.1f%%".format(((currentProducts - lastMonthProducts) / lastMonthProducts) * 100)
+        } else if (currentProducts > 0) {
+            "+100%"
+        } else {
+            "+0%"
+        }
+        stats.put("products_trend", productsTrend)
+
+        // الاحتفاظ بالمفاتيح القديمة لتوافق مع أي كود آخر (مع تحديثها لتراعي المحطة)
+        // إجمالي المبيعات والليترات وعدد المعاملات اليوم
         db.rawQuery(
             "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at) = date('now') AND is_deleted=0",
             arrayOf(stationId.toString())
@@ -7711,11 +7861,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
 
-        db.rawQuery("SELECT COALESCE(SUM(current_quantity),0) FROM tanks WHERE station_id=? AND is_deleted=0", arrayOf(stationId.toString()))
-            .use { cursor ->
-                if (cursor.moveToFirst()) stats.put("total_remaining", cursor.getDouble(0))
-            }
+        // إجمالي الكمية المتبقية في الخزانات للمحطة
+        db.rawQuery(
+            "SELECT COALESCE(SUM(current_quantity),0) FROM tanks WHERE station_id=? AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("total_remaining", cursor.getDouble(0))
+        }
 
+        // إجمالي المبالغ المستحقة (للعملاء) في المحطة
         db.rawQuery(
             "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND payment_status IN ('pending','partial') AND is_deleted=0",
             arrayOf(stationId.toString())
@@ -7723,11 +7877,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("total_due", cursor.getDouble(0))
         }
 
-        db.rawQuery("SELECT COUNT(*) FROM parties WHERE is_active=1 AND is_deleted=0", null)
-            .use { cursor ->
-                if (cursor.moveToFirst()) stats.put("total_customers", cursor.getInt(0))
-            }
+        // إجمالي العملاء (جميع العملاء في المحطة)
+        db.rawQuery(
+            "SELECT COUNT(DISTINCT p.id) FROM parties p JOIN sales_transactions s ON s.customer_party_id = p.id WHERE s.station_id=? AND p.is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) stats.put("total_customers", cursor.getInt(0))
+        }
 
+        // عدد ومبلغ الفواتير المتأخرة في المحطة
         db.rawQuery(
             "SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date('now') AND is_deleted=0",
             arrayOf(stationId.toString())
@@ -7740,6 +7898,57 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         return stats
     }
+
+    // ========================================================================
+    // دوال مساعدة لحساب الاتجاهات (Trends)
+    // ========================================================================
+
+    /**
+     * حساب إجمالي المبيعات (صافي المبلغ) لمحطة معينة في تاريخ محدد.
+     */
+    private fun getDailySalesAmount(stationId: Int, date: String): Double {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at)=? AND is_deleted=0",
+                arrayOf(stationId.toString(), date)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * حساب عدد المنتجات النشطة في محطة معينة، مع إمكانية تحديد عدد الأيام الماضية.
+     * @param daysAgo عدد الأيام الماضية (0 = اليوم، 30 = قبل شهر، إلخ)
+     */
+    private fun getActiveProductsCount(stationId: Int, daysAgo: Int = 0): Int {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val dateCondition = if (daysAgo == 0) {
+                "" // لا شرط تاريخي للمنتجات الحالية، نأخذ الوضع الحالي
+            } else {
+                " AND created_at <= date('now', '-$daysAgo days')"
+            }
+            // نفترض أننا نأخذ عدد المنتجات النشطة في تاريخ معين (نستخدم created_at كتقريب)
+            db.rawQuery(
+                "SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0 AND status='active' $dateCondition",
+                arrayOf(stationId.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ========================================================================
+    // باقي الدوال كما هي في الملف الأصلي (بدءاً من هنا جميع الدوال المتبقية)
+    // ========================================================================
 
     // ========================================================================
     // تسجيل النشاطات

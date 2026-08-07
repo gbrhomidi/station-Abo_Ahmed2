@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
     <title>محطة أبو أحمد – لوحة التحكم</title>
-    <!-- Font Awesome محلي -->
-    <link rel="stylesheet" href="file:///android_asset/fontawesome/css/all.min.css" />
+    <!-- Font Awesome محلي عبر assets-local -->
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css" />
     <!-- Google Fonts محلية -->
     <style>
         @font-face {
@@ -630,24 +630,6 @@
             margin-top: 2px;
         }
 
-        .logo-full {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 6px 0 10px 0;
-            width: 100%;
-        }
-        .company-logo {
-            max-width: 100%;
-            height: 375px;
-            width: auto;
-            object-fit: contain;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
-        }
-        .company-logo:hover { transform: scale(1.02); }
-
         .data-update-info {
             text-align: left;
             font-size: 0.8rem;
@@ -840,7 +822,6 @@
             .stat-card { min-height: 80px; padding: 12px; }
             .stat-card .card-header h3 { font-size: 0.8rem; }
             .submenu-panel { min-width: 140px; max-width: 200px; font-size: 0.85rem; }
-            .company-logo { height: 320px; }
             .user-info-card { flex-wrap: wrap; justify-content: center; text-align: center; }
         }
         @media (max-width: 480px) {
@@ -852,14 +833,12 @@
             .app-header .header-brand small { font-size: 10px; }
             .submenu-panel { min-width: 120px; max-width: 180px; padding: 0.5rem 0.3rem; }
             .submenu-panel ul li { padding: 8px 10px; font-size: 12px; }
-            .company-logo { height: 280px; }
         }
         @media (max-width: 360px) {
             .stats-grid { gap: 4px; }
             .stat-card { padding: 8px; min-height: 70px; }
             .stat-card .card-header h3 { font-size: 0.7rem; }
             .stat-card .stat-value { font-size: 15px; }
-            .company-logo { height: 250px; }
         }
 
         .text-center { text-align: center; }
@@ -895,7 +874,7 @@
         <header class="app-header">
             <div class="header-left">
                 <button class="menu-toggle" onclick="toggleSidebar()" aria-label="فتح القائمة">
-                    <i class="fas fa-bars"></i>
+                    <i class="fas fa-bars"></i> <!-- أيقونة ☰ -->
                 </button>
                 <div class="header-brand">
                     <div class="brand-icon"><i class="fas fa-gas-pump"></i></div>
@@ -962,7 +941,7 @@
 
                 <div class="user-info-card" id="userInfoCard">
                     <div class="avatar">
-                        <img id="userAvatar" src="file:///android_asset/images/default_avatar.png" alt="صورة المستخدم">
+                        <img id="userAvatar" src="file:///android_asset/assets-local/images/default_avatar.png" alt="صورة المستخدم">
                     </div>
                     <div class="user-details">
                         <h4 id="userDisplayName">مدير النظام</h4>
@@ -971,10 +950,7 @@
                     </div>
                 </div>
 
-                <div class="logo-full">
-                    <img src="file:///android_asset/images/shar11.jpg" alt="شعار الشركة" class="company-logo"
-                         onerror="this.src='file:///android_asset/images/logo_fallback.png'">
-                </div>
+                <!-- تم حذف قسم "شعار الشركة" بالكامل حسب الطلب -->
 
                 <div class="stats-grid" id="dashStats">
                     <div class="stat-card" id="card-total-products">
@@ -1451,8 +1427,8 @@
         // تحميل البيانات من JSON
         async function loadMenuData() {
             try {
-                // محاولة تحميل الملف من assets
-                const response = await fetch('file:///android_asset/menu.json');
+                // محاولة تحميل الملف من assets (يُفضل استخدام assets-local)
+                const response = await fetch('file:///android_asset/assets-local/menu.json');
                 if (response.ok) {
                     const data = await response.json();
                     sidebarNavData = data.menu || fallbackSidebarData;
@@ -1494,13 +1470,17 @@
                 `;
                 btn.onclick = function(e) {
                     e.stopPropagation();
+                    const panel = document.getElementById('submenuPanel');
+                    const isSubmenuOpen = panel.classList.contains('show') && panel.dataset.parent === item.id;
+
                     if (item.children && item.children.length) {
-                        const panel = document.getElementById('submenuPanel');
-                        if (panel.classList.contains('show') && panel.dataset.parent === item.id) {
+                        if (isSubmenuOpen) {
+                            // إغلاق القائمة الفرعية ونقل التركيز إلى الزر الرئيسي
                             closeSubmenuPanel();
-                        } else {
-                            showSubmenu(e, item.label, item.children, item.id);
+                            this.focus();
+                            return;
                         }
+                        showSubmenu(e, item.label, item.children, item.id);
                     } else {
                         const route = subPageRouteMap[item.label] || '/';
                         navigateTo(route);
@@ -1566,20 +1546,16 @@
                 li.textContent = item;
                 const route = subPageRouteMap[item] || null;
                 // Permissions removed - all items enabled
-                if (false) {
-                    li.classList.add('disabled');
-                } else {
-                    li.onclick = function(e) {
-                        e.stopPropagation();
-                        if (this.classList.contains('disabled')) return;
-                        if (route) {
-                            navigateTo(route);
-                        } else {
-                            showToast('هذه الشاشة قيد التطوير', 'info');
-                        }
-                        closeSubmenuPanel();
-                    };
-                }
+                li.onclick = function(e) {
+                    e.stopPropagation();
+                    if (this.classList.contains('disabled')) return;
+                    if (route) {
+                        navigateTo(route);
+                    } else {
+                        showToast('هذه الشاشة قيد التطوير', 'info');
+                    }
+                    closeSubmenuPanel();
+                };
                 submenuItems.appendChild(li);
             });
 
@@ -1967,7 +1943,7 @@
             // 1. تهيئة AndroidInterface
             const bridgeReady = initAndroidBridge();
 
-            // 2. تحميل بيانات القائمة (JSON)
+            // 2. تحميل بيانات القائمة (JSON) من المسار الجديد
             await loadMenuData();
 
             // 3. تحميل المستخدم من Kotlin أو استخدام بيانات افتراضية
