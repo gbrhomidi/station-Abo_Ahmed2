@@ -6848,43 +6848,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getUserScreens(userId: Long): JSONArray {
-        
-        val result = JSONArray()
-
-        val db = readableDatabase
-
-
-        val cursor = db.rawQuery(
-            """
-            SELECT DISTINCT
-                p.module
-            FROM permissions p
-            JOIN role_permissions rp
-                ON rp.permission_id = p.id
-            JOIN users u
-                ON u.role_id = rp.role_id
-            WHERE u.id=?
-            AND rp.can_read=1
-            """,
-            arrayOf(userId.toString())
-        )
-
-
-        cursor.use {
-
-            while(it.moveToNext()) {
-
-                val module = it.getString(0)
-
-                result.put(module)
-
-            }
-        }
-
-
-        return result
-    }        
-        
         dbLock.lock()
         return try {
             val arr = JSONArray()

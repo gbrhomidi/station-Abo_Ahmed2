@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- تم حذف الأبعاد width و height، وتم تغيير gravity إلى center -->
-    <item android:gravity="center">
-        <bitmap 
-            android:src="@drawable/ic_launcher_foreground_img"
-            android:gravity="center" />
-    </item>
-</layer-list>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="20dp">
+    <bitmap 
+        android:src="@drawable/ic_launcher_foreground_img"
+        android:gravity="center" />
+</inset>
