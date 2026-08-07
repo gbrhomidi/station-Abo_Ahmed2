@@ -7,9 +7,6 @@ import android.os.PowerManager
 import android.provider.Telephony
 import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
-import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
-import com.aistudio.dieselstationsms.kxmpzq.utils.SystemEventLogger
 import kotlinx.coroutines.*
 
 /**
@@ -27,6 +24,7 @@ import kotlinx.coroutines.*
  * 2. منع معالجة التكرار عبر Hash
  * 3. Wake Lock للمعالجة الآمنة
  * 4. Coroutines + goAsync
+ * 5. Diagnostics محسّنة دون تسجيل بيانات حساسة
  */
 class SmsReceiver : BroadcastReceiver() {
 
@@ -63,18 +61,20 @@ class SmsReceiver : BroadcastReceiver() {
                 Log.d(TAG, "SMS processed: $processed")
 
             } catch (e: Exception) {
-
-                Log.e(TAG, "Error in async processing", e)
-
+                val errorId = java.util.UUID.randomUUID().toString().take(8)
+                Log.e(
+                    TAG,
+                    "SMS processing failed [ErrorID=$errorId] " +
+                    "type=${e.javaClass.simpleName} " +
+                    "msg=${e.message?.take(80)}",
+                    e
+                )
             } finally {
-
                 wakeLock?.let {
                     if (it.isHeld) it.release()
                 }
-
                 pendingResult.finish()
-                
-                }
             }
         }
     }
+}

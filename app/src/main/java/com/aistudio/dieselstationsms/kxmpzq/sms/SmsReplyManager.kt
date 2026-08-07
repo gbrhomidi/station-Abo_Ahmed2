@@ -34,6 +34,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
 
     suspend fun sendReply(phone: String, message: String): Boolean = withContext(Dispatchers.IO) {
         if (!checkSmsPermission()) {
+            Log.e(TAG, "SEND_SMS permission denied; reply to ${maskPhone(phone)} blocked")
             db.logSms(phone, message, "auto_reply", "failed: permission denied")
             return@withContext false
         }
@@ -49,7 +50,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
             db.logSms(phone, message, "auto_reply", "sent")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to send reply: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Failed to send reply to ${maskPhone(phone)}: ${e.javaClass.simpleName}")
             db.logSms(phone, message, "auto_reply", "failed: ${e.javaClass.simpleName}")
             false
         }
@@ -58,7 +59,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
     suspend fun sendReplyOnce(phone: String, message: String): Boolean = withContext(Dispatchers.IO) {
         val lastSent = recentReplies[phone] ?: 0
         if (System.currentTimeMillis() - lastSent < RATE_LIMIT_MS) {
-            Log.d(TAG, "Skipping duplicate reply to $phone")
+            Log.d(TAG, "Skipping duplicate reply to ${maskPhone(phone)}")
             return@withContext false
         }
         recentReplies[phone] = System.currentTimeMillis()
@@ -69,7 +70,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
         return try {
             sendReply(phone, message)
         } catch (e: Exception) {
-            Log.e(TAG, "Safe send failed: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Safe send failed for ${maskPhone(phone)}: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -83,7 +84,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
                 sendPushNotificationIfEnabled(managerPhone, "تنبيه مدير", message)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to notify manager: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Failed to notify manager ${maskPhone(managerPhone)}: ${e.javaClass.simpleName}")
         }
     }
 
@@ -91,7 +92,7 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
         try {
             val fcmToken = getSystemSetting("fcm_token_$target", "")
             if (fcmToken.isNotEmpty()) {
-                Log.d(TAG, "Push notification would be sent to $target")
+                Log.d(TAG, "Push notification would be sent to ${maskPhone(target)}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send push notification: ${e.message}")
@@ -120,5 +121,13 @@ class SmsReplyManager(private val context: Context, private val db: DatabaseHelp
         return cursor.use {
             if (it.moveToFirst()) it.getString(0) else defaultValue
         }
+    }
+
+    /**
+     * إخفاء جزء من الرقم لأغراض التسجيل (privacy)
+     */
+    private fun maskPhone(phone: String): String {
+        if (phone.length <= 4) return "***"
+        return phone.take(3) + "***" + phone.takeLast(2)
     }
 }
