@@ -167,6 +167,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
+        ensureSmsMessagesTable(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)
@@ -178,6 +179,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
         ensureSmsSettings(db)
+    }
+
+    private fun ensureSmsMessagesTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                phone_number TEXT NOT NULL,
+                message_body TEXT NOT NULL,
+                message_type TEXT DEFAULT 'incoming',
+                status TEXT DEFAULT 'pending',
+                party_id INTEGER REFERENCES parties(id),
+                sent_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
     }
 
     // ===================================================================================
