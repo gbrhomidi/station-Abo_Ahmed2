@@ -160,7 +160,7 @@
         <!-- ❌ لا يتعامل مع قاعدة البيانات مباشرة                     -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".BootReceiver"
+            android:name=".receiver.BootReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -177,7 +177,7 @@
         <!-- ❌ لا يتعامل مع قاعدة البيانات مباشرة                     -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".PackageUpdatedReceiver"
+            android:name=".receiver.PackageUpdatedReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -192,7 +192,7 @@
         <!-- ❌ لا يحتوي على منطق أعمال مستقل                        -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".TimeChangedReceiver"
+            android:name=".receiver.TimeChangedReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -208,7 +208,7 @@
         <!-- ❌ لا يحتوي على منطق أعمال مستقل                        -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".TimezoneReceiver"
+            android:name=".receiver.TimezoneReceiver"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -224,7 +224,7 @@
         <!-- ❌ exported="false" - يُستدعى برمجياً فقط                 -->
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
-            android:name=".AlarmReceiver"
+            android:name=".receiver.AlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
@@ -243,7 +243,7 @@
         <!-- - تنسيق المكونات: SmsProcessor, SmsSecurity, etc.       -->
         <!-- ════════════════════════════════════════════════════════ -->
         <service
-            android:name=".SMSService"
+            android:name=".service.SMSService"
             android:directBootAware="false"
             android:exported="false"
             android:foregroundServiceType="dataSync"

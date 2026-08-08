@@ -34,7 +34,7 @@ import com.aistudio.dieselstationsms.kxmpzq.sms.SmsProcessor
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReplyManager
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurity
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurityOTP
-import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
+import com.aistudio.dieselstationms.kxmpzq.utils.PhoneUtils
 import com.aistudio.dieselstationsms.kxmpzq.utils.SystemEventLogger
 import kotlinx.coroutines.*
 import org.json.JSONArray
@@ -317,21 +317,100 @@ class SMSService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "SMSService onStartCommand - START_STICKY")
 
-        if (!isInitialized.get()) {
-            Log.w(TAG, "Service not initialized yet, reinitializing...")
-            initializeService()
+        try {
+            if (!isInitialized.get()) {
+                Log.w(TAG, "Service not initialized yet, reinitializing...")
+                initializeService()
+            }
+
+            if (isPaused.get()) {
+                resumeSmsEngine()
+            }
+
+            if (!isDestroyed.get()) {
+                startForeground(NOTIFICATION_ID, buildForegroundNotification())
+            }
+
+            // معالجة أي أمر مرسل إلى الخدمة
+            handleServiceCommand(intent)
+
+            // تسجيل معلومات بدء التشغيل بدون التأثير على السلوك
+            intent?.getStringExtra("startup_reason")?.let {
+                Log.i(TAG, "Startup reason: $it")
+            }
+
+            intent?.getStringExtra("restart_reason")?.let {
+                Log.i(TAG, "Restart reason: $it")
+            }
+
+            sendServiceStatusBroadcast()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling service start command: ${e.message}", e)
         }
 
-        if (isPaused.get()) {
-            resumeSmsEngine()
-        }
-
-        if (!isDestroyed.get()) {
-            startForeground(NOTIFICATION_ID, buildForegroundNotification())
-        }
-
-        sendServiceStatusBroadcast()
         return START_STICKY
+    }
+
+    /**
+     * معالجة أوامر الخدمة القادمة من BroadcastReceivers
+     */
+    private fun handleServiceCommand(intent: Intent?) {
+        val action = intent?.getStringExtra("action") ?: return
+
+        try {
+            when (action) {
+
+                "reschedule_tasks" -> {
+                    val reason = intent.getStringExtra("reason") ?: "unknown"
+
+                    Log.i(TAG, "Reschedule requested. reason=$reason")
+
+                    // إعادة جدولة المهام الموجودة فعلياً
+                    scheduleDatabaseCleanup()
+                    scheduleMaintenance()
+                    scheduleHealthChecks()
+                    scheduleMetricsFlush()
+                    scheduleSecurityChecks()
+
+                    Log.i(TAG, "Scheduled tasks refreshed successfully")
+                }
+
+                "execute_scheduled_task" -> {
+                    val taskType = intent.getStringExtra("task_type") ?: "default"
+
+                    Log.i(TAG, "Scheduled task received: $taskType")
+
+                    when (taskType) {
+                        "cleanup", "database_cleanup" -> {
+                            runCleanupNow()
+                        }
+                        else -> {
+                            Log.w(TAG, "Unknown scheduled task type: $taskType")
+                        }
+                    }
+                }
+
+                "app_updated" -> {
+                    Log.i(TAG, "Application update command received")
+
+                    reloadSettings()
+                    restartModules()
+
+                    // إعادة إنشاء الجدولة بعد تحديث التطبيق
+                    scheduleMaintenance()
+                    scheduleDatabaseCleanup()
+                    scheduleMetricsFlush()
+                    scheduleSecurityChecks()
+                }
+
+                else -> {
+                    Log.w(TAG, "Unknown service command: $action")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to handle service command '$action': ${e.message}", e)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder? = null
