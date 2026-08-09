@@ -1330,91 +1330,40 @@
 </head>
 <body>
 
-    <!-- ====== VConsole Integration (محلي) ====== -->
+    <!-- ====== Global Error Logger (بدون VConsole) ====== -->
     <script>
-        // محاولة تحميل VConsole مع فحص وجوده
-        var vconsoleLoaded = false;
-        var vconsoleError = null;
-
-        try {
-            // نتحقق أولاً مما إذا كان VConsole معرفاً بالفعل (في حال تم تحميله عن طريق script)
-            if (typeof VConsole !== 'undefined') {
-                window.vConsole = new VConsole();
-                vconsoleLoaded = true;
-                console.log("✅ VConsole initialized from global");
-            } else {
-                // نحاول تحميله عن طريق إنشاء script ديناميكياً
-                var script = document.createElement('script');
-                script.src = '../assets-local/js/vconsole.min.js';
-                script.onload = function() {
-                    try {
-                        if (typeof VConsole !== 'undefined') {
-                            window.vConsole = new VConsole();
-                            vconsoleLoaded = true;
-                            console.log("✅ VConsole loaded and initialized");
-                        } else {
-                            vconsoleError = "VConsole library loaded but class not found";
-                            console.warn("⚠️ " + vconsoleError);
-                        }
-                    } catch(e) {
-                        vconsoleError = e.message;
-                        console.error("❌ VConsole init error:", e);
-                    }
-                };
-                script.onerror = function() {
-                    vconsoleError = "Failed to load vconsole.min.js - file not found or inaccessible";
-                    console.error("❌ " + vconsoleError);
-                };
-                document.head.appendChild(script);
-            }
-        } catch(e) {
-            vconsoleError = e.message;
-            console.error("❌ VConsole setup error:", e);
-        }
-
-        // ==============================
-        // Global JavaScript Error Logger (بدون Alert)
-        // ==============================
         var errorCount = 0;
         var maxErrors = 20;
         var scriptErrorShown = false;
 
         window.onerror = function(msg, url, line, col, error) {
             errorCount++;
-
-            // إذا كان الخطأ هو "Script error" ونوعه غير محدد، نعرضه مرة واحدة فقط
             if (msg === "Script error." || msg === "Script error" || (msg === "" && url === "")) {
                 if (!scriptErrorShown) {
                     scriptErrorShown = true;
                     console.warn("⚠️ Script error detected (likely CORS or missing file)");
-                    console.warn("   This may be due to vconsole.min.js not loading correctly.");
-                    // محاولة إرسال إلى Kotlin
                     try {
                         if (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null) {
                             if (typeof AndroidInterface.logFromJS === 'function') {
-                                AndroidInterface.logFromJS('WARN', 'Script error: VConsole may be missing');
+                                AndroidInterface.logFromJS('WARN', 'Script error: unknown');
                             }
                         }
                     } catch(e) {}
                 }
-                return true; // منع ظهور alert
+                return true;
             }
-
             if (errorCount > maxErrors) {
                 if (errorCount === maxErrors + 1) {
                     console.error("⚠️ تجاوز الحد الأقصى للأخطاء، تم إيقاف التسجيل.");
                 }
                 return true;
             }
-
             var errorMsg = "JavaScript Error:\n\n" +
                 "Message: " + msg +
                 "\nFile: " + url +
                 "\nLine: " + line +
                 "\nColumn: " + col;
-
             console.error(errorMsg);
-
             try {
                 if (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null) {
                     if (typeof AndroidInterface.logFromJS === 'function') {
@@ -1422,32 +1371,8 @@
                     }
                 }
             } catch(e) {}
-
             return true;
         };
-
-        // ==============================
-        // Bridge Verification (بعد تحميل الصفحة)
-        // ==============================
-        setTimeout(function(){
-            try {
-                console.log("========== Bridge Check ==========");
-                console.log("AndroidInterface:", typeof window.AndroidInterface);
-                if(typeof window.AndroidInterface !== "undefined"){
-                    console.log("login:", typeof AndroidInterface.login);
-                    console.log("hasSavedCredentials:", typeof AndroidInterface.hasSavedCredentials);
-                } else {
-                    console.error("❌ AndroidInterface NOT FOUND");
-                }
-                console.log("VConsole loaded:", vconsoleLoaded);
-                if (vconsoleError) {
-                    console.warn("VConsole error:", vconsoleError);
-                }
-                console.log("==================================");
-            } catch(e) {
-                console.error("Bridge check error:", e.message);
-            }
-        }, 3000);
     </script>
 
     <!-- ============================================================ -->
@@ -1473,7 +1398,7 @@
 
     <!-- Floating Actions -->
     <div class="floating-actions" id="floatingActions">
-        <button class="action-btn" id="btnBiometric" data-tooltip="تسجيل الدخول بالبصمة"><i class="fas fa-thumbs-up"></i></button>
+        <!-- تم إزالة زر البصمة (id="btnBiometric") لأنه سيتم تشغيله تلقائياً -->
         <button class="action-btn" id="btnTogglePassword" data-tooltip="إظهار/إخفاء كلمة المرور"><i class="fas fa-eye"></i></button>
         <button class="action-btn" id="btnThemeToggle" data-tooltip="تبديل الوضع الليلي/النهاري"><i class="fas fa-moon"></i></button>
     </div>
@@ -1488,10 +1413,7 @@
         <div class="login-body">
             <div id="successMessage" class="success-message"></div>
 
-            <div id="quickLoginBadge" class="quick-login-badge" style="display: none;">
-                <i class="fas fa-shield-alt"></i>
-                <span>بيانات محفوظة - تسجيل دخول سريع متاح</span>
-            </div>
+            <!-- تم إزالة quickLoginBadge -->
 
             <div id="attemptsCounter" class="attempts-counter">
                 <i class="fas fa-exclamation-triangle"></i>
@@ -1540,22 +1462,7 @@
         </div>
     </div>
 
-    <!-- Fingerprint Modal -->
-    <div class="modal fingerprint-modal" id="fingerprintModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-fingerprint"></i> تسجيل الدخول بالبصمة</h2>
-                <button class="close-modal" id="closeFingerprintModal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="fingerprint-icon">
-                    <i class="fas fa-fingerprint"></i>
-                </div>
-                <div class="fingerprint-status" id="fingerprintStatus">ضع إصبعك على مستشعر البصمة</div>
-                <div class="fingerprint-hint">سيتم استخدام البصمة المسجلة في جهازك للتحقق من هويتك</div>
-            </div>
-        </div>
-    </div>
+    <!-- تم إزالة Fingerprint Modal -->
 
     <!-- Terms Modal -->
     <div class="modal" id="termsModal">
@@ -1793,15 +1700,12 @@
 
     <script>
         // ============================================================
-        // DEBUG LOGGING LAYER - Unified Diagnostic System
+        // DEBUG LOGGING LAYER - (بدون VConsole)
         // ============================================================
         function debugInfo(tag, data) {
             var msg = "[INFO] " + tag + " | " + (typeof data === 'object' ? JSON.stringify(data) : data);
             console.log(msg);
             try {
-                if (typeof vConsole !== 'undefined' && vConsole) {
-                    vConsole.log(msg);
-                }
                 if (typeof AndroidInterface !== 'undefined' && AndroidInterface && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('INFO', msg);
                 }
@@ -1812,9 +1716,6 @@
             var msg = "[WARN] " + tag + " | " + (typeof data === 'object' ? JSON.stringify(data) : data);
             console.warn(msg);
             try {
-                if (typeof vConsole !== 'undefined' && vConsole) {
-                    vConsole.warn(msg);
-                }
                 if (typeof AndroidInterface !== 'undefined' && AndroidInterface && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('WARN', msg);
                 }
@@ -1825,27 +1726,10 @@
             var msg = "[ERROR] " + tag + " | " + (typeof data === 'object' ? JSON.stringify(data) : data);
             console.error(msg);
             try {
-                if (typeof vConsole !== 'undefined' && vConsole) {
-                    vConsole.error(msg);
-                }
                 if (typeof AndroidInterface !== 'undefined' && AndroidInterface && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('ERROR', msg);
                 }
             } catch(e) {}
-        }
-
-        function debugGroup(label, fn) {
-            try {
-                if (typeof vConsole !== 'undefined' && vConsole && typeof vConsole.group === 'function') {
-                    vConsole.group(label);
-                    fn();
-                    vConsole.groupEnd();
-                } else {
-                    fn();
-                }
-            } catch(e) {
-                fn();
-            }
         }
 
         // ============================================================
@@ -2062,11 +1946,7 @@
         // ============================================================
         function hasAndroidBridge() {
             try {
-                const exists = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
-                if (exists && typeof AndroidInterface.logFromJS === 'function') {
-                    // فقط تحقق, لا تسجيل مفرط
-                }
-                return exists;
+                return (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
             } catch(e) {
                 return false;
             }
@@ -2077,9 +1957,7 @@
                 if (hasAndroidBridge() && typeof AndroidInterface.logFromJS === 'function') {
                     AndroidInterface.logFromJS('INFO', `[${action}] ${details}`);
                 }
-            } catch(e) {
-                // ignore
-            }
+            } catch(e) {}
         }
 
         // ============================================================
@@ -2149,7 +2027,6 @@
 
                 var methodName = actionMap[action];
                 if (!methodName) {
-                    // Try direct method
                     if (typeof AndroidInterface[action] === 'function') {
                         methodName = action;
                     } else {
@@ -2204,7 +2081,6 @@
         // دوال مساعدة (UI Utilities) – مع تسجيل الإشعارات
         // ============================================================
         function showNotification(message, type) {
-            // تسجيل الإشعار في vConsole
             debugInfo("NOTIFICATION_SHOWN", { message: message, type: type });
             
             const container = document.getElementById('notificationContainer');
@@ -2370,104 +2246,62 @@
         }
 
         // ============================================================
-        // Biometric Auto Login Flow – مع تسجيل
+        // Biometric Auto Login Flow (التشغيل التلقائي)
         // ============================================================
-        async function initBiometricFlow() {
+        var biometricLoginStarted = false;
+
+        async function triggerBiometricLogin() {
+            if (biometricLoginStarted) return;
+            biometricLoginStarted = true;
+
             try {
-                debugInfo("BIOMETRIC_INIT_START", {});
+                debugInfo("BIOMETRIC_AUTO_START", { timestamp: Date.now() });
                 const credsResult = await apiCall('has_saved_credentials');
                 if (credsResult.success && credsResult.hasCredentials) {
-                    const badge = document.getElementById('quickLoginBadge');
-                    if (badge) badge.style.display = 'flex';
-                    if (credsResult.username) {
-                        document.getElementById('username').value = credsResult.username;
-                    }
                     debugInfo("BIOMETRIC_HAS_CREDENTIALS", { username: credsResult.username });
-                    showNotification('بيانات محفوظة - يمكنك استخدام البصمة للدخول السريع', 'info');
+                    // تأخير بسيط للسماح للصفحة بالظهور
+                    setTimeout(() => {
+                        if (!biometricLoginStarted) return;
+                        debugInfo("BIOMETRIC_CALLING", {});
+                        const result = safeBridgeCall('biometricAutoLogin');
+                        // سيتم التعامل مع النتيجة عبر callback من Kotlin
+                    }, 500);
                 } else {
                     debugInfo("BIOMETRIC_NO_CREDENTIALS", {});
+                    biometricLoginStarted = false; // إعادة ضبط للسماح بالمحاولة لاحقاً إذا تغيرت البيانات
                 }
             } catch (e) {
-                debugError("BIOMETRIC_INIT_ERROR", { error: e.message, stack: e.stack });
-            }
-        }
-
-        async function requestFingerprintAuth() {
-            debugInfo("FINGERPRINT_START", { timestamp: Date.now() });
-            const fingerprintModal = document.getElementById('fingerprintModal');
-            const fingerprintStatus = document.getElementById('fingerprintStatus');
-
-            try {
-                openModal(fingerprintModal);
-                fingerprintStatus.textContent = 'جاري التحقق من توفر البصمة...';
-                fingerprintStatus.style.color = 'var(--secondary-color)';
-
-                if (!hasAndroidBridge() || typeof AndroidInterface.biometricAutoLogin !== 'function') {
-                    throw new Error('Biometric API غير متوفر');
-                }
-
-                fingerprintStatus.textContent = 'ضع إصبعك على مستشعر البصمة...';
-                fingerprintStatus.style.color = 'var(--secondary-color)';
-
-                // استدعاء البصمة عبر Bridge
-                var result = safeBridgeCall('biometricAutoLogin');
-                debugInfo("FINGERPRINT_BRIDGE_CALL", { result: result });
-            } catch (error) {
-                debugError("FINGERPRINT_ERROR", { error: error.message, stack: error.stack });
-                fingerprintStatus.textContent = 'حدث خطأ أثناء التحقق';
-                fingerprintStatus.style.color = 'var(--error-color)';
-                showNotification('حدث خطأ أثناء التحقق من البصمة', 'error');
-                setTimeout(() => closeModal(fingerprintModal), 2000);
+                debugError("BIOMETRIC_AUTO_ERROR", { error: e.message, stack: e.stack });
+                biometricLoginStarted = false;
             }
         }
 
         // Callback from Kotlin
         window.onBiometricAutoLogin = function(result) {
             debugInfo("BIOMETRIC_CALLBACK_RECEIVED", { result: result });
-            const fingerprintModal = document.getElementById('fingerprintModal');
-            const fingerprintStatus = document.getElementById('fingerprintStatus');
-            
             var parsed = handleAndroidResult(result);
 
             if (parsed && parsed.success) {
-                fingerprintStatus.textContent = 'تم التحقق بنجاح!';
-                fingerprintStatus.style.color = 'var(--success-color)';
                 showNotification('تم التحقق من البصمة بنجاح', 'success');
-
                 if (parsed.token) {
                     localStorage.setItem('authToken', parsed.token);
                 }
                 if (parsed.user) {
                     localStorage.setItem('user', JSON.stringify(parsed.user));
                 }
-
                 debugInfo("BIOMETRIC_LOGIN_SUCCESS", { user: parsed.user ? parsed.user.username : 'unknown' });
-
-                setTimeout(() => {
-                    closeModal(fingerprintModal);
-                    enterDashboard(parsed.user, parsed.token);
-                }, 800);
+                // الانتقال إلى main.html
+                window.location.replace('../main.html');
             } else {
                 var errorMsg = parsed ? (parsed.error || 'فشل التحقق من البصمة') : 'Unknown error';
-                fingerprintStatus.textContent = 'فشل التحقق من البصمة أو تم الإلغاء';
-                fingerprintStatus.style.color = 'var(--error-color)';
                 showNotification(errorMsg, 'error');
                 debugError("BIOMETRIC_LOGIN_FAILURE", { error: errorMsg });
-                setTimeout(() => closeModal(fingerprintModal), 2000);
+                // نسمح بإعادة المحاولة إذا تم إلغاء أو فشل البصمة، ولكن ليس تلقائياً.
+                // سيتم إعادة تعيين العلم لتمكين محاولة جديدة فقط إذا قام المستخدم بإعادة تحميل الصفحة أو تغيرت البيانات.
+                // لكننا نمنع إعادة التشغيل التلقائي في نفس دورة الصفحة.
+                biometricLoginStarted = true; // نبقيه true لمنع إعادة التشغيل.
             }
         };
-
-        function enterDashboard(user, token) {
-            debugInfo("DASHBOARD_ENTER", { user: user ? user.username : 'unknown', token: token ? 'present' : 'missing' });
-            document.getElementById('successMessage').textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
-            document.getElementById('successMessage').classList.add('show');
-            
-            showLoading(true);
-            
-            setTimeout(() => {
-                window.location.replace('../main.html');
-            }, 1000);
-        }
 
         // ============================================================
         // Remember Me System – مع تسجيل
@@ -2561,7 +2395,6 @@
 
             const btnThemeToggle = document.getElementById('btnThemeToggle');
             const btnTogglePassword = document.getElementById('btnTogglePassword');
-            const btnBiometric = document.getElementById('btnBiometric');
 
             const forgotPasswordModal = document.getElementById('forgotPasswordModal');
             const closeForgotModal = document.getElementById('closeForgotModal');
@@ -2569,9 +2402,6 @@
             const closeRecoveryLinkModal = document.getElementById('closeRecoveryLinkModal');
             const resetPasswordModal = document.getElementById('resetPasswordModal');
             const closeResetPasswordModal = document.getElementById('closeResetPasswordModal');
-
-            const fingerprintModal = document.getElementById('fingerprintModal');
-            const closeFingerprintModal = document.getElementById('closeFingerprintModal');
 
             const sendResetLinkBtn = document.getElementById('sendResetLinkBtn');
             const resetUsernameInput = document.getElementById('resetUsername');
@@ -2621,13 +2451,6 @@
                 passwordInput.focus();
             });
 
-            // زر البصمة
-            btnBiometric.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                requestFingerprintAuth();
-            });
-
             usernameInput.addEventListener('input', checkFieldsAndFocus);
             passwordInput.addEventListener('input', checkFieldsAndFocus);
 
@@ -2657,17 +2480,10 @@
                 closeModal(termsModal);
             });
 
-            // إغلاق مودال البصمة
-            closeFingerprintModal.addEventListener('click', function() {
-                closeModal(fingerprintModal);
-            });
-
             // Bridge check
-            debugInfo("BRIDGE_CHECK", { exists: hasAndroidBridge(), methods: AndroidInterface ? Object.keys(AndroidInterface).slice(0,5) : [] });
+            debugInfo("BRIDGE_CHECK", { exists: hasAndroidBridge() });
 
-            await initBiometricFlow();
-
-            // استرجاع بيانات "تذكرني"
+            // استرجاع بيانات "تذكرني" (عرض في الحقول فقط)
             try {
                 const savedCredentials = await loadRememberMeCredentials();
                 if (savedCredentials && savedCredentials.username) {
@@ -2873,7 +2689,13 @@
                         logToAndroid('LOGIN_SUCCESS', `مستخدم: ${username}`);
                         debugInfo("LOGIN_SUCCESS", { username: username });
 
-                        enterDashboard(result.user, result.token);
+                        // الدخول إلى main.html
+                        document.getElementById('successMessage').textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
+                        document.getElementById('successMessage').classList.add('show');
+                        showLoading(true);
+                        setTimeout(() => {
+                            window.location.replace('../main.html');
+                        }, 1000);
                     } else {
                         const attemptCount = incrementLoginAttempt(username);
                         showError(result.error || 'اسم المستخدم أو كلمة المرور غير صحيحة', 'usernameError');
@@ -2897,7 +2719,6 @@
                 if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
                 if (e.target === viewRecoveryLinkModal) closeModal(viewRecoveryLinkModal);
                 if (e.target === resetPasswordModal) closeModal(resetPasswordModal);
-                if (e.target === fingerprintModal) closeModal(fingerprintModal);
             });
 
             // إنشاء العناصر العائمة
@@ -2932,17 +2753,17 @@
                 }
             }
 
+            // ============================================================
+            // التشغيل التلقائي للبصمة (إذا توفرت بيانات Remember Me)
+            // ============================================================
+            // نبدأ بعد فترة قصيرة بعد تحميل الصفحة
+            setTimeout(() => {
+                triggerBiometricLogin();
+            }, 1000); // تأخير 1 ثانية للسماح بتهيئة كل شيء
+
             // تسجيل انتهاء التحميل
             debugInfo("PAGE_READY", {});
         });
-
-        // تسجيل أحداث WebView عبر window (مثل الأخطاء)
-        window.addEventListener('load', function() {
-            debugInfo("WINDOW_LOAD", {});
-        });
-
-        // تسجيل أخطاء JavaScript غير المعالجة (تم بالفعل عبر onerror)
-        // تسجيل أحداث console (يمكن إضافتها لكنها قد تكون مفرطة)
     </script>
 </body>
 </html>

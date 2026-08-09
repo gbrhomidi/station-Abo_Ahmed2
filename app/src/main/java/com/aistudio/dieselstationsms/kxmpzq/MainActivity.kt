@@ -991,7 +991,6 @@ class MainActivity : AppCompatActivity() {
                                     val source = consoleMessage.sourceId()
                                     Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
                                     DebugLogger.info("WebViewConsole", "$msg")
-                                    // إضافة تسجيل إضافي للأخطاء
                                     if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
                                         DebugLogger.error("WebViewConsole", "JS Error: $msg at $source:$line")
                                     }
@@ -1312,24 +1311,15 @@ class MainActivity : AppCompatActivity() {
         private fun getActivity(): MainActivity? = activityRef.get()
 
         private fun checkPermission(
-        permissionCode: String,
-        action: String
-    ): Boolean {
-
-        val activity = getActivity() ?: return false
-
-        val userId = activity.currentUserId
-
-        if (userId == 0L)
-            return false
-
-        val db = getDbHelper() ?: return false
-
-        return db.checkUserPermission(
-            userId,
-            "$permissionCode.$action"
-        )
-    }
+            permissionCode: String,
+            action: String
+        ): Boolean {
+            val activity = getActivity() ?: return false
+            val userId = activity.currentUserId
+            if (userId == 0L) return false
+            val db = getDbHelper() ?: return false
+            return db.checkUserPermission(userId, "$permissionCode.$action")
+        }
 
         private fun successResponse(id: Long, message: String): String {
             return JSONObject().apply {
@@ -1448,59 +1438,22 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getCurrentUser(): String {
-
-            DebugLogger.info(
-                "WebAppInterface",
-                "getCurrentUser called"
-            )
-
-            val activity = getActivity()
-                ?: return errorResponse("النشاط غير متاح")
-
-            val db = getDbHelper()
-                ?: return errorResponse("قاعدة البيانات غير متاحة")
-
-
+            DebugLogger.info("WebAppInterface", "getCurrentUser called")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-
                 val userId = activity.currentUserId
-
                 if (userId == 0L) {
                     return errorResponse("لا توجد جلسة مستخدم")
                 }
-
-
-                val user = db.getUserById(userId)
-
-                    ?: return errorResponse("المستخدم غير موجود")
-
-
+                val user = db.getUserById(userId) ?: return errorResponse("المستخدم غير موجود")
                 val permissions = db.getUserPermissions(userId)
-
                 val screens = db.getUserScreens(userId)
-
-
-                user.put(
-                    "permissions",
-                    permissions
-                )
-
-                user.put(
-                    "screens",
-                    screens
-                )
-
-
+                user.put("permissions", permissions)
+                user.put("screens", screens)
                 dataResponse(user)
-
-
             } catch (e: Exception) {
-
-                DebugLogger.logException(
-                    "CurrentUser",
-                    e
-                )
-
+                DebugLogger.logException("CurrentUser", e)
                 errorResponse(e.message)
             }
         }
@@ -3749,15 +3702,8 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun getUserPermissions(userId: Long): String {
-
-            DebugLogger.info(
-                "WebAppInterface",
-                "getUserPermissions called for user=$userId"
-            )
-
-            val db = getDbHelper()
-                ?: return errorResponse("قاعدة البيانات غير متاحة")
-
+            DebugLogger.info("WebAppInterface", "getUserPermissions called for user=$userId")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val permissions = db.getUserPermissions(userId)
                 dataResponse(permissions)
@@ -4201,41 +4147,86 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // ============================================================
+        // Biometric Auto-Login – المسار الكامل المحدث
+        // ============================================================
+
         @JavascriptInterface
         fun biometricAutoLogin(): String {
-            DebugLogger.info("WebAppInterface", "biometricAutoLogin called")
+            DebugLogger.info("BiometricAuto", "biometricAutoLogin called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val prefs = activity.sharedPrefs
 
-            val token = prefs.getString("saved_token", "") ?: ""
-            val userId = prefs.getLong("saved_user_id", 0)
+            // 1. التحقق من Remember Me
+            val remember = prefs.getBoolean("remember_me", false)
+            if (!remember) {
+                DebugLogger.warn("BiometricAuto", "Remember Me not enabled")
+                return errorResponse("لم يتم تفعيل Remember Me")
+            }
+
+            val savedUserId = prefs.getLong("saved_user_id", 0)
             val savedUsername = prefs.getString("saved_username", "") ?: ""
 
-            if (token.isEmpty() || userId == 0L || savedUsername.isEmpty()) {
-                DebugLogger.warn("Biometric", "No saved credentials found")
-                return errorResponse("لا توجد بيانات محفوظة")
+            if (savedUserId == 0L || savedUsername.isEmpty()) {
+                DebugLogger.warn("BiometricAuto", "Invalid saved credentials")
+                return errorResponse("بيانات تسجيل الدخول المحفوظة غير صالحة")
             }
+
+            // 2. جلب المستخدم من قاعدة البيانات
+            val user = db.getUserByUsername(savedUsername)
+            if (user == null) {
+                DebugLogger.warn("BiometricAuto", "User not found: $savedUsername")
+                return errorResponse("المستخدم غير موجود")
+            }
+
+            val userIdFromDb = user.optLong("user_id", 0)
+            if (userIdFromDb != savedUserId) {
+                DebugLogger.warn("BiometricAuto", "User ID mismatch: DB=$userIdFromDb, saved=$savedUserId")
+                return errorResponse("بيانات المستخدم غير متطابقة")
+            }
+
+            // 3. التحقق من حالة الحساب
+            val status = user.optString("status", "")
+            val isDeleted = user.optInt("is_deleted", 0)
+            if (status != "active") {
+                DebugLogger.warn("BiometricAuto", "User account not active: $status")
+                return errorResponse("الحساب غير نشط")
+            }
+            if (isDeleted != 0) {
+                DebugLogger.warn("BiometricAuto", "User account deleted")
+                return errorResponse("الحساب محذوف")
+            }
+
+            // 4. عرض BiometricPrompt
+            val role = user.optString("role", "USER")
+            val fullName = user.optString("full_name", savedUsername)
+
+            DebugLogger.info("BiometricAuto", "Prompting biometric for user $savedUsername (ID=$savedUserId)")
 
             activity.runOnUiThread {
                 activity.showBiometricPrompt(
                     onSuccess = {
-                        val db = getDbHelper()
-                        if (db == null) {
-                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("قاعدة البيانات غير متاحة")})""")
-                            return@showBiometricPrompt
-                        }
+                        DebugLogger.info("BiometricAuto", "Biometric success for $savedUsername")
                         try {
-                            activity.currentAuthToken = token
-                            activity.currentUserId = userId
+                            // 5. إنشاء توكن جديد
+                            val newToken = UUID.randomUUID().toString()
 
-                            val user = db.getUserByUsername(savedUsername)
-                            if (user != null) {
-                                val permissionsArray = db.getUserPermissions(userId)
-                                val permissionsObject = JSONObject()
-                                for (i in 0 until permissionsArray.length()) {
-                                    val item = permissionsArray.getJSONObject(i)
-                                    val code = item.getString("permission_code")
-                                    permissionsObject.put(code, JSONObject().apply {
+                            // 6. تحديث الجلسة
+                            activity.currentAuthToken = newToken
+                            activity.currentUserId = savedUserId
+                            activity.currentUserRole = role
+                            activity.currentUserName = savedUsername
+
+                            // 7. جلب الصلاحيات والشاشات بنفس آلية login التقليدية
+                            val permissionsArray = db.getUserPermissions(savedUserId)
+                            val permissionsObject = JSONObject()
+                            for (i in 0 until permissionsArray.length()) {
+                                val item = permissionsArray.getJSONObject(i)
+                                val code = item.getString("permission_code")
+                                permissionsObject.put(
+                                    code,
+                                    JSONObject().apply {
                                         put("can_create", item.optBoolean("can_create"))
                                         put("can_read", item.optBoolean("can_read"))
                                         put("can_update", item.optBoolean("can_update"))
@@ -4243,41 +4234,55 @@ class MainActivity : AppCompatActivity() {
                                         put("can_export", item.optBoolean("can_export"))
                                         put("can_print", item.optBoolean("can_print"))
                                         put("can_approve", item.optBoolean("can_approve"))
-                                    })
-                                }
-                                user.put("permissions", permissionsObject)
-                                user.put("screens", db.getUserScreens(userId))
-                                val role = user.optString("role", "USER")
-                                user.put("role", role)
-                                user.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
-
-                                activity.currentUserRole = role
-                                activity.currentUserName = user.optString("username", "")
-
-                                val result = JSONObject().apply {
-                                    put("success", true)
-                                    put("user", user)
-                                    put("token", token)
-                                    put("message", "تم تسجيل الدخول عبر البصمة")
-                                }
-                                DebugLogger.info("Biometric", "Auto-login success for $savedUsername")
-                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
-                            } else {
-                                DebugLogger.warn("Biometric", "User not found: $savedUsername")
-                                activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse("المستخدم غير موجود")})""")
+                                    }
+                                )
                             }
+                            val screensArray = db.getUserScreens(savedUserId)
+
+                            // 8. تحديث البيانات المحفوظة (تحديث التوكن)
+                            prefs.edit().apply {
+                                putString("saved_token", newToken)
+                                putLong("saved_timestamp", System.currentTimeMillis())
+                                apply()
+                            }
+
+                            // 9. تحضير النتيجة
+                            val userJson = JSONObject().apply {
+                                put("user_id", savedUserId)
+                                put("username", savedUsername)
+                                put("full_name", fullName)
+                                put("role", role)
+                                put("permissions", permissionsObject)
+                                put("screens", screensArray)
+                                put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
+                            }
+
+                            val result = JSONObject().apply {
+                                put("success", true)
+                                put("user", userJson)
+                                put("token", newToken)
+                                put("message", "تم تسجيل الدخول بالبصمة")
+                            }
+
+                            DebugLogger.info("BiometricAuto", "Login success for $savedUsername, new token generated")
+                            activity.safeEvaluateJs("window.onBiometricAutoLogin && window.onBiometricAutoLogin(${result})")
+
                         } catch (e: Exception) {
-                            DebugLogger.logException("Biometric", e)
-                            activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errorResponse(e.message)})""")
+                            DebugLogger.logException("BiometricAuto", e)
+                            val errResult = JSONObject().apply {
+                                put("success", false)
+                                put("error", e.message)
+                            }
+                            activity.safeEvaluateJs("window.onBiometricAutoLogin && window.onBiometricAutoLogin(${errResult})")
                         }
                     },
                     onError = { error ->
+                        DebugLogger.warn("BiometricAuto", "Biometric error: $error")
                         val result = JSONObject().apply {
                             put("success", false)
                             put("error", error)
                         }
-                        DebugLogger.warn("Biometric", "Auto-login error: $error")
-                        activity.safeEvaluateJs("""window.onBiometricAutoLogin && window.onBiometricAutoLogin($result)""")
+                        activity.safeEvaluateJs("window.onBiometricAutoLogin && window.onBiometricAutoLogin(${result})")
                     }
                 )
             }
