@@ -1,0 +1,2816 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>القائمة البيضاء - إدارة الأرقام</title>
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+    <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
+    <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
+    <style>
+        /* ============================================================
+           المتغيرات الأساسية – من قالب المشروع
+           ============================================================ */
+        :root {
+            --bg-color: #f5efe6;
+            --surface-color: #faf3e8;
+            --surface-elevated: #fdf8f0;
+            --primary-color: #007ACC;
+            --primary-dim: rgba(0,122,204,0.12);
+            --accent-color: #d4a017;
+            --accent-dim: rgba(212,160,23,0.12);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #1a2a3a;
+            --text-muted: #6a7f94;
+            --border-color: #003366;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
+            --glass-bg: rgba(255,248,240,0.85);
+            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
+            --card-hover-bg: rgba(0,122,204,0.04);
+            --fab-shadow: rgba(0,122,204,0.3);
+            --toast-bg: #fdf8f0;
+            --scrollbar-track: #f5efe6;
+            --scrollbar-thumb: rgba(0,51,102,0.2);
+            --skeleton-bg: #e8e0d5;
+            --skeleton-shine: #f5efe6;
+            --modal-border-color: #003366;
+            --modal-border-style: dashed;
+            --input-bg: #fdf8f0;
+            --input-border: #003366;
+            --input-border-style: dashed;
+            --data-text-color: #1a2a3a;
+            --data-text-muted: #4a5a6a;
+            --status-enabled: #10b981;
+            --status-disabled: #6a7f94;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0a0e1a;
+            --surface-color: #111827;
+            --surface-elevated: #1a2236;
+            --primary-color: #00d4ff;
+            --primary-dim: rgba(0,212,255,0.15);
+            --accent-color: #f59e0b;
+            --accent-dim: rgba(245,158,11,0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #e8d48b;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
+            --glass-bg: rgba(22,34,64,0.85);
+            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-hover-bg: rgba(0,212,255,0.05);
+            --fab-shadow: rgba(0,212,255,0.3);
+            --toast-bg: #1a2236;
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255,255,255,0.1);
+            --skeleton-bg: #1e293b;
+            --skeleton-shine: #2d3a4f;
+            --modal-border-color: #e8d48b;
+            --modal-border-style: dashed;
+            --input-bg: #1e293b;
+            --input-border: #e8d48b;
+            --input-border-style: dashed;
+            --data-text-color: #f1f5f9;
+            --data-text-muted: #94a3b8;
+            --status-enabled: #10b981;
+            --status-disabled: #94a3b8;
+        }
+
+        /* ============================================================
+           الأنماط الأساسية
+           ============================================================ */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.4s ease, color 0.4s ease;
+            touch-action: pan-y;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+        /* ===== Loading ===== */
+        .loading-indicator {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(0,212,255,0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ===== Offline Banner ===== */
+        .offline-banner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: linear-gradient(90deg, var(--warning), #f97316);
+            color: #000;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show { transform: translateY(0); }
+
+        /* ============================================================
+           الشريط العلوي (Header)
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.4s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 6px; right: 6px;
+            width: 8px; height: 8px;
+            background: var(--error);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--error);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        /* ============================================================
+           البحث والفلاتر
+           ============================================================ */
+        .search-wrap {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 44px 12px 16px;
+            border-radius: 14px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .filter-chips::-webkit-scrollbar { display: none; }
+        .filter-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .filter-chip:active { transform: scale(0.95); }
+        .filter-chip.active {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .filter-chip:hover:not(.active) {
+            border-color: var(--text-muted);
+            color: var(--text-color);
+        }
+
+        /* ============================================================
+           بطاقات الإحصائيات
+           ============================================================ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        .stat-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .stat-card:active { transform: scale(0.96); }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-glow);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-icon {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
+        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
+        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
+        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: var(--data-text-color);
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ============================================================
+           بطاقات القائمة البيضاء
+           ============================================================ */
+        .cards-container {
+            padding: 0 16px 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            touch-action: pan-y;
+        }
+
+        .whitelist-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 18px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+        .whitelist-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: var(--card-hover-bg);
+        }
+        .whitelist-card.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
+        }
+        .whitelist-card:active { transform: scale(0.98); }
+        .whitelist-card.disabled {
+            opacity: 0.6;
+        }
+
+        .whitelist-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .whitelist-card .card-phone {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--data-text-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .whitelist-card .card-phone i {
+            color: var(--primary-color);
+        }
+        .whitelist-card .card-checkbox {
+            margin-left: 8px;
+            flex-shrink: 0;
+        }
+        .whitelist-card .card-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--primary-color);
+        }
+        .whitelist-card .card-badges {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .whitelist-card .badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.6rem;
+            font-weight: 600;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .badge-enabled { background: rgba(16,185,129,0.15); color: var(--status-enabled); }
+        .badge-disabled { background: rgba(106,127,148,0.15); color: var(--status-disabled); }
+        .badge-operator {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+        }
+
+        .whitelist-card .card-name {
+            font-size: 0.9rem;
+            color: var(--data-text-muted);
+            margin: 4px 0;
+            text-align: center;
+        }
+        .whitelist-card .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .whitelist-card .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .whitelist-card .card-actions .card-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .whitelist-card .card-actions .card-btn:active { transform: scale(0.95); }
+        .whitelist-card .card-actions .card-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .whitelist-card .card-actions .card-btn.primary:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .whitelist-card .card-actions .card-btn.success:hover {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+        .whitelist-card .card-actions .card-btn.danger:hover {
+            background: rgba(239,68,68,0.15);
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+        /* ============================================================
+           شريط الإجراءات الجماعية
+           ============================================================ */
+        .bulk-actions-bar {
+            position: fixed;
+            bottom: 80px;
+            left: 0;
+            right: 0;
+            background: var(--surface-elevated);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            padding: 8px 16px;
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            z-index: 250;
+            backdrop-filter: blur(10px);
+        }
+        .bulk-actions-bar.show {
+            display: flex;
+        }
+        .bulk-actions-bar .bulk-btn {
+            padding: 8px 14px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .bulk-actions-bar .bulk-btn:hover {
+            background: var(--primary-dim);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .bulk-actions-bar .bulk-btn.primary {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .bulk-actions-bar .bulk-btn.primary:hover {
+            background: #005fa3;
+        }
+        .bulk-actions-bar .bulk-btn.danger {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .bulk-actions-bar .bulk-btn.danger:hover {
+            background: #c0392b;
+        }
+        .bulk-actions-bar .bulk-count {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding: 4px 8px;
+        }
+
+        /* ============================================================
+           الزر العائم (FAB) – إضافة رقم جديد
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px var(--fab-shadow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active { transform: scale(0.9); }
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px var(--fab-shadow);
+        }
+        .fab.bulk-mode {
+            bottom: 140px;
+        }
+
+        /* ============================================================
+           القائمة الجانبية (Sidebar)
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, #4B0082, #5a1a9a);
+            color: white;
+            width: 35px; height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 70px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+        }
+        .sidebar.open { right: 0; opacity: 1; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-btn {
+            position: relative;
+            background: rgba(75, 0, 130, 0.8);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 8px 4px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 55px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active { transform: scale(0.95); }
+        .sidebar-btn:hover {
+            transform: scale(1.05);
+            background: rgba(75,0,130,0.35);
+            box-shadow: 0 0 15px rgba(0,212,255,0.2);
+        }
+        .sidebar-btn i { font-size: 1.1rem; }
+        .sidebar-btn span { font-size: 0.65rem; }
+
+        /* ============================================================
+           القائمة السفلية (Bottom Navigation)
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+            z-index: 300;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 4px 8px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active { transform: scale(0.9); }
+        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
+        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
+        .bottom-nav .nav-item.active { color: var(--primary-color); }
+        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           مودالات
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 800;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; opacity: 1; }
+        .modal {
+            background: var(--surface-elevated);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 24px 20px;
+            transform: scale(0.9) translateY(20px);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+            opacity: 0;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal-overlay.show .modal {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); text-align: center; flex: 1; }
+        .modal-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .modal-close:active { transform: scale(0.9); }
+        .modal-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .modal-body {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .modal-actions .btn-secondary { flex: 1; }
+
+        /* ===== مودال الجدول (القائمة السفلية) ===== */
+        .modal-table .modal { max-width: 700px; }
+        .modal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .modal-body table th {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            padding: 10px 12px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 700;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .modal-body table td {
+            padding: 8px 12px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            text-align: center;
+            color: var(--data-text-color);
+        }
+        .modal-body table tr:hover { background: var(--card-hover-bg); }
+
+        /* ===== عام ===== */
+        .submit-btn {
+            padding: 14px 20px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            color: white;
+            font-family: 'Cairo', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+            flex: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .submit-btn:active { transform: scale(0.97); }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px var(--primary-dim);
+        }
+        .submit-btn.danger {
+            background: linear-gradient(135deg, var(--error), #dc2626);
+        }
+        .submit-btn.success {
+            background: linear-gradient(135deg, var(--success), #059669);
+        }
+        .btn-secondary {
+            padding: 14px 20px;
+            border-radius: 14px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-secondary:active { transform: scale(0.97); }
+        .btn-secondary:hover {
+            background: var(--border-color);
+            color: var(--text-color);
+        }
+
+        /* ===== حقول النموذج ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-align: center;
+        }
+        .form-label .required { color: var(--error); margin-right: 2px; }
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+            text-align: center;
+        }
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .form-input.error {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(239,68,68,0.2);
+        }
+        .form-input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .phone-validation-info {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 4px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            background: var(--surface-color);
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .phone-validation-info.valid {
+            color: var(--success);
+            border-color: var(--success);
+        }
+        .phone-validation-info.invalid {
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .selected-count-badge {
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            margin-right: 4px;
+        }
+
+        /* ============================================================
+           Toast إشعارات
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+        .toast.warning { border-color: var(--warning); }
+        .toast-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
+        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
+        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+
+        /* ============================================================
+           الرسوم المتحركة
+           ============================================================ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 0.5s ease forwards;
+        }
+
+        /* ============================================================
+           تحسينات للهواتف
+           ============================================================ */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
+            .stat-card { padding: 12px; }
+            .stat-value { font-size: 1.1rem; }
+            .cards-container { padding: 0 12px 16px; }
+            .bottom-nav .nav-item i { font-size: 15px; }
+            .bottom-nav .nav-item span { font-size: 0.7rem; }
+            .sidebar { width: 60px; }
+            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
+            .sidebar-btn i { font-size: 0.9rem; }
+            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
+            .top-title h2 { font-size: 1rem; }
+            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
+            .modal { padding: 16px; max-width: 100%; margin: 10px; }
+            .modal-actions { flex-direction: column; }
+            .modal-actions .submit-btn,
+            .modal-actions .btn-secondary { width: 100%; }
+            .form-row { grid-template-columns: 1fr; }
+            .bulk-actions-bar { bottom: 76px; padding: 6px 8px; }
+            .bulk-actions-bar .bulk-btn { font-size: 0.65rem; padding: 6px 10px; }
+            .fab.bulk-mode { bottom: 136px; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { gap: 6px; padding: 10px; }
+            .stat-card { padding: 10px; }
+            .stat-value { font-size: 0.95rem; }
+            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
+            .bottom-nav .nav-item { padding: 4px 4px; }
+            .bottom-nav .nav-item i { font-size: 13px; }
+            .bottom-nav .nav-item span { font-size: 0.6rem; }
+            .modal { padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Offline Banner -->
+    <div class="offline-banner" id="offlineBanner">
+        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- ============================================================
+    الشريط العلوي (Header)
+    ============================================================ -->
+    <header class="top-bar">
+        <div class="header-top">
+            <div class="top-title">
+                <h2>✅ القائمة البيضاء</h2>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+                <button class="icon-btn" onclick="openAIAdvisor()" title="المستشار الذكي" style="background:var(--primary-dim);color:var(--primary-color);">
+                    <i class="fas fa-robot"></i>
+                </button>
+            </div>
+        </div>
+        <div class="search-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" class="search-input" id="searchInput" placeholder="ابحث برقم الهاتف أو الاسم..." oninput="handleSearch(this.value)">
+        </div>
+        <div class="filter-chips">
+            <button class="filter-chip active" data-filter="all" onclick="setFilter('all', this)">الكل</button>
+            <button class="filter-chip" data-filter="enabled" onclick="setFilter('enabled', this)">✅ مفعل</button>
+            <button class="filter-chip" data-filter="disabled" onclick="setFilter('disabled', this)">❌ غير مفعل</button>
+        </div>
+    </header>
+
+    <!-- ============================================================
+    بطاقات الإحصائيات
+    ============================================================ -->
+    <div class="stats-grid">
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('total')">
+            <div class="stat-icon blue"><i class="fas fa-list"></i></div>
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">إجمالي الأرقام</div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('enabled')">
+            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-value" id="statEnabled">0</div>
+            <div class="stat-label">مفعلة</div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('disabled')">
+            <div class="stat-icon orange"><i class="fas fa-minus-circle"></i></div>
+            <div class="stat-value" id="statDisabled">0</div>
+            <div class="stat-label">غير مفعلة</div>
+        </div>
+        <div class="stat-card animate-fade-up" onclick="showStatDetail('withName')">
+            <div class="stat-icon purple"><i class="fas fa-user-tag"></i></div>
+            <div class="stat-value" id="statWithName">0</div>
+            <div class="stat-label">باسم</div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    عنوان القسم
+    ============================================================ -->
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
+        <h3>📋 قائمة الأرقام المسموحة</h3>
+        <span class="count-badge" id="whitelistCount" style="background:var(--primary-dim);color:var(--primary-color);padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:700;">0</span>
+        <span id="selectedCountBadge" class="selected-count-badge" style="display:none;">0</span>
+    </div>
+
+    <!-- ============================================================
+    بطاقات القائمة البيضاء
+    ============================================================ -->
+    <div class="cards-container" id="cardsContainer">
+        <!-- سيتم تعبئتها عبر JavaScript -->
+    </div>
+
+    <!-- ============================================================
+    شريط الإجراءات الجماعية
+    ============================================================ -->
+    <div class="bulk-actions-bar" id="bulkActionsBar">
+        <span class="bulk-count" id="bulkCount">0 محدد</span>
+        <button class="bulk-btn primary" onclick="bulkSendSMS()">
+            <i class="fas fa-paper-plane"></i> إرسال رسالة
+        </button>
+        <button class="bulk-btn success" onclick="bulkEnable()">
+            <i class="fas fa-check"></i> تفعيل
+        </button>
+        <button class="bulk-btn" onclick="bulkDisable()">
+            <i class="fas fa-pause"></i> تعطيل
+        </button>
+        <button class="bulk-btn danger" onclick="bulkDelete()">
+            <i class="fas fa-trash"></i> حذف
+        </button>
+        <button class="bulk-btn" onclick="clearSelection()">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- ============================================================
+    الزر العائم (FAB) – إضافة رقم جديد
+    ============================================================ -->
+    <button class="fab" id="fabAdd" onclick="openAddModal()">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- ============================================================
+    القائمة الجانبية (Sidebar)
+    ============================================================ -->
+    <div class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+    </div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <button class="sidebar-btn" onclick="handleSidebarAction('refresh')">
+                <i class="fas fa-sync"></i> <span>تحديث</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('add')">
+                <i class="fas fa-plus"></i> <span>إضافة</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('search')">
+                <i class="fas fa-search"></i> <span>استعلام</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('export')">
+                <i class="fas fa-file-export"></i> <span>تصدير</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('stats')">
+                <i class="fas fa-chart-bar"></i> <span>إحصائيات</span>
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('selectAll')">
+                <i class="fas fa-check-double"></i> <span>تحديد الكل</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    القائمة السفلية (Bottom Navigation)
+    ============================================================ -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-modal="all" onclick="openTableModal('all')">
+            <i class="fas fa-list"></i>
+            <span>جميع الأرقام</span>
+        </button>
+        <button class="nav-item" data-modal="enabled" onclick="openTableModal('enabled')">
+            <i class="fas fa-check-circle"></i>
+            <span>المفعلة</span>
+        </button>
+        <button class="nav-item" data-modal="disabled" onclick="openTableModal('disabled')">
+            <i class="fas fa-minus-circle"></i>
+            <span>غير المفعلة</span>
+        </button>
+        <button class="nav-item" data-modal="reports" onclick="openTableModal('reports')">
+            <i class="fas fa-chart-bar"></i>
+            <span>التقارير</span>
+        </button>
+        <button class="nav-item" data-modal="settings" onclick="openTableModal('settings')">
+            <i class="fas fa-cog"></i>
+            <span>الإعدادات</span>
+        </button>
+    </nav>
+
+    <!-- ============================================================
+    مودال الإضافة / التعديل
+    ============================================================ -->
+    <div class="modal-overlay" id="formModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">➕ إضافة رقم جديد</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="whitelistForm" onsubmit="return false;">
+                    <input type="hidden" id="editId" value="0">
+
+                    <div class="form-group">
+                        <label class="form-label">رقم الهاتف *</label>
+                        <input type="tel" class="form-input" id="phone" placeholder="مثال: 771234567" required>
+                        <div class="phone-validation-info" id="phoneValidationInfo">أدخل رقم الهاتف (بادئات اليمن: 70, 71, 73, 77, 78)</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">الاسم (اختياري)</label>
+                        <input type="text" class="form-input" id="name" placeholder="اسم صاحب الرقم">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">الحالة</label>
+                        <select class="form-input" id="enabled">
+                            <option value="1">✅ مفعل</option>
+                            <option value="0">❌ غير مفعل</option>
+                        </select>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="submit-btn" onclick="saveWhitelist()">
+                            <i class="fas fa-save"></i> حفظ
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="closeModal()">
+                            <i class="fas fa-times"></i> إلغاء
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال التفاصيل
+    ============================================================ -->
+    <div class="modal-overlay" id="detailsModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="detailsTitle">📄 تفاصيل الرقم</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="detailsBody">
+                <!-- يتم تعبئتها بواسطة JavaScript -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeModal()" style="width:100%;">
+                    <i class="fas fa-times"></i> إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال إرسال رسالة (فردي أو جماعي)
+    ============================================================ -->
+    <div class="modal-overlay" id="sendSmsModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="sendSmsTitle">📨 إرسال رسالة</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="sendSmsForm" onsubmit="return false;">
+                    <div class="form-group">
+                        <label class="form-label">المستلمون</label>
+                        <div id="sendSmsRecipients" style="background:var(--surface-color);padding:8px;border-radius:12px;border:var(--border-width) var(--border-style) var(--border-color);font-size:0.85rem;text-align:center;max-height:120px;overflow-y:auto;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">نوع الرسالة</label>
+                        <select class="form-input" id="sendSmsType">
+                            <option value="outgoing">صادرة</option>
+                            <option value="incoming">واردة (محاكاة)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">محتوى الرسالة *</label>
+                        <textarea class="form-input" id="sendSmsBody" rows="4" placeholder="أدخل نص الرسالة..." required></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="submit-btn success" onclick="executeSendSms()">
+                            <i class="fas fa-paper-plane"></i> إرسال
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="closeModal()">
+                            <i class="fas fa-times"></i> إلغاء
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال الجدول (القائمة السفلية)
+    ============================================================ -->
+    <div class="modal-overlay modal-table" id="tableModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="tableModalTitle">📊 البيانات</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="tableModalBody">
+                <!-- يتم تعبئتها بواسطة JavaScript -->
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeModal()" style="width:100%;">
+                    <i class="fas fa-times"></i> إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    مودال التأكيد (حذف، إجراءات جماعية)
+    ============================================================ -->
+    <div class="modal-overlay" id="confirmModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+            <div class="modal-header">
+                <h3 class="modal-title" style="color:var(--error);">⚠️ تأكيد</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align:center;padding:20px 0;">
+                <i class="fas fa-question-circle" style="font-size:3rem;color:var(--warning);margin-bottom:12px;display:block;"></i>
+                <p id="confirmMessage" style="font-size:1rem;color:var(--data-text-color);">هل أنت متأكد؟</p>
+            </div>
+            <div class="modal-actions">
+                <button class="submit-btn" id="confirmActionBtn" onclick="executeConfirmedAction()" style="flex:2;">
+                    <i class="fas fa-check"></i> نعم
+                </button>
+                <button class="btn-secondary" onclick="closeModal()" style="flex:1;">
+                    <i class="fas fa-times"></i> إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    Toast إشعارات
+    ============================================================ -->
+    <div class="toast" id="toast">
+        <div class="toast-icon"><i class="fas fa-check"></i></div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
+    </div>
+
+    <!-- ============================================================
+    JavaScript المتكامل
+    ============================================================ -->
+    <script>
+        // ============================================================
+        // 1. Android Bridge – من MainActivity.kt
+        // ============================================================
+        function apiCall(action, params) {
+            return new Promise((resolve, reject) => {
+                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+                    try {
+                        const jsonParams = JSON.stringify(params || {});
+                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        try {
+                            const parsed = JSON.parse(result);
+                            resolve(parsed);
+                        } catch (e) {
+                            resolve({ success: true, data: result });
+                        }
+                    } catch (e) {
+                        reject({ success: false, error: e.message });
+                    }
+                } else {
+                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                }
+            });
+        }
+
+        // ============================================================
+        // 2. PhoneUtils – منطق التطبيع والتحقق (مطابق لـ PhoneUtils.kt)
+        // ============================================================
+        const PhoneUtils = {
+            // بادئات الهواتف اليمنية حسب PhoneUtils.kt و PhoneUtilsTest.kt
+            YEMEN_PREFIXES: ['70', '71', '73', '77', '78'],
+            COUNTRY_CODE: '967',
+
+            normalize: function(phone) {
+                if (!phone || phone.trim() === '') return null;
+                let normalized = phone.trim().replace(/[\s\-\(\)\+]/g, '');
+                if (normalized.startsWith('00967')) {
+                    normalized = normalized.substring(5);
+                } else if (normalized.startsWith('967')) {
+                    normalized = normalized.substring(3);
+                } else if (normalized.startsWith('00')) {
+                    normalized = normalized.substring(2);
+                }
+                if (normalized.startsWith('0') && normalized.length === 10) {
+                    normalized = normalized.substring(1);
+                }
+                if (!normalized.startsWith(this.COUNTRY_CODE) && normalized.length === 9) {
+                    normalized = this.COUNTRY_CODE + normalized;
+                }
+                if (normalized.length !== 12) return null;
+                const nationalPrefix = normalized.substring(3, 5);
+                if (!this.YEMEN_PREFIXES.includes(nationalPrefix)) return null;
+                const rest = normalized.substring(5);
+                if (!/^\d+$/.test(rest)) return null;
+                return normalized;
+            },
+
+            isSameNumber: function(phone1, phone2) {
+                const norm1 = this.normalize(phone1);
+                const norm2 = this.normalize(phone2);
+                return norm1 !== null && norm2 !== null && norm1 === norm2;
+            },
+
+            getNationalPrefix: function(phone) {
+                const norm = this.normalize(phone);
+                if (!norm) return null;
+                return norm.substring(3, 5);
+            },
+
+            validateAndGetInfo: function(phone) {
+                const norm = this.normalize(phone);
+                if (!norm) {
+                    return { valid: false, normalized: null, prefix: null, operator: null, message: 'رقم غير صالح' };
+                }
+                const prefix = norm.substring(3, 5);
+                const operatorMap = {
+                    '70': 'شركة واي (Y)',
+                    '71': 'سبأ فون (SabaFon)',
+                    '73': 'الشركة اليمنية العمانية (Yemen Oman)',
+                    '77': 'يمن موبايل (Yemen Mobile)',
+                    '78': 'يمن موبايل (Yemen Mobile)'
+                };
+                const operator = operatorMap[prefix] || 'غير معروف';
+                return {
+                    valid: true,
+                    normalized: norm,
+                    prefix: prefix,
+                    operator: operator,
+                    message: '✅ رقم صالح - ' + operator
+                };
+            }
+        };
+
+        // ============================================================
+        // 3. التخزين المحلي (Offline Mode)
+        // ============================================================
+        const LocalDB = {
+            prefix: 'fuel_station_',
+            set: function(key, value) {
+                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
+            },
+            get: function(key, defaultValue) {
+                try {
+                    const item = localStorage.getItem(this.prefix + key);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) { return defaultValue; }
+            },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); },
+            getWhitelist: function() { return this.get('whitelist_data', []); },
+            setWhitelist: function(data) { this.set('whitelist_data', data); },
+            getStats: function() { return this.get('whitelist_stats', {}); },
+            setStats: function(stats) { this.set('whitelist_stats', stats); },
+            getPendingOps: function() { return this.get('pending_ops', []); },
+            addPendingOp: function(op) {
+                const ops = this.getPendingOps();
+                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
+                this.set('pending_ops', ops);
+            },
+            clearPendingOps: function() { this.remove('pending_ops'); }
+        };
+
+        // ============================================================
+        // 4. حالة الاتصال
+        // ============================================================
+        let isOnline = navigator.onLine;
+
+        function updateOnlineStatus() {
+            isOnline = navigator.onLine;
+            const banner = document.getElementById('offlineBanner');
+            if (!isOnline) {
+                banner.classList.add('show');
+                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+            } else {
+                banner.classList.remove('show');
+                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
+                syncPendingOperations();
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // ============================================================
+        // 5. مزامنة العمليات المعلقة
+        // ============================================================
+        async function syncPendingOperations() {
+            if (!isOnline) return;
+            const pendingOps = LocalDB.getPendingOps();
+            if (pendingOps.length === 0) return;
+            showLoading(true);
+            let successCount = 0,
+                failCount = 0;
+            for (const op of pendingOps) {
+                try {
+                    const result = await apiCall(op.action, op.data);
+                    if (result.success) successCount++;
+                    else failCount++;
+                } catch (e) { failCount++; }
+            }
+            if (successCount > 0) {
+                LocalDB.clearPendingOps();
+                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
+                await loadWhitelist();
+            }
+            if (failCount > 0) {
+                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
+            }
+            showLoading(false);
+        }
+
+        // ============================================================
+        // 6. Haptic Feedback
+        // ============================================================
+        function hapticFeedback(type) {
+            try {
+                if (navigator.vibrate) {
+                    if (type === 'success') navigator.vibrate(20);
+                    else if (type === 'error') navigator.vibrate([30, 50, 30]);
+                    else if (type === 'light') navigator.vibrate(10);
+                }
+            } catch (e) { /* تجاهل */ }
+        }
+
+        // ============================================================
+        // 7. دوال مساعدة
+        // ============================================================
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = toast.querySelector('.toast-icon i');
+            toast.className = 'toast ' + type;
+            msgEl.textContent = message;
+            if (type === 'success') { iconEl.className = 'fas fa-check';
+                hapticFeedback('success'); } else if (type === 'error') { iconEl.className = 'fas fa-times';
+                hapticFeedback('error'); } else if (type === 'warning') { iconEl.className = 'fas fa-exclamation-triangle';
+                hapticFeedback('light'); }
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3500);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '---';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
+            } catch (e) { return dateStr; }
+        }
+
+        // ============================================================
+        // 8. نظام تبديل الوضع
+        // ============================================================
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            const isDark = current === 'dark';
+            const newTheme = isDark ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            const icon = document.getElementById('themeIcon');
+            if (newTheme === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+            hapticFeedback('light');
+        }
+
+        function loadSavedTheme() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+
+            const icon = document.getElementById('themeIcon');
+            if (saved === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+
+        // ============================================================
+        // 9. متغيرات الحالة
+        // ============================================================
+        let currentFilter = 'all';
+        let allWhitelist = [];
+        let isInitialLoad = true;
+        let deleteTargetId = null;
+        let selectedIds = new Set();
+        let confirmCallback = null;
+
+        // ============================================================
+        // 10. تحميل البيانات
+        // ============================================================
+        function renderSkeleton() {
+            const container = document.getElementById('cardsContainer');
+            let skeleton = '';
+            for (let i = 0; i < 4; i++) {
+                skeleton += `
+                    <div class="skeleton-card" style="background:var(--surface-elevated);border-radius:18px;padding:16px;border:var(--border-width) var(--border-style) var(--border-color);position:relative;overflow:hidden;">
+                        <div style="display:flex;align-items:center;margin-bottom:12px;">
+                            <div style="width:48px;height:48px;border-radius:14px;background:var(--skeleton-bg);flex-shrink:0;margin-left:12px;"></div>
+                            <div style="flex:1;">
+                                <div class="skeleton-row long" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
+                                <div class="skeleton-row medium" style="height:12px;background:var(--skeleton-bg);border-radius:6px;width:60%;"></div>
+                            </div>
+                        </div>
+                        <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
+                        <div class="skeleton-row" style="height:12px;background:var(--skeleton-bg);border-radius:6px;margin-bottom:8px;"></div>
+                        <div style="display:flex;gap:10px;margin-top:12px;">
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
+                            <div class="skeleton-row" style="flex:1;height:40px;background:var(--skeleton-bg);border-radius:6px;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = `<div class="skeleton-grid" style="display:flex;flex-direction:column;gap:12px;padding:0 16px 16px;">${skeleton}</div>`;
+        }
+
+        async function loadWhitelist() {
+            if (isInitialLoad) renderSkeleton();
+
+            showLoading(true);
+            try {
+                const result = await apiCall('getWhitelist', {});
+                if (result.success && result.data) {
+                    allWhitelist = result.data;
+                    LocalDB.setWhitelist(allWhitelist);
+                } else {
+                    allWhitelist = LocalDB.getWhitelist();
+                }
+
+                if (allWhitelist.length === 0) {
+                    showToast('⚠️ لا توجد أرقام في القائمة البيضاء', 'warning');
+                }
+
+            } catch (e) {
+                allWhitelist = LocalDB.getWhitelist();
+                if (allWhitelist.length === 0) {
+                    showToast('⚠️ تعذر الاتصال بواجهة Android داخل التطبيق.', 'warning');
+                }
+            }
+
+            renderCards();
+            updateStats();
+            isInitialLoad = false;
+            showLoading(false);
+        }
+
+        // ============================================================
+        // 11. عرض البطاقات
+        // ============================================================
+        function renderCards() {
+            const container = document.getElementById('cardsContainer');
+            let filtered = [...allWhitelist];
+
+            if (currentFilter === 'enabled') {
+                filtered = filtered.filter(w => w.enabled == 1 || w.enabled === true);
+            } else if (currentFilter === 'disabled') {
+                filtered = filtered.filter(w => w.enabled == 0 || w.enabled === false);
+            }
+
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (searchQuery) {
+                filtered = filtered.filter(w => {
+                    const phone = (w.phone || '').toLowerCase();
+                    const name = (w.name || '').toLowerCase();
+                    return phone.includes(searchQuery) || name.includes(searchQuery);
+                });
+            }
+
+            document.getElementById('whitelistCount').textContent = filtered.length;
+            const selectedCount = selectedIds.size;
+            const badge = document.getElementById('selectedCountBadge');
+            if (selectedCount > 0) {
+                badge.style.display = 'inline';
+                badge.textContent = selectedCount;
+            } else {
+                badge.style.display = 'none';
+            }
+
+            // إظهار/إخفاء شريط الإجراءات الجماعية
+            const bulkBar = document.getElementById('bulkActionsBar');
+            if (selectedCount > 0) {
+                bulkBar.classList.add('show');
+                document.getElementById('bulkCount').textContent = selectedCount + ' محدد';
+                document.getElementById('fabAdd').classList.add('bulk-mode');
+            } else {
+                bulkBar.classList.remove('show');
+                document.getElementById('fabAdd').classList.remove('bulk-mode');
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>لا توجد أرقام مطابقة</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map((w, idx) => {
+                const id = w.id;
+                const phone = w.phone || '---';
+                const name = w.name || '';
+                const enabled = w.enabled == 1 || w.enabled === true;
+                const createdAt = w.created_at || '---';
+                const info = PhoneUtils.validateAndGetInfo(phone);
+                const prefix = info.valid ? info.prefix : null;
+                const operator = info.valid ? info.operator : null;
+                const disabledClass = !enabled ? 'disabled' : '';
+                const checked = selectedIds.has(id) ? 'checked' : '';
+
+                return `
+                    <div class="whitelist-card animate-fade-up ${disabledClass}" style="animation-delay:${idx*0.04}s" data-id="${id}">
+                        <div class="card-header">
+                            <div class="card-checkbox">
+                                <input type="checkbox" class="select-checkbox" data-id="${id}" ${checked} onchange="toggleSelect(${id})">
+                            </div>
+                            <div class="card-phone" onclick="selectCard(this, ${id})"><i class="fas fa-phone"></i> ${escapeHtml(phone)}</div>
+                            <div class="card-badges" onclick="selectCard(this, ${id})">
+                                <span class="badge ${enabled ? 'badge-enabled' : 'badge-disabled'}">${enabled ? '✅ مفعل' : '❌ غير مفعل'}</span>
+                                ${prefix ? `<span class="badge badge-operator">${escapeHtml(operator)}</span>` : ''}
+                            </div>
+                        </div>
+                        ${name ? `<div class="card-name" onclick="selectCard(this, ${id})"><i class="fas fa-user"></i> ${escapeHtml(name)}</div>` : ''}
+                        <div class="card-footer" onclick="selectCard(this, ${id})">
+                            <span><i class="far fa-clock"></i> ${formatDate(createdAt)}</span>
+                            ${prefix ? `<span>📡 ${escapeHtml(prefix)}</span>` : ''}
+                        </div>
+                        <div class="card-actions">
+                            <button class="card-btn" onclick="event.stopPropagation(); viewDetails(${id})">
+                                <i class="fas fa-eye"></i> تفاصيل
+                            </button>
+                            <button class="card-btn" onclick="event.stopPropagation(); editWhitelist(${id})">
+                                <i class="fas fa-edit"></i> تعديل
+                            </button>
+                            <button class="card-btn ${enabled ? 'danger' : 'success'}" onclick="event.stopPropagation(); toggleWhitelist(${id})">
+                                <i class="fas ${enabled ? 'fa-pause' : 'fa-play'}"></i> ${enabled ? 'تعطيل' : 'تفعيل'}
+                            </button>
+                            <button class="card-btn" onclick="event.stopPropagation(); sendSingleSms(${id})">
+                                <i class="fas fa-paper-plane"></i> إرسال
+                            </button>
+                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteWhitelist(${id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // ربط النقر على البطاقة للتحديد (باستثناء العناصر التفاعلية)
+            document.querySelectorAll('.whitelist-card').forEach(card => {
+                card.addEventListener('click', function(e) {
+                    if (e.target.closest('.card-actions') || e.target.closest('.card-checkbox')) return;
+                    const id = parseInt(this.dataset.id);
+                    toggleSelect(id);
+                });
+            });
+        }
+
+        function selectCard(card, id) {
+            document.querySelectorAll('.whitelist-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 12. تحديث الإحصائيات
+        // ============================================================
+        function updateStats() {
+            const total = allWhitelist.length;
+            const enabled = allWhitelist.filter(w => w.enabled == 1 || w.enabled === true).length;
+            const disabled = total - enabled;
+            const withName = allWhitelist.filter(w => w.name && w.name.trim().length > 0).length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statEnabled').textContent = enabled;
+            document.getElementById('statDisabled').textContent = disabled;
+            document.getElementById('statWithName').textContent = withName;
+
+            LocalDB.setStats({ total, enabled, disabled, withName });
+        }
+
+        function showStatDetail(type) {
+            showToast('📊 عرض تفاصيل: ' + type, 'success');
+        }
+
+        // ============================================================
+        // 13. البحث والفلاتر
+        // ============================================================
+        function handleSearch(query) { renderCards(); }
+
+        function setFilter(filter, btn) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            renderCards();
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 14. التنبيهات
+        // ============================================================
+        function generateAlerts() {
+            const alerts = [];
+            const disabled = allWhitelist.filter(w => w.enabled == 0 || w.enabled === false);
+            if (disabled.length > 0) {
+                alerts.push({
+                    type: 'warning',
+                    icon: 'fa-exclamation-triangle',
+                    title: '⚠️ أرقام غير مفعلة',
+                    desc: disabled.length + ' رقم غير مفعل في القائمة البيضاء',
+                    time: 'الآن'
+                });
+            }
+            LocalDB.set('whitelist_alerts', alerts);
+            renderAlerts(alerts);
+        }
+
+        function renderAlerts(alerts) {
+            const container = document.getElementById('alertsContainer');
+            if (!container) return;
+            if (!alerts || alerts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
+                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
+                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
+                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
+                    <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
+                </div>
+            `).join('');
+        }
+
+        function showNotifications() {
+            const alerts = LocalDB.get('whitelist_alerts', []);
+            if (alerts.length === 0) {
+                showToast('🔔 لا توجد تنبيهات جديدة', 'info');
+                return;
+            }
+            showToast('🔔 لديك ' + alerts.length + ' تنبيه', 'success');
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 15. التحقق من رقم الهاتف في الوقت الفعلي
+        // ============================================================
+        function validatePhoneInput(phone) {
+            const info = PhoneUtils.validateAndGetInfo(phone);
+            const infoEl = document.getElementById('phoneValidationInfo');
+            if (info.valid) {
+                infoEl.textContent = '✅ ' + info.message + ' (' + info.normalized + ')';
+                infoEl.className = 'phone-validation-info valid';
+            } else {
+                infoEl.textContent = '❌ ' + info.message;
+                infoEl.className = 'phone-validation-info invalid';
+            }
+            return info;
+        }
+
+        // ============================================================
+        // 16. فتح مودال الإضافة
+        // ============================================================
+        function openAddModal() {
+            document.getElementById('editId').value = '0';
+            document.getElementById('modalTitle').textContent = '➕ إضافة رقم جديد';
+            document.getElementById('whitelistForm').reset();
+            document.getElementById('enabled').value = '1';
+            document.getElementById('phoneValidationInfo').textContent = 'أدخل رقم الهاتف (بادئات اليمن: 70, 71, 73, 77, 78)';
+            document.getElementById('phoneValidationInfo').className = 'phone-validation-info';
+            document.getElementById('formModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+            setTimeout(() => { document.getElementById('phone').focus(); }, 400);
+
+            document.getElementById('phone').addEventListener('input', function() {
+                validatePhoneInput(this.value);
+            });
+        }
+
+        // ============================================================
+        // 17. فتح مودال التعديل
+        // ============================================================
+        function editWhitelist(id) {
+            const item = allWhitelist.find(w => w.id == id);
+            if (!item) {
+                showToast('❌ الرقم غير موجود', 'error');
+                return;
+            }
+
+            document.getElementById('editId').value = id;
+            document.getElementById('modalTitle').textContent = '✏️ تعديل رقم';
+            document.getElementById('phone').value = item.phone || '';
+            document.getElementById('name').value = item.name || '';
+            document.getElementById('enabled').value = (item.enabled == 1 || item.enabled === true) ? '1' : '0';
+
+            if (item.phone) {
+                validatePhoneInput(item.phone);
+            }
+
+            document.getElementById('formModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+
+            document.getElementById('phone').addEventListener('input', function() {
+                validatePhoneInput(this.value);
+            });
+        }
+
+        // ============================================================
+        // 18. حفظ (إضافة / تعديل)
+        // ============================================================
+        async function saveWhitelist() {
+            const id = parseInt(document.getElementById('editId').value) || 0;
+            const phoneRaw = document.getElementById('phone').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const enabled = parseInt(document.getElementById('enabled').value);
+
+            const info = PhoneUtils.validateAndGetInfo(phoneRaw);
+            if (!info.valid) {
+                showToast('❌ رقم الهاتف غير صالح: ' + info.message, 'error');
+                document.getElementById('phone').focus();
+                return;
+            }
+
+            const phone = info.normalized;
+
+            if (id === 0) {
+                const exists = allWhitelist.some(w => w.phone === phone);
+                if (exists) {
+                    showToast('❌ هذا الرقم موجود بالفعل في القائمة البيضاء', 'error');
+                    document.getElementById('phone').focus();
+                    return;
+                }
+            }
+
+            const data = {
+                id: id,
+                phone: phone,
+                name: name,
+                enabled: enabled
+            };
+
+            showLoading(true);
+            try {
+                const result = await apiCall('addWhitelist', data);
+                if (result.success) {
+                    showToast(id > 0 ? '✅ تم التعديل بنجاح' : '✅ تم الإضافة بنجاح', 'success');
+                    closeModal();
+                    await loadWhitelist();
+                    generateAlerts();
+                } else {
+                    throw new Error(result.message || 'فشل في الحفظ');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({ action: 'addWhitelist', data: data });
+                    if (id > 0) {
+                        const idx = allWhitelist.findIndex(w => w.id == id);
+                        if (idx >= 0) allWhitelist[idx] = { ...allWhitelist[idx], ...data };
+                    } else {
+                        allWhitelist.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
+                    }
+                    LocalDB.setWhitelist(allWhitelist);
+                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة لاحقاً', 'success');
+                    closeModal();
+                    renderCards();
+                    updateStats();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 19. عرض تفاصيل الرقم
+        // ============================================================
+        function viewDetails(id) {
+            const item = allWhitelist.find(w => w.id == id);
+            if (!item) {
+                showToast('❌ الرقم غير موجود', 'error');
+                return;
+            }
+
+            document.getElementById('detailsTitle').textContent = '📄 تفاصيل الرقم';
+            const body = document.getElementById('detailsBody');
+
+            const enabled = item.enabled == 1 || item.enabled === true;
+            const info = PhoneUtils.validateAndGetInfo(item.phone);
+            const prefix = info.valid ? info.prefix : null;
+            const operator = info.valid ? info.operator : null;
+            const normalized = info.valid ? info.normalized : null;
+
+            let html = `
+                <div style="text-align:center;padding:8px 0;">
+                    <div style="display:grid;gap:10px;text-align:right;">
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">المعرف:</span>
+                            <span style="color:var(--data-text-color);">#${item.id}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">رقم الهاتف:</span>
+                            <span style="color:var(--data-text-color);font-weight:700;direction:ltr;">${escapeHtml(item.phone || '---')}</span>
+                        </div>
+                        ${normalized ? `
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">الرقم المطبع:</span>
+                            <span style="color:var(--data-text-color);direction:ltr;">${escapeHtml(normalized)}</span>
+                        </div>
+                        ` : ''}
+                        ${prefix ? `
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">البادئة:</span>
+                            <span style="color:var(--data-text-color);">${escapeHtml(prefix)}</span>
+                        </div>
+                        ` : ''}
+                        ${operator ? `
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">شركة الاتصالات:</span>
+                            <span style="color:var(--data-text-color);">${escapeHtml(operator)}</span>
+                        </div>
+                        ` : ''}
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">الاسم:</span>
+                            <span style="color:var(--data-text-color);">${escapeHtml(item.name || '---')}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                            <span style="font-weight:600;color:var(--text-muted);">الحالة:</span>
+                            <span class="badge ${enabled ? 'badge-enabled' : 'badge-disabled'}" style="font-size:0.8rem;padding:4px 12px;">${enabled ? '✅ مفعل' : '❌ غير مفعل'}</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;padding:6px 0;">
+                            <span style="font-weight:600;color:var(--text-muted);">تاريخ الإضافة:</span>
+                            <span style="color:var(--data-text-color);">${formatDate(item.created_at)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            body.innerHTML = html;
+            document.getElementById('detailsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 20. تبديل حالة الرقم (تفعيل / تعطيل)
+        // ============================================================
+        async function toggleWhitelist(id) {
+            const item = allWhitelist.find(w => w.id == id);
+            if (!item) {
+                showToast('❌ الرقم غير موجود', 'error');
+                return;
+            }
+
+            const current = item.enabled == 1 || item.enabled === true;
+            const newStatus = current ? 0 : 1;
+            const actionText = current ? 'تعطيل' : 'تفعيل';
+
+            const confirmed = await Swal.fire({
+                title: '⚠️ تأكيد',
+                text: `هل أنت متأكد من ${actionText} الرقم "${item.phone}"؟`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: current ? '#ef4444' : '#10b981',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `نعم، ${actionText}`,
+                cancelButtonText: 'إلغاء',
+                background: '#1a2236',
+                color: '#f1f5f9'
+            });
+            if (!confirmed.isConfirmed) return;
+
+            showLoading(true);
+            try {
+                const data = { id: id, phone: item.phone, name: item.name || '', enabled: newStatus };
+                const result = await apiCall('addWhitelist', data);
+                if (result.success) {
+                    showToast(`✅ تم ${actionText} الرقم بنجاح`, 'success');
+                    await loadWhitelist();
+                    generateAlerts();
+                } else {
+                    throw new Error(result.message || 'فشل في التحديث');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({ action: 'addWhitelist', data: { id: id, enabled: newStatus } });
+                    const idx = allWhitelist.findIndex(w => w.id == id);
+                    if (idx >= 0) allWhitelist[idx].enabled = newStatus;
+                    LocalDB.setWhitelist(allWhitelist);
+                    showToast(`✅ تم ${actionText} محلياً - سيتم المزامنة لاحقاً`, 'success');
+                    renderCards();
+                    updateStats();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في التحديث'), 'error');
+                }
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // 21. حذف رقم
+        // ============================================================
+        function deleteWhitelist(id) {
+            const item = allWhitelist.find(w => w.id == id);
+            if (!item) {
+                showToast('❌ الرقم غير موجود', 'error');
+                return;
+            }
+
+            deleteTargetId = id;
+            document.getElementById('confirmMessage').textContent = `هل أنت متأكد من حذف الرقم "${item.phone}"${item.name ? ' (' + item.name + ')' : ''}؟`;
+            document.getElementById('confirmActionBtn').innerHTML = '<i class="fas fa-trash"></i> نعم، احذف';
+            document.getElementById('confirmActionBtn').className = 'submit-btn danger';
+            confirmCallback = function() {
+                executeDelete(id);
+            };
+            document.getElementById('confirmModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        async function executeDelete(id) {
+            showLoading(true);
+            try {
+                const result = await apiCall('removeWhitelist', { id: id });
+                if (result.success) {
+                    showToast('✅ تم الحذف بنجاح', 'success');
+                    closeModal();
+                    await loadWhitelist();
+                    generateAlerts();
+                } else {
+                    throw new Error(result.message || 'فشل في الحذف');
+                }
+            } catch (e) {
+                if (!isOnline) {
+                    LocalDB.addPendingOp({ action: 'removeWhitelist', data: { id: id } });
+                    allWhitelist = allWhitelist.filter(w => w.id != id);
+                    LocalDB.setWhitelist(allWhitelist);
+                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
+                    closeModal();
+                    renderCards();
+                    updateStats();
+                } else {
+                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                }
+            } finally {
+                showLoading(false);
+                deleteTargetId = null;
+                confirmCallback = null;
+            }
+        }
+
+        // ============================================================
+        // 22. إدارة التحديد الجماعي
+        // ============================================================
+        function toggleSelect(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            renderCards();
+        }
+
+        function selectAll() {
+            allWhitelist.forEach(w => selectedIds.add(w.id));
+            renderCards();
+            showToast('✅ تم تحديد الكل', 'success');
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            renderCards();
+        }
+
+        function getSelectedItems() {
+            return allWhitelist.filter(w => selectedIds.has(w.id));
+        }
+
+        // ============================================================
+        // 23. إرسال رسالة فردية
+        // ============================================================
+        function sendSingleSms(id) {
+            const item = allWhitelist.find(w => w.id == id);
+            if (!item) {
+                showToast('❌ الرقم غير موجود', 'error');
+                return;
+            }
+            // إعداد المودال لإرسال رسالة إلى رقم واحد
+            document.getElementById('sendSmsRecipients').innerHTML = `
+                <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:center;">
+                    <span class="badge badge-enabled">${escapeHtml(item.phone)}</span>
+                </div>
+            `;
+            document.getElementById('sendSmsTitle').textContent = '📨 إرسال رسالة إلى ' + escapeHtml(item.phone);
+            document.getElementById('sendSmsForm').reset();
+            document.getElementById('sendSmsModal').dataset.ids = JSON.stringify([id]);
+            document.getElementById('sendSmsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 24. إرسال رسالة جماعية
+        // ============================================================
+        function bulkSendSMS() {
+            const selected = getSelectedItems();
+            if (selected.length === 0) {
+                showToast('⚠️ لم يتم تحديد أي رقم', 'warning');
+                return;
+            }
+
+            let recipientsHtml = selected.map(item =>
+                `<span class="badge badge-enabled">${escapeHtml(item.phone)}</span>`
+            ).join(' ');
+            document.getElementById('sendSmsRecipients').innerHTML = recipientsHtml;
+            document.getElementById('sendSmsTitle').textContent = '📨 إرسال رسالة جماعية إلى ' + selected.length + ' مستلم';
+            document.getElementById('sendSmsForm').reset();
+            document.getElementById('sendSmsModal').dataset.ids = JSON.stringify(selected.map(w => w.id));
+            document.getElementById('sendSmsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        async function executeSendSms() {
+            const idsJson = document.getElementById('sendSmsModal').dataset.ids;
+            const ids = JSON.parse(idsJson || '[]');
+            const body = document.getElementById('sendSmsBody').value.trim();
+            const type = document.getElementById('sendSmsType').value;
+
+            if (!body) {
+                showToast('❌ الرجاء إدخال نص الرسالة', 'error');
+                document.getElementById('sendSmsBody').focus();
+                return;
+            }
+
+            if (ids.length === 0) {
+                showToast('❌ لا توجد أرقام محددة', 'error');
+                return;
+            }
+
+            const items = allWhitelist.filter(w => ids.includes(w.id));
+            if (items.length === 0) {
+                showToast('❌ لم يتم العثور على الأرقام', 'error');
+                return;
+            }
+
+            showLoading(true);
+            let successCount = 0,
+                failCount = 0;
+
+            for (const item of items) {
+                try {
+                    const data = {
+                        phone_number: item.phone,
+                        message_body: body,
+                        message_type: type,
+                        status: 'pending',
+                        party_id: 0
+                    };
+                    const result = await apiCall('addSmsMessage', data);
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (e) {
+                    failCount++;
+                }
+            }
+
+            showLoading(false);
+            if (successCount > 0) {
+                showToast(`✅ تم إرسال الرسالة إلى ${successCount} مستلم${failCount > 0 ? `، فشل ${failCount}` : ''}`, 'success');
+                closeModal();
+                // إلغاء التحديد بعد الإرسال
+                selectedIds.clear();
+                renderCards();
+            } else {
+                showToast('❌ فشل إرسال الرسائل', 'error');
+            }
+        }
+
+        // ============================================================
+        // 25. إجراءات جماعية أخرى
+        // ============================================================
+        function bulkEnable() {
+            const selected = getSelectedItems();
+            if (selected.length === 0) {
+                showToast('⚠️ لم يتم تحديد أي رقم', 'warning');
+                return;
+            }
+            document.getElementById('confirmMessage').textContent = `هل أنت متأكد من تفعيل ${selected.length} رقم؟`;
+            document.getElementById('confirmActionBtn').innerHTML = '<i class="fas fa-check"></i> نعم، تفعيل';
+            document.getElementById('confirmActionBtn').className = 'submit-btn success';
+            confirmCallback = function() {
+                executeBulkToggle(true);
+            };
+            document.getElementById('confirmModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        function bulkDisable() {
+            const selected = getSelectedItems();
+            if (selected.length === 0) {
+                showToast('⚠️ لم يتم تحديد أي رقم', 'warning');
+                return;
+            }
+            document.getElementById('confirmMessage').textContent = `هل أنت متأكد من تعطيل ${selected.length} رقم؟`;
+            document.getElementById('confirmActionBtn').innerHTML = '<i class="fas fa-pause"></i> نعم، تعطيل';
+            document.getElementById('confirmActionBtn').className = 'submit-btn';
+            confirmCallback = function() {
+                executeBulkToggle(false);
+            };
+            document.getElementById('confirmModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        async function executeBulkToggle(enabled) {
+            const selected = getSelectedItems();
+            if (selected.length === 0) return;
+
+            showLoading(true);
+            let successCount = 0,
+                failCount = 0;
+
+            for (const item of selected) {
+                try {
+                    const data = {
+                        id: item.id,
+                        phone: item.phone,
+                        name: item.name || '',
+                        enabled: enabled ? 1 : 0
+                    };
+                    const result = await apiCall('addWhitelist', data);
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (e) {
+                    failCount++;
+                }
+            }
+
+            showLoading(false);
+            if (successCount > 0) {
+                showToast(`✅ تم ${enabled ? 'تفعيل' : 'تعطيل'} ${successCount} رقم${failCount > 0 ? `، فشل ${failCount}` : ''}`, 'success');
+                closeModal();
+                selectedIds.clear();
+                await loadWhitelist();
+                generateAlerts();
+            } else {
+                showToast('❌ فشل تنفيذ العملية', 'error');
+            }
+            confirmCallback = null;
+        }
+
+        function bulkDelete() {
+            const selected = getSelectedItems();
+            if (selected.length === 0) {
+                showToast('⚠️ لم يتم تحديد أي رقم', 'warning');
+                return;
+            }
+            document.getElementById('confirmMessage').textContent = `هل أنت متأكد من حذف ${selected.length} رقم نهائياً؟`;
+            document.getElementById('confirmActionBtn').innerHTML = '<i class="fas fa-trash"></i> نعم، حذف الكل';
+            document.getElementById('confirmActionBtn').className = 'submit-btn danger';
+            confirmCallback = function() {
+                executeBulkDelete();
+            };
+            document.getElementById('confirmModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+        }
+
+        async function executeBulkDelete() {
+            const selected = getSelectedItems();
+            if (selected.length === 0) return;
+
+            showLoading(true);
+            let successCount = 0,
+                failCount = 0;
+
+            for (const item of selected) {
+                try {
+                    const result = await apiCall('removeWhitelist', { id: item.id });
+                    if (result.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (e) {
+                    failCount++;
+                }
+            }
+
+            showLoading(false);
+            if (successCount > 0) {
+                showToast(`✅ تم حذف ${successCount} رقم${failCount > 0 ? `، فشل ${failCount}` : ''}`, 'success');
+                closeModal();
+                selectedIds.clear();
+                await loadWhitelist();
+                generateAlerts();
+            } else {
+                showToast('❌ فشل الحذف', 'error');
+            }
+            confirmCallback = null;
+        }
+
+        function executeConfirmedAction() {
+            if (typeof confirmCallback === 'function') {
+                confirmCallback();
+            } else {
+                showToast('❌ لا يوجد إجراء مؤكد', 'error');
+            }
+        }
+
+        // ============================================================
+        // 26. مودالات القائمة السفلية
+        // ============================================================
+        function openTableModal(type) {
+            const modal = document.getElementById('tableModal');
+            const title = document.getElementById('tableModalTitle');
+            const body = document.getElementById('tableModalBody');
+
+            let html = '';
+            let titleText = '';
+            let filtered = [];
+
+            switch (type) {
+                case 'all':
+                    titleText = '📋 جميع أرقام القائمة البيضاء';
+                    filtered = allWhitelist;
+                    html = generateTableFromWhitelist(filtered);
+                    break;
+                case 'enabled':
+                    titleText = '✅ الأرقام المفعلة';
+                    filtered = allWhitelist.filter(w => w.enabled == 1 || w.enabled === true);
+                    html = generateTableFromWhitelist(filtered);
+                    break;
+                case 'disabled':
+                    titleText = '❌ الأرقام غير المفعلة';
+                    filtered = allWhitelist.filter(w => w.enabled == 0 || w.enabled === false);
+                    html = generateTableFromWhitelist(filtered);
+                    break;
+                case 'reports':
+                    titleText = '📊 تقارير القائمة البيضاء';
+                    const total = allWhitelist.length;
+                    const enabled = allWhitelist.filter(w => w.enabled == 1 || w.enabled === true).length;
+                    const disabled = total - enabled;
+                    const withName = allWhitelist.filter(w => w.name && w.name.trim().length > 0).length;
+                    const operators = {};
+                    allWhitelist.forEach(w => {
+                        const info = PhoneUtils.validateAndGetInfo(w.phone);
+                        if (info.valid && info.operator) {
+                            const op = info.operator;
+                            operators[op] = (operators[op] || 0) + 1;
+                        }
+                    });
+                    let operatorStats = '';
+                    for (const [op, count] of Object.entries(operators)) {
+                        operatorStats += `<tr><td>${escapeHtml(op)}</td><td>${count}</td></tr>`;
+                    }
+                    html = `
+                        <div style="text-align:center;padding:8px 0;">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                    <div class="stat-value" style="font-size:1.2rem;">${total}</div>
+                                    <div class="stat-label">إجمالي الأرقام</div>
+                                </div>
+                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                    <div class="stat-value" style="font-size:1.2rem;color:var(--success);">${enabled}</div>
+                                    <div class="stat-label">مفعلة</div>
+                                </div>
+                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                    <div class="stat-value" style="font-size:1.2rem;color:var(--text-muted);">${disabled}</div>
+                                    <div class="stat-label">غير مفعلة</div>
+                                </div>
+                                <div class="stat-card" style="padding:12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;">
+                                    <div class="stat-value" style="font-size:1.2rem;color:var(--primary-color);">${withName}</div>
+                                    <div class="stat-label">باسم</div>
+                                </div>
+                            </div>
+                            <table>
+                                <thead><tr><th>المعيار</th><th>العدد</th></tr></thead>
+                                <tbody>
+                                    <tr><td>إجمالي الأرقام</td><td>${total}</td></tr>
+                                    <tr><td>مفعلة</td><td>${enabled}</td></tr>
+                                    <tr><td>غير مفعلة</td><td>${disabled}</td></tr>
+                                    <tr><td>باسم</td><td>${withName}</td></tr>
+                                    <tr><td>بدون اسم</td><td>${total - withName}</td></tr>
+                                    ${operatorStats}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    break;
+                case 'settings':
+                    titleText = '⚙️ إعدادات القائمة البيضاء';
+                    html = `
+                        <div style="padding:12px;text-align:center;">
+                            <p>إعدادات نظام القائمة البيضاء</p>
+                            <ul style="list-style:none;padding:0;text-align:center;">
+                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 إجمالي الأرقام: ${allWhitelist.length}</li>
+                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 الأرقام المفعلة: ${allWhitelist.filter(w => w.enabled == 1 || w.enabled === true).length}</li>
+                                <li style="padding:8px 0;">🔹 القائمة البيضاء تستخدم لتصفية رسائل SMS الواردة</li>
+                            </ul>
+                            <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>
+                        </div>
+                    `;
+                    break;
+                default:
+                    titleText = 'غير معروف';
+                    html = '<div class="empty-state">لا توجد بيانات</div>';
+            }
+
+            title.textContent = titleText;
+            body.innerHTML = html;
+            modal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            hapticFeedback('light');
+
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelector(`.bottom-nav .nav-item[data-modal="${type}"]`)?.classList.add('active');
+        }
+
+        function generateTableFromWhitelist(data) {
+            if (!data || data.length === 0) {
+                return `<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد بيانات</p></div>`;
+            }
+            let table = `<table><thead><tr>
+                <th>#</th>
+                <th>رقم الهاتف</th>
+                <th>الاسم</th>
+                <th>الحالة</th>
+                <th>التاريخ</th>
+            </tr></thead><tbody>`;
+            data.forEach((w, idx) => {
+                const enabled = w.enabled == 1 || w.enabled === true;
+                const info = PhoneUtils.validateAndGetInfo(w.phone);
+                const operator = info.valid ? info.operator : '';
+                table += `<tr>
+                    <td>${idx + 1}</td>
+                    <td style="direction:ltr;">${escapeHtml(w.phone || '---')}</td>
+                    <td>${escapeHtml(w.name || '---')}</td>
+                    <td><span class="badge ${enabled ? 'badge-enabled' : 'badge-disabled'}" style="font-size:0.7rem;padding:2px 8px;">${enabled ? '✅ مفعل' : '❌ غير مفعل'}</span> ${operator ? '<br><span style="font-size:0.6rem;color:var(--text-muted);">' + escapeHtml(operator) + '</span>' : ''}</td>
+                    <td>${formatDate(w.created_at)}</td>
+                </tr>`;
+            });
+            table += `</tbody></table>`;
+            return table;
+        }
+
+        // ============================================================
+        // 27. إغلاق المودالات
+        // ============================================================
+        function closeModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.querySelectorAll('.modal-overlay').forEach(el => el.classList.remove('show'));
+            document.body.style.overflow = '';
+            deleteTargetId = null;
+            confirmCallback = null;
+            document.getElementById('phone').removeEventListener('input', function() {});
+        }
+
+        // ============================================================
+        // 28. معالج أزرار القائمة الجانبية
+        // ============================================================
+        function handleSidebarAction(action) {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.remove('open');
+            document.getElementById('sidebarToggle').classList.remove('hidden');
+
+            switch (action) {
+                case 'refresh':
+                    showLoading(true);
+                    loadWhitelist().finally(() => showLoading(false));
+                    showToast('🔄 جاري تحديث البيانات...', 'info');
+                    break;
+                case 'add':
+                    openAddModal();
+                    break;
+                case 'search':
+                    document.getElementById('searchInput').focus();
+                    showToast('🔍 اكتب كلمة البحث في الحقل أعلاه', 'info');
+                    break;
+                case 'export':
+                    exportWhitelist();
+                    break;
+                case 'stats':
+                    openTableModal('reports');
+                    break;
+                case 'selectAll':
+                    selectAll();
+                    break;
+                default:
+                    showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        // ============================================================
+        // 29. تصدير القائمة البيضاء
+        // ============================================================
+        function exportWhitelist() {
+            if (allWhitelist.length === 0) {
+                showToast('⚠️ لا توجد بيانات للتصدير', 'warning');
+                return;
+            }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const margin = 10;
+                let y = margin;
+
+                doc.setFontSize(18);
+                doc.setTextColor(0, 122, 204);
+                doc.text('القائمة البيضاء', pageWidth / 2, y, { align: 'center' });
+                y += 8;
+
+                doc.setFontSize(10);
+                doc.setTextColor(100);
+                doc.text(`تاريخ التصدير: ${new Date().toLocaleString('ar-EG')}`, pageWidth / 2, y, { align: 'center' });
+                y += 10;
+
+                const total = allWhitelist.length;
+                const enabled = allWhitelist.filter(w => w.enabled == 1 || w.enabled === true).length;
+                doc.setFontSize(11);
+                doc.setTextColor(50);
+                doc.setFont('helvetica', 'bold');
+                doc.text('ملخص:', margin, y);
+                y += 6;
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(10);
+                doc.text(`إجمالي الأرقام: ${total}`, margin + 5, y);
+                y += 5;
+                doc.text(`المفعلة: ${enabled}`, margin + 5, y);
+                y += 5;
+                doc.text(`غير المفعلة: ${total - enabled}`, margin + 5, y);
+                y += 8;
+
+                doc.setFont('helvetica', 'bold');
+                doc.text('قائمة الأرقام:', margin, y);
+                y += 6;
+                doc.setFont('helvetica', 'normal');
+
+                allWhitelist.forEach((w, idx) => {
+                    if (y > 250) {
+                        doc.addPage();
+                        y = margin;
+                    }
+                    const status = (w.enabled == 1 || w.enabled === true) ? 'مفعل' : 'غير مفعل';
+                    const name = w.name ? ` (${w.name})` : '';
+                    const info = PhoneUtils.validateAndGetInfo(w.phone);
+                    const operator = info.valid ? ` - ${info.operator}` : '';
+                    doc.text(`${idx + 1}. ${w.phone}${name} - ${status}${operator}`, margin + 3, y);
+                    y += 5;
+                });
+
+                const fileName = `whitelist_${new Date().toISOString().substring(0, 10)}.pdf`;
+                doc.save(fileName);
+                showToast('✅ تم تصدير القائمة البيضاء بنجاح', 'success');
+                hapticFeedback('success');
+            } catch (e) {
+                showToast('❌ فشل التصدير: ' + e.message, 'error');
+                console.error('Export error:', e);
+            }
+        }
+
+        // ============================================================
+        // 30. المستشار الذكي (AI Advisor)
+        // ============================================================
+        function openAIAdvisor() {
+            const total = allWhitelist.length;
+            const enabled = allWhitelist.filter(w => w.enabled == 1 || w.enabled === true).length;
+            const disabled = total - enabled;
+            const withName = allWhitelist.filter(w => w.name && w.name.trim().length > 0).length;
+
+            const operators = {};
+            allWhitelist.forEach(w => {
+                const info = PhoneUtils.validateAndGetInfo(w.phone);
+                if (info.valid && info.operator) {
+                    const op = info.operator;
+                    operators[op] = (operators[op] || 0) + 1;
+                }
+            });
+            let operatorText = '';
+            for (const [op, count] of Object.entries(operators)) {
+                operatorText += `<p style="font-size:0.85rem;">${escapeHtml(op)}: ${count}</p>`;
+            }
+
+            let suggestion = '';
+            if (total === 0) {
+                suggestion = '📭 القائمة البيضاء فارغة. يُنصح بإضافة أرقام موثوقة للسماح باستقبال رسائل SMS منها.';
+            } else if (disabled > 0) {
+                suggestion = `⚠️ يوجد ${disabled} رقم غير مفعل. يُنصح بمراجعة الأرقام غير المفعلة وتفعيلها إذا لزم الأمر.`;
+            } else {
+                suggestion = `✅ جميع الأرقام ${total} مفعلة. القائمة البيضاء تعمل بشكل جيد.`;
+            }
+
+            Swal.fire({
+                title: '🤖 المستشار الذكي - القائمة البيضاء',
+                html: `
+                    <div style="text-align:center;">
+                        <p>📋 إجمالي الأرقام: ${total}</p>
+                        <p>✅ المفعلة: ${enabled}</p>
+                        <p>❌ غير المفعلة: ${disabled}</p>
+                        <p>🏷️ بأسماء: ${withName}</p>
+                        <hr style="border:var(--border-width) var(--border-style) var(--border-color);margin:12px 0;">
+                        <div style="font-size:0.9rem;font-weight:600;color:var(--text-muted);">📡 توزيع شركات الاتصالات:</div>
+                        ${operatorText || '<p style="font-size:0.85rem;color:var(--text-muted);">لا توجد بيانات كافية</p>'}
+                        <hr style="border:var(--border-width) var(--border-style) var(--border-color);margin:12px 0;">
+                        <p style="font-weight:bold;">💡 التوصية: ${suggestion}</p>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'حسناً',
+                background: '#1a2236',
+                color: '#f1f5f9'
+            });
+            hapticFeedback('light');
+        }
+
+        // ============================================================
+        // 31. إعداد القائمة الجانبية
+        // ============================================================
+        function setupSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sidebar.classList.toggle('open');
+                toggle.classList.toggle('hidden');
+                hapticFeedback('light');
+            });
+            document.addEventListener('click', (e) => {
+                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                    toggle.classList.remove('hidden');
+                }
+            });
+        }
+
+        // ============================================================
+        // 32. التهيئة النهائية
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedTheme();
+            setupSidebar();
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            updateOnlineStatus();
+            loadWhitelist();
+
+            document.querySelector('.filter-chip.active')?.classList.remove('active');
+            document.querySelector('.filter-chip[data-filter="all"]')?.classList.add('active');
+
+            document.querySelectorAll('.modal-overlay').forEach(el => {
+                el.addEventListener('click', closeModal);
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+
+            setTimeout(() => {
+                generateAlerts();
+            }, 1000);
+
+            if (isOnline) {
+                syncPendingOperations();
+            }
+        });
+    </script>
+</body>
+</html>

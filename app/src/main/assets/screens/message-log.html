@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>سجل الرسائل</title>
+<style>
+/* ============================================
+   CSS VARIABLES — Mandatory Design System
+   ============================================ */
+:root {
+    --bg-color: #f5efe6;
+    --surface-color: #faf3e8;
+    --surface-elevated: #fdf8f0;
+    --primary-color: #007ACC;
+    --primary-dim: rgba(0,122,204,0.12);
+    --accent-color: #d4a017;
+    --accent-dim: rgba(212,160,23,0.12);
+    --success: #10b981;
+    --error: #ef4444;
+    --warning: #f59e0b;
+    --info: #0891b2;
+    --text-color: #1a2a3a;
+    --text-muted: #6a7f94;
+    --border-color: #003366;
+    --border-style: dashed;
+    --border-width: 2px;
+    --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
+    --glass-bg: rgba(255,248,240,0.85);
+    --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
+    --card-hover-bg: rgba(0,122,204,0.04);
+    --fab-shadow: rgba(0,122,204,0.3);
+    --toast-bg: #fdf8f0;
+    --scrollbar-track: #f5efe6;
+    --scrollbar-thumb: rgba(0,51,102,0.2);
+    --skeleton-bg: #e8e0d5;
+    --skeleton-shine: #f5efe6;
+    --modal-border-color: #003366;
+    --modal-border-style: dashed;
+    --input-bg: #fdf8f0;
+    --input-border: #003366;
+    --input-border-style: dashed;
+    --data-text-color: #1a2a3a;
+    --data-text-muted: #4a5a6a;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif;
+    --transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+    --bg-color: #0a0e1a;
+    --surface-color: #111827;
+    --surface-elevated: #1a2236;
+    --primary-color: #00d4ff;
+    --primary-dim: rgba(0,212,255,0.15);
+    --accent-color: #f59e0b;
+    --accent-dim: rgba(245,158,11,0.15);
+    --success: #10b981;
+    --error: #ef4444;
+    --warning: #f59e0b;
+    --info: #0891b2;
+    --text-color: #f1f5f9;
+    --text-muted: #94a3b8;
+    --border-color: #e8d48b;
+    --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
+    --glass-bg: rgba(22,34,64,0.85);
+    --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    --card-hover-bg: rgba(0,212,255,0.05);
+    --fab-shadow: rgba(0,212,255,0.3);
+    --toast-bg: #1a2236;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(255,255,255,0.1);
+    --skeleton-bg: #1e293b;
+    --skeleton-shine: #2d3a4f;
+    --modal-border-color: #e8d48b;
+    --input-bg: #1e293b;
+    --input-border: #e8d48b;
+    --data-text-color: #f1f5f9;
+    --data-text-muted: #94a3b8;
+}
+
+/* ============================================
+   RESET & BASE
+   ============================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+    font-family: var(--font); background: var(--bg-color); color: var(--text-color);
+    min-height: 100vh; -webkit-font-smoothing: antialiased; line-height: 1.6;
+    overflow-x: hidden; padding-bottom: 80px;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+/* ============================================
+   OFFLINE BANNER
+   ============================================ */
+.offline-banner {
+    display: none; background: var(--error); color: #fff;
+    text-align: center; padding: 8px; font-size: 0.8rem; font-weight: 600;
+    position: sticky; top: 0; z-index: 1001;
+}
+.offline-banner.active { display: block; }
+
+/* ============================================
+   HEADER
+   ============================================ */
+.app-header {
+    position: sticky; top: 0; z-index: 1000;
+    background: var(--header-bg);
+    border-bottom: var(--border-width) var(--border-style) var(--border-color);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.header-inner {
+    max-width: 900px; margin: 0 auto; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.header-title {
+    display: flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 700;
+}
+.header-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--primary-color), #3b82f6);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+    font-size: 1.1rem; flex-shrink: 0;
+}
+.header-actions { display: flex; gap: 8px; }
+.btn-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    border: var(--border-width) var(--border-style) var(--border-color);
+    background: var(--surface-color); color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    transition: var(--transition); -webkit-tap-highlight-color: transparent;
+}
+.btn-icon:active { transform: scale(0.92); }
+.btn-icon:hover { background: var(--surface-elevated); color: var(--text-color); }
+
+/* ============================================
+   STATS CARDS
+   ============================================ */
+.stats-container {
+    max-width: 900px; margin: 0 auto; padding: 12px 16px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+}
+.stat-card {
+    background: var(--surface-color);
+    border: var(--border-width) var(--border-style) var(--border-color);
+    border-radius: 12px; padding: 12px 8px; text-align: center;
+    transition: var(--transition); cursor: pointer;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-glow); }
+.stat-card.active { border-color: var(--primary-color); background: var(--primary-dim); }
+.stat-value { font-size: 1.4rem; font-weight: 800; line-height: 1; color: var(--primary-color); }
+.stat-label { font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; font-weight: 600; }
+.stat-card.sent .stat-value { color: var(--success); }
+.stat-card.pending .stat-value { color: var(--warning); }
+.stat-card.failed .stat-value { color: var(--error); }
+
+/* ============================================
+   TABS
+   ============================================ */
+.tabs-container {
+    max-width: 900px; margin: 0 auto; padding: 0 16px;
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch; padding-bottom: 4px;
+}
+.tabs-container::-webkit-scrollbar { display: none; }
+.tab-btn {
+    flex-shrink: 0; padding: 8px 16px; border-radius: 10px;
+    border: var(--border-width) var(--border-style) var(--border-color);
+    background: var(--surface-color); color: var(--text-muted);
+    font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: var(--transition); -webkit-tap-highlight-color: transparent;
+    font-family: var(--font);
+}
+.tab-btn.active {
+    background: var(--primary-color); color: #fff; border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(0,122,204,0.3);
+}
+.tab-btn:active { transform: scale(0.95); }
+
+/* ============================================
+   SEARCH & FILTERS
+   ============================================ */
+.filters-container {
+    max-width: 900px; margin: 0 auto; padding: 10px 16px;
+    display: flex; gap: 8px; align-items: center;
+}
+.search-box { flex: 1; position: relative; }
+.search-box input {
+    width: 100%; padding: 10px 14px 10px 38px; border-radius: 10px;
+    border: var(--border-width) var(--border-style) var(--input-border);
+    background: var(--input-bg); color: var(--text-color);
+    font-size: 0.85rem; font-family: var(--font); outline: none;
+    transition: var(--transition); direction: rtl;
+}
+.search-box input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-dim); }
+.search-box .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 0.9rem; pointer-events: none;
+}
+
+/* ============================================
+   MESSAGE CARDS
+   ============================================ */
+.messages-container {
+    max-width: 900px; margin: 0 auto; padding: 0 16px 16px;
+}
+.message-card {
+    background: var(--surface-color);
+    border: var(--border-width) var(--border-style) var(--border-color);
+    border-radius: 12px; padding: 14px; margin-bottom: 10px;
+    transition: var(--transition); cursor: pointer; position: relative; overflow: hidden;
+}
+.message-card:hover { box-shadow: var(--shadow-glow); background: var(--card-hover-bg); }
+.message-card:active { transform: scale(0.99); }
+.message-card::before {
+    content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 4px;
+    border-radius: 0 12px 12px 0;
+}
+.message-card.status-sent::before { background: var(--success); }
+.message-card.status-pending::before { background: var(--warning); }
+.message-card.status-failed::before { background: var(--error); }
+.message-card.status-queued::before { background: var(--info); }
+.message-card.status-delivered::before { background: var(--primary-color); }
+.message-card.status-cancelled::before { background: var(--text-muted); }
+
+.message-header {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px;
+}
+.message-phone {
+    display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.9rem;
+    color: var(--text-color); direction: ltr; unicode-bidi: embed;
+}
+.phone-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), #60a5fa);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.message-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.message-time { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; }
+.status-badge {
+    padding: 3px 10px; border-radius: 20px; font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.3px;
+}
+.status-badge.sent { background: rgba(16,163,74,0.15); color: var(--success); }
+.status-badge.pending { background: rgba(245,158,11,0.15); color: var(--warning); }
+.status-badge.failed { background: rgba(239,68,68,0.15); color: var(--error); }
+.status-badge.queued { background: rgba(8,145,178,0.15); color: var(--info); }
+.status-badge.delivered { background: var(--primary-dim); color: var(--primary-color); }
+.status-badge.cancelled { background: rgba(107,114,128,0.15); color: var(--text-muted); }
+
+.message-body {
+    font-size: 0.85rem; color: var(--data-text-muted); line-height: 1.6;
+    margin-bottom: 10px; word-break: break-word;
+}
+.message-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 10px; border-top: var(--border-width) var(--border-style) var(--border-color);
+}
+.message-type {
+    font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+    display: flex; align-items: center; gap: 4px;
+}
+.message-actions { display: flex; gap: 6px; }
+.msg-action-btn {
+    padding: 5px 10px; border-radius: 6px;
+    border: var(--border-width) var(--border-style) var(--border-color);
+    background: transparent; color: var(--text-muted); font-size: 0.7rem;
+    font-weight: 600; cursor: pointer; font-family: var(--font);
+    transition: var(--transition); -webkit-tap-highlight-color: transparent;
+}
+.msg-action-btn:hover { background: var(--surface-elevated); color: var(--text-color); }
+.msg-action-btn.retry { color: var(--warning); border-color: var(--warning); }
+.msg-action-btn.retry:hover { background: var(--accent-dim); }
+.msg-action-btn.delete { color: var(--error); border-color: var(--error); }
+.msg-action-btn.delete:hover { background: rgba(239,68,68,0.1); }
+
+/* ============================================
+   LOADING / EMPTY / ERROR STATES
+   ============================================ */
+.state-container {
+    max-width: 900px; margin: 0 auto; padding: 60px 16px; text-align: center;
+}
+.state-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+.state-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: var(--text-color); }
+.state-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; }
+.state-btn {
+    padding: 10px 24px; border-radius: 10px; border: none;
+    background: var(--primary-color); color: #fff; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; font-family: var(--font); transition: var(--transition);
+    -webkit-tap-highlight-color: transparent;
+}
+.state-btn:active { transform: scale(0.95); }
+
+/* Skeleton */
+.skeleton { animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:0.8} }
+.skeleton-card {
+    background: var(--surface-color);
+    border: var(--border-width) var(--border-style) var(--border-color);
+    border-radius: 12px; padding: 14px; margin-bottom: 10px;
+}
+.skeleton-line { height: 12px; background: var(--skeleton-bg); border-radius: 4px; margin-bottom: 8px; }
+.skeleton-line.short { width: 40%; }
+.skeleton-line.medium { width: 70%; }
+
+/* ============================================
+   MODAL — DETAILS
+   ============================================ */
+.modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 2000; opacity: 0; visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+.modal-overlay.active { opacity: 1; visibility: visible; }
+.modal-content {
+    background: var(--surface-color);
+    border: var(--border-width) var(--modal-border-style) var(--modal-border-color);
+    border-radius: 16px 16px 0 0;
+    width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto;
+    transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    -webkit-overflow-scrolling: touch;
+}
+.modal-overlay.active .modal-content { transform: translateY(0); }
+.modal-header {
+    padding: 16px; border-bottom: var(--border-width) var(--border-style) var(--border-color);
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; background: var(--surface-color); z-index: 1;
+}
+.modal-title { font-size: 1rem; font-weight: 700; color: var(--text-color); }
+.modal-close {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: var(--border-width) var(--border-style) var(--border-color);
+    background: var(--surface-elevated); color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    transition: var(--transition); -webkit-tap-highlight-color: transparent;
+}
+.modal-close:active { transform: scale(0.9); }
+.modal-body { padding: 16px; }
+.detail-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 10px 0; border-bottom: var(--border-width) var(--border-style) var(--border-color); gap: 12px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+.detail-value { font-size: 0.85rem; color: var(--data-text-color); font-weight: 700; text-align: left; word-break: break-word; }
+.detail-value.phone { direction: ltr; unicode-bidi: embed; }
+.detail-value.message-body {
+    text-align: right; line-height: 1.7; background: var(--surface-elevated);
+    padding: 10px; border-radius: 8px; width: 100%;
+    border: var(--border-width) var(--border-style) var(--border-color);
+}
+
+/* ============================================
+   TEMPLATES SECTION
+   ============================================ */
+.section-header {
+    max-width: 900px; margin: 0 auto; padding: 16px 16px 8px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.section-title { font-size: 0.9rem; font-weight: 700; color: var(--text-color); }
+.section-action {
+    padding: 6px 12px; border-radius: 8px;
+    border: var(--border-width) var(--border-style) var(--primary-color);
+    background: var(--primary-color); color: #fff; font-size: 0.75rem; font-weight: 600;
+    cursor: pointer; font-family: var(--font); transition: var(--transition);
+    -webkit-tap-highlight-color: transparent;
+}
+.section-action:active { transform: scale(0.95); }
+
+.template-card {
+    background: var(--surface-color);
+    border: var(--border-width) var(--border-style) var(--border-color);
+    border-radius: 12px; padding: 12px; margin-bottom: 8px;
+    transition: var(--transition); cursor: pointer;
+}
+.template-card:hover { box-shadow: var(--shadow-glow); background: var(--card-hover-bg); }
+.template-name { font-weight: 700; font-size: 0.85rem; color: var(--text-color); margin-bottom: 4px; }
+.template-body-preview { font-size: 0.8rem; color: var(--data-text-muted); line-height: 1.5; }
+.template-meta { display: flex; gap: 8px; margin-top: 8px; }
+.template-tag {
+    padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 600;
+    background: var(--surface-elevated); color: var(--text-muted);
+    border: 1px solid var(--border-color);
+}
+.template-tag.active { background: rgba(16,163,74,0.15); color: var(--success); border-color: var(--success); }
+
+/* ============================================
+   WHITELIST SECTION
+   ============================================ */
+.whitelist-item {
+    background: var(--surface-color);
+    border: var(--border-width) var(--border-style) var(--border-color);
+    border-radius: 12px; padding: 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 8px;
+}
+.whitelist-info { flex: 1; }
+.whitelist-name { font-weight: 700; font-size: 0.85rem; color: var(--text-color); }
+.whitelist-phone { font-size: 0.8rem; color: var(--text-muted); direction: ltr; unicode-bidi: embed; }
+
+/* ============================================
+   FAB
+   ============================================ */
+.fab {
+    position: fixed; bottom: 24px; left: 24px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), #3b82f6);
+    color: #fff; border: none; font-size: 1.5rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 15px var(--fab-shadow);
+    transition: var(--transition); z-index: 999;
+    -webkit-tap-highlight-color: transparent;
+}
+.fab:active { transform: scale(0.92); }
+.fab:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--fab-shadow); }
+
+/* ============================================
+   TOAST
+   ============================================ */
+.toast-container {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 3000; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; pointer-events: none;
+}
+.toast {
+    padding: 10px 20px; border-radius: 10px;
+    font-size: 0.8rem; font-weight: 600; color: #fff;
+    box-shadow: var(--shadow-glow); animation: toastIn 0.3s ease;
+    pointer-events: auto; white-space: nowrap;
+    border: var(--border-width) var(--border-style) transparent;
+}
+.toast.success { background: var(--success); }
+.toast.error { background: var(--error); }
+.toast.warning { background: var(--warning); color: #1a2a3a; }
+.toast.info { background: var(--info); }
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 480px) {
+    .stats-container { grid-template-columns: repeat(2, 1fr); }
+    .stat-value { font-size: 1.2rem; }
+    .message-header { flex-wrap: wrap; }
+    .message-meta { width: 100%; justify-content: flex-start; }
+    .header-title span { font-size: 0.95rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Offline Banner -->
+<div class="offline-banner" id="offlineBanner">⚠️ أنت غير متصل بالإنترنت</div>
+
+<!-- Header -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="header-title">
+      <div class="header-icon">&#9993;</div>
+      <span>سجل الرسائل</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="btnTheme" title="تبديل الوضع">&#9788;</button>
+      <button class="btn-icon" id="btnRefresh" title="تحديث">&#8635;</button>
+    </div>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats-container" id="statsContainer">
+  <div class="stat-card total active" data-filter="all">
+    <div class="stat-value" id="statTotal">—</div>
+    <div class="stat-label">الكل</div>
+  </div>
+  <div class="stat-card sent" data-filter="sent">
+    <div class="stat-value" id="statSent">—</div>
+    <div class="stat-label">مرسلة</div>
+  </div>
+  <div class="stat-card pending" data-filter="pending">
+    <div class="stat-value" id="statPending">—</div>
+    <div class="stat-label">معلقة</div>
+  </div>
+  <div class="stat-card failed" data-filter="failed">
+    <div class="stat-value" id="statFailed">—</div>
+    <div class="stat-label">فاشلة</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs-container" id="tabsContainer">
+  <button class="tab-btn active" data-tab="messages">&#9993; الرسائل</button>
+  <button class="tab-btn" data-tab="logs">&#128220; السجل التفصيلي</button>
+  <button class="tab-btn" data-tab="templates">&#128196; القوالب</button>
+  <button class="tab-btn" data-tab="whitelist">&#10003; القائمة البيضاء</button>
+</div>
+
+<!-- Search & Filters -->
+<div class="filters-container" id="filtersContainer">
+  <div class="search-box">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" id="searchInput" placeholder="بحث برقم الهاتف أو نص الرسالة..." autocomplete="off">
+  </div>
+</div>
+
+<!-- Content Area -->
+<div class="messages-container" id="contentArea">
+  <div id="loadingState">
+    <div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>
+    <div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>
+    <div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fabAdd" title="إنشاء رسالة جديدة">+</button>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Details Modal -->
+<div class="modal-overlay" id="detailsModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">تفاصيل الرسالة</div>
+      <button class="modal-close" id="modalClose">&#10005;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+// ============================================
+// CONFIG & STATE
+// ============================================
+const STATE = {
+    currentTab: 'messages',
+    currentFilter: 'all',
+    searchQuery: '',
+    messages: [],
+    logs: [],
+    templates: [],
+    whitelist: [],
+    stats: {},
+    isLoading: false,
+    selectedMessage: null,
+    darkMode: false
+};
+
+// ============================================
+// BRIDGE — VERIFIED from MainActivity.kt
+// ============================================
+const Bridge = {
+    call(method, ...args) {
+        try {
+            if (window.AndroidInterface && typeof window.AndroidInterface[method] === 'function') {
+                return window.AndroidInterface[method](...args);
+            }
+            console.warn('AndroidInterface.' + method + ' not available');
+            return null;
+        } catch (e) {
+            console.error('Bridge error: ' + method, e);
+            return null;
+        }
+    },
+
+    // SMS Messages — VERIFIED
+    getSmsMessages() { return this.call('getSmsMessages'); },
+    getSmsMessagesByPhone(phone) { return this.call('getSmsMessagesByPhone', phone); },
+    getSmsMessagesByStatus(status) { return this.call('getSmsMessagesByStatus', status); },
+    updateSmsStatus(id, status) { return this.call('updateSmsStatus', id, status); },
+    getSmsStats() { return this.call('getSmsStats'); },
+    addSmsMessage(data) { return this.call('addSmsMessage', JSON.stringify(data)); },
+
+    // SMS Logs — VERIFIED in DatabaseHelper, Bridge inferred from messages.html
+    getSmsLogs() { return this.call('getSmsLogs'); },
+
+    // Templates — VERIFIED
+    getSmsTemplates() { return this.call('getSmsTemplates'); },
+    addSmsTemplate(data) { return this.call('addSmsTemplate', JSON.stringify(data)); },
+    updateSmsTemplate(id, data) { return this.call('updateSmsTemplate', id, JSON.stringify(data)); },
+    deleteSmsTemplate(id) { return this.call('deleteSmsTemplate', id); },
+
+    // Whitelist — VERIFIED
+    getWhitelist() { return this.call('getWhitelist'); },
+    addWhitelist(data) { return this.call('addWhitelist', JSON.stringify(data)); },
+    removeWhitelist(data) { return this.call('removeWhitelist', JSON.stringify(data)); },
+
+    // Utilities — VERIFIED
+    showToast(msg) { this.call('showToast', msg); }
+};
+
+// ============================================
+// UTILITIES
+// ============================================
+function $(id) { return document.getElementById(id); }
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function parseJSON(str) {
+    try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        const now = new Date();
+        const diff = now - d;
+        const days = Math.floor(diff / 86400000);
+        if (days === 0) {
+            const hours = Math.floor(diff / 3600000);
+            if (hours === 0) {
+                const mins = Math.floor(diff / 60000);
+                return mins <= 1 ? 'الآن' : 'قبل ' + mins + ' دقيقة';
+            }
+            return 'قبل ' + hours + ' ساعة';
+        }
+        if (days === 1) return 'أمس';
+        if (days < 7) return 'قبل ' + days + ' يوم';
+        return d.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (e) { return dateStr; }
+}
+
+function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('ar-SA', {
+            year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch (e) { return dateStr; }
+}
+
+function getStatusLabel(status) {
+    const map = {
+        'sent': 'مرسلة', 'pending': 'معلقة', 'failed': 'فاشلة',
+        'queued': 'في الانتظار', 'delivered': 'تم التسليم', 'cancelled': 'ملغاة',
+        'sending': 'جاري الإرسال', 'processed': 'تمت المعالجة', 'read': 'مقروءة'
+    };
+    return map[status] || status;
+}
+
+function getTypeLabel(type) {
+    const map = {
+        'incoming': 'واردة', 'outgoing': 'صادرة',
+        'reminder': 'تذكير', 'notification': 'إشعار', 'alert': 'تنبيه', 'custom': 'مخصص'
+    };
+    return map[type] || type;
+}
+
+function getTypeIcon(type) {
+    const map = {
+        'incoming': '&#11166;', 'outgoing': '&#11167;',
+        'reminder': '&#9200;', 'notification': '&#128276;', 'alert': '&#9888;', 'custom': '&#9998;'
+    };
+    return map[type] || '&#9993;';
+}
+
+function showToast(message, type) {
+    type = type || 'info';
+    const container = $('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(20px)';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+}
+
+// ============================================
+// DATA LOADING — VERIFIED Bridge Methods
+// ============================================
+function fetchMessages() {
+    const result = Bridge.getSmsMessages();
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data && Array.isArray(parsed.data)) ? parsed.data : [];
+}
+
+function fetchMessagesByStatus(status) {
+    const result = Bridge.getSmsMessagesByStatus(status);
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data && Array.isArray(parsed.data)) ? parsed.data : [];
+}
+
+function fetchSmsLogs() {
+    const result = Bridge.getSmsLogs();
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data && Array.isArray(parsed.data)) ? parsed.data : [];
+}
+
+function fetchStats() {
+    const result = Bridge.getSmsStats();
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data) ? parsed.data : {};
+}
+
+function fetchTemplates() {
+    const result = Bridge.getSmsTemplates();
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data && Array.isArray(parsed.data)) ? parsed.data : [];
+}
+
+function fetchWhitelist() {
+    const result = Bridge.getWhitelist();
+    const parsed = parseJSON(result);
+    return (parsed && parsed.data && Array.isArray(parsed.data)) ? parsed.data : [];
+}
+
+// ============================================
+// RENDERING
+// ============================================
+function renderStats() {
+    var s = STATE.stats || {};
+    $('statTotal').textContent = s.total !== undefined ? s.total : '—';
+    $('statSent').textContent = s.sent !== undefined ? s.sent : '—';
+    $('statPending').textContent = s.pending !== undefined ? s.pending : '—';
+    $('statFailed').textContent = s.failed !== undefined ? s.failed : '—';
+}
+
+function renderMessages(messages) {
+    var container = $('contentArea');
+    if (!messages || messages.length === 0) {
+        container.innerHTML =
+            '<div class="state-container">' +
+            '<div class="state-icon">&#128172;</div>' +
+            '<div class="state-title">لا توجد رسائل</div>' +
+            '<div class="state-desc">لم يتم العثور على رسائل تطابق معايير البحث</div>' +
+            '</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < messages.length; i++) {
+        var msg = messages[i];
+        var status = (msg.status || 'pending').toLowerCase();
+        var type = (msg.message_type || 'incoming').toLowerCase();
+        var phone = msg.phone_number || '—';
+        var body = msg.message_body || msg.message_content || '';
+        var time = msg.created_at || msg.sent_at || '';
+        var id = msg.id || msg.uuid || '';
+
+        html +=
+            '<div class="message-card status-' + status + '" data-id="' + escapeHtml(id) + '" data-phone="' + escapeHtml(phone) + '">' +
+            '<div class="message-header">' +
+            '<div class="message-phone">' +
+            '<div class="phone-avatar">' + escapeHtml(phone.charAt(0) || '#') + '</div>' +
+            '<span>' + escapeHtml(phone) + '</span>' +
+            '</div>' +
+            '<div class="message-meta">' +
+            '<span class="message-time">' + formatDate(time) + '</span>' +
+            '<span class="status-badge ' + status + '">' + getStatusLabel(status) + '</span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="message-body">' + escapeHtml(body) + '</div>' +
+            '<div class="message-footer">' +
+            '<div class="message-type">' +
+            '<span class="type-icon">' + getTypeIcon(type) + '</span>' +
+            '<span>' + getTypeLabel(type) + '</span>' +
+            '</div>' +
+            '<div class="message-actions">' +
+            (status === 'failed' ? '<button class="msg-action-btn retry" data-action="retry" data-id="' + escapeHtml(id) + '">&#8635; إعادة</button>' : '') +
+            '<button class="msg-action-btn" data-action="details" data-id="' + escapeHtml(id) + '">التفاصيل</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function renderLogs(logs) {
+    var container = $('contentArea');
+    if (!logs || logs.length === 0) {
+        container.innerHTML =
+            '<div class="state-container">' +
+            '<div class="state-icon">&#128220;</div>' +
+            '<div class="state-title">لا توجد سجلات</div>' +
+            '<div class="state-desc">سجل الرسائل التفصيلي فارغ حالياً</div>' +
+            '</div>';
+        return;
+    }
+
+    var html = '';
+    for (var i = 0; i < logs.length; i++) {
+        var log = logs[i];
+        var status = (log.status || 'queued').toLowerCase();
+        var type = (log.message_type || 'reminder').toLowerCase();
+        var phone = log.phone_number || '—';
+        var content = log.message_content || '';
+        var time = log.created_at || log.sent_at || '';
+        var gateway = log.gateway_type || 'android_app';
+        var error = log.error_message || '';
+        var cost = log.cost || 0;
+
+        html +=
+            '<div class="message-card status-' + status + '">' +
+            '<div class="message-header">' +
+            '<div class="message-phone">' +
+            '<div class="phone-avatar">' + escapeHtml(phone.charAt(0) || '#') + '</div>' +
+            '<span>' + escapeHtml(phone) + '</span>' +
+            '</div>' +
+            '<div class="message-meta">' +
+            '<span class="message-time">' + formatDate(time) + '</span>' +
+            '<span class="status-badge ' + status + '">' + getStatusLabel(status) + '</span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="message-body">' + escapeHtml(content) + '</div>' +
+            '<div class="message-footer">' +
+            '<div class="message-type">' +
+            '<span class="type-icon">' + getTypeIcon(type) + '</span>' +
+            '<span>' + getTypeLabel(type) + '</span>' +
+            (gateway !== 'android_app' ? '<span style="margin-right:8px;color:var(--text-muted);font-size:0.7rem;">(' + escapeHtml(gateway) + ')</span>' : '') +
+            '</div>' +
+            '<div style="font-size:0.7rem;color:var(--text-muted);">' +
+            (cost > 0 ? 'التكلفة: ' + cost + ' ' : '') +
+            (error ? '<span style="color:var(--error)">خطأ: ' + escapeHtml(error) + '</span>' : '') +
+            '</div>' +
+            '</div>' +
+            '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function renderTemplates(templates) {
+    var container = $('contentArea');
+    if (!templates || templates.length === 0) {
+        container.innerHTML =
+            '<div class="state-container">' +
+            '<div class="state-icon">&#128196;</div>' +
+            '<div class="state-title">لا توجد قوالب</div>' +
+            '<div class="state-desc">لم يتم إنشاء أي قوالب رسائل بعد</div>' +
+            '</div>';
+        return;
+    }
+
+    var html = '<div style="max-width:900px;margin:0 auto;padding:0 16px;">';
+    for (var i = 0; i < templates.length; i++) {
+        var tpl = templates[i];
+        var name = tpl.template_name || 'بدون اسم';
+        var body = tpl.template_body || '';
+        var type = tpl.template_type || 'general';
+        var active = tpl.is_active === 1 || tpl.is_active === true;
+        var id = tpl.id || '';
+
+        html +=
+            '<div class="template-card" data-id="' + escapeHtml(id) + '">' +
+            '<div class="template-name">' + escapeHtml(name) + '</div>' +
+            '<div class="template-body-preview">' + escapeHtml(body.substring(0, 120)) + (body.length > 120 ? '...' : '') + '</div>' +
+            '<div class="template-meta">' +
+            '<span class="template-tag">' + escapeHtml(type) + '</span>' +
+            '<span class="template-tag ' + (active ? 'active' : '') + '">' + (active ? 'نشط' : 'معطل') + '</span>' +
+            '</div>' +
+            '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderWhitelist(list) {
+    var container = $('contentArea');
+    if (!list || list.length === 0) {
+        container.innerHTML =
+            '<div class="state-container">' +
+            '<div class="state-icon">&#10003;</div>' +
+            '<div class="state-title">القائمة البيضاء فارغة</div>' +
+            '<div class="state-desc">لم يتم إضافة أي أرقام إلى القائمة البيضاء</div>' +
+            '</div>';
+        return;
+    }
+
+    var html = '<div style="max-width:900px;margin:0 auto;padding:0 16px;">';
+    for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+        var phone = item.phone || '—';
+        var name = item.name || '';
+        var enabled = item.enabled === 1 || item.enabled === true;
+        html +=
+            '<div class="whitelist-item">' +
+            '<div class="whitelist-info">' +
+            '<div class="whitelist-name">' + escapeHtml(name || 'بدون اسم') + '</div>' +
+            '<div class="whitelist-phone">' + escapeHtml(phone) + '</div>' +
+            '</div>' +
+            '<div class="whitelist-actions">' +
+            '<span class="template-tag ' + (enabled ? 'active' : '') + '">' + (enabled ? 'مفعل' : 'معطل') + '</span>' +
+            '</div>' +
+            '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderError(message) {
+    var container = $('contentArea');
+    container.innerHTML =
+        '<div class="state-container">' +
+        '<div class="state-icon">&#9888;</div>' +
+        '<div class="state-title">حدث خطأ</div>' +
+        '<div class="state-desc">' + escapeHtml(message) + '</div>' +
+        '<button class="state-btn" id="btnRetry">&#8635; إعادة المحاولة</button>' +
+        '</div>';
+    $('btnRetry').addEventListener('click', loadData);
+}
+
+function renderLoading() {
+    $('contentArea').innerHTML =
+        '<div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>' +
+        '<div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>' +
+        '<div class="skeleton-card skeleton"><div class="skeleton-line short"></div><div class="skeleton-line medium"></div><div class="skeleton-line"></div></div>';
+}
+
+// ============================================
+// DETAILS MODAL
+// ============================================
+function showDetails(msg) {
+    var modal = $('detailsModal');
+    var body = $('modalBody');
+    var status = (msg.status || 'pending').toLowerCase();
+    var type = (msg.message_type || 'incoming').toLowerCase();
+
+    var rows = '';
+    var fields = [
+        { label: 'رقم الهاتف', value: msg.phone_number || '—', cls: 'phone' },
+        { label: 'نص الرسالة', value: msg.message_body || msg.message_content || '—', cls: 'message-body' },
+        { label: 'النوع', value: getTypeLabel(type) },
+        { label: 'الحالة', value: getStatusLabel(status) },
+        { label: 'تاريخ الإنشاء', value: formatDateTime(msg.created_at) },
+        { label: 'تاريخ الإرسال', value: formatDateTime(msg.sent_at) },
+        { label: 'تاريخ التحديث', value: formatDateTime(msg.updated_at) }
+    ];
+
+    if (msg.gateway_type) {
+        fields.push({ label: 'بوابة الإرسال', value: msg.gateway_type });
+    }
+    if (msg.gateway_response) {
+        fields.push({ label: 'رد البوابة', value: msg.gateway_response });
+    }
+    if (msg.error_message) {
+        fields.push({ label: 'رسالة الخطأ', value: msg.error_message });
+    }
+    if (msg.device_id) {
+        fields.push({ label: 'معرف الجهاز', value: msg.device_id });
+    }
+    if (msg.sim_slot) {
+        fields.push({ label: 'شريحة SIM', value: String(msg.sim_slot) });
+    }
+    if (msg.cost !== undefined && msg.cost !== null) {
+        fields.push({ label: 'التكلفة', value: String(msg.cost) });
+    }
+    if (msg.uuid) {
+        fields.push({ label: 'UUID', value: msg.uuid });
+    }
+
+    for (var i = 0; i < fields.length; i++) {
+        var f = fields[i];
+        rows += '<div class="detail-row">' +
+            '<div class="detail-label">' + f.label + '</div>' +
+            '<div class="detail-value ' + (f.cls || '') + '">' + escapeHtml(f.value) + '</div>' +
+            '</div>';
+    }
+
+    body.innerHTML = rows;
+    modal.classList.add('active');
+}
+
+function hideDetails() {
+    $('detailsModal').classList.remove('active');
+}
+
+// ============================================
+// DATA LOADING
+// ============================================
+function loadData() {
+    if (STATE.isLoading) return;
+    STATE.isLoading = true;
+    renderLoading();
+
+    // Load stats first
+    var stats = fetchStats();
+    STATE.stats = stats;
+    renderStats();
+
+    // Load data based on current tab
+    if (STATE.currentTab === 'messages') {
+        var messages;
+        if (STATE.currentFilter !== 'all') {
+            messages = fetchMessagesByStatus(STATE.currentFilter);
+        } else {
+            messages = fetchMessages();
+        }
+        STATE.messages = messages;
+        applyFilters();
+    } else if (STATE.currentTab === 'logs') {
+        var logs = fetchSmsLogs();
+        STATE.logs = logs;
+        applyFilters();
+    } else if (STATE.currentTab === 'templates') {
+        var templates = fetchTemplates();
+        STATE.templates = templates;
+        renderTemplates(templates);
+    } else if (STATE.currentTab === 'whitelist') {
+        var whitelist = fetchWhitelist();
+        STATE.whitelist = whitelist;
+        renderWhitelist(whitelist);
+    }
+
+    STATE.isLoading = false;
+}
+
+function applyFilters() {
+    var query = STATE.searchQuery.toLowerCase().trim();
+
+    if (STATE.currentTab === 'messages') {
+        var filtered = STATE.messages;
+        if (query) {
+            filtered = filtered.filter(function(m) {
+                var phone = (m.phone_number || '').toLowerCase();
+                var body = (m.message_body || '').toLowerCase();
+                return phone.indexOf(query) !== -1 || body.indexOf(query) !== -1;
+            });
+        }
+        renderMessages(filtered);
+    } else if (STATE.currentTab === 'logs') {
+        var filtered = STATE.logs;
+        if (query) {
+            filtered = filtered.filter(function(l) {
+                var phone = (l.phone_number || '').toLowerCase();
+                var content = (l.message_content || '').toLowerCase();
+                return phone.indexOf(query) !== -1 || content.indexOf(query) !== -1;
+            });
+        }
+        renderLogs(filtered);
+    }
+}
+
+// ============================================
+// THEME
+// ============================================
+function initTheme() {
+    var saved = localStorage.getItem('messageLogTheme');
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+        STATE.darkMode = saved === 'dark';
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        STATE.darkMode = true;
+    }
+}
+
+function toggleTheme() {
+    STATE.darkMode = !STATE.darkMode;
+    var theme = STATE.darkMode ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('messageLogTheme', theme);
+}
+
+// ============================================
+// EVENT HANDLERS
+// ============================================
+function setupEventListeners() {
+    // Refresh
+    $('btnRefresh').addEventListener('click', function() {
+        showToast('جاري التحديث...', 'info');
+        loadData();
+    });
+
+    // Theme toggle
+    $('btnTheme').addEventListener('click', toggleTheme);
+
+    // FAB — Open messages.html (VERIFIED requirement)
+    $('fabAdd').addEventListener('click', function() {
+        window.location.href = 'messages.html';
+    });
+
+    // Search with debounce
+    var searchTimeout;
+    $('searchInput').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        STATE.searchQuery = e.target.value;
+        searchTimeout = setTimeout(applyFilters, 300);
+    });
+
+    // Stats filter
+    $('statsContainer').addEventListener('click', function(e) {
+        var card = e.target.closest('.stat-card');
+        if (!card) return;
+        var filter = card.dataset.filter;
+        if (!filter) return;
+
+        var cards = document.querySelectorAll('.stat-card');
+        for (var i = 0; i < cards.length; i++) cards[i].classList.remove('active');
+        card.classList.add('active');
+
+        STATE.currentFilter = filter;
+        if (STATE.currentTab !== 'messages') {
+            var tabs = document.querySelectorAll('.tab-btn');
+            for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+            document.querySelector('.tab-btn[data-tab="messages"]').classList.add('active');
+            STATE.currentTab = 'messages';
+        }
+        loadData();
+    });
+
+    // Tabs
+    $('tabsContainer').addEventListener('click', function(e) {
+        var btn = e.target.closest('.tab-btn');
+        if (!btn) return;
+        var tab = btn.dataset.tab;
+        if (!tab) return;
+
+        var tabs = document.querySelectorAll('.tab-btn');
+        for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+        btn.classList.add('active');
+
+        STATE.currentTab = tab;
+        STATE.searchQuery = '';
+        $('searchInput').value = '';
+        loadData();
+    });
+
+    // Message card clicks
+    $('contentArea').addEventListener('click', function(e) {
+        var actionBtn = e.target.closest('[data-action]');
+        if (actionBtn) {
+            e.stopPropagation();
+            var action = actionBtn.dataset.action;
+            var id = actionBtn.dataset.id;
+
+            if (action === 'details') {
+                var msg = STATE.messages.find(function(m) { return String(m.id) === String(id); });
+                if (msg) showDetails(msg);
+            } else if (action === 'retry') {
+                showToast('إعادة المحاولة غير مدعومة حالياً', 'warning');
+            }
+            return;
+        }
+
+        var card = e.target.closest('.message-card');
+        if (card && card.dataset.id) {
+            var msg = STATE.messages.find(function(m) { return String(m.id) === String(card.dataset.id); });
+            if (msg) showDetails(msg);
+        }
+    });
+
+    // Modal close
+    $('modalClose').addEventListener('click', hideDetails);
+    $('detailsModal').addEventListener('click', function(e) {
+        if (e.target === $('detailsModal')) hideDetails();
+    });
+
+    // Offline detection
+    function updateOnlineStatus() {
+        var banner = $('offlineBanner');
+        if (navigator.onLine) {
+            banner.classList.remove('active');
+        } else {
+            banner.classList.add('active');
+        }
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    updateOnlineStatus();
+}
+
+// ============================================
+// INITIALIZATION
+// ============================================
+function init() {
+    initTheme();
+    setupEventListeners();
+    loadData();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+</script>
+</body>
+</html>
