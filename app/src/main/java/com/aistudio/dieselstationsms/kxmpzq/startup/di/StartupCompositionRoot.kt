@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.startup.di
 
 import android.content.Context
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.startup.*
 import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
 import com.aistudio.dieselstationsms.kxmpzq.startup.config.StaticConfigurationProvider
@@ -15,6 +16,17 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.retry.ExponentialBackoffRetr
 import com.aistudio.dieselstationsms.kxmpzq.startup.retry.RetryPolicy
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSServiceHeartbeatProvider
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * جذر التكوين - StartupCompositionRoot
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * التحديثات:
+ * 1. ✅ إضافة SchemaInitializationPhase
+ * 2. ✅ إضافة DatabaseHelper factory
+ * 3. ✅ تكامل مع SmsPartyGateway
+ * 4. ✅ تحديث PermissionCheckPhase لـ READ_PHONE_STATE
+ */
 class StartupCompositionRoot(private val context: Context) {
 
     private val config: ConfigurationProvider = StaticConfigurationProvider
@@ -31,6 +43,7 @@ class StartupCompositionRoot(private val context: Context) {
             register(EnvironmentCheckPhase())
             register(DelayPhase())
             register(PermissionCheckPhase())
+            register(SchemaInitializationPhase())  // ✅ جديد: تهيئة جداول SMS
             register(ServiceLaunchPhase())
             register(HealthCheckPhase())
         }
@@ -48,14 +61,16 @@ class StartupCompositionRoot(private val context: Context) {
             loggerFactory = { ctx -> StartupLoggerImpl(ctx) },
             launcherFactory = { ctx -> SmsServiceLauncher(ctx, statusRepository) },
             healthMonitorFactory = { createHealthMonitor() },
-            retryPolicyFactory = { createRetryPolicy() }
+            retryPolicyFactory = { createRetryPolicy() },
+            databaseHelperFactory = { ctx -> DatabaseHelper.getInstance(ctx) }  // ✅ جديد
         )
     }
 
     private fun createHealthMonitor(): HealthMonitor {
         return SmsServiceHealthMonitor(
             checkIntervalMs = config.getHealthCheckIntervalMs(),
-            heartbeatProvider = SMSServiceHeartbeatProvider
+            heartbeatProvider = SMSServiceHeartbeatProvider,
+            context = context  // ✅ جديد: لتحقق من Manifest
         )
     }
 

@@ -6,7 +6,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -25,7 +24,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
-import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReceiver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsConversationManager
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsCustomerResolver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsIntentDetector
@@ -203,10 +201,6 @@ class SMSService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     // ═══════════════════════════════════════════════════════════════
-    // ═══ Receiver ═══
-    // ═══════════════════════════════════════════════════════════════
-    private var smsReceiver: BroadcastReceiver? = null
-    private val isReceiverRegisteredFlag = AtomicBoolean(false)
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ المكونات المعمارية (Modules) ═══
@@ -220,7 +214,6 @@ class SMSService : Service() {
     private lateinit var smsCustomerResolver: SmsCustomerResolver
     private lateinit var smsIntentDetector: SmsIntentDetector
     private lateinit var smsReplyManager: SmsReplyManager
-    private lateinit var smsReceiverInstance: SmsReceiver
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ الإعدادات ═══
@@ -282,7 +275,6 @@ class SMSService : Service() {
             initializeSmsModules()
 
             // 7. تسجيل مستقبل الرسائل
-            registerSmsReceiver()
 
             // 8. تشغيل محرك SMS
             startSmsEngine()
@@ -426,7 +418,6 @@ class SMSService : Service() {
             stopSmsEngine()
 
             // 2. إلغاء تسجيل المستقبل
-            unregisterSmsReceiver()
 
             // 3. إيقاف المراقبة
             stopHealthMonitor()
@@ -580,20 +571,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * تهيئة مستقبل الرسائل
-     */
-    private fun initializeReceivers() {
-        try {
-            val start = System.currentTimeMillis()
-            smsReceiverInstance = SmsReceiver()
-            moduleLoadTimes["receiver"] = System.currentTimeMillis() - start
-            Log.d(TAG, "SmsReceiver initialized (${moduleLoadTimes["receiver"]}ms)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize SmsReceiver: ${e.message}", e)
-            throw e
-        }
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ إدارة الوحدات الجديدة (Module Management) ═══
@@ -804,7 +781,6 @@ class SMSService : Service() {
             stopPerformanceMonitor()
 
             // إلغاء تسجيل المستقبل
-            unregisterSmsReceiver()
 
             // إيقاف المحرك
             stopSmsEngine()
@@ -834,73 +810,6 @@ class SMSService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ إدارة مستقبل الرسائل (Receiver Management) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    /**
-     * تسجيل مستقبل الرسائل
-     */
-    private fun registerSmsReceiver() {
-        try {
-            if (isReceiverRegistered()) {
-                Log.w(TAG, "SMS receiver already registered")
-                return
-            }
-
-            if (!::smsReceiverInstance.isInitialized) {
-                initializeReceivers()
-            }
-
-            val filter = IntentFilter().apply {
-                addAction("android.provider.Telephony.SMS_RECEIVED")
-                addAction("android.provider.Telephony.SMS_DELIVER")
-                priority = Int.MAX_VALUE
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(smsReceiverInstance, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(smsReceiverInstance, filter)
-            }
-
-            isReceiverRegisteredFlag.set(true)
-            Log.i(TAG, "SMS receiver registered successfully")
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register SMS receiver: ${e.message}", e)
-            isReceiverRegisteredFlag.set(false)
-        }
-    }
-
-    /**
-     * إلغاء تسجيل مستقبل الرسائل
-     */
-    private fun unregisterSmsReceiver() {
-        try {
-            if (!isReceiverRegistered()) {
-                Log.w(TAG, "SMS receiver not registered")
-                return
-            }
-
-            smsReceiverInstance?.let {
-                unregisterReceiver(it)
-                Log.i(TAG, "SMS receiver unregistered")
-            }
-
-            isReceiverRegisteredFlag.set(false)
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error unregistering SMS receiver: ${e.message}", e)
-        }
-    }
-
-    /**
-     * التحقق من حالة تسجيل المستقبل
-     */
-    private fun isReceiverRegistered(): Boolean {
-        return isReceiverRegisteredFlag.get()
-    }
 
     // ═══════════════════════════════════════════════════════════════
     // ═══ مراقبة حالة النظام (Health Monitoring) ═══
@@ -985,11 +894,6 @@ class SMSService : Service() {
             checkBackgroundRestrictions()
             checkBatteryOptimization()
 
-            // فحص المستقبل
-            if (!checkReceiverStatus()) {
-                issues.add("Receiver not registered")
-                registerSmsReceiver()
-            }
 
             // فحص المكونات
             if (!validateModules()) {
@@ -1124,12 +1028,6 @@ class SMSService : Service() {
         }
     }
 
-    /**
-     * فحص حالة المستقبل
-     */
-    private fun checkReceiverStatus(): Boolean {
-        return isReceiverRegistered()
-    }
 
     /**
      * فحص سلامة قاعدة البيانات
@@ -1836,7 +1734,6 @@ class SMSService : Service() {
 
             // 1. إيقاف المكونات
             stopSmsEngine()
-            unregisterSmsReceiver()
 
             // 2. إلغاء المراقبة
             stopHealthMonitor()
@@ -1854,7 +1751,6 @@ class SMSService : Service() {
             initializeSmsModules()
 
             // 5. إعادة التشغيل
-            registerSmsReceiver()
             startSmsEngine()
             startHealthMonitor()
             startPerformanceMonitor()
@@ -2173,7 +2069,6 @@ class SMSService : Service() {
                 put("total_errors", errorCount.get())
                 put("restart_attempts", restartAttempts.get())
                 put("is_healthy", isHealthy())
-                put("is_receiver_registered", isReceiverRegistered())
                 put("has_all_permissions", hasAllPermissions())
                 put("module_load_times", JSONObject(moduleLoadTimes as Map<*, *>))
                 put("timestamp", System.currentTimeMillis())
@@ -2218,7 +2113,6 @@ class SMSService : Service() {
                 "SmsCustomerResolver" to ::smsCustomerResolver.isInitialized,
                 "SmsIntentDetector" to ::smsIntentDetector.isInitialized,
                 "SmsReplyManager" to ::smsReplyManager.isInitialized,
-                "SmsReceiver" to ::smsReceiverInstance.isInitialized
             )
             moduleList.forEach { (name, initialized) ->
                 modules.put(JSONObject().apply {
@@ -2410,7 +2304,6 @@ class SMSService : Service() {
                 ::dbHelper.isInitialized &&
                 !dbHelper.isClosed() &&
                 ::smsProcessor.isInitialized &&
-                isReceiverRegistered()
     }
 
     /**
@@ -2629,14 +2522,6 @@ class SMSService : Service() {
     /**
      * الحصول على مرجع SmsReceiver
      */
-    fun getSmsReceiver(): SmsReceiver? {
-        return if (::smsReceiverInstance.isInitialized) smsReceiverInstance else null
-    }
-
-    /**
-     * الحصول على الإعدادات
-     */
-    fun getSettings(): Map<String, String> {
         return settings.toMap()
     }
 

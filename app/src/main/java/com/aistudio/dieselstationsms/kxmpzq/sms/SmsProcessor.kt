@@ -56,9 +56,13 @@ class SmsProcessor(
     private val timeFormat = SimpleDateFormat("hh:mm a", Locale("ar"))
 
     suspend fun process(intent: Intent): Boolean = withContext(Dispatchers.IO) {
-        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) {
+        // قبول كلا الحدثين: SMS_RECEIVED و SMS_DELIVER
+        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION &&
+            intent.action != Telephony.Sms.Intents.SMS_DELIVER_ACTION
+        ) {
             return@withContext false
         }
+
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent)
             ?: return@withContext false

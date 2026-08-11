@@ -3,13 +3,22 @@ package com.aistudio.dieselstationsms.kxmpzq.startup
 import android.content.Context
 import android.content.SharedPreferences
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+* مستودع حالة الخدمة - ServiceStatusRepository
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * التحديثات:
+ * 1. ✅ زيادة STALE_TIMEOUT_MS من 5 إلى 15 دقيقة
+ * 2. ✅ دعم Doze mode (الجهاز في وضع الخمول)
+ */
 class ServiceStatusRepository(context: Context) {
     companion object {
         private const val PREFS_NAME = "service_status_prefs"
         private const val KEY_IS_RUNNING = "is_running"
         private const val KEY_LAST_UPDATE = "last_update"
         private const val KEY_LAST_HEARTBEAT = "last_heartbeat"
-        private const val STALE_TIMEOUT_MS = 300_000L
+        private const val STALE_TIMEOUT_MS = 900_000L  // ✅ 15 دقيقة (كان 300_000L = 5 دقائق)
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

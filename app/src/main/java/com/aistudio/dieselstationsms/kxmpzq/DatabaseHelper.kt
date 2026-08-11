@@ -36,6 +36,7 @@ import java.util.concurrent.locks.ReentrantLock
  *   getAssetMaintenanceHistory, deleteOlderThan, syncContext, syncPreferences,
  *   sync, syncRateLimits, syncData, recordPerformanceStats, flush,
  *   performSecurityCheck, cleanupExpired, getCurrentMetrics, isOpen, checkIntegrity
+ * - تم إصلاح إحصائيات لوحة التحكم بإضافة COALESCE لجميع الاستعلامات (منع قيم null)
  */
 class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(context.applicationContext, DB_NAME, null, VERSION) {
 
@@ -570,7 +571,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createVehicleTables(db)
         createProductTables(db)
         createTankPumpTables(db)
-        createInventoryTables(db)
+        createInventoryTables(db)   // تم تضمين إنشاء inventory_levels و warehouses
         createSalesTables(db)
         createFinanceTables(db)
         createAccountingTables(db)
@@ -4672,6 +4673,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_otp_expires ON sms_otp_verifications(expires_at)")
         Log.d(TAG, "SMS OTP verifications table created successfully")
     }
+
     private fun createUserOtpVerificationsTable(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS user_otp_verifications (
@@ -4689,7 +4691,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_user_otp_expires ON user_otp_verifications(expires_at)")
         Log.d(TAG, "User OTP verifications table created successfully")
     }
-
 
     private fun ensureSmsSettings(db: SQLiteDatabase) {
         val smsSettings = listOf(
@@ -5609,9 +5610,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getUserById(userId: Long): JSONObject? {
-
         val db = readableDatabase
-
         val cursor = db.rawQuery(
             """
             SELECT 
@@ -5636,13 +5635,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             """,
             arrayOf(userId.toString())
         )
-
         return cursor.use {
-
             if (it.moveToFirst()) {
-
                 JSONObject().apply {
-
                     put("user_id", it.getLong(it.getColumnIndexOrThrow("id")))
                     put("uuid", it.getString(it.getColumnIndexOrThrow("uuid")))
                     put("username", it.getString(it.getColumnIndexOrThrow("username")))
@@ -5657,7 +5652,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("theme", it.getString(it.getColumnIndexOrThrow("theme")))
                     put("status", it.getString(it.getColumnIndexOrThrow("status")))
                 }
-
             } else {
                 null
             }
@@ -5697,12 +5691,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getParty(id: Int): JSONObject? {
         val db = readableDatabase
-
         return db.rawQuery(
             "SELECT * FROM parties WHERE id=? AND is_deleted=0",
             arrayOf(id.toString())
         ).use { cursor ->
-
             if (cursor.moveToFirst()) {
                 partyCursorToJson(cursor)
             } else {
@@ -6155,12 +6147,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getSaleTransactionById(id: Int): JSONObject? {
         val db = readableDatabase
-
         return db.rawQuery(
             "SELECT * FROM sales_transactions WHERE id=?",
             arrayOf(id.toString())
         ).use { cursor ->
-
             if (cursor.moveToFirst()) {
                 saleCursorToJson(cursor)
             } else {
@@ -7723,25 +7713,25 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val stats = JSONObject()
         val db = readableDatabase
 
-        // 1. إجمالي المنتجات النشطة في المحطة
+        // 1. إجمالي المنتجات النشطة في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(*) FROM products WHERE station_id = ? AND is_deleted = 0 AND status = 'active'",
+            "SELECT COALESCE(COUNT(*), 0) FROM products WHERE station_id = ? AND is_deleted = 0 AND status = 'active'",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("total_products", cursor.getInt(0))
         }
 
-        // 2. المبيعات اليومية (صافي المبلغ)
+        // 2. المبيعات اليومية (صافي المبلغ) - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND is_deleted=0",
+            "SELECT COALESCE(SUM(net_amount), 0) FROM sales_transactions WHERE station_id=? AND date(created_at)=date('now') AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("daily_sales", cursor.getDouble(0))
         }
 
-        // 3. العملاء النشطون في المحطة (من خلال المبيعات)
+        // 3. العملاء النشطون في المحطة (من خلال المبيعات) - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(DISTINCT p.id) FROM parties p " +
+            "SELECT COALESCE(COUNT(DISTINCT p.id), 0) FROM parties p " +
                     "JOIN sales_transactions s ON s.customer_party_id = p.id " +
                     "WHERE s.station_id = ? AND p.is_active = 1 AND p.is_deleted = 0",
             arrayOf(stationId.toString())
@@ -7749,18 +7739,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("active_customers", cursor.getInt(0))
         }
 
-        // 4. المنتجات المنتهية قريباً (خلال 30 يوم) في المحطة
+        // 4. المنتجات المنتهية قريباً (خلال 30 يوم) في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(*) FROM products WHERE station_id = ? AND has_expiry=1 AND expiry_date BETWEEN date('now') AND date('now', '+30 days') AND is_deleted=0",
+            "SELECT COALESCE(COUNT(*), 0) FROM products WHERE station_id = ? AND has_expiry=1 AND expiry_date BETWEEN date('now') AND date('now', '+30 days') AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("expiry_soon", cursor.getInt(0))
         }
 
-        // 5. المنتجات منخفضة المخزون في المحطة
+        // 5. المنتجات منخفضة المخزون في المحطة - مع COALESCE
         db.rawQuery(
             """
-            SELECT COUNT(*) FROM products p
+            SELECT COALESCE(COUNT(*), 0) FROM products p
             LEFT JOIN inventory_levels il ON p.id = il.product_id
             LEFT JOIN warehouses w ON il.warehouse_id = w.id
             WHERE p.station_id = ? AND p.is_deleted=0 AND p.status='active'
@@ -7772,9 +7762,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("low_stock", cursor.getInt(0))
         }
 
-        // 6. الفواتير المستحقة (خلال أسبوع) في المحطة
+        // 6. الفواتير المستحقة (خلال أسبوع) في المحطة - مع COALESCE
         db.rawQuery(
-            """SELECT COUNT(*) FROM sales_transactions
+            """SELECT COALESCE(COUNT(*), 0) FROM sales_transactions
                WHERE station_id=? AND remaining_amount > 0
                AND date(due_date) BETWEEN date('now') AND date('now', '+7 days')
                AND is_deleted=0""",
@@ -7783,34 +7773,34 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("due_invoices", cursor.getInt(0))
         }
 
-        // 7. كمية المنتجات المرتجعة اليوم في المحطة
+        // 7. كمية المنتجات المرتجعة اليوم في المحطة - مع COALESCE
         db.rawQuery(
-            """SELECT COALESCE(SUM(quantity),0) FROM inventory_movements
+            """SELECT COALESCE(SUM(quantity), 0) FROM inventory_movements
                WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("returned_products_today", cursor.getDouble(0))
         }
 
-        // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
+        // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id) - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
+            "SELECT COALESCE(SUM(quantity), 0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
         }
 
-        // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة
+        // 9. مديونية العملاء (المبالغ المتبقية للفواتير الآجلة) في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND is_deleted=0",
+            "SELECT COALESCE(SUM(remaining_amount), 0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("customer_debts", cursor.getDouble(0))
         }
 
-        // 10. مديونية الموردين المرتبطين بالمحطة (من خلال عمليات التعبئة)
+        // 10. مديونية الموردين المرتبطين بالمحطة (من خلال عمليات التعبئة) - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(p.current_balance),0) FROM parties p " +
+            "SELECT COALESCE(SUM(p.current_balance), 0) FROM parties p " +
                     "JOIN tank_refills tr ON tr.supplier_id = p.id " +
                     "WHERE tr.station_id = ? AND p.party_type_id = 6 AND p.is_deleted=0",
             arrayOf(stationId.toString())
@@ -7818,10 +7808,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("supplier_debts", cursor.getDouble(0))
         }
 
-        // 11. قيمة المخزون في المحطة (من خلال المنتجات والمستودعات)
+        // 11. قيمة المخزون في المحطة (من خلال المنتجات والمستودعات) - مع COALESCE
         db.rawQuery(
             """
-            SELECT COALESCE(SUM(il.quantity_on_hand * p.purchase_price),0)
+            SELECT COALESCE(SUM(il.quantity_on_hand * p.purchase_price), 0)
             FROM inventory_levels il
             JOIN products p ON il.product_id = p.id
             JOIN warehouses w ON il.warehouse_id = w.id
@@ -7832,9 +7822,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("inventory_value", cursor.getDouble(0))
         }
 
-        // 12. المهام المعلقة (طلبات الصيانة المفتوحة) في المحطة
+        // 12. المهام المعلقة (طلبات الصيانة المفتوحة) في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(*) FROM maintenance_requests WHERE station_id=? AND status='open' AND is_deleted=0",
+            "SELECT COALESCE(COUNT(*), 0) FROM maintenance_requests WHERE station_id=? AND status='open' AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("pending_tasks", cursor.getInt(0))
@@ -7867,9 +7857,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         stats.put("products_trend", productsTrend)
 
         // الاحتفاظ بالمفاتيح القديمة لتوافق مع أي كود آخر (مع تحديثها لتراعي المحطة)
-        // إجمالي المبيعات والليترات وعدد المعاملات اليوم
+        // إجمالي المبيعات والليترات وعدد المعاملات اليوم - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(net_amount),0), COALESCE(SUM(liters),0), COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at) = date('now') AND is_deleted=0",
+            "SELECT COALESCE(SUM(net_amount), 0), COALESCE(SUM(liters), 0), COUNT(*) FROM sales_transactions WHERE station_id=? AND date(created_at) = date('now') AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -7879,33 +7869,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
 
-        // إجمالي الكمية المتبقية في الخزانات للمحطة
+        // إجمالي الكمية المتبقية في الخزانات للمحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(current_quantity),0) FROM tanks WHERE station_id=? AND is_deleted=0",
+            "SELECT COALESCE(SUM(current_quantity), 0) FROM tanks WHERE station_id=? AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("total_remaining", cursor.getDouble(0))
         }
 
-        // إجمالي المبالغ المستحقة (للعملاء) في المحطة
+        // إجمالي المبالغ المستحقة (للعملاء) في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND payment_status IN ('pending','partial') AND is_deleted=0",
+            "SELECT COALESCE(SUM(remaining_amount), 0) FROM sales_transactions WHERE station_id=? AND payment_status IN ('pending','partial') AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("total_due", cursor.getDouble(0))
         }
 
-        // إجمالي العملاء (جميع العملاء في المحطة)
+        // إجمالي العملاء (جميع العملاء في المحطة) - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(DISTINCT p.id) FROM parties p JOIN sales_transactions s ON s.customer_party_id = p.id WHERE s.station_id=? AND p.is_deleted=0",
+            "SELECT COALESCE(COUNT(DISTINCT p.id), 0) FROM parties p JOIN sales_transactions s ON s.customer_party_id = p.id WHERE s.station_id=? AND p.is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("total_customers", cursor.getInt(0))
         }
 
-        // عدد ومبلغ الفواتير المتأخرة في المحطة
+        // عدد ومبلغ الفواتير المتأخرة في المحطة - مع COALESCE
         db.rawQuery(
-            "SELECT COUNT(*), COALESCE(SUM(remaining_amount),0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date('now') AND is_deleted=0",
+            "SELECT COALESCE(COUNT(*), 0), COALESCE(SUM(remaining_amount), 0) FROM sales_transactions WHERE station_id=? AND is_credit=1 AND date(due_date) < date('now') AND is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -7929,7 +7919,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at)=? AND is_deleted=0",
+                "SELECT COALESCE(SUM(net_amount), 0) FROM sales_transactions WHERE station_id=? AND date(created_at)=? AND is_deleted=0",
                 arrayOf(stationId.toString(), date)
             ).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0
@@ -7954,7 +7944,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             // نفترض أننا نأخذ عدد المنتجات النشطة في تاريخ معين (نستخدم created_at كتقريب)
             db.rawQuery(
-                "SELECT COUNT(*) FROM products WHERE station_id=? AND is_deleted=0 AND status='active' $dateCondition",
+                "SELECT COALESCE(COUNT(*), 0) FROM products WHERE station_id=? AND is_deleted=0 AND status='active' $dateCondition",
                 arrayOf(stationId.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) cursor.getInt(0) else 0
@@ -9570,10 +9560,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
-    /**
-     * الحصول على آخر قراءة لكل مضخة.
-     * @return JSONArray يحتوي على آخر قراءة لكل مضخة
-     */
+
     fun getLatestMeterReadings(): JSONArray {
         dbLock.lock()
         return try {
@@ -9738,10 +9725,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
-    /**
-    * الحصول على وضع دفتر اليومية (Journal Mode) لقاعدة البيانات.
-    * @return وضع الـ journal (مثل "WAL", "DELETE") أو null في حال الفشل.
-    */
+
     fun getJournalMode(): String? {
         dbLock.lock()
         return try {
@@ -9756,7 +9740,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
-
 
     fun addTankReading(data: JSONObject): Long {
         dbLock.lock()
@@ -9807,18 +9790,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-
     // ========================================================================
     // دوال إدارة رموز إعادة تعيين كلمة المرور (Password Reset Tokens)
     // ========================================================================
 
-    /**
-     * تخزين رمز إعادة تعيين كلمة المرور للمستخدم
-     * @param userId معرف المستخدم
-     * @param token الرمز المميز
-     * @param expiryMinutes مدة صلاحية الرمز بالدقائق (افتراضي 60)
-     * @return true إذا نجحت العملية
-     */
     fun storeResetToken(userId: Long, token: String, expiryMinutes: Int = 60): Boolean {
         dbLock.lock()
         return try {
@@ -9840,11 +9815,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * التحقق من صلاحية رمز إعادة تعيين كلمة المرور
-     * @param token الرمز المميز
-     * @return JSONObject يحتوي على بيانات المستخدم إذا كان الرمز صالحاً، أو null
-     */
     fun validateResetToken(token: String): JSONObject? {
         if (token.isBlank()) return null
         dbLock.lock()
@@ -9880,11 +9850,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * إزالة رمز إعادة تعيين كلمة المرور (بعد الاستخدام أو الإلغاء)
-     * @param token الرمز المميز
-     * @return true إذا تم الحذف
-     */
     fun clearResetToken(token: String): Boolean {
         if (token.isBlank()) return false
         dbLock.lock()
@@ -9899,12 +9864,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * تحديث كلمة مرور المستخدم مع توليد salt و hash جديدين
-     * @param userId معرف المستخدم
-     * @param newPassword كلمة المرور الجديدة
-     * @return true إذا نجح التحديث
-     */
     fun updateUserPassword(userId: Long, newPassword: String): Boolean {
         if (newPassword.isBlank()) return false
         dbLock.lock()
@@ -9923,7 +9882,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             val rows = db.update("users", cv, "id = ? AND is_deleted = 0", arrayOf(userId.toString()))
             if (rows > 0) {
-                // تعيين الرمز كمستخدم
                 val usedCv = ContentValues().apply {
                     put("is_used", 1)
                     put("used_at", getCurrentDateTime())
@@ -9944,13 +9902,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال OTP الخاصة بالمستخدمين (User OTP)
     // ========================================================================
 
-    /**
-     * إنشاء/تخزين رمز OTP للمستخدم
-     * @param userId معرف المستخدم
-     * @param otpCode رمز OTP
-     * @param expirySeconds مدة الصلاحية بالثواني (افتراضي 300 = 5 دقائق)
-     * @return true إذا نجحت العملية
-     */
     fun storeUserOtp(userId: Long, otpCode: String, expirySeconds: Int = 300): Boolean {
         dbLock.lock()
         return try {
@@ -9975,12 +9926,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * التحقق من رمز OTP للمستخدم
-     * @param userId معرف المستخدم
-     * @param otpCode رمز OTP المدخل
-     * @return true إذا كان الرمز صحيحاً ولم تنتهِ صلاحيته
-     */
     fun validateOtpCode(userId: Long, otpCode: String): Boolean {
         dbLock.lock()
         return try {
@@ -9991,12 +9936,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 arrayOf(userId.toString(), otpCode, now.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
-                    // نجاح: حذف الرمز بعد الاستخدام
                     db.delete("user_otp_verifications", "user_id = ?", arrayOf(userId.toString()))
                     logActivity("system", "otp_verified", "تم التحقق من OTP للمستخدم $userId")
                     true
                 } else {
-                    // فشل: زيادة عدد المحاولات
                     db.execSQL("UPDATE user_otp_verifications SET attempts = attempts + 1 WHERE user_id = ?", arrayOf(userId.toString()))
                     false
                 }
@@ -10009,11 +9952,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * إزالة/حذف رمز OTP للمستخدم (بعد الاستخدام أو الإلغاء)
-     * @param userId معرف المستخدم
-     * @return true إذا تم الحذف
-     */
     fun clearOtpCode(userId: Long): Boolean {
         dbLock.lock()
         return try {
@@ -10027,10 +9965,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    /**
-     * تنظيف رموز OTP منتهية الصلاحية للمستخدمين
-     * @return عدد السجلات المحذوفة
-     */
     fun cleanupExpiredUserOtps(): Int {
         dbLock.lock()
         return try {
@@ -10044,5 +9978,4 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
-
 }

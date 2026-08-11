@@ -2838,12 +2838,19 @@ class MainActivity : AppCompatActivity() {
         // ============================================================
 
         @JavascriptInterface
-        fun getDashboardStats(): String {
+        fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getDashboardStats called")
             if (!checkPermission("dashboard", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val stats = db.getDashboardStats(1)
+                // تحليل المعاملات إذا كانت موجودة
+                val params = if (jsonData.isNotBlank() && jsonData != "{}") {
+                    try { JSONObject(jsonData) } catch (e: Exception) { JSONObject() }
+                } else {
+                    JSONObject()
+                }
+                val stationId = params.optInt("station_id", 1)
+                val stats = db.getDashboardStats(stationId)
                 dataResponse(stats)
             } catch (e: Exception) {
                 DebugLogger.logException("Dashboard", e)

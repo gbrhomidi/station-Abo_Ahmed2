@@ -1185,6 +1185,7 @@
         // ============================================================
         // دالة الاتصال الأساسية عبر AndroidInterface (باستخدام JSON واحد)
         // ============================================================
+        // تم إصلاحها: قائمة بالدوال التي لا تحتاج إلى تمرير معاملات (string empty)
         async function apiCall(action, params = {}) {
             if (!useAndroidInterface || !androidInterface) {
                 throw new Error('AndroidInterface غير متاح');
@@ -1197,8 +1198,20 @@
             }
 
             try {
-                const jsonParams = JSON.stringify(params);
-                const result = method(jsonParams);
+                // قائمة الدوال التي لا تحتاج معاملات
+                const noParamMethods = ['getDashboardStats', 'getCurrentUser', 'getCustomers', 
+                                       'getSuppliers', 'getProducts', 'getNotifications', 
+                                       'getTableCounts', 'getDatabaseInfo', 'ping', 
+                                       'getOverduePayments', 'getActiveAlerts', 'getRecentActivity'];
+                
+                let result;
+                if (noParamMethods.includes(action)) {
+                    // لا ترسل معاملات للدوال التي لا تحتاجها
+                    result = method();
+                } else {
+                    const jsonParams = JSON.stringify(params);
+                    result = method(jsonParams);
+                }
                 return handleAndroidResult(result);
             } catch (e) {
                 console.error('AndroidInterface error:', e);
@@ -1685,8 +1698,57 @@
         }
 
         // ============================================================
-        // تحميل لوحة التحكم مع Cache
+        // تحميل لوحة التحكم مع Cache محسّن ومعالجة أخطاء أفضل
         // ============================================================
+        // محاولة تحميل البيانات من cache أو عرض قيم افتراضية
+        function tryLoadFromCache() {
+            try {
+                const cached = localStorage.getItem('dashboardCache');
+                if (cached) {
+                    try {
+                        const stats = JSON.parse(cached);
+                        dashboardCache = stats;
+                        updateStatsCards(stats);
+                        document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
+                        showToast('تم تحميل البيانات من الذاكرة المؤقتة', 'warning');
+                        return true;
+                    } catch (e) {
+                        console.error('Error parsing cached dashboard data:', e);
+                    }
+                }
+            } catch (e) {
+                console.error('Cache load error:', e);
+            }
+
+            // إذا لم يوجد cache، عرض قيم افتراضية
+            updateStatsCards({
+                total_products: 0,
+                daily_sales: 0,
+                active_customers: 0,
+                expiry_soon: 0,
+                low_stock: 0,
+                due_invoices: 0,
+                returned_products_today: 0,
+                damaged_products_today: 0,
+                customer_debts: 0,
+                supplier_debts: 0,
+                inventory_value: 0,
+                pending_tasks: 0,
+                total_sales: 0,
+                total_liters: 0,
+                transactions_today: 0,
+                total_remaining: 0,
+                total_due: 0,
+                total_customers: 0,
+                overdue_count: 0,
+                overdue_amount: 0,
+                products_trend: '+0%',
+                sales_trend: '+0%'
+            });
+            document.getElementById('last-update').textContent = 'جاري تحميل البيانات...';
+            return false;
+        }
+
         async function loadDashboard(forceRefresh = false) {
             // إذا كان هناك Cache ولم نطلب تحديثاً قسرياً، نستخدمه
             if (!forceRefresh && dashboardCache) {
@@ -1699,6 +1761,7 @@
             showLoading(true);
             try {
                 const result = await apiCall('getDashboardStats');
+                
                 if (result.success && result.data) {
                     const stats = result.data;
                     // تحديث Cache
@@ -1706,7 +1769,10 @@
                     // تخزين في localStorage للاستخدام دون اتصال
                     try {
                         localStorage.setItem('dashboardCache', JSON.stringify(stats));
-                    } catch (e) { /* ignore */ }
+                        localStorage.setItem('dashboardCacheTime', Date.now().toString());
+                    } catch (e) {
+                        console.warn('localStorage not available');
+                    }
 
                     updateStatsCards(stats);
                     if (stats.notifications) {
@@ -1718,34 +1784,22 @@
                     showToast('تم تحديث لوحة التحكم', 'success');
                 } else {
                     // في حالة فشل التحميل، محاولة استخدام Cache من localStorage
-                    const cached = localStorage.getItem('dashboardCache');
-                    if (cached) {
-                        try {
-                            const stats = JSON.parse(cached);
-                            dashboardCache = stats;
-                            updateStatsCards(stats);
-                            document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
-                            showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
-                            return;
-                        } catch (e) { /* ignore */ }
+                    const cacheLoaded = tryLoadFromCache();
+                    if (!cacheLoaded) {
+                        showToast('فشل تحميل الإحصائيات', 'error');
                     }
-                    showToast('فشل تحميل الإحصائيات', 'error');
                 }
             } catch (e) {
                 console.error('Dashboard error:', e);
                 // محاولة استخدام Cache
-                const cached = localStorage.getItem('dashboardCache');
-                if (cached) {
-                    try {
-                        const stats = JSON.parse(cached);
-                        dashboardCache = stats;
-                        updateStatsCards(stats);
-                        document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
-                        showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
-                        return;
-                    } catch (e2) { /* ignore */ }
+                const cacheLoaded = tryLoadFromCache();
+                if (!cacheLoaded) {
+                    showToast('خطأ في تحميل البيانات', 'error');
                 }
-                showToast('خطأ في تحميل البيانات', 'error');
+                // عرض رسالة خطأ واضحة في وحدة التحكم
+                if (e.message && e.message.includes('not found')) {
+                    console.error('خطأ في الاتصال بالنظام: الدالة غير موجودة');
+                }
             } finally {
                 showLoading(false);
             }

@@ -11,15 +11,19 @@ import android.util.Log
 
 /**
  * ═══════════════════════════════════════════════════════════════
- * محلل العملاء - SmsCustomerResolver
+ * محلل العملاء - SmsCustomerResolver (المُحدَّث لـ Gateway Pattern)
  * ═══════════════════════════════════════════════════════════════
  *
  * المهام:
- * 1. البحث عن العميل برقم الهاتف
+ * 1. البحث عن العميل برقم الهاتف عبر SmsPartyGateway
  * 2. قراءة الرصيد والنقاط
  * 3. قراءة سجل الطلبات
  * 4. قراءة الأسعار من قاعدة البيانات
  * 5. قراءة أرقام المديرين والسائقين
+ *
+ * التغيير الجوهري:
+ * - لم يعد يستعلم مباشرة على parties.phone
+ * - يستخدم SmsPartyGateway كطبقة وصول وحيدة
  */
 class SmsCustomerResolver(private val db: DatabaseHelper) {
 
@@ -41,44 +45,40 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         val fleetSize: Int = 0
     )
 
+    /**
+     * البحث عن العميل برقم الهاتف عبر SmsPartyGateway
+     * لا يستعلم مباشرة على parties.phone
+     */
     suspend fun findCustomer(phone: String): CustomerInfo? = withContext(Dispatchers.IO) {
         val cleanSender = PhoneUtils.normalize(phone) ?: ""
         if (cleanSender.isEmpty()) return@withContext null
 
-        val cursor = db.readableDatabase.rawQuery(
-            "SELECT * FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
-            arrayOf(cleanSender)
-        )
+        // استخدام SmsPartyGateway بدلاً من الاستعلام المباشر
+        val gateway = SmsPartyGateway(db)
+        val partyData = gateway.findPartyByPhone(cleanSender)
 
-        cursor.use {
-            if (it.moveToFirst()) {
-                CustomerInfo(
-                    name = it.getString(it.getColumnIndexOrThrow("name"))?.orEmpty() ?: "",
-                    phone = phone,
-                    balance = it.getDouble(it.getColumnIndexOrThrow("current_balance")),
-                    points = it.getInt(it.getColumnIndexOrThrow("loyalty_points")),
-                    vipLevel = it.getInt(it.getColumnIndexOrThrow("vip_level")),
-                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name"))?.orEmpty() ?: "",
-                    email = it.getString(it.getColumnIndexOrThrow("email"))?.orEmpty() ?: "",
-                    address = it.getString(it.getColumnIndexOrThrow("address"))?.orEmpty() ?: "",
-                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type"))?.orEmpty() ?: "",
-                    fleetSize = it.getInt(it.getColumnIndexOrThrow("fleet_size"))
-                )
-            } else null
-        }
+        if (partyData != null) {
+            CustomerInfo(
+                name = partyData.getString("name") ?: "",
+                phone = phone,
+                balance = partyData.optDouble("current_balance", 0.0),
+                points = partyData.optInt("loyalty_points", 0),
+                vipLevel = partyData.optInt("vip_level", 0),
+                commercialName = partyData.optString("commercial_name", ""),
+                email = partyData.optString("email", ""),
+                address = partyData.optString("address", ""),
+                vehicleType = partyData.optString("vehicle_type", ""),
+                fleetSize = partyData.optInt("fleet_size", 0)
+            )
+        } else null
     }
 
     suspend fun getCustomerBalanceByPhone(phone: String): Double = withContext(Dispatchers.IO) {
         val cleanPhone = PhoneUtils.normalize(phone) ?: ""
-        val cursor = db.readableDatabase.rawQuery("""
-            SELECT current_balance FROM parties
-            WHERE phone = ? AND is_deleted = 0
-            LIMIT 1
-        """.trimIndent(), arrayOf(cleanPhone))
-
-        cursor.use {
-            if (it.moveToFirst()) it.getDouble(0) else 0.0
-        }
+        // استخدام Gateway
+        val gateway = SmsPartyGateway(db)
+        val partyData = gateway.findPartyByPhone(cleanPhone)
+        partyData?.optDouble("current_balance", 0.0) ?: 0.0
     }
 
     suspend fun getLastOrderByPhone(phone: String): JSONObject? = withContext(Dispatchers.IO) {
@@ -86,9 +86,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
-            WHERE p.phone = ? AND s.is_deleted = 0
+            WHERE p.id = (SELECT party_id FROM party_contacts WHERE phone = ? OR phone2 = ? OR whatsapp = ? LIMIT 1)
+            AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT 1
-        """.trimIndent(), arrayOf(cleanPhone))
+        """.trimIndent(), arrayOf(cleanPhone, cleanPhone, cleanPhone))
 
         cursor.use {
             if (it.moveToFirst()) {
@@ -109,9 +110,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         val cursor = db.readableDatabase.rawQuery("""
             SELECT s.* FROM sales_transactions s
             JOIN parties p ON s.customer_party_id = p.id
-            WHERE p.phone = ? AND s.is_deleted = 0
+            WHERE p.id = (SELECT party_id FROM party_contacts WHERE phone = ? OR phone2 = ? OR whatsapp = ? LIMIT 1)
+            AND s.is_deleted = 0
             ORDER BY s.id DESC LIMIT ?
-        """.trimIndent(), arrayOf(cleanPhone, limit.toString()))
+        """.trimIndent(), arrayOf(cleanPhone, cleanPhone, cleanPhone, limit.toString()))
 
         cursor.use {
             while (it.moveToNext()) {
@@ -239,13 +241,10 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
 
     private suspend fun getPartyIdByPhone(phone: String): Int? = withContext(Dispatchers.IO) {
         val cleanPhone = PhoneUtils.normalize(phone) ?: ""
-        val cursor = db.readableDatabase.rawQuery(
-            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
-            arrayOf(cleanPhone)
-        )
-        cursor.use {
-            if (it.moveToFirst()) it.getInt(0) else null
-        }
+        // استخدام Gateway بدلاً من الاستعلام المباشر
+        val gateway = SmsPartyGateway(db)
+        val partyData = gateway.findPartyByPhone(cleanPhone)
+        partyData?.optInt("id", 0)?.takeIf { it > 0 }
     }
 
     fun getVipText(vip: Int): String {
@@ -264,10 +263,6 @@ class SmsCustomerResolver(private val db: DatabaseHelper) {
         require(result.isFinite() && result >= 0) { "Calculation overflow" }
         return result
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ مزامنة تفضيلات العميل (syncPreferences) – جديدة ═══
-    // ═══════════════════════════════════════════════════════════════
 
     suspend fun syncPreferences() = withContext(Dispatchers.IO) {
         try {

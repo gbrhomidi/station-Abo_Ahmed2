@@ -526,68 +526,145 @@
             transform: translateY(-50%);
             background: linear-gradient(145deg, #4B0082, #5a1a9a);
             color: white;
-            width: 35px; height: 35px;
+            width: 38px;
+            height: 38px;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 50% 0 0 50%;
             cursor: pointer;
             z-index: 1001;
-            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
-            transition: all 0.3s;
-            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: -3px 0 15px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.15);
             touch-action: manipulation;
+            font-size: 1.1rem;
         }
-        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
-        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.92);
+        }
+        .sidebar-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(20px) translateY(-50%);
+        }
         .sidebar {
             position: fixed;
-            top: 50%;
-            right: -90px;
-            transform: translateY(-50%);
-            width: 70px;
+            top: 0;
+            right: -320px;
+            width: 280px;
+            height: 100vh;
             background: var(--surface-elevated);
             z-index: 999;
-            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            padding: 8px;
-            border-radius: 15px 0 0 15px;
+            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 20px 16px;
             overflow-y: auto;
-            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
-            backdrop-filter: blur(10px);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            opacity: 0;
-        }
-        .sidebar.open { right: 0; opacity: 1; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
-        .sidebar-btn {
-            position: relative;
-            background: rgba(75, 0, 130, 0.8);
-            border: var(--border-width) var(--border-style) var(--border-color);
-            padding: 8px 4px;
-            border-radius: 10px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
+            box-shadow: -8px 0 40px rgba(0,0,0,0.3);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-left: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 1;
             display: flex;
             flex-direction: column;
+        }
+        .sidebar.open { right: 0; }
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 998;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+        .sidebar-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            margin-bottom: 16px;
+        }
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        .sidebar-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 4px;
-            min-height: 55px;
-            text-align: center;
-            font-size: 0.75rem;
+            transition: all 0.3s;
+        }
+        .sidebar-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+        .sidebar-btn {
+            background: var(--surface-color);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 12px 14px;
+            border-radius: 12px;
+            color: var(--text-color);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
             font-family: 'Cairo', sans-serif;
             touch-action: manipulation;
+            width: 100%;
+            text-align: right;
         }
-        .sidebar-btn:active { transform: scale(0.95); }
+        .sidebar-btn:active { transform: scale(0.96); }
         .sidebar-btn:hover {
-            transform: scale(1.05);
-            background: rgba(75,0,130,0.35);
-            box-shadow: 0 0 15px rgba(0,212,255,0.2);
+            background: var(--primary-dim);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
         }
-        .sidebar-btn i { font-size: 1.1rem; }
-        .sidebar-btn span { font-size: 0.65rem; }
+        .sidebar-btn i {
+            font-size: 1.1rem;
+            width: 24px;
+            text-align: center;
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .sidebar-footer .sidebar-btn {
+            background: var(--primary-dim);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .sidebar-footer .sidebar-btn:hover {
+            background: var(--primary-color);
+            color: white;
+        }
 
         /* ============================================================
            القائمة السفلية (Bottom Navigation)
@@ -889,8 +966,8 @@
             .cards-container { padding: 0 12px 16px; }
             .bottom-nav .nav-item i { font-size: 15px; }
             .bottom-nav .nav-item span { font-size: 0.7rem; }
-            .sidebar { width: 60px; }
-            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
+            .sidebar { width: 260px; right: -280px; padding: 16px 12px; }
+            .sidebar-btn { padding: 10px 12px; font-size: 0.8rem; }
             .sidebar-btn i { font-size: 0.9rem; }
             .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
             .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
@@ -1015,25 +1092,42 @@
     <!-- ============================================================
     القائمة الجانبية (Sidebar)
     ============================================================ -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <div class="sidebar-toggle" id="sidebarToggle">
         <i class="fas fa-bars"></i>
     </div>
+
     <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>📋 القائمة</h3>
+            <button class="sidebar-close" id="sidebarClose">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
         <div class="sidebar-content">
             <button class="sidebar-btn" onclick="handleSidebarAction('add')">
-                <i class="fas fa-plus"></i> <span>إضافة</span>
+                <i class="fas fa-plus-circle"></i> إضافة قالب
             </button>
             <button class="sidebar-btn" onclick="handleSidebarAction('search')">
-                <i class="fas fa-search"></i> <span>استعلام</span>
+                <i class="fas fa-search"></i> بحث متقدم
             </button>
             <button class="sidebar-btn" onclick="handleSidebarAction('export')">
-                <i class="fas fa-file-export"></i> <span>تصدير</span>
+                <i class="fas fa-file-export"></i> تصدير القوالب
             </button>
             <button class="sidebar-btn" onclick="handleSidebarAction('stats')">
-                <i class="fas fa-chart-bar"></i> <span>إحصائيات</span>
+                <i class="fas fa-chart-bar"></i> إحصائيات
             </button>
             <button class="sidebar-btn" onclick="handleSidebarAction('cleanup')">
-                <i class="fas fa-broom"></i> <span>تنظيف</span>
+                <i class="fas fa-broom"></i> تنظيف
+            </button>
+            <button class="sidebar-btn" onclick="handleSidebarAction('refresh')">
+                <i class="fas fa-sync-alt"></i> تحديث البيانات
+            </button>
+        </div>
+        <div class="sidebar-footer">
+            <button class="sidebar-btn" id="sidebarBack">
+                <i class="fas fa-arrow-right"></i> رجوع
             </button>
         </div>
     </div>
@@ -1226,25 +1320,120 @@
     ============================================================ -->
     <script>
         // ============================================================
-        // 1. Android Bridge – حقيقي من MainActivity.kt
+        // 1. Android Bridge
+        //    متوافق مباشرة مع WebAppInterface الموجود في MainActivity.kt
         // ============================================================
-        function apiCall(action, params) {
+        function apiCall(action, params = {}) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
+                try {
+                    if (
+                        typeof window.AndroidInterface === 'undefined' ||
+                        !window.AndroidInterface
+                    ) {
+                        reject({
+                            success: false,
+                            message: 'AndroidInterface غير متاح'
+                        });
+                        return;
                     }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+
+                    let result;
+
+                    switch (action) {
+
+                        // ------------------------------------------------
+                        // قراءة القوالب
+                        // MainActivity.kt:
+                        // getSmsTemplates(): String
+                        // ------------------------------------------------
+                        case 'getSmsTemplates':
+                            result = window.AndroidInterface.getSmsTemplates();
+                            break;
+
+                        // ------------------------------------------------
+                        // إضافة قالب
+                        // MainActivity.kt:
+                        // addSmsTemplate(jsonData: String)
+                        // ------------------------------------------------
+                        case 'addSmsTemplate':
+                            result = window.AndroidInterface.addSmsTemplate(
+                                JSON.stringify(params || {})
+                            );
+                            break;
+
+                        // ------------------------------------------------
+                        // تعديل قالب
+                        // MainActivity.kt:
+                        // updateSmsTemplate(id: Long, jsonData: String)
+                        // ------------------------------------------------
+                        case 'updateSmsTemplate': {
+                            const id = Number(params?.id || 0);
+
+                            if (!Number.isInteger(id) || id <= 0) {
+                                reject({
+                                    success: false,
+                                    message: 'معرف القالب غير صالح'
+                                });
+                                return;
+                            }
+
+                            const data = { ...params };
+                            delete data.id;
+
+                            result = window.AndroidInterface.updateSmsTemplate(
+                                id,
+                                JSON.stringify(data)
+                            );
+                            break;
+                        }
+
+                        // ------------------------------------------------
+                        // حذف قالب
+                        // MainActivity.kt:
+                        // deleteSmsTemplate(id: Long)
+                        // ------------------------------------------------
+                        case 'deleteSmsTemplate': {
+                            const id = Number(params?.id || 0);
+
+                            if (!Number.isInteger(id) || id <= 0) {
+                                reject({
+                                    success: false,
+                                    message: 'معرف القالب غير صالح'
+                                });
+                                return;
+                            }
+
+                            result = window.AndroidInterface.deleteSmsTemplate(id);
+                            break;
+                        }
+
+                        default:
+                            reject({
+                                success: false,
+                                message: `إجراء غير مدعوم: ${action}`
+                            });
+                            return;
+                    }
+
+                    // WebAppInterface يعيد String JSON
+                    if (typeof result === 'string') {
+                        try {
+                            resolve(JSON.parse(result));
+                        } catch (parseError) {
+                            resolve({
+                                success: true,
+                                data: result
+                            });
+                        }
+                    } else {
+                        resolve(result);
+                    }
+
+                } catch (error) {
+                    reject({
+                        success: false,
+                        message: error?.message || 'حدث خطأ أثناء الاتصال بالتطبيق'
+                    });
                 }
             });
         }
@@ -1264,8 +1453,8 @@
                 } catch (e) { return defaultValue; }
             },
             remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getTemplates: function() { return this.get('notification_templates', []); },
-            setTemplates: function(data) { this.set('notification_templates', data); },
+            getTemplates: function() { return this.get('sms_templates', []); },
+            setTemplates: function(data) { this.set('sms_templates', data); },
             getStats: function() { return this.get('template_stats', {}); },
             setStats: function(stats) { this.set('template_stats', stats); },
             getPendingOps: function() { return this.get('pending_ops', []); },
@@ -1274,7 +1463,8 @@
                 ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
                 this.set('pending_ops', ops);
             },
-            clearPendingOps: function() { this.remove('pending_ops'); }
+            clearPendingOps: function() { this.remove('pending_ops'); },
+            set: function(key, value) { this.set(key, value); }
         };
 
         // ============================================================
@@ -1302,27 +1492,57 @@
         // ============================================================
         async function syncPendingOperations() {
             if (!isOnline) return;
+
             const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
+
+            if (!Array.isArray(pendingOps) || pendingOps.length === 0) {
+                return;
+            }
+
             showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
+
+            const remainingOps = [];
+            let successCount = 0;
+            let failCount = 0;
+
+            try {
+                for (const op of pendingOps) {
+                    try {
+                        const result = await apiCall(op.action, op.data);
+
+                        if (result && result.success === true) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                            remainingOps.push(op);
+                        }
+
+                    } catch (error) {
+                        failCount++;
+                        remainingOps.push(op);
+                    }
+                }
+
+                LocalDB.set('pending_ops', remainingOps);
+
+                if (successCount > 0) {
+                    showToast(
+                        `✅ تمت مزامنة ${successCount} عملية بنجاح`,
+                        'success'
+                    );
+                    await loadTemplates();
+                }
+
+                if (failCount > 0) {
+                    showToast(
+                        `⚠️ تعذر مزامنة ${failCount} عملية`,
+                        'warning'
+                    );
+                }
+
+            } finally {
+                showLoading(false);
             }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadTemplates();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
         }
 
         // ============================================================
@@ -1467,34 +1687,51 @@
         }
 
         async function loadTemplates() {
-            if (isInitialLoad) renderSkeleton();
+            if (isInitialLoad) {
+                renderSkeleton();
+            }
 
             showLoading(true);
+
             try {
-                // جلب القوالب عبر Android Bridge – الدالة getSmsTemplates من MainActivity.kt
-                const result = await apiCall('getSmsTemplates', {});
-                if (result.success && result.data) {
-                    allTemplates = result.data;
+                const result = await apiCall('getSmsTemplates');
+
+                if (result && result.success && result.data) {
+                    allTemplates = Array.isArray(result.data)
+                        ? result.data
+                        : [];
+
                     LocalDB.setTemplates(allTemplates);
                 } else {
                     allTemplates = LocalDB.getTemplates();
                 }
 
                 if (allTemplates.length === 0) {
-                    showToast('⚠️ لا توجد قوالب إشعارات', 'warning');
+                    showToast(
+                        '⚠️ لا توجد قوالب إشعارات',
+                        'warning'
+                    );
                 }
 
-            } catch (e) {
+            } catch (error) {
+
                 allTemplates = LocalDB.getTemplates();
-                if (allTemplates.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
-            }
 
-            renderCards();
-            updateStats();
-            isInitialLoad = false;
-            showLoading(false);
+                if (allTemplates.length === 0) {
+                    showToast(
+                        '⚠️ تعذر الوصول إلى بيانات القوالب',
+                        'warning'
+                    );
+                }
+
+            } finally {
+                renderCards();
+                updateStats();
+                generateAlerts();
+
+                isInitialLoad = false;
+                showLoading(false);
+            }
         }
 
         // ============================================================
@@ -1647,6 +1884,7 @@
                     time: 'الآن'
                 });
             }
+            // تخزين الإشعارات في LocalDB للاستخدام في showNotifications
             LocalDB.set('template_notifications', alerts);
             renderAlerts(alerts);
         }
@@ -1722,27 +1960,39 @@
         // 16. حفظ القالب (إضافة / تعديل)
         // ============================================================
         async function saveTemplate() {
-            const id = parseInt(document.getElementById('editId').value) || 0;
-            const templateCode = document.getElementById('templateCode').value.trim();
-            const templateName = document.getElementById('templateName').value.trim();
-            const channel = document.getElementById('channel').value;
-            const body = document.getElementById('body').value.trim();
+            const id =
+                parseInt(document.getElementById('editId').value, 10) || 0;
+
+            const templateCode =
+                document.getElementById('templateCode').value.trim();
+
+            const templateName =
+                document.getElementById('templateName').value.trim();
+
+            const channel =
+                document.getElementById('channel').value;
+
+            const body =
+                document.getElementById('body').value.trim();
 
             if (!templateCode) {
                 showToast('❌ الرجاء إدخال كود القالب', 'error');
                 document.getElementById('templateCode').focus();
                 return;
             }
+
             if (!templateName) {
                 showToast('❌ الرجاء إدخال اسم القالب', 'error');
                 document.getElementById('templateName').focus();
                 return;
             }
+
             if (!channel) {
                 showToast('❌ الرجاء اختيار القناة', 'error');
                 document.getElementById('channel').focus();
                 return;
             }
+
             if (!body) {
                 showToast('❌ الرجاء إدخال محتوى الرسالة', 'error');
                 document.getElementById('body').focus();
@@ -1750,47 +2000,121 @@
             }
 
             const data = {
-                id: id,
                 template_code: templateCode,
                 template_name: templateName,
-                template_name_ar: document.getElementById('templateNameAr').value.trim(),
+                template_name_ar:
+                    document.getElementById('templateNameAr').value.trim(),
                 channel: channel,
-                subject: document.getElementById('subject').value.trim(),
+                subject:
+                    document.getElementById('subject').value.trim(),
                 body: body,
-                body_ar: document.getElementById('bodyAr').value.trim(),
-                variables: document.getElementById('variables').value.trim(),
-                is_active: parseInt(document.getElementById('isActive').value)
+                body_ar:
+                    document.getElementById('bodyAr').value.trim(),
+                variables:
+                    document.getElementById('variables').value.trim(),
+                is_active:
+                    parseInt(
+                        document.getElementById('isActive').value,
+                        10
+                    )
             };
 
+            const isUpdate = id > 0;
+            const action = isUpdate ?
+                'updateSmsTemplate' :
+                'addSmsTemplate';
+
             showLoading(true);
+
             try {
-                const action = id > 0 ? 'updateSmsTemplate' : 'addSmsTemplate';
-                const result = await apiCall(action, data);
-                if (result.success) {
-                    showToast(id > 0 ? '✅ تم التعديل بنجاح' : '✅ تم الإضافة بنجاح', 'success');
-                    closeModal();
-                    await loadTemplates();
-                    generateAlerts();
-                } else {
-                    throw new Error(result.message || 'فشل في الحفظ');
+                const requestData = isUpdate ?
+                    { ...data, id } :
+                    data;
+
+                const result =
+                    await apiCall(action, requestData);
+
+                if (!result || result.success !== true) {
+                    throw new Error(
+                        result?.message ||
+                        result?.error ||
+                        'فشل في حفظ القالب'
+                    );
                 }
-            } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: id > 0 ? 'updateSmsTemplate' : 'addSmsTemplate', data: data });
-                    if (id > 0) {
-                        const idx = allTemplates.findIndex(t => t.id == id);
-                        if (idx >= 0) allTemplates[idx] = { ...allTemplates[idx], ...data };
+
+                showToast(
+                    isUpdate ?
+                    '✅ تم تعديل القالب بنجاح' :
+                    '✅ تم إضافة القالب بنجاح',
+                    'success'
+                );
+
+                closeModal();
+
+                await loadTemplates();
+
+            } catch (error) {
+
+                // التخزين المحلي فقط عند عدم توفر Android Bridge/
+                // فشل الاتصال الحقيقي، وليس عند رفض الصلاحيات.
+                if (
+                    !isOnline ||
+                    error?.message === 'AndroidInterface غير متاح'
+                ) {
+                    LocalDB.addPendingOp({
+                        action: action,
+                        data: isUpdate ?
+                            { ...data, id } :
+                            data
+                    });
+
+                    if (isUpdate) {
+                        const index =
+                            allTemplates.findIndex(
+                                t => Number(t.id) === id
+                            );
+
+                        if (index >= 0) {
+                            allTemplates[index] = {
+                                ...allTemplates[index],
+                                ...data,
+                                id
+                            };
+                        }
+
                     } else {
-                        allTemplates.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
+                        allTemplates.push({
+                            ...data,
+                            id: Date.now(),
+                            created_at:
+                                new Date().toISOString()
+                        });
                     }
+
                     LocalDB.setTemplates(allTemplates);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
+
+                    showToast(
+                        '✅ تم الحفظ محلياً وسيتم إرسال العملية عند عودة الاتصال',
+                        'success'
+                    );
+
                     closeModal();
                     renderCards();
                     updateStats();
+                    generateAlerts();
+
                 } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                    showToast(
+                        '❌ ' +
+                        (
+                            error?.message ||
+                            error?.error ||
+                            'حدث خطأ أثناء الحفظ'
+                        ),
+                        'error'
+                    );
                 }
+
             } finally {
                 showLoading(false);
             }
@@ -1885,53 +2209,111 @@
         // 18. تبديل حالة القالب (تفعيل / تعطيل)
         // ============================================================
         async function toggleTemplateStatus(id) {
-            const template = allTemplates.find(t => t.id == id);
+            const template =
+                allTemplates.find(
+                    t => Number(t.id) === Number(id)
+                );
+
             if (!template) {
-                showToast('❌ القالب غير موجود', 'error');
+                showToast(
+                    '❌ القالب غير موجود',
+                    'error'
+                );
                 return;
             }
 
-            const current = template.is_active == 1 || template.is_active === true;
+            const current =
+                template.is_active == 1 ||
+                template.is_active === true;
+
             const newStatus = current ? 0 : 1;
-            const actionText = current ? 'تعطيل' : 'تفعيل';
+
+            const actionText =
+                current ? 'تعطيل' : 'تفعيل';
 
             const confirmed = await Swal.fire({
                 title: '⚠️ تأكيد',
-                text: `هل أنت متأكد من ${actionText} القالب "${template.template_name}"؟`,
+                text:
+                    `هل أنت متأكد من ${actionText} القالب "${template.template_name}"؟`,
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: current ? '#ef4444' : '#10b981',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: `نعم، ${actionText}`,
-                cancelButtonText: 'إلغاء',
-                background: '#1a2236',
-                color: '#f1f5f9'
+                confirmButtonText:
+                    `نعم، ${actionText}`,
+                cancelButtonText: 'إلغاء'
             });
-            if (!confirmed.isConfirmed) return;
+
+            if (!confirmed.isConfirmed) {
+                return;
+            }
 
             showLoading(true);
+
             try {
-                const data = { id: id, is_active: newStatus };
-                const result = await apiCall('updateSmsTemplate', data);
-                if (result.success) {
-                    showToast(`✅ تم ${actionText} القالب بنجاح`, 'success');
-                    await loadTemplates();
-                    generateAlerts();
-                } else {
-                    throw new Error(result.message || 'فشل في التحديث');
+                const result =
+                    await apiCall(
+                        'updateSmsTemplate', {
+                            id: Number(id),
+                            is_active: newStatus
+                        }
+                    );
+
+                if (!result || result.success !== true) {
+                    throw new Error(
+                        result?.message ||
+                        'فشل في تحديث حالة القالب'
+                    );
                 }
-            } catch (e) {
+
+                showToast(
+                    `✅ تم ${actionText} القالب بنجاح`,
+                    'success'
+                );
+
+                await loadTemplates();
+
+            } catch (error) {
+
                 if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'updateSmsTemplate', data: { id: id, is_active: newStatus } });
-                    const idx = allTemplates.findIndex(t => t.id == id);
-                    if (idx >= 0) allTemplates[idx].is_active = newStatus;
+                    const index =
+                        allTemplates.findIndex(
+                            t => Number(t.id) === Number(id)
+                        );
+
+                    if (index >= 0) {
+                        allTemplates[index].is_active =
+                            newStatus;
+                    }
+
                     LocalDB.setTemplates(allTemplates);
-                    showToast(`✅ تم ${actionText} محلياً - سيتم المزامنة لاحقاً`, 'success');
+
+                    LocalDB.addPendingOp({
+                        action: 'updateSmsTemplate',
+                        data: {
+                            id: Number(id),
+                            is_active: newStatus
+                        }
+                    });
+
                     renderCards();
                     updateStats();
+                    generateAlerts();
+
+                    showToast(
+                        '✅ تم تغيير الحالة محلياً',
+                        'success'
+                    );
+
                 } else {
-                    showToast('❌ ' + (e.message || 'خطأ في التحديث'), 'error');
+                    showToast(
+                        '❌ ' +
+                        (
+                            error?.message ||
+                            'حدث خطأ أثناء تحديث الحالة'
+                        ),
+                        'error'
+                    );
                 }
+
             } finally {
                 showLoading(false);
             }
@@ -1955,42 +2337,88 @@
         }
 
         async function confirmDelete() {
-            if (!deleteTargetId) return;
-            const id = deleteTargetId;
+            const id = Number(deleteTargetId);
+
+            if (!id) {
+                showToast(
+                    '❌ معرف القالب غير صالح',
+                    'error'
+                );
+                return;
+            }
 
             showLoading(true);
+
             try {
-                const result = await apiCall('deleteSmsTemplate', { id: id });
-                if (result.success) {
-                    showToast('✅ تم الحذف بنجاح', 'success');
-                    closeModal();
-                    await loadTemplates();
-                    generateAlerts();
-                } else {
-                    throw new Error(result.message || 'فشل في الحذف');
+                const result =
+                    await apiCall(
+                        'deleteSmsTemplate', { id }
+                    );
+
+                if (!result || result.success !== true) {
+                    throw new Error(
+                        result?.message ||
+                        'فشل في حذف القالب'
+                    );
                 }
-            } catch (e) {
+
+                showToast(
+                    '✅ تم حذف القالب بنجاح',
+                    'success'
+                );
+
+                closeModal();
+
+                deleteTargetId = null;
+
+                await loadTemplates();
+
+            } catch (error) {
+
                 if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteSmsTemplate', data: { id: id } });
-                    allTemplates = allTemplates.filter(t => t.id != id);
+                    allTemplates =
+                        allTemplates.filter(
+                            t => Number(t.id) !== id
+                        );
+
                     LocalDB.setTemplates(allTemplates);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
+
+                    LocalDB.addPendingOp({
+                        action: 'deleteSmsTemplate',
+                        data: { id }
+                    });
+
                     renderCards();
                     updateStats();
+                    generateAlerts();
+
+                    closeModal();
+
+                    showToast(
+                        '✅ تم حذف القالب محلياً',
+                        'success'
+                    );
+
                 } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                    showToast(
+                        '❌ ' +
+                        (
+                            error?.message ||
+                            'حدث خطأ أثناء الحذف'
+                        ),
+                        'error'
+                    );
                 }
+
             } finally {
                 showLoading(false);
-                deleteTargetId = null;
             }
         }
 
         // ============================================================
         // 20. مودالات القائمة السفلية (حقيقية)
         // ============================================================
-        function openTableModal(type) {
+        async function openTableModal(type) {
             const modal = document.getElementById('tableModal');
             const title = document.getElementById('tableModalTitle');
             const body = document.getElementById('tableModalBody');
@@ -1998,67 +2426,83 @@
             let html = '';
             let titleText = '';
 
-            switch (type) {
-                case 'allTemplates':
-                    titleText = '📋 جميع قوالب الإشعارات';
-                    html = generateTableFromTemplates(allTemplates);
-                    break;
-                case 'activeTemplates':
-                    titleText = '✅ القوالب النشطة';
-                    const active = allTemplates.filter(t => t.is_active == 1 || t.is_active === true);
-                    html = generateTableFromTemplates(active);
-                    break;
-                case 'channels':
-                    titleText = '📊 توزيع القوالب حسب القناة';
-                    const channelMap = {};
-                    allTemplates.forEach(t => {
-                        const ch = t.channel || 'unknown';
-                        channelMap[ch] = (channelMap[ch] || 0) + 1;
-                    });
-                    html = generateTableFromObject(channelMap, ['القناة', 'عدد القوالب']);
-                    break;
-                case 'usage':
-                    titleText = '📈 إحصائيات استخدام القوالب';
-                    const total = allTemplates.length;
-                    const active = allTemplates.filter(t => t.is_active == 1 || t.is_active === true).length;
-                    const inactive = total - active;
-                    const channels = new Set(allTemplates.map(t => t.channel).filter(c => c)).size;
-                    const usageData = [
-                        { 'المعيار': 'إجمالي القوالب', 'القيمة': total },
-                        { 'المعيار': 'القوالب النشطة', 'القيمة': active },
-                        { 'المعيار': 'القوالب غير النشطة', 'القيمة': inactive },
-                        { 'المعيار': 'القنوات المستخدمة', 'القيمة': channels }
-                    ];
-                    html = generateTableFromArray(usageData, ['المعيار', 'القيمة']);
-                    break;
-                case 'settings':
-                    titleText = '⚙️ إعدادات قوالب الإشعارات';
-                    html = `
-                        <div style="padding:12px;text-align:center;">
-                            <p>إعدادات نظام قوالب الإشعارات</p>
-                            <ul style="list-style:none;padding:0;text-align:center;">
-                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 عدد القوالب المحملة: ${allTemplates.length}</li>
-                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 القنوات المدعومة: SMS, Email, Push, WhatsApp, Telegram, In-App</li>
-                                <li style="padding:8px 0;">🔹 دعم المتغيرات: {variable}</li>
-                            </ul>
-                            <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>
-                        </div>
-                    `;
-                    break;
-                default:
-                    titleText = 'غير معروف';
-                    html = '<div class="empty-state">لا توجد بيانات</div>';
+            showLoading(true);
+
+            try {
+                // نستخدم البيانات المحلية (allTemplates) لأن getSmsTemplates يتم استدعاؤها في loadTemplates
+                // لكننا نحدث البيانات أولاً للتأكد من حداثتها
+                await loadTemplates();
+
+                switch (type) {
+                    case 'allTemplates':
+                        titleText = '📋 جميع قوالب الإشعارات';
+                        html = generateTableFromTemplates(allTemplates);
+                        break;
+                    case 'activeTemplates':
+                        titleText = '✅ القوالب النشطة';
+                        const active = allTemplates.filter(t => t.is_active == 1 || t.is_active === true);
+                        html = generateTableFromTemplates(active);
+                        break;
+                    case 'channels':
+                        titleText = '📊 توزيع القوالب حسب القناة';
+                        const channelMap = {};
+                        allTemplates.forEach(t => {
+                            const ch = t.channel || 'unknown';
+                            channelMap[ch] = (channelMap[ch] || 0) + 1;
+                        });
+                        html = generateTableFromObject(channelMap, ['القناة', 'عدد القوالب']);
+                        break;
+                    case 'usage':
+                        titleText = '📈 إحصائيات استخدام القوالب';
+                        const total = allTemplates.length;
+                        const activeCount = allTemplates.filter(t => t.is_active == 1 || t.is_active === true).length;
+                        const inactiveCount = total - activeCount;
+                        const channelsCount = new Set(allTemplates.map(t => t.channel).filter(c => c)).size;
+                        const usageData = [
+                            { 'المعيار': 'إجمالي القوالب', 'القيمة': total },
+                            { 'المعيار': 'القوالب النشطة', 'القيمة': activeCount },
+                            { 'المعيار': 'القوالب غير النشطة', 'القيمة': inactiveCount },
+                            { 'المعيار': 'القنوات المستخدمة', 'القيمة': channelsCount }
+                        ];
+                        html = generateTableFromArray(usageData, ['المعيار', 'القيمة']);
+                        break;
+                    case 'settings':
+                        titleText = '⚙️ إعدادات قوالب الإشعارات';
+                        html = `
+                            <div style="padding:12px;text-align:center;">
+                                <p>إعدادات نظام قوالب الإشعارات</p>
+                                <ul style="list-style:none;padding:0;text-align:center;">
+                                    <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 عدد القوالب المحملة: ${allTemplates.length}</li>
+                                    <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 القنوات المدعومة: SMS, Email, Push, WhatsApp, Telegram, In-App</li>
+                                    <li style="padding:8px 0;">🔹 دعم المتغيرات: {variable}</li>
+                                </ul>
+                                <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>
+                            </div>
+                        `;
+                        break;
+                    default:
+                        titleText = 'غير معروف';
+                        html = '<div class="empty-state">لا توجد بيانات</div>';
+                }
+
+                title.textContent = titleText;
+                body.innerHTML = html;
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+                hapticFeedback('light');
+
+                // تفعيل العنصر في القائمة السفلية
+                document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
+                document.querySelector(`.bottom-nav .nav-item[data-modal="${type}"]`)?.classList.add('active');
+
+            } catch (error) {
+                showToast('❌ ' + (error?.message || 'حدث خطأ أثناء تحميل البيانات'), 'error');
+                body.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>حدث خطأ في تحميل البيانات</p></div>';
+                modal.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            } finally {
+                showLoading(false);
             }
-
-            title.textContent = titleText;
-            body.innerHTML = html;
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-            hapticFeedback('light');
-
-            // تفعيل العنصر في القائمة السفلية
-            document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
-            document.querySelector(`.bottom-nav .nav-item[data-modal="${type}"]`)?.classList.add('active');
         }
 
         function generateTableFromTemplates(templates) {
@@ -2076,7 +2520,7 @@
                 const isActive = t.is_active == 1 || t.is_active === true;
                 const statusText = isActive ? 'نشط' : 'غير نشط';
                 const statusClass = isActive ? 'active' : 'inactive';
-                table += `<tr>
+                table += `<tr onclick="viewTemplate(${t.id})" style="cursor:pointer;">
                     <td>${escapeHtml(t.template_code || '---')}</td>
                     <td>${escapeHtml(t.template_name || '---')}</td>
                     <td>${getChannelLabel(t.channel)}</td>
@@ -2130,6 +2574,8 @@
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.remove('open');
             document.getElementById('sidebarToggle').classList.remove('hidden');
+            document.getElementById('sidebarOverlay')?.classList.remove('active');
+            document.body.style.overflow = '';
 
             switch (action) {
                 case 'add':
@@ -2146,10 +2592,31 @@
                     openTableModal('usage');
                     break;
                 case 'cleanup':
-                    showToast('🧹 جاري تنظيف البيانات القديمة...', 'info');
+                    cleanupData();
+                    break;
+                case 'refresh':
+                    loadTemplates();
+                    showToast('🔄 تم تحديث البيانات', 'success');
                     break;
                 default:
                     showToast('❌ إجراء غير معروف', 'error');
+            }
+        }
+
+        async function cleanupData() {
+            showLoading(true);
+            try {
+                // محاولة تنظيف العمليات المعلقة
+                LocalDB.clearPendingOps();
+                // إعادة تحميل القوالب
+                await loadTemplates();
+                showToast('🧹 تم تنظيف البيانات المحلية بنجاح', 'success');
+            } catch (error) {
+                showToast('⚠️ تم تنظيف البيانات المحلية', 'info');
+                LocalDB.clearPendingOps();
+                await loadTemplates();
+            } finally {
+                showLoading(false);
             }
         }
 
@@ -2218,9 +2685,9 @@
                 doc.save(fileName);
                 showToast('✅ تم تصدير القوالب بنجاح', 'success');
                 hapticFeedback('success');
-            } catch (e) {
-                showToast('❌ فشل التصدير: ' + e.message, 'error');
-                console.error('Export error:', e);
+            } catch (error) {
+                showToast('❌ فشل التصدير: ' + error.message, 'error');
+                console.error('Export error:', error);
             }
         }
 
@@ -2241,8 +2708,10 @@
                 .map(([ch, count]) => `${getChannelLabel(ch)}: ${count}`)
                 .join(', ');
 
-            const suggestion = total === 0 ? '⚠️ لا توجد قوالب. يُنصح بإنشاء قوالب إشعارات أساسية.' :
-                active < total ? `⚠️ ${total - active} قالب غير نشط. يُنصح بمراجعة القوالب غير النشطة.` :
+            const suggestion = total === 0 ?
+                '⚠️ لا توجد قوالب. يُنصح بإنشاء قوالب إشعارات أساسية.' :
+                active < total ?
+                `⚠️ ${total - active} قالب غير نشط. يُنصح بمراجعة القوالب غير النشطة.` :
                 `✅ جميع القوالب نشطة.`;
 
             Swal.fire({
@@ -2259,9 +2728,7 @@
                     </div>
                 `,
                 icon: 'info',
-                confirmButtonText: 'حسناً',
-                background: '#1a2236',
-                color: '#f1f5f9'
+                confirmButtonText: 'حسناً'
             });
             hapticFeedback('light');
         }
@@ -2272,17 +2739,68 @@
         function setupSidebar() {
             const sidebar = document.getElementById('sidebar');
             const toggle = document.getElementById('sidebarToggle');
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation();
-                sidebar.classList.toggle('open');
-                toggle.classList.toggle('hidden');
+            const closeBtn = document.getElementById('sidebarClose');
+            const overlay = document.getElementById('sidebarOverlay');
+            const backBtn = document.getElementById('sidebarBack');
+
+            if (!sidebar || !toggle) {
+                console.warn('Sidebar elements not found');
+                return;
+            }
+
+            function openSidebar() {
+                sidebar.classList.add('open');
+                toggle.classList.add('hidden');
+                if (overlay) overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
                 hapticFeedback('light');
+            }
+
+            function closeSidebar() {
+                sidebar.classList.remove('open');
+                toggle.classList.remove('hidden');
+                if (overlay) overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+
+            toggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openSidebar();
             });
-            document.addEventListener('click', (e) => {
-                if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                    toggle.classList.remove('hidden');
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeSidebar);
+            }
+
+            if (overlay) {
+                overlay.addEventListener('click', closeSidebar);
+            }
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+                    closeSidebar();
                 }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (sidebar.classList.contains('open')) {
+                    if (!sidebar.contains(e.target) &&
+                        e.target !== toggle &&
+                        !toggle.contains(e.target) &&
+                        !closeBtn?.contains(e.target)) {
+                        closeSidebar();
+                    }
+                }
+            });
+
+            if (backBtn) {
+                backBtn.addEventListener('click', function() {
+                    window.location.href = '../main.html';
+                });
+            }
+
+            sidebar.addEventListener('click', function(e) {
+                e.stopPropagation();
             });
         }
 

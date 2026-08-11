@@ -6,6 +6,16 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+* مشغل خدمة SMS - SmsServiceLauncher
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * التحديثات:
+ * 1. ✅ حذف تسجيل SmsReceiver ديناميكياً
+ * 2. ✅ SmsReceiver يعمل فقط عبر AndroidManifest.xml
+ * 3. ✅ تبسيط المنطق - يبدأ الخدمة فقط
+ */
 class SmsServiceLauncher(
     private val context: Context,
     private val statusRepository: ServiceStatusRepository
