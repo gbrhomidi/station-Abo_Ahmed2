@@ -1,89 +1,128 @@
 package com.aistudio.dieselstationsms.kxmpzq.startup.di
 
 import android.content.Context
+import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-import com.aistudio.dieselstationsms.kxmpzq.startup.*
-import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
-import com.aistudio.dieselstationsms.kxmpzq.startup.config.StaticConfigurationProvider
-import com.aistudio.dieselstationsms.kxmpzq.startup.event.CoroutineEventBus
-import com.aistudio.dieselstationsms.kxmpzq.startup.event.EventBus
-import com.aistudio.dieselstationsms.kxmpzq.startup.health.HealthMonitor
-import com.aistudio.dieselstationsms.kxmpzq.startup.health.SmsServiceHealthMonitor
-import com.aistudio.dieselstationsms.kxmpzq.startup.metrics.InMemoryMetricsCollector
-import com.aistudio.dieselstationsms.kxmpzq.startup.metrics.MetricsCollector
-import com.aistudio.dieselstationsms.kxmpzq.startup.pipeline.*
-import com.aistudio.dieselstationsms.kxmpzq.startup.retry.ExponentialBackoffRetryPolicy
-import com.aistudio.dieselstationsms.kxmpzq.startup.retry.RetryPolicy
-import com.aistudio.dieselstationsms.kxmpzq.service.SMSServiceHeartbeatProvider
+import com.aistudio.dieselstationsms.kxmpzq.sms.*
+import com.aistudio.dieselstationsms.kxmpzq.utils.*
 
 /**
  * ═══════════════════════════════════════════════════════════════
  * جذر التكوين - StartupCompositionRoot
  * ═══════════════════════════════════════════════════════════════
  *
- * التحديثات:
- * 1. ✅ إضافة SchemaInitializationPhase
- * 2. ✅ إضافة DatabaseHelper factory
- * 3. ✅ تكامل مع SmsPartyGateway
- * 4. ✅ تحديث PermissionCheckPhase لـ READ_PHONE_STATE
+ * المهام:
+ * 1. تهيئة جميع المكونات عند بدء التطبيق
+ * 2. إدارة دورة حياة المكونات
+ * 3. توفير وصول مركزي إلى المكونات
  */
-class StartupCompositionRoot(private val context: Context) {
-
-    private val config: ConfigurationProvider = StaticConfigurationProvider
-    private val eventBus: EventBus = CoroutineEventBus()
-    private val stateMachine: StartupStateMachine = StartupStateMachine()
-    private val metricsCollector: MetricsCollector = InMemoryMetricsCollector()
-    private val executionGuard: StartupExecutionGuard = StartupExecutionGuard()
-    private val cancellationRegistry: CancellationRegistry = CancellationRegistry()
-    private val statusRepository: ServiceStatusRepository = ServiceStatusRepository(context)
-    private val phaseRegistry: PhaseRegistry = createPhaseRegistry()
-
-    private fun createPhaseRegistry(): PhaseRegistry {
-        return PhaseRegistry().apply {
-            register(EnvironmentCheckPhase())
-            register(DelayPhase())
-            register(PermissionCheckPhase())
-            register(SchemaInitializationPhase())  // ✅ جديد: تهيئة جداول SMS
-            register(ServiceLaunchPhase())
-            register(HealthCheckPhase())
-        }
-    }
-
-    fun createCoordinator(): ApplicationInitializationCoordinator {
-        return ApplicationInitializationCoordinator(
-            config = config,
-            eventBus = eventBus,
-            stateMachine = stateMachine,
-            metricsCollector = metricsCollector,
-            executionGuard = executionGuard,
-            cancellationRegistry = cancellationRegistry,
-            phaseRegistry = phaseRegistry,
-            loggerFactory = { ctx -> StartupLoggerImpl(ctx) },
-            launcherFactory = { ctx -> SmsServiceLauncher(ctx, statusRepository) },
-            healthMonitorFactory = { createHealthMonitor() },
-            retryPolicyFactory = { createRetryPolicy() },
-            databaseHelperFactory = { ctx -> DatabaseHelper.getInstance(ctx) }  // ✅ جديد
-        )
-    }
-
-    private fun createHealthMonitor(): HealthMonitor {
-        return SmsServiceHealthMonitor(
-            checkIntervalMs = config.getHealthCheckIntervalMs(),
-            heartbeatProvider = SMSServiceHeartbeatProvider,
-            context = context  // ✅ جديد: لتحقق من Manifest
-        )
-    }
-
-    private fun createRetryPolicy(): RetryPolicy {
-        return ExponentialBackoffRetryPolicy(
-            maxAttempts = config.getMaxRetryAttempts(),
-            backoffMs = config.getRetryBackoffMs()
-        )
-    }
+class StartupCompositionRoot private constructor(context: Context) {
 
     companion object {
-        fun createCoordinator(context: Context): ApplicationInitializationCoordinator {
-            return StartupCompositionRoot(context).createCoordinator()
+        private const val TAG = "StartupCompositionRoot"
+        @Volatile
+        private var instance: StartupCompositionRoot? = null
+
+        fun getInstance(context: Context): StartupCompositionRoot {
+            return instance ?: synchronized(this) {
+                instance ?: StartupCompositionRoot(context.applicationContext).also {
+                    instance = it
+                }
+            }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ Database ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    val databaseHelper: DatabaseHelper by lazy {
+        DatabaseHelper(context)
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ SMS Components ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    val conversationManager: SmsConversationManager by lazy {
+        SmsConversationManager(databaseHelper)
+    }
+
+    val securityOTP: SmsSecurityOTP by lazy {
+        SmsSecurityOTP(databaseHelper)
+    }
+
+    val customerResolver: SmsCustomerResolver by lazy {
+        SmsCustomerResolver(databaseHelper)
+    }
+
+    val partyGateway: SmsPartyGateway by lazy {
+        SmsPartyGateway(databaseHelper)
+    }
+
+    val responseGenerator: SmsResponseGenerator by lazy {
+        SmsResponseGenerator()
+    }
+
+    val intentDetector: SmsIntentDetector by lazy {
+        SmsIntentDetector()
+    }
+
+    val locationExtractor: SmsLocationExtractor by lazy {
+        SmsLocationExtractor()
+    }
+
+    val quantityExtractor: SmsQuantityExtractor by lazy {
+        SmsQuantityExtractor()
+    }
+
+    val smsProcessor: SmsProcessor by lazy {
+        SmsProcessor(
+            context = context,
+            conversationManager = conversationManager,
+            customerResolver = customerResolver,
+            securityOTP = securityOTP,
+            gateway = partyGateway,
+            responseGenerator = responseGenerator,
+            intentDetector = intentDetector,
+            locationExtractor = locationExtractor,
+            quantityExtractor = quantityExtractor
+        )
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ Initialization ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    fun initialize() {
+        Log.i(TAG, "Initializing StartupCompositionRoot...")
+
+        // تهيئة قاعدة البيانات
+        databaseHelper.writableDatabase
+
+        // تهيئة المكونات
+        conversationManager // force initialization
+        securityOTP
+        customerResolver
+        partyGateway
+
+        Log.i(TAG, "StartupCompositionRoot initialized successfully")
+    }
+
+    fun cleanup() {
+        Log.i(TAG, "Cleaning up StartupCompositionRoot...")
+        conversationManager.cleanupExpiredCache()
+        instance = null
+    }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * Factory للوصول إلى SmsProcessor
+ * ═══════════════════════════════════════════════════════════════
+ */
+object SmsProcessorFactory {
+    fun getProcessor(context: Context): SmsProcessor {
+        return StartupCompositionRoot.getInstance(context).smsProcessor
     }
 }

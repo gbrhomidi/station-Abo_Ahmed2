@@ -1,15 +1,14 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.content.ContentValues
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
-
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -30,6 +29,7 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
         private const val OTP_MAX_ATTEMPTS = 3
         private const val OTP_TABLE = "sms_otp_verifications"
         private const val OTP_GENERATION_COOLDOWN_MS = 60000L // 1 دقيقة
+    }
 
     data class OTPData(
         val code: String,
@@ -55,6 +55,7 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     // ═══ توليد OTP ═══
     // ═══════════════════════════════════════════════════════════════
 
+    suspend fun generateOTP(phone: String): String = withContext(Dispatchers.IO) {
         val normalizedPhone = normalizePhone(phone)
 
         // Rate Limiting
@@ -73,6 +74,7 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
         val now = System.currentTimeMillis()
         val expiresAt = now + OTP_EXPIRY_MS
 
+        val values = ContentValues().apply {
             put("phone", normalizedPhone)
             put("otp_code", code)
             put("timestamp", now)
@@ -81,9 +83,7 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
             put("expires_at", expiresAt)
         }
 
-
         writableDb.insert(OTP_TABLE, null, values)
-        code
         otpGenerationTimes[normalizedPhone] = now
         Log.d(TAG, "OTP generated for ${maskPhone(normalizedPhone)}")
         code
@@ -98,9 +98,9 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
 
         readableDb.rawQuery(
             """
-            SELECT otp_code, timestamp, attempts, max_attempts, expires_at 
-            FROM $OTP_TABLE 
-            WHERE phone = ? 
+            SELECT otp_code, timestamp, attempts, max_attempts, expires_at
+            FROM $OTP_TABLE
+            WHERE phone = ?
             LIMIT 1
             """.trimIndent(),
             arrayOf(normalizedPhone)
@@ -184,10 +184,9 @@ class SmsSecurityOTP(private val db: DatabaseHelper) {
     suspend fun cleanupExpired() = cleanupExpiredOTPs()
 
     // ═══════════════════════════════════════════════════════════════
-    // ═══ مزامنة بيانات OTP (syncData) – جديدة ═══
+    // ═══ مزامنة بيانات OTP (syncData) ═══
     // ═══════════════════════════════════════════════════════════════
 
-    suspend fun syncData() = withContext(Dispatchers.IO) {
     suspend fun syncData() = withContext(Dispatchers.IO) {
         try {
             cleanupExpiredOTPs()

@@ -1,7 +1,6 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,9 +25,13 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         private const val TAG = "SmsConversationManager"
         private const val CONTEXT_TIMEOUT_MS = 600000L
         private const val MAX_HISTORY_SIZE = 50
-    }
         private const val MAX_CACHE_SIZE = 1000
         private const val ORDER_DRAFT_MAX_AGE_MS = 86400000L // 24 ساعة
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ Data Classes ═══
+    // ═══════════════════════════════════════════════════════════════
 
     data class OrderDraft(
         var product: String = "",
@@ -69,11 +72,21 @@ class SmsConversationManager(private val db: DatabaseHelper) {
     )
 
     data class RecurringOrder(
-    // ✅ Caches مع حد أقصى وحذف تلقائي
+        val customerId: String = "",
+        val quantity: Double = 0.0,
+        val location: String = "",
+        val schedule: String = "",
+        val nextDelivery: Long = 0
+    )
+
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ Caches مع حد أقصى وحذف تلقائي ═══
+    // ═══════════════════════════════════════════════════════════════
+
     private val activeOrdersCache = object : LinkedHashMap<String, OrderDraft>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: Map.Entry<String, OrderDraft>): Boolean {
-            return size > MAX_CACHE_SIZE || 
-                   System.currentTimeMillis() - eldest.value.createdAt > ORDER_DRAFT_MAX_AGE_MS
+            return size > MAX_CACHE_SIZE ||
+                System.currentTimeMillis() - eldest.value.createdAt > ORDER_DRAFT_MAX_AGE_MS
         }
     }
 
@@ -94,10 +107,12 @@ class SmsConversationManager(private val db: DatabaseHelper) {
             return size > MAX_CACHE_SIZE
         }
     }
-        val schedule: String,
-        val nextDelivery: Long
-    )
 
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 1. إدارة سياق المحادثة (SQLite-backed) ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun getOrCreateContext(phone: String): ConversationContext = withContext(Dispatchers.IO) {
         synchronized(contextCache) {
             val cached = contextCache[phone]
             if (cached != null && System.currentTimeMillis() - cached.timestamp < CONTEXT_TIMEOUT_MS) {
@@ -106,8 +121,10 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         }
 
         val ctx = try {
-    // ═══ 1. إدارة سياق المحادثة (SQLite-backed) ═══
-    // ═══════════════════════════════════════════════════════════════
+            val cursor = db.readableDatabase.rawQuery(
+                "SELECT * FROM sms_conversation_context WHERE phone = ? LIMIT 1",
+                arrayOf(phone)
+            )
 
             cursor.use {
                 if (it.moveToFirst()) {
@@ -145,9 +162,6 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         ctx
     }
 
-            } else {
-                ConversationContext()
-            }
     suspend fun saveContext(phone: String, ctx: ConversationContext) = withContext(Dispatchers.IO) {
         synchronized(contextCache) {
             contextCache[phone] = ctx
@@ -162,27 +176,28 @@ class SmsConversationManager(private val db: DatabaseHelper) {
             "{}"
         }
 
-    }
+        val values = android.content.ContentValues().apply {
+            put("phone", phone)
+            put("last_topic", ctx.lastTopic)
+            put("last_intent", ctx.lastIntent)
+            put("timestamp", ctx.timestamp)
+            put("pending_action", ctx.pendingAction)
+            put("awaiting_response", if (ctx.awaitingResponse) 1 else 0)
+            put("data_json", dataJson)
+        }
 
-    suspend fun saveContext(phone: String, ctx: ConversationContext) = withContext(Dispatchers.IO) {
-        contextCache[phone] = ctx
-
-        val dataJson = JSONObject().apply {
-            ctx.data.forEach { (k, v) -> put(k, v) }
-        }.toString()
         try {
-            
-                    val values = android.content.ContentValues().apply {
-                        put("phone", phone)
-                        put("last_topic", ctx.lastTopic)
+            db.writableDatabase.insertWithOnConflict(
+                "sms_conversation_context",
+                null,
+                values,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save context: ${e.javaClass.simpleName}")
         }
     }
 
-            put("last_intent", ctx.lastIntent)
-            put("timestamp", ctx.timestamp)
-            put("pending_action", ctx.pendingAction)
     suspend fun clearContext(phone: String) = withContext(Dispatchers.IO) {
         synchronized(contextCache) {
             contextCache.remove(phone)
@@ -194,9 +209,10 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         }
     }
 
-        }
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 2. إدارة تفضيلات العميل ═══
+    // ═══════════════════════════════════════════════════════════════
 
-        db.writableDatabase.insertWithOnConflict(
     suspend fun getOrCreatePreferences(phone: String): CustomerPreferences = withContext(Dispatchers.IO) {
         synchronized(prefsCache) {
             val cached = prefsCache[phone]
@@ -234,62 +250,64 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         prefs
     }
 
-            if (it.moveToFirst()) {
-                CustomerPreferences(
-                    preferredQuantity = it.getDouble(it.getColumnIndexOrThrow("preferred_quantity")),
     suspend fun savePreferences(phone: String, prefs: CustomerPreferences) = withContext(Dispatchers.IO) {
         synchronized(prefsCache) {
             prefsCache[phone] = prefs
         }
 
         val values = android.content.ContentValues().apply {
-                    lastOrderDate = it.getLong(it.getColumnIndexOrThrow("last_order_date")),
-                    orderCount = it.getInt(it.getColumnIndexOrThrow("order_count")),
-                    language = it.getString(it.getColumnIndexOrThrow("language")) ?: "ar"
-                )
-            } else {
-                CustomerPreferences()
-            }
+            put("phone", phone)
+            put("preferred_quantity", prefs.preferredQuantity)
+            put("preferred_location", prefs.preferredLocation)
+            put("preferred_time", prefs.preferredTime)
+            put("last_order_date", prefs.lastOrderDate)
+            put("order_count", prefs.orderCount)
+            put("language", prefs.language)
+        }
+
         try {
-                    }
-            
-                    prefsCache[phone] = prefs
-                    prefs
+            db.writableDatabase.insertWithOnConflict(
+                "sms_customer_preferences",
+                null,
+                values,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save preferences: ${e.javaClass.simpleName}")
         }
     }
 
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 3. سجل التفاعلات ═══
+    // ═══════════════════════════════════════════════════════════════
 
-    suspend fun savePreferences(phone: String, prefs: CustomerPreferences) = withContext(Dispatchers.IO) {
     suspend fun recordInteraction(phone: String, intent: String, message: String) = withContext(Dispatchers.IO) {
         val values = android.content.ContentValues().apply {
-
-        val values = android.content.ContentValues().apply {
             put("phone", phone)
-            put("preferred_quantity", prefs.preferredQuantity)
-            put("preferred_location", prefs.preferredLocation)
-        // ✅ استخدام transaction
-        db.writableDatabase.beginTransaction()
+            put("intent", intent)
+            put("message", message)
+            put("timestamp", System.currentTimeMillis())
+        }
+
         try {
-            db.writableDatabase.insert("sms_interaction_history", null, values)
-            db.writableDatabase.execSQL("""
-                DELETE FROM sms_interaction_history 
-                WHERE phone = ? AND id NOT IN (
-                    SELECT id FROM sms_interaction_history 
-                    WHERE phone = ? ORDER BY timestamp DESC LIMIT ?
-                )
-            """.trimIndent(), arrayOf(phone, phone, MAX_HISTORY_SIZE))
-            db.writableDatabase.setTransactionSuccessful()
+            // ✅ استخدام transaction
+            db.writableDatabase.beginTransaction()
+            try {
+                db.writableDatabase.insert("sms_interaction_history", null, values)
+                db.writableDatabase.execSQL("""
+                    DELETE FROM sms_interaction_history
+                    WHERE phone = ? AND id NOT IN (
+                        SELECT id FROM sms_interaction_history
+                        WHERE phone = ? ORDER BY timestamp DESC LIMIT ?
+                    )
+                """.trimIndent(), arrayOf(phone, phone, MAX_HISTORY_SIZE))
+                db.writableDatabase.setTransactionSuccessful()
+            } finally {
+                db.writableDatabase.endTransaction()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to record interaction: ${e.javaClass.simpleName}")
-        } finally {
-            db.writableDatabase.endTransaction()
         }
-    }
-
-        )
     }
 
     suspend fun getInteractionHistory(phone: String, limit: Int = 10): List<InteractionRecord> = withContext(Dispatchers.IO) {
@@ -314,9 +332,10 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         list
     }
 
-                SELECT id FROM sms_interaction_history 
-                WHERE phone = ? ORDER BY timestamp DESC LIMIT ?
-            )
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 4. إدارة الطلبات المسودة ═══
+    // ═══════════════════════════════════════════════════════════════
+
     fun getOrCreateOrderDraft(phone: String, product: String = "diesel"): OrderDraft {
         synchronized(activeOrdersCache) {
             return activeOrdersCache.getOrPut(phone) { OrderDraft(product = product) }
@@ -341,31 +360,33 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         }
     }
 
-                    intent = it.getString(it.getColumnIndexOrThrow("intent")),
-                    message = it.getString(it.getColumnIndexOrThrow("message"))
-                ))
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 5. إدارة الطلبات المتكررة ═══
+    // ═══════════════════════════════════════════════════════════════
+
     suspend fun saveRecurringOrder(order: RecurringOrder) = withContext(Dispatchers.IO) {
         synchronized(recurringOrdersCache) {
             recurringOrdersCache[order.customerId] = order
         }
 
         val values = android.content.ContentValues().apply {
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 4. إدارة الطلبات المسودة ═══
-    // ═══════════════════════════════════════════════════════════════
+            put("customer_id", order.customerId)
+            put("quantity", order.quantity)
+            put("location", order.location)
+            put("schedule", order.schedule)
+            put("next_delivery", order.nextDelivery)
+        }
 
-    fun getOrCreateOrderDraft(phone: String, product: String = "diesel"): OrderDraft {
         try {
-                    return activeOrdersCache.getOrPut(phone) { OrderDraft(product = product) }
-                }
-            
-                fun getOrderDraft(phone: String): OrderDraft? {
+            db.writableDatabase.insertWithOnConflict(
+                "sms_recurring_orders",
+                null,
+                values,
+                android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save recurring order: ${e.javaClass.simpleName}")
         }
-    }
-
-        return activeOrdersCache[phone]
     }
 
     suspend fun getRecurringOrder(phone: String): RecurringOrder? = withContext(Dispatchers.IO) {
@@ -401,8 +422,9 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         }
     }
 
-            put("next_delivery", order.nextDelivery)
-        }
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 6. التنظيف ═══
+    // ═══════════════════════════════════════════════════════════════
 
     fun cleanupExpiredCache() {
         val now = System.currentTimeMillis()
@@ -414,14 +436,21 @@ class SmsConversationManager(private val db: DatabaseHelper) {
         Log.d(TAG, "Cache cleaned. Contexts: ${contextCache.size}, Drafts: ${activeOrdersCache.size}")
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ 7. مزامنة البيانات ═══
+    // ═══════════════════════════════════════════════════════════════
 
-    suspend fun getRecurringOrder(phone: String): RecurringOrder? = withContext(Dispatchers.IO) {
-        val cached = recurringOrdersCache[phone]
-        if (cached != null) return@withContext cached
-
-        val cursor = db.readableDatabase.rawQuery(
-            "SELECT * FROM sms_recurring_orders WHERE customer_id = ? LIMIT 1",
-            arrayOf(phone)
-        )
-
+    suspend fun syncContext() = withContext(Dispatchers.IO) {
+        try {
+            // مزامنة السياقات المعدلة فقط
+            synchronized(contextCache) {
+                contextCache.forEach { (phone, ctx) ->
+                    saveContext(phone, ctx)
+                }
+            }
+            Log.d(TAG, "Context synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync context: ${e.javaClass.simpleName}")
+        }
+    }
 }
