@@ -11,13 +11,21 @@ import android.util.Log
  * ═══════════════════════════════════════════════════════════════
  * مقاييس الأداء - SmsMetrics
  * ═══════════════════════════════════════════════════════════════
+ *
+ * المهام:
+ * 1. تتبع عدد الرسائل المستلمة
+ * 2. تتبع عدد الرسائل المرفوضة
+ * 3. تتبع عدد الرسائل المكررة
+ * 4. تتبع عدد الرسائل المشبوهة
+ * 5. تتبع عدد الرسائل المعالجة
+ * 6. تتبع عدد الرسائل الفاشلة
+ * 7. توليد تقارير
  */
 class SmsMetrics(private val db: DatabaseHelper) {
 
     companion object {
         private const val TAG = "SmsMetrics"
         private const val METRICS_TABLE = "sms_metrics"
-        private const val DEFAULT_RETENTION_DAYS = 30
     }
 
     enum class EventType {
@@ -33,112 +41,83 @@ class SmsMetrics(private val db: DatabaseHelper) {
         ORDER_CONFIRMED,
         ORDER_CANCELLED,
         CRITICAL_ERROR,
-        PERFORMANCE
+        PERFORMANCE   // تمت الإضافة لـ recordPerformanceStats
     }
 
-    /**
-     * ✅ تسجيل حدث مع معالجة الاستثناء
-     */
     suspend fun recordEvent(eventType: EventType, phone: String = "", details: String = "") = withContext(Dispatchers.IO) {
-        try {
-            val values = android.content.ContentValues().apply {
-                put("event_type", eventType.name)
-                put("phone", phone.take(20))
-                put("details", details.take(200))
-                put("timestamp", System.currentTimeMillis())
-                put("date", getTodayDate())
-            }
-            db.writableDatabase.insert(METRICS_TABLE, null, values)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to record event ${eventType.name}: ${e.javaClass.simpleName}")
+        val values = android.content.ContentValues().apply {
+            put("event_type", eventType.name)
+            put("phone", phone)
+            put("details", details.take(200))
+            put("timestamp", System.currentTimeMillis())
+            put("date", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(java.util.Date()))
         }
+
+        db.writableDatabase.insert(METRICS_TABLE, null, values)
     }
 
-    /**
-     * ✅ جلب إحصائيات اليوم باستعلام واحد (GROUP BY)
-     */
     suspend fun getTodayStats(): Map<String, Int> = withContext(Dispatchers.IO) {
-        getStatsForDate(getTodayDate())
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(java.util.Date())
+        val stats = mutableMapOf<String, Int>()
+
+        for (eventType in EventType.values()) {
+            val cursor = db.readableDatabase.rawQuery(
+                "SELECT COUNT(*) FROM $METRICS_TABLE WHERE event_type = ? AND date = ?",
+                arrayOf(eventType.name, today)
+            )
+            val count = cursor.use {
+                if (it.moveToFirst()) it.getInt(0) else 0
+            }
+            stats[eventType.name.lowercase()] = count
+        }
+
+        stats
     }
 
-    /**
-     * ✅ جلب إحصائيات فترة باستعلام واحد
-     */
     suspend fun getStatsForPeriod(days: Int): Map<String, Int> = withContext(Dispatchers.IO) {
-        if (days <= 0) return@withContext emptyMap<String, Int>()
-
         val cal = java.util.Calendar.getInstance()
         cal.add(java.util.Calendar.DAY_OF_YEAR, -days)
-        val startDate = formatDate(cal.time)
+        val startDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(cal.time)
+        val stats = mutableMapOf<String, Int>()
 
-        getStatsForRange(startDate)
-    }
-
-    /**
-     * ✅ جلب إحصائيات تاريخ محدد
-     */
-    private fun getStatsForDate(date: String): Map<String, Int> {
-        return getStatsForRange(date, exactDate = true)
-    }
-
-    /**
-     * ✅ استعلام موحد بـ GROUP BY
-     */
-    private fun getStatsForRange(startDate: String, exactDate: Boolean = false): Map<String, Int> {
-        val stats = EventType.values().associate { it.name.lowercase() to 0 }.toMutableMap()
-
-        val whereClause = if (exactDate) "date = ?" else "date >= ?"
-        val cursor = db.readableDatabase.rawQuery(
-            "SELECT event_type, COUNT(*) as count FROM $METRICS_TABLE WHERE $whereClause GROUP BY event_type",
-            arrayOf(startDate)
-        )
-
-        cursor.use {
-            while (it.moveToNext()) {
-                val eventType = it.getString(it.getColumnIndexOrThrow("event_type")).lowercase()
-                val count = it.getInt(it.getColumnIndexOrThrow("count"))
-                stats[eventType] = count
+        for (eventType in EventType.values()) {
+            val cursor = db.readableDatabase.rawQuery(
+                "SELECT COUNT(*) FROM $METRICS_TABLE WHERE event_type = ? AND date >= ?",
+                arrayOf(eventType.name, startDate)
+            )
+            val count = cursor.use {
+                if (it.moveToFirst()) it.getInt(0) else 0
             }
+            stats[eventType.name.lowercase()] = count
         }
 
-        return stats
+        stats
     }
 
-    /**
-     * ✅ توليد تقرير
-     */
     suspend fun generateReport(days: Int = 7): String = withContext(Dispatchers.IO) {
         val stats = getStatsForPeriod(days)
-        buildString {
-            appendLine("📊 تقرير SMS - آخر $days أيام")
-            appendLine("═══════════════════")
-            appendLine("📥 مستلمة: ${stats["sms_received"] ?: 0}")
-            appendLine("❌ مرفوضة: ${stats["sms_rejected"] ?: 0}")
-            appendLine("🔄 مكررة: ${stats["sms_duplicated"] ?: 0}")
-            appendLine("🚨 مشبوهة: ${stats["sms_spoofed"] ?: 0}")
-            appendLine("✅ معالجة: ${stats["sms_processed"] ?: 0}")
-            appendLine("❌ فاشلة: ${stats["sms_failed"] ?: 0}")
-            appendLine("🚫 محظورة: ${stats["sms_blocked"] ?: 0}")
-            appendLine("⚠️ تحذيرات: ${stats["sms_warning"] ?: 0}")
-            appendLine("🔐 OTP: ${stats["otp_sent"] ?: 0}")
-            appendLine("📦 طلبات مؤكدة: ${stats["order_confirmed"] ?: 0}")
-            appendLine("❌ طلبات ملغاة: ${stats["order_cancelled"] ?: 0}")
-            appendLine("═══════════════════")
-        }
+        val sb = StringBuilder()
+        sb.appendLine("📊 تقرير SMS - آخر $days أيام")
+        sb.appendLine("═══════════════════")
+        sb.appendLine("📥 مستلمة: ${stats["sms_received"] ?: 0}")
+        sb.appendLine("❌ مرفوضة: ${stats["sms_rejected"] ?: 0}")
+        sb.appendLine("🔄 مكررة: ${stats["sms_duplicated"] ?: 0}")
+        sb.appendLine("🚨 مشبوهة: ${stats["sms_spoofed"] ?: 0}")
+        sb.appendLine("✅ معالجة: ${stats["sms_processed"] ?: 0}")
+        sb.appendLine("❌ فاشلة: ${stats["sms_failed"] ?: 0}")
+        sb.appendLine("🚫 محظورة: ${stats["sms_blocked"] ?: 0}")
+        sb.appendLine("⚠️ تحذيرات: ${stats["sms_warning"] ?: 0}")
+        sb.appendLine("🔐 OTP: ${stats["otp_sent"] ?: 0}")
+        sb.appendLine("📦 طلبات مؤكدة: ${stats["order_confirmed"] ?: 0}")
+        sb.appendLine("❌ طلبات ملغاة: ${stats["order_cancelled"] ?: 0}")
+        sb.appendLine("═══════════════════")
+        sb.toString()
     }
 
-    /**
-     * ✅ تنظيف السجلات القديمة مع التحقق
-     */
-    suspend fun cleanupOldMetrics(retentionDays: Int = DEFAULT_RETENTION_DAYS) = withContext(Dispatchers.IO) {
-        if (retentionDays <= 0) {
-            Log.w(TAG, "Invalid retentionDays: $retentionDays, skipping cleanup")
-            return@withContext
-        }
-
+    suspend fun cleanupOldMetrics(retentionDays: Int) = withContext(Dispatchers.IO) {
         val cal = java.util.Calendar.getInstance()
         cal.add(java.util.Calendar.DAY_OF_YEAR, -retentionDays)
-        val cutoffDate = formatDate(cal.time)
+        val cutoffDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(cal.time)
 
         val deleted = db.writableDatabase.delete(
             METRICS_TABLE,
@@ -146,70 +125,54 @@ class SmsMetrics(private val db: DatabaseHelper) {
             arrayOf(cutoffDate)
         )
 
-        Log.d(TAG, "Cleaned up $deleted old metrics records (before $cutoffDate)")
+        Log.d(TAG, "Cleaned up $deleted old metrics records")
     }
 
-    /**
-     * ✅ تسجيل أداء بصيغة JSON
-     */
+    // ═══════════════════════════════════════════════════════════════
+    // ═══ الدوال المفقودة – المُضافة حديثاً ═══
+    // ═══════════════════════════════════════════════════════════════
+
+    suspend fun sync() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Metrics synced successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync metrics: ${e.message}", e)
+        }
+    }
+
+    suspend fun flush() = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Metrics flushed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to flush metrics: ${e.message}", e)
+        }
+    }
+
     suspend fun recordPerformanceStats(stats: Map<String, Any>) = withContext(Dispatchers.IO) {
         try {
-            val jsonDetails = JSONObject(stats).toString().take(500)
             val values = android.content.ContentValues().apply {
                 put("event_type", EventType.PERFORMANCE.name)
-                put("details", jsonDetails)
+                put("details", stats.toString().take(500))
                 put("timestamp", System.currentTimeMillis())
-                put("date", getTodayDate())
+                put("date", java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(java.util.Date()))
             }
             db.writableDatabase.insert(METRICS_TABLE, null, values)
             Log.d(TAG, "Performance stats recorded")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to record performance stats: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Failed to record performance stats: ${e.message}", e)
         }
     }
 
-    /**
-     * ✅ جلب المقاييس الحالية مع جميع المفاتيح
-     */
     suspend fun getCurrentMetrics(): JSONObject = withContext(Dispatchers.IO) {
         try {
             val stats = getTodayStats()
             JSONObject().apply {
-                EventType.values().forEach { 
-                    put(it.name.lowercase(), stats[it.name.lowercase()] ?: 0) 
-                }
+                stats.forEach { (key, value) -> put(key, value) }
                 put("timestamp", System.currentTimeMillis())
-                put("date", getTodayDate())
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get current metrics: ${e.javaClass.simpleName}")
-            JSONObject().apply {
-                EventType.values().forEach { put(it.name.lowercase(), 0) }
-                put("error", e.message)
-                put("timestamp", System.currentTimeMillis())
-            }
+            Log.e(TAG, "Failed to get current metrics: ${e.message}", e)
+            JSONObject().put("error", e.message)
         }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Helpers ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    private fun getTodayDate(): String = formatDate(java.util.Date())
-
-    private fun formatDate(date: java.util.Date): String {
-        return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("ar")).format(date)
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ Compatibility methods ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    suspend fun sync() = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Metrics synced successfully")
-    }
-
-    suspend fun flush() = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Metrics flushed successfully")
     }
 }

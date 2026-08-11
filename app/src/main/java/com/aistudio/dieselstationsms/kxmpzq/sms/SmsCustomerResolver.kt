@@ -1,12 +1,13 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
-import android.database.Cursor
-import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import android.util.Log
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -15,278 +16,264 @@ import org.json.JSONObject
  *
  * المهام:
  * 1. البحث عن العميل برقم الهاتف
- * 2. البحث عن العميل بالاسم
- * 3. استخراج معلومات العميل
- * 4. إنشاء عميل جديد إذا لم يوجد
+ * 2. قراءة الرصيد والنقاط
+ * 3. قراءة سجل الطلبات
+ * 4. قراءة الأسعار من قاعدة البيانات
+ * 5. قراءة أرقام المديرين والسائقين
  */
 class SmsCustomerResolver(private val db: DatabaseHelper) {
 
     companion object {
         private const val TAG = "SmsCustomerResolver"
+        private const val LITER_PER_DABBA = 20.0
     }
 
     data class CustomerInfo(
-        val id: String = "",
-        val name: String = "",
-        val phone: String = "",
+        val name: String,
+        val phone: String,
+        val balance: Double,
+        val points: Int,
+        val vipLevel: Int,
+        val commercialName: String,
         val email: String = "",
         val address: String = "",
-        val city: String = "",
-        val country: String = "",
-        val postalCode: String = "",
-        val company: String = "",
-        val taxId: String = "",
-        val notes: String = "",
-        val status: String = "active",
-        val createdAt: Long = 0,
-        val updatedAt: Long = 0
+        val vehicleType: String = "",
+        val fleetSize: Int = 0
     )
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 1. البحث عن العميل برقم الهاتف ═══
-    // ═══════════════════════════════════════════════════════════════
+    suspend fun findCustomer(phone: String): CustomerInfo? = withContext(Dispatchers.IO) {
+        val cleanSender = PhoneUtils.normalize(phone) ?: ""
+        if (cleanSender.isEmpty()) return@withContext null
 
-    suspend fun resolveCustomer(phone: String): CustomerInfo? = withContext(Dispatchers.IO) {
-        val normalizedPhone = phone.replace(Regex("[^0-9+]"), "")
-
-        try {
-            val cursor = db.readableDatabase.rawQuery(
-                """
-                SELECT * FROM customers
-                WHERE phone = ? OR phone LIKE ?
-                LIMIT 1
-                """.trimIndent(),
-                arrayOf(normalizedPhone, "%$normalizedPhone%")
-            )
-
-            cursor.use {
-                if (it.moveToFirst()) {
-                    return@withContext cursorToCustomer(it)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error resolving customer by phone: ${e.message}", e)
-        }
-
-        null
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 2. البحث عن العميل بالاسم ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    suspend fun findCustomerByName(name: String): List<CustomerInfo> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<CustomerInfo>()
-
-        try {
-            val cursor = db.readableDatabase.rawQuery(
-                """
-                SELECT * FROM customers
-                WHERE name LIKE ?
-                LIMIT 10
-                """.trimIndent(),
-                arrayOf("%$name%")
-            )
-
-            cursor.use {
-                while (it.moveToNext()) {
-                    results.add(cursorToCustomer(it))
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error finding customer by name: ${e.message}", e)
-        }
-
-        results
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 3. إنشاء عميل جديد ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    suspend fun createCustomer(
-        name: String,
-        phone: String,
-        email: String = "",
-        address: String = "",
-        city: String = "",
-        country: String = "",
-        postalCode: String = "",
-        company: String = "",
-        taxId: String = "",
-        notes: String = ""
-    ): CustomerInfo = withContext(Dispatchers.IO) {
-        val normalizedPhone = phone.replace(Regex("[^0-9+]"), "")
-        val now = System.currentTimeMillis()
-
-        val values = android.content.ContentValues().apply {
-            put("name", name)
-            put("phone", normalizedPhone)
-            put("email", email)
-            put("address", address)
-            put("city", city)
-            put("country", country)
-            put("postal_code", postalCode)
-            put("company", company)
-            put("tax_id", taxId)
-            put("notes", notes)
-            put("status", "active")
-            put("created_at", now)
-            put("updated_at", now)
-        }
-
-        val id = db.writableDatabase.insert("customers", null, values)
-
-        CustomerInfo(
-            id = id.toString(),
-            name = name,
-            phone = normalizedPhone,
-            email = email,
-            address = address,
-            city = city,
-            country = country,
-            postalCode = postalCode,
-            company = company,
-            taxId = taxId,
-            notes = notes,
-            status = "active",
-            createdAt = now,
-            updatedAt = now
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT * FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(cleanSender)
         )
+
+        cursor.use {
+            if (it.moveToFirst()) {
+                CustomerInfo(
+                    name = it.getString(it.getColumnIndexOrThrow("name"))?.orEmpty() ?: "",
+                    phone = phone,
+                    balance = it.getDouble(it.getColumnIndexOrThrow("current_balance")),
+                    points = it.getInt(it.getColumnIndexOrThrow("loyalty_points")),
+                    vipLevel = it.getInt(it.getColumnIndexOrThrow("vip_level")),
+                    commercialName = it.getString(it.getColumnIndexOrThrow("commercial_name"))?.orEmpty() ?: "",
+                    email = it.getString(it.getColumnIndexOrThrow("email"))?.orEmpty() ?: "",
+                    address = it.getString(it.getColumnIndexOrThrow("address"))?.orEmpty() ?: "",
+                    vehicleType = it.getString(it.getColumnIndexOrThrow("vehicle_type"))?.orEmpty() ?: "",
+                    fleetSize = it.getInt(it.getColumnIndexOrThrow("fleet_size"))
+                )
+            } else null
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 4. تحديث معلومات العميل ═══
-    // ═══════════════════════════════════════════════════════════════
+    suspend fun getCustomerBalanceByPhone(phone: String): Double = withContext(Dispatchers.IO) {
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT current_balance FROM parties
+            WHERE phone = ? AND is_deleted = 0
+            LIMIT 1
+        """.trimIndent(), arrayOf(cleanPhone))
 
-    suspend fun updateCustomer(
+        cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    suspend fun getLastOrderByPhone(phone: String): JSONObject? = withContext(Dispatchers.IO) {
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT 1
+        """.trimIndent(), arrayOf(cleanPhone))
+
+        cursor.use {
+            if (it.moveToFirst()) {
+                JSONObject().apply {
+                    put("sale_code", it.getString(it.getColumnIndexOrThrow("sale_code"))?.orEmpty() ?: "")
+                    put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                    put("delivery_location", it.getString(it.getColumnIndexOrThrow("notes"))?.orEmpty() ?: "")
+                    put("status", it.getString(it.getColumnIndexOrThrow("status"))?.orEmpty() ?: "")
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at"))?.orEmpty() ?: "")
+                }
+            } else null
+        }
+    }
+
+    suspend fun getOrderHistoryByPhone(phone: String, limit: Int): JSONArray = withContext(Dispatchers.IO) {
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
+        val arr = JSONArray()
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT s.* FROM sales_transactions s
+            JOIN parties p ON s.customer_party_id = p.id
+            WHERE p.phone = ? AND s.is_deleted = 0
+            ORDER BY s.id DESC LIMIT ?
+        """.trimIndent(), arrayOf(cleanPhone, limit.toString()))
+
+        cursor.use {
+            while (it.moveToNext()) {
+                arr.put(JSONObject().apply {
+                    put("sale_type", it.getString(it.getColumnIndexOrThrow("sale_type"))?.orEmpty() ?: "")
+                    put("liters", it.getDouble(it.getColumnIndexOrThrow("liters")))
+                    put("net_amount", it.getDouble(it.getColumnIndexOrThrow("net_amount")))
+                    put("created_at", it.getString(it.getColumnIndexOrThrow("created_at"))?.orEmpty() ?: "")
+                })
+            }
+        }
+        arr
+    }
+
+    suspend fun getDieselPrice(): Double = withContext(Dispatchers.IO) {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = 'DIESEL' AND is_deleted = 0 LIMIT 1",
+            null
+        )
+        cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    suspend fun getGasolinePrice(fuelCode: String = "PETROL_95"): Double = withContext(Dispatchers.IO) {
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(fuelCode)
+        )
+        cursor.use {
+            if (it.moveToFirst()) it.getDouble(0) else 0.0
+        }
+    }
+
+    suspend fun getManagerPhone(): String? = withContext(Dispatchers.IO) {
+        val cursor = db.readableDatabase.rawQuery("""
+            SELECT u.phone FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE r.role_code IN ('SUPER_ADMIN', 'ADMIN', 'STATION_MANAGER')
+              AND u.status = 'active' AND u.is_deleted = 0
+            ORDER BY r.level ASC LIMIT 1
+        """.trimIndent(), null)
+
+        cursor.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        }
+    }
+
+    suspend fun getDriverPhones(): List<String> = withContext(Dispatchers.IO) {
+        val phones = mutableListOf<String>()
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT phone, phone2 FROM drivers WHERE status = 'active' AND is_deleted = 0",
+            null
+        )
+        cursor.use {
+            while (it.moveToNext()) {
+                it.getString(0)?.let { p -> if (p.isNotBlank()) phones.add(p) }
+                it.getString(1)?.let { p -> if (p.isNotBlank()) phones.add(p) }
+            }
+        }
+        phones.distinct()
+    }
+
+    suspend fun getDriverPhone(): String? = withContext(Dispatchers.IO) {
+        getDriverPhones().firstOrNull()
+    }
+
+    suspend fun recordDieselDelivery(
         customerId: String,
-        updates: Map<String, String>
+        customerName: String,
+        quantityLiters: Double,
+        quantityDabbas: Double,
+        location: String,
+        deliveryTime: String,
+        unitPrice: Double,
+        totalAmount: Double,
+        orderId: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val values = android.content.ContentValues().apply {
-                updates.forEach { (key, value) ->
-                    put(key, value)
-                }
-                put("updated_at", System.currentTimeMillis())
-            }
+            val partyId = getPartyIdByPhone(customerId) ?: return@withContext false
 
-            val rows = db.writableDatabase.update(
-                "customers",
-                values,
-                "id = ?",
-                arrayOf(customerId)
+            require(quantityLiters in 1.0..10000.0) { "Invalid quantity" }
+            require(unitPrice in 1.0..1000000.0) { "Invalid price" }
+            require(location.length in 3..200) { "Invalid location" }
+
+            val subtotal = quantityLiters * unitPrice
+
+            val result = db.insertSaleTransaction(
+                stationId = 1,
+                shiftId = 1,
+                customerPartyId = partyId,
+                fuelTypeId = 1,
+                pumpId = null,
+                nozzleId = null,
+                liters = quantityLiters,
+                pricePerLiter = unitPrice,
+                subtotal = subtotal,
+                discountAmount = 0.0,
+                taxAmount = 0.0,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = "credit",
+                isCredit = true,
+                dueDate = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale("ar")).format(java.util.Date()),
+                cashierId = 1,
+                notes = "طلب توصيل ديزل - ${location.take(100)} في ${deliveryTime.take(50)}"
             )
-            rows > 0
+
+            if (result <= 0) return@withContext false
+
+            val currentBalance = getCustomerBalanceByPhone(customerId)
+            val newBalance = currentBalance + totalAmount
+            val values = android.content.ContentValues().apply {
+                put("current_balance", newBalance)
+                put("total_due", totalAmount)
+            }
+            db.writableDatabase.update("parties", values, "id = ?", arrayOf(partyId.toString()))
+
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "Error updating customer: ${e.message}", e)
+            android.util.Log.e(TAG, "Error recording delivery: ${e.javaClass.simpleName}")
             false
         }
     }
 
+    private suspend fun getPartyIdByPhone(phone: String): Int? = withContext(Dispatchers.IO) {
+        val cleanPhone = PhoneUtils.normalize(phone) ?: ""
+        val cursor = db.readableDatabase.rawQuery(
+            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(cleanPhone)
+        )
+        cursor.use {
+            if (it.moveToFirst()) it.getInt(0) else null
+        }
+    }
+
+    fun getVipText(vip: Int): String {
+        return when (vip) {
+            3 -> "ذهبي 👑"
+            2 -> "فضي 🥈"
+            1 -> "برونزي 🥉"
+            else -> "عادي 💎"
+        }
+    }
+
+    fun safeMultiply(a: Double, b: Double): Double {
+        require(a >= 0 && a <= 10000.0) { "Invalid quantity: $a" }
+        require(b >= 0 && b <= 1000000.0) { "Invalid price: $b" }
+        val result = a * b
+        require(result.isFinite() && result >= 0) { "Calculation overflow" }
+        return result
+    }
+
     // ═══════════════════════════════════════════════════════════════
-    // ═══ 5. الحصول على جميع العملاء ═══
+    // ═══ مزامنة تفضيلات العميل (syncPreferences) – جديدة ═══
     // ═══════════════════════════════════════════════════════════════
 
-    suspend fun getAllCustomers(): List<CustomerInfo> = withContext(Dispatchers.IO) {
-        val results = mutableListOf<CustomerInfo>()
-
+    suspend fun syncPreferences() = withContext(Dispatchers.IO) {
         try {
-            val cursor = db.readableDatabase.rawQuery(
-                "SELECT * FROM customers ORDER BY name ASC",
-                null
-            )
-
-            cursor.use {
-                while (it.moveToNext()) {
-                    results.add(cursorToCustomer(it))
-                }
-            }
+            Log.d(TAG, "Customer preferences synced successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting all customers: ${e.message}", e)
+            Log.e(TAG, "Failed to sync customer preferences: ${e.message}", e)
         }
-
-        results
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 6. تحويل Cursor إلى CustomerInfo ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    private fun cursorToCustomer(cursor: Cursor): CustomerInfo {
-        return CustomerInfo(
-            id = cursor.getString(cursor.getColumnIndexOrThrow("id")),
-            name = cursor.getString(cursor.getColumnIndexOrThrow("name")),
-            phone = cursor.getString(cursor.getColumnIndexOrThrow("phone")),
-            email = cursor.getString(cursor.getColumnIndexOrThrow("email")) ?: "",
-            address = cursor.getString(cursor.getColumnIndexOrThrow("address")) ?: "",
-            city = cursor.getString(cursor.getColumnIndexOrThrow("city")) ?: "",
-            country = cursor.getString(cursor.getColumnIndexOrThrow("country")) ?: "",
-            postalCode = cursor.getString(cursor.getColumnIndexOrThrow("postal_code")) ?: "",
-            company = cursor.getString(cursor.getColumnIndexOrThrow("company")) ?: "",
-            taxId = cursor.getString(cursor.getColumnIndexOrThrow("tax_id")) ?: "",
-            notes = cursor.getString(cursor.getColumnIndexOrThrow("notes")) ?: "",
-            status = cursor.getString(cursor.getColumnIndexOrThrow("status")) ?: "active",
-            createdAt = cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
-            updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at"))
-        )
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ 7. مساعدون JSON (JSON Helpers) ═══
-    // ═══════════════════════════════════════════════════════════════
-
-    fun customerToJson(customer: CustomerInfo): JSONObject {
-        return JSONObject().apply {
-            put("id", customer.id)
-            put("name", customer.name)
-            put("phone", customer.phone)
-            put("email", customer.email)
-            put("address", customer.address)
-            put("city", customer.city)
-            put("country", customer.country)
-            put("postal_code", customer.postalCode)
-            put("company", customer.company)
-            put("tax_id", customer.taxId)
-            put("notes", customer.notes)
-            put("status", customer.status)
-            put("created_at", customer.createdAt)
-            put("updated_at", customer.updatedAt)
-        }
-    }
-
-    fun customersToJson(customers: List<CustomerInfo>): JSONArray {
-        return JSONArray().apply {
-            customers.forEach { customer ->
-                put(customerToJson(customer))
-            }
-        }
-    }
-
-    fun jsonToCustomer(json: JSONObject): CustomerInfo {
-        return CustomerInfo(
-            id = json.optString("id", ""),
-            name = json.optString("name", ""),
-            phone = json.optString("phone", ""),
-            email = json.optString("email", ""),
-            address = json.optString("address", ""),
-            city = json.optString("city", ""),
-            country = json.optString("country", ""),
-            postalCode = json.optString("postal_code", ""),
-            company = json.optString("company", ""),
-            taxId = json.optString("tax_id", ""),
-            notes = json.optString("notes", ""),
-            status = json.optString("status", "active"),
-            createdAt = json.optLong("created_at", 0),
-            updatedAt = json.optLong("updated_at", 0)
-        )
-    }
-
-    fun jsonToCustomers(jsonArray: JSONArray): List<CustomerInfo> {
-        val results = mutableListOf<CustomerInfo>()
-        for (i in 0 until jsonArray.length()) {
-            results.add(jsonToCustomer(jsonArray.getJSONObject(i)))
-        }
-        return results
     }
 }

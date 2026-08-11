@@ -12,7 +12,6 @@ import java.util.*
  * 2. حساب Confidence Score لكل نية
  * 3. اختيار النية الأعلى درجة
  * 4. Compiled Regex patterns للأداء
- * 5. دعم وحدات القياس: لتر / دباب / برميل
  */
 class SmsIntentDetector {
 
@@ -21,26 +20,11 @@ class SmsIntentDetector {
         private val NUMBER_ONLY_REGEX = Regex("""^(\d{1,5})$""")
         private val DABBA_REGEX = Regex("""(\d{1,5})\s*(?:دباب|دبابات|دبة|دبات)""")
         private val LITER_REGEX = Regex("""(\d{1,5}(?:\.\d{1,2})?)\s*(?:لتر|ltr|L|liter)?""")
-        private val BARREL_REGEX = Regex("""(\d{1,5})\s*(?:برميل|براميل|طن|طن)""")
         private val TIME_REGEX = Regex("""(\d{1,2})[:.]?(\d{2})?\s*(ص|صباح|am|م|مساء|pm)?""")
         private val RATING_REGEX = Regex("""^[1-5]$""")
         private val AMOUNT_REGEX = Regex("""(\d{1,10}(?:\.\d{1,2})?)\s*(?:ريال|riyal|ry|YER)?""")
         private val RECURRING_REGEX = Regex("""كل\s+(يوم|أسبوع|شهر)\s+([\w]+)""")
-        private val QUANTITY_RESPONSE_REGEX = Regex("""^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L|برميل|براميل)?\s*$""", RegexOption.IGNORE_CASE)
-
-        // ✅ Word boundary patterns
-        private val YES_PATTERN = Regex("""\b(نعم|yes|موافق|أوافق|أوكي|ok)\b""")
-        private val NO_PATTERN = Regex("""\b(لا|no|رفض)\b""")
-        private val CANCEL_PATTERN = Regex("""\b(إلغاء|الغاء|cancel)\b""")
-
-        // ✅ Constants for units
-        const val LITER_PER_DABBA = 20.0
-        const val LITER_PER_BARREL = 200.0
-
-        // ✅ Messages
-        const val MSG_CLARIFY_UNIT = " ماذا؟ يرجى تحديد الطلب (لتر & دباب & براميل)"
-        const val MSG_SMALL_QUANTITY_DELIVERY = "سعر الـ %s ديزل هو %s ريال، وللحصول على طلبك هذا يرجى حضورك للمحطة، فلا يمكن توصيل هذه الكمية"
-        const val MIN_DELIVERY_LITERS = 100.0  // أقل كمية للتوصيل
+        private val QUANTITY_RESPONSE_REGEX = Regex("""^\d+\s*(?:دباب|دبابات|دبة|دبات|لتر|ltr|L)?\s*$""", RegexOption.IGNORE_CASE)
     }
 
     data class IntentResult(
@@ -56,43 +40,21 @@ class SmsIntentDetector {
         var timestamp: Long = System.currentTimeMillis()
     )
 
-    /**
-     * ✅ نتيجة تحليل الكمية مع معلومات الوحدة
-     */
-    data class QuantityInfo(
-        val liters: Double,
-        val dabbas: Double,
-        val barrels: Double,
-        val isDabba: Boolean,
-        val isBarrel: Boolean,
-        val isLiter: Boolean,
-        val rawValue: Double,
-        val unit: String,
-        val needsClarification: Boolean  // true إذا كان الرقم فقط بدون وحدة
-    )
-
     fun detectIntent(msgBody: String, ctx: ConversationState, sender: String): IntentResult {
         val normalized = msgBody.lowercase(Locale.getDefault()).trim()
         val scores = mutableMapOf<String, Int>()
 
-        // ✅ التحقق من انتهاء صلاحية السياق (5 دقائق)
-        if (ctx.awaitingResponse && System.currentTimeMillis() - ctx.timestamp < 300000L) {
+        if (ctx.awaitingResponse) {
             val contextResult = detectContextIntent(normalized, ctx)
             if (contextResult != null) {
                 return contextResult
             }
         }
 
-        // ✅ اكتشاف الطلب المشترك أولاً
-        if (normalized.contains("ديزل") && normalized.contains("بنزين")) {
-            scores["mixed_fuel_request"] = 95
-            return IntentResult("mixed_fuel_request", 95, scores)
-        }
-
         scores["diesel_request"] = scoreDieselRequest(normalized)
         scores["gasoline_request"] = scoreGasolineRequest(normalized)
-        scores["quantity_response"] = scoreQuantityResponse(normalized, ctx)
-        scores["confirm_order"] = scoreConfirmOrder(normalized, ctx)
+        scores["quantity_response"] = scoreQuantityResponse(normalized)
+        scores["confirm_order"] = scoreConfirmOrder(normalized)
         scores["cancel_order"] = scoreCancelOrder(normalized)
         scores["balance_query"] = scoreBalanceQuery(normalized)
         scores["payment_request"] = scorePaymentRequest(normalized)
@@ -113,7 +75,7 @@ class SmsIntentDetector {
         scores["weekly_report"] = scoreWeeklyReport(normalized)
         scores["schedule_appointment"] = scoreScheduleAppointment(normalized)
         scores["schedule_recurring"] = scoreRecurringSchedule(normalized)
-        scores["rating"] = scoreRating(normalized, ctx)
+        scores["rating"] = scoreRating(normalized)
         scores["greeting"] = scoreGreeting(normalized)
         scores["thanks"] = scoreThanks(normalized)
 
@@ -141,7 +103,8 @@ class SmsIntentDetector {
             "awaiting_location" -> {
                 when {
                     normalized.length in 3..200 &&
-                            !CANCEL_PATTERN.containsMatchIn(normalized) ->
+                            !normalized.contains("إلغاء") &&
+                            !normalized.contains("cancel") ->
                         IntentResult("location_response", 90)
                     else -> null
                 }
@@ -159,28 +122,18 @@ class SmsIntentDetector {
             }
             "awaiting_confirmation" -> {
                 when {
-                    YES_PATTERN.containsMatchIn(normalized) ->
+                    normalized.contains("تأكيد") || normalized.contains("confirm") ||
+                            normalized.contains("نعم") || normalized.contains("yes") ->
                         IntentResult("confirm_order", 95)
-                    NO_PATTERN.containsMatchIn(normalized) || 
-                    CANCEL_PATTERN.containsMatchIn(normalized) ->
+                    normalized.contains("إلغاء") || normalized.contains("cancel") ||
+                            normalized.contains("لا") || normalized.contains("no") ->
                         IntentResult("cancel_order", 95)
-                    else -> null
-                }
-            }
-            "awaiting_rating" -> {
-                when {
-                    RATING_REGEX.matches(normalized) ->
-                        IntentResult("rating", 95)
                     else -> null
                 }
             }
             else -> null
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ═══ دوال التقييم (Scoring) ═══
-    // ═══════════════════════════════════════════════════════════════
 
     private fun scoreDieselRequest(msg: String): Int {
         var score = 0
@@ -203,35 +156,34 @@ class SmsIntentDetector {
         return score.coerceAtMost(100)
     }
 
-    private fun scoreQuantityResponse(msg: String, ctx: ConversationState): Int {
+    private fun scoreQuantityResponse(msg: String): Int {
         var score = 0
         if (NUMBER_ONLY_REGEX.matches(msg)) score += 90
         if (DABBA_REGEX.containsMatchIn(msg)) score += 85
         if (LITER_REGEX.containsMatchIn(msg)) score += 85
-        if (BARREL_REGEX.containsMatchIn(msg)) score += 85
         if (msg.contains("دباب") || msg.contains("دبة")) score += 80
         if (msg.contains("لتر")) score += 75
-        if (msg.contains("برميل") || msg.contains("براميل")) score += 80
-        // ✅ Boost if awaiting quantity
-        if (ctx.pendingAction.startsWith("awaiting_quantity")) score += 10
         return score.coerceAtMost(100)
     }
 
-    private fun scoreConfirmOrder(msg: String, ctx: ConversationState): Int {
+    private fun scoreConfirmOrder(msg: String): Int {
         var score = 0
         if (msg == "تأكيد") score += 100
-        if (CANCEL_PATTERN.containsMatchIn(msg)) score -= 50
-        if (YES_PATTERN.containsMatchIn(msg)) score += 90
+        if (msg.contains("تأكيد")) score += 90
         if (msg.contains("confirm")) score += 85
-        if (ctx.pendingAction == "awaiting_confirmation") score += 15
+        if (msg.contains("نعم") && msg.length < 10) score += 80
+        if (msg.contains("yes")) score += 75
+        if (msg.contains("موافق")) score += 70
         return score.coerceAtMost(100)
     }
 
     private fun scoreCancelOrder(msg: String): Int {
         var score = 0
         if (msg == "إلغاء" || msg == "الغاء") score += 100
-        if (CANCEL_PATTERN.containsMatchIn(msg)) score += 95
-        if (NO_PATTERN.containsMatchIn(msg)) score += 80
+        if (msg.contains("إلغاء") || msg.contains("الغاء")) score += 95
+        if (msg.contains("cancel")) score += 90
+        if (msg.contains("لا") && msg.length < 5) score += 75
+        if (msg.contains("no")) score += 70
         if (msg.contains("ألغي")) score += 80
         return score.coerceAtMost(100)
     }
@@ -271,6 +223,8 @@ class SmsIntentDetector {
         var score = 0
         if (msg.contains("عروض")) score += 95
         if (msg.contains("offer")) score += 85
+        if (msg.contains("سعر")) score += 80
+        if (msg.contains("price")) score += 75
         if (msg.contains("تخفيض")) score += 70
         return score.coerceAtMost(100)
     }
@@ -424,9 +378,9 @@ class SmsIntentDetector {
         return score.coerceAtMost(100)
     }
 
-    private fun scoreRating(msg: String, ctx: ConversationState): Int {
+    private fun scoreRating(msg: String): Int {
         var score = 0
-        if (ctx.pendingAction == "awaiting_rating" && RATING_REGEX.matches(msg)) score += 95
+        if (RATING_REGEX.matches(msg)) score += 95
         if (msg.contains("تقييم")) score += 85
         if (msg.contains("rating")) score += 80
         if (msg.contains("rate")) score += 75
@@ -461,114 +415,36 @@ class SmsIntentDetector {
     // ═══ أدوات تحليل النصوص ═══
     // ═══════════════════════════════════════════════════════════════
 
-    /**
-     * ✅ تحليل الكمية مع دعم الوحدات: لتر / دباب / برميل
-     * 
-     * إذا أرسل المستخدم رقم فقط (مثل "5")، يُرجع needsClarification = true
-     * ويجب على المعالج إرسال رسالة توضيحية
-     */
-    fun parseQuantity(msgBody: String, expectedUnit: String = "auto"): QuantityInfo {
+    data class QuantityInfo(val liters: Double, val dabbas: Double, val isDabba: Boolean)
+
+    fun parseQuantity(msgBody: String): QuantityInfo {
         val normalized = msgBody.trim().lowercase(Locale.getDefault())
 
-        // ✅ التحقق من برميل أولاً
-        val barrelMatch = BARREL_REGEX.find(normalized)
-        if (barrelMatch != null) {
-            val barrels = barrelMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            val liters = barrels * LITER_PER_BARREL
-            return QuantityInfo(
-                liters = liters,
-                dabbas = liters / LITER_PER_DABBA,
-                barrels = barrels,
-                isDabba = false,
-                isBarrel = true,
-                isLiter = false,
-                rawValue = barrels,
-                unit = "برميل",
-                needsClarification = false
-            )
-        }
-
-        // ✅ التحقق من دباب
         val dabbaMatch = DABBA_REGEX.find(normalized)
         if (dabbaMatch != null) {
             val dabbas = dabbaMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            val liters = dabbas * LITER_PER_DABBA
-            return QuantityInfo(
-                liters = liters,
-                dabbas = dabbas,
-                barrels = liters / LITER_PER_BARREL,
-                isDabba = true,
-                isBarrel = false,
-                isLiter = false,
-                rawValue = dabbas,
-                unit = "دباب",
-                needsClarification = false
-            )
+            val liters = dabbas * 20.0
+            return QuantityInfo(liters, dabbas, true)
         }
 
-        // ✅ التحقق من لتر
         val literMatch = LITER_REGEX.find(normalized)
         if (literMatch != null) {
             val liters = literMatch.groupValues[1].toDoubleOrNull() ?: 0.0
-            return QuantityInfo(
-                liters = liters,
-                dabbas = liters / LITER_PER_DABBA,
-                barrels = liters / LITER_PER_BARREL,
-                isDabba = false,
-                isBarrel = false,
-                isLiter = true,
-                rawValue = liters,
-                unit = "لتر",
-                needsClarification = false
-            )
+            val dabbas = liters / 20.0
+            return QuantityInfo(liters, dabbas, false)
         }
 
-        // ✅ إذا كان رقم فقط - يحتاج توضيح
         val numberOnly = NUMBER_ONLY_REGEX.find(normalized)
         if (numberOnly != null) {
             val value = numberOnly.groupValues[1].toDouble()
-            return QuantityInfo(
-                liters = 0.0,
-                dabbas = 0.0,
-                barrels = 0.0,
-                isDabba = false,
-                isBarrel = false,
-                isLiter = false,
-                rawValue = value,
-                unit = "",
-                needsClarification = true  // ✅ يحتاج توضيح الوحدة
-            )
+            return if (value <= 50) {
+                QuantityInfo(value * 20.0, value, true)
+            } else {
+                QuantityInfo(value, value / 20.0, false)
+            }
         }
 
-        return QuantityInfo(0.0, 0.0, 0.0, false, false, false, 0.0, "", false)
-    }
-
-    /**
-     * ✅ إنشاء رسالة توضيحية للوحدة
-     */
-    fun buildClarificationMessage(rawValue: Double): String {
-        return "${rawValue.toInt()} $MSG_CLARIFY_UNIT"
-    }
-
-    /**
-     * ✅ إنشاء رسالة الكمية الصغيرة
-     */
-    fun buildSmallQuantityMessage(quantityInfo: QuantityInfo, pricePerLiter: Double): String {
-        val totalPrice = quantityInfo.liters * pricePerLiter
-        val quantityStr = when {
-            quantityInfo.isLiter -> "${quantityInfo.rawValue} لتر"
-            quantityInfo.isDabba -> "${quantityInfo.rawValue} دباب"
-            quantityInfo.isBarrel -> "${quantityInfo.rawValue} برميل"
-            else -> "${quantityInfo.liters} لتر"
-        }
-        return MSG_SMALL_QUANTITY_DELIVERY.format(quantityStr, String.format("%.2f", totalPrice))
-    }
-
-    /**
-     * ✅ التحقق مما إذا كانت الكمية تصلح للتوصيل
-     */
-    fun isDeliverable(quantityInfo: QuantityInfo): Boolean {
-        return quantityInfo.liters >= MIN_DELIVERY_LITERS
+        return QuantityInfo(0.0, 0.0, false)
     }
 
     data class TimeInfo(val displayTime: String, val timestamp: Long)
@@ -602,8 +478,7 @@ class SmsIntentDetector {
             cal.set(Calendar.MINUTE, minute)
             cal.set(Calendar.SECOND, 0)
 
-            // ✅ حد أدنى 1 ساعة
-            if (cal.timeInMillis < System.currentTimeMillis() + 3600000L) {
+            if (cal.timeInMillis < System.currentTimeMillis()) {
                 cal.add(Calendar.DAY_OF_MONTH, 1)
             }
 

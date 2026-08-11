@@ -3,7 +3,6 @@ package com.aistudio.dieselstationsms.kxmpzq.startup
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
-import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.startup.config.ConfigurationProvider
 import com.aistudio.dieselstationsms.kxmpzq.startup.event.EventBus
 import com.aistudio.dieselstationsms.kxmpzq.startup.health.HealthMonitor
@@ -13,16 +12,6 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.retry.RetryPolicy
 import kotlinx.coroutines.*
 import java.util.UUID
 
-/**
- * ═══════════════════════════════════════════════════════════════
- * منسق تهيئة التطبيق - ApplicationInitializationCoordinator
- * ═══════════════════════════════════════════════════════════════
- *
- * التحديثات:
- * 1. إضافة DatabaseHelper لتهيئة السياق
- * 2. دعم SchemaInitializationPhase
- * 3. تكامل مع SmsPartyGateway
- */
 class ApplicationInitializationCoordinator(
     private val config: ConfigurationProvider,
     private val eventBus: EventBus,
@@ -34,8 +23,7 @@ class ApplicationInitializationCoordinator(
     private val loggerFactory: (Context) -> StartupLogger,
     private val launcherFactory: (Context) -> ServiceLauncher,
     private val healthMonitorFactory: () -> HealthMonitor,
-    private val retryPolicyFactory: () -> RetryPolicy,
-    private val databaseHelperFactory: (Context) -> DatabaseHelper  // ✅ جديد
+    private val retryPolicyFactory: () -> RetryPolicy
 ) {
     private val coordinatorScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO + CoroutineName("InitCoordinator")
@@ -54,13 +42,11 @@ class ApplicationInitializationCoordinator(
         val serviceLauncher = launcherFactory(context)
         val healthMonitor = healthMonitorFactory()
         val retryPolicy = retryPolicyFactory()
-        val databaseHelper = databaseHelperFactory(context)  // ✅ جديد
 
         val initContext = InitializationContext(
             appContext = context, startupReason = reason, logger = logger,
             serviceLauncher = serviceLauncher, config = config, healthMonitor = healthMonitor,
-            retryPolicy = retryPolicy, correlationId = correlationId, cancellationToken = cancellationToken,
-            databaseHelper = databaseHelper  // ✅ جديد
+            retryPolicy = retryPolicy, correlationId = correlationId, cancellationToken = cancellationToken
         )
 
         logger.logBootReceived(reason, action, correlationId)
