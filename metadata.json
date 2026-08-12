@@ -1,0 +1,6 @@
+{
+  "name": "محطة ابو أحمد لمشتقات الديزل",
+  "description": "نظام إدارة محطة وقود متطور مع دعم SMS، الذكاء الاصطناعي، والولاء",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
