@@ -28,25 +28,27 @@ import java.util.concurrent.locks.ReentrantLock
  *
  * المسؤوليات:
  *
- * 1. تهيئة Application العامة.
- * 2. تهيئة StartupDiagnostics بصورة مبكرة وآمنة.
- * 3. تسجيل Crash Handler عالمي.
- * 4. تسجيل Crash الخاص بـ Startup عند الحاجة.
+ * 1. تهيئة Application الأساسية.
+ * 2. تهيئة StartupDiagnostics مبكرًا.
+ * 3. تسجيل Crash عام للتطبيق.
+ * 4. تسجيل Crash خاص بـ Startup عند الحاجة.
  * 5. إنشاء Notification Channels.
- * 6. توفير EncryptedSharedPreferences.
- * 7. توفير أدوات Hashing آمنة.
- * 8. توفير معلومات التخزين والذاكرة.
- * 9. إدارة ملفات Crash Logs.
+ * 6. تهيئة EncryptedSharedPreferences.
+ * 7. توفير وظائف مساعدة للتخزين والتشخيص.
  *
- * المبادئ:
+ * الحدود المعمارية:
  *
- * - لا يعتمد StartupDiagnostics على MyApplication.
- * - MyApplication يمكنه استخدام StartupDiagnostics دون اعتماد عكسي.
- * - فشل التشخيص لا يجب أن يؤدي إلى Crash إضافي.
- * - Crash Handler لا يرمي Exceptions.
- * - OutOfMemoryError يعالج بمسار منخفض التكلفة.
- * - عمليات الكتابة إلى Crash Logs Best-Effort.
- * - جميع العمليات الحساسة محمية من الاستثناءات.
+ * - لا ينشئ InitializationPipeline.
+ * - لا ينشئ StartupPolicyFactory.
+ * - لا يشغّل SMSService مباشرة.
+ * - لا يعتمد على EventBus.
+ * - لا يعتمد على Coroutine.
+ * - لا يعتمد على StartupCoordinator.
+ *
+ * تشغيل مراحل Startup والخدمات يتم من طبقة Startup المخصصة.
+ *
+ * StartupDiagnostics مستقلة عن MyApplication، ولذلك يمكن
+ * استخدامها في مرحلة مبكرة جدًا من دورة التشغيل.
  */
 class MyApplication : Application() {
 
@@ -54,44 +56,45 @@ class MyApplication : Application() {
 
         private const val TAG = "MyApplication"
 
-        /**
-         * مجلد Crash Logs.
+        /*
+         * Crash reports.
          */
         private const val CRASH_DIR = "crashes"
 
-        /**
-         * الحد الأقصى لعدد ملفات Crash.
-         */
         private const val MAX_CRASH_FILES = 10
 
-        /**
-         * الحد الأدنى للمساحة الحرة المطلوبة للكتابة.
-         */
         private const val MIN_FREE_SPACE_MB = 5L
 
-        /**
-         * تنسيق التاريخ.
-         */
-        private const val DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS"
+        private const val DATE_FORMAT =
+            "yyyy-MM-dd HH:mm:ss.SSS"
 
-        /**
-         * قفل مشترك لعمليات Crash Logging.
-         */
-        private val crashLock = ReentrantLock()
-
-        /**
-         * اسم SharedPreferences المشفرة.
+        /*
+         * Encrypted preferences.
          */
         private const val PREFS_NAME = "secure_prefs"
 
-        /**
-         * Singleton للـ Application.
+        private const val MASTER_KEY_ALIAS =
+            "my_app_master_key"
+
+        /*
+         * Notification channel.
+         */
+        const val SMS_NOTIFICATION_CHANNEL_ID =
+            "station_sms_channel"
+
+        /*
+         * Singleton.
          */
         @Volatile
         private var instance: MyApplication? = null
 
+        /*
+         * Crash-file lock.
+         */
+        private val crashLock = ReentrantLock()
+
         /**
-         * الحصول على Instance.
+         * الحصول على Instance التطبيق.
          */
         fun getInstance(): MyApplication {
             return instance
@@ -108,20 +111,11 @@ class MyApplication : Application() {
         }
 
         /**
-         * ═══════════════════════════════════════════════════════
-         * EncryptedSharedPreferences
-         * ═══════════════════════════════════════════════════════
+         * الحصول على SharedPreferences مشفرة.
          *
-         * يتم إنشاء MasterKey بصورة آمنة.
-         *
-         * في حال فشل التشفير، نستخدم SharedPreferences عادية
-         * كـ fallback حتى لا يؤدي فشل طبقة التشفير إلى إسقاط
-         * التطبيق أثناء Startup.
-         *
-         * ملاحظة:
-         *
-         * البيانات شديدة الحساسية لا ينبغي الاعتماد على fallback
-         * غير المشفر لها.
+         * إذا تعذر إنشاء EncryptedSharedPreferences،
+         * يتم استخدام SharedPreferences عادية كـ fallback
+         * حتى لا يؤدي فشل طبقة التشفير إلى إسقاط التطبيق.
          */
         fun getEncryptedPreferences(): SharedPreferences {
 
@@ -153,7 +147,7 @@ class MyApplication : Application() {
                 Log.e(
                     TAG,
                     "Failed to create encrypted preferences; " +
-                        "using fallback SharedPreferences",
+                        "using fallback preferences",
                     e
                 )
 
@@ -165,11 +159,10 @@ class MyApplication : Application() {
         }
 
         /**
-         * ═══════════════════════════════════════════════════════
-         * SHA-256 Hash
-         * ═══════════════════════════════════════════════════════
+         * تجزئة SHA-256.
          *
-         * يستخدم لتجزئة قيم مثل أرقام الهواتف عند الحاجة.
+         * تستخدم فقط عندما يحتاج أحد أجزاء التطبيق
+         * إلى بصمة غير قابلة للعكس للنص.
          */
         fun hashString(input: String): String {
 
@@ -198,8 +191,11 @@ class MyApplication : Application() {
                 )
 
                 /*
-                 * لا نعيد القيمة الأصلية كحل أمني مثالي،
-                 * لكن نحافظ على التوافق مع السلوك السابق.
+                 * لا نرمي Exception من helper عام.
+                 *
+                 * ملاحظة:
+                 * المستهلك الذي يتطلب SHA-256 حقيقيًا يجب ألا يعتمد
+                 * على fallback هذا كقيمة أمنية.
                  */
                 input
             }
@@ -207,48 +203,46 @@ class MyApplication : Application() {
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Application Startup
-     * ═══════════════════════════════════════════════════════════
+     * تهيئة Application.
      */
     override fun onCreate() {
-
         super.onCreate()
 
-        /*
-         * يجب تسجيل instance أولًا لأن بقية أدوات Application
-         * تعتمد عليه.
-         */
         instance = this
 
         /*
-         * StartupDiagnostics مستقل عن MyApplication،
-         * لذلك يمكن تهيئته مبكرًا جدًا.
+         * ═══════════════════════════════════════════════════════
+         * 1. Startup Diagnostics
+         * ═══════════════════════════════════════════════════════
          *
-         * initialize() مصمم ليكون Best-Effort ولا ينبغي أن
-         * يسقط التطبيق.
+         * يجب تهيئتها مبكرًا.
+         *
+         * لا تعتمد على MyApplication داخليًا.
          */
         initializeStartupDiagnostics()
 
         /*
-         * بعد تهيئة Diagnostics يتم تثبيت Crash Handler.
-         *
-         * بهذه الطريقة إذا حدث Crash أثناء Startup اللاحق
-         * يمكن تسجيله في StartupDiagnostics.
+         * ═══════════════════════════════════════════════════════
+         * 2. Global Crash Handler
+         * ═══════════════════════════════════════════════════════
          */
         setupCrashHandler()
 
         /*
-         * إنشاء قنوات الإشعارات.
+         * ═══════════════════════════════════════════════════════
+         * 3. Notification Channels
+         * ═══════════════════════════════════════════════════════
          */
         createNotificationChannels()
 
         /*
-         * تهيئة EncryptedSharedPreferences مسبقًا.
+         * ═══════════════════════════════════════════════════════
+         * 4. Secure Preferences
+         * ═══════════════════════════════════════════════════════
          */
         initializeEncryptedPreferences()
 
-        Log.d(
+        Log.i(
             TAG,
             "Application initialized successfully"
         )
@@ -257,7 +251,9 @@ class MyApplication : Application() {
     /**
      * تهيئة StartupDiagnostics.
      *
-     * هذه العملية مستقلة تمامًا عن Pipeline نفسه.
+     * هذه العملية Best-Effort.
+     *
+     * أي فشل هنا يجب ألا يمنع Application من الإقلاع.
      */
     private fun initializeStartupDiagnostics() {
 
@@ -274,9 +270,6 @@ class MyApplication : Application() {
 
         } catch (e: Exception) {
 
-            /*
-             * لا يجب أن يفشل Application بسبب Diagnostics.
-             */
             Log.e(
                 TAG,
                 "StartupDiagnostics initialization failed",
@@ -286,7 +279,10 @@ class MyApplication : Application() {
     }
 
     /**
-     * تهيئة EncryptedSharedPreferences.
+     * تهيئة EncryptedSharedPreferences مبكرًا.
+     *
+     * لا نحتفظ بنسخة static من SharedPreferences هنا
+     * حتى لا نخلق state عالميًا غير ضروري.
      */
     private fun initializeEncryptedPreferences() {
 
@@ -302,26 +298,25 @@ class MyApplication : Application() {
         } catch (e: Exception) {
 
             /*
-             * getEncryptedPreferences لديها fallback،
-             * ولكن نحمي Application أيضًا من أي Exception
-             * غير متوقع.
+             * getEncryptedPreferences() يحتوي أصلًا على fallback،
+             * لكن نحمي Application أيضًا من أي خطأ غير متوقع.
              */
             Log.e(
                 TAG,
-                "Failed to initialize preferences",
+                "Encrypted preferences initialization failed",
                 e
             )
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Notification Channels
-     * ═══════════════════════════════════════════════════════════
+     * إنشاء Notification Channels.
      */
     private fun createNotificationChannels() {
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT <
+            Build.VERSION_CODES.O
+        ) {
             return
         }
 
@@ -329,7 +324,7 @@ class MyApplication : Application() {
 
             val channel =
                 NotificationChannel(
-                    "station_sms_channel",
+                    SMS_NOTIFICATION_CHANNEL_ID,
                     "Station SMS Service",
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
@@ -343,15 +338,13 @@ class MyApplication : Application() {
             val manager =
                 getSystemService(
                     Context.NOTIFICATION_SERVICE
-                ) as NotificationManager
+                ) as? NotificationManager
 
-            manager.createNotificationChannel(
-                channel
-            )
+            manager?.createNotificationChannel(channel)
 
             Log.d(
                 TAG,
-                "Notification channel created"
+                "Notification channel initialized"
             )
 
         } catch (e: Exception) {
@@ -365,130 +358,136 @@ class MyApplication : Application() {
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Global Crash Handler
-     * ═══════════════════════════════════════════════════════════
+     * إعداد Global UncaughtExceptionHandler.
      *
-     * يتم الاحتفاظ بالـ defaultHandler حتى يستمر Android في
-     * معالجة Crash بالطريقة الطبيعية بعد تسجيل التقرير.
+     * مهم جدًا:
+     *
+     * هذا Handler لا يستبدل Handler النظام بصورة دائمة
+     * دون الاحتفاظ بالـ original handler.
+     *
+     * بعد كتابة التقرير، يتم تمرير Crash إلى handler الأصلي.
      */
     private fun setupCrashHandler() {
 
-        try {
+        val defaultHandler =
+            Thread.getDefaultUncaughtExceptionHandler()
 
-            val defaultHandler =
-                Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler {
+                thread,
+                throwable ->
 
-            Thread.setDefaultUncaughtExceptionHandler {
-                    thread,
-                    throwable ->
+            try {
 
-                try {
+                when (throwable) {
 
-                    when (throwable) {
+                    is OutOfMemoryError -> {
 
-                        /*
-                         * OutOfMemoryError لا ينبغي تنفيذ عمليات
-                         * ثقيلة أثناء معالجته.
-                         */
-                        is OutOfMemoryError -> {
-
-                            handleOOMError(
-                                thread = thread,
-                                throwable = throwable,
-                                defaultHandler = defaultHandler
-                            )
-                        }
-
-                        else -> {
-
-                            handleNormalCrash(
-                                thread = thread,
-                                throwable = throwable,
-                                defaultHandler = defaultHandler
-                            )
-                        }
+                        handleOOMCrash(
+                            thread = thread,
+                            throwable = throwable
+                        )
                     }
 
-                } catch (handlerError: Throwable) {
+                    else -> {
 
-                    /*
-                     * Crash Handler نفسه يجب ألا يؤدي إلى Crash
-                     * إضافي أو يمنع النظام من استكمال معالجة
-                     * الاستثناء الأصلي.
-                     */
-                    try {
-
-                        Log.e(
-                            TAG,
-                            "Crash handler failed",
-                            handlerError
+                        handleNormalCrash(
+                            thread = thread,
+                            throwable = throwable
                         )
-
-                    } catch (_: Throwable) {
-                        // لا شيء
-                    }
-
-                    try {
-
-                        defaultHandler?.uncaughtException(
-                            thread,
-                            throwable
-                        )
-
-                    } catch (_: Throwable) {
-                        // لا شيء
                     }
                 }
+
+            } catch (handlerError: Throwable) {
+
+                /*
+                 * لا نسمح لـ Crash Handler نفسه
+                 * بإحداث Crash ثانوي.
+                 */
+                try {
+
+                    Log.e(
+                        TAG,
+                        "Crash handler failed",
+                        handlerError
+                    )
+
+                } catch (_: Throwable) {
+                    // Last-resort: ignore.
+                }
+
+            } finally {
+
+                /*
+                 * StartupDiagnostics مستقل عن MyApplication.
+                 *
+                 * إذا كان Startup نشطًا، نسجل Crash الخاص به أيضًا.
+                 */
+                try {
+
+                    val diagnostics =
+                        StartupDiagnostics.peek()
+
+                    if (
+                        diagnostics != null &&
+                        diagnostics.isStartupActive()
+                    ) {
+
+                        diagnostics.recordCrash(
+                            threadName = thread.name,
+                            throwable = throwable
+                        )
+                    }
+
+                } catch (_: Throwable) {
+                    /*
+                     * Diagnostics must never cause a second crash.
+                     */
+                }
+
+                /*
+                 * تمرير Crash إلى النظام/Handler السابق.
+                 */
+                try {
+
+                    defaultHandler?.uncaughtException(
+                        thread,
+                        throwable
+                    )
+
+                } catch (_: Throwable) {
+
+                    /*
+                     * لا يوجد شيء آمن يمكن فعله هنا.
+                     */
+                }
             }
-
-        } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Failed to install global crash handler",
-                e
-            )
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Normal Crash
-     * ═══════════════════════════════════════════════════════════
+     * معالجة Crash عادي.
      */
     private fun handleNormalCrash(
         thread: Thread,
-        throwable: Throwable,
-        defaultHandler: Thread.UncaughtExceptionHandler?
+        throwable: Throwable
     ) {
 
         /*
-         * أولًا نحاول تسجيل Crash في StartupDiagnostics
-         * إذا كان Startup نشطًا.
-         *
-         * لا نستخدم getInstance() هنا حتى لا نرمي Exception
-         * إذا حدث شيء غير متوقع.
+         * لا نحاول تنفيذ عمليات ثقيلة إذا كانت المساحة غير كافية.
          */
-        recordStartupCrashSafely(
-            thread = thread,
-            throwable = throwable
-        )
+        if (!hasEnoughCrashStorage()) {
+
+            Log.w(
+                TAG,
+                "Insufficient storage for crash report"
+            )
+
+            return
+        }
 
         crashLock.lock()
 
         try {
-
-            if (!hasEnoughSpace()) {
-
-                Log.w(
-                    TAG,
-                    "Insufficient space for crash log"
-                )
-
-                return
-
-            }
 
             val crashDir =
                 File(
@@ -496,22 +495,17 @@ class MyApplication : Application() {
                     CRASH_DIR
                 )
 
-            if (!crashDir.exists()) {
+            if (!ensureDirectory(crashDir)) {
 
-                if (!crashDir.mkdirs() &&
-                    !crashDir.exists()
-                ) {
+                Log.w(
+                    TAG,
+                    "Unable to create crash directory"
+                )
 
-                    Log.w(
-                        TAG,
-                        "Unable to create crash directory"
-                    )
-
-                    return
-                }
+                return
             }
 
-            cleanupOldCrashes(
+            cleanupOldCrashFiles(
                 crashDir
             )
 
@@ -541,7 +535,7 @@ class MyApplication : Application() {
 
             Log.d(
                 TAG,
-                "Crash log saved: " +
+                "Crash report saved: " +
                     logFile.absolutePath
             )
 
@@ -549,104 +543,32 @@ class MyApplication : Application() {
 
             Log.e(
                 TAG,
-                "Failed to write crash log",
+                "Failed to save crash report",
                 e
             )
 
         } finally {
 
-            try {
-
-                crashLock.unlock()
-
-            } catch (_: Exception) {
-                // لا شيء
-            }
-        }
-
-        /*
-         * يجب دائمًا تمرير Crash الأصلي إلى النظام.
-         */
-        try {
-
-            defaultHandler?.uncaughtException(
-                thread,
-                throwable
-            )
-
-        } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Default crash handler failed",
-                e
-            )
+            crashLock.unlock()
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Startup Crash Recording
-     * ═══════════════════════════════════════════════════════════
+     * معالجة OutOfMemoryError.
      *
-     * StartupDiagnostics مستقل عن MyApplication.
+     * هنا نتجنب:
      *
-     * نسجل Crash فقط إذا كان Startup فعليًا نشطًا.
+     * - JSON كبير.
+     * - stacktraceToString().
+     * - عمليات File.walk().
+     * - أي allocation غير ضروري.
      */
-    private fun recordStartupCrashSafely(
+    private fun handleOOMCrash(
         thread: Thread,
-        throwable: Throwable
+        throwable: OutOfMemoryError
     ) {
 
         try {
-
-            val diagnostics =
-                StartupDiagnostics.peek()
-                    ?: return
-
-            if (!diagnostics.isStartupActive()) {
-                return
-            }
-
-            diagnostics.recordCrash(
-                threadName = thread.name,
-                throwable = throwable
-            )
-
-        } catch (e: Exception) {
-
-            /*
-             * فشل Diagnostics لا يجوز أن يؤثر على Crash Handler.
-             */
-            Log.e(
-                TAG,
-                "Failed to record startup crash",
-                e
-            )
-        }
-    }
-
-    /**
-     * ═══════════════════════════════════════════════════════════
-     * Out Of Memory
-     * ═══════════════════════════════════════════════════════════
-     *
-     * هذا المسار يجب أن يبقى بسيطًا جدًا.
-     */
-    private fun handleOOMError(
-        thread: Thread,
-        throwable: OutOfMemoryError,
-        defaultHandler: Thread.UncaughtExceptionHandler?
-    ) {
-
-        try {
-
-            /*
-             * لا نستدعي StartupDiagnostics هنا عمدًا.
-             *
-             * recordCrash() يبني تقريرًا كبيرًا نسبيًا ويقرأ
-             * ملفات أخرى، وهذا غير مناسب لمسار OOM.
-             */
 
             val crashDir =
                 File(
@@ -654,37 +576,9 @@ class MyApplication : Application() {
                     CRASH_DIR
                 )
 
-            if (!crashDir.exists()) {
-                crashDir.mkdirs()
+            if (!ensureDirectory(crashDir)) {
+                return
             }
-
-            val simpleLog =
-                buildString {
-
-                    append("OOM Crash\n")
-                    append(
-                        "timestamp=" +
-                            formatDate(
-                                Date()
-                            ) +
-                            "\n"
-                    )
-                    append(
-                        "thread=" +
-                            safeText(
-                                thread.name
-                            ) +
-                            "\n"
-                    )
-                    append(
-                        "message=" +
-                            safeText(
-                                throwable.message
-                                    ?: "N/A"
-                            ) +
-                            "\n"
-                    )
-                }
 
             val logFile =
                 File(
@@ -692,325 +586,211 @@ class MyApplication : Application() {
                     "oom_${System.currentTimeMillis()}.txt"
                 )
 
-            /*
-             * writeText قد يحتاج ذاكرة إضافية،
-             * لكنه أقل تكلفة من بناء تقرير كامل.
-             */
-            try {
+            val message =
+                buildString {
 
-                logFile.writeText(
-                    simpleLog
-                )
+                    append("OOM Crash\n")
+                    append("time=")
+                    append(Date())
+                    append('\n')
 
-            } catch (_: Throwable) {
-                // تجاهل أي فشل أثناء OOM
-            }
+                    append("thread=")
+                    append(thread.name)
+                    append('\n')
 
-        } catch (_: Throwable) {
+                    append("message=")
+                    append(
+                        throwable.message ?: "OutOfMemoryError"
+                    )
+                    append('\n')
+                }
 
-            /*
-             * لا نفعل شيئًا.
-             */
-        }
-
-        try {
-
-            defaultHandler?.uncaughtException(
-                thread,
-                throwable
+            logFile.writeText(
+                message
             )
 
         } catch (_: Throwable) {
-            // لا شيء
+            /*
+             * OOM path must be best-effort only.
+             */
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Crash Report
-     * ═══════════════════════════════════════════════════════════
+     * بناء Crash Report بصيغة JSON.
+     *
+     * لا نستخدم مكتبة JSON هنا حتى يبقى Crash Handler
+     * قليل الاعتماديات قدر الإمكان.
      */
     private fun buildCrashReport(
         thread: Thread,
         throwable: Throwable
     ): String {
 
+        val runtime =
+            Runtime.getRuntime()
+
+        val totalMemory =
+            runtime.totalMemory()
+
+        val freeMemory =
+            runtime.freeMemory()
+
+        val usedMemory =
+            totalMemory - freeMemory
+
+        val maxMemory =
+            runtime.maxMemory()
+
+        val version =
+            getAppVersion()
+
+        return """
+            {
+                "timestamp": "${escapeJson(formatDate(Date()))}",
+                "thread": {
+                    "name": "${escapeJson(thread.name)}",
+                    "id": ${thread.id}
+                },
+                "exception": {
+                    "type": "${escapeJson(throwable.javaClass.name)}",
+                    "message": "${escapeJson(throwable.message ?: "N/A")}",
+                    "stacktrace": "${escapeJson(safeStackTrace(throwable))}"
+                },
+                "device": {
+                    "manufacturer": "${escapeJson(Build.MANUFACTURER)}",
+                    "brand": "${escapeJson(Build.BRAND)}",
+                    "model": "${escapeJson(Build.MODEL)}",
+                    "device": "${escapeJson(Build.DEVICE)}",
+                    "hardware": "${escapeJson(Build.HARDWARE)}",
+                    "android_version": "${escapeJson(Build.VERSION.RELEASE ?: "unknown")}",
+                    "sdk_int": ${Build.VERSION.SDK_INT},
+                    "fingerprint": "${escapeJson(Build.FINGERPRINT ?: "unknown")}"
+                },
+                "memory": {
+                    "total_mb": ${totalMemory / 1024 / 1024},
+                    "free_mb": ${freeMemory / 1024 / 1024},
+                    "used_mb": ${usedMemory / 1024 / 1024},
+                    "max_mb": ${maxMemory / 1024 / 1024}
+                },
+                "storage": {
+                    "available_mb": ${getAvailableStorageMb()}
+                },
+                "database": {
+                    "size_bytes": ${getDatabaseSize()}
+                },
+                "app": {
+                    "package": "${escapeJson(packageName)}",
+                    "version": "${escapeJson(version)}"
+                }
+            }
+        """.trimIndent()
+    }
+
+    /**
+     * الحصول على StackTrace بأفضل جهد.
+     */
+    private fun safeStackTrace(
+        throwable: Throwable
+    ): String {
+
         return try {
 
-            val runtime =
-                Runtime.getRuntime()
+            throwable.stackTraceToString()
 
-            val totalMemory =
-                runtime.totalMemory()
+        } catch (_: Throwable) {
 
-            val freeMemory =
-                runtime.freeMemory()
-
-            val usedMemory =
-                totalMemory - freeMemory
-
-            buildString {
-
-                appendLine("{")
-
-                appendLine(
-                    "  \"timestamp\": \"" +
-                        escapeJson(
-                            formatDate(Date())
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "  \"thread\": {"
-                )
-
-                appendLine(
-                    "    \"name\": \"" +
-                        escapeJson(
-                            thread.name
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"id\": " +
-                        thread.id
-                )
-
-                appendLine(
-                    "  },"
-                )
-
-                appendLine(
-                    "  \"exception\": {"
-                )
-
-                appendLine(
-                    "    \"type\": \"" +
-                        escapeJson(
-                            throwable
-                                .javaClass
-                                .name
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"message\": \"" +
-                        escapeJson(
-                            throwable.message
-                                ?: "N/A"
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"stacktrace\": \"" +
-                        escapeJson(
-                            throwable
-                                .stackTraceToString()
-                        ) +
-                        "\""
-                )
-
-                appendLine(
-                    "  },"
-                )
-
-                appendLine(
-                    "  \"device\": {"
-                )
-
-                appendLine(
-                    "    \"manufacturer\": \"" +
-                        escapeJson(
-                            Build.MANUFACTURER
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"model\": \"" +
-                        escapeJson(
-                            Build.MODEL
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"brand\": \"" +
-                        escapeJson(
-                            Build.BRAND
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"device\": \"" +
-                        escapeJson(
-                            Build.DEVICE
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"hardware\": \"" +
-                        escapeJson(
-                            Build.HARDWARE
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"android_version\": \"" +
-                        escapeJson(
-                            Build.VERSION.RELEASE
-                                ?: "unknown"
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"sdk_int\": " +
-                        Build.VERSION.SDK_INT +
-                        ","
-                )
-
-                appendLine(
-                    "    \"fingerprint\": \"" +
-                        escapeJson(
-                            Build.FINGERPRINT
-                        ) +
-                        "\""
-                )
-
-                appendLine(
-                    "  },"
-                )
-
-                appendLine(
-                    "  \"memory\": {"
-                )
-
-                appendLine(
-                    "    \"total_mb\": " +
-                        (
-                            totalMemory /
-                                1024 /
-                                1024
-                            ) +
-                        ","
-                )
-
-                appendLine(
-                    "    \"free_mb\": " +
-                        (
-                            freeMemory /
-                                1024 /
-                                1024
-                            ) +
-                        ","
-                )
-
-                appendLine(
-                    "    \"used_mb\": " +
-                        (
-                            usedMemory /
-                                1024 /
-                                1024
-                            ) +
-                        ","
-                )
-
-                appendLine(
-                    "    \"max_mb\": " +
-                        (
-                            runtime.maxMemory() /
-                                1024 /
-                                1024
-                            )
-                )
-
-                appendLine(
-                    "  },"
-                )
-
-                appendLine(
-                    "  \"app\": {"
-                )
-
-                appendLine(
-                    "    \"package\": \"" +
-                        escapeJson(
-                            packageName
-                        ) +
-                        "\","
-                )
-
-                appendLine(
-                    "    \"version\": \"" +
-                        escapeJson(
-                            getAppVersion()
-                        ) +
-                        "\""
-                )
-
-                appendLine(
-                    "  }"
-                )
-
-                appendLine("}")
-
-            }
-
-        } catch (e: Exception) {
-
-            /*
-             * يجب أن يكون Crash Reporting نفسه آمنًا.
-             */
-            "{\"error\":\"Unable to build crash report\"}"
+            "Unable to obtain stacktrace"
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Storage Check
-     * ═══════════════════════════════════════════════════════════
+     * التحقق من وجود مساحة كافية لتقرير Crash.
      */
-    private fun hasEnoughSpace(): Boolean {
+    private fun hasEnoughCrashStorage(): Boolean {
 
         return try {
 
             val stat =
                 StatFs(
-                    cacheDir.path
+                    cacheDir.absolutePath
                 )
 
-            val availableBytes =
+            val available =
                 stat.availableBytes
 
-            availableBytes >
+            available >
                 MIN_FREE_SPACE_MB *
-                1024L *
-                1024L
+                    1024L *
+                    1024L
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
 
             /*
-             * إذا تعذر معرفة المساحة،
-             * لا نمنع Crash Reporting.
+             * فشل قياس المساحة لا يمنع محاولة التسجيل.
              */
             true
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Crash Cleanup
-     * ═══════════════════════════════════════════════════════════
+     * الحصول على المساحة المتاحة.
      */
-    private fun cleanupOldCrashes(
+    fun getAvailableStorageMb(): Long {
+
+        return try {
+
+            val stat =
+                StatFs(
+                    filesDir.absolutePath
+                )
+
+            stat.availableBytes /
+                1024L /
+                1024L
+
+        } catch (_: Exception) {
+
+            -1L
+        }
+    }
+
+    /**
+     * إنشاء مجلد بأمان.
+     */
+    private fun ensureDirectory(
+        directory: File
+    ): Boolean {
+
+        return try {
+
+            if (directory.exists()) {
+
+                return directory.isDirectory
+            }
+
+            directory.mkdirs() ||
+                directory.exists()
+
+        } catch (e: Exception) {
+
+            Log.w(
+                TAG,
+                "Unable to create directory: " +
+                    directory.absolutePath,
+                e
+            )
+
+            false
+        }
+    }
+
+    /**
+     * تنظيف Crash reports القديمة.
+     *
+     * يتم الاحتفاظ بأحدث MAX_CRASH_FILES فقط.
+     */
+    private fun cleanupOldCrashFiles(
         crashDir: File
     ) {
 
@@ -1019,16 +799,21 @@ class MyApplication : Application() {
             val files =
                 crashDir.listFiles { file ->
 
-                    file.name.startsWith(
-                        "crash_"
-                    ) ||
-                        file.name.startsWith(
-                            "oom_"
+                    file.isFile &&
+                        (
+                            file.name.startsWith(
+                                "crash_"
+                            ) ||
+                            file.name.startsWith(
+                                "oom_"
+                            )
                         )
-                }
-                    ?: return
+                } ?: return
 
-            if (files.size <= MAX_CRASH_FILES) {
+            if (
+                files.size <=
+                MAX_CRASH_FILES
+            ) {
                 return
             }
 
@@ -1036,50 +821,232 @@ class MyApplication : Application() {
                 it.lastModified()
             }
 
-            val numberToDelete =
+            val deleteCount =
                 files.size -
                     MAX_CRASH_FILES
 
-            files
-                .take(numberToDelete)
-                .forEach { file ->
+            for (
+                file in
+                files.take(deleteCount)
+            ) {
 
-                    try {
+                try {
 
-                        if (file.delete()) {
+                    if (file.delete()) {
 
-                            Log.d(
-                                TAG,
-                                "Deleted old crash log: " +
-                                    file.name
-                            )
-                        }
-
-                    } catch (e: Exception) {
-
-                        Log.w(
+                        Log.d(
                             TAG,
-                            "Failed to delete old crash log: " +
-                                file.name,
-                            e
+                            "Deleted old crash report: " +
+                                file.name
                         )
                     }
+
+                } catch (e: Exception) {
+
+                    Log.w(
+                        TAG,
+                        "Unable to delete crash report: " +
+                            file.name,
+                        e
+                    )
                 }
+            }
 
         } catch (e: Exception) {
 
             Log.w(
                 TAG,
-                "Failed to cleanup old crashes",
+                "Failed to cleanup crash reports",
                 e
             )
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * Date Formatting
-     * ═══════════════════════════════════════════════════════════
+     * الحصول على حجم قاعدة البيانات.
+     *
+     * DatabaseHelper هو المسؤول عن إنشاء وإدارة قاعدة البيانات،
+     * وهذه الدالة للقراءة والتشخيص فقط.
+     */
+    fun getDatabaseSize(): Long {
+
+        return try {
+
+            val databaseFile =
+                applicationContext.getDatabasePath(
+                    "diesel_station.db"
+                )
+
+            if (
+                databaseFile.exists() &&
+                databaseFile.isFile
+            ) {
+
+                databaseFile.length()
+
+            } else {
+
+                0L
+            }
+
+        } catch (e: Exception) {
+
+            Log.w(
+                TAG,
+                "Unable to determine database size",
+                e
+            )
+
+            0L
+        }
+    }
+
+    /**
+     * الحصول على حجم Cache.
+     */
+    fun getCacheSize(): Long {
+
+        return try {
+
+            calculateDirectorySize(
+                cacheDir
+            )
+
+        } catch (e: Exception) {
+
+            Log.w(
+                TAG,
+                "Unable to calculate cache size",
+                e
+            )
+
+            0L
+        }
+    }
+
+    /**
+     * حساب حجم مجلد بصورة آمنة.
+     */
+    private fun calculateDirectorySize(
+        directory: File
+    ): Long {
+
+        if (
+            !directory.exists() ||
+            !directory.isDirectory
+        ) {
+            return 0L
+        }
+
+        var total = 0L
+
+        try {
+
+            val files =
+                directory.listFiles()
+                    ?: return 0L
+
+            for (file in files) {
+
+                try {
+
+                    total += if (
+                        file.isDirectory
+                    ) {
+
+                        calculateDirectorySize(
+                            file
+                        )
+
+                    } else {
+
+                        file.length()
+                    }
+
+                } catch (_: Exception) {
+                    /*
+                     * تجاهل ملف واحد تالف أو غير قابل للقراءة.
+                     */
+                }
+            }
+
+        } catch (_: Exception) {
+            return total
+        }
+
+        return total
+    }
+
+    /**
+     * تنظيف Cache.
+     *
+     * ملاحظة:
+     *
+     * لا يتم استدعاؤها تلقائيًا من onCreate().
+     *
+     * هذا يمنع حذف ملفات تشخيص Startup أثناء التشغيل.
+     */
+    fun clearCache(): Boolean {
+
+        return try {
+
+            val directory =
+                cacheDir
+
+            if (!directory.exists()) {
+                return false
+            }
+
+            val success =
+                directory.deleteRecursively()
+
+            /*
+             * إعادة إنشاء cache directory حتى يبقى
+             * Android قادرًا على استخدامه بصورة طبيعية.
+             */
+            if (!directory.exists()) {
+                directory.mkdirs()
+            }
+
+            success
+
+        } catch (e: Exception) {
+
+            Log.e(
+                TAG,
+                "Failed to clear cache",
+                e
+            )
+
+            false
+        }
+    }
+
+    /**
+     * الحصول على إصدار التطبيق.
+     */
+    private fun getAppVersion(): String {
+
+        return try {
+
+            @Suppress("DEPRECATION")
+            val packageInfo =
+                packageManager.getPackageInfo(
+                    packageName,
+                    0
+                )
+
+            packageInfo.versionName
+                ?: "unknown"
+
+        } catch (e: Exception) {
+
+            "unknown"
+        }
+    }
+
+    /**
+     * تنسيق التاريخ.
      */
     private fun formatDate(
         date: Date
@@ -1092,261 +1059,26 @@ class MyApplication : Application() {
                 Locale.US
             ).format(date)
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
 
             date.time.toString()
         }
     }
 
     /**
-     * ═══════════════════════════════════════════════════════════
-     * App Version
-     * ═══════════════════════════════════════════════════════════
-     */
-    private fun getAppVersion(): String {
-
-        return try {
-
-            @Suppress("DEPRECATION")
-            packageManager
-                .getPackageInfo(
-                    packageName,
-                    0
-                )
-                .versionName
-                ?: "unknown"
-
-        } catch (e: Exception) {
-
-            "unknown"
-        }
-    }
-
-    /**
-     * ═══════════════════════════════════════════════════════════
-     * JSON Escaping
-     * ═══════════════════════════════════════════════════════════
-     *
-     * تتم معالجة:
-     *
-     * - backslash
-     * - quotes
-     * - newline
-     * - carriage return
-     * - tab
-     * - backspace
-     * - form feed
-     * - control characters
+     * Escape بسيط وآمن لقيم JSON.
      */
     private fun escapeJson(
         text: String
     ): String {
 
-        return buildString(
-            text.length + 16
-        ) {
-
-            text.forEach { char ->
-
-                when (char) {
-
-                    '\\' ->
-                        append("\\\\")
-
-                    '"' ->
-                        append("\\\"")
-
-                    '\n' ->
-                        append("\\n")
-
-                    '\r' ->
-                        append("\\r")
-
-                    '\t' ->
-                        append("\\t")
-
-                    '\b' ->
-                        append("\\b")
-
-                    '\u000C' ->
-                        append("\\f")
-
-                    else -> {
-
-                        if (char.code < 0x20) {
-
-                            append(
-                                "\\u%04x"
-                                    .format(
-                                        char.code
-                                    )
-                            )
-
-                        } else {
-
-                            append(char)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * تحويل النص إلى قيمة آمنة للـ logging.
-     */
-    private fun safeText(
-        value: String
-    ): String {
-
-        return try {
-
-            value
-                .replace(
-                    "\r",
-                    " "
-                )
-                .replace(
-                    "\n",
-                    " "
-                )
-
-        } catch (_: Exception) {
-
-            "unknown"
-        }
-    }
-
-    /**
-     * ═══════════════════════════════════════════════════════════
-     * Database Size
-     * ═══════════════════════════════════════════════════════════
-     */
-    fun getDatabaseSize(): Long {
-
-        return try {
-
-            val dbFile =
-                File(
-                    applicationContext
-                        .getDatabasePath(
-                            "diesel_station.db"
-                        )
-                        .path
-                )
-
-            if (dbFile.exists()) {
-                dbFile.length()
-            } else {
-                0L
-            }
-
-        } catch (e: Exception) {
-
-            Log.w(
-                TAG,
-                "Failed to get database size",
-                e
-            )
-
-            0L
-        }
-    }
-
-    /**
-     * ═══════════════════════════════════════════════════════════
-     * Cache Size
-     * ═══════════════════════════════════════════════════════════
-     */
-    fun getCacheSize(): Long {
-
-        return try {
-
-            val currentCacheDir =
-                cacheDir
-
-            if (!currentCacheDir.exists()) {
-                return 0L
-            }
-
-            currentCacheDir
-                .walkTopDown()
-                .filter {
-                    it.isFile
-                }
-                .sumOf {
-                    it.length()
-                }
-
-        } catch (e: Exception) {
-
-            Log.w(
-                TAG,
-                "Failed to calculate cache size",
-                e
-            )
-
-            0L
-        }
-    }
-
-    /**
-     * ═══════════════════════════════════════════════════════════
-     * Clear Cache
-     * ═══════════════════════════════════════════════════════════
-     *
-     * ملاحظة:
-     *
-     * StartupDiagnostics يستخدم:
-     *
-     * filesDir/startup-diagnostics
-     *
-     * بينما هذه الدالة تحذف:
-     *
-     * cacheDir
-     *
-     * لذلك لا تقوم هذه الدالة بحذف StartupDiagnostics.
-     */
-    fun clearCache(): Boolean {
-
-        return try {
-
-            val currentCacheDir =
-                cacheDir
-
-            if (!currentCacheDir.exists()) {
-                return false
-            }
-
-            val deleted =
-                currentCacheDir.deleteRecursively()
-
-            if (!deleted) {
-
-                Log.w(
-                    TAG,
-                    "Some cache files could not be deleted"
-                )
-            }
-
-            /*
-             * إعادة إنشاء cacheDir بعد الحذف.
-             */
-            if (!currentCacheDir.exists()) {
-                currentCacheDir.mkdirs()
-            }
-
-            true
-
-        } catch (e: Exception) {
-
-            Log.e(
-                TAG,
-                "Failed to clear cache",
-                e
-            )
-
-            false
-        }
+        return text
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+            .replace("\b", "\\b")
+            .replace("\u000C", "\\f")
     }
 }
