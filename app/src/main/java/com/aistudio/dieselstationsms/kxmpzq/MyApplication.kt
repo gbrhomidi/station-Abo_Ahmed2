@@ -106,8 +106,22 @@ class MyApplication : Application() {
     }
 
     override fun onCreate() {
+        try {
+            File(filesDir, "STARTUP_MARKER_APPLICATION_ENTERED").writeText(
+                "MyApplication.onCreate entered"
+            )
+        } catch (_: Throwable) {
+        }
+
         super.onCreate()
         instance = this
+
+        try {
+            File(filesDir, "STARTUP_MARKER_APPLICATION_SUPER_OK").writeText(
+                "MyApplication.super.onCreate completed"
+            )
+        } catch (_: Throwable) {
+        }
 
         // تهيئة معالج الأعطال العالمي
         setupCrashHandler()

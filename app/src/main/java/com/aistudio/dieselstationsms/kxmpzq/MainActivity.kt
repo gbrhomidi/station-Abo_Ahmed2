@@ -216,7 +216,21 @@ class MainActivity : AppCompatActivity() {
     // ============================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        try {
+            java.io.File(applicationContext.filesDir, "STARTUP_MARKER_ACTIVITY_ENTERED").writeText(
+                "MainActivity.onCreate entered"
+            )
+        } catch (_: Throwable) {
+        }
+
         super.onCreate(savedInstanceState)
+
+        try {
+            java.io.File(applicationContext.filesDir, "STARTUP_MARKER_ACTIVITY_SUPER_OK").writeText(
+                "MainActivity.super.onCreate completed"
+            )
+        } catch (_: Throwable) {
+        }
 
         installGlobalExceptionHandler()
 
