@@ -161,7 +161,7 @@
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
             android:name=".receiver.BootReceiver"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -178,7 +178,7 @@
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
             android:name=".receiver.PackageUpdatedReceiver"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
