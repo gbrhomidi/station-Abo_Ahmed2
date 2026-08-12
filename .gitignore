@@ -1,0 +1,40 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# ─── ملفات الإعدادات السرية ───
+# ملف .env في جذر المشروع يحتوي على مفاتيح API الحقيقية
+# لا ترفعه إلى GitHub أبداً!
+.env
+
+# ملفات التوقيع
+*.jks
+*.keystore
+debug.keystore
+
+# ─── ملاحظة هامة ───
+# app/src/main/assets/.env  ← هذا الملف يُوزع مع التطبيق
+# ويمكن أن يحتوي على مفتاح Gemini للمستخدم النهائي
+# لكن .env في جذر المشروع (لـ BuildConfig) يجب أن يبقى سراً
+
+# Local backup files
+*.bak
+*.backup*
+
+# Local backup files
+*.backup
+*.bak
+*.backup_*
