@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify Java version
+        run: java -version
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # ───────────────────────────────────────────────
+      # 🔐 فك تشفير Keystore الخاص بالـ Release
+      # ───────────────────────────────────────────────
+      - name: Decode Release Keystore
+        run: |
+          echo "🔐 Decoding release keystore from GitHub Secrets..."
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > diesel-station-release.keystore
+          ls -la diesel-station-release.keystore
+          echo "✅ Release keystore decoded successfully."
+
+      # ───────────────────────────────────────────────
+      # 🔑 توليد debug.keystore كاحتياطي (للـ Debug builds)
+      # ───────────────────────────────────────────────
+      - name: Generate debug keystore (if missing)
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "🔑 Generating debug.keystore..."
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug, O=Android, C=US"
+            echo "✅ debug.keystore generated."
+          else
+            echo "✅ debug.keystore already exists."
+          fi
+
+      # ───────────────────────────────────────────────
+      # 🏗️ بناء Release APK مع التوقيع الحقيقي
+      # ───────────────────────────────────────────────
+      - name: Clean and Build Release APK
+        run: ./gradlew clean assembleRelease --no-daemon -PGEMINI_API_KEY=$GEMINI_API_KEY
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/diesel-station-release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+
+      - name: List APK outputs
+        run: |
+          echo "===== APK FILES ====="
+          find app/build -type f -name "*.apk"
+          echo
+          echo "===== APK DETAILS ====="
+          ls -lahR app/build/outputs || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Station_Abo_Ahmed_Release_APK
+          path: app/build/outputs/**/*.apk
+          if-no-files-found: error
