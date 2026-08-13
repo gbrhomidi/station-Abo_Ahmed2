@@ -1356,84 +1356,70 @@ class MainActivity : AppCompatActivity() {
                 }.toString()
             }
         }
-
-        // ============================================================
-        // Dashboard Statistics
-        // ============================================================
-
+    
         @JavascriptInterface
-        fun getDashboardStats(jsonData: String = "{}"): String {
-            DebugLogger.info(
-                "Dashboard",
-                "getDashboardStats called: $jsonData"
+fun getDashboardStats(jsonData: String = "{}"): String {
+    DebugLogger.info(
+        "Dashboard",
+        "getDashboardStats called: $jsonData"
+    )
+
+    val db = getDbHelper()
+        ?: return errorResponse("قاعدة البيانات غير متاحة")
+
+    return try {
+        val params = try {
+            JSONObject(
+                jsonData.ifBlank { "{}" }
             )
-
-            val db = getDbHelper()
-                ?: return errorResponse("قاعدة البيانات غير متاحة")
-
-            return try {
-                val params = try {
-                    JSONObject(
-                        jsonData.ifBlank { "{}" }
-                    )
-                } catch (e: Exception) {
-                    DebugLogger.warn(
-                        "Dashboard",
-                        "Invalid JSON parameters; using defaults: ${e.message}"
-                    )
-                    JSONObject()
-                }
-
-                val stationId = params.optInt(
-                    "station_id",
-                    1
-                )
-
-                if (stationId <= 0) {
-                    return errorResponse("معرف المحطة غير صالح")
-                }
-
-                DebugLogger.info(
-                    "Dashboard",
-                    "Loading dashboard statistics for stationId=$stationId"
-                )
-
-                val stats = db.getDashboardStats(stationId)
-
-                JSONObject().apply {
-                    put("success", true)
-                    put("data", stats)
-                }.toString()
-
-            } catch (e: Exception) {
-                DebugLogger.logException(
-                    "Dashboard",
-                    e
-                )
-
-                JSONObject().apply {
-                    put("success", false)
-                    put(
-                        "error",
-                        e.message
-                            ?: "فشل تحميل إحصائيات لوحة التحكم"
-                    )
-                    put(
-                        "code",
-                        "DASHBOARD_STATS_ERROR"
-                    )
-                }.toString()
-            }
+        } catch (e: Exception) {
+            DebugLogger.warn(
+                "Dashboard",
+                "Invalid JSON parameters; using defaults: ${e.message}"
+            )
+            JSONObject()
         }
 
-        // ============================================================
-        // 1. المصادقة – مع تسجيل محسن
-        // ============================================================
+        val stationId = params.optInt(
+            "station_id",
+            1
+        )
 
-        @JavascriptInterface
-        fun login(username: String, password: String): String {
-            ...
+        if (stationId <= 0) {
+            return errorResponse("معرف المحطة غير صالح")
         }
+
+        DebugLogger.info(
+            "Dashboard",
+            "Loading dashboard statistics for stationId=$stationId"
+        )
+
+        val stats = db.getDashboardStats(stationId)
+
+        JSONObject().apply {
+            put("success", true)
+            put("data", stats)
+        }.toString()
+
+    } catch (e: Exception) {
+        DebugLogger.logException(
+            "Dashboard",
+            e
+        )
+
+        JSONObject().apply {
+            put("success", false)
+            put(
+                "error",
+                e.message ?: "فشل تحميل إحصائيات لوحة التحكم"
+            )
+            put(
+                "code",
+                "DASHBOARD_STATS_ERROR"
+            )
+        }.toString()
+    }
+}
 
         // ============================================================
         // 1. المصادقة – مع تسجيل محسن
@@ -2915,26 +2901,7 @@ class MainActivity : AppCompatActivity() {
         // 17. لوحة التحكم والتقارير
         // ============================================================
 
-        @JavascriptInterface
-        fun getDashboardStats(jsonData: String = "{}"): String {
-            DebugLogger.info("WebAppInterface", "getDashboardStats called")
-            if (!checkPermission("dashboard", "read")) return errorResponse("لا تملك صلاحية القراءة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                // تحليل المعاملات إذا كانت موجودة
-                val params = if (jsonData.isNotBlank() && jsonData != "{}") {
-                    try { JSONObject(jsonData) } catch (e: Exception) { JSONObject() }
-                } else {
-                    JSONObject()
-                }
-                val stationId = params.optInt("station_id", 1)
-                val stats = db.getDashboardStats(stationId)
-                dataResponse(stats)
-            } catch (e: Exception) {
-                DebugLogger.logException("Dashboard", e)
-                errorResponse(e.message)
-            }
-        }
+        // لاحظ: تم إزالة الدالة المكررة getDashboardStats هنا، حيث توجد نسخة واحدة فقط في بداية WebAppInterface
 
         @JavascriptInterface
         fun getOverduePayments(): String {
