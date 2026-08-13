@@ -1358,6 +1358,84 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ============================================================
+        // Dashboard Statistics
+        // ============================================================
+
+        @JavascriptInterface
+        fun getDashboardStats(jsonData: String = "{}"): String {
+            DebugLogger.info(
+                "Dashboard",
+                "getDashboardStats called: $jsonData"
+            )
+
+            val db = getDbHelper()
+                ?: return errorResponse("قاعدة البيانات غير متاحة")
+
+            return try {
+                val params = try {
+                    JSONObject(
+                        jsonData.ifBlank { "{}" }
+                    )
+                } catch (e: Exception) {
+                    DebugLogger.warn(
+                        "Dashboard",
+                        "Invalid JSON parameters; using defaults: ${e.message}"
+                    )
+                    JSONObject()
+                }
+
+                val stationId = params.optInt(
+                    "station_id",
+                    1
+                )
+
+                if (stationId <= 0) {
+                    return errorResponse("معرف المحطة غير صالح")
+                }
+
+                DebugLogger.info(
+                    "Dashboard",
+                    "Loading dashboard statistics for stationId=$stationId"
+                )
+
+                val stats = db.getDashboardStats(stationId)
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", stats)
+                }.toString()
+
+            } catch (e: Exception) {
+                DebugLogger.logException(
+                    "Dashboard",
+                    e
+                )
+
+                JSONObject().apply {
+                    put("success", false)
+                    put(
+                        "error",
+                        e.message
+                            ?: "فشل تحميل إحصائيات لوحة التحكم"
+                    )
+                    put(
+                        "code",
+                        "DASHBOARD_STATS_ERROR"
+                    )
+                }.toString()
+            }
+        }
+
+        // ============================================================
+        // 1. المصادقة – مع تسجيل محسن
+        // ============================================================
+
+        @JavascriptInterface
+        fun login(username: String, password: String): String {
+            ...
+        }
+
+        // ============================================================
         // 1. المصادقة – مع تسجيل محسن
         // ============================================================
 
