@@ -1,0 +1,3257 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>إدارة الصلاحيات – نظام محطات الوقود</title>
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+    <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
+    <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
+    <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
+    <style>
+        /* ============================================================
+           Cobalt / Ruby Theme – متغيرات مخصصة (مطابقة للشاشات السابقة)
+           ============================================================ */
+        :root {
+            --cobalt: #1a3a6b;
+            --cobalt-light: #2a5a8b;
+            --cobalt-dark: #0d1f3d;
+            --cobalt-dim: rgba(26, 58, 107, 0.12);
+            --cobalt-glow: rgba(26, 58, 107, 0.25);
+
+            --ruby: #9b1d3a;
+            --ruby-light: #c0395a;
+            --ruby-dark: #6b1225;
+            --ruby-dim: rgba(155, 29, 58, 0.12);
+            --ruby-glow: rgba(155, 29, 58, 0.25);
+
+            --gold: #d4a017;
+            --gold-dim: rgba(212, 160, 23, 0.12);
+
+            --bg-color: #f4f0eb;
+            --surface-color: #fcf8f2;
+            --surface-elevated: #fffcf7;
+            --text-color: #1a1a2e;
+            --text-muted: #5a5a7a;
+            --border-color: var(--cobalt);
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 30px rgba(26, 58, 107, 0.08);
+            --glass-bg: rgba(255, 252, 247, 0.88);
+            --header-bg: linear-gradient(145deg, var(--cobalt-dark) 0%, var(--cobalt) 100%);
+            --card-hover-bg: rgba(26, 58, 107, 0.04);
+            --fab-shadow: rgba(26, 58, 107, 0.35);
+            --scrollbar-track: #f4f0eb;
+            --scrollbar-thumb: rgba(26, 58, 107, 0.2);
+            --skeleton-bg: #e8e2d8;
+            --skeleton-shine: #f4f0eb;
+            --input-bg: #fcf8f2;
+            --input-border: var(--cobalt);
+            --data-text-color: #1a1a2e;
+            --data-text-muted: #5a5a7a;
+            --success: #0d7a4a;
+            --error: #b31b3a;
+            --warning: #b8860b;
+            --info: #1a3a6b;
+            --toast-bg: #fcf8f2;
+            --chart-grid: rgba(26, 58, 107, 0.10);
+            --chart-text: #1a1a2e;
+            --skip-link-bg: var(--cobalt);
+            --skip-link-color: #fff;
+            --focus-ring: 0 0 0 3px var(--ruby);
+            --high-contrast-bg: #000;
+            --high-contrast-text: #fff;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #0d0d1a;
+            --surface-color: #16162a;
+            --surface-elevated: #1f1f3a;
+            --text-color: #e8e8f0;
+            --text-muted: #9999b8;
+            --border-color: #8a7a5a;
+            --shadow-glow: 0 0 30px rgba(26, 58, 107, 0.20);
+            --glass-bg: rgba(22, 22, 42, 0.88);
+            --header-bg: linear-gradient(145deg, #0a0a18 0%, #1a1a3a 100%);
+            --card-hover-bg: rgba(26, 58, 107, 0.08);
+            --fab-shadow: rgba(26, 58, 107, 0.40);
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+            --skeleton-bg: #2a2a4a;
+            --skeleton-shine: #3a3a5a;
+            --input-bg: #1f1f3a;
+            --input-border: #8a7a5a;
+            --data-text-color: #e8e8f0;
+            --data-text-muted: #9999b8;
+            --toast-bg: #1f1f3a;
+            --chart-grid: rgba(255, 255, 255, 0.08);
+            --chart-text: #e8e8f0;
+            --skip-link-bg: #2a2a5a;
+            --skip-link-color: #fff;
+            --high-contrast-bg: #000;
+            --high-contrast-text: #fff;
+        }
+
+        /* الوضع الفاتح – خلفية الهيدر بني فاتح مع بيج */
+        [data-theme="light"] .top-bar {
+            background: linear-gradient(145deg, #d4c4b0, #e8dccc) !important;
+            border-bottom-color: #c4b49a !important;
+        }
+        [data-theme="light"] .top-title h2 {
+            color: #3d2b1f;
+        }
+        [data-theme="light"] .top-title h2 i {
+            color: #7a5230;
+        }
+        [data-theme="light"] .search-input {
+            background: rgba(255, 248, 240, 0.6);
+            border-color: #c4b49a;
+            color: #3d2b1f;
+        }
+        [data-theme="light"] .search-input::placeholder {
+            color: #8a7a6a;
+        }
+        [data-theme="light"] .icon-btn {
+            background: rgba(255, 248, 240, 0.3);
+            border-color: #c4b49a;
+            color: #5a4a3a;
+        }
+        [data-theme="light"] .icon-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        [data-theme="light"] .badge-ruby {
+            background: var(--ruby);
+            color: #fff;
+        }
+
+        @media (prefers-contrast: high) {
+            :root {
+                --bg-color: #000;
+                --surface-color: #111;
+                --surface-elevated: #222;
+                --text-color: #fff;
+                --text-muted: #ccc;
+                --border-color: #fff;
+                --border-style: solid;
+                --border-width: 2px;
+                --shadow-glow: none;
+                --glass-bg: rgba(0, 0, 0, 0.95);
+                --header-bg: #000;
+                --card-hover-bg: rgba(255, 255, 255, 0.05);
+                --skeleton-bg: #333;
+                --skeleton-shine: #555;
+                --input-bg: #111;
+                --input-border: #fff;
+                --data-text-color: #fff;
+                --data-text-muted: #ccc;
+                --toast-bg: #111;
+                --chart-grid: rgba(255, 255, 255, 0.20);
+                --chart-text: #fff;
+                --skip-link-bg: #fff;
+                --skip-link-color: #000;
+                --focus-ring: 0 0 0 4px #fff, 0 0 0 8px #000;
+            }
+            [data-theme="dark"] {
+                --bg-color: #000;
+                --surface-color: #111;
+                --surface-elevated: #222;
+                --text-color: #fff;
+                --text-muted: #ccc;
+                --border-color: #fff;
+                --border-style: solid;
+                --glass-bg: rgba(0, 0, 0, 0.95);
+                --header-bg: #000;
+                --input-bg: #111;
+                --input-border: #fff;
+                --data-text-color: #fff;
+                --data-text-muted: #ccc;
+                --toast-bg: #111;
+                --chart-grid: rgba(255, 255, 255, 0.20);
+                --chart-text: #fff;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .animate-fade-up,
+            .skeleton-card::after,
+            .perm-card {
+                animation: none !important;
+            }
+        }
+
+        .skip-link {
+            position: fixed;
+            top: -999px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--skip-link-bg);
+            color: var(--skip-link-color);
+            padding: 12px 24px;
+            border-radius: 0 0 12px 12px;
+            z-index: 9999;
+            font-weight: 700;
+            font-size: 1rem;
+            text-decoration: none;
+            border: 2px solid var(--border-color);
+            border-top: none;
+        }
+        .skip-link:focus {
+            top: 0;
+            outline: 3px solid var(--ruby);
+            outline-offset: 2px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.3s ease, color 0.3s ease;
+            touch-action: pan-y;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 2px;
+        }
+        :focus-visible {
+            outline: 3px solid var(--ruby);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            border: 0 !important;
+        }
+
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(26, 58, 107, 0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--cobalt);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        .skeleton-card {
+            background: var(--surface-elevated);
+            border-radius: 18px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 0%, var(--skeleton-shine) 50%, transparent 100%);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+        .skeleton-row {
+            height: 12px;
+            background: var(--skeleton-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skeleton-row.short {
+            width: 40%;
+        }
+        .skeleton-row.medium {
+            width: 60%;
+        }
+        .skeleton-row.long {
+            width: 80%;
+        }
+
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, var(--warning), #d4770a);
+            color: #fff;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show {
+            transform: translateY(0);
+        }
+
+        /* ============================================================
+           Header – تصميم أنيق مع خلفية بيج في الوضع الفاتح
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 10px 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.3s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .top-title h2 i {
+            color: var(--ruby-light);
+            font-size: 1.2rem;
+        }
+        .top-title .badge-ruby {
+            background: var(--ruby);
+            color: #fff;
+            font-size: 0.55rem;
+            padding: 2px 10px;
+            border-radius: 12px;
+            vertical-align: middle;
+        }
+        .header-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-size: 0.9rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--ruby-dim);
+            color: #fff;
+            border-color: var(--ruby-light);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active {
+            transform: scale(0.92);
+        }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: var(--ruby-light);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--ruby-glow);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.4);
+            }
+        }
+        .icon-btn.ruby-btn {
+            background: var(--ruby-dim);
+            color: var(--ruby-light);
+            border-color: var(--ruby);
+        }
+        .icon-btn.ruby-btn:hover {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby-light);
+        }
+
+        .search-wrap {
+            position: relative;
+            margin-bottom: 6px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px 40px 8px 14px;
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .search-input:focus {
+            border-color: var(--ruby-light);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+            background: rgba(255, 255, 255, 0.10);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* ============================================================
+           Tabs – سطر واحد مع التمرير الأفقي (تم التعديل)
+           ============================================================ */
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            padding: 0 4px 6px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            flex-wrap: nowrap;          /* إجبار السطر الواحد */
+            overflow-x: auto;           /* تمرير أفقي إذا لزم الأمر */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;      /* إخفاء شريط التمرير في Firefox */
+        }
+        .tab-bar::-webkit-scrollbar {
+            display: none;              /* إخفاء شريط التمرير في WebKit */
+        }
+        .tab-btn {
+            padding: 4px 10px;          /* تقليل الهوامش لتناسب الشاشات الصغيرة */
+            border-radius: 10px 10px 0 0;
+            border: var(--border-width) var(--border-style) transparent;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.7rem;          /* حجم خط أصغر قليلاً لتناسب السطر الواحد */
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            touch-action: manipulation;
+            white-space: nowrap;         /* منع التفاف النص */
+            flex-shrink: 0;              /* منع الانكماش */
+        }
+        .tab-btn:active {
+            transform: scale(0.95);
+        }
+        .tab-btn:hover {
+            color: var(--text-color);
+            background: var(--surface-color);
+        }
+        .tab-btn.active {
+            background: var(--surface-elevated);
+            color: var(--ruby);
+            border-color: var(--border-color) var(--border-color) transparent var(--border-color);
+        }
+        .tab-btn i {
+            font-size: 0.7rem;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 10px 0;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* ============================================================
+           Table Styles – محسّنة ومتطورة
+           ============================================================ */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 0 16px 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            background: var(--surface-elevated);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+        }
+        .table-wrapper table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.8rem;
+        }
+        .table-wrapper th {
+            background: var(--surface-color);
+            color: var(--data-text-muted);
+            font-weight: 700;
+            padding: 10px 12px;
+            text-align: center;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table-wrapper td {
+            padding: 10px 12px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--data-text-color);
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        .table-wrapper tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .table-wrapper tbody tr:hover td {
+            background: var(--card-hover-bg);
+        }
+        .table-wrapper tbody tr:nth-child(even) td {
+            background: var(--bg-color);
+        }
+        .table-wrapper tbody tr:nth-child(even):hover td {
+            background: var(--card-hover-bg);
+        }
+
+        .table-wrapper .status-badge {
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            display: inline-block;
+            letter-spacing: 0.3px;
+        }
+        .status-badge.active {
+            background: rgba(13, 122, 74, 0.12);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        .status-badge.inactive {
+            background: rgba(90, 90, 122, 0.10);
+            color: var(--text-muted);
+            border: 1px solid var(--text-muted);
+        }
+        .status-badge.expired {
+            background: rgba(179, 27, 58, 0.12);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+        .status-badge.pending {
+            background: rgba(184, 134, 11, 0.12);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .table-actions .action-btn {
+            background: none;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            touch-action: manipulation;
+        }
+        .table-actions .action-btn:active {
+            transform: scale(0.9);
+        }
+        .table-actions .action-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .table-actions .action-btn.danger:hover {
+            background: rgba(179, 27, 58, 0.12);
+            color: var(--error);
+            border-color: var(--error);
+        }
+        .table-actions .action-btn.primary:hover {
+            background: var(--cobalt-dim);
+            color: var(--cobalt);
+            border-color: var(--cobalt);
+        }
+
+        .pagination-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px 12px;
+            flex-wrap: wrap;
+        }
+        .pagination-bar button {
+            padding: 4px 12px;
+            border-radius: 8px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            touch-action: manipulation;
+            font-weight: 600;
+        }
+        .pagination-bar button:active {
+            transform: scale(0.95);
+        }
+        .pagination-bar button:hover:not(:disabled) {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .pagination-bar button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .pagination-bar .page-num {
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pagination-bar .page-num:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+        }
+        .pagination-bar .page-num.active {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby);
+        }
+
+        .table-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0 16px 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* ============================================================
+           تحسينات حقل البحث والأزرار في تبويب الصلاحيات
+           ============================================================ */
+        .permission-toolbar {
+            display: flex;
+            gap: 10px;
+            padding: 0 16px 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .permission-toolbar .search-wrap-tool {
+            flex: 2;
+            min-width: 200px;
+            position: relative;
+        }
+        .permission-toolbar .search-wrap-tool input {
+            width: 100%;
+            padding: 8px 40px 8px 14px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            outline: none;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .permission-toolbar .search-wrap-tool input:focus {
+            border-color: var(--ruby);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+        }
+        .permission-toolbar .search-wrap-tool i {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            opacity: 0.6;
+        }
+        .permission-toolbar .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .permission-toolbar .action-buttons .btn-tool {
+            padding: 8px 18px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            touch-action: manipulation;
+            background: var(--surface-color);
+            color: var(--text-muted);
+        }
+        .permission-toolbar .action-buttons .btn-tool:active {
+            transform: scale(0.95);
+        }
+        .permission-toolbar .action-buttons .btn-tool.primary {
+            background: var(--cobalt);
+            color: #fff;
+            border-color: var(--cobalt);
+        }
+        .permission-toolbar .action-buttons .btn-tool.primary:hover {
+            background: var(--cobalt-light);
+            box-shadow: 0 2px 12px var(--cobalt-glow);
+        }
+        .permission-toolbar .action-buttons .btn-tool.ruby {
+            background: var(--ruby);
+            color: #fff;
+            border-color: var(--ruby);
+        }
+        .permission-toolbar .action-buttons .btn-tool.ruby:hover {
+            background: var(--ruby-dark);
+            box-shadow: 0 2px 12px var(--ruby-glow);
+        }
+        .permission-toolbar .action-buttons .btn-tool:hover:not(.primary):not(.ruby) {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+
+        /* ============================================================
+           Forms داخل التبويبات
+           ============================================================ */
+        .form-section {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin: 0 16px 16px;
+        }
+        .form-section .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .form-section .form-group {
+            margin-bottom: 12px;
+        }
+        .form-section .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .form-section .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .form-section .form-input:focus {
+            border-color: var(--ruby);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+        }
+        .form-section .submit-btn {
+            width: 100%;
+            padding: 10px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(145deg, var(--ruby), var(--ruby-dark));
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 6px;
+            touch-action: manipulation;
+        }
+        .form-section .submit-btn:active {
+            transform: scale(0.97);
+        }
+        .form-section .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 24px var(--ruby-glow);
+        }
+        .form-section .submit-btn.secondary {
+            background: var(--cobalt);
+        }
+        .form-section .submit-btn.secondary:hover {
+            box-shadow: 0 4px 24px var(--cobalt-glow);
+        }
+
+        /* ============================================================
+           تحسينات قسم صلاحيات المجموعات
+           ============================================================ */
+        .group-perm-toolbar {
+            display: flex;
+            gap: 12px;
+            padding: 0 16px 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .group-perm-toolbar .group-select-wrap {
+            flex: 2;
+            min-width: 200px;
+        }
+        .group-perm-toolbar .group-select-wrap select {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--input-bg);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .group-perm-toolbar .group-select-wrap select:focus {
+            border-color: var(--ruby);
+            box-shadow: 0 0 0 3px var(--ruby-dim);
+        }
+        .group-perm-toolbar .btn-refresh-group {
+            padding: 8px 20px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--cobalt);
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            touch-action: manipulation;
+        }
+        .group-perm-toolbar .btn-refresh-group:active {
+            transform: scale(0.95);
+        }
+        .group-perm-toolbar .btn-refresh-group:hover {
+            background: var(--cobalt-light);
+            box-shadow: 0 2px 12px var(--cobalt-glow);
+        }
+
+        /* ============================================================
+           Modals (للإضافة والتعديل – يتم استخدامها عند الحاجة)
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 800;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        .modal {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .modal-overlay.show .modal {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            color: var(--data-text-color);
+        }
+        .modal-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s;
+            touch-action: manipulation;
+        }
+        .modal-close:active {
+            transform: scale(0.9);
+        }
+        .modal-close:hover {
+            background: var(--error);
+            color: #fff;
+            border-color: var(--error);
+        }
+
+        /* تحسينات مودال إضافة صلاحية */
+        .perm-modal-form .form-group {
+            margin-bottom: 16px;
+        }
+        .perm-modal-form .form-label {
+            font-weight: 700;
+            color: var(--data-text-color);
+            font-size: 0.8rem;
+        }
+        .perm-modal-form .form-input {
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            border-radius: 14px;
+        }
+        .perm-modal-form .form-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
+        }
+        .perm-modal-form .form-check input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: var(--ruby);
+            cursor: pointer;
+        }
+        .perm-modal-form .form-check label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--data-text-color);
+        }
+        .perm-modal-form .submit-btn {
+            padding: 14px;
+            border-radius: 16px;
+            font-size: 1rem;
+            margin-top: 10px;
+            background: linear-gradient(145deg, var(--ruby), var(--ruby-dark));
+        }
+        .perm-modal-form .submit-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 28px var(--ruby-glow);
+        }
+
+        /* ============================================================
+           Toast
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 12px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success {
+            border-color: var(--success);
+        }
+        .toast.error {
+            border-color: var(--error);
+        }
+        .toast.warning {
+            border-color: var(--warning);
+        }
+        .toast-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+        .toast.success .toast-icon {
+            background: rgba(13, 122, 74, 0.10);
+            color: var(--success);
+        }
+        .toast.error .toast-icon {
+            background: rgba(179, 27, 58, 0.10);
+            color: var(--error);
+        }
+        .toast.warning .toast-icon {
+            background: var(--gold-dim);
+            color: var(--warning);
+        }
+
+        /* ============================================================
+           Bottom Navigation – حجم خط مضاعف (تم التعديل)
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 6px 0 env(safe-area-inset-bottom, 6px) 0;
+            z-index: 300;
+            overflow-x: auto;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.5rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            padding: 4px 6px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 0 0 auto;
+            min-width: 56px;
+        }
+        .bottom-nav .nav-item:active {
+            transform: scale(0.9);
+        }
+        .bottom-nav .nav-item i {
+            font-size: 56px; /* تم المضاعفة من 28px إلى 56px */
+            transition: all 0.25s;
+        }
+        .bottom-nav .nav-item span {
+            font-weight: 800;
+            margin-top: 2px;
+            font-size: 1.5rem; /* تم المضاعفة من 0.75rem إلى 1.5rem */
+            white-space: nowrap;
+        }
+        .bottom-nav .nav-item.active {
+            color: var(--ruby);
+        }
+        .bottom-nav .nav-item.active i {
+            transform: translateY(-3px);
+            text-shadow: 0 0 24px var(--ruby-glow);
+        }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 24px;
+            height: 3px;
+            background: var(--ruby);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           FAB – تم تغييره إلى "الشاشات"
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 80px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, var(--cobalt), var(--cobalt-dark));
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 1.3rem;
+            cursor: pointer;
+            box-shadow: 0 4px 24px var(--cobalt-glow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            gap: 4px;
+            flex-direction: column;
+            line-height: 1.2;
+        }
+        .fab:active {
+            transform: scale(0.9);
+        }
+        .fab:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 36px var(--cobalt-glow);
+        }
+        .fab i {
+            font-size: 1.2rem;
+        }
+        .fab .fab-label {
+            font-size: 0.5rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+
+        /* ============================================================
+           Sidebar
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, var(--cobalt), var(--ruby));
+            color: #fff;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 16px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.9);
+        }
+        .sidebar-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -80px;
+            transform: translateY(-50%);
+            width: 60px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 24px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(12px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+            max-height: 80vh;
+        }
+        .sidebar.open {
+            right: 0;
+            opacity: 1;
+        }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .sidebar-btn {
+            background: rgba(26, 58, 107, 0.10);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 6px 2px;
+            border-radius: 10px;
+            color: var(--text-color);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            min-height: 42px;
+            text-align: center;
+            font-size: 0.6rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active {
+            transform: scale(0.95);
+        }
+        .sidebar-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+            box-shadow: 0 0 20px var(--ruby-glow);
+        }
+        .sidebar-btn i {
+            font-size: 0.9rem;
+        }
+        .sidebar-btn span {
+            font-size: 0.55rem;
+        }
+        .sidebar-btn.ruby-bg {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
+        }
+        .sidebar-btn.ruby-bg:hover {
+            background: var(--ruby);
+            color: #fff;
+        }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 768px) {
+            .form-section .form-row {
+                grid-template-columns: 1fr;
+            }
+            .top-title h2 {
+                font-size: 1rem;
+            }
+            .icon-btn {
+                width: 34px;
+                height: 34px;
+                font-size: 0.8rem;
+            }
+            .bottom-nav .nav-item {
+                min-width: 44px;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 40px; /* تصغير طفيف على الشاشات الصغيرة مع بقاء الحجم مضاعفاً */
+            }
+            .bottom-nav .nav-item span {
+                font-size: 1.2rem;
+            }
+            .fab {
+                width: 44px;
+                height: 44px;
+                font-size: 1rem;
+                bottom: 70px;
+                left: 14px;
+            }
+            .fab .fab-label {
+                font-size: 0.4rem;
+            }
+            .permission-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .permission-toolbar .action-buttons {
+                justify-content: center;
+            }
+            .group-perm-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .group-perm-toolbar .btn-refresh-group {
+                justify-content: center;
+            }
+        }
+        @media (max-width: 480px) {
+            .table-wrapper table {
+                font-size: 0.7rem;
+            }
+            .table-wrapper th,
+            .table-wrapper td {
+                padding: 6px 8px;
+            }
+            .table-actions .action-btn {
+                font-size: 0.6rem;
+                padding: 2px 6px;
+            }
+            .bottom-nav .nav-item {
+                min-width: 38px;
+                padding: 2px 4px;
+            }
+            .bottom-nav .nav-item i {
+                font-size: 32px;
+            }
+            .bottom-nav .nav-item span {
+                font-size: 1rem;
+            }
+            .tab-btn {
+                font-size: 0.6rem;
+                padding: 3px 6px;
+            }
+            .tab-btn i {
+                font-size: 0.6rem;
+            }
+        }
+
+        @media print {
+            .top-bar,
+            .bottom-nav,
+            .fab,
+            .sidebar-toggle,
+            .sidebar,
+            .filter-chips,
+            .search-wrap,
+            .card-actions,
+            .pagination-bar,
+            .icon-btn {
+                display: none !important;
+            }
+            body {
+                background: #fff !important;
+                color: #000 !important;
+                padding: 10px !important;
+            }
+            .table-wrapper {
+                border: 1px solid #000 !important;
+            }
+            .modal-overlay {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <a class="skip-link" href="#main-content">تخطي إلى المحتوى الرئيسي</a>
+
+    <div class="offline-banner" id="offlineBanner" role="alert" aria-live="polite">
+        <i class="fas fa-wifi-slash" aria-hidden="true"></i> أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
+    </div>
+
+    <div class="loading-indicator" id="loadingIndicator" role="status" aria-live="polite">
+        <div class="spinner" aria-label="جاري التحميل..."></div>
+        <span class="sr-only">جاري التحميل...</span>
+    </div>
+
+    <main id="main-content">
+
+        <!-- Header -->
+        <header class="top-bar" role="banner" aria-label="رأس الصفحة">
+            <div class="header-top">
+                <div class="top-title">
+                    <h2><i class="fas fa-lock" aria-hidden="true"></i> إدارة الصلاحيات</h2>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" aria-label="التنبيهات" title="التنبيهات">
+                        <i class="fas fa-bell" aria-hidden="true"></i>
+                        <span class="sr-only">التنبيهات</span>
+                    </button>
+                    <button class="icon-btn" id="themeToggle" aria-label="تبديل الوضع" title="تبديل الوضع">
+                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                        <span class="sr-only">تبديل الوضع</span>
+                    </button>
+                    <button class="icon-btn ruby-btn" onclick="openAIAdvisor()" aria-label="المستشار الذكي" title="المستشار الذكي">
+                        <i class="fas fa-robot" aria-hidden="true"></i>
+                        <span class="sr-only">المستشار الذكي</span>
+                    </button>
+                    <button class="icon-btn" onclick="openExportModal()" aria-label="تصدير" title="تصدير">
+                        <i class="fas fa-file-export" aria-hidden="true"></i>
+                        <span class="sr-only">تصدير</span>
+                    </button>
+                    <button class="icon-btn" onclick="openAddPermissionModal()" aria-label="إضافة صلاحية" title="إضافة صلاحية">
+                        <i class="fas fa-plus-circle" aria-hidden="true"></i>
+                        <span class="sr-only">إضافة صلاحية</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="search-wrap" role="search">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input type="text" class="search-input" id="globalSearch" placeholder="ابحث في الصلاحيات..." aria-label="بحث عام" oninput="handleGlobalSearch(this.value)">
+            </div>
+
+            <!-- Tabs – سطر واحد مع تمرير أفقي (تم التعديل) -->
+            <div class="tab-bar" role="tablist">
+                <button class="tab-btn active" role="tab" aria-selected="true" onclick="switchTab('permissions', this)"><i class="fas fa-list" aria-hidden="true"></i> قائمة الصلاحيات</button>
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('grant', this)"><i class="fas fa-user-plus" aria-hidden="true"></i> منح صلاحيات</button>
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('groups', this)"><i class="fas fa-users-cog" aria-hidden="true"></i> صلاحيات المجموعات</button>
+                <button class="tab-btn" role="tab" aria-selected="false" onclick="switchTab('delegate', this)"><i class="fas fa-user-shield" aria-hidden="true"></i> تفويض مؤقت</button>
+            </div>
+        </header>
+
+        <!-- ==================== TAB: قائمة الصلاحيات ==================== -->
+        <div class="tab-content active" id="tab-permissions" role="tabpanel">
+            <!-- تحسين شريط الأدوات -->
+            <div class="permission-toolbar">
+                <div class="search-wrap-tool">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="text" id="permissionSearch" placeholder="ابحث في الصلاحيات..." oninput="searchPermissions(this.value)">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn-tool primary" onclick="loadAllPermissionsData()"><i class="fas fa-sync" aria-hidden="true"></i> تحديث</button>
+                    <button class="btn-tool ruby" onclick="openAddPermissionModal()"><i class="fas fa-plus" aria-hidden="true"></i> إضافة صلاحية</button>
+                </div>
+            </div>
+            <div class="table-count">إجمالي الصلاحيات: <span id="permissionsCount">0</span></div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>اسم الصلاحية</th>
+                            <th>الوصف</th>
+                            <th>المجموعة</th>
+                            <th>الحالة</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="permissionsTableBody">
+                        <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">جاري التحميل...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination-bar" id="permissionsPagination">
+                <button id="prevPagePerms" onclick="changePagePerms(-1)" disabled><i class="fas fa-chevron-right" aria-hidden="true"></i> السابقة</button>
+                <span id="pageNumbersPerms"></span>
+                <button id="nextPagePerms" onclick="changePagePerms(1)">التالية <i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB: منح صلاحيات للمستخدمين ==================== -->
+        <div class="tab-content" id="tab-grant" role="tabpanel">
+            <div class="form-section">
+                <h4 style="margin-bottom:12px;color:var(--ruby);">منح صلاحية لمستخدم</h4>
+                <form id="grantPermissionForm" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="grantUser">المستخدم *</label>
+                            <select class="form-input" id="grantUser" required>
+                                <option value="">اختر المستخدم</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="grantPermission">الصلاحية *</label>
+                            <select class="form-input" id="grantPermission" required>
+                                <option value="">اختر الصلاحية</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="grantScreen">الشاشة *</label>
+                            <select class="form-input" id="grantScreen" required>
+                                <option value="">اختر الشاشة</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="grantExpiry">تاريخ الانتهاء (اختياري)</label>
+                            <input type="date" class="form-input" id="grantExpiry">
+                        </div>
+                    </div>
+                    <button type="button" class="submit-btn" onclick="grantUserPermission()">
+                        <i class="fas fa-check" aria-hidden="true"></i> منح الصلاحية
+                    </button>
+                </form>
+            </div>
+
+            <div style="padding:0 16px;">
+                <h4 style="margin:12px 0 6px;color:var(--cobalt);">الصلاحيات الممنوحة حالياً</h4>
+                <div class="table-wrapper" style="margin:0;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>المستخدم</th>
+                                <th>الصلاحية</th>
+                                <th>الشاشة</th>
+                                <th>تاريخ المنح</th>
+                                <th>تاريخ الانتهاء</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="grantedPermissionsBody">
+                            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات ممنوحة</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB: صلاحيات المجموعات (محسّن) ==================== -->
+        <div class="tab-content" id="tab-groups" role="tabpanel">
+            <!-- شريط أدوات محسّن -->
+            <div class="group-perm-toolbar">
+                <div class="group-select-wrap">
+                    <select id="groupSelectForPerms" onchange="loadGroupPermissions(this.value)">
+                        <option value="">-- اختر مجموعة --</option>
+                    </select>
+                </div>
+                <button class="btn-refresh-group" onclick="refreshGroupPermissions()"><i class="fas fa-sync" aria-hidden="true"></i> تحديث</button>
+            </div>
+            <div id="groupPermissionsDisplay">
+                <div style="text-align:center;padding:30px;color:var(--text-muted);">
+                    <i class="fas fa-users-cog" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
+                    اختر مجموعة لعرض صلاحياتها
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB: التفويض المؤقت ==================== -->
+        <div class="tab-content" id="tab-delegate" role="tabpanel">
+            <div class="form-section">
+                <h4 style="margin-bottom:12px;color:var(--ruby);">تفويض صلاحية مؤقتاً</h4>
+                <form id="delegatePermissionForm" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="delegator">المفوض (المانح) *</label>
+                            <select class="form-input" id="delegator" required>
+                                <option value="">اختر المفوض</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="delegatee">المفوض إليه *</label>
+                            <select class="form-input" id="delegatee" required>
+                                <option value="">اختر المفوض إليه</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="delegatePermission">الصلاحية *</label>
+                            <select class="form-input" id="delegatePermission" required>
+                                <option value="">اختر الصلاحية</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="delegateScreen">الشاشة *</label>
+                            <select class="form-input" id="delegateScreen" required>
+                                <option value="">اختر الشاشة</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="delegateExpiry">تاريخ الانتهاء *</label>
+                            <input type="date" class="form-input" id="delegateExpiry" required>
+                        </div>
+                    </div>
+                    <button type="button" class="submit-btn" onclick="delegatePermission()">
+                        <i class="fas fa-share" aria-hidden="true"></i> تفويض الصلاحية
+                    </button>
+                </form>
+            </div>
+
+            <div style="padding:0 16px;">
+                <h4 style="margin:12px 0 6px;color:var(--cobalt);">الصلاحيات المفوضة حالياً</h4>
+                <div class="table-wrapper" style="margin:0;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>المفوض</th>
+                                <th>المفوض إليه</th>
+                                <th>الصلاحية</th>
+                                <th>الشاشة</th>
+                                <th>تاريخ التفويض</th>
+                                <th>تاريخ الانتهاء</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="delegatedPermissionsBody">
+                            <tr><td colspan="8" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات مفوضة</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        FAB – "الشاشات" (تم التعديل)
+        ============================================================ -->
+        <button class="fab" onclick="openScreens()" aria-label="إدارة شاشات التطبيق" title="إدارة شاشات التطبيق">
+            <i class="fas fa-desktop" aria-hidden="true"></i>
+            <span class="fab-label">الشاشات</span>
+            <span class="sr-only">إدارة شاشات التطبيق</span>
+        </button>
+
+        <!-- ============================================================
+        Sidebar
+        ============================================================ -->
+        <div class="sidebar-toggle" id="sidebarToggle" role="button" tabindex="0" aria-label="فتح القائمة الجانبية">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </div>
+        <nav class="sidebar" id="sidebar" role="navigation" aria-label="القائمة الجانبية">
+            <div class="sidebar-content">
+                <button class="sidebar-btn" onclick="handleSidebarAction('refresh')" aria-label="تحديث">
+                    <i class="fas fa-sync" aria-hidden="true"></i> <span>تحديث</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('add')" aria-label="إضافة">
+                    <i class="fas fa-plus-circle" aria-hidden="true"></i> <span>إضافة</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('grant')" aria-label="منح">
+                    <i class="fas fa-user-plus" aria-hidden="true"></i> <span>منح</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('export')" aria-label="تصدير">
+                    <i class="fas fa-file-export" aria-hidden="true"></i> <span>تصدير</span>
+                </button>
+                <button class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')" aria-label="المستشار الذكي">
+                    <i class="fas fa-robot" aria-hidden="true"></i> <span>AI</span>
+                </button>
+                <button class="sidebar-btn" onclick="handleSidebarAction('home')" aria-label="الرئيسية">
+                    <i class="fas fa-home" aria-hidden="true"></i> <span>رجوع</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- ============================================================
+        Bottom Navigation – حجم خط مضاعف (تم التعديل)
+        ============================================================ -->
+        <nav class="bottom-nav" role="navigation" aria-label="القائمة السفلية">
+            <button class="nav-item active" onclick="navigateTo('permissions')" aria-label="قائمة الصلاحيات">
+                <i class="fas fa-list" aria-hidden="true"></i>
+                <span>الصلاحيات</span>
+            </button>
+            <button class="nav-item" onclick="navigateTo('grant')" aria-label="منح صلاحيات">
+                <i class="fas fa-user-plus" aria-hidden="true"></i>
+                <span>منح</span>
+            </button>
+            <button class="nav-item" onclick="navigateTo('groups')" aria-label="صلاحيات المجموعات">
+                <i class="fas fa-users-cog" aria-hidden="true"></i>
+                <span>المجموعات</span>
+            </button>
+            <button class="nav-item" onclick="navigateTo('delegate')" aria-label="التفويض المؤقت">
+                <i class="fas fa-user-shield" aria-hidden="true"></i>
+                <span>تفويض</span>
+            </button>
+        </nav>
+
+        <!-- ============================================================
+        MODAL: إضافة / تعديل صلاحية (محسّن)
+        ============================================================ -->
+        <div class="modal-overlay" id="permissionModal" onclick="closePermissionModal(event)" role="dialog" aria-modal="true" aria-labelledby="permModalTitle">
+            <div class="modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="permModalTitle">➕ إضافة صلاحية جديدة</h3>
+                    <button class="modal-close" onclick="closePermissionModal()" aria-label="إغلاق النافذة">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <form class="perm-modal-form" id="permissionForm" onsubmit="return false;">
+                    <input type="hidden" id="editPermId" value="0">
+                    <div class="form-group">
+                        <label class="form-label" for="permName">اسم الصلاحية *</label>
+                        <input type="text" class="form-input" id="permName" placeholder="مثال: users.create" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="permNameAr">اسم الصلاحية بالعربية</label>
+                        <input type="text" class="form-input" id="permNameAr" placeholder="إنشاء مستخدمين">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="permDescription">الوصف</label>
+                        <textarea class="form-input" id="permDescription" rows="2" placeholder="وصف الصلاحية"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="permModule">الوحدة *</label>
+                        <select class="form-input" id="permModule" required>
+                            <option value="">اختر الوحدة</option>
+                            <option value="users">المستخدمين</option>
+                            <option value="sales">المبيعات</option>
+                            <option value="inventory">المخزون</option>
+                            <option value="accounting">المحاسبة</option>
+                            <option value="reports">التقارير</option>
+                            <option value="settings">الإعدادات</option>
+                            <option value="tanks">الخزانات</option>
+                            <option value="pumps">المضخات</option>
+                            <option value="customers">العملاء</option>
+                            <option value="parties">الأطراف</option>
+                            <option value="vehicles">المركبات</option>
+                            <option value="drivers">السائقين</option>
+                            <option value="employees">الموظفين</option>
+                            <option value="maintenance">الصيانة</option>
+                            <option value="sms">الرسائل القصيرة</option>
+                            <option value="notifications">الإشعارات</option>
+                            <option value="audit">التدقيق</option>
+                            <option value="backup">النسخ الاحتياطي</option>
+                            <option value="sync">المزامنة</option>
+                            <option value="ai">الذكاء الاصطناعي</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="permAction">الإجراء *</label>
+                        <select class="form-input" id="permAction" required>
+                            <option value="">اختر الإجراء</option>
+                            <option value="create">إنشاء</option>
+                            <option value="read">عرض</option>
+                            <option value="update">تعديل</option>
+                            <option value="delete">حذف</option>
+                            <option value="export">تصدير</option>
+                            <option value="print">طباعة</option>
+                            <option value="approve">موافقة</option>
+                        </select>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="permIsActive" checked>
+                        <label for="permIsActive">الصلاحية مفعلة</label>
+                    </div>
+                    <button type="button" class="submit-btn" onclick="savePermission()">
+                        <i class="fas fa-save" aria-hidden="true"></i> حفظ الصلاحية
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        MODAL: تصدير
+        ============================================================ -->
+        <div class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+            <div class="modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="exportTitle">📤 تصدير البيانات</h3>
+                    <button class="modal-close" onclick="closeExportModal()" aria-label="إغلاق التصدير">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <button class="submit-btn" onclick="exportData('xlsx')" style="background:var(--cobalt);">Excel (XLSX)</button>
+                    <button class="submit-btn" onclick="exportData('pdf')" style="background:var(--ruby);">PDF</button>
+                    <button class="submit-btn" onclick="exportData('json')" style="background:var(--gold);color:#000;">JSON</button>
+                    <button class="submit-btn" onclick="exportData('csv')" style="background:var(--success);">CSV</button>
+                </div>
+                <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i> سيتم تصدير جميع الصلاحيات مع البيانات المرتبطة
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        Toast
+        ============================================================ -->
+        <div class="toast" id="toast" role="alert" aria-live="assertive">
+            <div class="toast-icon"><i class="fas fa-check" aria-hidden="true"></i></div>
+            <span id="toastMessage">تمت العملية بنجاح</span>
+        </div>
+
+        <!-- ============================================================
+        JavaScript المتكامل – جميع العمليات حقيقية 100%
+        ============================================================ -->
+        <script>
+            /* ============================================================
+               0. RBAC – دور المستخدم (افتراضي Admin)
+               ============================================================ */
+            const ROLES = {
+                ADMIN: 'admin',
+                MANAGER: 'manager',
+                VIEWER: 'viewer',
+                AUDITOR: 'auditor'
+            };
+
+            let currentUserRole = ROLES.ADMIN;
+
+            function hasPermission(action) {
+                if (currentUserRole === ROLES.ADMIN) return true;
+                if (currentUserRole === ROLES.MANAGER) {
+                    if (action === 'delete' || action === 'delete_user') return false;
+                    return true;
+                }
+                if (currentUserRole === ROLES.VIEWER) {
+                    return action === 'read' || action === 'view' || action === 'export';
+                }
+                if (currentUserRole === ROLES.AUDITOR) {
+                    return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
+                }
+                return false;
+            }
+
+            function requirePermission(action) {
+                if (!hasPermission(action)) {
+                    showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
+                    return false;
+                }
+                return true;
+            }
+
+            /* ============================================================
+               1. API Call – جسر حقيقي مع DatabaseHelper.kt
+               ============================================================ */
+            function apiCall(action, params) {
+                return new Promise((resolve, reject) => {
+                    if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
+                        try {
+                            const jsonParams = JSON.stringify(params || {});
+                            const result = window.AndroidInterface.execute(action, jsonParams);
+                            try {
+                                const parsed = JSON.parse(result);
+                                resolve(parsed);
+                            } catch (e) {
+                                resolve({ success: true, data: result });
+                            }
+                        } catch (e) {
+                            reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
+                        }
+                    } else {
+                        console.warn('AndroidInterface غير موجود.');
+                        reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+                    }
+                });
+            }
+
+            /* ============================================================
+               2. Local Storage (للتخزين المؤقت عند عدم الاتصال)
+               ============================================================ */
+            const LocalDB = {
+                prefix: 'fuel_station_',
+                set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
+                    catch (e) { return false; } },
+                get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
+                        JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
+                remove: function(key) { localStorage.removeItem(this.prefix + key); }
+            };
+
+            /* ============================================================
+               3. Offline / Online – مزامنة العمليات المعلقة
+               ============================================================ */
+            let isOnline = navigator.onLine;
+
+            function updateOnlineStatus() {
+                isOnline = navigator.onLine;
+                const banner = document.getElementById('offlineBanner');
+                if (!isOnline) {
+                    banner.classList.add('show');
+                    showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
+                } else {
+                    banner.classList.remove('show');
+                    showToast('✅ تم استعادة الاتصال', 'success');
+                    syncPendingOperations();
+                }
+            }
+            window.addEventListener('online', updateOnlineStatus);
+            window.addEventListener('offline', updateOnlineStatus);
+
+            async function syncPendingOperations() {
+                if (!isOnline) return;
+                const pending = LocalDB.get('pending_ops', []);
+                if (pending.length === 0) return;
+                showLoading(true);
+                let ok = 0,
+                    fail = 0;
+                for (const op of pending) {
+                    try {
+                        const result = await apiCall(op.action, op.data);
+                        if (result.success) ok++;
+                        else fail++;
+                    } catch (e) { fail++; }
+                }
+                if (ok > 0) {
+                    const remaining = pending.slice(fail);
+                    LocalDB.set('pending_ops', remaining);
+                    showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
+                }
+                if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
+                showLoading(false);
+            }
+
+            /* ============================================================
+               4. Toast, Loading, Helpers
+               ============================================================ */
+            function showToast(message, type) {
+                const toast = document.getElementById('toast');
+                const msg = document.getElementById('toastMessage');
+                const icon = toast.querySelector('.toast-icon i');
+                toast.className = 'toast ' + (type || '');
+                msg.textContent = message;
+                if (type === 'success') { icon.className = 'fas fa-check'; } else if (type === 'error') { icon.className =
+                        'fas fa-times'; } else if (type === 'warning') { icon.className = 'fas fa-exclamation-triangle'; } else { icon
+                        .className = 'fas fa-info-circle'; }
+                toast.classList.add('show');
+                clearTimeout(toast._timer);
+                toast._timer = setTimeout(() => toast.classList.remove('show'), 3500);
+            }
+
+            function showLoading(show) {
+                document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+            }
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                const d = document.createElement('div');
+                d.textContent = text;
+                return d.innerHTML;
+            }
+
+            function getStatusClass(status) {
+                const map = { 'active': 'active', 'inactive': 'inactive', 'expired': 'expired', 'pending': 'pending' };
+                return map[status] || 'inactive';
+            }
+
+            function getStatusLabel(status) {
+                const map = { 'active': 'نشطة', 'inactive': 'غير نشطة', 'expired': 'منتهية', 'pending': 'معلقة' };
+                return map[status] || status;
+            }
+
+            /* ============================================================
+               5. Theme Toggle – الوضع الفاتح هو الافتراضي
+               ============================================================ */
+            function toggleTheme() {
+                const current = document.documentElement.getAttribute('data-theme');
+                const isDark = current === 'dark';
+                const newTheme = isDark ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                const icon = document.getElementById('themeIcon');
+                icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+
+            function loadSavedTheme() {
+                const saved = localStorage.getItem('theme') || 'light';
+                document.documentElement.setAttribute('data-theme', saved);
+                const icon = document.getElementById('themeIcon');
+                icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+            /* ============================================================
+               6. Sidebar
+               ============================================================ */
+            function setupSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                const toggle = document.getElementById('sidebarToggle');
+                toggle.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    sidebar.classList.toggle('open');
+                    toggle.classList.toggle('hidden');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!sidebar.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) {
+                        sidebar.classList.remove('open');
+                        toggle.classList.remove('hidden');
+                    }
+                });
+            }
+
+            function handleSidebarAction(action) {
+                document.getElementById('sidebar').classList.remove('open');
+                document.getElementById('sidebarToggle').classList.remove('hidden');
+                switch (action) {
+                    case 'refresh':
+                        loadAllData();
+                        break;
+                    case 'add':
+                        openAddPermissionModal();
+                        break;
+                    case 'grant':
+                        switchTab('grant', document.querySelector('.tab-btn:nth-child(2)'));
+                        break;
+                    case 'export':
+                        openExportModal();
+                        break;
+                    case 'ai_advisor':
+                        openAIAdvisor();
+                        break;
+                    case 'home':
+                        window.location.href = '../main.html';
+                        break;
+                    default:
+                        showToast('❌ إجراء غير معروف', 'error');
+                }
+            }
+
+            /* ============================================================
+               7. Keyboard Shortcuts (Ctrl+K)
+               ============================================================ */
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    document.getElementById('globalSearch').focus();
+                    document.getElementById('globalSearch').select();
+                }
+            });
+
+            /* ============================================================
+               8. State
+               ============================================================ */
+            let allPermissions = [];
+            let allScreens = [];
+            let allUsers = [];
+            let allGroups = [];
+            let allRoles = [];
+            let allGrantedPermissions = [];
+            let allDelegatedPermissions = [];
+            let currentPagePerms = 1;
+            const PAGE_SIZE_PERMS = 10;
+            let totalPerms = 0;
+            let permissionSearchQuery = '';
+            let editingPermId = 0;
+
+            /* ============================================================
+               9. Load All Data (حقيقي من قاعدة البيانات)
+               ============================================================ */
+            async function loadAllData() {
+                showLoading(true);
+                try {
+                    const [permsRes, screensRes, usersRes, groupsRes, rolesRes] = await Promise.all([
+                        apiCall('getPermissions', {}),
+                        apiCall('getScreens', {}),
+                        apiCall('getUsers', { limit: 1000 }),
+                        apiCall('getGroups', {}),
+                        apiCall('getRoles', {})
+                    ]);
+
+                    if (permsRes.success && permsRes.data) {
+                        allPermissions = permsRes.data;
+                        LocalDB.set('permissions', allPermissions);
+                    } else {
+                        allPermissions = LocalDB.get('permissions', []);
+                    }
+
+                    if (screensRes.success && screensRes.data) {
+                        allScreens = screensRes.data;
+                        LocalDB.set('screens', allScreens);
+                    } else {
+                        allScreens = LocalDB.get('screens', []);
+                    }
+
+                    if (usersRes.success && usersRes.data) {
+                        allUsers = usersRes.data;
+                        LocalDB.set('users', allUsers);
+                    } else {
+                        allUsers = LocalDB.get('users', []);
+                    }
+
+                    if (groupsRes.success && groupsRes.data) {
+                        allGroups = groupsRes.data;
+                        LocalDB.set('groups', allGroups);
+                    } else {
+                        allGroups = LocalDB.get('groups', []);
+                    }
+
+                    if (rolesRes.success && rolesRes.data) {
+                        allRoles = rolesRes.data;
+                        LocalDB.set('roles', allRoles);
+                    } else {
+                        allRoles = LocalDB.get('roles', []);
+                    }
+
+                    // تحديث دور المستخدم الحالي
+                    if (allUsers.length > 0) {
+                        const u = allUsers[0];
+                        const role = u.role_name || u.role || 'admin';
+                        if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
+                        else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
+                        else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
+                        else currentUserRole = ROLES.VIEWER;
+                    }
+
+                    populateDropdowns();
+                    renderPermissionsTable();
+                    populateGrantFormDropdowns();
+                    populateGroupSelect();
+                    populateDelegateFormDropdowns();
+                    loadGrantedPermissions();
+                    loadDelegatedPermissions();
+                    showLoading(false);
+                } catch (e) {
+                    console.error('Load error:', e);
+                    allPermissions = LocalDB.get('permissions', []);
+                    allScreens = LocalDB.get('screens', []);
+                    allUsers = LocalDB.get('users', []);
+                    allGroups = LocalDB.get('groups', []);
+                    allRoles = LocalDB.get('roles', []);
+                    populateDropdowns();
+                    renderPermissionsTable();
+                    populateGrantFormDropdowns();
+                    populateGroupSelect();
+                    populateDelegateFormDropdowns();
+                    loadGrantedPermissions();
+                    loadDelegatedPermissions();
+                    showLoading(false);
+                    showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
+                }
+            }
+
+            function populateDropdowns() {
+                // لا توجد قوائم منسدلة رئيسية هنا
+            }
+
+            /* ============================================================
+               10. Permissions Table (حقيقي)
+               ============================================================ */
+            function renderPermissionsTable() {
+                let filtered = [...allPermissions];
+                if (permissionSearchQuery) {
+                    const q = permissionSearchQuery.toLowerCase();
+                    filtered = filtered.filter(p =>
+                        (p.permission_name || '').toLowerCase().includes(q) ||
+                        (p.permission_code || '').toLowerCase().includes(q) ||
+                        (p.permission_name_ar || '').toLowerCase().includes(q) ||
+                        (p.description || '').toLowerCase().includes(q) ||
+                        (p.module || '').toLowerCase().includes(q)
+                    );
+                }
+
+                totalPerms = filtered.length;
+                document.getElementById('permissionsCount').textContent = totalPerms;
+
+                const start = (currentPagePerms - 1) * PAGE_SIZE_PERMS;
+                const pageItems = filtered.slice(start, start + PAGE_SIZE_PERMS);
+
+                const tbody = document.getElementById('permissionsTableBody');
+                if (pageItems.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">لا توجد صلاحيات</td></tr>`;
+                } else {
+                    tbody.innerHTML = pageItems.map((p, idx) => {
+                        const id = p.id || p.permission_id;
+                        const name = p.permission_name || p.permission_code || '---';
+                        const nameAr = p.permission_name_ar || '';
+                        const desc = p.description || '---';
+                        const module = p.module || '---';
+                        const isActive = p.is_active !== undefined ? p.is_active : true;
+                        const statusClass = isActive ? 'active' : 'inactive';
+                        const statusLabel = isActive ? 'نشطة' : 'غير نشطة';
+                        const createdAt = p.created_at || '---';
+
+                        return `
+                            <tr>
+                                <td>${start + idx + 1}</td>
+                                <td>${escapeHtml(name)} ${nameAr ? ' (' + escapeHtml(nameAr) + ')' : ''}</td>
+                                <td>${escapeHtml(desc)}</td>
+                                <td>${escapeHtml(module)}</td>
+                                <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                                <td>${createdAt}</td>
+                                <td class="table-actions">
+                                    <button class="action-btn" onclick="viewPermission(${id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                                    ${hasPermission('update') ? `<button class="action-btn" onclick="editPermission(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
+                                    ${hasPermission('delete') ? `<button class="action-btn danger" onclick="deletePermission(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+
+                renderPermissionsPagination(Math.ceil(totalPerms / PAGE_SIZE_PERMS));
+            }
+
+            function renderPermissionsPagination(totalPages) {
+                const container = document.getElementById('pageNumbersPerms');
+                let html = '';
+                const maxShow = 5;
+                let start = Math.max(1, currentPagePerms - Math.floor(maxShow / 2));
+                let end = Math.min(totalPages, start + maxShow - 1);
+                if (end - start < maxShow - 1) start = Math.max(1, end - maxShow + 1);
+
+                for (let i = start; i <= end; i++) {
+                    html += `<span class="page-num ${i === currentPagePerms ? 'active' : ''}" onclick="goToPagePerms(${i})">${i}</span>`;
+                }
+                container.innerHTML = html;
+
+                document.getElementById('prevPagePerms').disabled = currentPagePerms <= 1;
+                document.getElementById('nextPagePerms').disabled = currentPagePerms >= totalPages;
+            }
+
+            function changePagePerms(delta) {
+                const total = Math.ceil(totalPerms / PAGE_SIZE_PERMS) || 1;
+                const newPage = currentPagePerms + delta;
+                if (newPage < 1 || newPage > total) return;
+                currentPagePerms = newPage;
+                renderPermissionsTable();
+            }
+
+            function goToPagePerms(page) {
+                const total = Math.ceil(totalPerms / PAGE_SIZE_PERMS) || 1;
+                if (page < 1 || page > total) return;
+                currentPagePerms = page;
+                renderPermissionsTable();
+            }
+
+            function searchPermissions(query) {
+                permissionSearchQuery = query.trim();
+                currentPagePerms = 1;
+                renderPermissionsTable();
+            }
+
+            function loadAllPermissionsData() {
+                // إعادة تحميل الصلاحيات من الخادم
+                apiCall('getPermissions', {})
+                    .then(res => {
+                        if (res.success && res.data) {
+                            allPermissions = res.data;
+                            LocalDB.set('permissions', allPermissions);
+                            renderPermissionsTable();
+                            showToast('✅ تم تحديث الصلاحيات', 'success');
+                        }
+                    })
+                    .catch(() => showToast('⚠️ فشل تحميل الصلاحيات', 'warning'));
+            }
+
+            /* ============================================================
+               11. CRUD: Permissions (Add, Edit, Delete, View) – حقيقي
+               ============================================================ */
+            function openAddPermissionModal() {
+                if (!requirePermission('create')) return;
+                editingPermId = 0;
+                document.getElementById('permModalTitle').textContent = '➕ إضافة صلاحية جديدة';
+                document.getElementById('editPermId').value = '0';
+                document.getElementById('permissionForm').reset();
+                document.getElementById('permIsActive').checked = true;
+                document.getElementById('permissionModal').classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closePermissionModal(e) {
+                if (e && e.target !== e.currentTarget && e.type === 'click') return;
+                document.getElementById('permissionModal').classList.remove('show');
+                document.body.style.overflow = '';
+            }
+
+            function editPermission(id) {
+                if (!requirePermission('update')) return;
+                const perm = allPermissions.find(p => (p.id || p.permission_id) == id);
+                if (!perm) { showToast('❌ الصلاحية غير موجودة', 'error'); return; }
+
+                editingPermId = id;
+                document.getElementById('permModalTitle').textContent = '✏️ تعديل صلاحية';
+                document.getElementById('editPermId').value = id;
+                document.getElementById('permName').value = perm.permission_name || perm.permission_code || '';
+                document.getElementById('permNameAr').value = perm.permission_name_ar || '';
+                document.getElementById('permDescription').value = perm.description || '';
+                document.getElementById('permModule').value = perm.module || '';
+                document.getElementById('permAction').value = perm.action || '';
+                document.getElementById('permIsActive').checked = perm.is_active !== undefined ? perm.is_active : true;
+
+                document.getElementById('permissionModal').classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+
+            async function savePermission() {
+                const id = parseInt(document.getElementById('editPermId').value);
+                const name = document.getElementById('permName').value.trim();
+                const nameAr = document.getElementById('permNameAr').value.trim();
+                const description = document.getElementById('permDescription').value.trim();
+                const module = document.getElementById('permModule').value;
+                const action = document.getElementById('permAction').value;
+                const isActive = document.getElementById('permIsActive').checked ? 1 : 0;
+
+                if (!name) { showToast('❌ اسم الصلاحية مطلوب', 'error');
+                    document.getElementById('permName').focus(); return; }
+                if (!module) { showToast('❌ الوحدة مطلوبة', 'error');
+                    document.getElementById('permModule').focus(); return; }
+                if (!action) { showToast('❌ الإجراء مطلوب', 'error');
+                    document.getElementById('permAction').focus(); return; }
+
+                // إنشاء permission_code من الوحدة والإجراء
+                const permissionCode = module + '.' + action;
+
+                const data = {
+                    id: id || 0,
+                    permission_code: permissionCode,
+                    permission_name: name,
+                    permission_name_ar: nameAr,
+                    description: description,
+                    module: module,
+                    module_name_ar: module,
+                    action: action,
+                    is_active: isActive
+                };
+
+                showLoading(true);
+                try {
+                    const actionName = id > 0 ? 'updatePermission' : 'addPermission';
+                    const result = await apiCall(actionName, data);
+                    if (result.success) {
+                        showToast(result.message || '✅ تم حفظ الصلاحية بنجاح', 'success');
+                        closePermissionModal();
+                        await loadAllData();
+                    } else {
+                        throw new Error(result.message || 'فشل في الحفظ');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: id > 0 ? 'updatePermission' :
+                                'addPermission', data }]);
+                        if (id > 0) {
+                            const idx = allPermissions.findIndex(p => (p.id || p.permission_id) == id);
+                            if (idx >= 0) allPermissions[idx] = { ...allPermissions[idx], ...data };
+                        } else {
+                            allPermissions.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
+                        }
+                        LocalDB.set('permissions', allPermissions);
+                        showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
+                        closePermissionModal();
+                        renderPermissionsTable();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            async function deletePermission(id) {
+                if (!requirePermission('delete')) return;
+                const perm = allPermissions.find(p => (p.id || p.permission_id) == id);
+                const name = perm ? (perm.permission_name || perm.permission_code || 'هذه الصلاحية') : 'هذه الصلاحية';
+
+                const confirmed = await Swal.fire({
+                    title: '⚠️ هل أنت متأكد؟',
+                    text: 'سيتم حذف الصلاحية "' + name + '" نهائياً!',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b31b3a',
+                    cancelButtonColor: '#5a5a7a',
+                    confirmButtonText: 'نعم، احذف',
+                    cancelButtonText: 'إلغاء'
+                });
+                if (!confirmed.isConfirmed) return;
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('deletePermission', { id });
+                    if (result.success) {
+                        showToast('✅ تم حذف الصلاحية بنجاح', 'success');
+                        await loadAllData();
+                    } else {
+                        throw new Error(result.message || 'فشل في الحذف');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deletePermission',
+                            data: { id } }]);
+                        allPermissions = allPermissions.filter(p => (p.id || p.permission_id) != id);
+                        LocalDB.set('permissions', allPermissions);
+                        showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
+                        renderPermissionsTable();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            function viewPermission(id) {
+                const perm = allPermissions.find(p => (p.id || p.permission_id) == id);
+                if (!perm) { showToast('❌ الصلاحية غير موجودة', 'error'); return; }
+
+                const statusLabel = perm.is_active ? 'نشطة' : 'غير نشطة';
+                const statusClass = perm.is_active ? 'active' : 'inactive';
+
+                Swal.fire({
+                    title: '📋 تفاصيل الصلاحية',
+                    html: `
+                        <div style="text-align:right;direction:rtl;font-size:0.9rem;line-height:1.8;">
+                            <strong>كود الصلاحية:</strong> ${escapeHtml(perm.permission_code || '---')}<br>
+                            <strong>اسم الصلاحية:</strong> ${escapeHtml(perm.permission_name || '---')}<br>
+                            <strong>الاسم بالعربية:</strong> ${escapeHtml(perm.permission_name_ar || '---')}<br>
+                            <strong>الوصف:</strong> ${escapeHtml(perm.description || '---')}<br>
+                            <strong>الوحدة:</strong> ${escapeHtml(perm.module || '---')}<br>
+                            <strong>الإجراء:</strong> ${escapeHtml(perm.action || '---')}<br>
+                            <strong>الحالة:</strong> <span class="status-badge ${statusClass}">${statusLabel}</span><br>
+                            <strong>تاريخ الإنشاء:</strong> ${perm.created_at || '---'}
+                        </div>
+                    `,
+                    confirmButtonText: 'إغلاق',
+                    confirmButtonColor: '#9b1d3a',
+                    background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1f1f3a' : '#fffcf7',
+                    color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#e8e8f0' : '#1a1a2e'
+                });
+            }
+
+            /* ============================================================
+               12. منح صلاحيات للمستخدمين (Grant)
+               ============================================================ */
+            function populateGrantFormDropdowns() {
+                // المستخدمين
+                const userSelect = document.getElementById('grantUser');
+                userSelect.innerHTML = '<option value="">اختر المستخدم</option>';
+                allUsers.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id || u.user_id;
+                    opt.textContent = (u.full_name || u.username || 'مستخدم') + ' (' + (u.username || '') + ')';
+                    userSelect.appendChild(opt);
+                });
+
+                // الصلاحيات
+                const permSelect = document.getElementById('grantPermission');
+                permSelect.innerHTML = '<option value="">اختر الصلاحية</option>';
+                allPermissions.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id || p.permission_id;
+                    opt.textContent = p.permission_name || p.permission_code || 'صلاحية';
+                    permSelect.appendChild(opt);
+                });
+
+                // الشاشات
+                const screenSelect = document.getElementById('grantScreen');
+                screenSelect.innerHTML = '<option value="">اختر الشاشة</option>';
+                allScreens.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id || s.screen_id;
+                    opt.textContent = s.screen_name || s.module || 'شاشة';
+                    screenSelect.appendChild(opt);
+                });
+            }
+
+            async function grantUserPermission() {
+                const userId = document.getElementById('grantUser').value;
+                const permId = document.getElementById('grantPermission').value;
+                const screenId = document.getElementById('grantScreen').value;
+                const expiry = document.getElementById('grantExpiry').value;
+
+                if (!userId) { showToast('❌ يرجى اختيار مستخدم', 'error');
+                    document.getElementById('grantUser').focus(); return; }
+                if (!permId) { showToast('❌ يرجى اختيار صلاحية', 'error');
+                    document.getElementById('grantPermission').focus(); return; }
+                if (!screenId) { showToast('❌ يرجى اختيار شاشة', 'error');
+                    document.getElementById('grantScreen').focus(); return; }
+
+                const data = {
+                    user_id: parseInt(userId),
+                    permission_id: parseInt(permId),
+                    screen_id: parseInt(screenId),
+                    expiry_date: expiry || null,
+                    granted_by: 1 // افتراضي، يمكن جلبها من المستخدم الحالي
+                };
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('grantUserPermission', data);
+                    if (result.success) {
+                        showToast('✅ تم منح الصلاحية بنجاح', 'success');
+                        document.getElementById('grantPermissionForm').reset();
+                        loadGrantedPermissions();
+                    } else {
+                        throw new Error(result.message || 'فشل في المنح');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'grantUserPermission',
+                            data }]);
+                        showToast('✅ تم المنح محلياً – سيتم المزامنة لاحقاً', 'success');
+                        loadGrantedPermissions();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ في المنح'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            async function loadGrantedPermissions() {
+                try {
+                    const result = await apiCall('getGrantedPermissions', {});
+                    if (result.success && result.data) {
+                        allGrantedPermissions = result.data;
+                        renderGrantedPermissionsTable();
+                    } else {
+                        allGrantedPermissions = [];
+                        renderGrantedPermissionsTable();
+                    }
+                } catch (e) {
+                    allGrantedPermissions = [];
+                    renderGrantedPermissionsTable();
+                }
+            }
+
+            function renderGrantedPermissionsTable() {
+                const tbody = document.getElementById('grantedPermissionsBody');
+                if (allGrantedPermissions.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات ممنوحة</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = allGrantedPermissions.map(g => {
+                    const status = g.is_active ? 'نشطة' : (g.expires_at && new Date(g.expires_at) < new Date() ?
+                        'منتهية' : 'نشطة');
+                    const statusClass = getStatusClass(g.is_active ? 'active' : (g.expires_at && new Date(g
+                    .expires_at) < new Date() ? 'expired' : 'active'));
+                    return `
+                        <tr>
+                            <td>${escapeHtml(g.user_name || g.username || '---')}</td>
+                            <td>${escapeHtml(g.permission_name || g.permission_code || '---')}</td>
+                            <td>${escapeHtml(g.screen_name || g.module || '---')}</td>
+                            <td>${g.granted_at || '---'}</td>
+                            <td>${g.expires_at || '---'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                            <td class="table-actions">
+                                ${hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeGrantedPermission(${g.ups_id})"><i class="fas fa-trash" aria-hidden="true"></i> سحب</button>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            async function revokeGrantedPermission(upsId) {
+                if (!upsId) return;
+                const confirmed = await Swal.fire({
+                    title: '⚠️ تأكيد السحب',
+                    text: 'هل أنت متأكد من سحب هذه الصلاحية من المستخدم؟',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b31b3a',
+                    cancelButtonColor: '#5a5a7a',
+                    confirmButtonText: 'نعم، اسحب',
+                    cancelButtonText: 'إلغاء'
+                });
+                if (!confirmed.isConfirmed) return;
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('revokeUserPermission', { upsId: upsId });
+                    if (result.success) {
+                        showToast('✅ تم سحب الصلاحية', 'success');
+                        loadGrantedPermissions();
+                    } else {
+                        throw new Error(result.message || 'فشل السحب');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'revokeUserPermission',
+                            data: { upsId } }]);
+                        showToast('✅ تم السحب محلياً – سيتم المزامنة', 'success');
+                        loadGrantedPermissions();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            /* ============================================================
+               13. صلاحيات المجموعات (Group Permissions) – محسّن
+               ============================================================ */
+            function populateGroupSelect() {
+                const select = document.getElementById('groupSelectForPerms');
+                select.innerHTML = '<option value="">-- اختر مجموعة --</option>';
+                allGroups.forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g.id || g.group_id;
+                    opt.textContent = g.group_name || 'مجموعة';
+                    select.appendChild(opt);
+                });
+            }
+
+            function refreshGroupPermissions() {
+                const select = document.getElementById('groupSelectForPerms');
+                if (select.value) {
+                    loadGroupPermissions(select.value);
+                } else {
+                    showToast('⚠️ يرجى اختيار مجموعة', 'warning');
+                }
+            }
+
+            async function loadGroupPermissions(groupId) {
+                if (!groupId) {
+                    document.getElementById('groupPermissionsDisplay').innerHTML = `
+                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
+                            <i class="fas fa-users-cog" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
+                            اختر مجموعة لعرض صلاحياتها
+                        </div>
+                    `;
+                    return;
+                }
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('getGroupPermissions', { groupId: parseInt(groupId) });
+                    if (result.success && result.data) {
+                        renderGroupPermissions(result.data);
+                    } else {
+                        renderGroupPermissions([]);
+                    }
+                } catch (e) {
+                    renderGroupPermissions([]);
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            function renderGroupPermissions(data) {
+                const container = document.getElementById('groupPermissionsDisplay');
+                if (!data || data.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
+                            <i class="fas fa-lock-open" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
+                            لا توجد صلاحيات لهذه المجموعة
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `
+                    <div class="table-wrapper" style="margin:0;">
+                        <table>
+                            <thead><tr><th>الصلاحية</th><th>الشاشة</th><th>تاريخ المنح</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+                            <tbody>
+                `;
+                data.forEach(p => {
+                    const status = p.is_active ? 'نشطة' : 'غير نشطة';
+                    const statusClass = p.is_active ? 'active' : 'inactive';
+                    html += `
+                        <tr>
+                            <td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td>
+                            <td>${escapeHtml(p.screen_name || p.module || '---')}</td>
+                            <td>${p.granted_at || '---'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                            <td class="table-actions">
+                                ${hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeGroupPermission(${p.group_permission_id})"><i class="fas fa-trash" aria-hidden="true"></i> إزالة</button>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table></div>`;
+                container.innerHTML = html;
+            }
+
+            async function revokeGroupPermission(groupPermId) {
+                if (!groupPermId) return;
+                const confirmed = await Swal.fire({
+                    title: '⚠️ تأكيد الإزالة',
+                    text: 'هل أنت متأكد من إزالة هذه الصلاحية من المجموعة؟',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b31b3a',
+                    cancelButtonColor: '#5a5a7a',
+                    confirmButtonText: 'نعم، أزل',
+                    cancelButtonText: 'إلغاء'
+                });
+                if (!confirmed.isConfirmed) return;
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('revokeGroupPermission', { groupPermissionId: groupPermId });
+                    if (result.success) {
+                        showToast('✅ تمت الإزالة بنجاح', 'success');
+                        const select = document.getElementById('groupSelectForPerms');
+                        if (select.value) loadGroupPermissions(select.value);
+                    } else {
+                        throw new Error(result.message || 'فشل الإزالة');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'revokeGroupPermission',
+                            data: { groupPermissionId: groupPermId } }]);
+                        showToast('✅ تمت الإزالة محلياً – سيتم المزامنة', 'success');
+                        const select = document.getElementById('groupSelectForPerms');
+                        if (select.value) loadGroupPermissions(select.value);
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            /* ============================================================
+               14. التفويض المؤقت (Delegation)
+               ============================================================ */
+            function populateDelegateFormDropdowns() {
+                // المفوض (المستخدمون)
+                const delegatorSelect = document.getElementById('delegator');
+                delegatorSelect.innerHTML = '<option value="">اختر المفوض</option>';
+                allUsers.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id || u.user_id;
+                    opt.textContent = (u.full_name || u.username || 'مستخدم') + ' (' + (u.username || '') + ')';
+                    delegatorSelect.appendChild(opt);
+                });
+
+                // المفوض إليه
+                const delegateeSelect = document.getElementById('delegatee');
+                delegateeSelect.innerHTML = '<option value="">اختر المفوض إليه</option>';
+                allUsers.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id || u.user_id;
+                    opt.textContent = (u.full_name || u.username || 'مستخدم') + ' (' + (u.username || '') + ')';
+                    delegateeSelect.appendChild(opt);
+                });
+
+                // الصلاحيات
+                const permSelect = document.getElementById('delegatePermission');
+                permSelect.innerHTML = '<option value="">اختر الصلاحية</option>';
+                allPermissions.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id || p.permission_id;
+                    opt.textContent = p.permission_name || p.permission_code || 'صلاحية';
+                    permSelect.appendChild(opt);
+                });
+
+                // الشاشات
+                const screenSelect = document.getElementById('delegateScreen');
+                screenSelect.innerHTML = '<option value="">اختر الشاشة</option>';
+                allScreens.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id || s.screen_id;
+                    opt.textContent = s.screen_name || s.module || 'شاشة';
+                    screenSelect.appendChild(opt);
+                });
+            }
+
+            async function delegatePermission() {
+                const delegatorId = document.getElementById('delegator').value;
+                const delegateeId = document.getElementById('delegatee').value;
+                const permId = document.getElementById('delegatePermission').value;
+                const screenId = document.getElementById('delegateScreen').value;
+                const expiry = document.getElementById('delegateExpiry').value;
+
+                if (!delegatorId) { showToast('❌ يرجى اختيار المفوض', 'error');
+                    document.getElementById('delegator').focus(); return; }
+                if (!delegateeId) { showToast('❌ يرجى اختيار المفوض إليه', 'error');
+                    document.getElementById('delegatee').focus(); return; }
+                if (!permId) { showToast('❌ يرجى اختيار صلاحية', 'error');
+                    document.getElementById('delegatePermission').focus(); return; }
+                if (!screenId) { showToast('❌ يرجى اختيار شاشة', 'error');
+                    document.getElementById('delegateScreen').focus(); return; }
+                if (!expiry) { showToast('❌ يرجى تحديد تاريخ الانتهاء', 'error');
+                    document.getElementById('delegateExpiry').focus(); return; }
+
+                const data = {
+                    delegator_id: parseInt(delegatorId),
+                    delegatee_id: parseInt(delegateeId),
+                    permission_id: parseInt(permId),
+                    screen_id: parseInt(screenId),
+                    expiry_date: expiry,
+                    delegated_by: 1 // افتراضي
+                };
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('delegatePermission', data);
+                    if (result.success) {
+                        showToast('✅ تم تفويض الصلاحية بنجاح', 'success');
+                        document.getElementById('delegatePermissionForm').reset();
+                        loadDelegatedPermissions();
+                    } else {
+                        throw new Error(result.message || 'فشل التفويض');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'delegatePermission',
+                            data }]);
+                        showToast('✅ تم التفويض محلياً – سيتم المزامنة', 'success');
+                        loadDelegatedPermissions();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ في التفويض'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            async function loadDelegatedPermissions() {
+                try {
+                    const result = await apiCall('getDelegatedPermissions', {});
+                    if (result.success && result.data) {
+                        allDelegatedPermissions = result.data;
+                        renderDelegatedPermissionsTable();
+                    } else {
+                        allDelegatedPermissions = [];
+                        renderDelegatedPermissionsTable();
+                    }
+                } catch (e) {
+                    allDelegatedPermissions = [];
+                    renderDelegatedPermissionsTable();
+                }
+            }
+
+            function renderDelegatedPermissionsTable() {
+                const tbody = document.getElementById('delegatedPermissionsBody');
+                if (allDelegatedPermissions.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات مفوضة</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = allDelegatedPermissions.map(d => {
+                    const status = d.is_active ? 'نشطة' : (new Date(d.expiry_date) < new Date() ? 'منتهية' :
+                    'نشطة');
+                    const statusClass = getStatusClass(d.is_active ? 'active' : (new Date(d.expiry_date) < new Date() ?
+                        'expired' : 'active'));
+                    return `
+                        <tr>
+                            <td>${escapeHtml(d.delegator_name || d.delegator_username || '---')}</td>
+                            <td>${escapeHtml(d.delegatee_name || d.delegatee_username || '---')}</td>
+                            <td>${escapeHtml(d.permission_name || d.permission_code || '---')}</td>
+                            <td>${escapeHtml(d.screen_name || d.module || '---')}</td>
+                            <td>${d.delegated_at || '---'}</td>
+                            <td>${d.expiry_date || '---'}</td>
+                            <td><span class="status-badge ${statusClass}">${status}</span></td>
+                            <td class="table-actions">
+                                <button class="action-btn" onclick="viewDelegation(${d.delegation_id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                                ${hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeDelegation(${d.delegation_id})"><i class="fas fa-trash" aria-hidden="true"></i> سحب</button>` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            function viewDelegation(id) {
+                const d = allDelegatedPermissions.find(item => item.delegation_id == id);
+                if (!d) { showToast('❌ التفويض غير موجود', 'error'); return; }
+
+                const status = d.is_active ? 'نشطة' : 'منتهية';
+                Swal.fire({
+                    title: '📋 تفاصيل التفويض',
+                    html: `
+                        <div style="text-align:right;direction:rtl;font-size:0.9rem;line-height:1.8;">
+                            <strong>المفوض:</strong> ${escapeHtml(d.delegator_name || d.delegator_username || '---')}<br>
+                            <strong>المفوض إليه:</strong> ${escapeHtml(d.delegatee_name || d.delegatee_username || '---')}<br>
+                            <strong>الصلاحية:</strong> ${escapeHtml(d.permission_name || d.permission_code || '---')}<br>
+                            <strong>الشاشة:</strong> ${escapeHtml(d.screen_name || d.module || '---')}<br>
+                            <strong>تاريخ التفويض:</strong> ${d.delegated_at || '---'}<br>
+                            <strong>تاريخ الانتهاء:</strong> ${d.expiry_date || '---'}<br>
+                            <strong>الحالة:</strong> ${status}
+                        </div>
+                    `,
+                    confirmButtonText: 'إغلاق',
+                    confirmButtonColor: '#9b1d3a'
+                });
+            }
+
+            async function revokeDelegation(delegationId) {
+                if (!delegationId) return;
+                const confirmed = await Swal.fire({
+                    title: '⚠️ تأكيد السحب',
+                    text: 'هل أنت متأكد من سحب هذا التفويض (إلغاء الصلاحية المفوضة)؟',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b31b3a',
+                    cancelButtonColor: '#5a5a7a',
+                    confirmButtonText: 'نعم، اسحب',
+                    cancelButtonText: 'إلغاء'
+                });
+                if (!confirmed.isConfirmed) return;
+
+                showLoading(true);
+                try {
+                    const result = await apiCall('revokeDelegatedPermission', { delegationId: delegationId });
+                    if (result.success) {
+                        showToast('✅ تم سحب التفويض', 'success');
+                        loadDelegatedPermissions();
+                    } else {
+                        throw new Error(result.message || 'فشل السحب');
+                    }
+                } catch (e) {
+                    if (!isOnline) {
+                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'revokeDelegatedPermission',
+                            data: { delegationId } }]);
+                        showToast('✅ تم السحب محلياً – سيتم المزامنة', 'success');
+                        loadDelegatedPermissions();
+                    } else {
+                        showToast('❌ ' + (e.message || 'خطأ'), 'error');
+                    }
+                } finally {
+                    showLoading(false);
+                }
+            }
+
+            /* ============================================================
+               15. Navigation & Tab Switching
+               ============================================================ */
+            function navigateTo(section) {
+                const tabs = ['permissions', 'grant', 'groups', 'delegate'];
+                const index = tabs.indexOf(section);
+                if (index === -1) return;
+                const tabBtn = document.querySelectorAll('.tab-btn')[index];
+                if (tabBtn) switchTab(section, tabBtn);
+            }
+
+            function switchTab(tabId, btn) {
+                document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(el => {
+                    el.classList.remove('active');
+                    el.setAttribute('aria-selected', 'false');
+                });
+                document.getElementById('tab-' + tabId).classList.add('active');
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.setAttribute('aria-selected', 'true');
+                } else {
+                    document.querySelectorAll('.tab-btn').forEach(el => {
+                        if (el.textContent.includes(tabId)) {
+                            el.classList.add('active');
+                            el.setAttribute('aria-selected', 'true');
+                        }
+                    });
+                }
+                // تحديث التنقل السفلي
+                document.querySelectorAll('.bottom-nav .nav-item').forEach(el => el.classList.remove('active'));
+                const navMap = { 'permissions': 0, 'grant': 1, 'groups': 2, 'delegate': 3 };
+                if (navMap[tabId] !== undefined) {
+                    document.querySelectorAll('.bottom-nav .nav-item')[navMap[tabId]].classList.add('active');
+                }
+            }
+
+            /* ============================================================
+               16. Export (حقيقي)
+               ============================================================ */
+            function openExportModal() {
+                if (!requirePermission('export')) return;
+                document.getElementById('exportModal').classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeExportModal(e) {
+                if (e && e.target !== e.currentTarget && e.type === 'click') return;
+                document.getElementById('exportModal').classList.remove('show');
+                document.body.style.overflow = '';
+            }
+
+            function exportData(format) {
+                if (!requirePermission('export')) return;
+                const data = allPermissions.map(p => ({
+                    'كود الصلاحية': p.permission_code || '',
+                    'اسم الصلاحية': p.permission_name || '',
+                    'الاسم بالعربية': p.permission_name_ar || '',
+                    'الوصف': p.description || '',
+                    'الوحدة': p.module || '',
+                    'الإجراء': p.action || '',
+                    'الحالة': p.is_active ? 'نشطة' : 'غير نشطة',
+                    'تاريخ الإنشاء': p.created_at || ''
+                }));
+
+                if (data.length === 0) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
+
+                try {
+                    if (format === 'xlsx') {
+                        if (typeof XLSX === 'undefined') { showToast('❌ مكتبة Excel غير متوفرة', 'error'); return; }
+                        const ws = XLSX.utils.json_to_sheet(data);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'الصلاحيات');
+                        XLSX.writeFile(wb, 'الصلاحيات_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                        showToast('✅ تم تصدير Excel بنجاح', 'success');
+                    } else if (format === 'pdf') {
+                        if (typeof window.jspdf === 'undefined') { showToast('❌ مكتبة PDF غير متوفرة', 'error'); return; }
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF('l', 'mm', 'a4');
+                        doc.setFont('Cairo');
+                        doc.setFontSize(14);
+                        doc.text('تقرير الصلاحيات', 20, 20);
+                        doc.setFontSize(8);
+                        let y = 30;
+                        const headers = Object.keys(data[0]);
+                        const colWidth = 260 / headers.length;
+                        headers.forEach((h, i) => { doc.text(h, 20 + i * colWidth, y); });
+                        y += 6;
+                        data.slice(0, 30).forEach(row => {
+                            if (y > 270) { doc.addPage();
+                                y = 20; }
+                            headers.forEach((h, i) => {
+                                doc.text(String(row[h] || ''), 20 + i * colWidth, y);
+                            });
+                            y += 6;
+                        });
+                        doc.save('الصلاحيات_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                        showToast('✅ تم تصدير PDF بنجاح', 'success');
+                    } else if (format === 'json') {
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'الصلاحيات_' + new Date().toISOString().slice(0, 10) + '.json';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        showToast('✅ تم تصدير JSON بنجاح', 'success');
+                    } else if (format === 'csv') {
+                        const headers = Object.keys(data[0]);
+                        let csv = headers.join(',') + '\n';
+                        data.forEach(row => {
+                            csv += headers.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(',') +
+                            '\n';
+                        });
+                        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'الصلاحيات_' + new Date().toISOString().slice(0, 10) + '.csv';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        showToast('✅ تم تصدير CSV بنجاح', 'success');
+                    }
+                } catch (e) {
+                    showToast('❌ فشل التصدير: ' + e.message, 'error');
+                    console.error(e);
+                }
+            }
+
+            /* ============================================================
+               17. AI Advisor (بسيط)
+               ============================================================ */
+            function openAIAdvisor() {
+                const insights = LocalDB.get('ai_permission_insights', []);
+                if (insights.length === 0) {
+                    showToast('🤖 لا توجد توصيات حالياً', 'info');
+                    return;
+                }
+                let msg = 'توصيات المستشار الذكي:\n';
+                insights.forEach(ins => {
+                    msg += `• ${ins.suggestion}\n`;
+                });
+                Swal.fire({
+                    title: '🤖 المستشار الذكي',
+                    text: msg,
+                    icon: 'info',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#9b1d3a'
+                });
+            }
+
+            /* ============================================================
+               18. Notifications (بسيطة)
+               ============================================================ */
+            function showNotifications() {
+                const alerts = LocalDB.get('permission_notifications', []);
+                if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
+                let msg = 'الإشعارات:\n';
+                alerts.forEach(a => {
+                    msg += `• ${a.title}: ${a.desc}\n`;
+                });
+                Swal.fire({
+                    title: '🔔 الإشعارات',
+                    text: msg,
+                    icon: 'info',
+                    confirmButtonText: 'حسناً',
+                    confirmButtonColor: '#9b1d3a'
+                });
+            }
+
+            /* ============================================================
+               19. Global Search
+               ============================================================ */
+            function handleGlobalSearch(query) {
+                document.getElementById('permissionSearch').value = query;
+                searchPermissions(query);
+            }
+
+            /* ============================================================
+               20. Pull-to-Refresh
+               ============================================================ */
+            let pullStartY = 0,
+                pullOffset = 0,
+                isPulling = false;
+
+            document.addEventListener('touchstart', (e) => {
+                if (window.scrollY <= 0) { pullStartY = e.touches[0].clientY;
+                    isPulling = true; }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isPulling) return;
+                const diff = e.touches[0].clientY - pullStartY;
+                if (diff > 20) {
+                    pullOffset = Math.min(diff, 80);
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', () => {
+                if (isPulling && pullOffset > 60) {
+                    loadAllData();
+                    setTimeout(() => { isPulling = false;
+                        pullOffset = 0; }, 300);
+                } else {
+                    isPulling = false;
+                    pullOffset = 0;
+                }
+            }, { passive: true });
+
+            /* ============================================================
+               21. Open Screens (الشاشات) – الوظيفة الجديدة للـ FAB
+               ============================================================ */
+            function openScreens() {
+                // توجيه إلى شاشة إدارة الشاشات
+                window.location.href = 'file:///android_asset/screens/screens.html';
+                // في حال عدم وجود AndroidInterface، يمكن استخدام fallback
+                if (typeof window.AndroidInterface === 'undefined') {
+                    showToast('📱 يتم توجيهك إلى شاشة إدارة الشاشات...', 'info');
+                }
+            }
+
+            /* ============================================================
+               22. Init
+               ============================================================ */
+            document.addEventListener('DOMContentLoaded', function() {
+                loadSavedTheme(); // الوضع الفاتح هو الافتراضي
+                setupSidebar();
+                updateOnlineStatus();
+
+                document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+                document.getElementById('permissionModal').addEventListener('click', function(e) { if (e.target === this)
+                        closePermissionModal(); });
+                document.getElementById('exportModal').addEventListener('click', function(e) { if (e.target === this)
+                        closeExportModal(); });
+
+                loadAllData();
+
+                setInterval(() => {
+                    if (isOnline) loadAllData();
+                }, 60000);
+
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js').catch(() => {});
+                }
+
+                showToast('🔐 مرحباً بك في إدارة الصلاحيات', 'info');
+            });
+
+            // تصدير الدوال إلى النطاق العام
+            window.loadAllData = loadAllData;
+            window.renderPermissionsTable = renderPermissionsTable;
+            window.searchPermissions = searchPermissions;
+            window.loadAllPermissionsData = loadAllPermissionsData;
+            window.openAddPermissionModal = openAddPermissionModal;
+            window.closePermissionModal = closePermissionModal;
+            window.editPermission = editPermission;
+            window.savePermission = savePermission;
+            window.deletePermission = deletePermission;
+            window.viewPermission = viewPermission;
+            window.grantUserPermission = grantUserPermission;
+            window.loadGrantedPermissions = loadGrantedPermissions;
+            window.revokeGrantedPermission = revokeGrantedPermission;
+            window.loadGroupPermissions = loadGroupPermissions;
+            window.refreshGroupPermissions = refreshGroupPermissions;
+            window.revokeGroupPermission = revokeGroupPermission;
+            window.delegatePermission = delegatePermission;
+            window.loadDelegatedPermissions = loadDelegatedPermissions;
+            window.revokeDelegation = revokeDelegation;
+            window.viewDelegation = viewDelegation;
+            window.navigateTo = navigateTo;
+            window.switchTab = switchTab;
+            window.handleGlobalSearch = handleGlobalSearch;
+            window.openExportModal = openExportModal;
+            window.closeExportModal = closeExportModal;
+            window.exportData = exportData;
+            window.openAIAdvisor = openAIAdvisor;
+            window.showNotifications = showNotifications;
+            window.handleSidebarAction = handleSidebarAction;
+            window.changePagePerms = changePagePerms;
+            window.goToPagePerms = goToPagePerms;
+            window.apiCall = apiCall;
+            window.showToast = showToast;
+            window.showLoading = showLoading;
+            window.escapeHtml = escapeHtml;
+            window.hasPermission = hasPermission;
+            window.requirePermission = requirePermission;
+            window.ROLES = ROLES;
+            window.currentUserRole = currentUserRole;
+            window.openScreens = openScreens;  // إضافة الدالة الجديدة للنطاق العام
+        </script>
+</main></body>
+</html>
