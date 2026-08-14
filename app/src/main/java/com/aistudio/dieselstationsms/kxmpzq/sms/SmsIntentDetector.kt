@@ -221,9 +221,6 @@ class SmsIntentDetector {
         // Intent Detection
         // ═══════════════════════════════════════════════════════
 
-        fun normalizeForMatching(value: String?): String {
-            return normalizeText(value)
-        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2400,6 +2397,16 @@ class SmsIntentDetector {
     // ═══════════════════════════════════════════════════════════════
     // Text Normalization
     // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Normalizes text for intent matching.
+     *
+     * This is an instance method because normalizeText() is an instance
+     * helper and is not part of the companion object.
+     */
+    fun normalizeForMatching(value: String?): String {
+        return normalizeText(value)
+    }
 
     private fun normalizeText(
         value: String?

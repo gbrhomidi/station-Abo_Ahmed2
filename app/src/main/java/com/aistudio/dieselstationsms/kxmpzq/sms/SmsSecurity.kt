@@ -120,6 +120,12 @@ class SmsSecurity(
         private const val CLAIM_STALE_TIMEOUT_MS = 2L * 60L * 1000L
 
         /**
+         * Durable phase markers stored in the existing message_preview column.
+         */
+        private const val CLAIM_MARKER = "__SMS_CLAIM__"
+        private const val BUSINESS_MARKER = "__SMS_BUSINESS_STARTED__"
+
+        /**
          * الحد الأقصى لسجل التدقيق المخزن في SharedPreferences.
          */
         private const val MAX_AUDIT_LOG_LENGTH = 10_000
@@ -260,7 +266,10 @@ class SmsSecurity(
                     put("phone", normalizedPhone)
                     put(
                         "message_preview",
-                        sanitizePreview(message).take(100)
+                        buildClaimPreview(
+                            CLAIM_MARKER,
+                            message
+                        )
                     )
                     // Negative timestamp means: claim in progress.
                     put("processed_at", -now)
@@ -280,9 +289,9 @@ class SmsSecurity(
                     )
                 }
 
-                val existingTimestamp = database.query(
+                val existingRecord = database.query(
                     HASH_TABLE,
-                    arrayOf("processed_at"),
+                    arrayOf("processed_at", "message_preview"),
                     "message_hash = ?",
                     arrayOf(hash),
                     null,
@@ -291,16 +300,19 @@ class SmsSecurity(
                     "1"
                 ).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        cursor.getLong(0)
+                        cursor.getLong(0) to cursor.getString(1)
                     } else {
                         null
                     }
                 }
 
-                if (existingTimestamp == null) {
+                if (existingRecord == null) {
                     database.setTransactionSuccessful()
                     return@withContext SmsClaimResult.Unavailable
                 }
+
+                val existingTimestamp = existingRecord.first
+                val existingPreview = existingRecord.second.orEmpty()
 
                 if (existingTimestamp > 0L && existingTimestamp >= cutoff) {
                     database.setTransactionSuccessful()
@@ -311,9 +323,24 @@ class SmsSecurity(
                     if (existingTimestamp < 0L) -existingTimestamp
                     else existingTimestamp
 
+                // Once business work has started, never auto-take over an
+                // uncertain claim. This prevents a retry from duplicating
+                // a financial side effect after timeout/cancellation.
+                val businessAlreadyStarted =
+                    existingTimestamp < 0L &&
+                        existingPreview.startsWith(BUSINESS_MARKER)
+
+                if (businessAlreadyStarted) {
+                    database.setTransactionSuccessful()
+                    return@withContext SmsClaimResult.InProgress
+                }
+
+                // Only a stale pre-business claim may be taken over.
                 val canTakeOver =
                     existingTimestamp > 0L && existingTimestamp < cutoff ||
-                        existingTimestamp < 0L && claimTimestamp <= staleCutoff
+                        existingTimestamp < 0L &&
+                            existingPreview.startsWith(CLAIM_MARKER) &&
+                            claimTimestamp <= staleCutoff
 
                 if (!canTakeOver) {
                     database.setTransactionSuccessful()
@@ -326,7 +353,10 @@ class SmsSecurity(
                         put("phone", normalizedPhone)
                         put(
                             "message_preview",
-                            sanitizePreview(message).take(100)
+                            buildClaimPreview(
+                                CLAIM_MARKER,
+                                message
+                            )
                         )
                         put("processed_at", -now)
                     },
@@ -365,7 +395,7 @@ class SmsSecurity(
         claim: SmsClaim,
         phone: String,
         message: String
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Boolean = withContext(NonCancellable + Dispatchers.IO) {
 
         val now = System.currentTimeMillis()
         val updated = try {
@@ -398,6 +428,46 @@ class SmsSecurity(
             false
         }
     }
+
+    /**
+     * Marks the durable boundary immediately before business side effects.
+     */
+    suspend fun markSmsBusinessStarted(
+        claim: SmsClaim,
+        message: String
+    ): Boolean = withContext(NonCancellable + Dispatchers.IO) {
+
+        val updated = try {
+            db.writableDatabase.update(
+                HASH_TABLE,
+                ContentValues().apply {
+                    put(
+                        "message_preview",
+                        buildClaimPreview(
+                            BUSINESS_MARKER,
+                            message
+                        )
+                    )
+                },
+                "message_hash = ? AND processed_at = ?",
+                arrayOf(claim.hash, (-claim.claimedAt).toString())
+            )
+        } catch (e: SQLiteException) {
+            Log.e(
+                TAG,
+                "Failed to mark SMS business phase: ${e.javaClass.simpleName}",
+                e
+            )
+            0
+        }
+
+        updated == 1
+    }
+
+    private fun buildClaimPreview(
+        marker: String,
+        message: String
+    ): String = marker + sanitizePreview(message).take(96)
 
     /**
      * يحرر claim الفاشلة فقط إذا كانت ما زالت تملك token نفسه.

@@ -270,6 +270,7 @@ class SmsProcessor(
             PhoneUtils.normalize(sender).orEmpty()
 
         var smsClaim: SmsSecurity.SmsClaim? = null
+        var businessStarted = false
 
         return try {
 
@@ -581,6 +582,22 @@ class SmsProcessor(
             /*
              * التنفيذ الرئيسي.
              */
+            val claim = smsClaim
+                ?: return false
+
+            val businessClaimed =
+                security.markSmsBusinessStarted(
+                    claim,
+                    rawBody
+                )
+
+            if (!businessClaimed) {
+                security.releaseSmsClaim(claim)
+                return false
+            }
+
+            businessStarted = true
+
             val processed =
                 handleSmartMessage(
                     customer,
@@ -592,7 +609,7 @@ class SmsProcessor(
              * إكمال claim بعد نجاح العملية أو تحريره عند الفشل.
              */
             smsClaim?.let {
-                if (processed) {
+                if (businessStarted) {
                     val completed =
                         security.completeSmsClaim(
                             it,
@@ -603,11 +620,15 @@ class SmsProcessor(
                     if (!completed) {
                         Log.e(
                             TAG,
-                            "SMS business logic succeeded but claim completion failed"
+                            "SMS business claim finalization failed; claim retained"
                         )
                     }
                 } else {
-                    security.releaseSmsClaim(it)
+                    security.completeSmsClaim(
+                        it,
+                        sender,
+                        rawBody
+                    )
                 }
             }
 
@@ -641,15 +662,29 @@ class SmsProcessor(
 
         } catch (e: CancellationException) {
 
-            smsClaim?.let {
-                security.releaseSmsClaim(it)
+            if (!businessStarted) {
+                smsClaim?.let {
+                    security.releaseSmsClaim(it)
+                }
+            } else {
+                Log.w(
+                    TAG,
+                    "SMS cancelled after business start; retaining claim"
+                )
             }
             throw e
 
         } catch (e: Exception) {
 
-            smsClaim?.let {
-                security.releaseSmsClaim(it)
+            if (!businessStarted) {
+                smsClaim?.let {
+                    security.releaseSmsClaim(it)
+                }
+            } else {
+                Log.w(
+                    TAG,
+                    "SMS failed after business start; retaining claim"
+                )
             }
 
             val errorId =
