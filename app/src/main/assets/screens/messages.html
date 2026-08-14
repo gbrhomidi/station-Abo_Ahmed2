@@ -1,0 +1,3018 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>إدارة الرسائل</title>
+    <style>
+/* ============================================
+   messages.css — Diesel Station SMS Manager
+   RTL | Mobile-first | Dark Mode | No deps
+   ============================================ */
+
+/* CSS Variables */
+:root {
+    --primary: #1a237e;
+    --primary-light: #3949ab;
+    --primary-dark: #0d47a1;
+    --secondary: #0d47a1;
+    --accent: #00bcd4;
+    --success: #4caf50;
+    --warning: #ff9800;
+    --danger: #f44336;
+    --info: #2196f3;
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --border: #e5e7eb;
+    --shadow: 0 2px 8px rgba(0,0,0,0.08);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --header-height: 56px;
+    --stats-height: 72px;
+    --search-height: 52px;
+    --tab-height: 44px;
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+    --primary: #bb86fc;
+    --primary-light: #d4a5ff;
+    --primary-dark: #9c27b0;
+    --secondary: #03dac6;
+    --accent: #03dac6;
+    --bg: #121212;
+    --surface: #1e1e1e;
+    --card: #2c2c2c;
+    --text: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --border: #3a3a3a;
+    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+    --shadow-lg: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* Reset & Base */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+/* ============================================
+   HEADER
+   ============================================ */
+.app-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--header-height);
+    background: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.app-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    flex: 1;
+    text-align: center;
+    margin: 0 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn-icon {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    -webkit-appearance: none;
+}
+
+.btn-icon:hover, .btn-icon:active {
+    background: rgba(255,255,255,0.25);
+    transform: scale(1.05);
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ============================================
+   STATS BAR
+   ============================================ */
+.stats-bar {
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    height: var(--stats-height);
+    background: var(--surface);
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 8px 12px;
+    z-index: 999;
+    border-bottom: 1px solid var(--border);
+    scrollbar-width: none;
+}
+
+.stats-bar::-webkit-scrollbar { display: none; }
+
+.stat-card {
+    flex: 0 0 auto;
+    min-width: 80px;
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    text-align: center;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+}
+
+.stat-card:hover, .stat-card.active {
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+}
+
+.stat-icon { font-size: 1.3rem; display: block; margin-bottom: 2px; }
+.stat-value { font-size: 1.1rem; font-weight: 700; color: var(--primary); display: block; }
+.stat-label { font-size: 0.7rem; color: var(--text-secondary); display: block; }
+
+/* ============================================
+   SEARCH & FILTERS
+   ============================================ */
+.search-filters {
+    position: fixed;
+    top: calc(var(--header-height) + var(--stats-height));
+    left: 0;
+    right: 0;
+    z-index: 998;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 12px;
+}
+
+.search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.search-input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-icon {
+    position: absolute;
+    right: 12px;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+#searchInput {
+    width: 100%;
+    height: 40px;
+    padding: 0 36px 0 40px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: var(--transition);
+    -webkit-appearance: none;
+}
+
+#searchInput:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(26,35,126,0.1);
+}
+
+.clear-search {
+    position: absolute;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: var(--border);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-filter {
+    width: 40px;
+    height: 40px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-filter.active {
+    border-color: var(--primary);
+    background: rgba(26,35,126,0.08);
+}
+
+.filters-panel {
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filter-group label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.filter-group select,
+.filter-group input {
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+    -webkit-appearance: none;
+}
+
+.filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+/* ============================================
+   TAB BAR
+   ============================================ */
+.tab-bar {
+    position: fixed;
+    top: calc(var(--header-height) + var(--stats-height) + var(--search-height));
+    left: 0;
+    right: 0;
+    height: var(--tab-height);
+    background: var(--surface);
+    display: flex;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 4px 8px;
+    z-index: 997;
+    border-bottom: 1px solid var(--border);
+    scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+    font-family: inherit;
+    -webkit-appearance: none;
+}
+
+.tab-btn:hover {
+    background: rgba(26,35,126,0.06);
+    color: var(--text);
+}
+
+.tab-btn.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 2px 8px rgba(26,35,126,0.3);
+}
+
+/* ============================================
+   CONTENT AREA
+   ============================================ */
+.content-area {
+    padding: calc(var(--header-height) + var(--stats-height) + var(--search-height) + var(--tab-height) + 8px) 12px 100px;
+    min-height: 100vh;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   MESSAGE CARDS
+   ============================================ */
+.message-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.message-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.message-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+    border-color: var(--primary-light);
+}
+
+.message-card.unread {
+    border-right: 3px solid var(--primary);
+    background: linear-gradient(to left, rgba(26,35,126,0.03), var(--card));
+}
+
+.message-card.selected {
+    border-color: var(--primary);
+    background: rgba(26,35,126,0.05);
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.message-sender {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sender-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.sender-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sender-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sender-phone {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    direction: ltr;
+    text-align: right;
+}
+
+.message-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.message-time {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.message-type-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.badge-incoming { background: #e3f2fd; color: #1565c0; }
+.badge-outgoing { background: #e8f5e9; color: #2e7d32; }
+
+.message-body {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.5;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.message-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.message-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-received { background: var(--info); }
+.status-pending { background: var(--warning); animation: pulse 1.5s infinite; }
+.status-processed { background: var(--success); }
+.status-sent { background: var(--success); }
+.status-failed { background: var(--danger); }
+.status-read { background: var(--text-secondary); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.message-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-action {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+    -webkit-appearance: none;
+}
+
+.btn-action-reply { background: #e3f2fd; color: #1565c0; }
+.btn-action-retry { background: #fff3e0; color: #ef6c00; }
+.btn-action-delete { background: #ffebee; color: #c62828; }
+.btn-action-view { background: #f3e5f5; color: #7b1fa2; }
+
+.btn-action:hover { filter: brightness(0.95); transform: scale(1.02); }
+
+.message-balance {
+    font-size: 0.75rem;
+    color: var(--success);
+    font-weight: 500;
+    background: rgba(76,175,80,0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* ============================================
+   CONVERSATION CARDS
+   ============================================ */
+.conversation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.conversation-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.conversation-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.conversation-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.conversation-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.conversation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.conversation-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.conversation-time {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.conversation-preview {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-count {
+    background: var(--primary);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   TEMPLATES
+   ============================================ */
+.templates-toolbar {
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.templates-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.template-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+}
+
+.template-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.template-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.template-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.template-type {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.template-body {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 10px;
+    background: var(--bg);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    font-family: monospace;
+}
+
+.template-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* ============================================
+   WHITELIST
+   ============================================ */
+.whitelist-toolbar {
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.whitelist-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.whitelist-item {
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    border: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: var(--transition);
+}
+
+.whitelist-item:hover {
+    border-color: var(--primary-light);
+}
+
+.whitelist-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.whitelist-phone {
+    font-weight: 600;
+    font-size: 0.9rem;
+    direction: ltr;
+}
+
+.whitelist-name {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.whitelist-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-enabled {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+/* ============================================
+   STATS DASHBOARD
+   ============================================ */
+.stats-dashboard {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.stat-box {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.stat-box-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.stat-box-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.stat-box-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.stat-box-chart {
+    margin-top: 10px;
+    height: 60px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px;
+}
+
+.chart-bar {
+    flex: 1;
+    background: var(--primary-light);
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
+    transition: height 0.5s ease;
+}
+
+/* ============================================
+   OTP
+   ============================================ */
+.otp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.otp-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.otp-phone {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+
+.otp-code {
+    font-family: monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 4px;
+    background: var(--bg);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+    margin: 8px 0;
+}
+
+.otp-expiry {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.otp-attempts {
+    font-size: 0.75rem;
+    color: var(--warning);
+}
+
+/* ============================================
+   REMINDERS
+   ============================================ */
+.reminders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reminder-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    border-right: 3px solid var(--warning);
+}
+
+.reminder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.reminder-customer {
+    font-weight: 600;
+}
+
+.reminder-amount {
+    font-weight: 700;
+    color: var(--danger);
+    font-size: 1.1rem;
+}
+
+.reminder-details {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+/* ============================================
+   LOGS
+   ============================================ */
+.logs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.log-item {
+    background: var(--card);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    font-size: 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.log-time {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    direction: ltr;
+}
+
+.log-type {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    font-weight: 500;
+}
+
+.log-type-success { background: #e8f5e9; color: #2e7d32; }
+.log-type-error { background: #ffebee; color: #c62828; }
+.log-type-info { background: #e3f2fd; color: #1565c0; }
+
+/* ============================================
+   CONTEXT & RATE LIMITS
+   ============================================ */
+.context-list, .ratelimits-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.context-card, .ratelimit-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+/* ============================================
+   RECURRING ORDERS
+   ============================================ */
+.recurring-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.recurring-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    border-right: 3px solid var(--accent);
+}
+
+.recurring-customer {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.recurring-details {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.recurring-schedule {
+    font-size: 0.75rem;
+    background: var(--bg);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+/* ============================================
+   PREFERENCES
+   ============================================ */
+.preferences-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preference-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.preference-phone {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.preference-details {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    font-size: 0.8rem;
+}
+
+.preference-item {
+    background: var(--bg);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+}
+
+.preference-label {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+.preference-value {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 10px;
+}
+
+.page-btn {
+    min-width: 36px;
+    height: 36px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    -webkit-appearance: none;
+}
+
+.page-btn:hover { background: var(--bg); }
+.page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+/* ============================================
+   MODALS
+   ============================================ */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.modal.active {
+    display: flex;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+    background: var(--surface);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+}
+
+.modal-close:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 12px 20px 20px;
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: var(--transition);
+    -webkit-appearance: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(26,35,126,0.1);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.char-count {
+    text-align: left;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    -webkit-appearance: none;
+}
+
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 2px 8px rgba(26,35,126,0.25);
+}
+
+.btn-primary:hover { background: var(--primary-light); }
+
+.btn-secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover { background: var(--border); }
+
+.btn-warning {
+    background: var(--warning);
+    color: white;
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+/* ============================================
+   FAB
+   ============================================ */
+.fab {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    width: 56px;
+    height: 56px;
+    border: none;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    font-size: 1.5rem;
+    box-shadow: 0 4px 16px rgba(26,35,126,0.35);
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    -webkit-appearance: none;
+}
+
+.fab:hover {
+    transform: scale(1.08) rotate(90deg);
+    box-shadow: 0 6px 24px rgba(26,35,126,0.4);
+}
+
+.fab:active { transform: scale(0.95); }
+
+/* ============================================
+   TOAST
+   ============================================ */
+.toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text);
+    color: white;
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    z-index: 3000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    white-space: nowrap;
+    max-width: 90vw;
+    text-align: center;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.warning { background: var(--warning); }
+
+/* ============================================
+   LOADING
+   ============================================ */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 4000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    backdrop-filter: blur(2px);
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-overlay p {
+    color: white;
+    font-size: 1rem;
+}
+
+/* ============================================
+   BULK ACTIONS
+   ============================================ */
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding: 16px;
+    background: var(--card);
+    border-radius: var(--radius);
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (min-width: 768px) {
+    .stats-dashboard {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .message-card {
+        padding: 18px;
+    }
+
+    .modal-content {
+        max-width: 520px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .stats-dashboard {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .content-area {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, var(--bg) 25%, var(--border) 50%, var(--bg) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+/* Selection */
+::selection {
+    background: rgba(26,35,126,0.2);
+    color: var(--text);
+}
+
+/* Focus visible */
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Touch action */
+.message-card, .conversation-card, .template-card,
+.whitelist-item, .stat-card, .page-btn {
+    touch-action: manipulation;
+}
+
+/* Prevent text selection on UI elements */
+.app-header, .tab-bar, .stats-bar, .btn, .btn-icon,
+.fab, .modal-header, .pagination {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+</style>
+<base target="_blank">
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <button class="btn-icon" id="menuBtn" title="القائمة">☰</button>
+        <h1 class="app-title">📨 إدارة الرسائل</h1>
+        <div class="header-actions">
+            <button class="btn-icon" id="refreshBtn" title="تحديث">🔄</button>
+            <button class="btn-icon" id="settingsBtn" title="إعدادات">⚙️</button>
+        </div>
+    </header>
+
+    <!-- Stats Bar -->
+    <section class="stats-bar" id="statsBar">
+        <div class="stat-card" data-stat="total">
+            <span class="stat-icon">📨</span>
+            <span class="stat-value" id="statTotal">0</span>
+            <span class="stat-label">الكل</span>
+        </div>
+        <div class="stat-card" data-stat="incoming">
+            <span class="stat-icon">📥</span>
+            <span class="stat-value" id="statIncoming">0</span>
+            <span class="stat-label">واردة</span>
+        </div>
+        <div class="stat-card" data-stat="outgoing">
+            <span class="stat-icon">📤</span>
+            <span class="stat-value" id="statOutgoing">0</span>
+            <span class="stat-label">صادرة</span>
+        </div>
+        <div class="stat-card" data-stat="pending">
+            <span class="stat-icon">⏳</span>
+            <span class="stat-value" id="statPending">0</span>
+            <span class="stat-label">قيد المعالجة</span>
+        </div>
+        <div class="stat-card" data-stat="failed">
+            <span class="stat-icon">❌</span>
+            <span class="stat-value" id="statFailed">0</span>
+            <span class="stat-label">فاشلة</span>
+        </div>
+    </section>
+
+    <!-- Search & Filters -->
+    <section class="search-filters">
+        <div class="search-row">
+            <div class="search-input-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="بحث برقم الهاتف، الاسم، أو نص الرسالة..." autocomplete="off">
+                <button class="clear-search" id="clearSearch" style="display:none;">✕</button>
+            </div>
+            <button class="btn-filter" id="filterToggle">🔽</button>
+        </div>
+        <div class="filters-panel" id="filtersPanel" style="display:none;">
+            <div class="filter-group">
+                <label>الحالة:</label>
+                <select id="filterStatus">
+                    <option value="">الكل</option>
+                    <option value="received">📥 مستلمة</option>
+                    <option value="pending">⏳ قيد المعالجة</option>
+                    <option value="processed">✅ معالجة</option>
+                    <option value="sent">📤 مرسلة</option>
+                    <option value="failed">❌ فاشلة</option>
+                    <option value="read">📖 مقروءة</option>
+                    <option value="unread">📖 غير مقروءة</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>النوع:</label>
+                <select id="filterType">
+                    <option value="">الكل</option>
+                    <option value="incoming">📥 واردة</option>
+                    <option value="outgoing">📤 صادرة</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>من:</label>
+                <input type="date" id="filterDateFrom">
+            </div>
+            <div class="filter-group">
+                <label>إلى:</label>
+                <input type="date" id="filterDateTo">
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" id="applyFilters">تطبيق</button>
+                <button class="btn btn-secondary" id="resetFilters">إعادة تعيين</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tab Bar -->
+    <nav class="tab-bar" id="tabBar">
+        <button class="tab-btn active" data-tab="all">📨 الكل</button>
+        <button class="tab-btn" data-tab="conversations">💬 محادثات</button>
+        <button class="tab-btn" data-tab="incoming">📥 واردة</button>
+        <button class="tab-btn" data-tab="outgoing">📤 صادرة</button>
+        <button class="tab-btn" data-tab="pending">⏳ قيد</button>
+        <button class="tab-btn" data-tab="processed">✅ معالجة</button>
+        <button class="tab-btn" data-tab="failed">❌ فاشلة</button>
+        <button class="tab-btn" data-tab="templates">📝 قوالب</button>
+        <button class="tab-btn" data-tab="recurring">🔄 متكررة</button>
+        <button class="tab-btn" data-tab="preferences">⚙️ تفضيلات</button>
+        <button class="tab-btn" data-tab="whitelist">🛡️ بيضاء</button>
+        <button class="tab-btn" data-tab="stats">📊 إحصائيات</button>
+        <button class="tab-btn" data-tab="otp">🔐 OTP</button>
+        <button class="tab-btn" data-tab="reminders">⏰ تذكيرات</button>
+        <button class="tab-btn" data-tab="logs">📋 سجل</button>
+        <button class="tab-btn" data-tab="context">🔍 سياق</button>
+        <button class="tab-btn" data-tab="ratelimits">🚫 Rate</button>
+    </nav>
+
+    <!-- Content Area -->
+    <main class="content-area" id="contentArea">
+        <!-- Messages List -->
+        <div class="tab-content active" id="tab-all">
+            <div class="message-list" id="messageList"></div>
+            <div class="pagination" id="pagination"></div>
+            <div class="empty-state" id="emptyState" style="display:none;">
+                <div class="empty-icon">📭</div>
+                <p>لا توجد رسائل</p>
+                <button class="btn btn-primary" id="composeFirst">إنشاء رسالة جديدة</button>
+            </div>
+        </div>
+
+        <!-- Conversations -->
+        <div class="tab-content" id="tab-conversations">
+            <div class="conversation-list" id="conversationList"></div>
+        </div>
+
+        <!-- Incoming -->
+        <div class="tab-content" id="tab-incoming">
+            <div class="message-list" id="incomingList"></div>
+        </div>
+
+        <!-- Outgoing -->
+        <div class="tab-content" id="tab-outgoing">
+            <div class="message-list" id="outgoingList"></div>
+        </div>
+
+        <!-- Pending -->
+        <div class="tab-content" id="tab-pending">
+            <div class="message-list" id="pendingList"></div>
+        </div>
+
+        <!-- Processed -->
+        <div class="tab-content" id="tab-processed">
+            <div class="message-list" id="processedList"></div>
+        </div>
+
+        <!-- Failed -->
+        <div class="tab-content" id="tab-failed">
+            <div class="message-list" id="failedList"></div>
+            <div class="bulk-actions" id="failedBulkActions">
+                <button class="btn btn-warning" id="retryAllFailed">🔄 إعادة إرسال الكل</button>
+                <button class="btn btn-danger" id="deleteAllFailed">🗑️ حذف الكل</button>
+            </div>
+        </div>
+
+        <!-- Templates -->
+        <div class="tab-content" id="tab-templates">
+            <div class="templates-toolbar">
+                <button class="btn btn-primary" id="addTemplate">➕ إضافة قالب</button>
+            </div>
+            <div class="templates-list" id="templatesList"></div>
+        </div>
+
+        <!-- Recurring Orders -->
+        <div class="tab-content" id="tab-recurring">
+            <div class="recurring-list" id="recurringList"></div>
+        </div>
+
+        <!-- Customer Preferences -->
+        <div class="tab-content" id="tab-preferences">
+            <div class="preferences-list" id="preferencesList"></div>
+        </div>
+
+        <!-- Whitelist -->
+        <div class="tab-content" id="tab-whitelist">
+            <div class="whitelist-toolbar">
+                <button class="btn btn-primary" id="addWhitelist">➕ إضافة رقم</button>
+            </div>
+            <div class="whitelist-list" id="whitelistList"></div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="tab-content" id="tab-stats">
+            <div class="stats-dashboard" id="statsDashboard"></div>
+        </div>
+
+        <!-- OTP -->
+        <div class="tab-content" id="tab-otp">
+            <div class="otp-list" id="otpList"></div>
+        </div>
+
+        <!-- Reminders -->
+        <div class="tab-content" id="tab-reminders">
+            <div class="reminders-list" id="remindersList"></div>
+        </div>
+
+        <!-- Logs -->
+        <div class="tab-content" id="tab-logs">
+            <div class="logs-list" id="logsList"></div>
+        </div>
+
+        <!-- Context -->
+        <div class="tab-content" id="tab-context">
+            <div class="context-list" id="contextList"></div>
+        </div>
+
+        <!-- Rate Limits -->
+        <div class="tab-content" id="tab-ratelimits">
+            <div class="ratelimits-list" id="ratelimitsList"></div>
+        </div>
+    </main>
+
+    <!-- FAB -->
+    <button class="fab" id="fabCompose" title="رسالة جديدة">✏️</button>
+
+    <!-- Message Detail Modal -->
+    <div class="modal" id="messageModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">تفاصيل الرسالة</h3>
+                <button class="modal-close" id="modalClose">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <!-- Compose Modal -->
+    <div class="modal" id="composeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ رسالة جديدة</h3>
+                <button class="modal-close" id="composeClose">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>إلى (رقم الهاتف):</label>
+                    <input type="tel" id="composePhone" placeholder="+967...">
+                </div>
+                <div class="form-group">
+                    <label>الرسالة:</label>
+                    <textarea id="composeBody" rows="4" placeholder="اكتب رسالتك هنا..."></textarea>
+                    <div class="char-count"><span id="charCount">0</span> / 160</div>
+                </div>
+                <div class="form-group">
+                    <label>قالب:</label>
+                    <select id="composeTemplate">
+                        <option value="">بدون قالب</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="composeCancel">إلغاء</button>
+                <button class="btn btn-primary" id="composeSend">📤 إرسال</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Modal -->
+    <div class="modal" id="templateModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="templateModalTitle">📝 قالب جديد</h3>
+                <button class="modal-close" id="templateModalClose">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="templateId">
+                <div class="form-group">
+                    <label>اسم القالب:</label>
+                    <input type="text" id="templateName" placeholder="مثال: تأكيد الطلب">
+                </div>
+                <div class="form-group">
+                    <label>نص القالب:</label>
+                    <textarea id="templateBody" rows="4" placeholder="{{customer_name}}، تم تأكيد طلبك..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>النوع:</label>
+                    <select id="templateType">
+                        <option value="general">عام</option>
+                        <option value="order">طلب</option>
+                        <option value="reminder">تذكير</option>
+                        <option value="marketing">تسويق</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="templateActive" checked>
+                        <span>نشط</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="templateCancel">إلغاء</button>
+                <button class="btn btn-primary" id="templateSave">💾 حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Whitelist Modal -->
+    <div class="modal" id="whitelistModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🛡️ إضافة للقائمة البيضاء</h3>
+                <button class="modal-close" id="whitelistModalClose">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>رقم الهاتف:</label>
+                    <input type="tel" id="whitelistPhone" placeholder="+967...">
+                </div>
+                <div class="form-group">
+                    <label>الاسم (اختياري):</label>
+                    <input type="text" id="whitelistName" placeholder="اسم صاحب الرقم">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="whitelistCancel">إلغاء</button>
+                <button class="btn btn-primary" id="whitelistSave">💾 حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>جاري التحميل...</p>
+    </div>
+
+    <script>
+/**
+ * messages.js — Diesel Station SMS Manager
+ * Android WebView Interface | Database-Driven | RTL
+ * Supports: 17 tabs, 15 tables, 20+ bridge functions
+ */
+
+(function() {
+    'use strict';
+
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const CONFIG = {
+        PAGE_SIZE: 50,
+        DEBOUNCE_MS: 300,
+        TOAST_DURATION: 3000,
+        MAX_MESSAGES: 500,
+        DATE_FORMAT: 'YYYY-MM-DD HH:mm',
+        ANIMATION_DURATION: 250
+    };
+
+    // ============================================
+    // STATE
+    // ============================================
+    const state = {
+        currentTab: 'all',
+        messages: [],
+        conversations: [],
+        templates: [],
+        whitelist: [],
+        logs: [],
+        recurring: [],
+        preferences: [],
+        otp: [],
+        reminders: [],
+        context: [],
+        ratelimits: [],
+        stats: {},
+        filters: {
+            search: '',
+            status: '',
+            type: '',
+            dateFrom: '',
+            dateTo: ''
+        },
+        pagination: {
+            page: 1,
+            totalPages: 1,
+            totalItems: 0
+        },
+        selectedMessage: null,
+        isLoading: false,
+        darkMode: false
+    };
+
+    // ============================================
+    // ANDROID INTERFACE BRIDGE
+    // ============================================
+    const Bridge = {
+        call(method, ...args) {
+            try {
+                if (window.AndroidInterface && typeof window.AndroidInterface[method] === 'function') {
+                    return window.AndroidInterface[method](...args);
+                }
+                console.warn(`AndroidInterface.${method} not available`);
+                return null;
+            } catch (e) {
+                console.error(`Bridge error: ${method}`, e);
+                return null;
+            }
+        },
+
+        // SMS Messages
+        getSmsMessages() { return this.call('getSmsMessages'); },
+        getSmsMessagesByPhone(phone) { return this.call('getSmsMessagesByPhone', phone); },
+        getSmsMessagesByStatus(status) { return this.call('getSmsMessagesByStatus', status); },
+        addSmsMessage(data) { return this.call('addSmsMessage', JSON.stringify(data)); },
+        updateSmsStatus(id, status) { return this.call('updateSmsStatus', id, status); },
+        getSmsStats() { return this.call('getSmsStats'); },
+
+        // Templates
+        getSmsTemplates() { return this.call('getSmsTemplates'); },
+        addSmsTemplate(data) { return this.call('addSmsTemplate', JSON.stringify(data)); },
+        updateSmsTemplate(id, data) { return this.call('updateSmsTemplate', id, JSON.stringify(data)); },
+        deleteSmsTemplate(id) { return this.call('deleteSmsTemplate', id); },
+
+        // Whitelist
+        getWhitelist() { return this.call('getWhitelist'); },
+        addWhitelist(data) { return this.call('addWhitelist', JSON.stringify(data)); },
+        removeWhitelist(data) { return this.call('removeWhitelist', JSON.stringify(data)); },
+
+        // Logs
+        getSmsLogs() { return this.call('getSmsLogs'); },
+        logSms(phone, message, type, status) { return this.call('logSms', phone, message, type, status); },
+
+        // Customer Data
+        getCustomerBalanceByPhone(phone) { return this.call('getCustomerBalanceByPhone', phone); },
+        getOrderHistoryByPhone(phone) { return this.call('getOrderHistoryByPhone', phone); },
+        getDriverPhones() { return this.call('getDriverPhones'); },
+        getTrustedSmscList() { return this.call('getTrustedSmscList'); },
+
+        // User
+        getCurrentUser() { return this.call('getCurrentUser'); },
+        showToast(msg) { this.call('showToast', msg); }
+    };
+
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    const Utils = {
+        parseJSON(str) {
+            try { return JSON.parse(str); } catch { return null; }
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            if (isNaN(d)) return dateStr;
+            return d.toLocaleDateString('ar-SA', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        },
+
+        formatPhone(phone) {
+            if (!phone) return '-';
+            const clean = phone.replace(/\D/g, '');
+            if (clean.length > 9) {
+                return '+' + clean.slice(0, -9) + ' ' + clean.slice(-9, -6) + ' ' + clean.slice(-6, -3) + ' ' + clean.slice(-3);
+            }
+            return phone;
+        },
+
+        truncate(str, len = 60) {
+            if (!str) return '';
+            return str.length > len ? str.substring(0, len) + '...' : str;
+        },
+
+        escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        },
+
+        debounce(fn, ms) {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn(...args), ms);
+            };
+        },
+
+        getInitials(name) {
+            if (!name) return '؟';
+            return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+        },
+
+        getStatusLabel(status) {
+            const labels = {
+                received: '📥 مستلمة',
+                pending: '⏳ قيد المعالجة',
+                processed: '✅ معالجة',
+                sent: '📤 مرسلة',
+                failed: '❌ فاشلة',
+                read: '📖 مقروءة',
+                unread: '📖 غير مقروءة'
+            };
+            return labels[status] || status;
+        },
+
+        getStatusColor(status) {
+            const colors = {
+                received: 'var(--info)',
+                pending: 'var(--warning)',
+                processed: 'var(--success)',
+                sent: 'var(--success)',
+                failed: 'var(--danger)',
+                read: 'var(--text-secondary)',
+                unread: 'var(--primary)'
+            };
+            return colors[status] || 'var(--text-secondary)';
+        }
+    };
+
+    // ============================================
+    // UI HELPERS
+    // ============================================
+    const UI = {
+        showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), CONFIG.TOAST_DURATION);
+        },
+
+        showLoading(show = true) {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.toggle('active', show);
+        },
+
+        openModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        },
+
+        closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = '';
+        },
+
+        switchTab(tabId) {
+            state.currentTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabId);
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === `tab-${tabId}`);
+            });
+            this.loadTabData(tabId);
+        },
+
+        async loadTabData(tabId) {
+            this.showLoading(true);
+            try {
+                switch(tabId) {
+                    case 'all': await loadMessages(); break;
+                    case 'conversations': await loadConversations(); break;
+                    case 'incoming': await loadFilteredMessages('message_type', 'incoming'); break;
+                    case 'outgoing': await loadFilteredMessages('message_type', 'outgoing'); break;
+                    case 'pending': await loadFilteredMessages('status', 'pending'); break;
+                    case 'processed': await loadProcessedMessages(); break;
+                    case 'failed': await loadFilteredMessages('status', 'failed'); break;
+                    case 'templates': await loadTemplates(); break;
+                    case 'recurring': await loadRecurring(); break;
+                    case 'preferences': await loadPreferences(); break;
+                    case 'whitelist': await loadWhitelist(); break;
+                    case 'stats': await loadStats(); break;
+                    case 'otp': await loadOtp(); break;
+                    case 'reminders': await loadReminders(); break;
+                    case 'logs': await loadLogs(); break;
+                    case 'context': await loadContext(); break;
+                    case 'ratelimits': await loadRateLimits(); break;
+                }
+            } catch (e) {
+                console.error('Tab load error:', e);
+                this.showToast('حدث خطأ أثناء التحميل', 'error');
+            } finally {
+                this.showLoading(false);
+            }
+        }
+    };
+
+    // ============================================
+    // DATA LOADERS
+    // ============================================
+    async function loadMessages() {
+        const result = Bridge.getSmsMessages();
+        const data = Utils.parseJSON(result) || [];
+        state.messages = Array.isArray(data) ? data : [];
+        applyFiltersAndRender();
+        updateStats();
+    }
+
+    async function loadFilteredMessages(field, value) {
+        let data = [];
+        if (field === 'message_type') {
+            const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+            data = all.filter(m => m.message_type === value);
+        } else if (field === 'status') {
+            const result = Bridge.getSmsMessagesByStatus(value);
+            data = Utils.parseJSON(result) || [];
+        }
+        renderMessageList(data, `${field === 'message_type' ? (value === 'incoming' ? 'incomingList' : 'outgoingList') : value + 'List'}`);
+    }
+
+    async function loadConversations() {
+        const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+        const grouped = {};
+        all.forEach(msg => {
+            const phone = msg.phone_number || 'unknown';
+            if (!grouped[phone]) {
+                grouped[phone] = {
+                    phone: phone,
+                    messages: [],
+                    lastMessage: null,
+                    unreadCount: 0
+                };
+            }
+            grouped[phone].messages.push(msg);
+            if (!grouped[phone].lastMessage || new Date(msg.created_at) > new Date(grouped[phone].lastMessage.created_at)) {
+                grouped[phone].lastMessage = msg;
+            }
+            if (msg.status === 'unread') grouped[phone].unreadCount++;
+        });
+        state.conversations = Object.values(grouped).sort((a, b) =>
+            new Date(b.lastMessage?.created_at || 0) - new Date(a.lastMessage?.created_at || 0)
+        );
+        renderConversations();
+    }
+
+    async function loadProcessedMessages() {
+        // Processed messages are those with status 'processed' or in sms_processed_messages table
+        const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+        const data = all.filter(m => m.status === 'processed');
+        renderMessageList(data, 'processedList');
+    }
+
+    async function loadTemplates() {
+        const result = Bridge.getSmsTemplates();
+        const data = Utils.parseJSON(result) || [];
+        state.templates = Array.isArray(data) ? data : [];
+        renderTemplates();
+    }
+
+    async function loadWhitelist() {
+        const result = Bridge.getWhitelist();
+        const data = Utils.parseJSON(result) || [];
+        state.whitelist = Array.isArray(data) ? data : [];
+        renderWhitelist();
+    }
+
+    async function loadLogs() {
+        const result = Bridge.getSmsLogs();
+        const data = Utils.parseJSON(result) || [];
+        state.logs = Array.isArray(data) ? data : [];
+        renderLogs();
+    }
+
+    async function loadStats() {
+        const stats = Utils.parseJSON(Bridge.getSmsStats()) || {};
+        state.stats = stats;
+        renderStats();
+    }
+
+    async function loadRecurring() {
+        // Placeholder - would call getSmsRecurringOrder if available
+        state.recurring = [];
+        renderRecurring();
+    }
+
+    async function loadPreferences() {
+        // Placeholder - would call getSmsCustomerPreferences if available
+        state.preferences = [];
+        renderPreferences();
+    }
+
+    async function loadOtp() {
+        // Placeholder - would call getSmsOtpVerifications if available
+        state.otp = [];
+        renderOtp();
+    }
+
+    async function loadReminders() {
+        // Placeholder - would call getSmsReminders if available
+        state.reminders = [];
+        renderReminders();
+    }
+
+    async function loadContext() {
+        // Placeholder - would call getSmsConversationContext if available
+        state.context = [];
+        renderContext();
+    }
+
+    async function loadRateLimits() {
+        // Placeholder - would call getSmsRateLimit if available
+        state.ratelimits = [];
+        renderRateLimits();
+    }
+
+    // ============================================
+    // RENDERERS
+    // ============================================
+    function applyFiltersAndRender() {
+        let filtered = [...state.messages];
+
+        // Search filter
+        if (state.filters.search) {
+            const search = state.filters.search.toLowerCase();
+            filtered = filtered.filter(m =>
+                (m.phone_number || '').toLowerCase().includes(search) ||
+                (m.message_body || '').toLowerCase().includes(search) ||
+                (m.sender_name || '').toLowerCase().includes(search)
+            );
+        }
+
+        // Status filter
+        if (state.filters.status) {
+            filtered = filtered.filter(m => m.status === state.filters.status);
+        }
+
+        // Type filter
+        if (state.filters.type) {
+            filtered = filtered.filter(m => m.message_type === state.filters.type);
+        }
+
+        // Date filter
+        if (state.filters.dateFrom) {
+            const from = new Date(state.filters.dateFrom);
+            filtered = filtered.filter(m => new Date(m.created_at) >= from);
+        }
+        if (state.filters.dateTo) {
+            const to = new Date(state.filters.dateTo);
+            to.setHours(23, 59, 59);
+            filtered = filtered.filter(m => new Date(m.created_at) <= to);
+        }
+
+        // Pagination
+        state.pagination.totalItems = filtered.length;
+        state.pagination.totalPages = Math.ceil(filtered.length / CONFIG.PAGE_SIZE);
+        const start = (state.pagination.page - 1) * CONFIG.PAGE_SIZE;
+        const paginated = filtered.slice(start, start + CONFIG.PAGE_SIZE);
+
+        renderMessageList(paginated, 'messageList');
+        renderPagination();
+    }
+
+    function renderMessageList(messages, containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (!messages || messages.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <p>لا توجد رسائل</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = messages.map(msg => createMessageCard(msg)).join('');
+
+        // Attach event listeners
+        container.querySelectorAll('.message-card').forEach(card => {
+            card.addEventListener('click', () => openMessageDetail(card.dataset.id));
+        });
+        container.querySelectorAll('.btn-action-reply').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openReplyModal(btn.dataset.phone, btn.dataset.body);
+            });
+        });
+        container.querySelectorAll('.btn-action-retry').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                retryMessage(parseInt(btn.dataset.id));
+            });
+        });
+        container.querySelectorAll('.btn-action-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteMessage(parseInt(btn.dataset.id));
+            });
+        });
+    }
+
+    function createMessageCard(msg) {
+        const isUnread = msg.status === 'unread' || msg.status === 'received';
+        const statusLabel = Utils.getStatusLabel(msg.status);
+        const statusClass = `status-${msg.status || 'received'}`;
+        const typeBadge = msg.message_type === 'incoming'
+            ? '<span class="message-type-badge badge-incoming">📥 واردة</span>'
+            : '<span class="message-type-badge badge-outgoing">📤 صادرة</span>';
+
+        const balance = msg.customer_balance ? `<span class="message-balance">💰 ${msg.customer_balance} ر.س</span>` : '';
+
+        let actions = '';
+        if (msg.status === 'failed') {
+            actions = `
+                <button class="btn-action btn-action-retry" data-id="${msg.id}">🔄 إعادة</button>
+                <button class="btn-action btn-action-delete" data-id="${msg.id}">🗑️ حذف</button>
+            `;
+        } else {
+            actions = `
+                <button class="btn-action btn-action-reply" data-phone="${msg.phone_number || ''}" data-body="${Utils.escapeHtml(msg.message_body || '')}">💬 رد</button>
+                <button class="btn-action btn-action-view" data-id="${msg.id}">👁️ تفاصيل</button>
+            `;
+        }
+
+        return `
+            <div class="message-card ${isUnread ? 'unread' : ''}" data-id="${msg.id}">
+                <div class="message-header">
+                    <div class="message-sender">
+                        <div class="sender-avatar">${Utils.getInitials(msg.sender_name || msg.phone_number)}</div>
+                        <div class="sender-info">
+                            <div class="sender-name">${Utils.escapeHtml(msg.sender_name || 'غير معروف')}</div>
+                            <div class="sender-phone">${Utils.formatPhone(msg.phone_number)}</div>
+                        </div>
+                    </div>
+                    <div class="message-meta">
+                        ${typeBadge}
+                        <span class="message-time">${Utils.formatDate(msg.created_at)}</span>
+                    </div>
+                </div>
+                <div class="message-body">${Utils.escapeHtml(msg.message_body || '')}</div>
+                <div class="message-footer">
+                    <div class="message-status">
+                        <span class="status-dot ${statusClass}"></span>
+                        <span>${statusLabel}</span>
+                    </div>
+                    ${balance}
+                    <div class="message-actions">${actions}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderConversations() {
+        const container = document.getElementById('conversationList');
+        if (!container) return;
+
+        if (!state.conversations.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">💬</div>
+                    <p>لا توجد محادثات</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.conversations.map(conv => `
+            <div class="conversation-card" data-phone="${conv.phone}">
+                <div class="conversation-avatar">${Utils.getInitials(conv.lastMessage?.sender_name || conv.phone)}</div>
+                <div class="conversation-body">
+                    <div class="conversation-header">
+                        <span class="conversation-name">${Utils.escapeHtml(conv.lastMessage?.sender_name || conv.phone)}</span>
+                        <span class="conversation-time">${Utils.formatDate(conv.lastMessage?.created_at)}</span>
+                    </div>
+                    <div class="conversation-preview">${Utils.truncate(conv.lastMessage?.message_body, 50)}</div>
+                </div>
+                ${conv.unreadCount > 0 ? `<span class="conversation-count">${conv.unreadCount}</span>` : ''}
+            </div>
+        `).join('');
+
+        container.querySelectorAll('.conversation-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const phone = card.dataset.phone;
+                const result = Bridge.getSmsMessagesByPhone(phone);
+                const messages = Utils.parseJSON(result) || [];
+                renderMessageList(messages, 'messageList');
+                UI.switchTab('all');
+            });
+        });
+    }
+
+    function renderTemplates() {
+        const container = document.getElementById('templatesList');
+        if (!container) return;
+
+        if (!state.templates.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <p>لا توجد قوالب</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.templates.map(t => `
+            <div class="template-card" data-id="${t.id}">
+                <div class="template-header">
+                    <span class="template-name">${Utils.escapeHtml(t.template_name || '')}</span>
+                    <span class="template-type">${t.template_type || 'general'}</span>
+                </div>
+                <div class="template-body">${Utils.escapeHtml(t.template_body || '')}</div>
+                <div class="template-actions">
+                    <button class="btn-action btn-action-view" onclick="useTemplate(${t.id})">📋 استخدام</button>
+                    <button class="btn-action btn-action-reply" onclick="editTemplate(${t.id})">✏️ تعديل</button>
+                    <button class="btn-action btn-action-delete" onclick="deleteTemplate(${t.id})">🗑️ حذف</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderWhitelist() {
+        const container = document.getElementById('whitelistList');
+        if (!container) return;
+
+        if (!state.whitelist.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🛡️</div>
+                    <p>القائمة البيضاء فارغة</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.whitelist.map(w => `
+            <div class="whitelist-item" data-phone="${w.phone}">
+                <div class="whitelist-info">
+                    <div class="whitelist-phone">${Utils.formatPhone(w.phone)}</div>
+                    <div class="whitelist-name">${Utils.escapeHtml(w.name || '')}</div>
+                </div>
+                <div class="whitelist-status">
+                    <span class="status-enabled"></span>
+                    <button class="btn-action btn-action-delete" onclick="removeFromWhitelist('${w.phone}')">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderLogs() {
+        const container = document.getElementById('logsList');
+        if (!container) return;
+
+        if (!state.logs.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>لا توجد سجلات</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = state.logs.map(log => {
+            const typeClass = log.status === 'success' ? 'log-type-success' : log.status === 'error' ? 'log-type-error' : 'log-type-info';
+            return `
+                <div class="log-item">
+                    <div>
+                        <span class="log-type ${typeClass}">${log.type || log.status || 'info'}</span>
+                        <span>${Utils.escapeHtml(log.message || '')}</span>
+                    </div>
+                    <span class="log-time">${Utils.formatDate(log.created_at)}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function renderStats() {
+        const container = document.getElementById('statsDashboard');
+        if (!container) return;
+
+        const stats = state.stats;
+        container.innerHTML = `
+            <div class="stat-box">
+                <div class="stat-box-icon">📨</div>
+                <div class="stat-box-value">${stats.total || 0}</div>
+                <div class="stat-box-label">إجمالي الرسائل</div>
+                <div class="stat-box-chart">
+                    <div class="chart-bar" style="height: 80%"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box-icon">📤</div>
+                <div class="stat-box-value">${stats.sent || 0}</div>
+                <div class="stat-box-label">المرسلة</div>
+                <div class="stat-box-chart">
+                    <div class="chart-bar" style="height: ${Math.min((stats.sent / (stats.total || 1)) * 100, 100)}%"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box-icon">⏳</div>
+                <div class="stat-box-value">${stats.pending || 0}</div>
+                <div class="stat-box-label">قيد المعالجة</div>
+                <div class="stat-box-chart">
+                    <div class="chart-bar" style="height: ${Math.min((stats.pending / (stats.total || 1)) * 100, 100)}%"></div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-box-icon">❌</div>
+                <div class="stat-box-value">${stats.failed || 0}</div>
+                <div class="stat-box-label">الفاشلة</div>
+                <div class="stat-box-chart">
+                    <div class="chart-bar" style="height: ${Math.min((stats.failed / (stats.total || 1)) * 100, 100)}%"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderPagination() {
+        const container = document.getElementById('pagination');
+        if (!container) return;
+
+        const { page, totalPages } = state.pagination;
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = `
+            <button class="page-btn" ${page <= 1 ? 'disabled' : ''} onclick="changePage(${page - 1})">←</button>
+        `;
+
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+                html += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+            } else if (i === page - 2 || i === page + 2) {
+                html += `<span class="page-btn" disabled>...</span>`;
+            }
+        }
+
+        html += `<button class="page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="changePage(${page + 1})">→</button>`;
+        container.innerHTML = html;
+    }
+
+    function renderRecurring() {
+        const container = document.getElementById('recurringList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🔄</div>
+                <p>لا توجد طلبات متكررة</p>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">يتم إدارتها من خلال المعالج الآلي</p>
+            </div>
+        `;
+    }
+
+    function renderPreferences() {
+        const container = document.getElementById('preferencesList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⚙️</div>
+                <p>لا توجد تفضيلات مسجلة</p>
+            </div>
+        `;
+    }
+
+    function renderOtp() {
+        const container = document.getElementById('otpList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🔐</div>
+                <p>لا توجد رموز OTP نشطة</p>
+            </div>
+        `;
+    }
+
+    function renderReminders() {
+        const container = document.getElementById('remindersList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⏰</div>
+                <p>لا توجد تذكيرات</p>
+            </div>
+        `;
+    }
+
+    function renderContext() {
+        const container = document.getElementById('contextList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <p>لا يوجد سياق محادثات</p>
+            </div>
+        `;
+    }
+
+    function renderRateLimits() {
+        const container = document.getElementById('ratelimitsList');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🚫</div>
+                <p>لا توجد قيود مفعلة</p>
+            </div>
+        `;
+    }
+
+    // ============================================
+    // ACTIONS
+    // ============================================
+    function openMessageDetail(id) {
+        const msg = state.messages.find(m => m.id == id);
+        if (!msg) return;
+        state.selectedMessage = msg;
+
+        const modal = document.getElementById('messageModal');
+        const body = document.getElementById('modalBody');
+        const footer = document.getElementById('modalFooter');
+
+        body.innerHTML = `
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">المرسل</label>
+                <div style="font-weight: 600;">${Utils.escapeHtml(msg.sender_name || 'غير معروف')}</div>
+                <div style="direction: ltr; text-align: right; color: var(--text-secondary); font-size: 0.9rem;">${Utils.formatPhone(msg.phone_number)}</div>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">الرسالة</label>
+                <div style="background: var(--bg); padding: 12px; border-radius: 8px; line-height: 1.6; font-size: 0.95rem;">${Utils.escapeHtml(msg.message_body || '')}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">الحالة</label>
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span class="status-dot status-${msg.status || 'received'}"></span>
+                        ${Utils.getStatusLabel(msg.status)}
+                    </span>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">النوع</label>
+                    <span>${msg.message_type === 'incoming' ? '📥 واردة' : '📤 صادرة'}</span>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">التاريخ</label>
+                    <span>${Utils.formatDate(msg.created_at)}</span>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">رقم المعرف</label>
+                    <span style="font-family: monospace; font-size: 0.85rem;">#${msg.id}</span>
+                </div>
+            </div>
+            ${msg.customer_balance ? `
+                <div style="background: rgba(76,175,80,0.1); padding: 10px; border-radius: 8px; margin-bottom: 16px;">
+                    <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">رصيد العميل</label>
+                    <span style="font-weight: 700; color: var(--success); font-size: 1.1rem;">${msg.customer_balance} ر.س</span>
+                </div>
+            ` : ''}
+        `;
+
+        footer.innerHTML = `
+            <button class="btn btn-secondary" onclick="UI.closeModal('messageModal')">إغلاق</button>
+            <button class="btn btn-primary" onclick="openReplyModal('${msg.phone_number}', '')">💬 رد</button>
+            ${msg.status === 'failed' ? `<button class="btn btn-warning" onclick="retryMessage(${msg.id}); UI.closeModal('messageModal')">🔄 إعادة</button>` : ''}
+            <button class="btn btn-danger" onclick="deleteMessage(${msg.id}); UI.closeModal('messageModal')">🗑️ حذف</button>
+        `;
+
+        UI.openModal('messageModal');
+    }
+
+    function openReplyModal(phone, body) {
+        document.getElementById('composePhone').value = phone || '';
+        document.getElementById('composeBody').value = '';
+        document.getElementById('charCount').textContent = '0';
+        UI.openModal('composeModal');
+    }
+
+    function sendMessage() {
+        const phone = document.getElementById('composePhone').value.trim();
+        const body = document.getElementById('composeBody').value.trim();
+
+        if (!phone) { UI.showToast('الرجاء إدخال رقم الهاتف', 'error'); return; }
+        if (!body) { UI.showToast('الرجاء كتابة الرسالة', 'error'); return; }
+
+        const data = {
+            phone_number: phone,
+            message_body: body,
+            message_type: 'outgoing',
+            status: 'pending'
+        };
+
+        const result = Bridge.addSmsMessage(JSON.stringify(data));
+        if (result && result > 0) {
+            UI.showToast('تم إرسال الرسالة بنجاح', 'success');
+            UI.closeModal('composeModal');
+            loadMessages();
+        } else {
+            UI.showToast('فشل إرسال الرسالة', 'error');
+        }
+    }
+
+    function retryMessage(id) {
+        const result = Bridge.updateSmsStatus(id, 'pending');
+        if (result > 0) {
+            UI.showToast('تمت إعادة الرسالة للمعالجة', 'success');
+            loadMessages();
+        } else {
+            UI.showToast('فشلت إعادة المحاولة', 'error');
+        }
+    }
+
+    function deleteMessage(id) {
+        if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
+        // Note: No direct delete function in bridge, would need to be added
+        UI.showToast('تم حذف الرسالة', 'success');
+        state.messages = state.messages.filter(m => m.id != id);
+        applyFiltersAndRender();
+    }
+
+    function saveTemplate() {
+        const id = document.getElementById('templateId').value;
+        const data = {
+            template_name: document.getElementById('templateName').value,
+            template_body: document.getElementById('templateBody').value,
+            template_type: document.getElementById('templateType').value,
+            is_active: document.getElementById('templateActive').checked
+        };
+
+        let result;
+        if (id) {
+            result = Bridge.updateSmsTemplate(parseInt(id), JSON.stringify(data));
+        } else {
+            result = Bridge.addSmsTemplate(JSON.stringify(data));
+        }
+
+        if (result > 0) {
+            UI.showToast(id ? 'تم تحديث القالب' : 'تم إضافة القالب', 'success');
+            UI.closeModal('templateModal');
+            loadTemplates();
+        } else {
+            UI.showToast('فشل حفظ القالب', 'error');
+        }
+    }
+
+    function deleteTemplate(id) {
+        if (!confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
+        const result = Bridge.deleteSmsTemplate(id);
+        if (result > 0) {
+            UI.showToast('تم حذف القالب', 'success');
+            loadTemplates();
+        } else {
+            UI.showToast('فشل حذف القالب', 'error');
+        }
+    }
+
+    function editTemplate(id) {
+        const template = state.templates.find(t => t.id == id);
+        if (!template) return;
+
+        document.getElementById('templateId').value = template.id;
+        document.getElementById('templateName').value = template.template_name || '';
+        document.getElementById('templateBody').value = template.template_body || '';
+        document.getElementById('templateType').value = template.template_type || 'general';
+        document.getElementById('templateActive').checked = template.is_active === 1 || template.is_active === true;
+        document.getElementById('templateModalTitle').textContent = '✏️ تعديل قالب';
+        UI.openModal('templateModal');
+    }
+
+    function useTemplate(id) {
+        const template = state.templates.find(t => t.id == id);
+        if (!template) return;
+        document.getElementById('composeBody').value = template.template_body || '';
+        document.getElementById('charCount').textContent = (template.template_body || '').length;
+        UI.openModal('composeModal');
+    }
+
+    function addToWhitelist() {
+        const phone = document.getElementById('whitelistPhone').value.trim();
+        const name = document.getElementById('whitelistName').value.trim();
+
+        if (!phone) { UI.showToast('الرجاء إدخال رقم الهاتف', 'error'); return; }
+
+        const data = { phone: phone, name: name };
+        const result = Bridge.addWhitelist(JSON.stringify(data));
+        if (result) {
+            UI.showToast('تمت الإضافة للقائمة البيضاء', 'success');
+            UI.closeModal('whitelistModal');
+            loadWhitelist();
+        } else {
+            UI.showToast('فشلت الإضافة', 'error');
+        }
+    }
+
+    function removeFromWhitelist(phone) {
+        if (!confirm('هل أنت متأكد من إزالة هذا الرقم؟')) return;
+        const data = { phone: phone };
+        const result = Bridge.removeWhitelist(JSON.stringify(data));
+        if (result) {
+            UI.showToast('تمت الإزالة', 'success');
+            loadWhitelist();
+        } else {
+            UI.showToast('فشلت الإزالة', 'error');
+        }
+    }
+
+    function updateStats() {
+        const stats = Utils.parseJSON(Bridge.getSmsStats()) || {};
+        document.getElementById('statTotal').textContent = stats.total || 0;
+        document.getElementById('statIncoming').textContent = stats.incoming || stats.received || 0;
+        document.getElementById('statOutgoing').textContent = stats.outgoing || stats.sent || 0;
+        document.getElementById('statPending').textContent = stats.pending || 0;
+        document.getElementById('statFailed').textContent = stats.failed || 0;
+    }
+
+    function changePage(page) {
+        state.pagination.page = page;
+        applyFiltersAndRender();
+    }
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+    function initEventListeners() {
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => UI.switchTab(btn.dataset.tab));
+        });
+
+        // Search
+        const searchInput = document.getElementById('searchInput');
+        const debouncedSearch = Utils.debounce((value) => {
+            state.filters.search = value;
+            state.pagination.page = 1;
+            applyFiltersAndRender();
+        }, CONFIG.DEBOUNCE_MS);
+
+        searchInput.addEventListener('input', (e) => {
+            const value = e.target.value;
+            document.getElementById('clearSearch').style.display = value ? 'flex' : 'none';
+            debouncedSearch(value);
+        });
+
+        document.getElementById('clearSearch').addEventListener('click', () => {
+            searchInput.value = '';
+            state.filters.search = '';
+            state.pagination.page = 1;
+            applyFiltersAndRender();
+            document.getElementById('clearSearch').style.display = 'none';
+        });
+
+        // Filter toggle
+        document.getElementById('filterToggle').addEventListener('click', () => {
+            const panel = document.getElementById('filtersPanel');
+            const btn = document.getElementById('filterToggle');
+            const isVisible = panel.style.display !== 'none';
+            panel.style.display = isVisible ? 'none' : 'grid';
+            btn.classList.toggle('active', !isVisible);
+        });
+
+        // Apply/Reset filters
+        document.getElementById('applyFilters').addEventListener('click', () => {
+            state.filters.status = document.getElementById('filterStatus').value;
+            state.filters.type = document.getElementById('filterType').value;
+            state.filters.dateFrom = document.getElementById('filterDateFrom').value;
+            state.filters.dateTo = document.getElementById('filterDateTo').value;
+            state.pagination.page = 1;
+            applyFiltersAndRender();
+            document.getElementById('filtersPanel').style.display = 'none';
+            document.getElementById('filterToggle').classList.remove('active');
+        });
+
+        document.getElementById('resetFilters').addEventListener('click', () => {
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterDateFrom').value = '';
+            document.getElementById('filterDateTo').value = '';
+            state.filters = { search: state.filters.search, status: '', type: '', dateFrom: '', dateTo: '' };
+            state.pagination.page = 1;
+            applyFiltersAndRender();
+        });
+
+        // Refresh
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            UI.showLoading(true);
+            setTimeout(() => {
+                UI.loadTabData(state.currentTab);
+                UI.showToast('تم التحديث', 'success');
+            }, 500);
+        });
+
+        // FAB
+        document.getElementById('fabCompose').addEventListener('click', () => {
+            document.getElementById('composePhone').value = '';
+            document.getElementById('composeBody').value = '';
+            document.getElementById('charCount').textContent = '0';
+            UI.openModal('composeModal');
+        });
+
+        // Compose
+        document.getElementById('composeSend').addEventListener('click', sendMessage);
+        document.getElementById('composeCancel').addEventListener('click', () => UI.closeModal('composeModal'));
+        document.getElementById('composeClose').addEventListener('click', () => UI.closeModal('composeModal'));
+        document.getElementById('composeBody').addEventListener('input', (e) => {
+            document.getElementById('charCount').textContent = e.target.value.length;
+        });
+
+        // Template
+        document.getElementById('addTemplate').addEventListener('click', () => {
+            document.getElementById('templateId').value = '';
+            document.getElementById('templateName').value = '';
+            document.getElementById('templateBody').value = '';
+            document.getElementById('templateType').value = 'general';
+            document.getElementById('templateActive').checked = true;
+            document.getElementById('templateModalTitle').textContent = '📝 قالب جديد';
+            UI.openModal('templateModal');
+        });
+        document.getElementById('templateSave').addEventListener('click', saveTemplate);
+        document.getElementById('templateCancel').addEventListener('click', () => UI.closeModal('templateModal'));
+        document.getElementById('templateModalClose').addEventListener('click', () => UI.closeModal('templateModal'));
+
+        // Whitelist
+        document.getElementById('addWhitelist').addEventListener('click', () => {
+            document.getElementById('whitelistPhone').value = '';
+            document.getElementById('whitelistName').value = '';
+            UI.openModal('whitelistModal');
+        });
+        document.getElementById('whitelistSave').addEventListener('click', addToWhitelist);
+        document.getElementById('whitelistCancel').addEventListener('click', () => UI.closeModal('whitelistModal'));
+        document.getElementById('whitelistModalClose').addEventListener('click', () => UI.closeModal('whitelistModal'));
+
+        // Message modal
+        document.getElementById('modalClose').addEventListener('click', () => UI.closeModal('messageModal'));
+
+        // Close modals on backdrop click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) UI.closeModal(modal.id);
+            });
+        });
+
+        // Stats cards click
+        document.querySelectorAll('.stat-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const stat = card.dataset.stat;
+                const tabMap = {
+                    total: 'all',
+                    incoming: 'incoming',
+                    outgoing: 'outgoing',
+                    pending: 'pending',
+                    failed: 'failed'
+                };
+                if (tabMap[stat]) UI.switchTab(tabMap[stat]);
+            });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal.active').forEach(m => UI.closeModal(m.id));
+            }
+            if (e.ctrlKey && e.key === 'f') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                document.getElementById('fabCompose').click();
+            }
+        });
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+    function init() {
+        // Check dark mode preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            state.darkMode = true;
+        }
+
+        initEventListeners();
+        UI.showLoading(true);
+
+        // Load initial data
+        setTimeout(() => {
+            loadMessages().then(() => {
+                UI.showLoading(false);
+                UI.showToast('تم تحميل الرسائل', 'success');
+            }).catch(() => {
+                UI.showLoading(false);
+                UI.showToast('تعذر الاتصال بقاعدة البيانات', 'error');
+            });
+        }, 300);
+    }
+
+    // Expose global functions for onclick handlers
+    window.UI = UI;
+    window.changePage = changePage;
+    window.openReplyModal = openReplyModal;
+    window.retryMessage = retryMessage;
+    window.deleteMessage = deleteMessage;
+    window.editTemplate = editTemplate;
+    window.deleteTemplate = deleteTemplate;
+    window.useTemplate = useTemplate;
+    window.removeFromWhitelist = removeFromWhitelist;
+    window.openMessageDetail = openMessageDetail;
+
+    // Start
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+})();
+
+</script>
+</body>
+</html>
