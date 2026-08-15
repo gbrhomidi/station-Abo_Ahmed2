@@ -337,28 +337,6 @@
         }
 
         /* ============================================================
-           Offline Banner
-           ============================================================ */
-        .offline-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(90deg, var(--warning), #d4770a);
-            color: #fff;
-            text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-        }
-        .offline-banner.show {
-            transform: translateY(0);
-        }
-
-        /* ============================================================
            Header – Cobalt/Ruby
            ============================================================ */
         .top-bar {
@@ -1630,12 +1608,7 @@
   <!-- ============================================================
     Offline Banner
     ============================================================ -->
-  <div aria-live="polite" class="offline-banner" id="offlineBanner" role="alert">
-   <i aria-hidden="true" class="fas fa-wifi-slash">
-   </i>
-   أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
-  </div>
-  <!-- ============================================================
+<!-- ============================================================
     Loading Indicator
     ============================================================ -->
   <div aria-live="polite" class="loading-indicator" id="loadingIndicator" role="status">
@@ -1721,6 +1694,9 @@
      </button>
      <button aria-selected="false" class="filter-chip" onclick="setFilter('draft', this)" role="tab">
       مسودة
+     </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('archived', this)" role="tab">
+      مؤرشف
      </button>
      <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">
       🤖 توصية AI
@@ -2133,6 +2109,22 @@
        </option>
       </select>
      </div>
+     <div class="form-row">
+      <div class="form-group">
+       <label class="form-label" for="parentContractId">العقد الرئيسي</label>
+       <select class="form-input" id="parentContractId">
+        <option value="">لا يوجد</option>
+       </select>
+      </div>
+      <div class="form-group">
+       <label class="form-label" for="reminderDays">التذكير قبل الانتهاء (يوم)</label>
+       <input class="form-input" id="reminderDays" min="0" max="365" type="number" value="30">
+      </div>
+     </div>
+     <div class="form-group">
+      <label class="form-label" for="renewalCount">عدد مرات التجديد</label>
+      <input class="form-input" id="renewalCount" min="0" type="number" value="0">
+     </div>
      <div class="form-group">
       <label class="form-label" for="terms">
        شروط وأحكام
@@ -2150,6 +2142,20 @@
        ملاحظات
       </label>
       <textarea class="form-input" id="notes" placeholder="ملاحظات إضافية..." rows="2"></textarea>
+     </div>
+     <div class="form-group" id="contractLineItemsSection">
+      <label class="form-label">بنود العقد</label>
+      <div id="lineItemsList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <button class="card-btn" onclick="addContractLineItem()" type="button" style="width:100%;margin-top:6px;">
+       <i aria-hidden="true" class="fas fa-plus"></i> إضافة بند
+      </button>
+     </div>
+     <div class="form-group" id="contractPaymentsSection">
+      <label class="form-label">جدول الدفعات</label>
+      <div id="paymentSchedulesList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <button class="card-btn" onclick="addPaymentSchedule()" type="button" style="width:100%;margin-top:6px;">
+       <i aria-hidden="true" class="fas fa-plus"></i> إضافة دفعة
+      </button>
      </div>
      <!-- المرفقات -->
      <div class="form-group">
@@ -2412,7 +2418,7 @@
             AUDITOR: 'auditor'
         };
 
-        let currentUserRole = ROLES.ADMIN; // سيتم جلبها من قاعدة البيانات
+        let currentUserRole = ROLES.VIEWER; // تُرفع الصلاحية بعد قراءة جلسة Android الفعلية
 
         function hasPermission(action) {
             // Admin: كل الصلاحيات
@@ -2442,85 +2448,56 @@
         }
 
         /* ============================================================
-           1. API Call – بدون بيانات تجريبية
+           1. Typed Android Bridge – WebView -> MainActivity -> SQLite
            ============================================================ */
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
-                    }
-                } else {
-                    // في بيئة التطوير – نعرض رسالة خطأ بدلاً من بيانات تجريبية
-                    reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+        function parseBridgeResponse(raw) {
+            if (raw === null || raw === undefined) throw new Error('لم تُرجع طبقة Android نتيجة');
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!parsed || parsed.success === false) {
+                throw new Error((parsed && (parsed.error || parsed.message)) || 'فشلت العملية في قاعدة البيانات');
+            }
+            return parsed;
+        }
+        function parseBridgeObject(raw) {
+            const parsed = parseBridgeResponse(raw);
+            if (parsed && parsed.success === true && !Object.prototype.hasOwnProperty.call(parsed, 'data')) {
+                const data = { ...parsed };
+                delete data.success;
+                parsed.data = data;
+            }
+            return parsed;
+        }
+        function apiCall(action, params = {}) {
+            return Promise.resolve().then(() => {
+                const bridge = window.AndroidInterface;
+                if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
+                switch (action) {
+                    case 'getContracts': return parseBridgeResponse(bridge.getContracts(Boolean(params.includeArchived)));
+                    case 'getContractBundle': return parseBridgeObject(bridge.getContractBundle(Number(params.id)));
+                    case 'saveContract':
+                    case 'updateContract': return parseBridgeResponse(bridge.saveContract(JSON.stringify(params)));
+                    case 'deleteContract': return parseBridgeResponse(bridge.deleteContract(Number(params.id)));
+                    case 'archiveContract': return parseBridgeResponse(bridge.archiveContract(Number(params.id)));
+                    case 'restoreContract': return parseBridgeResponse(bridge.restoreContract(Number(params.id)));
+                    case 'cloneContract': return parseBridgeResponse(bridge.cloneContract(Number(params.id), JSON.stringify(params)));
+                    case 'changeContractStatus': return parseBridgeResponse(bridge.changeContractStatus(Number(params.id), String(params.status), params.reason || ''));
+                    case 'generateContractReport': return parseBridgeResponse(bridge.generateContractReport(JSON.stringify(params)));
+                    case 'getContractAudit': return parseBridgeResponse(bridge.getContractAudit(Number(params.id || 0)));
+                    case 'getParties': return parseBridgeResponse(bridge.getContractParties());
+                    case 'getCurrencies': return parseBridgeResponse(bridge.getCurrencies());
+                    case 'getCurrentUser': return parseBridgeObject(bridge.getCurrentUser());
+                    case 'backupDatabase': return parseBridgeResponse(bridge.backupDatabase());
+                    default: throw new Error('عملية Bridge غير مدعومة: ' + action);
                 }
             });
         }
 
         /* ============================================================
-           2. Local Storage (للنسخ الاحتياطي المؤقت)
+           2. حالة الواجهة المحلية فقط؛ لا تخزن بيانات الأعمال في المتصفح
            ============================================================ */
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                catch (e) { return false; } },
-            get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
-                    JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); }
-        };
-
-        /* ============================================================
-           3. Offline / Online
-           ============================================================ */
-        let isOnline = navigator.onLine;
-
-        function updateOnlineStatus() {
-            isOnline = navigator.onLine;
-            const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال', 'success');
-                syncPendingOperations();
-            }
-        }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pending = LocalDB.get('pending_ops', []);
-            if (pending.length === 0) return;
-            showLoading(true);
-            let ok = 0,
-                fail = 0;
-            for (const op of pending) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) ok++;
-                    else fail++;
-                } catch (e) { fail++; }
-            }
-            if (ok > 0) {
-                const remaining = pending.slice(fail);
-                LocalDB.set('pending_ops', remaining);
-                showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
-            }
-            if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
-            showLoading(false);
-        }
-
+        let aiInsightsCache = [];
+        let alertsCache = [];
+        let currentTheme = 'light';
         /* ============================================================
            4. Toast, Loading, Helpers
            ============================================================ */
@@ -2563,13 +2540,13 @@
 
         function getContractStatusClass(status) {
             const map = { 'active': 'active', 'expired': 'expired', 'expiring': 'expiring', 'terminated': 'terminated',
-                'draft': 'draft' };
+                'draft': 'draft', 'archived': 'terminated' };
             return map[status] || 'draft';
         }
 
         function getContractStatusLabel(status) {
             const map = { 'active': 'نشط', 'expired': 'منتهي', 'expiring': 'قارب الانتهاء', 'terminated': 'ملغى',
-            'draft': 'مسودة' };
+            'draft': 'مسودة', 'archived': 'مؤرشف' };
             return map[status] || status;
         }
 
@@ -2577,6 +2554,17 @@
             const map = { 'purchase': 'شراء', 'sale': 'بيع', 'service': 'خدمات', 'rental': 'إيجار', 'maintenance': 'صيانة',
                 'other': 'أخرى' };
             return map[type] || type;
+        }
+
+
+        function getDisplayStatus(contract) {
+            if (Number(contract.is_archived) === 1) return 'archived';
+            if (contract.status === 'active' && contract.end_date) {
+                const days = Math.ceil((new Date(contract.end_date) - new Date()) / 86400000);
+                if (days <= 0) return 'expired';
+                if (days <= 30) return 'expiring';
+            }
+            return contract.status || 'draft';
         }
 
         /* ============================================================
@@ -2587,7 +2575,7 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            currentTheme = newTheme;
             const icon = document.getElementById('themeIcon');
             icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
             // تحديث المخططات
@@ -2596,7 +2584,7 @@
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = currentTheme;
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -2696,71 +2684,43 @@
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
-                const [contractsRes, partiesRes, currenciesRes, usersRes] = await Promise.all([
-                    apiCall('getContracts', {}),
+                const [contractsRes, partiesRes, currenciesRes, userRes] = await Promise.all([
+                    apiCall('getContracts', { includeArchived: true }),
                     apiCall('getParties', {}),
                     apiCall('getCurrencies', {}),
-                    apiCall('getUsers', {})
+                    apiCall('getCurrentUser', {})
                 ]);
-
-                if (contractsRes.success && contractsRes.data) {
-                    allContracts = contractsRes.data;
-                    LocalDB.set('contracts', allContracts);
-                } else {
-                    allContracts = LocalDB.get('contracts', []);
-                }
-                if (partiesRes.success && partiesRes.data) {
-                    allParties = partiesRes.data;
-                    LocalDB.set('parties', allParties);
-                } else {
-                    allParties = LocalDB.get('parties', []);
-                }
-                if (currenciesRes.success && currenciesRes.data) {
-                    allCurrencies = currenciesRes.data;
-                    LocalDB.set('currencies', allCurrencies);
-                } else {
-                    allCurrencies = LocalDB.get('currencies', []);
-                }
-                if (usersRes.success && usersRes.data) {
-                    allUsers = usersRes.data;
-                    LocalDB.set('users', allUsers);
-                } else {
-                    allUsers = LocalDB.get('users', []);
-                }
-
-                // تحديث دور المستخدم من أول مستخدم
-                if (allUsers.length > 0) {
-                    const u = allUsers[0];
-                    const role = u.role_name || u.role || 'admin';
-                    if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
-                    else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
-                    else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
-                    else currentUserRole = ROLES.VIEWER;
-                }
-
+                allContracts = Array.isArray(contractsRes.data) ? contractsRes.data : [];
+                allParties = Array.isArray(partiesRes.data) ? partiesRes.data : [];
+                allCurrencies = Array.isArray(currenciesRes.data) ? currenciesRes.data : [];
+                const currentUser = userRes.data || {};
+                allUsers = currentUser.id ? [currentUser] : [];
+                const role = String(currentUser.role || currentUser.role_code || '').toLowerCase();
+                if (role.includes('admin') || role.includes('super')) currentUserRole = ROLES.ADMIN;
+                else if (role.includes('manager')) currentUserRole = ROLES.MANAGER;
+                else if (role.includes('audit')) currentUserRole = ROLES.AUDITOR;
+                else currentUserRole = ROLES.VIEWER;
                 populateDropdowns();
                 generateAIInsights();
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
-                isInitialLoad = false;
-                showLoading(false);
             } catch (e) {
-                console.error('Load error:', e);
-                // محاولة استخدام التخزين المحلي كفشل
-                allContracts = LocalDB.get('contracts', []);
-                allParties = LocalDB.get('parties', []);
-                allCurrencies = LocalDB.get('currencies', []);
-                allUsers = LocalDB.get('users', []);
+                allContracts = [];
+                allParties = [];
+                allCurrencies = [];
+                allUsers = [];
                 populateDropdowns();
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
+                showToast('❌ تعذر قراءة قاعدة بيانات العقود: ' + (e.message || 'خطأ غير معروف'), 'error');
+            } finally {
+                initFuse();
                 isInitialLoad = false;
                 showLoading(false);
-                showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
             }
         }
 
@@ -2807,6 +2767,19 @@
                 opt.textContent = name + ' (' + (c.currency_code || c.code || '') + ')';
                 currencySelect.appendChild(opt);
             });
+            const parentSelect = document.getElementById('parentContractId');
+            if (parentSelect) {
+                const currentParent = parentSelect.value;
+                parentSelect.innerHTML = '<option value="">لا يوجد</option>';
+                allContracts.forEach(c => {
+                    if (Number(c.id) === Number(currentEditId)) return;
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = (c.contract_code || '') + ' - ' + (c.contract_name || 'عقد');
+                    parentSelect.appendChild(opt);
+                });
+                parentSelect.value = currentParent;
+            }
         }
 
         /* ============================================================
@@ -2830,15 +2803,17 @@
 
         function getFilteredData() {
             let data = [...allContracts];
+            if (currentFilter === 'archived') data = data.filter(s => Number(s.is_archived) === 1);
+            else data = data.filter(s => Number(s.is_archived) !== 1);
 
             // فلتر الحالة
-            if (currentFilter === 'active') data = data.filter(s => s.status === 'active');
-            else if (currentFilter === 'expiring') data = data.filter(s => s.status === 'expiring');
-            else if (currentFilter === 'expired') data = data.filter(s => s.status === 'expired');
+            if (currentFilter === 'active') data = data.filter(s => getDisplayStatus(s) === 'active');
+            else if (currentFilter === 'expiring') data = data.filter(s => getDisplayStatus(s) === 'expiring');
+            else if (currentFilter === 'expired') data = data.filter(s => getDisplayStatus(s) === 'expired');
             else if (currentFilter === 'terminated') data = data.filter(s => s.status === 'terminated');
             else if (currentFilter === 'draft') data = data.filter(s => s.status === 'draft');
             else if (currentFilter === 'ai_suggest') {
-                const insights = LocalDB.get('ai_insights', []);
+                const insights = aiInsightsCache;
                 const ids = insights.map(i => i.contractId);
                 data = data.filter(s => ids.includes(s.id));
             }
@@ -2887,7 +2862,7 @@
                 return;
             }
 
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = aiInsightsCache;
 
             container.innerHTML = pageItems.map((s, idx) => {
                 const id = s.id;
@@ -2895,13 +2870,13 @@
                 const name = s.contract_name || '---';
                 const partyName = s.party_name || '---';
                 const type = getContractTypeLabel(s.contract_type);
-                const status = s.status || 'draft';
+                const status = getDisplayStatus(s);
                 const statusClass = getContractStatusClass(status);
                 const statusLabel = getContractStatusLabel(status);
                 const totalValue = parseFloat(s.total_value || 0);
                 const startDate = s.start_date || '---';
                 const endDate = s.end_date || '---';
-                const avatar = name.substring(0, 2);
+                const avatar = escapeHtml(name.substring(0, 2));
 
                 const insight = insights.find(i => i.contractId == id);
                 const insightHTML = insight ?
@@ -2930,6 +2905,11 @@
                         <div class="card-actions">
                             <button class="card-btn" onclick="event.stopPropagation(); viewContract(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
                             <button class="card-btn" onclick="event.stopPropagation(); editContract(${id})" aria-label="تعديل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
+                            <button class="card-btn" onclick="event.stopPropagation(); cloneContractUI(${id})" aria-label="نسخ العقد"><i class="fas fa-copy" aria-hidden="true"></i> نسخ</button>
+                            <select class="form-input" aria-label="تغيير الحالة سريعاً" style="flex:1;min-width:110px;padding:6px;" onclick="event.stopPropagation()" onchange="changeContractStatusUI(${id}, this.value)">
+                             <option value="">الحالة</option><option value="draft">مسودة</option><option value="active">نشط</option><option value="terminated">ملغى</option><option value="expired">منتهي</option>
+                            </select>
+                            <button class="card-btn" onclick="event.stopPropagation(); toggleArchiveContract(${id})" aria-label="${Number(s.is_archived) === 1 ? 'استعادة' : 'أرشفة'}"><i class="fas ${Number(s.is_archived) === 1 ? 'fa-box-open' : 'fa-archive'}" aria-hidden="true"></i></button>
                             <button class="card-btn danger" onclick="event.stopPropagation(); deleteContract(${id})" aria-label="حذف" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-trash" aria-hidden="true"></i></button>
                         </div>
                     </div>
@@ -2994,12 +2974,12 @@
             document.getElementById('statTotalValue').textContent = formatNumber(totalValue);
 
             // اتجاهات وهمية (يمكن جعلها حقيقية من قاعدة البيانات)
-            document.getElementById('trendTotal').textContent = total > 0 ? '+12%' : '0%';
-            document.getElementById('trendActive').textContent = active > 0 ? '+5%' : '0%';
-            document.getElementById('trendExpiring').textContent = expiring > 0 ? '-3%' : '0%';
-            document.getElementById('trendTotalValue').textContent = totalValue > 0 ? '+8%' : '0%';
+            document.getElementById('trendTotal').textContent = '—';
+            document.getElementById('trendActive').textContent = '—';
+            document.getElementById('trendExpiring').textContent = '—';
+            document.getElementById('trendTotalValue').textContent = '—';
 
-            LocalDB.set('contract_stats', { total, active, expiring, total_value: totalValue });
+
         }
 
         function showStatDetail(type) {
@@ -3121,12 +3101,12 @@
                     value });
                 }
             });
-            LocalDB.set('ai_insights', insights);
+            aiInsightsCache = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = aiInsightsCache;
             if (insights.length === 0) return null;
             const pri = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (pri[a.priority] > pri[b.priority] ? a : b));
@@ -3138,7 +3118,7 @@
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
 
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = aiInsightsCache;
             if (insights.length === 0) {
                 content.innerHTML = `
                     <div style="text-align:center;color:var(--text-muted);padding:30px;">
@@ -3199,13 +3179,13 @@
                 const daysLeft = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24));
                 if (daysLeft <= 0 && c.status !== 'terminated') {
                     alerts.push({ type: 'error', icon: 'fa-exclamation-circle', title: '⚠️ عقد منتهي',
-                        desc: c.contract_name + ' (' + (c.party_name || '') + ')' });
+                        desc: escapeHtml(c.contract_name || '') + ' (' + escapeHtml(c.party_name || '') + ')' });
                 } else if (daysLeft <= 30 && daysLeft > 0) {
                     alerts.push({ type: 'warning', icon: 'fa-clock', title: '⏳ قارب على الانتهاء',
-                        desc: c.contract_name + ' – متبقي ' + daysLeft + ' يوم' });
+                        desc: escapeHtml(c.contract_name || '') + ' – متبقي ' + daysLeft + ' يوم' });
                 }
             });
-            LocalDB.set('notifications', alerts);
+            alertsCache = alerts;
 
             if (alerts.length === 0) {
                 container.innerHTML = '';
@@ -3221,7 +3201,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('notifications', []);
+            const alerts = alertsCache;
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
             document.getElementById('alertsContainer').scrollIntoView({ behavior: 'smooth' });
@@ -3241,6 +3221,12 @@
             document.body.style.overflow = 'hidden';
             attachedFiles = [];
             renderFileList();
+            populateDropdowns();
+            document.getElementById('parentContractId').value = '';
+            document.getElementById('renewalCount').value = '0';
+            document.getElementById('reminderDays').value = '30';
+            renderContractLineItems([]);
+            renderPaymentSchedules([]);
         }
 
         function closeModal(e) {
@@ -3252,149 +3238,109 @@
         async function saveContract() {
             if (!requirePermission('create') && currentEditId === 0) return;
             if (!requirePermission('update') && currentEditId > 0) return;
-
             const name = document.getElementById('contractName').value.trim();
             const partyId = document.getElementById('partyId').value;
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
-
-            if (!name) { showToast('❌ الرجاء إدخال اسم العقد', 'error');
-                document.getElementById('contractName').focus(); return; }
-            if (!partyId) { showToast('❌ الرجاء اختيار الطرف', 'error');
-                document.getElementById('partyId').focus(); return; }
-            if (!startDate || !endDate) { showToast('❌ الرجاء إدخال تاريخ البداية والنهاية', 'error'); return; }
-
+            if (!name) { showToast('❌ الرجاء إدخال اسم العقد', 'error'); document.getElementById('contractName').focus(); return; }
+            if (!partyId) { showToast('❌ الرجاء اختيار الطرف', 'error'); document.getElementById('partyId').focus(); return; }
+            if (!startDate || !endDate || endDate < startDate) { showToast('❌ نطاق التاريخ غير صالح', 'error'); return; }
+            const attachmentMetadata = attachedFiles.map(file => ({
+                name: file.name || file.file_name || '', size: Number(file.size || file.file_size || 0),
+                type: file.type || file.file_type || '', path: file.file_path || ''
+            }));
+            if (attachedFiles.some(file => file.file)) showToast('تنبيه: حفظ الملفات الجديدة يحتاج مسار Android؛ تم حفظ بياناتها الوصفية فقط', 'warning');
             const data = {
                 id: currentEditId || 0,
-                contract_name: name,
-                party_id: parseInt(partyId),
+                contract_code: document.getElementById('contractCode').value.startsWith('سيتولى') ? '' : document.getElementById('contractCode').value.trim(),
+                contract_name: name, party_id: parseInt(partyId),
                 contract_type: document.getElementById('contractType').value,
                 status: document.getElementById('contractStatus').value,
-                start_date: startDate,
-                end_date: endDate,
+                start_date: startDate, end_date: endDate,
                 total_value: parseFloat(document.getElementById('totalValue').value) || 0,
-                currency_id: document.getElementById('currencyId').value ? parseInt(document.getElementById('currencyId')
-                    .value) : null,
-                auto_renew: parseInt(document.getElementById('autoRenew').value),
+                currency_id: document.getElementById('currencyId').value ? parseInt(document.getElementById('currencyId').value) : null,
+                auto_renew: parseInt(document.getElementById('autoRenew').value || '0'),
+                parent_contract_id: document.getElementById('parentContractId').value ? parseInt(document.getElementById('parentContractId').value) : null,
+                renewal_count: parseInt(document.getElementById('renewalCount').value || '0'),
+                reminder_days: parseInt(document.getElementById('reminderDays').value || '30'),
                 terms: document.getElementById('terms').value.trim(),
                 special_conditions: document.getElementById('specialConditions').value.trim(),
                 notes: document.getElementById('notes').value.trim(),
-                attachments: attachedFiles
+                attachments: attachmentMetadata,
+                line_items: collectContractLineItems(),
+                payment_schedules: collectPaymentSchedules()
             };
-
             showLoading(true);
             try {
-                const action = currentEditId > 0 ? 'updateContract' : 'saveContract';
-                const result = await apiCall(action, data);
-                if (result.success) {
-                    showToast(result.message || '✅ تم حفظ العقد بنجاح', 'success');
-                    closeModal();
-                    await loadData();
-                } else {
-                    throw new Error(result.message || 'فشل في الحفظ');
-                }
+                const result = await apiCall(currentEditId > 0 ? 'updateContract' : 'saveContract', data);
+                if (!result.success) throw new Error(result.error || result.message || 'فشل في الحفظ');
+                showToast(result.message || '✅ تم حفظ العقد في SQLite', 'success');
+                closeModal();
+                await loadData();
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: currentEditId > 0 ?
-                                'updateContract' : 'saveContract', data }]);
-                    if (currentEditId > 0) {
-                        const idx = allContracts.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) allContracts[idx] = { ...allContracts[idx], ...data };
-                    } else {
-                        allContracts.push({ ...data, id: Date.now(), contract_code: 'CONT-' + Date.now() });
-                    }
-                    LocalDB.set('contracts', allContracts);
-                    showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
-            } finally {
-                showLoading(false);
-            }
+                showToast('❌ لم يتم حفظ العقد: ' + (e.message || 'خطأ غير معروف'), 'error');
+            } finally { showLoading(false); }
         }
 
         async function editContract(id) {
             if (!requirePermission('update')) return;
             const item = allContracts.find(s => s.id == id);
             if (!item) { showToast('❌ العقد غير موجود', 'error'); return; }
-
-            currentEditId = id;
-            document.getElementById('modalTitle').textContent = '✏️ تعديل عقد';
-            document.getElementById('editId').value = id;
-            document.getElementById('contractCode').value = item.contract_code || 'سيتم إنشاؤه تلقائياً';
-            document.getElementById('contractName').value = item.contract_name || '';
-            document.getElementById('partyId').value = item.party_id || '';
-            document.getElementById('contractType').value = item.contract_type || 'purchase';
-            document.getElementById('contractStatus').value = item.status || 'draft';
-            document.getElementById('startDate').value = item.start_date || '';
-            document.getElementById('endDate').value = item.end_date || '';
-            document.getElementById('totalValue').value = item.total_value || '';
-            document.getElementById('currencyId').value = item.currency_id || '';
-            document.getElementById('autoRenew').value = item.auto_renew || '0';
-            document.getElementById('terms').value = item.terms || '';
-            document.getElementById('specialConditions').value = item.special_conditions || '';
-            document.getElementById('notes').value = item.notes || '';
-            attachedFiles = item.attachments || [];
-            renderFileList();
-
-            document.getElementById('modalOverlay').classList.add('show');
-            document.body.style.overflow = 'hidden';
+            showLoading(true);
+            try {
+                const response = await apiCall('getContractBundle', { id });
+                const bundle = response.data || item;
+                currentEditId = id;
+                document.getElementById('modalTitle').textContent = '✏️ تعديل عقد';
+                document.getElementById('editId').value = id;
+                document.getElementById('contractCode').value = bundle.contract_code || '';
+                document.getElementById('contractName').value = bundle.contract_name || '';
+                document.getElementById('partyId').value = bundle.party_id || '';
+                document.getElementById('contractType').value = bundle.contract_type || 'purchase';
+                document.getElementById('contractStatus').value = bundle.status || 'draft';
+                document.getElementById('startDate').value = bundle.start_date || '';
+                document.getElementById('endDate').value = bundle.end_date || '';
+                document.getElementById('totalValue').value = bundle.total_value || '';
+                document.getElementById('currencyId').value = bundle.currency_id || '';
+                document.getElementById('autoRenew').value = bundle.auto_renew || '0';
+                document.getElementById('parentContractId').value = bundle.parent_contract_id || '';
+                document.getElementById('renewalCount').value = bundle.renewal_count || 0;
+                document.getElementById('reminderDays').value = bundle.reminder_days ?? 30;
+                document.getElementById('terms').value = bundle.terms || '';
+                document.getElementById('specialConditions').value = bundle.special_conditions || '';
+                document.getElementById('notes').value = bundle.notes || '';
+                attachedFiles = Array.isArray(bundle.attachments) ? bundle.attachments : [];
+                renderFileList();
+                renderContractLineItems(bundle.line_items || []);
+                renderPaymentSchedules(bundle.payment_schedules || []);
+                document.getElementById('modalOverlay').classList.add('show');
+                document.body.style.overflow = 'hidden';
+            } catch (e) { showToast('❌ تعذر قراءة تفاصيل العقد: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
         }
 
         async function deleteContract(id) {
             if (!requirePermission('delete')) return;
             const item = allContracts.find(s => s.id == id);
             const name = item ? (item.contract_name || 'هذا العقد') : 'هذا العقد';
-
-            const confirmed = await Swal.fire({
-                title: '⚠️ هل أنت متأكد؟',
-                text: 'سيتم حذف العقد "' + name + '" – لا يمكن التراجع!',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#b31b3a',
-                cancelButtonColor: '#5a5a7a',
-                confirmButtonText: 'نعم، احذف',
-                cancelButtonText: 'إلغاء',
-                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1f1f3a' : '#fffcf7',
-                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#e8e8f0' : '#1a1a2e'
-            });
+            const confirmed = await Swal.fire({ title: '⚠️ هل أنت متأكد؟', text: 'سيتم حذف العقد "' + name + '" حذفاً منطقياً وتسجيل العملية.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#b31b3a', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء' });
             if (!confirmed.isConfirmed) return;
-
             showLoading(true);
             try {
                 const result = await apiCall('deleteContract', { id });
-                if (result.success) {
-                    showToast('✅ تم الحذف بنجاح', 'success');
-                    await loadData();
-                } else {
-                    throw new Error(result.message || 'فشل في الحذف');
-                }
-            } catch (e) {
-                if (!isOnline) {
-                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteContract', data: { id } }]);
-                    allContracts = allContracts.filter(s => s.id != id);
-                    LocalDB.set('contracts', allContracts);
-                    showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
-            } finally {
-                showLoading(false);
-            }
+                if (!result.success) throw new Error(result.error || result.message || 'فشل في الحذف');
+                showToast(result.message || '✅ تم حذف العقد منطقياً', 'success');
+                await loadData();
+            } catch (e) { showToast('❌ لم يتم حذف العقد: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
         }
 
         async function viewContract(id) {
             const item = allContracts.find(s => s.id == id);
             if (!item) { showToast('❌ العقد غير موجود', 'error'); return; }
+            let bundle = item;
+            try { const bundleResult = await apiCall('getContractBundle', { id }); bundle = bundleResult.data || item; }
+            catch (e) { showToast('❌ تعذر تحميل تفاصيل العقد من SQLite: ' + (e.message || ''), 'error'); return; }
 
             const party = allParties.find(p => (p.id || p.party_id) == item.party_id);
             const currency = allCurrencies.find(c => (c.id || c.currency_id) == item.currency_id);
@@ -3463,6 +3409,7 @@
                 </div>
                 ` : ''}
 
+                ${renderContractDetailsSections(bundle)}
                 <div style="height:40px;"></div>
             `;
 
@@ -3474,6 +3421,129 @@
             document.getElementById('detailsOverlay').classList.remove('show');
             document.body.style.overflow = '';
         }
+
+
+        async function cloneContractUI(id) {
+            if (!requirePermission('create')) return;
+            const source = allContracts.find(c => Number(c.id) === Number(id));
+            if (!source) return showToast('العقد غير موجود', 'error');
+            const result = await Swal.fire({
+                title: 'نسخ العقد',
+                html: '<input id="cloneContractCode" class="swal2-input" placeholder="كود العقد الجديد"><input id="cloneContractName" class="swal2-input" placeholder="اسم العقد الجديد">',
+                showCancelButton: true, confirmButtonText: 'نسخ فعلياً', cancelButtonText: 'إلغاء',
+                preConfirm: () => {
+                    const code = document.getElementById('cloneContractCode').value.trim();
+                    const name = document.getElementById('cloneContractName').value.trim();
+                    if (!code || !name) { Swal.showValidationMessage('الكود والاسم مطلوبان'); return false; }
+                    return { contract_code: code, contract_name: name };
+                }
+            });
+            if (!result.isConfirmed) return;
+            showLoading(true);
+            try { await apiCall('cloneContract', { id, ...result.value }); showToast('تم نسخ العقد وبنوده وجدول دفعاته', 'success'); await loadData(); }
+            catch (e) { showToast('❌ فشل نسخ العقد: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
+
+        async function changeContractStatusUI(id, status) {
+            if (!status) return;
+            if (!requirePermission('update')) return;
+            const result = await Swal.fire({ title: 'تغيير حالة العقد', input: 'text', inputLabel: 'سبب التغيير (اختياري)', showCancelButton: true, confirmButtonText: 'تأكيد', cancelButtonText: 'إلغاء' });
+            if (!result.isConfirmed) { renderCards(); return; }
+            showLoading(true);
+            try { await apiCall('changeContractStatus', { id, status, reason: result.value || '' }); showToast('تم تغيير الحالة وتسجيلها', 'success'); await loadData(); }
+            catch (e) { showToast('❌ فشل تغيير الحالة: ' + (e.message || ''), 'error'); renderCards(); }
+            finally { showLoading(false); }
+        }
+
+        async function toggleArchiveContract(id) {
+            if (!requirePermission('update')) return;
+            const item = allContracts.find(c => Number(c.id) === Number(id));
+            if (!item) return;
+            const archived = Number(item.is_archived) === 1;
+            const result = await Swal.fire({ title: archived ? 'استعادة العقد؟' : 'أرشفة العقد؟', text: archived ? 'سيظهر العقد ضمن القائمة النشطة.' : 'سيبقى العقد في SQLite مع إخفائه من القائمة الافتراضية.', icon: 'question', showCancelButton: true, confirmButtonText: archived ? 'استعادة' : 'أرشفة', cancelButtonText: 'إلغاء' });
+            if (!result.isConfirmed) return;
+            showLoading(true);
+            try { await apiCall(archived ? 'restoreContract' : 'archiveContract', { id }); showToast(archived ? 'تمت الاستعادة فعلياً' : 'تمت الأرشفة فعلياً', 'success'); await loadData(); }
+            catch (e) { showToast('❌ فشلت العملية: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
+
+        function addContractLineItem(item = {}) {
+            const container = document.getElementById('lineItemsList');
+            const row = document.createElement('div');
+            row.className = 'contract-line-row';
+            row.style.cssText = 'display:grid;grid-template-columns:2fr .7fr 1fr 1fr auto;gap:5px;align-items:center;';
+            row.innerHTML = '<input class="form-input line-description" placeholder="الوصف" value="' + escapeHtml(item.description || '') + '">' +
+                '<input class="form-input line-quantity" min="0" step="0.001" type="number" value="' + Number(item.quantity || 1) + '">' +
+                '<input class="form-input line-unit-price" min="0" step="0.01" type="number" value="' + Number(item.unit_price || 0) + '">' +
+                '<input class="form-input line-total" readonly value="' + Number(item.total_amount || 0).toFixed(2) + '">' +
+                '<button class="modal-close" type="button" onclick="this.closest(\'.contract-line-row\').remove();recalculateContractLines()" aria-label="حذف البند">×</button>';
+            container.appendChild(row);
+            row.querySelectorAll('.line-quantity,.line-unit-price').forEach(el => el.addEventListener('input', recalculateContractLines));
+            recalculateContractLines();
+        }
+        function recalculateContractLines() {
+            document.querySelectorAll('.contract-line-row').forEach(row => {
+                const quantity = Number(row.querySelector('.line-quantity').value || 0);
+                const price = Number(row.querySelector('.line-unit-price').value || 0);
+                row.querySelector('.line-total').value = (quantity * price).toFixed(2);
+            });
+        }
+        function renderContractLineItems(items) {
+            const container = document.getElementById('lineItemsList');
+            if (!container) return;
+            container.innerHTML = '';
+            (items || []).forEach(item => addContractLineItem(item));
+        }
+        function collectContractLineItems() {
+            return Array.from(document.querySelectorAll('.contract-line-row')).map(row => ({
+                description: row.querySelector('.line-description').value.trim(),
+                quantity: Number(row.querySelector('.line-quantity').value || 0),
+                unit_price: Number(row.querySelector('.line-unit-price').value || 0),
+                total_amount: Number(row.querySelector('.line-total').value || 0)
+            })).filter(item => item.description);
+        }
+        function addPaymentSchedule(item = {}) {
+            const container = document.getElementById('paymentSchedulesList');
+            const row = document.createElement('div');
+            row.className = 'contract-payment-row';
+            row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr auto;gap:5px;align-items:center;';
+            row.innerHTML = '<input class="form-input payment-due-date" type="date" value="' + escapeHtml(item.due_date || '') + '">' +
+                '<input class="form-input payment-amount" min="0" step="0.01" type="number" value="' + Number(item.amount || 0) + '">' +
+                '<select class="form-input payment-status"><option value="pending">معلق</option><option value="paid">مدفوع</option><option value="overdue">متأخر</option><option value="cancelled">ملغى</option></select>' +
+                '<input class="form-input payment-notes" placeholder="ملاحظات" value="' + escapeHtml(item.notes || '') + '">' +
+                '<button class="modal-close" type="button" onclick="this.closest(\'.contract-payment-row\').remove()" aria-label="حذف الدفعة">×</button>';
+            container.appendChild(row);
+            row.querySelector('.payment-status').value = item.status || 'pending';
+        }
+        function renderPaymentSchedules(items) {
+            const container = document.getElementById('paymentSchedulesList');
+            if (!container) return;
+            container.innerHTML = '';
+            (items || []).forEach(item => addPaymentSchedule(item));
+        }
+        function collectPaymentSchedules() {
+            return Array.from(document.querySelectorAll('.contract-payment-row')).map(row => ({
+                due_date: row.querySelector('.payment-due-date').value,
+                amount: Number(row.querySelector('.payment-amount').value || 0),
+                status: row.querySelector('.payment-status').value,
+                notes: row.querySelector('.payment-notes').value.trim()
+            })).filter(item => item.due_date && item.amount >= 0);
+        }
+        function renderContractDetailsSections(contract) {
+            const lines = Array.isArray(contract.line_items) ? contract.line_items : [];
+            const payments = Array.isArray(contract.payment_schedules) ? contract.payment_schedules : [];
+            const audit = Array.isArray(contract.audit) ? contract.audit : [];
+            const lineHtml = lines.length ? lines.map(line => '<div class="details-row"><span class="details-label">' + escapeHtml(line.description || '') + '</span><span class="details-value">' + formatCurrency(line.total_amount || 0) + '</span></div>').join('') : '<p style="color:var(--text-muted);">لا توجد بنود</p>';
+            const paymentHtml = payments.length ? payments.map(p => '<div class="details-row"><span class="details-label">' + escapeHtml(p.due_date || '') + ' – ' + getPaymentStatusLabel(p.status) + '</span><span class="details-value">' + formatCurrency(p.amount || 0) + '</span></div>').join('') : '<p style="color:var(--text-muted);">لا يوجد جدول دفعات</p>';
+            const auditHtml = audit.length ? audit.slice(0, 10).map(a => '<div class="details-row"><span class="details-label">' + escapeHtml(a.action_type || '') + '</span><span class="details-value">' + escapeHtml(a.created_at || '') + '</span></div>').join('') : '<p style="color:var(--text-muted);">لا يوجد سجل تغييرات</p>';
+            return '<div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);"><div style="font-weight:700;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-list"></i> بنود العقد</div>' + lineHtml + '</div>' +
+                '<div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);"><div style="font-weight:700;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-calendar-check"></i> جدول الدفعات</div>' + paymentHtml + '</div>' +
+                '<div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);"><div style="font-weight:700;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-history"></i> سجل التغييرات</div>' + auditHtml + '</div>';
+        }
+        function getPaymentStatusLabel(status) { return ({ pending: 'معلق', paid: 'مدفوع', overdue: 'متأخر', cancelled: 'ملغى' }[status] || status || 'معلق'); }
+
 
         /* ============================================================
            17. File Attachments (Drag & Drop)
@@ -3489,13 +3559,13 @@
             dropzone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropzone.classList.remove('dragover');
-                const files = Array.from(e.dataTransfer.files);
+                const files = Array.from(e.dataTransfer.files).filter(f => f.size <= 10 * 1024 * 1024);
                 attachedFiles = attachedFiles.concat(files.map(f => ({ name: f.name, size: (f.size / 1024).toFixed(1),
                     file: f })));
                 renderFileList();
             });
             fileInput.addEventListener('change', (e) => {
-                const files = Array.from(e.target.files);
+                const files = Array.from(e.target.files).filter(f => f.size <= 10 * 1024 * 1024);
                 attachedFiles = attachedFiles.concat(files.map(f => ({ name: f.name, size: (f.size / 1024).toFixed(1),
                     file: f })));
                 renderFileList();
@@ -3582,7 +3652,7 @@
                     showToast(result.message || '❌ لا توجد بيانات', 'warning');
                 }
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                showToast('❌ فشل توليد التقرير من SQLite: ' + (e.message || ''), 'error');
                 console.error(e);
             } finally {
                 showLoading(false);
@@ -3774,82 +3844,30 @@
         async function createBackup() {
             if (!requirePermission('audit')) return;
             showLoading(true);
-            try {
-                const result = await apiCall('backupData', {});
-                if (result.success) {
-                    showToast('✅ تم إنشاء النسخة الاحتياطية بنجاح', 'success');
-                    loadBackupList();
-                } else {
-                    throw new Error(result.message || 'فشل في النسخ الاحتياطي');
-                }
-            } catch (e) {
-                // نسخ احتياطي محلي
-                const data = { contracts: allContracts, parties: allParties, currencies: allCurrencies, timestamp: new Date()
-                        .toISOString() };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'backup_' + new Date().toISOString().slice(0, 10) + '.json';
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('✅ تم إنشاء نسخة احتياطية محلية', 'success');
-            } finally {
+            window.onBackupResult = function(result) {
                 showLoading(false);
-            }
+                if (result && result.success) {
+                    showToast('✅ تم إنشاء النسخة الاحتياطية عبر Android', 'success');
+                    const path = result.path ? '<div style="font-size:.7rem;direction:ltr;word-break:break-all;">' + escapeHtml(result.path) + '</div>' : '';
+                    document.getElementById('backupList').insertAdjacentHTML('afterbegin', path);
+                } else showToast('❌ فشل النسخ الاحتياطي: ' + (result && (result.error || result.message) || ''), 'error');
+            };
+            try {
+                const result = await apiCall('backupDatabase', {});
+                if (result && result.status === 'processing') showToast('جاري إنشاء النسخة الاحتياطية داخل Android...', 'info');
+                else if (!result.success) throw new Error(result.error || result.message || 'فشل النسخ الاحتياطي');
+            } catch (e) { showLoading(false); showToast('❌ لم يتم إنشاء النسخة الاحتياطية: ' + (e.message || ''), 'error'); }
         }
 
         function restoreBackup() {
             if (!requirePermission('audit')) return;
-            document.getElementById('restoreFileInput').click();
-            document.getElementById('restoreFileInput').onchange = function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async function(event) {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        if (data.contracts) {
-                            allContracts = data.contracts;
-                            LocalDB.set('contracts', allContracts);
-                            renderCards();
-                            updateStats();
-                            updateCharts();
-                            updateAlerts();
-                            showToast('✅ تم استعادة البيانات بنجاح', 'success');
-                        } else {
-                            showToast('❌ ملف غير صالح', 'error');
-                        }
-                    } catch (err) {
-                        showToast('❌ فشل استعادة الملف: ' + err.message, 'error');
-                    }
-                };
-                reader.readAsText(file);
-                document.getElementById('restoreFileInput').value = '';
-            };
+            showToast('استعادة ملف قاعدة البيانات تتم من مسار Android الآمن، ولا يمكن تنفيذها من File input داخل WebView دون URI Native.', 'warning');
         }
 
         function loadBackupList() {
-            const container = document.getElementById('backupList');
-            container.innerHTML = `
-                <div style="color:var(--text-muted);text-align:center;padding:10px;">
-                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> جاري التحميل...
-                </div>
-            `;
-            // محاكاة قائمة النسخ
-            setTimeout(() => {
-                const backups = [
-                    { name: 'نسخة تلقائية', date: new Date().toLocaleString('ar'), size: '2.4 MB' },
-                    { name: 'نسخة يدوية', date: new Date(Date.now() - 86400000).toLocaleString('ar'), size: '2.3 MB' },
-                ];
-                container.innerHTML = backups.map(b => `
-                    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;">
-                        <span>${b.name}</span>
-                        <span style="color:var(--text-muted);">${b.date} – ${b.size}</span>
-                    </div>
-                `).join('');
-            }, 500);
+            document.getElementById('backupList').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">لا توجد قائمة نسخ احتياطية متاحة عبر عقد Bridge الحالي. استخدم إنشاء نسخة احتياطية من Android.</div>';
         }
+
 
         /* ============================================================
            21. Audit Trail
@@ -3859,45 +3877,12 @@
             document.getElementById('auditModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             const container = document.getElementById('auditContent');
-            container.innerHTML =
-                `<div style="color:var(--text-muted);text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> جاري التحميل...</div>`;
-
+            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">جاري التحميل من SQLite...</div>';
             try {
-                const result = await apiCall('getAuditLogs', { limit: 50 });
-                if (result.success && result.data) {
-                    const logs = result.data;
-                    if (logs.length === 0) {
-                        container.innerHTML =
-                            `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات</div>`;
-                        return;
-                    }
-                    container.innerHTML = logs.map(log => `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;gap:8px;flex-wrap:wrap;">
-                            <span style="font-weight:600;">${escapeHtml(log.action || 'إجراء')}</span>
-                            <span style="color:var(--text-muted);">${escapeHtml(log.description || '')}</span>
-                            <span style="color:var(--text-muted);font-size:0.65rem;">${log.created_at || ''} – ${escapeHtml(log.username || 'نظام')}</span>
-                        </div>
-                    `).join('');
-                } else {
-                    container.innerHTML =
-                        `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات</div>`;
-                }
-            } catch (e) {
-                // عرض سجلات محلية
-                const localLogs = LocalDB.get('audit_logs', []);
-                if (localLogs.length === 0) {
-                    container.innerHTML =
-                        `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات محلية</div>`;
-                } else {
-                    container.innerHTML = localLogs.slice(-20).reverse().map(log => `
-                        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;gap:8px;flex-wrap:wrap;">
-                            <span style="font-weight:600;">${escapeHtml(log.action || 'إجراء')}</span>
-                            <span style="color:var(--text-muted);">${escapeHtml(log.description || '')}</span>
-                            <span style="color:var(--text-muted);font-size:0.65rem;">${log.created_at || ''} – ${escapeHtml(log.username || 'نظام')}</span>
-                        </div>
-                    `).join('');
-                }
-            }
+                const result = await apiCall('getContractAudit', { id: 0 });
+                const logs = Array.isArray(result.data) ? result.data : [];
+                container.innerHTML = logs.length ? logs.map(log => '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:.75rem;gap:8px;flex-wrap:wrap;"><span style="font-weight:600;">' + escapeHtml(log.action_type || 'إجراء') + '</span><span style="color:var(--text-muted);">' + escapeHtml(log.username || 'نظام') + '</span><span style="color:var(--text-muted);font-size:.65rem;">' + escapeHtml(log.created_at || '') + '</span></div>').join('') : '<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات للعقود</div>';
+            } catch (e) { container.innerHTML = '<div style="color:var(--error);text-align:center;padding:20px;">تعذر قراءة سجل العقود: ' + escapeHtml(e.message || '') + '</div>'; }
         }
 
         function closeAuditModal(e) {
@@ -3968,9 +3953,7 @@
             loadSavedTheme();
             setupSidebar();
             setupFileUpload();
-            updateOnlineStatus();
 
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
             // إغلاق المودالات عند الضغط خارجها
             document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this)

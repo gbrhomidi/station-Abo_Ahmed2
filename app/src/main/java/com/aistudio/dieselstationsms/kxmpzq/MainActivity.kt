@@ -4210,6 +4210,145 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
+
+        // ============================================================
+        // CONTRACTS_V15_BRIDGE: WebView -> DatabaseHelper -> SQLite
+        // ============================================================
+        @JavascriptInterface
+        fun getContracts(includeArchived: Boolean): String {
+            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getContracts(includeArchived)) } catch (e: Exception) {
+                DebugLogger.logException("ContractsRead", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getContractParties(): String {
+            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة أطراف العقود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getParties("")) } catch (e: Exception) {
+                DebugLogger.logException("ContractParties", e)
+                errorResponse(e.message)
+            }
+        }
+        @JavascriptInterface
+        fun getContractBundle(id: Long): String {
+            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقد")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getContractBundle(id)) } catch (e: Exception) {
+                DebugLogger.logException("ContractBundle", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveContract(jsonData: String): String {
+            val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات العقد غير صالحة") }
+            val required = if (payload.optLong("id", 0L) > 0) "update" else "create"
+            if (!checkPermission("contracts", required)) return errorResponse("لا تملك صلاحية هذه العملية على العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val id = db.saveContractBundle(payload, activity.currentUserId)
+                successResponse(id, "تم حفظ العقد فعلياً في SQLite")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractSave", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteContract(id: Long): String {
+            if (!checkPermission("contracts", "delete")) return errorResponse("لا تملك صلاحية حذف العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteContract(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تم حذف العقد منطقياً وتسجيل العملية") else errorResponse("لم يتم حذف العقد")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractDelete", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun archiveContract(id: Long): String {
+            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية أرشفة العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.archiveContract(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تمت أرشفة العقد فعلياً") else errorResponse("لم تتم أرشفة العقد")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractArchive", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreContract(id: Long): String {
+            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية استعادة العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.restoreContract(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تمت استعادة العقد فعلياً") else errorResponse("لم تتم استعادة العقد")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractRestore", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun cloneContract(id: Long, jsonData: String): String {
+            if (!checkPermission("contracts", "create")) return errorResponse("لا تملك صلاحية نسخ العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val newId = db.cloneContract(id, JSONObject(jsonData.ifBlank { "{}" }), activity.currentUserId)
+                successResponse(newId, "تم نسخ العقد وبنوده وجدول دفعاته")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractClone", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun changeContractStatus(id: Long, status: String, reason: String?): String {
+            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية تغيير حالة العقود")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.changeContractStatus(id, status, reason, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تم تغيير حالة العقد وتسجيلها") else errorResponse("لم تتغير حالة العقد")
+            } catch (e: Exception) {
+                DebugLogger.logException("ContractStatus", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun generateContractReport(jsonData: String): String {
+            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير العقود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateContractReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) {
+                DebugLogger.logException("ContractReport", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getContractAudit(id: Long): String {
+            if (!checkPermission("contracts", "audit")) return errorResponse("لا تملك صلاحية قراءة سجل العقود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getContractAudit(id, 100)) } catch (e: Exception) {
+                DebugLogger.logException("ContractAudit", e)
+                errorResponse(e.message)
+            }
+        }
+
         // ============================================================
         // COA_RECOMMENDATIONS_BRIDGE_V1: جسر شاشة شجرة الحسابات.
         // المصدر الوحيد للبيانات هو DatabaseHelper/SQLite المحلي.

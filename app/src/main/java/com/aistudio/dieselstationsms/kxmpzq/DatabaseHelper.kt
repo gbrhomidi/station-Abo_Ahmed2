@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 14
+        const val VERSION = 15
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -150,6 +150,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         try {
             createAllTables(db)
             insertInitialData(db)
+            ensureContractSchema(db)
             ensureActivityPermissions(db)
             ensureSmsSettings(db)
             db.setTransactionSuccessful()
@@ -173,6 +174,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     11 -> migrateV11ToV12(db)
                     12 -> migrateV12ToV13(db)
                     13 -> migrateV13ToV14(db)
+                    14 -> migrateV14ToV15(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -184,6 +186,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
         ensureSmsMessagesTable(db)
+        ensureContractSchema(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)
@@ -580,6 +583,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureActivityPermissions(db)
         Log.d(TAG, "Migrated to V14 successfully")
     }
+    private fun migrateV14ToV15(db: SQLiteDatabase) {
+        ensureContractSchema(db)
+        ensureContractPermissions(db)
+    }
 
     private fun ensureActivityPermissions(db: SQLiteDatabase) {
         db.execSQL(
@@ -655,6 +662,157 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ===================================================================================
     // دوال إنشاء الجداول (CREATE TABLE)
     // ===================================================================================
+
+
+    // =========================================================================
+    // CONTRACTS_V15_SCHEMA: امتدادات العقود المعتمدة على SQLite المحلية.
+    // =========================================================================
+    private fun createContractExtensionTables(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS contract_line_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                contract_id INTEGER NOT NULL,
+                line_number INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                quantity DECIMAL(15,4) DEFAULT 1,
+                unit_price DECIMAL(15,2) DEFAULT 0,
+                total_amount DECIMAL(15,2) DEFAULT 0,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER,
+                is_deleted INTEGER DEFAULT 0,
+                FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+        """)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS contract_payment_schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                contract_id INTEGER NOT NULL,
+                installment_number INTEGER NOT NULL,
+                due_date DATE NOT NULL,
+                amount DECIMAL(15,2) NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'overdue', 'cancelled')),
+                paid_at DATETIME,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER,
+                is_deleted INTEGER DEFAULT 0,
+                FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+        """)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS contract_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                contract_id INTEGER NOT NULL,
+                old_status VARCHAR(20),
+                new_status VARCHAR(20) NOT NULL,
+                reason TEXT,
+                changed_by INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE CASCADE,
+                FOREIGN KEY (changed_by) REFERENCES users(id)
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contract_line_items_contract ON contract_line_items(contract_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contract_payments_contract ON contract_payment_schedules(contract_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contract_payments_due_date ON contract_payment_schedules(due_date, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contract_status_history_contract ON contract_status_history(contract_id, created_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contracts_archived ON contracts(is_archived, is_deleted)")
+    }
+
+    private fun contractColumnExists(db: SQLiteDatabase, columnName: String): Boolean {
+        return db.rawQuery("PRAGMA table_info(contracts)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) if (cursor.getString(nameIndex) == columnName) return@use true
+            false
+        }
+    }
+
+    private fun ensureContractColumn(db: SQLiteDatabase, columnName: String, definition: String) {
+        if (!contractColumnExists(db, columnName)) {
+            db.execSQL("ALTER TABLE contracts ADD COLUMN $columnName $definition")
+        }
+    }
+
+    private fun ensureContractSchema(db: SQLiteDatabase) {
+        val columns = listOf(
+            "parent_contract_id" to "INTEGER",
+            "renewal_count" to "INTEGER DEFAULT 0",
+            "reminder_days" to "INTEGER DEFAULT 30",
+            "is_archived" to "INTEGER DEFAULT 0",
+            "archived_at" to "DATETIME",
+            "archived_by" to "INTEGER",
+            "is_deleted" to "INTEGER DEFAULT 0",
+            "deleted_at" to "DATETIME",
+            "deleted_by" to "INTEGER",
+            "updated_by" to "INTEGER",
+            "attachments_json" to "TEXT"
+        )
+        columns.forEach { (name, definition) -> ensureContractColumn(db, name, definition) }
+        createContractExtensionTables(db)
+        ensureContractPermissions(db)
+    }
+
+    private fun ensureContractPermissions(db: SQLiteDatabase) {
+        val permissionRows = listOf(
+            arrayOf("PER-CONTRACTS-READ-V15", "contracts.read", "View Contracts", "عرض العقود", "contracts", "العقود", "read"),
+            arrayOf("PER-CONTRACTS-CREATE-V15", "contracts.create", "Create Contracts", "إنشاء العقود", "contracts", "العقود", "create"),
+            arrayOf("PER-CONTRACTS-UPDATE-V15", "contracts.update", "Update Contracts", "تعديل العقود", "contracts", "العقود", "update"),
+            arrayOf("PER-CONTRACTS-DELETE-V15", "contracts.delete", "Delete Contracts", "حذف العقود", "contracts", "العقود", "delete"),
+            arrayOf("PER-CONTRACTS-EXPORT-V15", "contracts.export", "Export Contracts", "تصدير العقود", "contracts", "العقود", "export"),
+            arrayOf("PER-CONTRACTS-AUDIT-V15", "contracts.audit", "Audit Contracts", "سجل العقود", "contracts", "العقود", "audit")
+        )
+        permissionRows.forEach { row ->
+            db.execSQL(
+                """INSERT OR IGNORE INTO permissions
+                   (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                row.map { it as Any }.toTypedArray()
+            )
+        }
+        val rolesReadWrite = listOf(1L, 2L, 3L)
+        val rolesReadAudit = listOf(1L, 2L, 3L, 5L)
+        val rolesDelete = listOf(1L, 2L)
+        val grants = listOf(
+            "contracts.read" to rolesReadAudit,
+            "contracts.create" to rolesReadWrite,
+            "contracts.update" to rolesReadWrite,
+            "contracts.delete" to rolesDelete,
+            "contracts.export" to rolesReadAudit,
+            "contracts.audit" to rolesReadAudit
+        )
+        grants.forEach { (permissionCode, roles) ->
+            val permissionId = db.rawQuery(
+                "SELECT id FROM permissions WHERE permission_code = ? LIMIT 1",
+                arrayOf(permissionCode)
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+            if (permissionId <= 0) return@forEach
+            roles.forEach { roleId ->
+                val values = ContentValues().apply {
+                    put("uuid", "RP-${permissionCode.uppercase().replace('.', '-')}-V15-$roleId")
+                    put("role_id", roleId)
+                    put("permission_id", permissionId)
+                    put("can_create", if (permissionCode.endsWith("create") || permissionCode.endsWith("update")) 1 else 0)
+                    put("can_read", if (permissionCode.endsWith("read") || permissionCode.endsWith("export") || permissionCode.endsWith("audit")) 1 else 0)
+                    put("can_update", if (permissionCode.endsWith("update")) 1 else 0)
+                    put("can_delete", if (permissionCode.endsWith("delete")) 1 else 0)
+                    put("can_export", if (permissionCode.endsWith("export")) 1 else 0)
+                    put("can_print", if (permissionCode.endsWith("export") || permissionCode.endsWith("audit")) 1 else 0)
+                    put("can_approve", 0)
+                    put("created_by", 1)
+                }
+                db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+            }
+        }
+    }
+
 
     private fun createAllTables(db: SQLiteDatabase) {
         createCoreTables(db)
@@ -10883,6 +11041,411 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
+
+
+    // =========================================================================
+    // CONTRACTS_V15_DATA: عمليات العقود الفعلية عبر SQLite فقط.
+    // =========================================================================
+    private fun contractRow(db: SQLiteDatabase, id: Long, includeDeleted: Boolean = false): JSONObject? {
+        val deletedClause = if (includeDeleted) "" else " AND c.is_deleted = 0"
+        return db.rawQuery(
+            """
+            SELECT c.*, p.commercial_name, p.legal_name, p.commercial_name_ar,
+                   cu.currency_code, cu.currency_name, cu.currency_name_ar
+            FROM contracts c
+            LEFT JOIN parties p ON p.id = c.party_id
+            LEFT JOIN currencies cu ON cu.id = c.currency_id
+            WHERE c.id = ? $deletedClause LIMIT 1
+            """.trimIndent(),
+            arrayOf(id.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
+    }
+
+    private fun writeContractAudit(db: SQLiteDatabase, userId: Long, action: String, recordId: Long, oldRow: JSONObject?, newRow: JSONObject?) {
+        val values = ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("user_id", if (userId > 0) userId else null)
+            put("action_type", action)
+            put("table_name", "contracts")
+            put("record_id", recordId)
+            put("old_row_json", oldRow?.toString())
+            put("new_row_json", newRow?.toString())
+            put("created_at", getCurrentDateTime())
+        }
+        db.insert("audit_logs", null, values)
+    }
+
+    private fun contractChildren(db: SQLiteDatabase, contractId: Long, table: String): JSONArray {
+        val sql = if (table == "contract_line_items") {
+            "SELECT * FROM contract_line_items WHERE contract_id = ? AND is_deleted = 0 ORDER BY line_number, id"
+        } else {
+            "SELECT * FROM contract_payment_schedules WHERE contract_id = ? AND is_deleted = 0 ORDER BY due_date, installment_number, id"
+        }
+        return db.rawQuery(sql, arrayOf(contractId.toString())).use { cursorToJsonArray(it) }
+    }
+
+    private fun contractAttachments(db: SQLiteDatabase, contractId: Long): JSONArray {
+        return db.rawQuery(
+            "SELECT id, uuid, file_name, file_name_original, file_path, file_url, file_size, file_type, file_extension, description, description_ar, created_at FROM attachments WHERE entity_type = 'contract' AND entity_id = ? AND is_active = 1 AND is_deleted = 0 ORDER BY id DESC",
+            arrayOf(contractId.toString())
+        ).use { cursorToJsonArray(it) }
+    }
+
+    fun getContracts(includeArchived: Boolean = true): JSONArray {
+        dbLock.lock()
+        return try {
+            val archiveClause = if (includeArchived) "" else " AND c.is_archived = 0"
+            readableDatabase.rawQuery(
+                """
+                SELECT c.id, c.uuid, c.contract_code, c.contract_name, c.contract_name_ar,
+                       c.party_id, COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS party_name,
+                       c.contract_type, c.start_date, c.end_date, c.auto_renew, c.renewal_terms,
+                       c.terms, c.special_conditions, c.total_value, c.currency_id,
+                       cu.currency_code, cu.currency_name, c.status, c.signed_by, c.signed_date,
+                       c.document_path, c.notes, c.parent_contract_id, c.renewal_count,
+                       c.reminder_days, c.is_archived, c.archived_at, c.is_deleted,
+                       c.created_at, c.updated_at,
+                       (SELECT COUNT(*) FROM contract_line_items li WHERE li.contract_id = c.id AND li.is_deleted = 0) AS line_item_count,
+                       (SELECT COUNT(*) FROM contract_payment_schedules ps WHERE ps.contract_id = c.id AND ps.is_deleted = 0) AS payment_schedule_count
+                FROM contracts c
+                LEFT JOIN parties p ON p.id = c.party_id
+                LEFT JOIN currencies cu ON cu.id = c.currency_id
+                WHERE c.is_deleted = 0 $archiveClause
+                ORDER BY COALESCE(c.end_date, '9999-12-31'), c.id DESC
+                """.trimIndent(), null
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getContractBundle(id: Long): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val contract = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            contract.put("line_items", contractChildren(db, id, "contract_line_items"))
+            contract.put("payment_schedules", contractChildren(db, id, "contract_payment_schedules"))
+            contract.put("attachments", contractAttachments(db, id))
+            contract.put("audit", getContractAudit(id, 100))
+            contract
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    private fun contractStatusValid(status: String): Boolean = status in setOf("draft", "active", "expired", "terminated")
+
+    private fun saveContractChildren(db: SQLiteDatabase, contractId: Long, data: JSONObject, userId: Long) {
+        db.delete("contract_line_items", "contract_id = ?", arrayOf(contractId.toString()))
+        val lines = data.optJSONArray("line_items") ?: JSONArray()
+        for (i in 0 until lines.length()) {
+            val line = lines.optJSONObject(i) ?: continue
+            val description = line.optString("description").trim()
+            if (description.isEmpty()) continue
+            val quantity = line.optDouble("quantity", 1.0)
+            val unitPrice = line.optDouble("unit_price", 0.0)
+            require(quantity >= 0 && unitPrice >= 0) { "قيم بنود العقد غير صالحة" }
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("contract_id", contractId)
+                put("line_number", i + 1)
+                put("description", description)
+                put("quantity", quantity)
+                put("unit_price", unitPrice)
+                put("total_amount", quantity * unitPrice)
+                put("notes", line.optString("notes").trim())
+                put("created_by", if (userId > 0) userId else null)
+            }
+            db.insertOrThrow("contract_line_items", null, values)
+        }
+        db.delete("contract_payment_schedules", "contract_id = ?", arrayOf(contractId.toString()))
+        val schedules = data.optJSONArray("payment_schedules") ?: JSONArray()
+        for (i in 0 until schedules.length()) {
+            val schedule = schedules.optJSONObject(i) ?: continue
+            val dueDate = schedule.optString("due_date").trim()
+            val amount = schedule.optDouble("amount", 0.0)
+            require(dueDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && amount >= 0) { "جدول دفعات العقد غير صالح" }
+            val status = schedule.optString("status", "pending")
+            require(status in setOf("pending", "paid", "overdue", "cancelled")) { "حالة الدفعة غير صالحة" }
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("contract_id", contractId)
+                put("installment_number", i + 1)
+                put("due_date", dueDate)
+                put("amount", amount)
+                put("status", status)
+                if (status == "paid") put("paid_at", getCurrentDateTime()) else putNull("paid_at")
+                put("notes", schedule.optString("notes").trim())
+                put("created_by", if (userId > 0) userId else null)
+            }
+            db.insertOrThrow("contract_payment_schedules", null, values)
+        }
+    }
+
+    fun saveContractBundle(data: JSONObject, userId: Long): Long {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val id = data.optLong("id", 0L)
+            val name = data.optString("contract_name").trim()
+            val partyId = data.optLong("party_id", 0L)
+            val startDate = data.optString("start_date").trim()
+            val endDate = data.optString("end_date").trim()
+            val status = data.optString("status", "draft")
+            require(name.isNotEmpty()) { "اسم العقد مطلوب" }
+            require(partyId > 0) { "الطرف مطلوب" }
+            require(startDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "تاريخ بداية العقد غير صالح" }
+            require(endDate.isEmpty() || endDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "تاريخ نهاية العقد غير صالح" }
+            require(endDate.isEmpty() || endDate >= startDate) { "تاريخ نهاية العقد يجب أن يكون بعد البداية" }
+            require(contractStatusValid(status)) { "حالة العقد غير صالحة" }
+            require(db.rawQuery("SELECT 1 FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(partyId.toString())).use { it.moveToFirst() }) { "الطرف غير موجود" }
+            val parentId = if (data.isNull("parent_contract_id")) 0L else data.optLong("parent_contract_id", 0L)
+            if (parentId > 0) {
+                require(parentId != id) { "لا يمكن ربط العقد بنفسه" }
+                require(contractRow(db, parentId) != null) { "العقد الرئيسي غير موجود" }
+            }
+            val oldRow = if (id > 0) contractRow(db, id) else null
+            val code = data.optString("contract_code").trim().ifEmpty { "CTR-${System.currentTimeMillis()}" }
+            val values = ContentValues().apply {
+                put("contract_code", code)
+                put("contract_name", name)
+                put("contract_name_ar", data.optString("contract_name_ar", name).trim())
+                put("party_id", partyId)
+                put("contract_type", data.optString("contract_type", "other"))
+                put("start_date", startDate)
+                if (endDate.isNotEmpty()) put("end_date", endDate) else putNull("end_date")
+                put("auto_renew", data.optInt("auto_renew", 0))
+                put("renewal_terms", data.optString("renewal_terms").trim())
+                put("terms", data.optString("terms").trim())
+                put("special_conditions", data.optString("special_conditions").trim())
+                put("total_value", data.optDouble("total_value", 0.0))
+                if (data.optLong("currency_id", 0L) > 0) put("currency_id", data.optLong("currency_id")) else putNull("currency_id")
+                put("status", status)
+                val signedDate = data.optString("signed_date").trim()
+                if (signedDate.isNotEmpty()) put("signed_date", signedDate) else putNull("signed_date")
+                put("document_path", data.optString("document_path").trim())
+                put("notes", data.optString("notes").trim())
+                if (parentId > 0) put("parent_contract_id", parentId) else putNull("parent_contract_id")
+                put("renewal_count", data.optInt("renewal_count", oldRow?.optInt("renewal_count", 0) ?: 0))
+                put("reminder_days", data.optInt("reminder_days", oldRow?.optInt("reminder_days", 30) ?: 30).coerceIn(0, 365))
+                put("is_archived", data.optInt("is_archived", oldRow?.optInt("is_archived", 0) ?: 0))
+                put("updated_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+                val attachmentMetadata = data.optJSONArray("attachments")
+                if (attachmentMetadata != null) put("attachments_json", attachmentMetadata.toString())
+            }
+            val savedId: Long
+            if (id > 0) {
+                require(oldRow != null) { "العقد غير موجود" }
+                require(db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString())) == 1) { "لم يتم تعديل العقد" }
+                savedId = id
+            } else {
+                values.put("uuid", UUID.randomUUID().toString())
+                values.put("created_by", if (userId > 0) userId else null)
+                values.put("created_at", getCurrentDateTime())
+                savedId = db.insertOrThrow("contracts", null, values)
+            }
+            saveContractChildren(db, savedId, data, userId)
+            val newRow = contractRow(db, savedId)
+            if (oldRow?.optString("status") != status && oldRow != null) {
+                val history = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("contract_id", savedId)
+                    put("old_status", oldRow.optString("status"))
+                    put("new_status", status)
+                    put("reason", data.optString("status_reason").trim())
+                    put("changed_by", if (userId > 0) userId else null)
+                }
+                db.insertOrThrow("contract_status_history", null, history)
+            }
+            writeContractAudit(db, userId, if (oldRow == null) "insert" else "update", savedId, oldRow, newRow)
+            db.setTransactionSuccessful()
+            return savedId
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun deleteContract(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val values = ContentValues().apply {
+                put("is_deleted", 1)
+                put("deleted_at", getCurrentDateTime())
+                put("deleted_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", if (userId > 0) userId else null)
+            }
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "delete", id, oldRow, contractRow(db, id, true))
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun archiveContract(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val values = ContentValues().apply {
+                put("is_archived", 1)
+                put("archived_at", getCurrentDateTime())
+                put("archived_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", if (userId > 0) userId else null)
+            }
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "archive", id, oldRow, contractRow(db, id))
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun restoreContract(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = contractRow(db, id, true) ?: throw IllegalArgumentException("العقد غير موجود")
+            val values = ContentValues().apply {
+                put("is_archived", 0)
+                put("is_deleted", 0)
+                putNull("archived_at")
+                putNull("archived_by")
+                putNull("deleted_at")
+                putNull("deleted_by")
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", if (userId > 0) userId else null)
+            }
+            val rows = db.update("contracts", values, "id = ?", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "restore", id, oldRow, contractRow(db, id))
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun cloneContract(sourceId: Long, data: JSONObject, userId: Long): Long {
+        val db = readableDatabase
+        val source = getContractBundle(sourceId)
+        val clone = JSONObject(source.toString()).apply {
+            remove("id"); remove("uuid"); remove("contract_code"); remove("created_at"); remove("updated_at")
+            remove("created_by"); remove("updated_by"); remove("is_deleted"); remove("deleted_at"); remove("deleted_by")
+            put("contract_name", data.optString("contract_name").trim().ifEmpty { source.optString("contract_name") + " - نسخة" })
+            put("contract_code", data.optString("contract_code").trim())
+            put("status", "draft")
+            put("is_archived", 0)
+            put("is_deleted", 0)
+        }
+        require(clone.optString("contract_code").isNotEmpty()) { "كود العقد المنسوخ مطلوب" }
+        return saveContractBundle(clone, userId)
+    }
+
+    fun changeContractStatus(id: Long, status: String, reason: String?, userId: Long): Int {
+        require(contractStatusValid(status)) { "حالة العقد غير صالحة" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            if (oldRow.optString("status") == status) return 0
+            val values = ContentValues().apply {
+                put("status", status)
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", if (userId > 0) userId else null)
+            }
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows == 1) {
+                val history = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("contract_id", id)
+                    put("old_status", oldRow.optString("status"))
+                    put("new_status", status)
+                    put("reason", reason?.trim())
+                    put("changed_by", if (userId > 0) userId else null)
+                }
+                db.insertOrThrow("contract_status_history", null, history)
+                writeContractAudit(db, userId, "status_change", id, oldRow, contractRow(db, id))
+            }
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun getContractAudit(recordId: Long = 0L, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            val where = if (recordId > 0) "AND al.record_id = ?" else ""
+            val args = if (recordId > 0) arrayOf(recordId.toString(), limit.coerceIn(1, 500).toString()) else arrayOf(limit.coerceIn(1, 500).toString())
+            readableDatabase.rawQuery(
+                """
+                SELECT al.id, al.uuid, al.action_type, al.table_name, al.record_id,
+                       al.old_row_json, al.new_row_json, al.created_at,
+                       COALESCE(u.display_name, u.full_name_ar, u.full_name, u.username, 'نظام') AS username
+                FROM audit_logs al
+                LEFT JOIN users u ON u.id = al.user_id
+                WHERE al.table_name = 'contracts' $where
+                ORDER BY al.id DESC LIMIT ?
+                """.trimIndent(), args
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun generateContractReport(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val reportType = data.optString("report_type", "contracts")
+            val startDate = data.optString("start_date").trim()
+            val endDate = data.optString("end_date").trim()
+            val status = data.optString("status").trim()
+            val baseWhere = StringBuilder("c.is_deleted = 0")
+            val args = mutableListOf<String>()
+            if (status.isNotEmpty()) { baseWhere.append(" AND c.status = ?"); args.add(status) }
+            if (startDate.isNotEmpty()) { baseWhere.append(" AND COALESCE(c.end_date, c.start_date) >= ?"); args.add(startDate) }
+            if (endDate.isNotEmpty()) { baseWhere.append(" AND c.start_date <= ?"); args.add(endDate) }
+            when (reportType) {
+                "by_party" -> db.rawQuery(
+                    """
+                    SELECT COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS party_name,
+                           COUNT(c.id) AS contract_count,
+                           SUM(CASE WHEN c.status = 'active' THEN 1 ELSE 0 END) AS active_count,
+                           SUM(CASE WHEN c.status = 'expired' THEN 1 ELSE 0 END) AS expired_count,
+                           COALESCE(SUM(c.total_value), 0) AS total_value
+                    FROM contracts c LEFT JOIN parties p ON p.id = c.party_id
+                    WHERE ${baseWhere}
+                    GROUP BY c.party_id ORDER BY total_value DESC
+                    """.trimIndent(), args.toTypedArray()
+                ).use { cursorToJsonArray(it) }
+                else -> db.rawQuery(
+                    """
+                    SELECT c.id, c.contract_code, c.contract_name, c.contract_name_ar, c.party_id,
+                           COALESCE(p.commercial_name_ar, p.commercial_name, p.legal_name, '') AS party_name,
+                           c.contract_type, c.status, c.start_date, c.end_date, c.total_value,
+                           cu.currency_code, cu.currency_name, c.auto_renew, c.is_archived
+                    FROM contracts c LEFT JOIN parties p ON p.id = c.party_id
+                    LEFT JOIN currencies cu ON cu.id = c.currency_id
+                    WHERE ${baseWhere}
+                    ORDER BY COALESCE(c.end_date, '9999-12-31'), c.id DESC
+                    """.trimIndent(), args.toTypedArray()
+                ).use { cursorToJsonArray(it) }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 
     // =========================================================================
     // COA_RECOMMENDATIONS_V1: عمليات شجرة الحسابات المحلية عبر SQLite فقط.
