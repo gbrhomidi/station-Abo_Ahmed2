@@ -1339,6 +1339,26 @@ class MainActivity : AppCompatActivity() {
             return db.checkUserPermission(userId, "$permissionCode.$action")
         }
 
+        private fun getCurrentStationId(db: DatabaseHelper, userId: Long): Int {
+            return db.getUserById(userId)
+                ?.optInt("station_id", 1)
+                ?.takeIf { it > 0 }
+                ?: 1
+        }
+
+        private fun resolveCurrencyId(db: DatabaseHelper, requestedCurrencyId: Long): Long {
+            if (requestedCurrencyId > 0) return requestedCurrencyId
+            val currencies = db.getCurrencies()
+            var firstId = 0L
+            for (i in 0 until currencies.length()) {
+                val currency = currencies.optJSONObject(i) ?: continue
+                val id = currency.optLong("id", 0L)
+                if (id > 0 && firstId == 0L) firstId = id
+                if (currency.optInt("is_default", 0) == 1 && id > 0) return id
+            }
+            return if (firstId > 0) firstId else 1L
+        }
+
         private fun successResponse(id: Long, message: String): String {
             return JSONObject().apply {
                 put("success", true)
@@ -2959,6 +2979,88 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(activity)
             } catch (e: Exception) {
                 DebugLogger.logException("Activity", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getActivityLogs(limit: Int): String {
+            DebugLogger.info("WebAppInterface", "getActivityLogs called")
+            if (!checkPermission("activity", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getActivityLogs(limit))
+            } catch (e: Exception) {
+                DebugLogger.logException("Activity", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteActivityLog(sourceTable: String, id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteActivityLog called")
+            if (!checkPermission("activity", "delete")) return errorResponse("لا تملك صلاحية حذف السجل")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteActivityLog(sourceTable, id)
+                when {
+                    rows < 0 -> errorResponse("مصدر السجل غير مسموح")
+                    rows == 0 -> successResponse(false, "لم يتم العثور على السجل")
+                    else -> successResponse(true, "تم حذف السجل فعلياً")
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("Activity", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun cleanupActivityLogs(retentionDays: Int): String {
+            DebugLogger.info("WebAppInterface", "cleanupActivityLogs called")
+            if (!checkPermission("activity", "delete")) return errorResponse("لا تملك صلاحية تنظيف السجلات")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val deleted = db.cleanupActivityLogs(retentionDays)
+                JSONObject().apply {
+                    put("success", true)
+                    put("deleted", deleted)
+                    put("message", "تم تنظيف السجلات فعلياً")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("Activity", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getBalanceSheet(reportDate: String, currencyId: Long): String {
+            DebugLogger.info("WebAppInterface", "getBalanceSheet called")
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الميزانية")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val effectiveCurrencyId = resolveCurrencyId(db, currencyId)
+                dataResponse(db.getBalanceSheet(reportDate, stationId, effectiveCurrencyId))
+            } catch (e: Exception) {
+                DebugLogger.logException("BalanceSheet", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveBalanceSheet(reportDate: String, currencyId: Long): String {
+            DebugLogger.info("WebAppInterface", "saveBalanceSheet called")
+            if (!checkPermission("accounting", "create")) return errorResponse("لا تملك صلاحية حفظ الميزانية")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val effectiveCurrencyId = resolveCurrencyId(db, currencyId)
+                val id = db.saveBalanceSheetSnapshot(reportDate, stationId, effectiveCurrencyId, activity.currentUserId)
+                successResponse(id, "تم حفظ snapshot الميزانية فعلياً")
+            } catch (e: Exception) {
+                DebugLogger.logException("BalanceSheet", e)
                 errorResponse(e.message)
             }
         }

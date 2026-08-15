@@ -2004,7 +2004,7 @@
             AUDITOR: 'auditor'
         };
 
-        let currentUserRole = ROLES.ADMIN;
+        let currentUserRole = ROLES.VIEWER;
 
         function hasPermission(action) {
             if (currentUserRole === ROLES.ADMIN) return true;
@@ -2032,12 +2032,62 @@
         /* ============================================================
            1. API Call – جسر حقيقي مع DatabaseHelper.kt
            ============================================================ */
-        function apiCall(action, params) {
+                function invokeExistingBridgeAction(action, params = {}) {
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('AndroidInterface bridge unavailable');
+            const p = params || {};
+            let result;
+            switch (action) {
+                case 'addNotification': result = bridge.addNotification(JSON.stringify(p)); break;
+                case 'addProduct': result = bridge.addProduct(JSON.stringify(p)); break;
+                case 'addSmsMessage': result = bridge.addSmsMessage(JSON.stringify(p)); break;
+                case 'addWhitelist': result = bridge.addWhitelist(JSON.stringify(p)); break;
+                case 'completeSale': result = bridge.completeSale(JSON.stringify(p)); break;
+                case 'deleteParty': result = bridge.deleteParty(Number(p.id ?? p.partyId ?? p.party_id)); break;
+                case 'deleteProduct': result = bridge.deleteProduct(Number(p.id ?? p.productId ?? p.product_id)); break;
+                case 'deleteUser': result = bridge.deleteUser(Number(p.id ?? p.userId ?? p.user_id)); break;
+                case 'getCategories': result = bridge.getCategories(); break;
+                case 'getCurrencies': result = bridge.getCurrencies(); break;
+                case 'getCurrentUser': result = bridge.getCurrentUser(); break;
+                case 'getCustomerDebts': result = bridge.getCustomerDebts(p.fromDate ?? p.from_date ?? null, p.toDate ?? p.to_date ?? null); break;
+                case 'getCustomerLedger': result = bridge.getCustomerLedger(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
+                case 'getCustomers': result = bridge.getCustomers(); break;
+                case 'getDashboardStats': result = bridge.getDashboardStats(JSON.stringify(p)); break;
+                case 'getFuelTypes': result = bridge.getFuelTypes(); break;
+                case 'getLowStockItems': result = bridge.getLowStockItems(); break;
+                case 'getNotifications': result = bridge.getNotifications(); break;
+                case 'getOverduePayments': result = bridge.getOverduePayments(); break;
+                case 'getParties': result = bridge.getParties(p.type ?? null); break;
+                case 'getCustomerSales': result = bridge.getCustomerSales(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
+                case 'getPartyTypes': result = bridge.getPartyTypes(); break;
+                case 'getProducts': result = bridge.getProducts(); break;
+                case 'getPumps': result = bridge.getPumps(); break;
+                case 'getRecentActivity': result = bridge.getRecentActivity(Number(p.limit ?? 100)); break;
+                case 'getActivityLogs': result = bridge.getActivityLogs(Number(p.limit ?? 500)); break;
+                case 'getSmsMessages': result = bridge.getSmsMessages(); break;
+                case 'getSetting': result = bridge.getSetting(String(p.key ?? '')); break;
+                case 'getShifts': result = bridge.getShifts(); break;
+                case 'getSuppliers': result = bridge.getSuppliers(); break;
+                case 'getTanks': result = bridge.getTanks(); break;
+                case 'getUserPermissions': result = bridge.getUserPermissions(Number(p.userId ?? p.user_id)); break;
+                case 'getUsers': result = bridge.getUsers(); break;
+                case 'deleteActivityLog': result = bridge.deleteActivityLog(String(p.sourceTable ?? p.source_table ?? p.tableName ?? ''), Number(p.id ?? 0)); break;
+                case 'cleanupActivityLogs': result = bridge.cleanupActivityLogs(Number(p.retentionDays ?? p.retention_days ?? 90)); break;
+                case 'getWhitelist': result = bridge.getWhitelist(); break;
+                case 'markNotificationRead': result = bridge.markNotificationRead(Number(p.id ?? p.notificationId ?? p.notification_id)); break;
+                case 'removeWhitelist': result = bridge.removeWhitelist(JSON.stringify(p)); break;
+                case 'setSetting': result = bridge.setSetting(String(p.key ?? ''), String(p.value ?? '')); break;
+                default:
+                    throw new Error(`Unsupported Bridge action: ${action}`);
+            }
+            return result;
+        }
+
+function apiCall(action, params) {
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        const result = invokeExistingBridgeAction(action, params);
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -2091,23 +2141,10 @@
             if (!isOnline) return;
             const pending = LocalDB.get('pending_ops', []);
             if (pending.length === 0) return;
-            showLoading(true);
-            let ok = 0,
-                fail = 0;
-            for (const op of pending) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) ok++;
-                    else fail++;
-                } catch (e) { fail++; }
-            }
-            if (ok > 0) {
-                const remaining = pending.slice(fail);
-                LocalDB.set('pending_ops', remaining);
-                showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
-            }
-            if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
-            showLoading(false);
+
+            // لا توجد في هذا الملف عملية كتابة لها عقد Bridge صريح.
+            // تبقى العمليات القديمة محفوظة ولا تُرسل إلى dispatcher مجهول.
+            showToast('⚠️ توجد عمليات معلقة تحتاج دالة Bridge صريحة قبل مزامنتها', 'warning');
         }
 
         /* ============================================================
@@ -2287,58 +2324,31 @@
             renderSkeleton();
             showLoading(true);
             try {
-                // استدعاء دوال DatabaseHelper الفعلية عبر AndroidInterface
-                const [recentRes, auditRes, systemRes, smsRes, syncRes, usersRes] = await Promise.all([
-                    apiCall('getRecentActivity', { limit: 500 }), // موجودة في DatabaseHelper
-                    apiCall('getAuditLogs', { limit: 500 }), // سيتم تنفيذها عبر AndroidInterface
-                    apiCall('getSystemLogs', { limit: 500 }), // سيتم تنفيذها عبر AndroidInterface
-                    apiCall('getSmsLogs', { limit: 500 }), // موجودة في DatabaseHelper
-                    apiCall('getSyncLogs', { limit: 500 }), // سيتم تنفيذها عبر AndroidInterface
-                    apiCall('getUsers', {}) // موجودة في DatabaseHelper
+                const [activityRes, currentUserRes] = await Promise.all([
+                    apiCall('getActivityLogs', { limit: 500 }),
+                    apiCall('getCurrentUser', {})
                 ]);
-
-                let logs = [];
-
-                if (recentRes.success && recentRes.data) {
-                    logs = logs.concat(recentRes.data.map(l => ({ ...l, _type: 'user_activity', _table: 'user_activity_log' })));
-                }
-                if (auditRes.success && auditRes.data) {
-                    logs = logs.concat(auditRes.data.map(l => ({ ...l, _type: 'audit', _table: 'audit_logs' })));
-                }
-                if (systemRes.success && systemRes.data) {
-                    logs = logs.concat(systemRes.data.map(l => ({ ...l, _type: 'system', _table: 'system_logs' })));
-                }
-                if (smsRes.success && smsRes.data) {
-                    logs = logs.concat(smsRes.data.map(l => ({ ...l, _type: 'sms', _table: 'sms_logs' })));
-                }
-                if (syncRes.success && syncRes.data) {
-                    logs = logs.concat(syncRes.data.map(l => ({ ...l, _type: 'sync', _table: 'sync_logs' })));
+                if (!activityRes.success || !Array.isArray(activityRes.data)) {
+                    throw new Error(activityRes.error || activityRes.message || 'فشل قراءة سجل النشاط');
                 }
 
-                // ترتيب تنازلي حسب التاريخ
-                logs.sort((a, b) => {
-                    const da = a.created_at || a.sent_at || a.started_at || '';
-                    const db = b.created_at || b.sent_at || b.started_at || '';
-                    return db.localeCompare(da);
-                });
-
-                allLogs = logs;
+                allLogs = activityRes.data.map(log => ({
+                    ...log,
+                    _type: log.log_type || 'user_activity',
+                    _table: log.source_table || 'user_activity_log'
+                }));
                 LocalDB.set('logs', allLogs);
 
-                if (usersRes.success && usersRes.data) {
-                    allUsers = usersRes.data;
+                const currentUser = currentUserRes && currentUserRes.data
+                    ? currentUserRes.data
+                    : (currentUserRes && currentUserRes.success ? currentUserRes : null);
+                if (currentUser) {
+                    allUsers = [currentUser];
                     LocalDB.set('users', allUsers);
-                } else {
-                    allUsers = LocalDB.get('users', []);
-                }
-
-                // تحديث دور المستخدم
-                if (allUsers.length > 0) {
-                    const u = allUsers[0];
-                    const role = u.role_name || u.role || 'admin';
-                    if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
-                    else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
-                    else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
+                    const role = String(currentUser.role || currentUser.role_name || '').toLowerCase();
+                    if (role.includes('admin')) currentUserRole = ROLES.ADMIN;
+                    else if (role.includes('manager')) currentUserRole = ROLES.MANAGER;
+                    else if (role.includes('audit')) currentUserRole = ROLES.AUDITOR;
                     else currentUserRole = ROLES.VIEWER;
                 }
 
@@ -2351,7 +2361,6 @@
                 showLoading(false);
             } catch (e) {
                 console.error('Load error:', e);
-                // محاولة استخدام التخزين المحلي كنسخة احتياطية
                 allLogs = LocalDB.get('logs', []);
                 allUsers = LocalDB.get('users', []);
                 initFuse();
@@ -2360,7 +2369,7 @@
                 updateCharts();
                 updateAlerts();
                 showLoading(false);
-                showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
+                showToast('⚠️ تعذر الاتصال بقاعدة البيانات؛ عُرضت آخر نسخة محلية', 'warning');
             }
         }
 
@@ -2877,50 +2886,35 @@
            ============================================================ */
         async function deleteLog(id, tableName) {
             if (!requirePermission('delete')) return;
-            if (!tableName) { showToast('❌ لا يمكن تحديد جدول السجل', 'error'); return; }
-
             const item = allLogs.find(l => l.id == id);
-            const desc = item ? (item.description || item.message || 'هذا السجل') : 'هذا السجل';
+            const sourceTable = item?._table || tableName;
+            if (!sourceTable) { showToast('❌ لا يمكن تحديد مصدر السجل', 'error'); return; }
+            if (sourceTable === 'audit_logs') {
+                showToast('⚠️ سجلات التدقيق محمية ولا تُحذف من هذه الشاشة', 'warning');
+                return;
+            }
 
+            const desc = item ? (item.description || item.message || 'هذا السجل') : 'هذا السجل';
             const confirmed = await Swal.fire({
                 title: '⚠️ هل أنت متأكد؟',
-                text: 'سيتم حذف السجل "' + desc.substring(0, 30) + '" نهائياً من قاعدة البيانات!',
+                text: 'سيتم حذف السجل "' + String(desc).substring(0, 30) + '" فعلياً من قاعدة البيانات.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#b31b3a',
                 cancelButtonColor: '#5a5a7a',
                 confirmButtonText: 'نعم، احذف',
-                cancelButtonText: 'إلغاء',
-                background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1f1f3a' : '#fffcf7',
-                color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#e8e8f0' : '#1a1a2e'
+                cancelButtonText: 'إلغاء'
             });
             if (!confirmed.isConfirmed) return;
 
             showLoading(true);
             try {
-                // استدعاء عملية حذف حقيقية عبر AndroidInterface
-                const result = await apiCall('deleteRecord', { table: tableName, id: id });
-                if (result.success) {
-                    showToast('✅ تم الحذف من قاعدة البيانات بنجاح', 'success');
-                    await loadData();
-                } else {
-                    throw new Error(result.message || 'فشل في الحذف');
-                }
+                const result = await apiCall('deleteActivityLog', { sourceTable, id });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل الحذف');
+                showToast('✅ تم الحذف فعلياً من قاعدة البيانات', 'success');
+                await loadData();
             } catch (e) {
-                if (!isOnline) {
-                    // وضع عدم الاتصال: حفظ العملية للمزامنة لاحقاً
-                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteRecord', data: { table: tableName,
-                            id } }]);
-                    allLogs = allLogs.filter(l => l.id != id);
-                    LocalDB.set('logs', allLogs);
-                    showToast('✅ تم الحذف محلياً – سيتم المزامنة مع قاعدة البيانات لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'فشل الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2933,7 +2927,7 @@
             if (!requirePermission('delete')) return;
             const confirmed = await Swal.fire({
                 title: '🧹 تنظيف السجلات القديمة',
-                text: 'سيتم حذف جميع السجلات الأقدم من 90 يوماً نهائياً من قاعدة البيانات. هل أنت متأكد؟',
+                text: 'سيتم حذف السجلات التشغيلية الأقدم من 90 يوماً فعلياً. سجلات التدقيق محمية. هل أنت متأكد؟',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#b31b3a',
@@ -2945,31 +2939,12 @@
 
             showLoading(true);
             try {
-                // استدعاء cleanupOldData الموجود في DatabaseHelper
-                const result = await apiCall('cleanupOldData', { days: 90 });
-                if (result.success) {
-                    showToast('✅ تم تنظيف السجلات القديمة من قاعدة البيانات', 'success');
-                    await loadData();
-                } else {
-                    throw new Error(result.message || 'فشل في التنظيف');
-                }
+                const result = await apiCall('cleanupActivityLogs', { retentionDays: 90 });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل التنظيف');
+                showToast('✅ تم تنظيف ' + Number(result.deleted || 0) + ' سجل فعلياً', 'success');
+                await loadData();
             } catch (e) {
-                if (!isOnline) {
-                    // تنظيف محلي مؤقت
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - 90);
-                    const cutoffStr = cutoff.toISOString();
-                    const before = allLogs.length;
-                    allLogs = allLogs.filter(l => (l.created_at || '') > cutoffStr);
-                    LocalDB.set('logs', allLogs);
-                    showToast('✅ تم تنظيف ' + (before - allLogs.length) + ' سجل محلياً – سيتم المزامنة', 'success');
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                } else {
-                    showToast('❌ ' + (e.message || 'فشل التنظيف'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'فشل التنظيف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3024,19 +2999,23 @@
 
             showLoading(true);
             try {
-                const params = { report_type: currentReportType, start_date: from, end_date: to, log_type: type || null,
-                    status: status || null };
-                const result = await apiCall('generateLogReport', params);
-                if (result.success && result.data) {
-                    reportData = result.data;
-                    renderReportResults(result.data);
-                    showToast('✅ تم توليد التقرير من قاعدة البيانات', 'success');
-                } else {
-                    document.getElementById('reportResults').innerHTML = `
-                        <div class="empty-state"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i><p>${result.message || 'لا توجد بيانات'}</p></div>
-                    `;
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                }
+                const start = new Date(from + 'T00:00:00').getTime();
+                const end = new Date(to + 'T23:59:59.999').getTime();
+                const normalizedStatus = value => {
+                    const v = String(value || '').toLowerCase();
+                    return v === 'failed' || v === 'error' ? 'fail' : v;
+                };
+                const filtered = allLogs.filter(item => {
+                    const rawDate = item.created_at || item.sent_at || item.started_at || '';
+                    const time = Date.parse(rawDate);
+                    const dateMatch = !Number.isNaN(time) && time >= start && time <= end;
+                    const typeMatch = !type || item._type === type;
+                    const statusMatch = !status || normalizedStatus(item.status || (item.is_success === false ? 'fail' : item.is_success === true ? 'success' : '')) === status;
+                    return dateMatch && typeMatch && statusMatch;
+                });
+                reportData = filtered;
+                renderReportResults(filtered);
+                showToast('✅ تم توليد التقرير من السجلات المحملة فعلياً', 'success');
             } catch (e) {
                 showToast('❌ فشل توليد التقرير', 'error');
                 console.error(e);

@@ -18,7 +18,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * DatabaseHelper - قاعدة بيانات محطة أبو أحمد لمشتقات الديزل
- * الإصدار المدمج V13 - تم إصلاح جميع المشاكل الحرجة والعالية الخطورة
+ * الإصدار المدمج V14 - تم إصلاح جميع المشاكل الحرجة والعالية الخطورة
  * - تم جعل المُنشئ خاصاً (Singleton آمن)
  * - تم استخدام ThreadLocal لـ SimpleDateFormat (أمان الخيوط)
  * - تم إصلاح SQL Injection في الترقية
@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 13
+        const val VERSION = 14
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -121,6 +121,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private val dbLock = ReentrantLock()
     private val contextRef = context.applicationContext
 
+    private data class BalanceAccountAccumulator(
+        val id: Long,
+        val code: String,
+        val name: String,
+        val nameAr: String?,
+        val type: String,
+        val level: Int,
+        val normalBalance: String,
+        var openingBalance: Double = 0.0,
+        var debitTotal: Double = 0.0,
+        var creditTotal: Double = 0.0,
+        var openingInitialized: Boolean = false
+    )
+
     private fun getCurrentDateTime(): String = getDateFormat().format(Date())
     private fun getCurrentDate(): String = getDateOnlyFormat().format(Date())
     private fun getCurrentTime(): String = getTimeFormat().format(Date())
@@ -136,6 +150,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         try {
             createAllTables(db)
             insertInitialData(db)
+            ensureActivityPermissions(db)
             ensureSmsSettings(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -157,6 +172,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     10 -> migrateV10ToV11(db)
                     11 -> migrateV11ToV12(db)
                     12 -> migrateV12ToV13(db)
+                    13 -> migrateV13ToV14(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -178,6 +194,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
+        ensureActivityPermissions(db)
         ensureSmsSettings(db)
     }
 
@@ -557,6 +574,39 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
         Log.d(TAG, "Migrated to V13 successfully")
+    }
+
+    private fun migrateV13ToV14(db: SQLiteDatabase) {
+        ensureActivityPermissions(db)
+        Log.d(TAG, "Migrated to V14 successfully")
+    }
+
+    private fun ensureActivityPermissions(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO permissions
+                (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+            VALUES
+                ('PER-ACTIVITY-READ-V14', 'activity.read', 'View Activity Logs', 'عرض سجل النشاط', 'activity', 'النشاط', 'read'),
+                ('PER-ACTIVITY-DELETE-V14', 'activity.delete', 'Delete Activity Logs', 'حذف سجل النشاط', 'activity', 'النشاط', 'delete')
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACTIVITY-READ-ADMIN-V14', 1, id, 0, 1, 0, 0, 1, 1, 0
+            FROM permissions WHERE permission_code = 'activity.read'
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACTIVITY-DELETE-ADMIN-V14', 1, id, 0, 1, 0, 1, 0, 0, 0
+            FROM permissions WHERE permission_code = 'activity.delete'
+            """.trimIndent()
+        )
     }
 
     // ===================================================================================
@@ -7496,6 +7546,498 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // ========================================================================
+    // APIs موحدة لسجل النشاط والميزانية العمومية
+    // ========================================================================
+
+    /**
+     * قراءة سجل موحد من الجداول الفعلية فقط. أسماء الجداول ثابتة داخل هذا الاستعلام
+     * ولا يمكن تمريرها من JavaScript.
+     */
+    fun getActivityLogs(limit: Int = 500): JSONArray {
+        val safeLimit = limit.coerceIn(1, 2000)
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = """
+                SELECT id, uuid, username, user_id, action, action_type, action_category,
+                       description, description_ar, table_name, record_id, ip_address,
+                       device_id, user_agent, old_values, new_values, changed_columns,
+                       status, is_success, error_message, log_type, message_type,
+                       phone_number, sent_at, started_at, sync_type, stack_trace,
+                       source_table, created_at
+                FROM (
+                    SELECT ual.id, ual.uuid, u.username, ual.user_id,
+                           ual.action, NULL AS action_type, ual.action_category,
+                           ual.description, ual.description_ar,
+                           ual.target_table AS table_name, ual.target_id AS record_id,
+                           ual.ip_address, ual.device_id, ual.user_agent,
+                           ual.old_values, ual.new_values, ual.changed_columns,
+                           CASE WHEN ual.is_success = 1 THEN 'success' ELSE 'failed' END AS status,
+                           ual.is_success, ual.error_message,
+                           'user_activity' AS log_type, NULL AS message_type,
+                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
+                           NULL AS sync_type, NULL AS stack_trace,
+                           'user_activity_log' AS source_table, ual.created_at
+                    FROM user_activity_log ual
+                    LEFT JOIN users u ON u.id = ual.user_id
+
+                    UNION ALL
+
+                    SELECT al.id, al.uuid, u.username, al.user_id,
+                           al.action_type AS action, al.action_type, 'audit' AS action_category,
+                           COALESCE(al.new_row_json, al.old_row_json, al.action_type) AS description,
+                           NULL AS description_ar, al.table_name, al.record_id,
+                           al.ip_address, NULL AS device_id, al.user_agent,
+                           al.old_row_json AS old_values, al.new_row_json AS new_values,
+                           al.changed_columns, 'success' AS status, 1 AS is_success,
+                           NULL AS error_message, 'audit' AS log_type, NULL AS message_type,
+                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
+                           NULL AS sync_type, NULL AS stack_trace,
+                           'audit_logs' AS source_table, al.created_at
+                    FROM audit_logs al
+                    LEFT JOIN users u ON u.id = al.user_id
+
+                    UNION ALL
+
+                    SELECT sl.id, sl.uuid, u.username, sl.user_id,
+                           sl.log_type AS action, sl.log_type, 'system' AS action_category,
+                           sl.message AS description, sl.message_ar AS description_ar,
+                           'system_logs' AS table_name, sl.id AS record_id,
+                           sl.ip_address, sl.device_id, NULL AS user_agent,
+                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
+                           CASE
+                               WHEN sl.log_level IN ('error', 'critical') THEN 'failed'
+                               WHEN sl.log_level = 'warning' THEN 'warning'
+                               ELSE 'success'
+                           END AS status,
+                           CASE WHEN sl.log_level IN ('error', 'critical') THEN 0 ELSE 1 END AS is_success,
+                           CASE WHEN sl.log_level IN ('error', 'critical') THEN sl.message ELSE NULL END AS error_message,
+                           'system' AS log_type, NULL AS message_type,
+                           NULL AS phone_number, NULL AS sent_at, NULL AS started_at,
+                           NULL AS sync_type, sl.stack_trace,
+                           'system_logs' AS source_table, sl.created_at
+                    FROM system_logs sl
+                    LEFT JOIN users u ON u.id = sl.user_id
+
+                    UNION ALL
+
+                    SELECT sy.id, sy.uuid, NULL AS username, NULL AS user_id,
+                           sy.sync_type AS action, sy.sync_type, 'sync' AS action_category,
+                           sy.entity_type AS description, NULL AS description_ar,
+                           sy.entity_type AS table_name, NULL AS record_id,
+                           NULL AS ip_address, sy.device_id, NULL AS user_agent,
+                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
+                           sy.status, CASE WHEN sy.status = 'success' THEN 1 ELSE 0 END AS is_success,
+                           sy.error_message, 'sync' AS log_type, NULL AS message_type,
+                           NULL AS phone_number, NULL AS sent_at, sy.started_at,
+                           sy.sync_type, NULL AS stack_trace,
+                           'sync_logs' AS source_table, sy.created_at
+                    FROM sync_logs sy
+
+                    UNION ALL
+
+                    SELECT sms.id, sms.uuid, u.username, sms.created_by,
+                           sms.message_type AS action, sms.message_type, 'sms' AS action_category,
+                           sms.message_content AS description, NULL AS description_ar,
+                           'sms_logs' AS table_name, sms.id AS record_id,
+                           NULL AS ip_address, sms.device_id, NULL AS user_agent,
+                           NULL AS old_values, NULL AS new_values, NULL AS changed_columns,
+                           sms.status,
+                           CASE WHEN sms.status IN ('failed', 'cancelled') THEN 0 ELSE 1 END AS is_success,
+                           sms.error_message, 'sms' AS log_type, sms.message_type,
+                           sms.phone_number, sms.sent_at, NULL AS started_at,
+                           NULL AS sync_type, NULL AS stack_trace,
+                           'sms_logs' AS source_table, sms.created_at
+                    FROM sms_logs sms
+                    LEFT JOIN users u ON u.id = sms.created_by
+                ) activity
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            """.trimIndent()
+            db.rawQuery(sql, arrayOf(safeLimit.toString())).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /** حذف سجل من جدول ثابت مسموح به؛ audit_logs غير قابل للحذف من الواجهة. */
+    fun deleteActivityLog(sourceTable: String, id: Long): Int {
+        if (id <= 0) return 0
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            when (sourceTable) {
+                "user_activity_log" -> db.delete("user_activity_log", "id = ?", arrayOf(id.toString()))
+                "system_logs" -> db.delete("system_logs", "id = ?", arrayOf(id.toString()))
+                "sync_logs" -> db.delete("sync_logs", "id = ?", arrayOf(id.toString()))
+                "sms_logs" -> db.delete("sms_logs", "id = ?", arrayOf(id.toString()))
+                else -> -1
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /** تنظيف سجلات التشغيل القديمة دون حذف audit_logs ودون VACUUM داخل معاملة. */
+    fun cleanupActivityLogs(retentionDays: Int): Int {
+        val safeDays = retentionDays.coerceIn(1, 3650)
+        val cutoff = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -safeDays) }
+        val cutoffDate = getDateOnlyFormat().format(cutoff.time)
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val deletedActivity = db.delete("user_activity_log", "date(created_at) < ?", arrayOf(cutoffDate))
+                val deletedSystem = db.delete("system_logs", "date(created_at) < ? AND is_resolved = 1", arrayOf(cutoffDate))
+                val deletedSync = db.delete("sync_logs", "date(created_at) < ?", arrayOf(cutoffDate))
+                val deletedSms = db.delete("sms_logs", "date(created_at) < ?", arrayOf(cutoffDate))
+                db.setTransactionSuccessful()
+                deletedActivity + deletedSystem + deletedSync + deletedSms
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * حساب ميزانية فعلية حتى تاريخ محدد من accounts وقيود journal_entries.
+     * stationId يبقى داخل Android/DatabaseHelper ولا يأتي من JavaScript.
+     */
+    /**
+     * حساب ميزانية فعلية حتى تاريخ محدد، مع تحويل كل سطر إلى reporting currency.
+     * سياسة السعر:
+     * 1) إذا كانت عملة السطر هي العملة الهدف فالمعامل = 1.
+     * 2) يستخدم journal_entry_items.exchange_rate كسعر تاريخي من عملة القيد إلى العملة الافتراضية، وهو نفس الاتجاه الذي تدل عليه amount_in_default في الجداول التجارية.
+     * 3) إذا كانت عملة التقرير مختلفة عن العملة الافتراضية، يُركّب السعر التاريخي مع exchange_rates من العملة الافتراضية إلى عملة التقرير.
+     * 4) عند وجود سعر عكسي يستخدم exchange_rates.inverse_rate.
+     * 5) إذا تعذر إثبات السعر يرفض الحساب بدلاً من خلط عملات مختلفة.
+     */
+    fun getBalanceSheet(reportDate: String, stationId: Int, currencyId: Long): JSONObject {
+        require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(reportDate)) {
+            "صيغة التاريخ يجب أن تكون YYYY-MM-DD"
+        }
+        require(stationId > 0) { "stationId غير صالح" }
+        require(currencyId > 0) { "currencyId غير صالح" }
+
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val defaultCurrencyId = getDefaultCurrencyId(db)
+            val assets = JSONArray()
+            val liabilities = JSONArray()
+            val equity = JSONArray()
+            var assetsTotal = 0.0
+            var liabilitiesTotal = 0.0
+            var equityBaseTotal = 0.0
+            var revenueTotal = 0.0
+            var expenseTotal = 0.0
+
+            val accountTotals = linkedMapOf<Long, BalanceAccountAccumulator>()
+            val accountSql = """
+                SELECT a.id,
+                       a.account_code,
+                       a.account_name,
+                       a.account_name_ar,
+                       a.account_type,
+                       a.level,
+                       a.normal_balance,
+                       COALESCE(a.opening_balance, 0) AS opening_balance,
+                       CASE WHEN je.id IS NOT NULL THEN jei.id ELSE NULL END AS item_id,
+                       CASE WHEN je.id IS NOT NULL THEN COALESCE(jei.debit, 0) ELSE 0 END AS debit_amount,
+                       CASE WHEN je.id IS NOT NULL THEN COALESCE(jei.credit, 0) ELSE 0 END AS credit_amount,
+                       jei.currency_id AS item_currency_id,
+                       COALESCE(jei.exchange_rate, 1.0) AS item_exchange_rate,
+                       je.entry_date AS entry_date
+                FROM accounts a
+                LEFT JOIN journal_entry_items jei
+                    ON jei.account_id = a.id
+                LEFT JOIN journal_entries je
+                    ON je.id = jei.journal_entry_id
+                   AND je.entry_date <= ?
+                   AND je.status = 'posted'
+                   AND je.is_deleted = 0
+                WHERE a.is_active = 1
+                  AND a.is_deleted = 0
+                  AND a.account_type IN ('asset', 'liability', 'equity', 'revenue', 'expense')
+                ORDER BY a.account_type, a.level, a.account_code, jei.id
+            """.trimIndent()
+
+            db.rawQuery(accountSql, arrayOf(reportDate)).use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow("id")
+                val codeIndex = cursor.getColumnIndexOrThrow("account_code")
+                val nameIndex = cursor.getColumnIndexOrThrow("account_name")
+                val nameArIndex = cursor.getColumnIndexOrThrow("account_name_ar")
+                val typeIndex = cursor.getColumnIndexOrThrow("account_type")
+                val levelIndex = cursor.getColumnIndexOrThrow("level")
+                val normalBalanceIndex = cursor.getColumnIndexOrThrow("normal_balance")
+                val openingIndex = cursor.getColumnIndexOrThrow("opening_balance")
+                val itemIdIndex = cursor.getColumnIndexOrThrow("item_id")
+                val debitIndex = cursor.getColumnIndexOrThrow("debit_amount")
+                val creditIndex = cursor.getColumnIndexOrThrow("credit_amount")
+                val itemCurrencyIndex = cursor.getColumnIndexOrThrow("item_currency_id")
+                val itemRateIndex = cursor.getColumnIndexOrThrow("item_exchange_rate")
+                val entryDateIndex = cursor.getColumnIndexOrThrow("entry_date")
+
+                while (cursor.moveToNext()) {
+                    val accountId = cursor.getLong(idIndex)
+                    val accumulator = accountTotals.getOrPut(accountId) {
+                        BalanceAccountAccumulator(
+                            id = accountId,
+                            code = cursor.getString(codeIndex),
+                            name = cursor.getString(nameIndex),
+                            nameAr = if (cursor.isNull(nameArIndex)) null else cursor.getString(nameArIndex),
+                            type = cursor.getString(typeIndex),
+                            level = cursor.getInt(levelIndex),
+                            normalBalance = cursor.getString(normalBalanceIndex)
+                        )
+                    }
+
+                    if (!accumulator.openingInitialized) {
+                        val openingRate = resolveExchangeRate(
+                            db = db,
+                            sourceCurrencyId = defaultCurrencyId,
+                            targetCurrencyId = currencyId,
+                            effectiveDate = reportDate,
+                            transactionRate = null,
+                            defaultCurrencyId = defaultCurrencyId
+                        ) ?: throw SQLiteException(
+                            "لا يوجد سعر تحويل افتتاحي من $defaultCurrencyId إلى $currencyId بتاريخ $reportDate"
+                        )
+                        accumulator.openingBalance = cursor.getDouble(openingIndex) * openingRate
+                        accumulator.openingInitialized = true
+                    }
+
+                    if (!cursor.isNull(itemIdIndex)) {
+                        val entryDate = cursor.getString(entryDateIndex)
+                        val sourceCurrencyId = if (cursor.isNull(itemCurrencyIndex)) {
+                            defaultCurrencyId
+                        } else {
+                            cursor.getLong(itemCurrencyIndex)
+                        }
+                        val transactionRate = cursor.getDouble(itemRateIndex)
+                        val conversionRate = resolveExchangeRate(
+                            db = db,
+                            sourceCurrencyId = sourceCurrencyId,
+                            targetCurrencyId = currencyId,
+                            effectiveDate = entryDate,
+                            transactionRate = transactionRate,
+                            defaultCurrencyId = defaultCurrencyId
+                        ) ?: throw SQLiteException(
+                            "لا يوجد سعر تحويل من $sourceCurrencyId إلى $currencyId بتاريخ $entryDate للحركة ${cursor.getLong(itemIdIndex)}"
+                        )
+                        accumulator.debitTotal += cursor.getDouble(debitIndex) * conversionRate
+                        accumulator.creditTotal += cursor.getDouble(creditIndex) * conversionRate
+                    }
+                }
+            }
+
+            accountTotals.values.forEach { account ->
+                val balance = if (account.normalBalance == "debit") {
+                    account.openingBalance + account.debitTotal - account.creditTotal
+                } else {
+                    account.openingBalance + account.creditTotal - account.debitTotal
+                }
+                val row = JSONObject().apply {
+                    put("id", account.id)
+                    put("account_code", account.code)
+                    put("account_name", account.name)
+                    put("account_name_ar", account.nameAr ?: JSONObject.NULL)
+                    put("account_type", account.type)
+                    put("level", account.level)
+                    put("opening_balance", account.openingBalance)
+                    put("debit_total", account.debitTotal)
+                    put("credit_total", account.creditTotal)
+                    put("balance", balance)
+                    put("currency_id", currencyId)
+                }
+                when (account.type) {
+                    "asset" -> { assets.put(row); assetsTotal += balance }
+                    "liability" -> { liabilities.put(row); liabilitiesTotal += balance }
+                    "equity" -> { equity.put(row); equityBaseTotal += balance }
+                    "revenue" -> revenueTotal += balance
+                    "expense" -> expenseTotal += balance
+                }
+            }
+
+            val netIncome = revenueTotal - expenseTotal
+            if (kotlin.math.abs(netIncome) > 0.000001) {
+                equity.put(JSONObject().apply {
+                    put("id", JSONObject.NULL)
+                    put("account_code", "NET_INCOME")
+                    put("account_name", "Net Income")
+                    put("account_name_ar", "صافي الدخل")
+                    put("account_type", "equity")
+                    put("level", 1)
+                    put("opening_balance", 0.0)
+                    put("debit_total", 0.0)
+                    put("credit_total", netIncome)
+                    put("balance", netIncome)
+                    put("currency_id", currencyId)
+                })
+            }
+
+            val equityTotal = equityBaseTotal + netIncome
+            val difference = assetsTotal - liabilitiesTotal - equityTotal
+            JSONObject().apply {
+                put("report_date", reportDate)
+                put("station_id", stationId)
+                put("currency_id", currencyId)
+                put("default_currency_id", defaultCurrencyId)
+                put("assets", assets)
+                put("liabilities", liabilities)
+                put("equity", equity)
+                put("total_assets", assetsTotal)
+                put("total_liabilities", liabilitiesTotal)
+                put("total_equity", equityTotal)
+                put("assets_total", assetsTotal)
+                put("liabilities_total", liabilitiesTotal)
+                put("equity_total", equityTotal)
+                put("net_income", netIncome)
+                put("difference", difference)
+                put("is_balanced", kotlin.math.abs(difference) <= 0.01)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    private fun getDefaultCurrencyId(db: SQLiteDatabase): Long {
+        return db.rawQuery(
+            "SELECT id FROM currencies WHERE is_default = 1 AND is_active = 1 AND is_deleted = 0 ORDER BY id LIMIT 1",
+            null
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0)
+            else throw SQLiteException("لا توجد عملة افتراضية فعالة")
+        }
+    }
+
+    /**
+     * يعيد معامل التحويل من عملة القيد إلى عملة التقرير.
+     * exchange_rate في سطر القيد يُعامل كسعر source -> default، لا source -> target.
+     */
+    private fun resolveExchangeRate(
+        db: SQLiteDatabase,
+        sourceCurrencyId: Long,
+        targetCurrencyId: Long,
+        effectiveDate: String,
+        transactionRate: Double?,
+        defaultCurrencyId: Long
+    ): Double? {
+        if (sourceCurrencyId == targetCurrencyId) return 1.0
+        val explicitTransactionRate = transactionRate?.takeIf {
+            it > 0.0 && kotlin.math.abs(it - 1.0) > 0.0000001
+        }
+
+        if (targetCurrencyId == defaultCurrencyId && sourceCurrencyId != defaultCurrencyId) {
+            if (explicitTransactionRate != null) return explicitTransactionRate
+            return findCentralExchangeRate(db, sourceCurrencyId, targetCurrencyId, effectiveDate)
+        }
+
+        if (sourceCurrencyId != defaultCurrencyId && targetCurrencyId != defaultCurrencyId) {
+            if (explicitTransactionRate != null) {
+                val defaultToTarget = findCentralExchangeRate(db, defaultCurrencyId, targetCurrencyId, effectiveDate)
+                if (defaultToTarget != null) return explicitTransactionRate * defaultToTarget
+            }
+
+            val sourceToDefault = findCentralExchangeRate(db, sourceCurrencyId, defaultCurrencyId, effectiveDate)
+            val defaultToTarget = findCentralExchangeRate(db, defaultCurrencyId, targetCurrencyId, effectiveDate)
+            if (sourceToDefault != null && defaultToTarget != null) {
+                return sourceToDefault * defaultToTarget
+            }
+        }
+
+        return findCentralExchangeRate(db, sourceCurrencyId, targetCurrencyId, effectiveDate)
+    }
+
+    private fun findCentralExchangeRate(
+        db: SQLiteDatabase,
+        sourceCurrencyId: Long,
+        targetCurrencyId: Long,
+        effectiveDate: String
+    ): Double? {
+        if (sourceCurrencyId == targetCurrencyId) return 1.0
+        val directRate = db.rawQuery(
+            """
+            SELECT rate FROM exchange_rates
+            WHERE from_currency_id = ?
+              AND to_currency_id = ?
+              AND effective_date <= ?
+              AND (expiry_date IS NULL OR expiry_date >= ?)
+              AND is_active = 1
+              AND is_deleted = 0
+            ORDER BY effective_date DESC, id DESC
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(sourceCurrencyId.toString(), targetCurrencyId.toString(), effectiveDate, effectiveDate)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else null }
+        if (directRate != null && directRate > 0.0) return directRate
+
+        val reverseRate = db.rawQuery(
+            """
+            SELECT inverse_rate FROM exchange_rates
+            WHERE from_currency_id = ?
+              AND to_currency_id = ?
+              AND effective_date <= ?
+              AND (expiry_date IS NULL OR expiry_date >= ?)
+              AND is_active = 1
+              AND is_deleted = 0
+            ORDER BY effective_date DESC, id DESC
+            LIMIT 1
+            """.trimIndent(),
+            arrayOf(targetCurrencyId.toString(), sourceCurrencyId.toString(), effectiveDate, effectiveDate)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else null }
+        return reverseRate?.takeIf { it > 0.0 }
+    }
+
+    /** حفظ snapshot محسوب داخل Android بعد نجاح القراءة والمعادلة. */
+    fun saveBalanceSheetSnapshot(reportDate: String, stationId: Int, currencyId: Long, generatedBy: Long): Long {
+        require(generatedBy > 0) { "generatedBy غير صالح" }
+        val report = getBalanceSheet(reportDate, stationId, currencyId)
+        if (!report.optBoolean("is_balanced", false)) {
+            throw SQLiteException("لا يمكن حفظ ميزانية غير متوازنة: الفرق ${report.optDouble("difference", 0.0)}")
+        }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val values = ContentValues().apply {
+                    put("station_id", stationId)
+                    put("report_date", reportDate)
+                    put("assets_total", report.optDouble("assets_total", 0.0))
+                    put("liabilities_total", report.optDouble("liabilities_total", 0.0))
+                    put("equity_total", report.optDouble("equity_total", 0.0))
+                    put("net_income", report.optDouble("net_income", 0.0))
+                    put("currency_id", currencyId)
+                    put("generated_by", generatedBy)
+                    put("generated_at", getCurrentDateTime())
+                    put("archived", 0)
+                }
+                val existingId = db.rawQuery(
+                    "SELECT id FROM balance_sheets WHERE station_id = ? AND report_date = ? AND currency_id = ? AND archived = 0 ORDER BY id DESC LIMIT 1",
+                    arrayOf(stationId.toString(), reportDate, currencyId.toString())
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+                val rowId = if (existingId > 0) {
+                    val updated = db.update("balance_sheets", values, "id = ?", arrayOf(existingId.toString()))
+                    if (updated > 0) existingId else -1L
+                } else {
+                    db.insert("balance_sheets", null, values)
+                }
+                if (rowId <= 0) throw SQLiteException("فشل حفظ snapshot الميزانية")
+                db.setTransactionSuccessful()
+                rowId
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ========================================================================
     // دوال الإعدادات
     // ========================================================================
 
@@ -9791,6 +10333,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun checkUserPermission(userId: Long, permissionCode: String): Boolean {
+        if (userId <= 0 || permissionCode.isBlank()) return false
+        val action = permissionCode.substringAfterLast('.', "read")
+        val capabilityColumn = when (action) {
+            "create" -> "rp.can_create"
+            "read", "view" -> "rp.can_read"
+            "update" -> "rp.can_update"
+            "delete" -> "rp.can_delete"
+            "export" -> "rp.can_export"
+            "print" -> "rp.can_print"
+            "approve" -> "rp.can_approve"
+            else -> return false
+        }
         dbLock.lock()
         return try {
             val db = readableDatabase
@@ -9798,7 +10352,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """SELECT 1 FROM role_permissions rp
                    JOIN users u ON u.role_id = rp.role_id
                    JOIN permissions p ON p.id = rp.permission_id
-                   WHERE u.id = ? AND p.permission_code = ? AND rp.can_read = 1
+                   WHERE u.id = ?
+                     AND u.is_deleted = 0
+                     AND p.permission_code = ?
+                     AND p.is_active = 1
+                     AND p.is_deleted = 0
+                     AND rp.is_deleted = 0
+                     AND $capabilityColumn = 1
                    LIMIT 1""".trimIndent(),
                 arrayOf(userId.toString(), permissionCode)
             ).use { cursor -> cursor.moveToFirst() }

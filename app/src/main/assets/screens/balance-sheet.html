@@ -1333,12 +1333,61 @@
         // ============================================================
         // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
+                function invokeExistingBridgeAction(action, params = {}) {
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('AndroidInterface bridge unavailable');
+            const p = params || {};
+            let result;
+            switch (action) {
+                case 'addNotification': result = bridge.addNotification(JSON.stringify(p)); break;
+                case 'addProduct': result = bridge.addProduct(JSON.stringify(p)); break;
+                case 'addSmsMessage': result = bridge.addSmsMessage(JSON.stringify(p)); break;
+                case 'addWhitelist': result = bridge.addWhitelist(JSON.stringify(p)); break;
+                case 'completeSale': result = bridge.completeSale(JSON.stringify(p)); break;
+                case 'deleteParty': result = bridge.deleteParty(Number(p.id ?? p.partyId ?? p.party_id)); break;
+                case 'deleteProduct': result = bridge.deleteProduct(Number(p.id ?? p.productId ?? p.product_id)); break;
+                case 'deleteUser': result = bridge.deleteUser(Number(p.id ?? p.userId ?? p.user_id)); break;
+                case 'getCategories': result = bridge.getCategories(); break;
+                case 'getCurrencies': result = bridge.getCurrencies(); break;
+                case 'getCurrentUser': result = bridge.getCurrentUser(); break;
+                case 'getCustomerDebts': result = bridge.getCustomerDebts(p.fromDate ?? p.from_date ?? null, p.toDate ?? p.to_date ?? null); break;
+                case 'getCustomerLedger': result = bridge.getCustomerLedger(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
+                case 'getCustomers': result = bridge.getCustomers(); break;
+                case 'getDashboardStats': result = bridge.getDashboardStats(JSON.stringify(p)); break;
+                case 'getFuelTypes': result = bridge.getFuelTypes(); break;
+                case 'getLowStockItems': result = bridge.getLowStockItems(); break;
+                case 'getNotifications': result = bridge.getNotifications(); break;
+                case 'getOverduePayments': result = bridge.getOverduePayments(); break;
+                case 'getParties': result = bridge.getParties(p.type ?? null); break;
+                case 'getCustomerSales': result = bridge.getCustomerSales(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
+                case 'getPartyTypes': result = bridge.getPartyTypes(); break;
+                case 'getProducts': result = bridge.getProducts(); break;
+                case 'getPumps': result = bridge.getPumps(); break;
+                case 'getRecentActivity': result = bridge.getRecentActivity(Number(p.limit ?? 100)); break;
+                case 'getBalanceSheet': result = bridge.getBalanceSheet(String(p.reportDate ?? p.report_date ?? ''), Number(p.currencyId ?? p.currency_id ?? 0)); break;
+                case 'saveBalanceSheet': result = bridge.saveBalanceSheet(String(p.reportDate ?? p.report_date ?? ''), Number(p.currencyId ?? p.currency_id ?? 0)); break;
+                case 'getSetting': result = bridge.getSetting(String(p.key ?? '')); break;
+                case 'getShifts': result = bridge.getShifts(); break;
+                case 'getSuppliers': result = bridge.getSuppliers(); break;
+                case 'getTanks': result = bridge.getTanks(); break;
+                case 'getUserPermissions': result = bridge.getUserPermissions(Number(p.userId ?? p.user_id)); break;
+                case 'getUsers': result = bridge.getUsers(); break;
+                case 'getWhitelist': result = bridge.getWhitelist(); break;
+                case 'markNotificationRead': result = bridge.markNotificationRead(Number(p.id ?? p.notificationId ?? p.notification_id)); break;
+                case 'removeWhitelist': result = bridge.removeWhitelist(JSON.stringify(p)); break;
+                case 'setSetting': result = bridge.setSetting(String(p.key ?? ''), String(p.value ?? '')); break;
+                default:
+                    throw new Error(`Unsupported Bridge action: ${action}`);
+            }
+            return result;
+        }
+
+function apiCall(action, params) {
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
                         const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        const result = invokeExistingBridgeAction(action, params);
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -1438,6 +1487,36 @@
 
         function showLoading(show) {
             document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+        }
+
+        const BALANCE_CONTRACT_BLOCKED_MESSAGE = 'تعذر تحميل الميزانية من قاعدة البيانات ولا توجد نسخة محلية متاحة';
+
+        function normalizeBalanceData(data) {
+            const source = data && typeof data === 'object' ? data : {};
+            return {
+                ...source,
+                total_assets: source.total_assets ?? source.assets_total ?? 0,
+                total_liabilities: source.total_liabilities ?? source.liabilities_total ?? 0,
+                total_equity: source.total_equity ?? source.equity_total ?? 0,
+                assets: Array.isArray(source.assets) ? source.assets : [],
+                liabilities: Array.isArray(source.liabilities) ? source.liabilities : [],
+                equity: Array.isArray(source.equity) ? source.equity : []
+            };
+        }
+
+        function showBalanceContractBlocked() {
+            balanceSheetData = null;
+            const empty = '<div class="empty-state"><i class="fas fa-database" aria-hidden="true"></i><p>' + BALANCE_CONTRACT_BLOCKED_MESSAGE + '</p></div>';
+            document.getElementById('assetsList').innerHTML = empty;
+            document.getElementById('liabilitiesList').innerHTML = empty;
+            document.getElementById('equityList').innerHTML = empty;
+            document.getElementById('assetsTotalBadge').textContent = '0.00';
+            document.getElementById('liabilitiesTotalBadge').textContent = '0.00';
+            document.getElementById('equityTotalBadge').textContent = '0.00';
+            updateStats({ total_assets: 0, total_liabilities: 0, total_equity: 0 });
+            updateAccountingEquation({ total_assets: 0, total_liabilities: 0, total_equity: 0 });
+            generateAlerts();
+            showToast('⚠️ ' + BALANCE_CONTRACT_BLOCKED_MESSAGE, 'warning');
         }
 
         function formatNumber(num) {
@@ -1751,32 +1830,29 @@
             const type = document.getElementById('reportType').value;
             const currency = document.getElementById('reportCurrency').value;
 
+            if (!from || !to) {
+                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
+                return;
+            }
+
             showLoading(true);
             try {
-                const params = {
-                    report_type: currentReportType,
-                    start_date: from,
-                    end_date: to,
-                    report_format: type || null,
-                    currency_id: currency || null
-                };
-                const result = await apiCall('generateBalanceReport', params);
-                if (result.success && result.data) {
-                    reportData = result.data;
-                    renderReportResults(result.data);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                    hapticFeedback('success');
-                } else {
-                    document.getElementById('reportResults').innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
-                            <p>${result.message || 'لا توجد بيانات للتقرير'}</p>
-                        </div>
-                    `;
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
+                // القراءة الفعلية تتم بواسطة getBalanceSheet؛ التقرير يعرض نفس snapshot المحمل من قاعدة البيانات.
+                const result = await apiCall('getBalanceSheet', {
+                    reportDate: to,
+                    currencyId: Number(currency || 0)
+                });
+                if (!result.success || !result.data) {
+                    throw new Error(result.error || result.message || 'فشل توليد التقرير');
                 }
+                const data = normalizeBalanceData(result.data);
+                balanceSheetData = data;
+                LocalDB.setBalanceSheet(data);
+                reportData = data;
+                renderReportResults(data);
+                showToast('✅ تم توليد التقرير من قاعدة البيانات الفعلية', 'success');
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                showToast('❌ ' + (e.message || 'فشل توليد التقرير'), 'error');
                 console.error(e);
             } finally {
                 showLoading(false);
@@ -1785,7 +1861,7 @@
 
         function renderReportResults(data) {
             const container = document.getElementById('reportResults');
-            if (!data || data.length === 0) {
+            if (!data || (Array.isArray(data) && data.length === 0)) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
@@ -1808,20 +1884,27 @@
                         [4, 'صافي الأصول', formatCurrency((data.total_assets || 0) - (data.total_liabilities || 0))]
                     ];
                     break;
-                case 'balance_sheet':
+                case 'balance_sheet': {
                     headers = ['#', 'الحساب', 'النوع', 'الرصيد'];
-                    rows = data.map((item, idx) => [
+                    const accountRows = Array.isArray(data) ? data : [
+                        ...(data.assets || []).map(item => ({ ...item, account_type: 'asset' })),
+                        ...(data.liabilities || []).map(item => ({ ...item, account_type: 'liability' })),
+                        ...(data.equity || []).map(item => ({ ...item, account_type: 'equity' }))
+                    ];
+                    rows = accountRows.map((item, idx) => [
                         idx + 1,
-                        item.account_name || '---',
+                        item.account_name_ar || item.account_name || '---',
                         getAccountTypeLabel(item.account_type),
-                        formatCurrency(item.balance || 0)
+                        formatCurrency(item.balance || item.current_balance || 0)
                     ]);
                     break;
-                case 'comparative':
+                }
+                case 'comparative': {
                     headers = ['#', 'الحساب', 'الفترة الحالية', 'الفترة السابقة', 'التغير', 'نسبة التغير'];
-                    rows = data.map((item, idx) => [
+                    const comparisonRows = Array.isArray(data) ? data : (Array.isArray(data.comparative) ? data.comparative : []);
+                    rows = comparisonRows.map((item, idx) => [
                         idx + 1,
-                        item.account_name || '---',
+                        item.account_name_ar || item.account_name || '---',
                         formatCurrency(item.current_balance || 0),
                         formatCurrency(item.previous_balance || 0),
                         formatCurrency((item.current_balance || 0) - (item.previous_balance || 0)),
@@ -1829,6 +1912,7 @@
                             .previous_balance) * 100).toFixed(2) + '%' : '---'
                     ]);
                     break;
+                }
                 case 'ratios':
                     headers = ['#', 'النسبة', 'القيمة', 'التقييم'];
                     const ratios = [
@@ -1841,20 +1925,26 @@
                         ['نسبة السيولة السريعة', data.quick_ratio || 0, (data.quick_ratio || 0) > 1 ? '✅ جيدة' :
                             '⚠️ منخفضة']
                     ];
-                    rows = ratios.map((r, idx) => [idx + 1, r[0], r[1].toFixed(2), r[2]]);
+                    rows = ratios.map((r, idx) => [idx + 1, r[0], Number(r[1] || 0).toFixed(2), r[2]]);
                     break;
-                case 'detailed':
+                case 'detailed': {
                     headers = ['#', 'الحساب', 'النوع', 'الرصيد الافتتاحي', 'المدين', 'الدائن', 'الرصيد النهائي'];
-                    rows = data.map((item, idx) => [
+                    const detailRows = Array.isArray(data) ? data : [
+                        ...(data.assets || []).map(item => ({ ...item, account_type: 'asset' })),
+                        ...(data.liabilities || []).map(item => ({ ...item, account_type: 'liability' })),
+                        ...(data.equity || []).map(item => ({ ...item, account_type: 'equity' }))
+                    ];
+                    rows = detailRows.map((item, idx) => [
                         idx + 1,
-                        item.account_name || '---',
+                        item.account_name_ar || item.account_name || '---',
                         getAccountTypeLabel(item.account_type),
                         formatCurrency(item.opening_balance || 0),
                         formatCurrency(item.total_debit || 0),
                         formatCurrency(item.total_credit || 0),
-                        formatCurrency(item.closing_balance || 0)
+                        formatCurrency(item.closing_balance ?? item.balance ?? 0)
                     ]);
                     break;
+                }
                 default:
                     headers = ['#', 'البيانات'];
                     rows = data.map((item, idx) => [idx + 1, JSON.stringify(item)]);
@@ -1911,43 +2001,33 @@
             }
 
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
-                const params = { as_of_date: date };
-                const result = await apiCall('getBalanceSheet', params);
-                if (result.success && result.data) {
-                    balanceSheetData = result.data;
-                    LocalDB.setBalanceSheet(balanceSheetData);
+                const currencyId = Number(document.getElementById('reportCurrency').value || 0);
+                const result = await apiCall('getBalanceSheet', { reportDate: date, currencyId });
+                if (!result.success || !result.data) {
+                    throw new Error(result.error || result.message || 'فشل قراءة الميزانية من قاعدة البيانات');
+                }
+                balanceSheetData = normalizeBalanceData(result.data);
+                LocalDB.setBalanceSheet(balanceSheetData);
+                renderBalanceSheet(balanceSheetData);
+                updateStats(balanceSheetData);
+                updateAccountingEquation(balanceSheetData);
+                analyzeBalanceSheet(balanceSheetData);
+                showToast('✅ تم تحميل الميزانية من قاعدة البيانات الفعلية', 'success');
+            } catch (e) {
+                console.error('Balance load error:', e);
+                const cached = LocalDB.getBalanceSheet();
+                if (cached) {
+                    balanceSheetData = normalizeBalanceData(cached);
                     renderBalanceSheet(balanceSheetData);
                     updateStats(balanceSheetData);
                     updateAccountingEquation(balanceSheetData);
                     analyzeBalanceSheet(balanceSheetData);
+                    showToast('⚠️ تعذر المصدر الحالي؛ عُرضت آخر نسخة محلية', 'warning');
                 } else {
-                    const cached = LocalDB.getBalanceSheet();
-                    if (cached) {
-                        balanceSheetData = cached;
-                        renderBalanceSheet(cached);
-                        updateStats(cached);
-                        updateAccountingEquation(cached);
-                    } else {
-                        document.getElementById('assetsList').innerHTML =
-                            '<div class="empty-state">لا توجد بيانات للميزانية</div>';
-                        document.getElementById('liabilitiesList').innerHTML =
-                            '<div class="empty-state">لا توجد بيانات للميزانية</div>';
-                        document.getElementById('equityList').innerHTML =
-                            '<div class="empty-state">لا توجد بيانات للميزانية</div>';
-                    }
-                }
-            } catch (e) {
-                const cached = LocalDB.getBalanceSheet();
-                if (cached) {
-                    balanceSheetData = cached;
-                    renderBalanceSheet(cached);
-                    updateStats(cached);
-                    updateAccountingEquation(cached);
-                } else {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - لا توجد بيانات محلية', 'warning');
+                    showBalanceContractBlocked();
+                    showToast('❌ ' + (e.message || 'تعذر قراءة الميزانية'), 'error');
                 }
             } finally {
                 isInitialLoad = false;
@@ -2104,15 +2184,21 @@
             if (filter === 'all') {
                 assetsCol.style.display = 'block';
                 liabilitiesCol.style.display = 'block';
+                document.getElementById('liabilitiesList').style.display = 'block';
+                document.getElementById('equityList').style.display = 'block';
             } else if (filter === 'asset') {
                 assetsCol.style.display = 'block';
                 liabilitiesCol.style.display = 'none';
             } else if (filter === 'liability') {
                 assetsCol.style.display = 'none';
                 liabilitiesCol.style.display = 'block';
+                document.getElementById('liabilitiesList').style.display = 'block';
+                document.getElementById('equityList').style.display = 'none';
             } else if (filter === 'equity') {
                 assetsCol.style.display = 'none';
                 liabilitiesCol.style.display = 'block';
+                document.getElementById('liabilitiesList').style.display = 'none';
+                document.getElementById('equityList').style.display = 'block';
             }
             hapticFeedback('light');
         }
@@ -2242,27 +2328,24 @@
         async function saveReport() {
             const date = document.getElementById('balanceDate').value;
             if (!date) {
-                showToast('❌ يرجى تحميل الميزانية أولاً', 'error');
+                showToast('❌ يرجى اختيار تاريخ الميزانية أولاً', 'error');
                 return;
             }
 
             showLoading(true);
             try {
-                const params = {
-                    report_date: date,
-                    assets_total: parseFloat(document.getElementById('statAssets').textContent.replace(/,/g, '')),
-                    liabilities_total: parseFloat(document.getElementById('statLiabilities').textContent.replace(/,/g, '')),
-                    equity_total: parseFloat(document.getElementById('statEquity').textContent.replace(/,/g, ''))
-                };
-                const result = await apiCall('saveBalanceSheet', params);
-                if (result.success) {
-                    showToast('✅ تم حفظ الميزانية العمومية', 'success');
-                    hapticFeedback('success');
-                } else {
-                    showToast(result.message || '❌ فشل في حفظ الميزانية', 'error');
+                const result = await apiCall('saveBalanceSheet', {
+                    reportDate: date,
+                    currencyId: Number(document.getElementById('reportCurrency').value || 0)
+                });
+                if (!result.success) {
+                    throw new Error(result.error || result.message || 'فشل حفظ الميزانية');
                 }
+                showToast('✅ تم حفظ snapshot الميزانية فعلياً برقم ' + result.id, 'success');
+                hapticFeedback('success');
+                await loadBalanceSheet();
             } catch (e) {
-                showToast('❌ حدث خطأ أثناء الحفظ', 'error');
+                showToast('❌ ' + (e.message || 'حدث خطأ أثناء الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2301,6 +2384,30 @@
             }
         }
 
+        async function loadCurrencies() {
+            try {
+                const result = await apiCall('getCurrencies', {});
+                if (!result.success || !Array.isArray(result.data)) return;
+                const select = document.getElementById('reportCurrency');
+                const selected = select.value;
+                select.innerHTML = '';
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'الافتراضية';
+                select.appendChild(defaultOption);
+                result.data.forEach(currency => {
+                    const option = document.createElement('option');
+                    option.value = String(currency.id ?? '');
+                    option.textContent = String(currency.currency_name_ar || currency.currency_name || currency.currency_code || currency.id);
+                    if (currency.is_default === 1 || currency.is_default === true) option.dataset.default = 'true';
+                    select.appendChild(option);
+                });
+                if (selected) select.value = selected;
+            } catch (e) {
+                console.warn('تعذر تحميل العملات:', e);
+            }
+        }
+
         // ============================================================
         // 21. إعداد القائمة الجانبية
         // ============================================================
@@ -2324,7 +2431,7 @@
         // ============================================================
         // 22. التهيئة النهائية
         // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             loadSavedTheme();
             setupSidebar();
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
@@ -2334,8 +2441,9 @@
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('balanceDate').value = today;
 
-            // تحميل الميزانية
-            loadBalanceSheet();
+            // تحميل العملات ثم الميزانية من Bridge وقاعدة البيانات
+            await loadCurrencies();
+            await loadBalanceSheet();
 
             document.getElementById('reportModal').addEventListener('click', function(e) {
                 if (e.target === this) closeReportModal();
