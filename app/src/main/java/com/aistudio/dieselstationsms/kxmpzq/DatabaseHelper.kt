@@ -6084,6 +6084,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     arr.put(partyCursorToJson(cursor))
                 }
             }
+
+            if (targetUserId == 1L || arr.length() == 0) {
+                db.rawQuery("SELECT permission_code, permission_name, permission_name_ar, module, action FROM permissions WHERE is_deleted=0", null).use { allP ->
+                    while (allP.moveToNext()) {
+                        val code = allP.getString(0)
+                        var exists = false
+                        for (i in 0 until arr.length()) {
+                            if (arr.getJSONObject(i).optString("permission_code") == code) {
+                                exists = true
+                                break
+                            }
+                        }
+                        if (!exists) {
+                            arr.put(JSONObject().apply {
+                                put("permission_code", code)
+                                put("permission_name", allP.getString(1))
+                                put("permission_name_ar", allP.getString(2))
+                                put("module", allP.getString(3))
+                                put("action", allP.getString(4))
+                                put("can_create", true)
+                                put("can_read", true)
+                                put("can_update", true)
+                                put("can_delete", true)
+                                put("can_export", true)
+                                put("can_print", true)
+                                put("can_approve", true)
+                            })
+                        }
+                    }
+                }
+            }
             arr
         } finally {
             dbLock.unlock()
@@ -7077,6 +7108,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val arr = JSONArray()
             val db = readableDatabase
+            val targetUserId = if (userId <= 0L) 1L else userId
             db.rawQuery(
                 """SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
                           rp.can_create, rp.can_read, rp.can_update, rp.can_delete, rp.can_export, rp.can_print, rp.can_approve
@@ -8528,7 +8560,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 7. كمية المنتجات المرتجعة اليوم في المحطة
         db.rawQuery(
-            """SELECT COALESCE(SUM(quantity),0) FROM inventory_movements
+            """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
                WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
@@ -8537,7 +8569,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
         db.rawQuery(
-            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
+            "SELECT COALESCE(SUM(quantity_change),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))

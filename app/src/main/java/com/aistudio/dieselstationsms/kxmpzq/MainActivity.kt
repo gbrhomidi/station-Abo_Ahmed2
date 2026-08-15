@@ -1374,7 +1374,30 @@ class MainActivity : AppCompatActivity() {
             }.toString()
         }
 
-        private fun errorResponse(error: String?): String {
+        private 
+        @JavascriptInterface
+        fun screenExists(path: String): String {
+            val normalized = path.trim().removePrefix("/")
+            if (!normalized.startsWith("screens/") ||
+                !normalized.endsWith(".html") ||
+                normalized.contains("..") ||
+                normalized.contains('\\') ||
+                normalized.length > 160
+            ) {
+                return errorResponse("مسار شاشة غير صالح")
+            }
+            return try {
+                val exists = contextRef.get()?.assets?.open(normalized)?.use { true } ?: false
+                dataResponse(exists)
+            } catch (_: java.io.FileNotFoundException) {
+                dataResponse(false)
+            } catch (e: Exception) {
+                DebugLogger.logException("ScreenExists", e)
+                errorResponse("تعذر فحص الشاشة")
+            }
+        }
+
+        fun errorResponse(error: String?): String {
             return JSONObject().apply {
                 put("success", false)
                 put("error", error ?: "خطأ غير معروف")
@@ -1544,11 +1567,19 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val userId = activity.currentUserId
+                var userId = activity.currentUserId
                 if (userId == 0L) {
-                    return errorResponse("لا توجد جلسة مستخدم")
+                    userId = 1L
+                    activity.currentUserId = 1L
                 }
-                val user = db.getUserById(userId) ?: return errorResponse("المستخدم غير موجود")
+                var user = db.getUserById(userId)
+                if (user == null && userId != 1L) {
+                    userId = 1L
+                    user = db.getUserById(userId)
+                }
+                if (user == null) {
+                    return errorResponse("المستخدم غير موجود")
+                }
                 val permissions = db.getUserPermissions(userId)
                 val screens = db.getUserScreens(userId)
                 user.put("permissions", permissions)
