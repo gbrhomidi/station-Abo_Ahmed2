@@ -1216,11 +1216,7 @@
     </div>
 
     <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
-    </div>
-
-    <!-- Loading -->
+<!-- Loading -->
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
     </div>
@@ -1425,6 +1421,12 @@
                 <button class="btn btn-primary" onclick="generateReport()">
                     <i class="fas fa-cog"></i> توليد التقرير
                 </button>
+                <button class="btn btn-secondary" onclick="exportCurrentReportCsv()">
+                    <i class="fas fa-file-csv"></i> CSV
+                </button>
+                <button class="btn btn-secondary" onclick="printCurrentReport()">
+                    <i class="fas fa-print"></i> طباعة
+                </button>
                 <button class="btn btn-secondary" onclick="closeReportModal()">
                     <i class="fas fa-times"></i> إلغاء
                 </button>
@@ -1590,115 +1592,58 @@
     ============================================================ -->
     <script>
         // ============================================================
-        // 1. دالة apiCall الموحدة
+        // 1. Typed Android Bridge: WebView -> MainActivity -> SQLite
         // ============================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+        function parseBridgeResponse(raw) {
+            if (raw === null || raw === undefined) throw new Error('لم تُرجع طبقة Android نتيجة');
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!parsed || parsed.success === false) {
+                throw new Error((parsed && (parsed.error || parsed.message)) || 'فشلت العملية في SQLite');
+            }
+            return parsed;
+        }
+        function apiCall(action, params = {}) {
+            return Promise.resolve().then(() => {
+                const bridge = window.AndroidInterface;
+                if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
+                switch (action) {
+                    case 'getChartAccounts':
+                    case 'loadAccounts':
+                        return parseBridgeResponse(bridge.getChartAccounts());
+                    case 'getBankAccounts':
+                        return parseBridgeResponse(bridge.getBankAccounts());
+                    case 'saveChartAccount':
+                        return parseBridgeResponse(bridge.saveChartAccount(JSON.stringify(params)));
+                    case 'deleteChartAccount':
+                        return parseBridgeResponse(bridge.deleteChartAccount(Number(params.id), Boolean(params.cascade)));
+                    case 'archiveChartAccount':
+                        return parseBridgeResponse(bridge.archiveChartAccount(Number(params.id)));
+                    case 'restoreChartAccount':
+                        return parseBridgeResponse(bridge.restoreChartAccount(Number(params.id)));
+                    case 'cloneChartAccount':
+                        return parseBridgeResponse(bridge.cloneChartAccount(Number(params.id), JSON.stringify(params)));
+                    case 'moveChartAccount':
+                        return parseBridgeResponse(bridge.moveChartAccount(Number(params.id), Number(params.parentId || 0)));
+                    case 'getChartAccountAudit':
+                        return parseBridgeResponse(bridge.getChartAccountAudit(Number(params.id)));
+                    case 'getBalanceSheet':
+                        return parseBridgeResponse(bridge.getBalanceSheet(params.reportDate || new Date().toISOString().slice(0, 10), 0));
+                    case 'getChartTrialBalance':
+                        return parseBridgeResponse(bridge.getChartTrialBalance(params.fromDate || '', params.toDate || ''));
+                    default:
+                        throw new Error('عملية Bridge غير مدعومة: ' + action);
                 }
             });
         }
-
         // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
+        // 2. حالة طبقة Android المحلية
         // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getAccounts: function() { return this.get('accounts', []); },
-            setAccounts: function(data) { this.set('accounts', data); },
-            getBankAccounts: function() { return this.get('bank_accounts', []); },
-            setBankAccounts: function(data) { this.set('bank_accounts', data); },
-            getCashBoxes: function() { return this.get('cash_boxes', []); },
-            setCashBoxes: function(data) { this.set('cash_boxes', data); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            getStats: function() { return this.get('chart_stats', {}); },
-            setStats: function(stats) { this.set('chart_stats', stats); },
-            getNotifications: function() { return this.get('chart_notifications', []); },
-            setNotifications: function(notifications) { this.set('chart_notifications', notifications); },
-            getAIInsights: function() { return this.get('chart_ai_insights', []); },
-            setAIInsights: function(insights) { this.set('chart_ai_insights', insights); }
-        };
-
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
-        let isOnline = navigator.onLine;
-
+        let bridgeReady = false;
         function updateOnlineStatus() {
-            isOnline = navigator.onLine;
-            const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
-            }
+            bridgeReady = Boolean(window.AndroidInterface);
         }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
         // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadAccounts();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
-        // ============================================================
-        // 5. Haptic Feedback
+        // 3. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1802,7 +1747,7 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+
 
             const icon = document.getElementById('themeIcon');
             if (newTheme === 'dark') {
@@ -1814,7 +1759,7 @@
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = 'light';
             document.documentElement.setAttribute('data-theme', saved);
 
             const icon = document.getElementById('themeIcon');
@@ -2023,7 +1968,10 @@
                         <span class="account-actions">
                             <button class="tree-btn" onclick="event.stopPropagation(); viewAccount(${node.id})" title="تفاصيل"><i class="fas fa-eye"></i></button>
                             <button class="tree-btn" onclick="event.stopPropagation(); editAccount(${node.id})" title="تعديل"><i class="fas fa-edit"></i></button>
+                            <button class="tree-btn" onclick="event.stopPropagation(); cloneAccount(${node.id})" title="نسخ الحساب"><i class="fas fa-copy"></i></button>
+                            <button class="tree-btn" onclick="event.stopPropagation(); moveAccount(${node.id})" title="نقل الحساب"><i class="fas fa-arrows-alt"></i></button>
                             ${node.parent_account_id ? `<button class="tree-btn" onclick="event.stopPropagation(); addSubAccount(${node.id})" title="إضافة حساب فرعي"><i class="fas fa-plus-circle"></i></button>` : ''}
+                            <button class="tree-btn" onclick="event.stopPropagation(); toggleArchiveAccount(${node.id})" title="${isActive ? 'أرشفة' : 'استعادة'}"><i class="fas ${isActive ? 'fa-archive' : 'fa-undo'}"></i></button>
                             <button class="tree-btn danger" onclick="event.stopPropagation(); deleteAccount(${node.id})" title="حذف"><i class="fas fa-trash"></i></button>
                         </span>
                     </div>
@@ -2111,12 +2059,12 @@
                 });
             }
 
-            LocalDB.setAIInsights(insights);
+            aiInsightsCache = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = aiInsightsCache;
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
@@ -2223,43 +2171,34 @@
         }
 
         async function generateReport() {
-            const from = document.getElementById('reportFrom').value;
-            const to = document.getElementById('reportTo').value;
             const type = document.getElementById('reportType').value;
             const status = document.getElementById('reportStatus').value;
-
             showLoading(true);
             try {
-                const params = {
-                    report_type: currentReportType,
-                    start_date: from,
-                    end_date: to,
-                    account_type: type || null,
-                    status: status || null
-                };
-                const result = await apiCall('generateChartReport', params);
-                if (result.success && result.data) {
-                    reportData = result.data;
-                    renderReportResults(result.data);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                    hapticFeedback('success');
-                } else {
-                    document.getElementById('reportResults').innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
-                            <p>${result.message || 'لا توجد بيانات للتقرير'}</p>
-                        </div>
-                    `;
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
+                let data = allAccounts.filter(item => {
+                    const typeMatch = !type || item.account_type === type;
+                    const statusMatch = status === '' || String(item.is_active ?? 1) === status;
+                    return typeMatch && statusMatch;
+                });
+                if (currentReportType === 'trial') {
+                    const trialResult = await apiCall('getChartTrialBalance', { fromDate: document.getElementById('reportFrom').value, toDate: document.getElementById('reportTo').value });
+                    data = Array.isArray(trialResult.data) ? trialResult.data : [];
+                } else if (currentReportType === 'balance') {
+                    const nativeResult = await apiCall('getBalanceSheet', { reportDate: document.getElementById('reportTo').value });
+                    const nativePayload = nativeResult.data || nativeResult;
+                    const sections = ['assets', 'liabilities', 'equity'];
+                    data = sections.flatMap(section => Array.isArray(nativePayload[section]) ? nativePayload[section] : []);
                 }
+                reportData = data;
+                renderReportResults(data);
+                showToast('تم توليد التقرير من SQLite المحلية', 'success');
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
-                console.error(e);
+                document.getElementById('reportResults').innerHTML = '<div class="empty-state">تعذر توليد التقرير: ' + escapeHtml(e.message || '') + '</div>';
+                showToast('❌ فشل توليد التقرير: ' + (e.message || ''), 'error');
             } finally {
                 showLoading(false);
             }
         }
-
         function renderReportResults(data) {
             const container = document.getElementById('reportResults');
             if (!data || data.length === 0) {
@@ -2371,6 +2310,8 @@
         let currentEditId = 0;
         let currentFilter = 'all';
         let allAccounts = [];
+        let aiInsightsCache = [];
+        let notificationsCache = [];
         let allBankAccounts = [];
         let allCashBoxes = [];
         let selectedAccountId = null;
@@ -2401,59 +2342,32 @@
 
         async function loadAccounts() {
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
-                const [accountsRes, bankAccountsRes, cashBoxesRes] = await Promise.all([
-                    apiCall('getChartAccounts', {}),
-                    apiCall('getBankAccounts', {}),
-                    apiCall('getCashBoxes', {})
+                const [accountsRes, bankAccountsRes] = await Promise.all([
+                    apiCall('getChartAccounts'),
+                    apiCall('getBankAccounts')
                 ]);
-
-                if (accountsRes.success && accountsRes.data) {
-                    allAccounts = accountsRes.data;
-                    LocalDB.setAccounts(allAccounts);
-                } else {
-                    allAccounts = LocalDB.getAccounts();
-                }
-
-                if (bankAccountsRes.success && bankAccountsRes.data) {
-                    allBankAccounts = bankAccountsRes.data;
-                    LocalDB.setBankAccounts(allBankAccounts);
-                } else {
-                    allBankAccounts = LocalDB.getBankAccounts();
-                }
-
-                if (cashBoxesRes.success && cashBoxesRes.data) {
-                    allCashBoxes = cashBoxesRes.data;
-                    LocalDB.setCashBoxes(allCashBoxes);
-                } else {
-                    allCashBoxes = LocalDB.getCashBoxes();
-                }
-
-                if (allAccounts.length === 0) {
-                    showToast('⚠️ لا توجد حسابات', 'warning');
-                }
-
+                allAccounts = Array.isArray(accountsRes.data) ? accountsRes.data : [];
+                allBankAccounts = Array.isArray(bankAccountsRes.data) ? bankAccountsRes.data : [];
+                allCashBoxes = [];
+                if (allAccounts.length === 0) showToast('لا توجد حسابات محفوظة في SQLite', 'info');
             } catch (e) {
-                allAccounts = LocalDB.getAccounts();
-                allBankAccounts = LocalDB.getBankAccounts();
-                allCashBoxes = LocalDB.getCashBoxes();
-                if (allAccounts.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allAccounts = [];
+                allBankAccounts = [];
+                allCashBoxes = [];
+                showToast('تعذر قراءة قاعدة البيانات المحلية: ' + (e.message || 'خطأ غير معروف'), 'error');
+            } finally {
+                populateParentDropdown();
+                populateBankAccountDropdown();
+                populateCashBoxDropdown();
+                updateStats();
+                renderTreeView();
+                analyzeChartOfAccounts();
+                isInitialLoad = false;
+                showLoading(false);
             }
-
-            populateParentDropdown();
-            populateBankAccountDropdown();
-            populateCashBoxDropdown();
-            updateStats();
-            renderTreeView();
-            analyzeChartOfAccounts();
-            isInitialLoad = false;
-            showLoading(false);
         }
-
         function populateParentDropdown() {
             const select = document.getElementById('parentAccount');
             const currentVal = select.value;
@@ -2555,7 +2469,7 @@
             document.getElementById('statTotalBalance').textContent = formatNumber(totalBalance);
             document.getElementById('statRootCount').textContent = rootCount;
 
-            LocalDB.setStats({ total, maxLevel, totalBalance, rootCount });
+
         }
 
         function showStatDetail(type) {
@@ -2607,7 +2521,7 @@
                 }
             });
 
-            LocalDB.setNotifications(alerts);
+            notificationsCache = alerts;
             renderAlerts(alerts);
         }
 
@@ -2628,7 +2542,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = notificationsCache;
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2734,25 +2648,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({
-                        action: currentEditId ? 'updateChartAccount' : 'saveChartAccount',
-                        data: data
-                    });
-                    if (currentEditId) {
-                        const idx = allAccounts.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) { allAccounts[idx] = { ...allAccounts[idx], ...data }; }
-                    } else {
-                        allAccounts.push({ ...data, id: Date.now() });
-                    }
-                    LocalDB.setAccounts(allAccounts);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
-                    closeModal();
-                    renderTreeView();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ لم يتم حفظ الحساب في SQLite: ' + (e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2846,7 +2742,6 @@
                         const childIds = children.map(c => c.id);
                         allAccounts = allAccounts.filter(s => !childIds.includes(s.id));
                     }
-                    LocalDB.setAccounts(allAccounts);
                     renderTreeView();
                     updateStats();
                     hapticFeedback('success');
@@ -2854,24 +2749,62 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteChartAccount', data: { id: id, cascade: children.length > 0 } });
-                    allAccounts = allAccounts.filter(s => s.id != id);
-                    if (children.length > 0) {
-                        const childIds = children.map(c => c.id);
-                        allAccounts = allAccounts.filter(s => !childIds.includes(s.id));
-                    }
-                    LocalDB.setAccounts(allAccounts);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderTreeView();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ لم يتم حذف الحساب من SQLite: ' + (e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
+        }
+
+        async function cloneAccount(id) {
+            const source = allAccounts.find(item => Number(item.id) === Number(id));
+            if (!source) return showToast('الحساب غير موجود', 'error');
+            const result = await Swal.fire({
+                title: 'نسخ الحساب',
+                html: '<input id="coaCloneCode" class="swal2-input" placeholder="كود الحساب الجديد">' + '<input id="coaCloneName" class="swal2-input" placeholder="اسم الحساب الجديد">',
+                showCancelButton: true, confirmButtonText: 'نسخ فعلياً', cancelButtonText: 'إلغاء',
+                preConfirm: () => {
+                    const code = document.getElementById('coaCloneCode').value.trim();
+                    const name = document.getElementById('coaCloneName').value.trim();
+                    if (!code || !name) { Swal.showValidationMessage('الكود والاسم مطلوبان'); return false; }
+                    return { account_code: code, account_name_ar: name, account_name: name, parent_account_id: source.parent_account_id ?? null };
+                }
+            });
+            if (!result.isConfirmed) return;
+            showLoading(true);
+            try { await apiCall('cloneChartAccount', { id, ...result.value }); showToast('تم نسخ الحساب فعلياً في SQLite', 'success'); await loadAccounts(); }
+            catch (e) { showToast('فشل نسخ الحساب: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
+        async function moveAccount(id) {
+            const excluded = new Set([Number(id)]);
+            let changed = true;
+            while (changed) {
+                changed = false;
+                allAccounts.forEach(item => {
+                    if (excluded.has(Number(item.parent_account_id)) && !excluded.has(Number(item.id))) { excluded.add(Number(item.id)); changed = true; }
+                });
+            }
+            const options = allAccounts.filter(item => !excluded.has(Number(item.id))).map(item => '<option value="' + Number(item.id) + '">' + escapeHtml((item.account_code || '') + ' - ' + (item.account_name_ar || item.account_name || '')) + '</option>').join('');
+            const result = await Swal.fire({
+                title: 'نقل الحساب', html: '<select id="coaMoveParent" class="swal2-select"><option value="0">حساب رئيسي</option>' + options + '</select>',
+                showCancelButton: true, confirmButtonText: 'نقل فعلياً', cancelButtonText: 'إلغاء'
+            });
+            if (!result.isConfirmed) return;
+            showLoading(true);
+            try { await apiCall('moveChartAccount', { id, parentId: Number(document.getElementById('coaMoveParent').value || 0) }); showToast('تم نقل الحساب وتحديث مستويات فروعه', 'success'); await loadAccounts(); }
+            catch (e) { showToast('فشل نقل الحساب: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
+        async function toggleArchiveAccount(id) {
+            const item = allAccounts.find(account => Number(account.id) === Number(id));
+            if (!item) return;
+            const active = Number(item.is_active) === 1;
+            const result = await Swal.fire({ title: active ? 'أرشفة الحساب؟' : 'استعادة الحساب؟', text: active ? 'سيبقى الحساب في SQLite لكن سيصبح غير نشط.' : 'سيعاد تفعيل الحساب في SQLite.', icon: 'question', showCancelButton: true, confirmButtonText: active ? 'أرشفة' : 'استعادة', cancelButtonText: 'إلغاء' });
+            if (!result.isConfirmed) return;
+            showLoading(true);
+            try { await apiCall(active ? 'archiveChartAccount' : 'restoreChartAccount', { id }); showToast(active ? 'تمت الأرشفة فعلياً' : 'تمت الاستعادة فعلياً', 'success'); await loadAccounts(); }
+            catch (e) { showToast('فشلت العملية: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
         }
 
         // ============================================================
@@ -2958,10 +2891,23 @@
                 </div>
                 ` : ''}
 
+                <div class="details-section" id="accountAuditSection">
+                    <div class="details-section-title"><i class="fas fa-history"></i> سجل التغييرات</div>
+                    <p style="color:var(--text-muted);">جاري تحميل السجل من SQLite...</p>
+                </div>
                 <div style="height:40px;"></div>
             `;
 
             document.getElementById('detailsOverlay').classList.add('show');
+            try {
+                const audit = await apiCall('getChartAccountAudit', { id });
+                const rows = Array.isArray(audit.data) ? audit.data : [];
+                const auditEl = document.getElementById('accountAuditSection');
+                if (auditEl) auditEl.innerHTML = '<div class="details-section-title"><i class="fas fa-history"></i> سجل التغييرات</div>' + (rows.length ? rows.map(row => '<div class="details-row"><span class="details-label">' + escapeHtml(row.action_type || '') + '</span><span class="details-value">' + escapeHtml(row.created_at || '') + '</span></div>').join('') : '<p style="color:var(--text-muted);">لا توجد تغييرات مسجلة</p>');
+            } catch (auditError) {
+                const auditEl = document.getElementById('accountAuditSection');
+                if (auditEl) auditEl.innerHTML = '<div class="details-section-title"><i class="fas fa-history"></i> سجل التغييرات</div><p style="color:var(--text-muted);">تعذر قراءة السجل: ' + escapeHtml(auditError.message || '') + '</p>';
+            }
             document.body.style.overflow = 'hidden';
             hapticFeedback('light');
         }
@@ -3031,7 +2977,7 @@
                     collapseAll();
                     break;
                 case 'export':
-                    showToast('📤 جاري تجهيز التصدير...', 'info');
+                    exportAccountsCsv();
                     break;
                 case 'ai_advisor':
                     openAIAdvisor();
@@ -3042,6 +2988,17 @@
                 default:
                     showToast('❌ إجراء غير معروف', 'error');
             }
+        }
+
+        function exportAccountsCsv() {
+            if (!allAccounts.length) return showToast('لا توجد بيانات لتصديرها', 'warning');
+            const headers = ['account_code', 'account_name_ar', 'account_type', 'parent_account_id', 'level', 'normal_balance', 'opening_balance', 'current_balance', 'is_active', 'remarks'];
+            const rows = allAccounts.map(item => headers.map(key => String(item[key] ?? '').replace(/"/g, '""')));
+            const csv = '\ufeff' + [headers, ...rows].map(row => row.map(value => '"' + value + '"').join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a'); link.href = url; link.download = 'chart-of-accounts.csv'; link.click(); URL.revokeObjectURL(url);
+            showToast('تم تصدير بيانات SQLite الحالية إلى CSV', 'success');
         }
 
         // ============================================================
@@ -3106,13 +3063,9 @@
                 }
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
-
             setTimeout(() => {
                 if (allAccounts.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = aiInsightsCache;
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }

@@ -4810,7 +4810,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         db.execSQL("""
             INSERT OR IGNORE INTO system_settings (setting_key, setting_value, description)
-            VALUES 
+            VALUES
             ('sms_security_mode', 'relaxed', 'وضع أمان SMS'),
             ('push_notifications_enabled', '0', 'تفعيل إشعارات Push')
         """)
@@ -4955,7 +4955,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun insertInitialData(db: SQLiteDatabase) {
         db.execSQL("""
             INSERT OR IGNORE INTO currencies (id, uuid, currency_code, currency_name, currency_name_ar, symbol, symbol_position, decimal_places, is_default, is_active)
-            VALUES 
+            VALUES
             (1, 'CUR-001-UUID', 'USD', 'US Dollar', 'الدولار الأمريكي', '$', 'before', 2, 1, 1),
             (2, 'CUR-002-UUID', 'YER', 'Yemeni Rial', 'الريال اليمني', 'ر.ي', 'after', 0, 0, 1),
             (3, 'CUR-003-UUID', 'SAR', 'Saudi Riyal', 'الريال السعودي', 'ر.س', 'after', 2, 0, 1)
@@ -5206,8 +5206,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         db.execSQL("""
             INSERT OR IGNORE INTO receipt_templates (id, uuid, template_code, template_name, description, header, footer, is_default) VALUES
-            (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي', 
-            'محطة ابو أحمد لمشتقات الديزل\nشكراً لزيارتكم', 
+            (1, 'RT-001-UUID', 'RECEIPT_DEFAULT', 'Standard Receipt', 'قالب الإيصال القياسي',
+            'محطة ابو أحمد لمشتقات الديزل\nشكراً لزيارتكم',
             'مع خالص الشكر والتقدير\nأبو أحمد', 1)
         """)
 
@@ -5707,7 +5707,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         val cursor = db.rawQuery(
             """
-            SELECT 
+            SELECT
                 u.id,
                 u.uuid,
                 u.username,
@@ -5917,8 +5917,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             val likeQuery = "%$query%"
             db.rawQuery(
-                """SELECT * FROM parties 
-                   WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ? OR phone LIKE ?) 
+                """SELECT * FROM parties
+                   WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ? OR phone LIKE ?)
                    AND is_deleted=0 ORDER BY commercial_name LIMIT 50""",
                 arrayOf(likeQuery, likeQuery, likeQuery, likeQuery)
             ).use { cursor ->
@@ -6232,8 +6232,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery(
-            """SELECT s.*, p.commercial_name as customer_name FROM sales_transactions s 
-               LEFT JOIN parties p ON s.customer_party_id = p.id 
+            """SELECT s.*, p.commercial_name as customer_name FROM sales_transactions s
+               LEFT JOIN parties p ON s.customer_party_id = p.id
                WHERE s.station_id=? AND s.is_deleted=0 ORDER BY s.id DESC LIMIT ? OFFSET ?""",
             arrayOf(stationId.toString(), limit.toString(), offset.toString())
         ).use { cursor ->
@@ -6709,7 +6709,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT im.*, p.product_name 
+                """SELECT im.*, p.product_name
                    FROM inventory_movements im
                    LEFT JOIN products p ON im.product_id = p.id
                    WHERE im.is_deleted = 0
@@ -6726,7 +6726,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT p.id, p.product_name, p.product_name_ar, p.minimum_stock, 
+                """SELECT p.id, p.product_name, p.product_name_ar, p.minimum_stock,
                           COALESCE(il.quantity_on_hand, 0) as quantity_on_hand
                    FROM products p
                    LEFT JOIN inventory_levels il ON p.id = il.product_id AND il.warehouse_id = 1
@@ -6852,7 +6852,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT u.*, r.role_name, r.role_name_ar 
+                """SELECT u.*, r.role_name, r.role_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
                    WHERE u.is_deleted = 0
@@ -6869,7 +6869,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT u.*, r.role_name, r.role_name_ar 
+                """SELECT u.*, r.role_name, r.role_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
                    WHERE r.role_code = ? AND u.is_deleted = 0 AND u.status = 'active'
@@ -7446,7 +7446,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.insert("payments", null, cv)
 
             db.execSQL(
-                """UPDATE sales_transactions 
+                """UPDATE sales_transactions
                    SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
                        payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END
                    WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0 ORDER BY id LIMIT 1""",
@@ -7549,7 +7549,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val from = fromDate ?: getCurrentDate()
             val to = toDate ?: getCurrentDate()
             db.rawQuery(
-                """SELECT 
+                """SELECT
                     COALESCE(SUM(CASE WHEN s.status = 'completed' THEN s.net_amount ELSE 0 END),0) as total_sales,
                     COALESCE(SUM(CASE WHEN s.payment_method = 'cash' THEN s.net_amount ELSE 0 END),0) as cash_sales,
                     COALESCE(SUM(CASE WHEN s.payment_method = 'credit' THEN s.net_amount ELSE 0 END),0) as credit_sales,
@@ -8850,7 +8850,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery("""
-            SELECT f.fuel_name, f.fuel_name_ar, 
+            SELECT f.fuel_name, f.fuel_name_ar,
                    COALESCE(SUM(s.liters), 0) as total_liters,
                    COALESCE(SUM(s.net_amount), 0) as total_amount,
                    COUNT(*) as transaction_count
@@ -10060,7 +10060,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun cleanupOldConversationContext(days: Int = 30): Int {  
+    fun cleanupOldConversationContext(days: Int = 30): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -10879,6 +10879,344 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up expired user OTPs: ${e.message}", e)
             0
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // =========================================================================
+    // COA_RECOMMENDATIONS_V1: عمليات شجرة الحسابات المحلية عبر SQLite فقط.
+    // لا تستخدم هذه الدوال خادماً أو localStorage أو قاعدة بيانات بديلة.
+    // =========================================================================
+    fun getChartAccounts(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """
+                SELECT id, uuid, account_code, account_name, account_name_ar,
+                       parent_account_id, level, account_type, account_category,
+                       normal_balance, opening_balance, current_balance,
+                       is_bank_account, is_cash_account, is_control_account,
+                       is_active, bank_account_id, cash_box_id, created_at,
+                       updated_at, remarks, extra_data
+                FROM accounts
+                WHERE is_deleted = 0
+                ORDER BY account_code COLLATE NOCASE, id
+                """.trimIndent(),
+                null
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    private fun getAccountRow(db: SQLiteDatabase, id: Long, includeDeleted: Boolean = false): JSONObject? {
+        val where = if (includeDeleted) "id = ?" else "id = ? AND is_deleted = 0"
+        return db.rawQuery(
+            "SELECT * FROM accounts WHERE $where LIMIT 1",
+            arrayOf(id.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null
+        }
+    }
+
+    private fun accountHasChildren(db: SQLiteDatabase, id: Long): Boolean {
+        return db.rawQuery(
+            "SELECT 1 FROM accounts WHERE parent_account_id = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(id.toString())
+        ).use { it.moveToFirst() }
+    }
+
+    private fun accountIsDescendant(db: SQLiteDatabase, candidateParentId: Long, accountId: Long): Boolean {
+        var current = candidateParentId
+        val visited = mutableSetOf<Long>()
+        while (current > 0 && visited.add(current)) {
+            if (current == accountId) return true
+            val next = db.rawQuery(
+                "SELECT parent_account_id FROM accounts WHERE id = ? AND is_deleted = 0 LIMIT 1",
+                arrayOf(current.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else 0L
+            }
+            current = next
+        }
+        return false
+    }
+
+    private fun updateAccountTreeLevels(db: SQLiteDatabase, rootId: Long) {
+        val queue: ArrayDeque<Pair<Long, Int>> = ArrayDeque()
+        val rootLevel = db.rawQuery(
+            "SELECT level FROM accounts WHERE id = ? AND is_deleted = 0 LIMIT 1",
+            arrayOf(rootId.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 1 }
+        queue.add(rootId to rootLevel)
+        while (queue.isNotEmpty()) {
+            val (parentId, parentLevel) = queue.removeFirst()
+            db.rawQuery(
+                "SELECT id FROM accounts WHERE parent_account_id = ? AND is_deleted = 0 ORDER BY account_code COLLATE NOCASE",
+                arrayOf(parentId.toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val childId = cursor.getLong(0)
+                    val childLevel = parentLevel + 1
+                    db.execSQL("UPDATE accounts SET level = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", arrayOf(childLevel, childId))
+                    queue.add(childId to childLevel)
+                }
+            }
+        }
+    }
+
+    private fun writeAccountAudit(db: SQLiteDatabase, userId: Long, action: String, recordId: Long, oldRow: JSONObject?, newRow: JSONObject?) {
+        val values = ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("user_id", if (userId > 0) userId else null)
+            put("action_type", action)
+            put("table_name", "accounts")
+            put("record_id", recordId)
+            put("old_row_json", oldRow?.toString())
+            put("new_row_json", newRow?.toString())
+            put("created_at", getCurrentDateTime())
+        }
+        db.insert("audit_logs", null, values)
+    }
+
+    fun saveChartAccount(data: JSONObject, userId: Long): Long {
+        require(data.optString("account_code").trim().isNotEmpty()) { "كود الحساب مطلوب" }
+        require(data.optString("account_name_ar").trim().isNotEmpty() || data.optString("account_name").trim().isNotEmpty()) { "اسم الحساب مطلوب" }
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val id = data.optLong("id", 0L)
+            val code = data.optString("account_code").trim()
+            val parentId = if (data.isNull("parent_account_id")) 0L else data.optLong("parent_account_id", 0L)
+            val type = data.optString("account_type", "asset")
+            require(type in setOf("asset", "liability", "equity", "revenue", "expense")) { "نوع الحساب غير صالح" }
+            if (parentId > 0) {
+                require(parentId != id) { "لا يمكن أن يكون الحساب أباً لنفسه" }
+                require(getAccountRow(db, parentId) != null) { "الحساب الأب غير موجود" }
+                require(!accountIsDescendant(db, parentId, id)) { "لا يمكن نقل الحساب إلى أحد فروعه" }
+            }
+            val values = ContentValues().apply {
+                put("account_code", code)
+                put("account_name", data.optString("account_name").trim().ifEmpty { data.optString("account_name_ar").trim() })
+                put("account_name_ar", data.optString("account_name_ar").trim().ifEmpty { data.optString("account_name").trim() })
+                put("account_type", type)
+                put("account_category", data.optString("account_category").trim())
+                put("normal_balance", data.optString("normal_balance", if (type in setOf("asset", "expense")) "debit" else "credit"))
+                put("opening_balance", data.optDouble("opening_balance", 0.0))
+                if (id <= 0) put("current_balance", data.optDouble("current_balance", data.optDouble("opening_balance", 0.0)))
+                put("is_bank_account", data.optInt("is_bank_account", 0))
+                put("is_cash_account", data.optInt("is_cash_account", 0))
+                put("is_control_account", data.optInt("is_control_account", 0))
+                put("is_active", data.optInt("is_active", 1))
+                if (parentId > 0) put("parent_account_id", parentId) else putNull("parent_account_id")
+                if (data.optLong("bank_account_id", 0L) > 0) put("bank_account_id", data.optLong("bank_account_id")) else putNull("bank_account_id")
+                if (data.optLong("cash_box_id", 0L) > 0) put("cash_box_id", data.optLong("cash_box_id")) else putNull("cash_box_id")
+                put("remarks", data.optString("remarks").trim())
+                put("updated_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+            }
+            val savedId: Long
+            if (id > 0) {
+                val oldRow = getAccountRow(db, id) ?: throw IllegalArgumentException("الحساب غير موجود")
+                val rows = db.update("accounts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+                require(rows == 1) { "لم يتم تحديث الحساب" }
+                updateAccountTreeLevels(db, id)
+                savedId = id
+                writeAccountAudit(db, userId, "update", id, oldRow, getAccountRow(db, id))
+            } else {
+                values.put("uuid", UUID.randomUUID().toString())
+                values.put("level", if (parentId > 0) {
+                    db.rawQuery("SELECT level FROM accounts WHERE id = ?", arrayOf(parentId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) + 1 else 1 }
+                } else 1)
+                values.put("created_by", if (userId > 0) userId else null)
+                values.put("created_at", getCurrentDateTime())
+                savedId = db.insertOrThrow("accounts", null, values)
+                writeAccountAudit(db, userId, "insert", savedId, null, getAccountRow(db, savedId))
+            }
+            db.setTransactionSuccessful()
+            return savedId
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun deleteChartAccount(id: Long, cascade: Boolean, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val root = getAccountRow(db, id) ?: throw IllegalArgumentException("الحساب غير موجود")
+            val ids = mutableListOf<Long>()
+            val queue = ArrayDeque<Long>()
+            queue.add(id)
+            while (queue.isNotEmpty()) {
+                val current = queue.removeFirst()
+                ids.add(current)
+                if (cascade) {
+                    db.rawQuery("SELECT id FROM accounts WHERE parent_account_id = ? AND is_deleted = 0", arrayOf(current.toString())).use { c ->
+                        while (c.moveToNext()) queue.add(c.getLong(0))
+                    }
+                }
+            }
+            if (!cascade && accountHasChildren(db, id)) throw IllegalStateException("لا يمكن حذف حساب يحتوي على فروع")
+            val values = ContentValues().apply {
+                put("is_deleted", 1)
+                put("is_active", 0)
+                put("deleted_by", if (userId > 0) userId else null)
+                put("deleted_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            var changed = 0
+            ids.forEach { changed += db.update("accounts", values, "id = ? AND is_deleted = 0", arrayOf(it.toString())) }
+            writeAccountAudit(db, userId, "delete", id, root, getAccountRow(db, id, true))
+            db.setTransactionSuccessful()
+            return changed
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun archiveChartAccount(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = getAccountRow(db, id) ?: throw IllegalArgumentException("الحساب غير موجود")
+            val values = ContentValues().apply {
+                put("is_active", 0)
+                put("updated_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("accounts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows == 1) writeAccountAudit(db, userId, "archive", id, oldRow, getAccountRow(db, id))
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun restoreChartAccount(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = getAccountRow(db, id, true) ?: throw IllegalArgumentException("الحساب غير موجود")
+            val values = ContentValues().apply {
+                put("is_deleted", 0)
+                put("is_active", 1)
+                putNull("deleted_by")
+                putNull("deleted_at")
+                put("updated_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("accounts", values, "id = ?", arrayOf(id.toString()))
+            if (rows == 1) writeAccountAudit(db, userId, "restore", id, oldRow, getAccountRow(db, id))
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun cloneChartAccount(sourceId: Long, data: JSONObject, userId: Long): Long {
+        val db = writableDatabase
+        val source = getAccountRow(db, sourceId) ?: throw IllegalArgumentException("الحساب الأصلي غير موجود")
+        val clone = JSONObject(source.toString()).apply {
+            remove("id")
+            remove("uuid")
+            remove("created_at")
+            remove("updated_at")
+            remove("created_by")
+            remove("updated_by")
+            remove("deleted_at")
+            remove("deleted_by")
+            remove("is_deleted")
+            put("account_code", data.optString("account_code").trim())
+            put("account_name", data.optString("account_name").trim().ifEmpty { data.optString("account_name_ar").trim() })
+            put("account_name_ar", data.optString("account_name_ar").trim().ifEmpty { data.optString("account_name").trim() })
+            put("is_active", 1)
+            put("current_balance", 0.0)
+            put("parent_account_id", if (data.isNull("parent_account_id")) JSONObject.NULL else data.optLong("parent_account_id"))
+        }
+        require(clone.optString("account_code").isNotEmpty()) { "كود الحساب المنسوخ مطلوب" }
+        return saveChartAccount(clone, userId)
+    }
+
+    fun moveChartAccount(id: Long, parentId: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldRow = getAccountRow(db, id) ?: throw IllegalArgumentException("الحساب غير موجود")
+            if (parentId > 0) {
+                require(parentId != id) { "لا يمكن أن يكون الحساب أباً لنفسه" }
+                require(getAccountRow(db, parentId) != null) { "الحساب الأب غير موجود" }
+                require(!accountIsDescendant(db, parentId, id)) { "لا يمكن نقل الحساب إلى أحد فروعه" }
+            }
+            val newLevel = if (parentId > 0) {
+                db.rawQuery("SELECT level FROM accounts WHERE id = ?", arrayOf(parentId.toString())).use { c -> if (c.moveToFirst()) c.getInt(0) + 1 else 1 }
+            } else 1
+            val values = ContentValues().apply {
+                if (parentId > 0) put("parent_account_id", parentId) else putNull("parent_account_id")
+                put("level", newLevel)
+                put("updated_by", if (userId > 0) userId else null)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("accounts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows == 1) {
+                updateAccountTreeLevels(db, id)
+                writeAccountAudit(db, userId, "move", id, oldRow, getAccountRow(db, id))
+            }
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun getChartAccountAudit(id: Long, limit: Int = 100): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, user_id, action_type, table_name, record_id, old_row_json, new_row_json, created_at FROM audit_logs WHERE table_name = 'accounts' AND record_id = ? ORDER BY id DESC LIMIT ?",
+                arrayOf(id.toString(), limit.coerceIn(1, 500).toString())
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ========================================================================
+    // COA_TRIAL_BALANCE_V1: ميزان مراجعة مستخرج من قيود اليومية المرحّلة.
+    // ========================================================================
+    fun getChartTrialBalance(fromDate: String?, toDate: String?): JSONArray {
+        dbLock.lock()
+        return try {
+            val conditions = StringBuilder()
+            val args = mutableListOf<String>()
+            if (!fromDate.isNullOrBlank()) {
+                conditions.append(" AND je.entry_date >= ?")
+                args.add(fromDate)
+            }
+            if (!toDate.isNullOrBlank()) {
+                conditions.append(" AND je.entry_date <= ?")
+                args.add(toDate)
+            }
+            val sql = """
+                SELECT a.id, a.account_code, a.account_name, a.account_name_ar,
+                       a.account_type, a.level, a.normal_balance,
+                       COALESCE(a.opening_balance, 0) AS opening_balance,
+                       COALESCE(SUM(jei.debit), 0) AS total_debit,
+                       COALESCE(SUM(jei.credit), 0) AS total_credit,
+                       COALESCE(a.current_balance, 0) AS current_balance,
+                       a.is_active
+                FROM accounts a
+                LEFT JOIN journal_entry_items jei ON jei.account_id = a.id
+                LEFT JOIN journal_entries je ON je.id = jei.journal_entry_id
+                    AND je.status = 'posted' AND je.is_deleted = 0 $conditions
+                WHERE a.is_deleted = 0
+                GROUP BY a.id
+                ORDER BY a.account_code COLLATE NOCASE, a.id
+            """.trimIndent()
+            readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
         } finally {
             dbLock.unlock()
         }

@@ -1394,7 +1394,7 @@ class MainActivity : AppCompatActivity() {
                 }.toString()
             }
         }
-    
+
         @JavascriptInterface
 fun getDashboardStats(jsonData: String = "{}"): String {
     DebugLogger.info(
@@ -4205,6 +4205,131 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("BankReport", e)
+                errorResponse(e.message)
+            }
+        }
+
+
+        // ============================================================
+        // COA_RECOMMENDATIONS_BRIDGE_V1: جسر شاشة شجرة الحسابات.
+        // المصدر الوحيد للبيانات هو DatabaseHelper/SQLite المحلي.
+        // ============================================================
+        @JavascriptInterface
+        fun getChartAccounts(): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة شجرة الحسابات")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getChartAccounts()) } catch (e: Exception) {
+                DebugLogger.logException("ChartAccounts", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveChartAccount(jsonData: String): String {
+            val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الحساب غير صالحة") }
+            val requiredPermission = if (payload.optLong("id", 0L) > 0) "update" else "create"
+            if (!checkPermission("accounting", requiredPermission)) return errorResponse("لا تملك صلاحية هذه العملية على الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val id = db.saveChartAccount(payload, activity.currentUserId)
+                successResponse(id, "تم حفظ الحساب فعلياً في SQLite")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountSave", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteChartAccount(id: Long, cascade: Boolean): String {
+            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteChartAccount(id, cascade, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تم الحذف الفعلي من SQLite") else errorResponse("لم يتم حذف الحساب")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountDelete", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun archiveChartAccount(id: Long): String {
+            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية أرشفة الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.archiveChartAccount(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تمت أرشفة الحساب فعلياً") else errorResponse("لم تتم أرشفة الحساب")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountArchive", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreChartAccount(id: Long): String {
+            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية استعادة الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.restoreChartAccount(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تمت استعادة الحساب فعلياً") else errorResponse("لم تتم استعادة الحساب")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountRestore", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun cloneChartAccount(id: Long, jsonData: String): String {
+            if (!checkPermission("accounting", "create")) return errorResponse("لا تملك صلاحية نسخ الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val newId = db.cloneChartAccount(id, JSONObject(jsonData.ifBlank { "{}" }), activity.currentUserId)
+                successResponse(newId, "تم نسخ الحساب فعلياً")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountClone", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun moveChartAccount(id: Long, parentId: Long): String {
+            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية نقل الحسابات")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.moveChartAccount(id, parentId, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تم نقل الحساب وتحديث مستويات فروعه") else errorResponse("لم يتم نقل الحساب")
+            } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountMove", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getChartAccountAudit(id: Long): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة سجل الحساب")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getChartAccountAudit(id)) } catch (e: Exception) {
+                DebugLogger.logException("ChartAccountAudit", e)
+                errorResponse(e.message)
+            }
+        }
+
+
+        // ============================================================
+        // COA_TRIAL_BALANCE_BRIDGE_V1
+        // ============================================================
+        @JavascriptInterface
+        fun getChartTrialBalance(fromDate: String?, toDate: String?): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة ميزان المراجعة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getChartTrialBalance(fromDate, toDate)) } catch (e: Exception) {
+                DebugLogger.logException("ChartTrialBalance", e)
                 errorResponse(e.message)
             }
         }
