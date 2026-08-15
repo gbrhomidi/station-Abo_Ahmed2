@@ -607,6 +607,49 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             FROM permissions WHERE permission_code = 'activity.delete'
             """.trimIndent()
         )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO permissions
+                (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+            VALUES
+                ('PER-ACCOUNTING-UPDATE-V14', 'accounting.update', 'Update Accounting Records', 'تعديل سجلات المحاسبة', 'accounting', 'المحاسبة', 'update'),
+                ('PER-ACCOUNTING-DELETE-V14', 'accounting.delete', 'Delete Accounting Records', 'حذف سجلات المحاسبة', 'accounting', 'المحاسبة', 'delete'),
+                ('PER-ACCOUNTING-EXPORT-V14', 'accounting.export', 'Export Accounting Reports', 'تصدير تقارير المحاسبة', 'accounting', 'المحاسبة', 'export'),
+                ('PER-ACCOUNTING-PRINT-V14', 'accounting.print', 'Print Accounting Reports', 'طباعة تقارير المحاسبة', 'accounting', 'المحاسبة', 'print')
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACCOUNTING-UPDATE-ADMIN-V14', 1, id, 0, 0, 1, 0, 0, 0, 0
+            FROM permissions WHERE permission_code = 'accounting.update'
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACCOUNTING-DELETE-ADMIN-V14', 1, id, 0, 0, 0, 1, 0, 0, 0
+            FROM permissions WHERE permission_code = 'accounting.delete'
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACCOUNTING-EXPORT-ADMIN-V14', 1, id, 0, 1, 0, 0, 1, 0, 0
+            FROM permissions WHERE permission_code = 'accounting.export'
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-ACCOUNTING-PRINT-ADMIN-V14', 1, id, 0, 1, 0, 0, 0, 1, 0
+            FROM permissions WHERE permission_code = 'accounting.print'
+            """.trimIndent()
+        )
     }
 
     // ===================================================================================
@@ -10367,6 +10410,242 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+    // ========================================================================
+    // دوال البنوك والحسابات البنكية (مطابقة لـ banks و bank_accounts)
+    // ========================================================================
+
+    fun getBanks(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT id, uuid, bank_code, bank_name, bank_name_ar, swift_code,
+                          country, city, address, phone, email, website, is_active,
+                          created_at, updated_at, remarks, extra_data,
+                          (SELECT COUNT(*) FROM bank_accounts ba WHERE ba.bank_id = banks.id AND ba.is_deleted = 0) AS account_count,
+                          COALESCE((SELECT SUM(ba.current_balance) FROM bank_accounts ba WHERE ba.bank_id = banks.id AND ba.is_deleted = 0), 0) AS total_balance
+                   FROM banks
+                   WHERE is_deleted = 0
+                   ORDER BY COALESCE(bank_name_ar, bank_name) COLLATE NOCASE""",
+                null
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBankAccounts(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT a.id, a.uuid, a.account_code, a.bank_id, a.company_id, a.station_id,
+                          a.account_name, a.account_name_ar, a.account_number, a.iban,
+                          a.account_type, a.currency_id, a.opening_balance, a.current_balance,
+                          a.available_balance, a.overdraft_limit, a.authorized_users, a.status,
+                          a.created_at, a.updated_at, a.remarks, a.extra_data,
+                          b.bank_code, b.bank_name, b.bank_name_ar,
+                          c.currency_code, c.currency_name, c.currency_name_ar
+                   FROM bank_accounts a
+                   LEFT JOIN banks b ON b.id = a.bank_id AND b.is_deleted = 0
+                   LEFT JOIN currencies c ON c.id = a.currency_id AND c.is_deleted = 0
+                   WHERE a.is_deleted = 0
+                   ORDER BY COALESCE(a.account_name_ar, a.account_name) COLLATE NOCASE""",
+                null
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBankLedger(startDate: String?, endDate: String?): JSONArray {
+        dbLock.lock()
+        return try {
+            val selection = StringBuilder("l.bank_account_id = a.id")
+            val args = mutableListOf<String>()
+            if (!startDate.isNullOrBlank()) {
+                selection.append(" AND date(l.transaction_date) >= date(?)")
+                args.add(startDate)
+            }
+            if (!endDate.isNullOrBlank()) {
+                selection.append(" AND date(l.transaction_date) <= date(?)")
+                args.add(endDate)
+            }
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT l.id, l.uuid, l.transaction_date, l.transaction_type,
+                          l.transaction_id, l.reference_number, l.debit, l.credit,
+                          (l.debit - l.credit) AS amount, l.balance, l.description,
+                          a.account_name, a.account_name_ar, b.bank_name, b.bank_name_ar
+                   FROM bank_ledger l
+                   JOIN bank_accounts a ON ${selection}
+                   LEFT JOIN banks b ON b.id = a.bank_id AND b.is_deleted = 0
+                   WHERE a.is_deleted = 0
+                   ORDER BY datetime(l.transaction_date) DESC, l.id DESC""",
+                args.toTypedArray()
+            ).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun insertBank(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("bank_code", data.optString("bank_code").trim())
+                put("bank_name", data.optString("bank_name").trim())
+                put("bank_name_ar", data.optString("bank_name_ar").trim())
+                put("swift_code", data.optString("swift_code").trim())
+                put("country", data.optString("country").trim())
+                put("city", data.optString("city").trim())
+                put("address", data.optString("address").trim())
+                put("phone", data.optString("phone").trim())
+                put("email", data.optString("email").trim())
+                put("website", data.optString("website").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("remarks", data.optString("remarks", data.optString("notes", "")).trim())
+                put("extra_data", data.optString("extra_data", ""))
+            }
+            val id = db.insertOrThrow("banks", null, values)
+            logActivity("system", "insert_bank", "إضافة بنك: ${data.optString("bank_name_ar", data.optString("bank_name"))}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateBank(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("bank_code", data.optString("bank_code").trim())
+                put("bank_name", data.optString("bank_name").trim())
+                put("bank_name_ar", data.optString("bank_name_ar").trim())
+                put("swift_code", data.optString("swift_code").trim())
+                put("country", data.optString("country").trim())
+                put("city", data.optString("city").trim())
+                put("address", data.optString("address").trim())
+                put("phone", data.optString("phone").trim())
+                put("email", data.optString("email").trim())
+                put("website", data.optString("website").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("remarks", data.optString("remarks", data.optString("notes", "")).trim())
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("banks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_bank", "تحديث بنك: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteBank(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.rawQuery("SELECT COUNT(*) FROM bank_accounts WHERE bank_id = ? AND is_deleted = 0", arrayOf(id.toString())).use { cursor ->
+                if (cursor.moveToFirst() && cursor.getInt(0) > 0) {
+                    throw IllegalStateException("لا يمكن حذف بنك مرتبط بحسابات بنكية")
+                }
+            }
+            val values = ContentValues().apply {
+                put("is_deleted", 1)
+                put("is_active", 0)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("banks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_bank", "حذف بنك: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun insertBankAccount(data: JSONObject, stationId: Int, userId: Long): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("account_code", data.optString("account_code").trim())
+                put("bank_id", data.optLong("bank_id", 0L))
+                put("station_id", stationId)
+                put("account_name", data.optString("account_name").trim())
+                put("account_name_ar", data.optString("account_name_ar").trim())
+                put("account_number", data.optString("account_number").trim())
+                put("iban", data.optString("iban").trim())
+                put("account_type", data.optString("account_type", "current"))
+                put("currency_id", data.optLong("currency_id", 0L))
+                val opening = data.optDouble("opening_balance", 0.0)
+                put("opening_balance", opening)
+                put("current_balance", opening)
+                put("available_balance", opening)
+                put("overdraft_limit", data.optDouble("overdraft_limit", 0.0))
+                put("authorized_users", data.optString("authorized_users").trim())
+                put("status", data.optString("status", "active"))
+                put("created_by", userId)
+                put("remarks", data.optString("remarks", data.optString("notes", "")).trim())
+                put("extra_data", data.optString("extra_data", ""))
+            }
+            val id = db.insertOrThrow("bank_accounts", null, values)
+            logActivity("system", "insert_bank_account", "إضافة حساب بنكي: ${data.optString("account_name_ar", data.optString("account_name"))}")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateBankAccount(id: Long, data: JSONObject, userId: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("account_code", data.optString("account_code").trim())
+                put("bank_id", data.optLong("bank_id", 0L))
+                put("account_name", data.optString("account_name").trim())
+                put("account_name_ar", data.optString("account_name_ar").trim())
+                put("account_number", data.optString("account_number").trim())
+                put("iban", data.optString("iban").trim())
+                put("account_type", data.optString("account_type", "current"))
+                put("currency_id", data.optLong("currency_id", 0L))
+                put("overdraft_limit", data.optDouble("overdraft_limit", 0.0))
+                put("authorized_users", data.optString("authorized_users").trim())
+                put("status", data.optString("status", "active"))
+                put("updated_by", userId)
+                put("updated_at", getCurrentDateTime())
+                put("remarks", data.optString("remarks", data.optString("notes", "")).trim())
+            }
+            val rows = db.update("bank_accounts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_bank_account", "تحديث حساب بنكي: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteBankAccount(id: Long, userId: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("is_deleted", 1)
+                put("status", "closed")
+                put("deleted_at", getCurrentDateTime())
+                put("deleted_by", userId)
+            }
+            val rows = db.update("bank_accounts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_bank_account", "حذف حساب بنكي: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     // ========================================================================
     // دوال إدارة رموز إعادة تعيين كلمة المرور (Password Reset Tokens)

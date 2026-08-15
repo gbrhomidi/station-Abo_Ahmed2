@@ -4050,6 +4050,166 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
+        // 25. البنوك والحسابات البنكية - Bridge typed ومقيد بالصلاحيات
+        // ============================================================
+
+        @JavascriptInterface
+        fun getBanks(): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة البنوك")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getBanks()) } catch (e: Exception) {
+                DebugLogger.logException("Banks", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getBankAccounts(): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الحسابات البنكية")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getBankAccounts()) } catch (e: Exception) {
+                DebugLogger.logException("BankAccounts", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveBank(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData)
+                val id = data.optLong("id", 0L)
+                val permission = if (id > 0) "update" else "create"
+                if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية هذه العملية")
+                if (data.optString("bank_code").trim().isEmpty() || data.optString("bank_name_ar").trim().isEmpty()) {
+                    return errorResponse("كود البنك والاسم العربي مطلوبان")
+                }
+                val rowsOrId = if (id > 0) db.updateBank(id, data).toLong() else db.insertBank(data)
+                if (rowsOrId > 0) successResponse(rowsOrId, if (id > 0) "تم تحديث البنك" else "تم إضافة البنك")
+                else errorResponse("لم يتم العثور على البنك أو لم يتم حفظه")
+            } catch (e: Exception) {
+                DebugLogger.logException("Bank", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteBank(id: Long): String {
+            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف البنوك")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteBank(id)
+                if (rows > 0) successResponse(true, "تم حذف البنك") else errorResponse("لم يتم العثور على البنك")
+            } catch (e: Exception) {
+                DebugLogger.logException("Bank", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveBankAccount(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val data = JSONObject(jsonData)
+                val id = data.optLong("id", 0L)
+                val permission = if (id > 0) "update" else "create"
+                if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية هذه العملية")
+                val accountType = data.optString("account_type", "current")
+                val status = data.optString("status", "active")
+                if (data.optString("account_code").trim().isEmpty() || data.optString("account_name_ar").trim().isEmpty() ||
+                    data.optString("account_number").trim().isEmpty() || data.optLong("bank_id", 0L) <= 0 || data.optLong("currency_id", 0L) <= 0) {
+                    return errorResponse("بيانات الحساب الأساسية غير مكتملة")
+                }
+                if (accountType !in setOf("current", "savings", "deposit", "loan")) return errorResponse("نوع الحساب غير صالح")
+                if (status !in setOf("active", "inactive", "closed", "frozen")) return errorResponse("حالة الحساب غير صالحة")
+                val result = if (id > 0) {
+                    db.updateBankAccount(id, data, activity.currentUserId).toLong()
+                } else {
+                    db.insertBankAccount(data, getCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                }
+                if (result > 0) successResponse(result, if (id > 0) "تم تحديث الحساب" else "تم إضافة الحساب")
+                else errorResponse("لم يتم العثور على الحساب أو لم يتم حفظه")
+            } catch (e: Exception) {
+                DebugLogger.logException("BankAccount", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteBankAccount(id: Long): String {
+            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف الحسابات البنكية")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val rows = db.deleteBankAccount(id, activity.currentUserId)
+                if (rows > 0) successResponse(true, "تم حذف الحساب") else errorResponse("لم يتم العثور على الحساب")
+            } catch (e: Exception) {
+                DebugLogger.logException("BankAccount", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun generateBankReport(jsonData: String): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير الحسابات البنكية")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                val type = data.optString("report_type", "all")
+                val extra = data.optString("extra", "")
+                if (extra == "export" && !checkPermission("accounting", "export")) return errorResponse("لا تملك صلاحية التصدير")
+                val requestedStatus = if (data.isNull("status")) null else data.optInt("status", -1)
+                val result = when {
+                    extra == "stats" -> {
+                        val banks = db.getBanks()
+                        val accounts = db.getBankAccounts()
+                        val totalBalance = (0 until accounts.length()).sumOf { accounts.optJSONObject(it)?.optDouble("current_balance", 0.0) ?: 0.0 }
+                        JSONArray().put(JSONObject().apply {
+                            put("total_banks", banks.length())
+                            put("total_accounts", accounts.length())
+                            put("total_balance", totalBalance)
+                            put("active_accounts", (0 until accounts.length()).count { accounts.optJSONObject(it)?.optString("status") == "active" })
+                        })
+                    }
+                    type == "banks" -> {
+                        val banks = db.getBanks()
+                        if (requestedStatus == null || requestedStatus < 0) banks else JSONArray().also { filtered ->
+                            for (i in 0 until banks.length()) {
+                                val item = banks.optJSONObject(i) ?: continue
+                                val isActive = if (item.optInt("is_active", 0) == 1) 1 else 0
+                                if (isActive == requestedStatus) filtered.put(item)
+                            }
+                        }
+                    }
+                    type == "accounts" || type == "balance" -> {
+                        val accounts = db.getBankAccounts()
+                        if (requestedStatus == null || requestedStatus < 0) accounts else JSONArray().also { filtered ->
+                            for (i in 0 until accounts.length()) {
+                                val item = accounts.optJSONObject(i) ?: continue
+                                val isActive = if (item.optString("status") == "active") 1 else 0
+                                if (isActive == requestedStatus) filtered.put(item)
+                            }
+                        }
+                    }
+                    type == "transactions" -> db.getBankLedger(data.optString("start_date", ""), data.optString("end_date", ""))
+                    else -> {
+                        val all = JSONArray()
+                        val banks = db.getBanks()
+                        for (i in 0 until banks.length()) banks.optJSONObject(i)?.let { it.put("record_type", "bank"); all.put(it) }
+                        val accounts = db.getBankAccounts()
+                        for (i in 0 until accounts.length()) accounts.optJSONObject(i)?.let { it.put("record_type", "account"); all.put(it) }
+                        all
+                    }
+                }
+                dataResponse(result)
+            } catch (e: Exception) {
+                DebugLogger.logException("BankReport", e)
+                errorResponse(e.message)
+            }
+        }
+
+        // ============================================================
         // 25. دوال إضافية للشاشات الجديدة - مختصر
         // ============================================================
 

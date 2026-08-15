@@ -944,9 +944,9 @@
                         <img id="userAvatar" src="file:///android_asset/assets-local/images/default_avatar.png" alt="صورة المستخدم">
                     </div>
                     <div class="user-details">
-                        <h4 id="userDisplayName">مدير النظام</h4>
-                        <small id="userDisplayEmail">admin@example.com</small>
-                        <div><span class="role-badge" id="userDisplayRole">مدير</span></div>
+                        <h4 id="userDisplayName">جاري التحميل...</h4>
+                        <small id="userDisplayEmail">—</small>
+                        <div><span class="role-badge" id="userDisplayRole">—</span></div>
                     </div>
                 </div>
 
@@ -1111,45 +1111,38 @@
         let activeBubbles = [];
         let notificationsEnabled = true;
         let refreshInterval = null;
-        let dashboardCache = null; // تخزين مؤقت لبيانات Dashboard
+        let dashboardCache = null; // آخر نتيجة حية من SQLite، وليست بيانات افتراضية
 
         let androidInterface = null; // سيتم تهيئته لاحقاً
         let useAndroidInterface = false;
 
-        // دالة تهيئة الجسر
+        // دالة تهيئة الجسر؛ لا يُسمح بتشغيل Dashboard دون AndroidInterface.
         function initAndroidBridge() {
             if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
                 androidInterface = window.AndroidInterface;
                 useAndroidInterface = true;
                 console.log('AndroidInterface initialized successfully');
                 return true;
-            } else {
-                console.warn('AndroidInterface not available yet. Will retry...');
-                // محاولة ثانية بعد 500ms
-                setTimeout(() => {
-                    if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
-                        androidInterface = window.AndroidInterface;
-                        useAndroidInterface = true;
-                        console.log('AndroidInterface initialized after retry');
-                        if (currentUser) {
-                            loadDashboard();
-                            renderSidebar();
-                        } else {
-                            loadUserFromKotlin();
-                        }
-                    } else {
-                        // Permissions removed - continue without bridge
-                        console.log('Running without AndroidInterface - permissions disabled');
-                        if (!currentUser) {
-                            currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
-                            updateUserInfo(currentUser);
-                            renderSidebar();
-                            loadDashboard();
-                        }
-                    }
-                }, 500);
-                return false;
             }
+            console.warn('AndroidInterface not available yet. Will retry...');
+            setTimeout(() => {
+                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
+                    androidInterface = window.AndroidInterface;
+                    useAndroidInterface = true;
+                    console.log('AndroidInterface initialized after retry');
+                    if (currentUser) {
+                        loadDashboard(true);
+                        renderSidebar();
+                    } else {
+                        loadUserFromKotlin();
+                    }
+                } else {
+                    useAndroidInterface = false;
+                    console.error('AndroidInterface غير متاح؛ تم إيقاف تحميل Dashboard');
+                    showToast('جسر Android غير متاح؛ لم يتم تحميل بيانات لوحة التحكم', 'error');
+                }
+            }, 500);
+            return false;
         }
 
         // ============================================================
@@ -1159,7 +1152,9 @@
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            toast.innerHTML = `<span>${message}</span>`;
+            const text = document.createElement('span');
+            text.textContent = String(message || '');
+            toast.appendChild(text);
             container.appendChild(toast);
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
         }
@@ -1190,16 +1185,22 @@
                 throw new Error('AndroidInterface غير متاح');
             }
 
-            const method = androidInterface[action];
-            if (typeof method !== 'function') {
-                console.warn(`الدالة ${action} غير موجودة في الجسر`);
-                return { success: false, error: `Method ${action} not found` };
+            const safeParams = (params && typeof params === 'object') ? params : {};
+            const bridgeActions = {
+                getCurrentUser: () => androidInterface.getCurrentUser(),
+                getDashboardStats: () => androidInterface.getDashboardStats(JSON.stringify(safeParams)),
+                screenExists: () => androidInterface.screenExists(
+                    typeof safeParams.path === 'string' ? safeParams.path : ''
+                )
+            };
+            const handler = bridgeActions[action];
+            if (typeof handler !== 'function') {
+                console.warn(`الفعل ${action} غير مسموح به في الجسر`);
+                return { success: false, error: `Unsupported Bridge action: ${action}` };
             }
 
             try {
-                const jsonParams = JSON.stringify(params);
-                const result = method(jsonParams);
-                return handleAndroidResult(result);
+                return handleAndroidResult(handler());
             } catch (e) {
                 console.error('AndroidInterface error:', e);
                 return { success: false, error: e.message || 'AndroidInterface error' };
@@ -1233,45 +1234,20 @@
             try {
                 showLoading(true);
                 const result = await apiCall('getCurrentUser');
-                if (result.success && result.data) {
-                    currentUser = result.data;
-                    localStorage.setItem('user', JSON.stringify(currentUser));
-                    updateUserInfo(currentUser);
-                    renderSidebar();
-                    loadDashboard();
-                    return true;
-                } else {
-                    const cached = localStorage.getItem('user');
-                    if (cached) {
-                        currentUser = JSON.parse(cached);
-                        updateUserInfo(currentUser);
-                        renderSidebar();
-                        loadDashboard();
-                        return true;
-                    }
-                    // No user found, but permissions are removed - continue anyway
-                    currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
-                    updateUserInfo(currentUser);
-                    renderSidebar();
-                    loadDashboard();
-                    return true;
+                if (!result.success || !result.data) {
+                    throw new Error(result.error || 'لم يتم العثور على جلسة مستخدم');
                 }
-            } catch (e) {
-                console.error('Error loading user from Kotlin:', e);
-                const cached = localStorage.getItem('user');
-                if (cached) {
-                    currentUser = JSON.parse(cached);
-                    updateUserInfo(currentUser);
-                    renderSidebar();
-                    loadDashboard();
-                    return true;
-                }
-                // No user found, but permissions are removed - continue anyway
-                currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
+                currentUser = result.data;
+                localStorage.setItem('user', JSON.stringify(currentUser));
                 updateUserInfo(currentUser);
                 renderSidebar();
-                loadDashboard();
+                await loadDashboard();
                 return true;
+            } catch (e) {
+                console.error('Error loading user from Kotlin:', e);
+                currentUser = null;
+                showToast(e.message || 'تعذر تحميل المستخدم من Android', 'error');
+                return false;
             } finally {
                 showLoading(false);
             }
@@ -1449,8 +1425,20 @@
         // بناء القائمة الجانبية ديناميكياً من بيانات المستخدم
         // ============================================================
         function getSidebarData() {
-            // Permissions removed - show all menu items to all users
-            return sidebarNavData;
+            if (!currentUser) return [];
+            return sidebarNavData
+                .map((item) => {
+                    const originalChildren = Array.isArray(item.children) ? item.children : null;
+                    const children = originalChildren
+                        ? originalChildren.filter((label) => hasScreenAccess(subPageRouteMap[label] || ''))
+                        : [];
+                    return {
+                        item: { ...item, children },
+                        visible: originalChildren ? children.length > 0 : hasScreenAccess(subPageRouteMap[item.label] || '')
+                    };
+                })
+                .filter((entry) => entry.visible)
+                .map((entry) => entry.item);
         }
 
         function renderSidebar() {
@@ -1654,8 +1642,7 @@
                 return;
             }
             if (url.startsWith('screens/')) {
-                // Permissions removed - all screens accessible
-                // التحقق من وجود الملف باستخدام Kotlin
+                // التحقق من الصلاحية ووجود الملف باستخدام Kotlin
                 try {
                     const result = await apiCall('screenExists', { path: url });
                     if (result.success && result.data === false) {
@@ -1681,72 +1668,93 @@
         // نظام الصلاحيات (يعتمد على البيانات من Kotlin)
         // ============================================================
         function hasScreenAccess(route) {
-            // Permissions removed - all screens accessible to all users
-            return true;
+            if (!currentUser || typeof route !== 'string' || !route) return false;
+            const permissions = Array.isArray(currentUser.permissions) ? currentUser.permissions : [];
+            const hasPermission = (permissionCode) => permissions.some((permission) =>
+                permission && permission.permission_code === permissionCode && permission.can_read === true
+            );
+            if (route === 'dashboard') return hasPermission('dashboard.read');
+
+            const screenName = route
+                .replace(/^\//, '')
+                .replace(/^screens\//, '')
+                .replace(/\.html$/, '');
+            const screens = Array.isArray(currentUser.screens) ? currentUser.screens : [];
+            return screens.some((screen) => screen && (
+                screen.screen_name === screenName ||
+                screen.screen_name === screenName.replace(/-/g, '_')
+            ));
         }
 
         // ============================================================
-        // تحميل لوحة التحكم مع Cache
+        // تحميل لوحة التحكم من SQLite عبر Bridge مع fallback صريح لآخر بيانات حية
         // ============================================================
+        function readDashboardCache() {
+            try {
+                const cached = localStorage.getItem('dashboardCache');
+                if (!cached) return null;
+                const parsed = JSON.parse(cached);
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch (e) {
+                console.warn('تعذر قراءة cache المحلي:', e);
+                return null;
+            }
+        }
+
+        function renderDashboardCache(cause) {
+            const cached = dashboardCache || readDashboardCache();
+            if (!cached) return false;
+            dashboardCache = cached;
+            updateStatsCards(cached);
+            document.getElementById('last-update').textContent = 'بيانات SQLite سابقة: ' + new Date().toLocaleString('ar-EG');
+            showToast(`${cause || 'تعذر الاتصال بقاعدة البيانات'} — عُرضت آخر بيانات محفوظة`, 'warning');
+            return true;
+        }
+
         async function loadDashboard(forceRefresh = false) {
-            // إذا كان هناك Cache ولم نطلب تحديثاً قسرياً، نستخدمه
             if (!forceRefresh && dashboardCache) {
                 updateStatsCards(dashboardCache);
-                document.getElementById('last-update').textContent = 'من التخزين المؤقت: ' + new Date().toLocaleString('ar-EG');
-                showToast('تم عرض البيانات المخزنة مؤقتاً', 'info');
-                return;
+                document.getElementById('last-update').textContent = 'آخر بيانات SQLite محملة: ' + new Date().toLocaleString('ar-EG');
+                showToast('تم عرض آخر بيانات محملة من قاعدة البيانات', 'info');
+                return true;
             }
 
             showLoading(true);
             try {
                 const result = await apiCall('getDashboardStats');
-                if (result.success && result.data) {
-                    const stats = result.data;
-                    // تحديث Cache
-                    dashboardCache = stats;
-                    // تخزين في localStorage للاستخدام دون اتصال
-                    try {
-                        localStorage.setItem('dashboardCache', JSON.stringify(stats));
-                    } catch (e) { /* ignore */ }
-
-                    updateStatsCards(stats);
-                    if (stats.notifications) {
-                        showRealNotifications(stats);
-                    }
-                    document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
-                        year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'
-                    });
-                    showToast('تم تحديث لوحة التحكم', 'success');
-                } else {
-                    // في حالة فشل التحميل، محاولة استخدام Cache من localStorage
-                    const cached = localStorage.getItem('dashboardCache');
-                    if (cached) {
-                        try {
-                            const stats = JSON.parse(cached);
-                            dashboardCache = stats;
-                            updateStatsCards(stats);
-                            document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
-                            showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
-                            return;
-                        } catch (e) { /* ignore */ }
-                    }
-                    showToast('فشل تحميل الإحصائيات', 'error');
+                if (!result.success || !result.data) {
+                    throw new Error(result.error || 'فشل تحميل الإحصائيات من SQLite');
                 }
+                const stats = result.data;
+                const requiredFields = [
+                    'total_products', 'daily_sales', 'active_customers', 'expiry_soon',
+                    'low_stock', 'due_invoices', 'returned_products_today',
+                    'damaged_products_today', 'customer_debts', 'supplier_debts',
+                    'inventory_value', 'pending_tasks', 'products_trend', 'sales_trend'
+                ];
+                const missingFields = requiredFields.filter((field) => !Object.prototype.hasOwnProperty.call(stats, field));
+                if (missingFields.length > 0) {
+                    throw new Error(`استجابة Dashboard ناقصة: ${missingFields.join(', ')}`);
+                }
+                dashboardCache = stats;
+                try {
+                    localStorage.setItem('dashboardCache', JSON.stringify(stats));
+                } catch (cacheError) {
+                    console.warn('تعذر حفظ cache المحلي:', cacheError);
+                }
+                updateStatsCards(stats);
+                if (stats.notifications) {
+                    showRealNotifications(stats);
+                }
+                document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
+                    year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'
+                });
+                showToast('تم تحديث لوحة التحكم من قاعدة البيانات', 'success');
+                return true;
             } catch (e) {
                 console.error('Dashboard error:', e);
-                // محاولة استخدام Cache
-                const cached = localStorage.getItem('dashboardCache');
-                if (cached) {
-                    try {
-                        const stats = JSON.parse(cached);
-                        dashboardCache = stats;
-                        updateStatsCards(stats);
-                        document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
-                        showToast('تم عرض البيانات المخزنة مؤقتاً', 'warning');
-                        return;
-                    } catch (e2) { /* ignore */ }
-                }
-                showToast('خطأ في تحميل البيانات', 'error');
+                renderDashboardCache(e.message || 'فشل الاتصال بقاعدة البيانات');
+                return false;
             } finally {
                 showLoading(false);
             }
@@ -1794,9 +1802,9 @@
             const roleEl = document.getElementById('userDisplayRole');
             const avatarEl = document.getElementById('userAvatar');
 
-            if (nameEl) nameEl.textContent = user.full_name || user.username || 'مدير النظام';
-            if (emailEl) emailEl.textContent = user.email || 'admin@example.com';
-            if (roleEl) roleEl.textContent = user.role_name || user.role || 'مدير';
+            if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
+            if (emailEl) emailEl.textContent = user.email || '—';
+            if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
         }
 
         // ============================================================
@@ -1947,40 +1955,15 @@
             // 2. تحميل بيانات القائمة (JSON) من المسار الجديد
             await loadMenuData();
 
-            // 3. تحميل المستخدم من Kotlin أو استخدام بيانات افتراضية
-            if (bridgeReady) {
-                await loadUserFromKotlin();
-            } else {
-                const cached = localStorage.getItem('user');
-                if (cached) {
-                    try {
-                        currentUser = JSON.parse(cached);
-                        updateUserInfo(currentUser);
-                        renderSidebar();
-                        const dashCache = localStorage.getItem('dashboardCache');
-                        if (dashCache) {
-                            try {
-                                const stats = JSON.parse(dashCache);
-                                dashboardCache = stats;
-                                updateStatsCards(stats);
-                                document.getElementById('last-update').textContent = 'آخر تحديث (من التخزين المؤقت): ' + new Date().toLocaleString('ar-EG');
-                            } catch (e) { /* ignore */ }
-                        }
-                        setTimeout(() => {
-                            if (!useAndroidInterface) {
-                                initAndroidBridge();
-                            }
-                        }, 2000);
-                        return;
-                    } catch (e) { /* ignore */ }
-                }
-                // Permissions removed - use default user and continue
-                currentUser = { full_name: 'مدير النظام', email: 'admin@example.com', role_name: 'مدير' };
-                updateUserInfo(currentUser);
-                renderSidebar();
-                loadDashboard();
+            // 3. تحميل المستخدم والبيانات من Android فقط؛ لا cache ولا مستخدم افتراضي.
+            if (!bridgeReady) {
+                setTimeout(() => {
+                    if (!useAndroidInterface) initAndroidBridge();
+                }, 2000);
                 return;
             }
+            const userLoaded = await loadUserFromKotlin();
+            if (!userLoaded) return;
 
             // 4. ربط النقر المزدوج
             initCardDoubleClick();

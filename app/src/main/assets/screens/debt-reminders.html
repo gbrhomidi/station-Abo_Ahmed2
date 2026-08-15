@@ -4,13 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>تذكيرات الديون</title>
+    <!-- جميع المكتبات محلياً من assets-local -->
     <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
     <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
     <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
     <style>
         /* ============================================================
-           المتغيرات الأساسية – دعم Light/Dark
+           المتغيرات الأساسية – Light/Dark Mode
            ============================================================ */
         :root {
             --bg-color: #f5efe6;
@@ -556,7 +557,11 @@
             opacity: 0;
         }
         .sidebar.open { right: 0; opacity: 1; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
         .sidebar-btn {
             position: relative;
             background: rgba(75, 0, 130, 0.8);
@@ -1000,8 +1005,8 @@
     <!-- ============================================================
     عنوان القسم
     ============================================================ -->
-    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
-        <h3>📋 قائمة الديون المستحقة</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px;margin-bottom:12px;">
+        <h3 style="color:var(--data-text-color);">📋 قائمة الديون المستحقة</h3>
         <span class="count-badge" id="debtCount" style="background:var(--primary-dim);color:var(--primary-color);padding:2px 10px;border-radius:10px;font-size:0.75rem;font-weight:700;">0</span>
     </div>
 
@@ -1009,7 +1014,7 @@
     بطاقات الديون
     ============================================================ -->
     <div class="cards-container" id="cardsContainer">
-        <!-- سيتم تعبئتها عبر JavaScript -->
+        <!-- يتم تعبئتها عبر JavaScript -->
     </div>
 
     <!-- ============================================================
@@ -1035,6 +1040,10 @@
             <button class="sidebar-btn" onclick="handleSidebarAction('export')">
                 <i class="fas fa-file-export"></i> <span>تصدير</span>
             </button>
+            <!-- زر الرجوع إلى الشاشة الرئيسية -->
+            <button class="sidebar-btn" onclick="handleSidebarAction('home')" style="background:rgba(75,0,130,0.6);border-color:var(--primary-color);margin-top:8px;">
+                <i class="fas fa-arrow-right"></i> <span>رجوع</span>
+            </button>
         </div>
     </div>
 
@@ -1042,23 +1051,23 @@
     القائمة السفلية (Bottom Navigation)
     ============================================================ -->
     <nav class="bottom-nav">
-        <button class="nav-item active" data-modal="all" onclick="openTableModal('all')">
+        <button class="nav-item active" data-modal="all" onclick="openTableModal('all', this)">
             <i class="fas fa-hand-holding-usd"></i>
             <span>جميع الديون</span>
         </button>
-        <button class="nav-item" data-modal="overdue" onclick="openTableModal('overdue')">
+        <button class="nav-item" data-modal="overdue" onclick="openTableModal('overdue', this)">
             <i class="fas fa-exclamation-circle"></i>
             <span>المتأخرة</span>
         </button>
-        <button class="nav-item" data-modal="reminders" onclick="openTableModal('reminders')">
+        <button class="nav-item" data-modal="reminders" onclick="openTableModal('reminders', this)">
             <i class="fas fa-bell"></i>
             <span>التذكيرات</span>
         </button>
-        <button class="nav-item" data-modal="reports" onclick="openTableModal('reports')">
+        <button class="nav-item" data-modal="reports" onclick="openTableModal('reports', this)">
             <i class="fas fa-chart-bar"></i>
             <span>التقارير</span>
         </button>
-        <button class="nav-item" data-modal="settings" onclick="openTableModal('settings')">
+        <button class="nav-item" data-modal="settings" onclick="openTableModal('settings', this)">
             <i class="fas fa-cog"></i>
             <span>الإعدادات</span>
         </button>
@@ -1235,7 +1244,7 @@
     ============================================================ -->
     <script>
         // ============================================================
-        // 1. Android Bridge – من MainActivity.kt
+        // 1. Android Bridge – من MainActivity.kt (WebAppInterface)
         // ============================================================
         function apiCall(action, params) {
             return new Promise((resolve, reject) => {
@@ -1396,12 +1405,13 @@
             } catch (e) { return dateStr; }
         }
 
+        // دالة تحديد حالة الدين بناءً على المتبقي وتاريخ الاستحقاق (تطابق منطق DatabaseHelper)
         function getDebtStatus(remaining, dueDate) {
+            if (remaining <= 0) return { status: 'paid', label: 'مدفوع', class: 'paid', icon: 'fa-check-circle' };
+            if (!dueDate) return { status: 'pending', label: 'مستحق', class: 'pending', icon: 'fa-hourglass-half' };
             const now = new Date();
             const due = new Date(dueDate);
             const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
-
-            if (remaining <= 0) return { status: 'paid', label: 'مدفوع', class: 'paid', icon: 'fa-check-circle' };
             if (diffDays < 0) return { status: 'overdue', label: 'متأخر', class: 'overdue', icon: 'fa-exclamation-circle' };
             if (diffDays <= 3) return { status: 'due_soon', label: 'مستحق قريباً', class: 'due-soon', icon: 'fa-clock' };
             return { status: 'pending', label: 'مستحق', class: 'pending', icon: 'fa-hourglass-half' };
@@ -1473,7 +1483,7 @@
         let confirmCallback = null;
 
         // ============================================================
-        // 9. تحميل البيانات
+        // 9. تحميل البيانات من قاعدة البيانات عبر AndroidInterface
         // ============================================================
         function renderSkeleton() {
             const container = document.getElementById('cardsContainer');
@@ -1503,10 +1513,9 @@
 
         async function loadDebts() {
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
-                // جلب الديون المتأخرة والمستحقة
+                // جلب جميع البيانات المطلوبة من قاعدة البيانات عبر الـ API
                 const [overdueRes, debtsRes, partiesRes, notesRes, smsLogsRes] = await Promise.all([
                     apiCall('getOverduePayments', {}),
                     apiCall('getCustomerDebts', {}),
@@ -1516,16 +1525,13 @@
                 ]);
 
                 let allDebtsData = [];
-
                 // دمج الديون المتأخرة مع باقي الديون
                 if (overdueRes.success && overdueRes.data) {
                     const overdue = Array.isArray(overdueRes.data) ? overdueRes.data : [];
                     allDebtsData = [...overdue];
                 }
-
                 if (debtsRes.success && debtsRes.data) {
                     const debts = Array.isArray(debtsRes.data) ? debtsRes.data : [];
-                    // إضافة الديون غير المتأخرة التي لم تظهر في overdue
                     const overdueIds = new Set(allDebtsData.map(d => d.id));
                     debts.forEach(d => {
                         if (!overdueIds.has(d.id)) {
@@ -1539,16 +1545,14 @@
                 if (partiesRes.success && partiesRes.data) {
                     allParties = Array.isArray(partiesRes.data) ? partiesRes.data : [];
                 }
-
                 if (notesRes.success && notesRes.data) {
                     allNotifications = Array.isArray(notesRes.data) ? notesRes.data : [];
                 }
-
                 if (smsLogsRes.success && smsLogsRes.data) {
                     allSmsLogs = Array.isArray(smsLogsRes.data) ? smsLogsRes.data : [];
                 }
 
-                // تخزين محلي
+                // تخزين محلي للاستخدام في وضع عدم الاتصال
                 LocalDB.setDebts(allDebts);
 
                 if (allDebts.length === 0) {
@@ -1603,6 +1607,7 @@
                 });
                 allSmsLogs.forEach(l => {
                     if (l.reminder_id) remindedIds.add(l.reminder_id);
+                    if (l.transaction_id) remindedIds.add(l.transaction_id);
                 });
                 filtered = filtered.filter(d => remindedIds.has(d.id) || remindedIds.has(d.sale_id));
             }
@@ -1757,19 +1762,7 @@
         }
 
         function renderAlerts(alerts) {
-            const container = document.getElementById('alertsContainer');
-            if (!container) return;
-            if (!alerts || alerts.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s;padding:10px 16px;background:var(--surface-elevated);border-radius:12px;margin-bottom:8px;border:2px dashed ${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};display:flex;align-items:center;gap:10px;">
-                    <div class="alert-icon" style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;${a.type === 'danger' ? 'background:rgba(239,68,68,0.15);color:var(--error);' : 'background:rgba(245,158,11,0.15);color:var(--warning);'}"><i class="fas ${a.icon}"></i></div>
-                    <div class="alert-content" style="flex:1;"><div class="alert-title" style="font-size:0.85rem;font-weight:700;color:var(--data-text-color);">${a.title}</div><div class="alert-desc" style="font-size:0.75rem;color:var(--text-muted);">${a.desc}</div></div>
-                    <div class="alert-time" style="font-size:0.7rem;color:var(--text-muted);">${a.time}</div>
-                </div>
-            `).join('');
+            // هذه الدالة يتم استدعاؤها من showNotifications
         }
 
         function showNotifications() {
@@ -1778,7 +1771,20 @@
                 showToast('🔔 لا توجد تنبيهات جديدة', 'info');
                 return;
             }
-            showToast('🔔 لديك ' + alerts.length + ' تنبيه', 'success');
+            let html = alerts.map(a => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">
+                    <i class="fas ${a.icon}" style="color:${a.type === 'danger' ? 'var(--error)' : 'var(--warning)'};"></i>
+                    <div><strong>${a.title}</strong><br><span style="font-size:0.8rem;color:var(--text-muted);">${a.desc}</span></div>
+                </div>
+            `).join('');
+            Swal.fire({
+                title: '🔔 التنبيهات',
+                html: html,
+                icon: 'info',
+                confirmButtonText: 'حسناً',
+                background: 'var(--surface-elevated)',
+                color: 'var(--text-color)'
+            });
             hapticFeedback('light');
         }
 
@@ -1863,7 +1869,7 @@
         }
 
         // ============================================================
-        // 15. مودال إرسال تذكير
+        // 15. مودال إرسال تذكير (متكامل مع قاعدة البيانات)
         // ============================================================
         function openReminderModal(id) {
             const debt = allDebts.find(d => d.id == id);
@@ -1877,7 +1883,7 @@
             document.getElementById('reminderCustomerName').value = debt.customer_name || debt.commercial_name || 'عميل غير معروف';
             document.getElementById('reminderAmount').value = formatCurrency(debt.remaining_amount || debt.remainingAmount || 0);
 
-            // تعبئة رسالة تذكير افتراضية
+            // رسالة تذكير افتراضية
             const customerName = debt.customer_name || debt.commercial_name || 'العميل';
             const amount = formatCurrency(debt.remaining_amount || debt.remainingAmount || 0);
             const defaultMessage = `السيد/ة ${customerName}،\nنود تذكيركم بالمبلغ المستحق عليكم وقدره ${amount} ريال. الرجاء الإسراع في السداد.\nشكراً لتعاونكم.`;
@@ -1909,14 +1915,12 @@
                 return;
             }
 
-            const customerName = debt.customer_name || debt.commercial_name || 'العميل';
-
             showLoading(true);
 
             try {
-                // إنشاء إشعار (تذكير) في النظام
+                // 1. إنشاء إشعار (تذكير) في جدول notifications عبر DatabaseHelper
                 const notificationData = {
-                    user_id: 0, // سيتم تعيينه من قبل النظام
+                    user_id: 0,
                     role_id: 0,
                     customer_party_id: customerId,
                     notification_type: 'reminder',
@@ -1935,9 +1939,8 @@
                 let result = await apiCall('addNotification', notificationData);
 
                 if (result.success) {
-                    // إذا كانت القناة SMS، أضف رسالة SMS أيضاً
+                    // 2. إذا كانت القناة SMS، نقوم بتسجيل رسالة SMS أيضاً
                     if (channel === 'sms' && customerId > 0) {
-                        // محاولة العثور على رقم هاتف العميل
                         const party = allParties.find(p => p.id == customerId);
                         const phone = party ? (party.phone || party.phone2) : null;
                         if (phone) {
@@ -1961,6 +1964,7 @@
                 }
             } catch (e) {
                 if (!isOnline) {
+                    // حفظ العملية محلياً للمزامنة لاحقاً
                     LocalDB.addPendingOp({ action: 'addNotification', data: { customer_party_id: customerId, message: message } });
                     showToast('✅ تم الحفظ محلياً - سيتم المزامنة لاحقاً', 'success');
                     closeModal();
@@ -2038,9 +2042,9 @@
         }
 
         // ============================================================
-        // 17. مودالات القائمة السفلية
+        // 17. مودالات القائمة السفلية (جميعها متكاملة مع قاعدة البيانات)
         // ============================================================
-        function openTableModal(type) {
+        function openTableModal(type, btn) {
             const modal = document.getElementById('tableModal');
             const title = document.getElementById('tableModalTitle');
             const body = document.getElementById('tableModalBody');
@@ -2064,6 +2068,7 @@
                 case 'reminders':
                     titleText = '📨 سجل التذكيرات';
                     const reminders = [];
+                    // تذكيرات من notifications
                     allNotifications.forEach(n => {
                         if (n.reference_type === 'debt' || n.reference_type === 'sale') {
                             const debt = allDebts.find(d => d.id == n.reference_id);
@@ -2077,7 +2082,7 @@
                             });
                         }
                     });
-                    // إضافة رسائل SMS
+                    // تذكيرات من sms_logs
                     allSmsLogs.forEach(s => {
                         if (s.transaction_id) {
                             const debt = allDebts.find(d => d.id == s.transaction_id);
@@ -2137,20 +2142,48 @@
                                     <div class="stat-label">تذكيرات ناجحة</div>
                                 </div>
                             </div>
+                            <button class="submit-btn success" onclick="exportDebtsReport()" style="margin-top:16px;width:100%;">
+                                <i class="fas fa-file-pdf"></i> تصدير التقرير
+                            </button>
                         </div>
                     `;
                     break;
                 case 'settings':
                     titleText = '⚙️ إعدادات التذكيرات';
+                    // جلب الإعدادات الفعلية من قاعدة البيانات
+                    (async () => {
+                        try {
+                            const smsEnabled = await apiCall('getSetting', { key: 'sms_enabled' });
+                            const smsRate = await apiCall('getSetting', { key: 'sms_rate_limit' });
+                            const dailyLimit = await apiCall('getSetting', { key: 'sms_max_daily_messages' });
+                            const retryAttempts = await apiCall('getSetting', { key: 'retry_attempts' });
+                            // تحديث النموذج بالقيم الفعلية
+                            document.getElementById('setting_sms_enabled').checked = smsEnabled.data === '1';
+                            document.getElementById('setting_sms_rate').value = smsRate.data || '10';
+                            document.getElementById('setting_daily_limit').value = dailyLimit.data || '100';
+                            document.getElementById('setting_retry_attempts').value = retryAttempts.data || '3';
+                        } catch (e) { /* استخدام القيم الافتراضية */ }
+                    })();
                     html = `
                         <div style="padding:12px;text-align:center;">
-                            <p>إعدادات نظام تذكيرات الديون</p>
-                            <ul style="list-style:none;padding:0;text-align:center;">
-                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 إجمالي الديون: ${allDebts.length}</li>
-                                <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 القنوات المدعومة: SMS, In-App, Push, WhatsApp, Email, Telegram</li>
-                                <li style="padding:8px 0;">🔹 فترة التذكير: تلقائي عند الاستحقاق</li>
-                            </ul>
-                            <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>
+                            <p style="color:var(--data-text-color);font-weight:700;margin-bottom:16px;">إعدادات نظام تذكيرات الديون</p>
+                            <form id="settingsForm" onsubmit="saveSettings(); return false;">
+                                <div class="form-group">
+                                    <label class="form-label">تفعيل التذكيرات</label>
+                                    <input type="checkbox" id="setting_sms_enabled" style="transform:scale(1.5);margin:0 auto;display:block;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">الحد الأقصى للرسائل في اليوم</label>
+                                    <input type="number" class="form-input" id="setting_daily_limit" value="100" min="1" max="1000">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">عدد محاولات إعادة الإرسال</label>
+                                    <input type="number" class="form-input" id="setting_retry_attempts" value="3" min="1" max="10">
+                                </div>
+                                <button type="submit" class="submit-btn" style="width:100%;">
+                                    <i class="fas fa-save"></i> حفظ الإعدادات
+                                </button>
+                            </form>
                         </div>
                     `;
                     break;
@@ -2167,9 +2200,13 @@
 
             // تفعيل العنصر في القائمة السفلية
             document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
-            document.querySelector(`.bottom-nav .nav-item[data-modal="${type}"]`)?.classList.add('active');
+            if (btn) btn.classList.add('active');
+            else {
+                document.querySelector(`.bottom-nav .nav-item[data-modal="${type}"]`)?.classList.add('active');
+            }
         }
 
+        // دوال توليد الجداول
         function generateTableFromDebts(debts) {
             if (!debts || debts.length === 0) {
                 return `<div class="empty-state"><i class="fas fa-hand-holding-usd"></i><p>لا توجد ديون</p></div>`;
@@ -2223,6 +2260,24 @@
             return table;
         }
 
+        // دالة حفظ الإعدادات
+        async function saveSettings() {
+            try {
+                const smsEnabled = document.getElementById('setting_sms_enabled').checked ? '1' : '0';
+                const dailyLimit = document.getElementById('setting_daily_limit').value;
+                const retryAttempts = document.getElementById('setting_retry_attempts').value;
+
+                await apiCall('setSetting', { key: 'sms_enabled', value: smsEnabled });
+                await apiCall('setSetting', { key: 'sms_max_daily_messages', value: dailyLimit });
+                await apiCall('setSetting', { key: 'retry_attempts', value: retryAttempts });
+
+                showToast('✅ تم حفظ الإعدادات بنجاح', 'success');
+                closeModal();
+            } catch (e) {
+                showToast('❌ فشل حفظ الإعدادات: ' + e.message, 'error');
+            }
+        }
+
         // ============================================================
         // 18. إغلاق المودالات
         // ============================================================
@@ -2234,7 +2289,7 @@
         }
 
         // ============================================================
-        // 19. معالج أزرار القائمة الجانبية
+        // 19. معالج أزرار القائمة الجانبية (مع زر الرجوع)
         // ============================================================
         function handleSidebarAction(action) {
             const sidebar = document.getElementById('sidebar');
@@ -2255,10 +2310,14 @@
                     showToast('🔍 اكتب كلمة البحث في الحقل أعلاه', 'info');
                     break;
                 case 'stats':
-                    openTableModal('reports');
+                    openTableModal('reports', null);
                     break;
                 case 'export':
                     exportDebtsReport();
+                    break;
+                case 'home':
+                    // الانتقال إلى الشاشة الرئيسية
+                    window.location.href = '../main.html';
                     break;
                 default:
                     showToast('❌ إجراء غير معروف', 'error');
@@ -2266,7 +2325,7 @@
         }
 
         // ============================================================
-        // 20. تصدير تقرير الديون
+        // 20. تصدير تقرير الديون (PDF)
         // ============================================================
         function exportDebtsReport() {
             if (allDebts.length === 0) {
@@ -2376,8 +2435,8 @@
                 `,
                 icon: 'info',
                 confirmButtonText: 'حسناً',
-                background: '#1a2236',
-                color: '#f1f5f9'
+                background: 'var(--surface-elevated)',
+                color: 'var(--text-color)'
             });
             hapticFeedback('light');
         }

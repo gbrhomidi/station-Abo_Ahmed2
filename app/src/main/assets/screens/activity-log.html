@@ -1,26 +1,21 @@
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
- <head>
-  <meta charset="utf-8">
-  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-  <title>
-   سجل النشاطات – نظام محطات الوقود
-  </title>
-  <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
-  <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
-  <script src="file:///android_asset/assets-local/js/sweetalert2@11">
-  </script>
-  <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js">
-  </script>
-  <script src="file:///android_asset/assets-local/js/xlsx.full.min.js">
-  </script>
-  <script src="file:///android_asset/assets-local/js/fuse.js@7.0.0">
-  </script>
-  <script src="file:///android_asset/assets-local/js/chart.umd.min.js">
-  </script>
-  <style>
-   /* ============================================================
-           نفس التصميم المستخدم في contracts.html مع تغييرات طفيفة
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <meta name="color-scheme" content="light dark">
+    <title>سجل النشاطات – نظام محطات الوقود</title>
+    <!-- جميع المكتبات محلياً من assets-local -->
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link href="file:///android_asset/assets-local/css/all.min.css" rel="stylesheet">
+    <script src="file:///android_asset/assets-local/js/sweetalert2@11"></script>
+    <script src="file:///android_asset/assets-local/js/jspdf.umd.min.js"></script>
+    <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
+    <script src="file:///android_asset/assets-local/js/fuse.js@7.0.0"></script>
+    <script src="file:///android_asset/assets-local/js/chart.umd.min.js"></script>
+    <style>
+        /* ============================================================
+           نفس التصميم المستخدم مع إضافة متغيرات جديدة للأعلام والتنبيهات
            ============================================================ */
         :root {
             --cobalt: #1a3a6b;
@@ -71,6 +66,12 @@
             --focus-ring: 0 0 0 3px var(--ruby);
             --high-contrast-bg: #000;
             --high-contrast-text: #fff;
+
+            /* أعلام جديدة */
+            --flag-important: #ef4444;
+            --flag-review: #f59e0b;
+            --flag-resolved: #10b981;
+            --flag-none: transparent;
         }
 
         [data-theme="dark"] {
@@ -100,6 +101,9 @@
             --skip-link-color: #fff;
             --high-contrast-bg: #000;
             --high-contrast-text: #fff;
+            --flag-important: #ef4444;
+            --flag-review: #f59e0b;
+            --flag-resolved: #10b981;
         }
 
         /* ============================================================
@@ -136,6 +140,9 @@
                 --skip-link-bg: #fff;
                 --skip-link-color: #000;
                 --focus-ring: 0 0 0 4px #fff, 0 0 0 8px #000;
+                --flag-important: #ff6b6b;
+                --flag-review: #ffd93d;
+                --flag-resolved: #6bcb77;
             }
             [data-theme="dark"] {
                 --bg-color: #000;
@@ -487,6 +494,45 @@
             font-weight: 600;
         }
 
+        /* فلاتر زمنية جديدة */
+        .time-filters {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            padding: 4px 0 8px;
+            scrollbar-width: none;
+            flex-wrap: nowrap;
+        }
+        .time-filters::-webkit-scrollbar {
+            display: none;
+        }
+        .time-filter-btn {
+            padding: 3px 10px;
+            border-radius: 14px;
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.65rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.25s;
+            touch-action: manipulation;
+            font-weight: 600;
+        }
+        .time-filter-btn:active {
+            transform: scale(0.95);
+        }
+        .time-filter-btn.active {
+            background: var(--ruby-dim);
+            color: #fff;
+            border-color: var(--ruby-light);
+        }
+        .time-filter-btn:hover:not(.active) {
+            border-color: rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+        }
+
         .filter-chips {
             display: flex;
             gap: 6px;
@@ -551,7 +597,6 @@
             transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             cursor: pointer;
             touch-action: manipulation;
-            /* توسيط المحتوى */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -649,6 +694,8 @@
             align-items: center;
             padding: 0 16px;
             margin-bottom: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         .section-title h3 {
             font-size: 1rem;
@@ -667,6 +714,29 @@
         .section-title .pagination-info {
             font-size: 0.7rem;
             color: var(--text-muted);
+        }
+        .section-title .action-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .section-title .action-buttons .small-btn {
+            padding: 4px 10px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.65rem;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-weight: 600;
+            touch-action: manipulation;
+        }
+        .section-title .action-buttons .small-btn:hover {
+            background: var(--ruby-dim);
+            color: var(--ruby);
+            border-color: var(--ruby);
         }
 
         .pagination-bar {
@@ -748,6 +818,31 @@
         .log-card:active {
             transform: scale(0.98);
             transition-duration: 0.05s;
+        }
+
+        /* أعلام */
+        .log-card .flag-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 0.55rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .flag-important {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--flag-important);
+            border: 1px solid var(--flag-important);
+        }
+        .flag-review {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--flag-review);
+            border: 1px solid var(--flag-review);
+        }
+        .flag-resolved {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--flag-resolved);
+            border: 1px solid var(--flag-resolved);
         }
 
         .log-card .card-header {
@@ -881,14 +976,14 @@
         }
         .log-card .card-actions .card-btn {
             flex: 1;
-            min-width: 60px;
+            min-width: 50px;
             padding: 8px 6px;
             border-radius: 12px;
             border: var(--border-width) var(--border-style) var(--border-color);
             background: var(--surface-color);
             color: var(--text-muted);
             font-family: 'Cairo', sans-serif;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 600;
             cursor: pointer;
             display: flex;
@@ -910,6 +1005,21 @@
             background: rgba(179, 27, 58, 0.12);
             color: var(--error);
             border-color: var(--error);
+        }
+        .log-card .card-actions .card-btn.flag-btn:hover {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--warning);
+            border-color: var(--warning);
+        }
+        .log-card .card-actions .card-btn.note-btn:hover {
+            background: rgba(26, 58, 107, 0.10);
+            color: var(--cobalt);
+            border-color: var(--cobalt);
+        }
+        .log-card .card-actions .card-btn.trace-btn:hover {
+            background: rgba(13, 122, 74, 0.10);
+            color: var(--success);
+            border-color: var(--success);
         }
 
         .ai-insight-badge {
@@ -1073,7 +1183,7 @@
         }
 
         /* ============================================================
-           القائمة السفلية – حجم خط مضاعف وعريض
+           القائمة السفلية
            ============================================================ */
         .bottom-nav {
             position: fixed;
@@ -1110,13 +1220,13 @@
             transform: scale(0.9);
         }
         .bottom-nav .nav-item i {
-            font-size: 32px; /* مضاعف */
+            font-size: 32px;
             transition: all 0.25s;
         }
         .bottom-nav .nav-item span {
-            font-weight: 800; /* عريض جداً */
+            font-weight: 800;
             margin-top: 1px;
-            font-size: 1rem; /* مضاعف */
+            font-size: 1rem;
         }
         .bottom-nav .nav-item.active {
             color: var(--ruby);
@@ -1160,10 +1270,16 @@
             }
         }
 
+        /* ============================================================
+           مودالات
+           ============================================================ */
         .modal-overlay,
         .report-modal-overlay,
         .details-overlay,
-        .ai-modal-overlay {
+        .ai-modal-overlay,
+        .settings-overlay,
+        .compare-overlay,
+        .advanced-search-overlay {
             position: fixed;
             top: 0;
             left: 0;
@@ -1181,14 +1297,20 @@
         .modal-overlay.show,
         .report-modal-overlay.show,
         .details-overlay.show,
-        .ai-modal-overlay.show {
+        .ai-modal-overlay.show,
+        .settings-overlay.show,
+        .compare-overlay.show,
+        .advanced-search-overlay.show {
             display: flex;
             opacity: 1;
         }
         .modal,
         .report-modal,
         .details-content,
-        .ai-modal-content {
+        .ai-modal-content,
+        .settings-content,
+        .compare-content,
+        .advanced-search-content {
             background: var(--surface-elevated);
             border-radius: 24px 24px 0 0;
             width: 100%;
@@ -1203,7 +1325,10 @@
         .modal-overlay.show .modal,
         .report-modal-overlay.show .report-modal,
         .details-overlay.show .details-content,
-        .ai-modal-overlay.show .ai-modal-content {
+        .ai-modal-overlay.show .ai-modal-content,
+        .settings-overlay.show .settings-content,
+        .compare-overlay.show .compare-content,
+        .advanced-search-overlay.show .advanced-search-content {
             transform: translateY(0);
         }
 
@@ -1294,6 +1419,18 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 24px var(--ruby-glow);
         }
+        .submit-btn.secondary {
+            background: var(--cobalt);
+        }
+        .submit-btn.secondary:hover {
+            box-shadow: 0 4px 24px var(--cobalt-glow);
+        }
+        .submit-btn.success {
+            background: var(--success);
+        }
+        .submit-btn.success:hover {
+            box-shadow: 0 4px 24px rgba(13, 122, 74, 0.3);
+        }
 
         .toast {
             position: fixed;
@@ -1349,6 +1486,9 @@
             color: var(--warning);
         }
 
+        /* ============================================================
+           تحسينات للهواتف
+           ============================================================ */
         @media (max-width: 768px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
@@ -1397,6 +1537,10 @@
                 font-size: 0.6rem;
                 padding: 3px 10px;
             }
+            .time-filter-btn {
+                font-size: 0.55rem;
+                padding: 2px 8px;
+            }
             .top-title h2 {
                 font-size: 1rem;
             }
@@ -1411,6 +1555,10 @@
             .chart-container {
                 padding: 12px;
                 margin: 0 10px 12px;
+            }
+            .section-title .action-buttons .small-btn {
+                font-size: 0.55rem;
+                padding: 2px 8px;
             }
         }
 
@@ -1437,7 +1585,7 @@
                 flex-wrap: wrap;
             }
             .card-btn {
-                font-size: 0.6rem;
+                font-size: 0.55rem;
                 padding: 4px 6px;
             }
             .bottom-nav .nav-item {
@@ -1460,6 +1608,10 @@
                 font-size: 0.55rem;
                 padding: 2px 8px;
             }
+            .time-filter-btn {
+                font-size: 0.5rem;
+                padding: 2px 6px;
+            }
             .top-title h2 {
                 font-size: 0.85rem;
             }
@@ -1473,9 +1625,11 @@
             .sidebar,
             .filter-chips,
             .search-wrap,
+            .time-filters,
             .card-actions,
             .pagination-bar,
-            .icon-btn {
+            .icon-btn,
+            .section-title .action-buttons {
                 display: none !important;
             }
             body {
@@ -1504,498 +1658,408 @@
             .modal-overlay,
             .report-modal-overlay,
             .details-overlay,
-            .ai-modal-overlay {
+            .ai-modal-overlay,
+            .settings-overlay,
+            .compare-overlay,
+            .advanced-search-overlay {
                 display: none !important;
             }
         }
-  </style>
- </head>
- <body>
-  <a class="skip-link" href="#main-content">
-   تخطي إلى المحتوى الرئيسي
-  </a>
-  <div aria-live="polite" class="offline-banner" id="offlineBanner" role="alert">
-   <i aria-hidden="true" class="fas fa-wifi-slash">
-   </i>
-   أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
-  </div>
-  <div aria-live="polite" class="loading-indicator" id="loadingIndicator" role="status">
-   <div aria-label="جاري التحميل..." class="spinner">
-   </div>
-   <span class="sr-only">
-    جاري التحميل...
-   </span>
-  </div>
-  <main id="main-content">
-   <!-- Header -->
-   <header aria-label="رأس الصفحة" class="top-bar" role="banner">
-    <div class="header-top">
-     <div class="top-title">
-      <h2>
-       <i aria-hidden="true" class="fas fa-history">
-       </i>
-       سجل النشاطات
-       <span class="badge-ruby">
-        v3.0
-       </span>
-      </h2>
-     </div>
-     <div class="header-actions">
-      <button aria-label="التنبيهات" class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" title="التنبيهات">
-       <i aria-hidden="true" class="fas fa-bell">
-       </i>
-       <span class="sr-only">
-        التنبيهات
-       </span>
-      </button>
-      <button aria-label="تبديل الوضع" class="icon-btn" id="themeToggle" title="تبديل الوضع">
-       <i aria-hidden="true" class="fas fa-moon" id="themeIcon">
-       </i>
-       <span class="sr-only">
-        تبديل الوضع
-       </span>
-      </button>
-      <button aria-label="المستشار الذكي" class="icon-btn ruby-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
-       <i aria-hidden="true" class="fas fa-robot">
-       </i>
-       <span class="sr-only">
-        المستشار الذكي
-       </span>
-      </button>
-      <button aria-label="تصدير" class="icon-btn" onclick="openExportModal()" title="تصدير">
-       <i aria-hidden="true" class="fas fa-file-export">
-       </i>
-       <span class="sr-only">
-        تصدير
-       </span>
-      </button>
-     </div>
+    </style>
+</head>
+<body>
+
+    <a class="skip-link" href="#main-content">تخطي إلى المحتوى الرئيسي</a>
+
+    <!-- Offline Banner -->
+    <div aria-live="polite" class="offline-banner" id="offlineBanner" role="alert">
+        <i aria-hidden="true" class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال – سيتم حفظ التغييرات محلياً
     </div>
-    <div class="search-wrap" role="search">
-     <i aria-hidden="true" class="fas fa-search">
-     </i>
-     <input aria-label="بحث في سجل النشاطات" class="search-input" id="searchInput" oninput="handleSearch(this.value)" placeholder="ابحث عن نشاط (مستخدم، إجراء، جدول...)" type="text">
-     <span class="search-shortcut">
-      Ctrl+K
-     </span>
+
+    <!-- Loading -->
+    <div aria-live="polite" class="loading-indicator" id="loadingIndicator" role="status">
+        <div aria-label="جاري التحميل..." class="spinner"></div>
+        <span class="sr-only">جاري التحميل...</span>
     </div>
-    <div aria-label="فلاتر النشاطات" class="filter-chips" role="tablist">
-     <button aria-selected="true" class="filter-chip active" onclick="setFilter('all', this)" role="tab">
-      الكل
-     </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('user_activity', this)" role="tab">
-      نشاط المستخدمين
-     </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('audit', this)" role="tab">
-      تدقيق
-     </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('system', this)" role="tab">
-      سجلات النظام
-     </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('sms', this)" role="tab">
-      رسائل SMS
-     </button>
-     <button aria-selected="false" class="filter-chip" onclick="setFilter('sync', this)" role="tab">
-      مزامنة
-     </button>
-     <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">
-      🤖 توصية AI
-     </button>
+
+    <main id="main-content">
+        <!-- Header -->
+        <header aria-label="رأس الصفحة" class="top-bar" role="banner">
+            <div class="header-top">
+                <div class="top-title">
+                    <h2><i aria-hidden="true" class="fas fa-history"></i> سجل النشاطات <span class="badge-ruby">v4.0</span></h2>
+                </div>
+                <div class="header-actions">
+                    <button aria-label="التنبيهات" class="icon-btn has-badge" id="notifBtn" onclick="showNotifications()" title="التنبيهات">
+                        <i aria-hidden="true" class="fas fa-bell"></i><span class="sr-only">التنبيهات</span>
+                    </button>
+                    <button aria-label="تبديل الوضع" class="icon-btn" id="themeToggle" title="تبديل الوضع">
+                        <i aria-hidden="true" class="fas fa-moon" id="themeIcon"></i><span class="sr-only">تبديل الوضع</span>
+                    </button>
+                    <button aria-label="المستشار الذكي" class="icon-btn ruby-btn" onclick="openAIAdvisor()" title="المستشار الذكي">
+                        <i aria-hidden="true" class="fas fa-robot"></i><span class="sr-only">المستشار الذكي</span>
+                    </button>
+                    <button aria-label="تصدير" class="icon-btn" onclick="openExportModal()" title="تصدير">
+                        <i aria-hidden="true" class="fas fa-file-export"></i><span class="sr-only">تصدير</span>
+                    </button>
+                    <button aria-label="بحث متقدم" class="icon-btn" onclick="openAdvancedSearch()" title="بحث متقدم">
+                        <i aria-hidden="true" class="fas fa-search-plus"></i><span class="sr-only">بحث متقدم</span>
+                    </button>
+                    <button aria-label="الإعدادات" class="icon-btn" onclick="openSettings()" title="الإعدادات">
+                        <i aria-hidden="true" class="fas fa-cog"></i><span class="sr-only">الإعدادات</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- شريط البحث -->
+            <div class="search-wrap" role="search">
+                <i aria-hidden="true" class="fas fa-search"></i>
+                <input aria-label="بحث في سجل النشاطات" class="search-input" id="searchInput" oninput="handleSearch(this.value)" placeholder="ابحث عن نشاط (مستخدم، إجراء، جدول...)" type="text">
+                <span class="search-shortcut">Ctrl+K</span>
+            </div>
+
+            <!-- فلاتر زمنية سريعة -->
+            <div class="time-filters" id="timeFilters">
+                <button class="time-filter-btn" data-range="today" onclick="setTimeFilter('today', this)">اليوم</button>
+                <button class="time-filter-btn" data-range="yesterday" onclick="setTimeFilter('yesterday', this)">الأمس</button>
+                <button class="time-filter-btn active" data-range="week" onclick="setTimeFilter('week', this)">آخر 7 أيام</button>
+                <button class="time-filter-btn" data-range="month" onclick="setTimeFilter('month', this)">آخر 30 يوم</button>
+                <button class="time-filter-btn" data-range="this_month" onclick="setTimeFilter('this_month', this)">هذا الشهر</button>
+                <button class="time-filter-btn" data-range="last_month" onclick="setTimeFilter('last_month', this)">الشهر الماضي</button>
+                <button class="time-filter-btn" data-range="custom" onclick="setTimeFilter('custom', this)">مخصص</button>
+            </div>
+
+            <!-- فلاتر النوع -->
+            <div aria-label="فلاتر النشاطات" class="filter-chips" role="tablist">
+                <button aria-selected="true" class="filter-chip active" onclick="setFilter('all', this)" role="tab">الكل</button>
+                <button aria-selected="false" class="filter-chip" onclick="setFilter('user_activity', this)" role="tab">نشاط المستخدمين</button>
+                <button aria-selected="false" class="filter-chip" onclick="setFilter('audit', this)" role="tab">تدقيق</button>
+                <button aria-selected="false" class="filter-chip" onclick="setFilter('system', this)" role="tab">سجلات النظام</button>
+                <button aria-selected="false" class="filter-chip" onclick="setFilter('sms', this)" role="tab">رسائل SMS</button>
+                <button aria-selected="false" class="filter-chip" onclick="setFilter('sync', this)" role="tab">مزامنة</button>
+                <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">🤖 توصية AI</button>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <section aria-label="إحصائيات النشاطات" class="stats-grid">
+            <div aria-label="إجمالي النشاطات" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('total')" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();showStatDetail('total');}" role="button" tabindex="0">
+                <div class="stat-icon cobalt"><i aria-hidden="true" class="fas fa-list"></i></div>
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">إجمالي النشاطات</div>
+                <div class="stat-trend up"><i aria-hidden="true" class="fas fa-arrow-up"></i><span id="trendTotal">0%</span></div>
+            </div>
+            <div aria-label="نشاطات اليوم" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('today')" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();showStatDetail('today');}" role="button" tabindex="0">
+                <div class="stat-icon green"><i aria-hidden="true" class="fas fa-calendar-day"></i></div>
+                <div class="stat-value" id="statToday">0</div>
+                <div class="stat-label">نشاطات اليوم</div>
+                <div class="stat-trend up"><i aria-hidden="true" class="fas fa-arrow-up"></i><span id="trendToday">0%</span></div>
+            </div>
+            <div aria-label="الأخطاء" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('errors')" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();showStatDetail('errors');}" role="button" tabindex="0">
+                <div class="stat-icon ruby"><i aria-hidden="true" class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-value" id="statErrors">0</div>
+                <div class="stat-label">أخطاء</div>
+                <div class="stat-trend down"><i aria-hidden="true" class="fas fa-arrow-down"></i><span id="trendErrors">0%</span></div>
+            </div>
+            <div aria-label="مستخدمين نشطين" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('unique_users')" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();showStatDetail('unique_users');}" role="button" tabindex="0">
+                <div class="stat-icon gold"><i aria-hidden="true" class="fas fa-user"></i></div>
+                <div class="stat-value" id="statUsers">0</div>
+                <div class="stat-label">مستخدمين نشطين</div>
+                <div class="stat-trend neutral"><i aria-hidden="true" class="fas fa-minus"></i><span id="trendUsers">0%</span></div>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <div aria-label="المخططات التحليلية" class="chart-grid-2">
+            <div aria-label="توزيع النشاطات حسب النوع" class="chart-container" role="img">
+                <canvas aria-hidden="true" id="activityChart"></canvas>
+            </div>
+            <div aria-label="النشاطات عبر الأيام" class="chart-container" role="img">
+                <canvas aria-hidden="true" id="timelineChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Section Title + Actions -->
+        <div class="section-title">
+            <h3>📋 سجل النشاطات</h3>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <span class="count-badge" id="logCount">0</span>
+                <span class="pagination-info" id="paginationInfo">صفحة 1 من 1</span>
+                <div class="action-buttons">
+                    <button class="small-btn" onclick="openCompareModal()"><i class="fas fa-chart-line"></i> مقارنة</button>
+                    <button class="small-btn" onclick="exportCurrentResults()"><i class="fas fa-file-export"></i> تصدير النتائج</button>
+                    <button class="small-btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Container -->
+        <div aria-label="التنبيهات" class="alerts-container" id="alertsContainer" role="region" style="padding:0 16px 12px;"></div>
+
+        <!-- Cards Container -->
+        <div aria-label="قائمة النشاطات" class="cards-container" id="cardsContainer" role="list"></div>
+
+        <!-- Pagination -->
+        <div aria-label="تصفح الصفحات" class="pagination-bar" id="paginationBar" role="navigation">
+            <button aria-label="الصفحة السابقة" disabled id="prevPage" onclick="changePage(-1)">
+                <i aria-hidden="true" class="fas fa-chevron-right"></i> السابقة
+            </button>
+            <span id="pageNumbers"></span>
+            <button aria-label="الصفحة التالية" id="nextPage" onclick="changePage(1)">
+                التالية <i aria-hidden="true" class="fas fa-chevron-left"></i>
+            </button>
+        </div>
+
+        <!-- FAB -->
+        <button aria-label="تصدير السجل" class="fab" onclick="openExportModal()" title="تصدير السجل">
+            <i aria-hidden="true" class="fas fa-file-export"></i><span class="sr-only">تصدير السجل</span>
+        </button>
+
+        <!-- Sidebar -->
+        <button aria-label="فتح القائمة الجانبية" class="sidebar-toggle" id="sidebarToggle" type="button">
+            <i aria-hidden="true" class="fas fa-bars"></i>
+        </button>
+        <nav aria-label="القائمة الجانبية" class="sidebar" id="sidebar" role="navigation">
+            <div class="sidebar-content">
+                <button aria-label="تحديث" class="sidebar-btn" onclick="handleSidebarAction('refresh')">
+                    <i aria-hidden="true" class="fas fa-sync"></i><span>تحديث</span>
+                </button>
+                <button aria-label="تصدير" class="sidebar-btn" onclick="handleSidebarAction('export')">
+                    <i aria-hidden="true" class="fas fa-file-export"></i><span>تصدير</span>
+                </button>
+                <button aria-label="تنظيف" class="sidebar-btn" onclick="handleSidebarAction('cleanup')">
+                    <i aria-hidden="true" class="fas fa-broom"></i><span>تنظيف</span>
+                </button>
+                <button aria-label="تدقيق" class="sidebar-btn" onclick="handleSidebarAction('audit')">
+                    <i aria-hidden="true" class="fas fa-clipboard-check"></i><span>تدقيق</span>
+                </button>
+                <button aria-label="فلتر زمني" class="sidebar-btn" onclick="handleSidebarAction('time_filter')">
+                    <i aria-hidden="true" class="fas fa-calendar-alt"></i><span>فلتر زمني</span>
+                </button>
+                <button aria-label="بحث متقدم" class="sidebar-btn" onclick="handleSidebarAction('advanced_search')">
+                    <i aria-hidden="true" class="fas fa-search-plus"></i><span>بحث متقدم</span>
+                </button>
+                <button aria-label="مقارنة" class="sidebar-btn" onclick="handleSidebarAction('compare')">
+                    <i aria-hidden="true" class="fas fa-chart-line"></i><span>مقارنة</span>
+                </button>
+                <button aria-label="الإعدادات" class="sidebar-btn" onclick="handleSidebarAction('settings')">
+                    <i aria-hidden="true" class="fas fa-cog"></i><span>إعدادات</span>
+                </button>
+                <button aria-label="المستشار الذكي" class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')">
+                    <i aria-hidden="true" class="fas fa-robot"></i><span>AI</span>
+                </button>
+                <button aria-label="الرئيسية" class="sidebar-btn" onclick="handleSidebarAction('home')">
+                    <i aria-hidden="true" class="fas fa-home"></i><span>رجوع</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Bottom Navigation -->
+        <nav aria-label="القائمة السفلية" class="bottom-nav" role="navigation">
+            <button aria-label="ملخص النشاطات" class="nav-item" onclick="openReport('summary')">
+                <i aria-hidden="true" class="fas fa-file-alt"></i><span>ملخص</span>
+            </button>
+            <button aria-label="حسب المستخدم" class="nav-item" onclick="openReport('users')">
+                <i aria-hidden="true" class="fas fa-user"></i><span>المستخدمين</span>
+            </button>
+            <button aria-label="عرض الكل" class="nav-item active" onclick="openReport('all')">
+                <i aria-hidden="true" class="fas fa-list"></i><span>عرض الكل</span>
+            </button>
+            <button aria-label="الأخطاء" class="nav-item" onclick="openReport('errors')">
+                <i aria-hidden="true" class="fas fa-exclamation-circle"></i><span>الأخطاء</span>
+            </button>
+            <button aria-label="الخط الزمني" class="nav-item" onclick="openReport('timeline')">
+                <i aria-hidden="true" class="fas fa-chart-line"></i><span>الخط الزمني</span>
+            </button>
+            <button aria-label="التنبيهات" class="nav-item" onclick="showNotifications()">
+                <i aria-hidden="true" class="fas fa-bell"></i><span>تنبيهات</span>
+            </button>
+            <button aria-label="الإعدادات" class="nav-item" onclick="openSettings()">
+                <i aria-hidden="true" class="fas fa-cog"></i><span>إعدادات</span>
+            </button>
+        </nav>
+    </main>
+
+    <!-- Toast -->
+    <div aria-live="assertive" class="toast" id="toast" role="alert">
+        <div class="toast-icon"><i aria-hidden="true" class="fas fa-check"></i></div>
+        <span id="toastMessage">تمت العملية بنجاح</span>
     </div>
-   </header>
-   <!-- Stats -->
-   <section aria-label="إحصائيات النشاطات" class="stats-grid">
-    <div aria-label="إجمالي النشاطات" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('total')" role="button" tabindex="0">
-     <div class="stat-icon cobalt">
-      <i aria-hidden="true" class="fas fa-list">
-      </i>
-     </div>
-     <div class="stat-value" id="statTotal">
-      0
-     </div>
-     <div class="stat-label">
-      إجمالي النشاطات
-     </div>
-     <div class="stat-trend up">
-      <i aria-hidden="true" class="fas fa-arrow-up">
-      </i>
-      <span id="trendTotal">
-       0%
-      </span>
-     </div>
+
+    <!-- Modal: تفاصيل النشاط -->
+    <div aria-labelledby="detailsTitle" aria-modal="true" class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog">
+        <div class="details-content" id="detailsContent" onclick="event.stopPropagation()"></div>
     </div>
-    <div aria-label="نشاطات اليوم" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('today')" role="button" tabindex="0">
-     <div class="stat-icon green">
-      <i aria-hidden="true" class="fas fa-calendar-day">
-      </i>
-     </div>
-     <div class="stat-value" id="statToday">
-      0
-     </div>
-     <div class="stat-label">
-      نشاطات اليوم
-     </div>
-     <div class="stat-trend up">
-      <i aria-hidden="true" class="fas fa-arrow-up">
-      </i>
-      <span id="trendToday">
-       0%
-      </span>
-     </div>
+
+    <!-- Modal: التقارير -->
+    <div aria-labelledby="reportModalTitle" aria-modal="true" class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)" role="dialog">
+        <div class="report-modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="reportModalTitle">📊 تقرير النشاطات</h3>
+                <button aria-label="إغلاق التقرير" class="modal-close" onclick="closeReportModal()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div class="report-filter-row form-row">
+                <div class="form-group"><label class="form-label" for="reportFrom">📅 من تاريخ</label><input class="form-input" id="reportFrom" type="date"></div>
+                <div class="form-group"><label class="form-label" for="reportTo">📅 إلى تاريخ</label><input class="form-input" id="reportTo" type="date"></div>
+            </div>
+            <div class="report-filter-row form-row">
+                <div class="form-group"><label class="form-label" for="reportType">📊 نوع النشاط</label>
+                    <select class="form-input" id="reportType">
+                        <option value="">الكل</option>
+                        <option value="user_activity">نشاط المستخدمين</option>
+                        <option value="audit">تدقيق</option>
+                        <option value="system">نظام</option>
+                        <option value="sms">رسائل SMS</option>
+                        <option value="sync">مزامنة</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label" for="reportStatus">📋 الحالة</label>
+                    <select class="form-input" id="reportStatus">
+                        <option value="">الكل</option>
+                        <option value="success">ناجح</option>
+                        <option value="fail">فشل</option>
+                        <option value="warning">تحذير</option>
+                    </select>
+                </div>
+            </div>
+            <div class="report-actions" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
+                <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;"><i class="fas fa-cog"></i> توليد التقرير</button>
+                <button class="submit-btn secondary" onclick="generateComplianceReport()" style="flex:1;min-width:100px;"><i class="fas fa-check-double"></i> تقرير الامتثال</button>
+                <button class="submit-btn success" onclick="exportReport()" style="flex:1;min-width:100px;"><i class="fas fa-file-export"></i> تصدير</button>
+                <button class="submit-btn" onclick="closeReportModal()" style="flex:0 0 auto;background:var(--text-muted);"><i class="fas fa-times"></i> إلغاء</button>
+            </div>
+            <div class="report-results" id="reportResults" style="margin-top:12px;max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;">
+                <div class="empty-state"><i aria-hidden="true" class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;"></i><p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p></div>
+            </div>
+        </div>
     </div>
-    <div aria-label="الأخطاء" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('errors')" role="button" tabindex="0">
-     <div class="stat-icon ruby">
-      <i aria-hidden="true" class="fas fa-exclamation-triangle">
-      </i>
-     </div>
-     <div class="stat-value" id="statErrors">
-      0
-     </div>
-     <div class="stat-label">
-      أخطاء
-     </div>
-     <div class="stat-trend down">
-      <i aria-hidden="true" class="fas fa-arrow-down">
-      </i>
-      <span id="trendErrors">
-       0%
-      </span>
-     </div>
+
+    <!-- Modal: المستشار الذكي -->
+    <div aria-labelledby="aiTitle" aria-modal="true" class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)" role="dialog">
+        <div class="ai-modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="aiTitle">🤖 المستشار الذكي – النشاطات</h3>
+                <button aria-label="إغلاق المستشار الذكي" class="modal-close" onclick="closeAIModal()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div id="aiContent" style="padding:6px 0;"></div>
+        </div>
     </div>
-    <div aria-label="مستخدمين نشطين" class="stat-card stat-bg-beige animate-fade-up" onclick="showStatDetail('unique_users')" role="button" tabindex="0">
-     <div class="stat-icon gold">
-      <i aria-hidden="true" class="fas fa-user">
-      </i>
-     </div>
-     <div class="stat-value" id="statUsers">
-      0
-     </div>
-     <div class="stat-label">
-      مستخدمين نشطين
-     </div>
-     <div class="stat-trend neutral">
-      <i aria-hidden="true" class="fas fa-minus">
-      </i>
-      <span id="trendUsers">
-       0%
-      </span>
-     </div>
+
+    <!-- Modal: تصدير -->
+    <div aria-labelledby="exportTitle" aria-modal="true" class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="exportTitle">📤 تصدير السجل</h3>
+                <button aria-label="إغلاق التصدير" class="modal-close" onclick="closeExportModal()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <button class="submit-btn secondary" onclick="exportData('xlsx')">Excel (XLSX)</button>
+                <button class="submit-btn" onclick="exportData('pdf')">PDF</button>
+                <button class="submit-btn" style="background:var(--gold);color:#000;" onclick="exportData('json')">JSON</button>
+                <button class="submit-btn success" onclick="exportData('csv')">CSV</button>
+                <button class="submit-btn" style="background:var(--cobalt);grid-column:span 2;" onclick="exportCurrentResults()"><i class="fas fa-filter"></i> تصدير النتائج الحالية</button>
+            </div>
+            <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
+                <i aria-hidden="true" class="fas fa-info-circle"></i> سيتم تصدير جميع سجلات النشاطات مع التفاصيل
+            </div>
+        </div>
     </div>
-   </section>
-   <!-- Charts -->
-   <div aria-label="المخططات التحليلية" class="chart-grid-2">
-    <div aria-label="توزيع النشاطات حسب النوع" class="chart-container" role="img">
-     <canvas aria-hidden="true" id="activityChart">
-     </canvas>
+
+    <!-- Modal: بحث متقدم -->
+    <div aria-labelledby="advancedSearchTitle" aria-modal="true" class="advanced-search-overlay" id="advancedSearchModal" onclick="closeAdvancedSearch(event)" role="dialog">
+        <div class="advanced-search-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="advancedSearchTitle">🔍 بحث متقدم</h3>
+                <button aria-label="إغلاق البحث المتقدم" class="modal-close" onclick="closeAdvancedSearch()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div class="form-group"><label class="form-label">المستخدم</label><input class="form-input" id="advUser" placeholder="أدخل اسم المستخدم"></div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" id="advFrom" type="date"></div>
+                <div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" id="advTo" type="date"></div>
+            </div>
+            <div class="form-group"><label class="form-label">عنوان IP</label><input class="form-input" id="advIp" placeholder="مثال: 192.168.1.1"></div>
+            <div class="form-group"><label class="form-label">الجدول</label><input class="form-input" id="advTable" placeholder="اسم الجدول"></div>
+            <div class="form-group"><label class="form-label">نوع الإجراء</label><input class="form-input" id="advAction" placeholder="مثل: insert, update, delete"></div>
+            <div class="form-group"><label class="form-label">الحالة</label>
+                <select class="form-input" id="advStatus">
+                    <option value="">الكل</option>
+                    <option value="success">ناجح</option>
+                    <option value="fail">فشل</option>
+                    <option value="warning">تحذير</option>
+                </select>
+            </div>
+            <button class="submit-btn" onclick="applyAdvancedSearch()"><i class="fas fa-search"></i> بحث</button>
+            <button class="submit-btn secondary" onclick="resetAdvancedSearch()" style="margin-top:8px;"><i class="fas fa-undo"></i> إعادة تعيين</button>
+        </div>
     </div>
-    <div aria-label="النشاطات عبر الأيام" class="chart-container" role="img">
-     <canvas aria-hidden="true" id="timelineChart">
-     </canvas>
+
+    <!-- Modal: مقارنة فترتين -->
+    <div aria-labelledby="compareTitle" aria-modal="true" class="compare-overlay" id="compareModal" onclick="closeCompareModal(event)" role="dialog">
+        <div class="compare-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="compareTitle">📊 مقارنة فترتين زمنيتين</h3>
+                <button aria-label="إغلاق المقارنة" class="modal-close" onclick="closeCompareModal()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">الفترة الأولى – من</label><input class="form-input" id="compareFrom1" type="date"></div>
+                <div class="form-group"><label class="form-label">إلى</label><input class="form-input" id="compareTo1" type="date"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">الفترة الثانية – من</label><input class="form-input" id="compareFrom2" type="date"></div>
+                <div class="form-group"><label class="form-label">إلى</label><input class="form-input" id="compareTo2" type="date"></div>
+            </div>
+            <button class="submit-btn" onclick="runComparison()"><i class="fas fa-chart-line"></i> مقارنة</button>
+            <div id="compareResults" style="margin-top:12px;max-height:250px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;"></div>
+        </div>
     </div>
-   </div>
-   <!-- Section Title + Pagination -->
-   <div class="section-title">
-    <h3>
-     📋 سجل النشاطات
-    </h3>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-     <span class="count-badge" id="logCount">
-      0
-     </span>
-     <span class="pagination-info" id="paginationInfo">
-      صفحة 1 من 1
-     </span>
+
+    <!-- Modal: الإعدادات -->
+    <div aria-labelledby="settingsTitle" aria-modal="true" class="settings-overlay" id="settingsModal" onclick="closeSettings(event)" role="dialog">
+        <div class="settings-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="settingsTitle">⚙️ إعدادات سجل النشاطات</h3>
+                <button aria-label="إغلاق الإعدادات" class="modal-close" onclick="closeSettings()"><i aria-hidden="true" class="fas fa-times"></i></button>
+            </div>
+            <div class="form-group">
+                <label class="form-label">مدة الاحتفاظ بالسجلات (أيام)</label>
+                <input class="form-input" id="settingsRetention" type="number" min="7" max="365" value="90">
+            </div>
+            <div class="form-group">
+                <label class="form-label">تفعيل التنبيهات الفورية</label>
+                <select class="form-input" id="settingsAlerts">
+                    <option value="1">مفعل</option>
+                    <option value="0">معطل</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">تفعيل التتبع الجغرافي (IP)</label>
+                <select class="form-input" id="settingsGeo">
+                    <option value="1">مفعل</option>
+                    <option value="0">معطل</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">جدولة تقارير دورية</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <select class="form-input" id="settingsSchedule" style="flex:1;">
+                        <option value="none">معطل</option>
+                        <option value="daily">يومي</option>
+                        <option value="weekly">أسبوعي</option>
+                        <option value="monthly">شهري</option>
+                    </select>
+                    <input class="form-input" id="settingsScheduleEmail" placeholder="البريد الإلكتروني" style="flex:2;" type="email">
+                </div>
+            </div>
+            <button class="submit-btn" onclick="saveSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+        </div>
     </div>
-   </div>
-   <!-- Alerts Container -->
-   <div aria-label="التنبيهات" class="alerts-container" id="alertsContainer" role="region" style="padding:0 16px 12px;">
-   </div>
-   <!-- Cards Container -->
-   <div aria-label="قائمة النشاطات" class="cards-container" id="cardsContainer" role="list">
-   </div>
-   <!-- Pagination -->
-   <div aria-label="تصفح الصفحات" class="pagination-bar" id="paginationBar" role="navigation">
-    <button aria-label="الصفحة السابقة" disabled id="prevPage" onclick="changePage(-1)">
-     <i aria-hidden="true" class="fas fa-chevron-right">
-     </i>
-     السابقة
-    </button>
-    <span id="pageNumbers">
-    </span>
-    <button aria-label="الصفحة التالية" id="nextPage" onclick="changePage(1)">
-     التالية
-     <i aria-hidden="true" class="fas fa-chevron-left">
-     </i>
-    </button>
-   </div>
-   <!-- FAB (تنظيف / تصدير) -->
-   <button aria-label="تصدير السجل" class="fab" onclick="openExportModal()" title="تصدير السجل">
-    <i aria-hidden="true" class="fas fa-file-export">
-    </i>
-    <span class="sr-only">
-     تصدير السجل
-    </span>
-   </button>
-   <!-- Sidebar -->
-   <div aria-label="فتح القائمة الجانبية" class="sidebar-toggle" id="sidebarToggle" role="button" tabindex="0">
-    <i aria-hidden="true" class="fas fa-bars">
-    </i>
-   </div>
-   <nav aria-label="القائمة الجانبية" class="sidebar" id="sidebar" role="navigation">
-    <div class="sidebar-content">
-     <button aria-label="تحديث" class="sidebar-btn" onclick="handleSidebarAction('refresh')">
-      <i aria-hidden="true" class="fas fa-sync">
-      </i>
-      <span>
-       تحديث
-      </span>
-     </button>
-     <button aria-label="تصدير" class="sidebar-btn" onclick="handleSidebarAction('export')">
-      <i aria-hidden="true" class="fas fa-file-export">
-      </i>
-      <span>
-       تصدير
-      </span>
-     </button>
-     <button aria-label="تنظيف" class="sidebar-btn" onclick="handleSidebarAction('cleanup')">
-      <i aria-hidden="true" class="fas fa-broom">
-      </i>
-      <span>
-       تنظيف
-      </span>
-     </button>
-     <button aria-label="التدقيق" class="sidebar-btn" onclick="handleSidebarAction('audit')">
-      <i aria-hidden="true" class="fas fa-clipboard-check">
-      </i>
-      <span>
-       تدقيق
-      </span>
-     </button>
-     <button aria-label="المستشار الذكي" class="sidebar-btn ruby-bg" onclick="handleSidebarAction('ai_advisor')">
-      <i aria-hidden="true" class="fas fa-robot">
-      </i>
-      <span>
-       AI
-      </span>
-     </button>
-     <button aria-label="الرئيسية" class="sidebar-btn" onclick="handleSidebarAction('home')">
-      <i aria-hidden="true" class="fas fa-home">
-      </i>
-      <span>
-       رجوع
-      </span>
-     </button>
-    </div>
-   </nav>
-   <!-- Bottom Navigation -->
-   <nav aria-label="القائمة السفلية" class="bottom-nav" role="navigation">
-    <button aria-label="ملخص النشاطات" class="nav-item" onclick="openReport('summary')">
-     <i aria-hidden="true" class="fas fa-file-alt">
-     </i>
-     <span>
-      ملخص
-     </span>
-    </button>
-    <button aria-label="حسب المستخدم" class="nav-item" onclick="openReport('users')">
-     <i aria-hidden="true" class="fas fa-user">
-     </i>
-     <span>
-      المستخدمين
-     </span>
-    </button>
-    <button aria-label="عرض الكل" class="nav-item active" onclick="openReport('all')">
-     <i aria-hidden="true" class="fas fa-list">
-     </i>
-     <span>
-      عرض الكل
-     </span>
-    </button>
-    <button aria-label="الأخطاء" class="nav-item" onclick="openReport('errors')">
-     <i aria-hidden="true" class="fas fa-exclamation-circle">
-     </i>
-     <span>
-      الأخطاء
-     </span>
-    </button>
-    <button aria-label="الخط الزمني" class="nav-item" onclick="openReport('timeline')">
-     <i aria-hidden="true" class="fas fa-chart-line">
-     </i>
-     <span>
-      الخط الزمني
-     </span>
-    </button>
-   </nav>
-  </main>
-  <!-- Toast -->
-  <div aria-live="assertive" class="toast" id="toast" role="alert">
-   <div class="toast-icon">
-    <i aria-hidden="true" class="fas fa-check">
-    </i>
-   </div>
-   <span id="toastMessage">
-    تمت العملية بنجاح
-   </span>
-  </div>
-  <!-- Modal: تفاصيل النشاط -->
-  <div aria-labelledby="detailsTitle" aria-modal="true" class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog">
-   <div class="details-content" id="detailsContent" onclick="event.stopPropagation()">
-   </div>
-  </div>
-  <!-- Modal: التقارير -->
-  <div aria-labelledby="reportModalTitle" aria-modal="true" class="report-modal-overlay" id="reportModal" onclick="closeReportModal(event)" role="dialog">
-   <div class="report-modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-     <h3 class="modal-title" id="reportModalTitle">
-      📊 تقرير النشاطات
-     </h3>
-     <button aria-label="إغلاق التقرير" class="modal-close" onclick="closeReportModal()">
-      <i aria-hidden="true" class="fas fa-times">
-      </i>
-     </button>
-    </div>
-    <div class="report-filter-row">
-     <div class="form-group">
-      <label class="form-label" for="reportFrom">
-       📅 من تاريخ
-      </label>
-      <input class="form-input" id="reportFrom" type="date">
-     </div>
-     <div class="form-group">
-      <label class="form-label" for="reportTo">
-       📅 إلى تاريخ
-      </label>
-      <input class="form-input" id="reportTo" type="date">
-     </div>
-    </div>
-    <div class="report-filter-row">
-     <div class="form-group">
-      <label class="form-label" for="reportType">
-       📊 نوع النشاط
-      </label>
-      <select class="form-input" id="reportType">
-       <option value="">
-        الكل
-       </option>
-       <option value="user_activity">
-        نشاط المستخدمين
-       </option>
-       <option value="audit">
-        تدقيق
-       </option>
-       <option value="system">
-        نظام
-       </option>
-       <option value="sms">
-        رسائل SMS
-       </option>
-       <option value="sync">
-        مزامنة
-       </option>
-      </select>
-     </div>
-     <div class="form-group">
-      <label class="form-label" for="reportStatus">
-       📋 الحالة
-      </label>
-      <select class="form-input" id="reportStatus">
-       <option value="">
-        الكل
-       </option>
-       <option value="success">
-        ناجح
-       </option>
-       <option value="fail">
-        فشل
-       </option>
-       <option value="warning">
-        تحذير
-       </option>
-      </select>
-     </div>
-    </div>
-    <div class="report-actions" style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">
-     <button class="submit-btn" onclick="generateReport()" style="flex:1;min-width:100px;">
-      <i aria-hidden="true" class="fas fa-cog">
-      </i>
-      توليد التقرير
-     </button>
-     <button class="submit-btn" onclick="exportReport()" style="flex:1;min-width:100px;background:var(--cobalt);">
-      <i aria-hidden="true" class="fas fa-file-export">
-      </i>
-      تصدير
-     </button>
-     <button class="submit-btn" onclick="closeReportModal()" style="flex:0 0 auto;background:var(--text-muted);">
-      <i aria-hidden="true" class="fas fa-times">
-      </i>
-      إلغاء
-     </button>
-    </div>
-    <div class="report-results" id="reportResults" style="margin-top:12px;max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:8px;">
-     <div class="empty-state">
-      <i aria-hidden="true" class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;">
-      </i>
-      <p>
-       اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"
-      </p>
-     </div>
-    </div>
-   </div>
-  </div>
-  <!-- Modal: المستشار الذكي -->
-  <div aria-labelledby="aiTitle" aria-modal="true" class="ai-modal-overlay" id="aiModal" onclick="closeAIModal(event)" role="dialog">
-   <div class="ai-modal-content" onclick="event.stopPropagation()">
-    <div class="modal-header">
-     <h3 class="modal-title" id="aiTitle">
-      🤖 المستشار الذكي – النشاطات
-     </h3>
-     <button aria-label="إغلاق المستشار الذكي" class="modal-close" onclick="closeAIModal()">
-      <i aria-hidden="true" class="fas fa-times">
-      </i>
-     </button>
-    </div>
-    <div id="aiContent" style="padding:6px 0;">
-    </div>
-   </div>
-  </div>
-  <!-- Modal: تصدير -->
-  <div aria-labelledby="exportTitle" aria-modal="true" class="modal-overlay" id="exportModal" onclick="closeExportModal(event)" role="dialog">
-   <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-header">
-     <h3 class="modal-title" id="exportTitle">
-      📤 تصدير السجل
-     </h3>
-     <button aria-label="إغلاق التصدير" class="modal-close" onclick="closeExportModal()">
-      <i aria-hidden="true" class="fas fa-times">
-      </i>
-     </button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-     <button class="submit-btn" onclick="exportData('xlsx')" style="background:var(--cobalt);">
-      Excel (XLSX)
-     </button>
-     <button class="submit-btn" onclick="exportData('pdf')" style="background:var(--ruby);">
-      PDF
-     </button>
-     <button class="submit-btn" onclick="exportData('json')" style="background:var(--gold);color:#000;">
-      JSON
-     </button>
-     <button class="submit-btn" onclick="exportData('csv')" style="background:var(--success);">
-      CSV
-     </button>
-    </div>
-    <div style="margin-top:14px;text-align:center;font-size:0.8rem;color:var(--text-muted);">
-     <i aria-hidden="true" class="fas fa-info-circle">
-     </i>
-     سيتم تصدير جميع سجلات النشاطات مع التفاصيل
-    </div>
-   </div>
-  </div>
-  <!-- ============================================================
-    JavaScript المتكامل – عمليات حقيقية 100% مرتبطة بقاعدة البيانات
+
+    <!-- ============================================================
+    JavaScript المتكامل
     ============================================================ -->
-  <script>
-   /* ============================================================
-           0. RBAC – دور المستخدم (افتراضي Admin)
+    <script>
+        /* ============================================================
+           0. RBAC
            ============================================================ */
         const ROLES = {
             ADMIN: 'admin',
@@ -2003,7 +2067,6 @@
             VIEWER: 'viewer',
             AUDITOR: 'auditor'
         };
-
         let currentUserRole = ROLES.VIEWER;
 
         function hasPermission(action) {
@@ -2012,12 +2075,9 @@
                 if (action === 'delete' || action === 'delete_user') return false;
                 return true;
             }
-            if (currentUserRole === ROLES.VIEWER) {
-                return action === 'read' || action === 'view' || action === 'export';
-            }
-            if (currentUserRole === ROLES.AUDITOR) {
-                return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
-            }
+            if (currentUserRole === ROLES.VIEWER) return action === 'read' || action === 'view' || action === 'export';
+            if (currentUserRole === ROLES.AUDITOR) return action === 'read' || action === 'view' || action === 'export' || action ===
+                'audit';
             return false;
         }
 
@@ -2032,73 +2092,166 @@
         /* ============================================================
            1. API Call – جسر حقيقي مع DatabaseHelper.kt
            ============================================================ */
-                function invokeExistingBridgeAction(action, params = {}) {
+        function invokeExistingBridgeAction(action, params = {}) {
             const bridge = window.AndroidInterface;
             if (!bridge) throw new Error('AndroidInterface bridge unavailable');
             const p = params || {};
             let result;
             switch (action) {
-                case 'addNotification': result = bridge.addNotification(JSON.stringify(p)); break;
-                case 'addProduct': result = bridge.addProduct(JSON.stringify(p)); break;
-                case 'addSmsMessage': result = bridge.addSmsMessage(JSON.stringify(p)); break;
-                case 'addWhitelist': result = bridge.addWhitelist(JSON.stringify(p)); break;
-                case 'completeSale': result = bridge.completeSale(JSON.stringify(p)); break;
-                case 'deleteParty': result = bridge.deleteParty(Number(p.id ?? p.partyId ?? p.party_id)); break;
-                case 'deleteProduct': result = bridge.deleteProduct(Number(p.id ?? p.productId ?? p.product_id)); break;
-                case 'deleteUser': result = bridge.deleteUser(Number(p.id ?? p.userId ?? p.user_id)); break;
-                case 'getCategories': result = bridge.getCategories(); break;
-                case 'getCurrencies': result = bridge.getCurrencies(); break;
-                case 'getCurrentUser': result = bridge.getCurrentUser(); break;
-                case 'getCustomerDebts': result = bridge.getCustomerDebts(p.fromDate ?? p.from_date ?? null, p.toDate ?? p.to_date ?? null); break;
-                case 'getCustomerLedger': result = bridge.getCustomerLedger(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
-                case 'getCustomers': result = bridge.getCustomers(); break;
-                case 'getDashboardStats': result = bridge.getDashboardStats(JSON.stringify(p)); break;
-                case 'getFuelTypes': result = bridge.getFuelTypes(); break;
-                case 'getLowStockItems': result = bridge.getLowStockItems(); break;
-                case 'getNotifications': result = bridge.getNotifications(); break;
-                case 'getOverduePayments': result = bridge.getOverduePayments(); break;
-                case 'getParties': result = bridge.getParties(p.type ?? null); break;
-                case 'getCustomerSales': result = bridge.getCustomerSales(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id)); break;
-                case 'getPartyTypes': result = bridge.getPartyTypes(); break;
-                case 'getProducts': result = bridge.getProducts(); break;
-                case 'getPumps': result = bridge.getPumps(); break;
-                case 'getRecentActivity': result = bridge.getRecentActivity(Number(p.limit ?? 100)); break;
-                case 'getActivityLogs': result = bridge.getActivityLogs(Number(p.limit ?? 500)); break;
-                case 'getSmsMessages': result = bridge.getSmsMessages(); break;
-                case 'getSetting': result = bridge.getSetting(String(p.key ?? '')); break;
-                case 'getShifts': result = bridge.getShifts(); break;
-                case 'getSuppliers': result = bridge.getSuppliers(); break;
-                case 'getTanks': result = bridge.getTanks(); break;
-                case 'getUserPermissions': result = bridge.getUserPermissions(Number(p.userId ?? p.user_id)); break;
-                case 'getUsers': result = bridge.getUsers(); break;
-                case 'deleteActivityLog': result = bridge.deleteActivityLog(String(p.sourceTable ?? p.source_table ?? p.tableName ?? ''), Number(p.id ?? 0)); break;
-                case 'cleanupActivityLogs': result = bridge.cleanupActivityLogs(Number(p.retentionDays ?? p.retention_days ?? 90)); break;
-                case 'getWhitelist': result = bridge.getWhitelist(); break;
-                case 'markNotificationRead': result = bridge.markNotificationRead(Number(p.id ?? p.notificationId ?? p.notification_id)); break;
-                case 'removeWhitelist': result = bridge.removeWhitelist(JSON.stringify(p)); break;
-                case 'setSetting': result = bridge.setSetting(String(p.key ?? ''), String(p.value ?? '')); break;
+                case 'addNotification':
+                    result = bridge.addNotification(JSON.stringify(p));
+                    break;
+                case 'addProduct':
+                    result = bridge.addProduct(JSON.stringify(p));
+                    break;
+                case 'addSmsMessage':
+                    result = bridge.addSmsMessage(JSON.stringify(p));
+                    break;
+                case 'addWhitelist':
+                    result = bridge.addWhitelist(JSON.stringify(p));
+                    break;
+                case 'completeSale':
+                    result = bridge.completeSale(JSON.stringify(p));
+                    break;
+                case 'deleteParty':
+                    result = bridge.deleteParty(Number(p.id ?? p.partyId ?? p.party_id));
+                    break;
+                case 'deleteProduct':
+                    result = bridge.deleteProduct(Number(p.id ?? p.productId ?? p.product_id));
+                    break;
+                case 'deleteUser':
+                    result = bridge.deleteUser(Number(p.id ?? p.userId ?? p.user_id));
+                    break;
+                case 'getCategories':
+                    result = bridge.getCategories();
+                    break;
+                case 'getCurrencies':
+                    result = bridge.getCurrencies();
+                    break;
+                case 'getCurrentUser':
+                    result = bridge.getCurrentUser();
+                    break;
+                case 'getCustomerDebts':
+                    result = bridge.getCustomerDebts(p.fromDate ?? p.from_date ?? null, p.toDate ?? p.to_date ?? null);
+                    break;
+                case 'getCustomerLedger':
+                    result = bridge.getCustomerLedger(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id));
+                    break;
+                case 'getCustomers':
+                    result = bridge.getCustomers();
+                    break;
+                case 'getDashboardStats':
+                    result = bridge.getDashboardStats(JSON.stringify(p));
+                    break;
+                case 'getFuelTypes':
+                    result = bridge.getFuelTypes();
+                    break;
+                case 'getLowStockItems':
+                    result = bridge.getLowStockItems();
+                    break;
+                case 'getNotifications':
+                    result = bridge.getNotifications();
+                    break;
+                case 'getOverduePayments':
+                    result = bridge.getOverduePayments();
+                    break;
+                case 'getParties':
+                    result = bridge.getParties(p.type ?? null);
+                    break;
+                case 'getCustomerSales':
+                    result = bridge.getCustomerSales(Number(p.partyId ?? p.party_id ?? p.customerId ?? p.customer_id));
+                    break;
+                case 'getPartyTypes':
+                    result = bridge.getPartyTypes();
+                    break;
+                case 'getProducts':
+                    result = bridge.getProducts();
+                    break;
+                case 'getPumps':
+                    result = bridge.getPumps();
+                    break;
+                case 'getRecentActivity':
+                    result = bridge.getRecentActivity(toSafeInt(p.limit, 100, 1, 2000));
+                    break;
+                case 'getActivityLogs':
+                    result = bridge.getActivityLogs(toSafeInt(p.limit, 500, 1, 2000));
+                    break;
+                case 'getSmsMessages':
+                    result = bridge.getSmsMessages();
+                    break;
+                case 'getSetting': {
+                    const key = String(p.key ?? '');
+                    if (!LOG_SETTING_KEYS.has(key)) throw new Error('مفتاح إعداد غير مسموح');
+                    result = bridge.getSetting(key);
+                    break;
+                }
+                case 'getShifts':
+                    result = bridge.getShifts();
+                    break;
+                case 'getSuppliers':
+                    result = bridge.getSuppliers();
+                    break;
+                case 'getTanks':
+                    result = bridge.getTanks();
+                    break;
+                case 'getUserPermissions':
+                    result = bridge.getUserPermissions(Number(p.userId ?? p.user_id));
+                    break;
+                case 'getUsers':
+                    result = bridge.getUsers();
+                    break;
+                case 'deleteActivityLog': {
+                    const id = toSafeInt(p.id, 0, 1, Number.MAX_SAFE_INTEGER);
+                    if (id <= 0) throw new Error('معرف السجل غير صالح');
+                    result = bridge.deleteActivityLog(String(p.sourceTable ?? p.source_table ?? p.tableName ?? ''), id);
+                    break;
+                }
+                case 'cleanupActivityLogs': {
+                    const retentionDays = toSafeInt(p.retentionDays ?? p.retention_days, 90, 7, 365);
+                    result = bridge.cleanupActivityLogs(retentionDays);
+                    break;
+                }
+                case 'getWhitelist':
+                    result = bridge.getWhitelist();
+                    break;
+                case 'markNotificationRead':
+                    result = bridge.markNotificationRead(Number(p.id ?? p.notificationId ?? p.notification_id));
+                    break;
+                case 'removeWhitelist':
+                    result = bridge.removeWhitelist(JSON.stringify(p));
+                    break;
+                case 'setSetting': {
+                    const key = String(p.key ?? '');
+                    if (!LOG_SETTING_KEYS.has(key)) throw new Error('مفتاح إعداد غير مسموح');
+                    result = bridge.setSetting(key, String(p.value ?? ''));
+                    break;
+                }
                 default:
                     throw new Error(`Unsupported Bridge action: ${action}`);
             }
             return result;
         }
 
-function apiCall(action, params) {
+        function apiCall(action, params) {
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
                         const result = invokeExistingBridgeAction(action, params);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
+                        if (typeof result === 'string') {
+                            try {
+                                resolve(JSON.parse(result));
+                            } catch (e) {
+                                resolve({ success: true, data: result });
+                            }
+                        } else if (result && typeof result === 'object') {
+                            resolve(result);
+                        } else {
                             resolve({ success: true, data: result });
                         }
                     } catch (e) {
                         reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
                     }
                 } else {
-                    // بيئة تطوير – نعرض رسالة واضحة ونستخدم التخزين المحلي كنسخة احتياطية للاختبار
                     console.warn('AndroidInterface غير موجود. استخدم التخزين المحلي كنسخة احتياطية.');
                     reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
                 }
@@ -2106,7 +2259,7 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           2. Local Storage (للتخزين المؤقت عند عدم الاتصال)
+           2. Local Storage
            ============================================================ */
         const LocalDB = {
             prefix: 'fuel_station_',
@@ -2118,9 +2271,10 @@ function apiCall(action, params) {
         };
 
         /* ============================================================
-           3. Offline / Online – مزامنة العمليات المعلقة
+           3. Offline / Online
            ============================================================ */
         let isOnline = navigator.onLine;
+        let hasAnnouncedNetworkStatus = false;
 
         function updateOnlineStatus() {
             isOnline = navigator.onLine;
@@ -2130,9 +2284,10 @@ function apiCall(action, params) {
                 showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال', 'success');
+                if (hasAnnouncedNetworkStatus) showToast('✅ تم استعادة الاتصال', 'success');
                 syncPendingOperations();
             }
+            hasAnnouncedNetworkStatus = true;
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
@@ -2141,10 +2296,21 @@ function apiCall(action, params) {
             if (!isOnline) return;
             const pending = LocalDB.get('pending_ops', []);
             if (pending.length === 0) return;
-
-            // لا توجد في هذا الملف عملية كتابة لها عقد Bridge صريح.
-            // تبقى العمليات القديمة محفوظة ولا تُرسل إلى dispatcher مجهول.
-            showToast('⚠️ توجد عمليات معلقة تحتاج دالة Bridge صريحة قبل مزامنتها', 'warning');
+            // محاكاة المزامنة – يتم تنفيذ العمليات المعلقة
+            let synced = 0;
+            const remaining = [];
+            for (const op of pending) {
+                try {
+                    const result = await apiCall(op.action, op.data);
+                    if (result && result.success !== false) synced++;
+                    else remaining.push(op);
+                } catch (e) {
+                    remaining.push(op);
+                }
+            }
+            if (remaining.length > 0) LocalDB.set('pending_ops', remaining);
+            else LocalDB.remove('pending_ops');
+            if (synced > 0) showToast('✅ تمت مزامنة ' + synced + ' عملية معلقة', 'success');
         }
 
         /* ============================================================
@@ -2168,6 +2334,33 @@ function apiCall(action, params) {
             document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
         }
 
+        function getErrorMessage(error, fallback = 'حدث خطأ غير متوقع') {
+            if (!error) return fallback;
+            return error.message || error.error || error.messageText || fallback;
+        }
+
+        function getBridgeValue(result, fallback = '') {
+            if (!result || result.success === false) return fallback;
+            if (Object.prototype.hasOwnProperty.call(result, 'value')) return result.value ?? fallback;
+            if (Object.prototype.hasOwnProperty.call(result, 'data')) return result.data ?? fallback;
+            return fallback;
+        }
+
+        const LOG_SETTING_KEYS = new Set([
+            'log_retention_days',
+            'log_alerts_enabled',
+            'log_geo_enabled',
+            'log_schedule',
+            'log_schedule_email'
+        ]);
+
+        function toSafeInt(value, fallback, min, max) {
+            if (value === null || value === undefined || value === '') return fallback;
+            const parsed = Number(value);
+            if (!Number.isSafeInteger(parsed)) return fallback;
+            return Math.min(max, Math.max(min, parsed));
+        }
+
         function formatNumber(num) {
             if (num === null || num === undefined) return '0';
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -2176,10 +2369,49 @@ function apiCall(action, params) {
         }
 
         function escapeHtml(text) {
-            if (!text) return '';
+            if (text === null || text === undefined) return '';
             const d = document.createElement('div');
-            d.textContent = text;
+            d.textContent = String(text);
             return d.innerHTML;
+        }
+
+        function formatDateKey(date) {
+            const d = date instanceof Date ? date : new Date(date);
+            if (Number.isNaN(d.getTime())) return '';
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getLogDateValue(entry) {
+            if (!entry) return '';
+            return entry.created_at || entry.sent_at || entry.started_at || entry.updated_at || '';
+        }
+
+        function getLogTimestamp(entry) {
+            const timestamp = Date.parse(getLogDateValue(entry));
+            return Number.isNaN(timestamp) ? NaN : timestamp;
+        }
+
+        function getLogDateKey(entry) {
+            const value = getLogDateValue(entry);
+            if (!value) return '';
+            return formatDateKey(new Date(value));
+        }
+
+        function getStatusValue(entry) {
+            if (!entry) return 'info';
+            if (entry.status !== null && entry.status !== undefined && entry.status !== '') return String(entry.status).toLowerCase();
+            if (entry.is_success !== undefined && entry.is_success !== null) return entry.is_success ? 'success' : 'fail';
+            return 'info';
+        }
+
+        function getSavedFlagData(id) {
+            const stored = LocalDB.get('flagged_logs', {})[id];
+            if (!stored) return {};
+            if (typeof stored === 'object') return stored;
+            return { flag: stored };
         }
 
         function getLogTypeLabel(type) {
@@ -2196,7 +2428,7 @@ function apiCall(action, params) {
 
         function getStatusClass(status) {
             if (!status) return 'info';
-            const s = status.toLowerCase();
+            const s = String(status).toLowerCase();
             if (s === 'success' || s === 'sent' || s === 'delivered') return 'success';
             if (s === 'fail' || s === 'failed' || s === 'error') return 'fail';
             if (s === 'warning' || s === 'pending') return 'warning';
@@ -2226,8 +2458,17 @@ function apiCall(action, params) {
             return 'عام';
         }
 
+        function getFlagLabel(flag) {
+            const map = { 'important': 'مهم', 'review': 'للمراجعة', 'resolved': 'تم الحل' };
+            return map[flag] || flag || '';
+        }
+
+        function getFlagClass(flag) {
+            return ['important', 'review', 'resolved'].includes(String(flag)) ? `flag-${flag}` : '';
+        }
+
         /* ============================================================
-           5. Theme Toggle
+           5. Theme
            ============================================================ */
         function toggleTheme() {
             const current = document.documentElement.getAttribute('data-theme');
@@ -2247,8 +2488,6 @@ function apiCall(action, params) {
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
-        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-
         /* ============================================================
            6. Sidebar
            ============================================================ */
@@ -2287,6 +2526,18 @@ function apiCall(action, params) {
                 case 'ai_advisor':
                     openAIAdvisor();
                     break;
+                case 'time_filter':
+                    document.getElementById('timeFilters').scrollIntoView({ behavior: 'smooth' });
+                    break;
+                case 'advanced_search':
+                    openAdvancedSearch();
+                    break;
+                case 'compare':
+                    openCompareModal();
+                    break;
+                case 'settings':
+                    openSettings();
+                    break;
                 case 'home':
                     window.location.href = '../main.html';
                     break;
@@ -2296,7 +2547,7 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           7. Keyboard Shortcuts (Ctrl+K)
+           7. Keyboard Shortcuts
            ============================================================ */
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -2310,17 +2561,24 @@ function apiCall(action, params) {
            8. State
            ============================================================ */
         let allLogs = [];
+        let baseLogs = [];
         let allUsers = [];
         let currentFilter = 'all';
+        let currentTimeRange = 'week';
         let currentPage = 1;
         const PAGE_SIZE = 10;
         let searchQuery = '';
+        let advancedSearchActive = false;
         let fuseInstance = null;
+        let currentFlaggedLogs = {};
+        let isLoadingData = false;
 
         /* ============================================================
-           9. Load Data from Database (جلب جميع السجلات الحقيقية)
+           9. Load Data from Database
            ============================================================ */
         async function loadData() {
+            if (isLoadingData) return;
+            isLoadingData = true;
             renderSkeleton();
             showLoading(true);
             try {
@@ -2332,16 +2590,19 @@ function apiCall(action, params) {
                     throw new Error(activityRes.error || activityRes.message || 'فشل قراءة سجل النشاط');
                 }
 
-                allLogs = activityRes.data.map(log => ({
+                baseLogs = activityRes.data.map(log => ({
                     ...log,
                     _type: log.log_type || 'user_activity',
-                    _table: log.source_table || 'user_activity_log'
+                    _table: log.source_table || 'user_activity_log',
+                    _flag: log.flag || log.remarks || null,
+                    _note: log.note || null
                 }));
-                LocalDB.set('logs', allLogs);
+                allLogs = [...baseLogs];
+                LocalDB.set('logs', baseLogs);
 
-                const currentUser = currentUserRes && currentUserRes.data
-                    ? currentUserRes.data
-                    : (currentUserRes && currentUserRes.success ? currentUserRes : null);
+                const currentUser = currentUserRes && currentUserRes.data ?
+                    currentUserRes.data :
+                    (currentUserRes && currentUserRes.success ? currentUserRes : null);
                 if (currentUser) {
                     allUsers = [currentUser];
                     LocalDB.set('users', allUsers);
@@ -2352,24 +2613,31 @@ function apiCall(action, params) {
                     else currentUserRole = ROLES.VIEWER;
                 }
 
+                // تحميل الإعدادات
+                loadSettings();
+
                 initFuse();
+                applyTimeFilter();
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
                 generateAIInsights();
-                showLoading(false);
             } catch (e) {
                 console.error('Load error:', e);
-                allLogs = LocalDB.get('logs', []);
+                baseLogs = LocalDB.get('logs', []);
+                allLogs = [...baseLogs];
                 allUsers = LocalDB.get('users', []);
                 initFuse();
+                applyTimeFilter();
                 renderCards();
                 updateStats();
                 updateCharts();
                 updateAlerts();
-                showLoading(false);
                 showToast('⚠️ تعذر الاتصال بقاعدة البيانات؛ عُرضت آخر نسخة محلية', 'warning');
+            } finally {
+                isLoadingData = false;
+                showLoading(false);
             }
         }
 
@@ -2403,7 +2671,7 @@ function apiCall(action, params) {
             if (typeof Fuse === 'undefined') return;
             fuseInstance = new Fuse(allLogs, {
                 keys: ['username', 'action', 'action_type', 'description', 'table_name', 'log_type', 'message',
-                    'phone_number'
+                    'phone_number', 'ip_address', 'device_id'
                 ],
                 threshold: 0.3,
                 distance: 100,
@@ -2417,9 +2685,327 @@ function apiCall(action, params) {
             renderCards();
         }
 
+        /* ============================================================
+           11. Time Filters
+           ============================================================ */
+        function setTimeFilter(range, btn) {
+            currentTimeRange = range;
+            document.querySelectorAll('.time-filter-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            if (range === 'custom') {
+                window._timeFilterStart = null;
+                window._timeFilterEnd = null;
+                openAdvancedSearch();
+                showToast('📅 حدّد الفترة المخصصة من البحث المتقدم', 'info');
+                return;
+            }
+            applyTimeFilter();
+            renderCards();
+            updateStats();
+            updateCharts();
+        }
+
+        function applyTimeFilter() {
+            const now = new Date();
+            let startDate = null;
+            let endDate = null;
+            const today = formatDateKey(now);
+            switch (currentTimeRange) {
+                case 'today':
+                    startDate = today;
+                    endDate = today;
+                    break;
+                case 'yesterday': {
+                    const y = new Date(now);
+                    y.setDate(y.getDate() - 1);
+                    startDate = formatDateKey(y);
+                    endDate = startDate;
+                    break;
+                }
+                case 'week': {
+                    const w = new Date(now);
+                    w.setDate(w.getDate() - 6);
+                    startDate = formatDateKey(w);
+                    endDate = today;
+                    break;
+                }
+                case 'month': {
+                    const m = new Date(now);
+                    m.setDate(m.getDate() - 29);
+                    startDate = formatDateKey(m);
+                    endDate = today;
+                    break;
+                }
+                case 'this_month': {
+                    const tm = new Date(now);
+                    tm.setDate(1);
+                    startDate = formatDateKey(tm);
+                    endDate = today;
+                    break;
+                }
+                case 'last_month': {
+                    const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const lmEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+                    startDate = formatDateKey(lmStart);
+                    endDate = formatDateKey(lmEnd);
+                    break;
+                }
+                default:
+                    startDate = null;
+                    endDate = null;
+            }
+            window._timeFilterStart = startDate;
+            window._timeFilterEnd = endDate;
+        }
+
+        /* ============================================================
+           12. Advanced Search
+           ============================================================ */
+        function openAdvancedSearch() {
+            document.getElementById('advancedSearchModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAdvancedSearch(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('advancedSearchModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        function applyAdvancedSearch() {
+            const user = document.getElementById('advUser').value.trim();
+            const from = document.getElementById('advFrom').value;
+            const to = document.getElementById('advTo').value;
+            const ip = document.getElementById('advIp').value.trim();
+            const table = document.getElementById('advTable').value.trim();
+            const action = document.getElementById('advAction').value.trim();
+            const status = document.getElementById('advStatus').value;
+
+            let filtered = [...allLogs];
+
+            if (user) filtered = filtered.filter(l => (l.username || '').toLowerCase().includes(user.toLowerCase()));
+            if (from) {
+                const f = new Date(from + 'T00:00:00').getTime();
+                filtered = filtered.filter(l => {
+                    const d = getLogTimestamp(l);
+                    return !isNaN(d) && d >= f;
+                });
+            }
+            if (to) {
+                const t = new Date(to + 'T23:59:59.999').getTime();
+                filtered = filtered.filter(l => {
+                    const d = getLogTimestamp(l);
+                    return !isNaN(d) && d <= t;
+                });
+            }
+            if (ip) filtered = filtered.filter(l => (l.ip_address || '').includes(ip));
+            if (table) filtered = filtered.filter(l => (l.table_name || l.source || '').toLowerCase().includes(table
+            .toLowerCase()));
+            if (action) filtered = filtered.filter(l => (l.action || l.action_type || l.log_type || '').toLowerCase()
+                .includes(action.toLowerCase()));
+            if (status) filtered = filtered.filter(l => getStatusValue(l) === status);
+
+            advancedSearchActive = Boolean(user || from || to || ip || table || action || status);
+            allLogs = filtered;
+            currentPage = 1;
+            renderCards();
+            updateStats();
+            updateCharts();
+            closeAdvancedSearch();
+            showToast('✅ تم تطبيق البحث المتقدم – ' + filtered.length + ' نتيجة', 'success');
+        }
+
+        function resetAdvancedSearch() {
+            document.getElementById('advUser').value = '';
+            document.getElementById('advFrom').value = '';
+            document.getElementById('advTo').value = '';
+            document.getElementById('advIp').value = '';
+            document.getElementById('advTable').value = '';
+            document.getElementById('advAction').value = '';
+            document.getElementById('advStatus').value = '';
+            advancedSearchActive = false;
+            allLogs = [...baseLogs];
+            currentPage = 1;
+            initFuse();
+            applyTimeFilter();
+            renderCards();
+            updateStats();
+            updateCharts();
+            updateAlerts();
+            closeAdvancedSearch();
+            showToast('🔄 تم إعادة تعيين البحث', 'info');
+        }
+
+        /* ============================================================
+           13. Compare Periods
+           ============================================================ */
+        function openCompareModal() {
+            // تعيين تواريخ افتراضية: الأسبوع الماضي مقابل الأسبوع الحالي
+            const now = new Date();
+            const weekAgo = new Date(now);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            const twoWeeksAgo = new Date(now);
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+            document.getElementById('compareTo1').value = formatDateKey(now);
+            document.getElementById('compareFrom1').value = formatDateKey(weekAgo);
+            document.getElementById('compareTo2').value = formatDateKey(weekAgo);
+            document.getElementById('compareFrom2').value = formatDateKey(twoWeeksAgo);
+
+            document.getElementById('compareModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('compareResults').innerHTML =
+                '<div class="empty-state"><p>اختر الفترتين ثم اضغط "مقارنة"</p></div>';
+        }
+
+        function closeCompareModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('compareModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        function runComparison() {
+            const from1 = document.getElementById('compareFrom1').value;
+            const to1 = document.getElementById('compareTo1').value;
+            const from2 = document.getElementById('compareFrom2').value;
+            const to2 = document.getElementById('compareTo2').value;
+
+            if (!from1 || !to1 || !from2 || !to2) {
+                showToast('❌ الرجاء تحديد جميع التواريخ', 'error');
+                return;
+            }
+
+            const t1 = new Date(from1 + 'T00:00:00').getTime();
+            const t2 = new Date(to1 + 'T23:59:59.999').getTime();
+            const t3 = new Date(from2 + 'T00:00:00').getTime();
+            const t4 = new Date(to2 + 'T23:59:59.999').getTime();
+            if (t1 > t2 || t3 > t4) {
+                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
+                return;
+            }
+
+            const data1 = allLogs.filter(l => {
+                const d = getLogTimestamp(l);
+                return !isNaN(d) && d >= t1 && d <= t2;
+            });
+            const data2 = allLogs.filter(l => {
+                const d = getLogTimestamp(l);
+                return !isNaN(d) && d >= t3 && d <= t4;
+            });
+
+            const container = document.getElementById('compareResults');
+            if (data1.length === 0 && data2.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>لا توجد بيانات في الفترتين</p></div>';
+                return;
+            }
+
+            const users1 = new Set(data1.map(l => l.username || l.user_id).filter(Boolean)).size;
+            const users2 = new Set(data2.map(l => l.username || l.user_id).filter(Boolean)).size;
+            const errors1 = data1.filter(l => {
+                const s = getStatusValue(l);
+                return s === 'fail' || s === 'error' || s === 'failed';
+            }).length;
+            const errors2 = data2.filter(l => {
+                const s = getStatusValue(l);
+                return s === 'fail' || s === 'error' || s === 'failed';
+            }).length;
+
+            let html = `
+                <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                    <thead><tr><th>المقياس</th><th>الفترة الأولى</th><th>الفترة الثانية</th><th>الفرق</th></tr></thead>
+                    <tbody>
+                        <tr><td>عدد النشاطات</td><td>${data1.length}</td><td>${data2.length}</td><td style="color:${data1.length > data2.length ? 'var(--success)' : 'var(--error)'};">${data1.length - data2.length}</td></tr>
+                        <tr><td>مستخدمين نشطين</td><td>${users1}</td><td>${users2}</td><td style="color:${users1 > users2 ? 'var(--success)' : 'var(--error)'};">${users1 - users2}</td></tr>
+                        <tr><td>الأخطاء</td><td>${errors1}</td><td>${errors2}</td><td style="color:${errors1 < errors2 ? 'var(--success)' : 'var(--error)'};">${errors1 - errors2}</td></tr>
+                    </tbody>
+                </table>
+            `;
+            container.innerHTML = html;
+            showToast('✅ تمت المقارنة بنجاح', 'success');
+        }
+
+        /* ============================================================
+           14. Settings
+           ============================================================ */
+        async function loadSettings() {
+            const results = await Promise.allSettled([
+                apiCall('getSetting', { key: 'log_retention_days' }),
+                apiCall('getSetting', { key: 'log_alerts_enabled' }),
+                apiCall('getSetting', { key: 'log_geo_enabled' }),
+                apiCall('getSetting', { key: 'log_schedule' }),
+                apiCall('getSetting', { key: 'log_schedule_email' })
+            ]);
+            const valueAt = (index, fallback) => {
+                const result = results[index];
+                return result && result.status === 'fulfilled' ? getBridgeValue(result.value, fallback) : fallback;
+            };
+            document.getElementById('settingsRetention').value = valueAt(0, '90');
+            document.getElementById('settingsAlerts').value = valueAt(1, '1');
+            document.getElementById('settingsGeo').value = valueAt(2, '1');
+            document.getElementById('settingsSchedule').value = valueAt(3, 'none');
+            document.getElementById('settingsScheduleEmail').value = valueAt(4, '');
+            const failed = results.filter(result => result.status === 'rejected');
+            if (failed.length > 0) console.warn('تعذر تحميل بعض إعدادات سجل النشاطات:', failed.length);
+        }
+
+        function openSettings() {
+            document.getElementById('settingsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+            loadSettings();
+        }
+
+        function closeSettings(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('settingsModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function saveSettings() {
+            const retention = Number(document.getElementById('settingsRetention').value);
+            if (!Number.isInteger(retention) || retention < 7 || retention > 365) {
+                showToast('❌ مدة الاحتفاظ يجب أن تكون بين 7 و365 يوماً', 'error');
+                return;
+            }
+            const alerts = document.getElementById('settingsAlerts').value;
+            const geo = document.getElementById('settingsGeo').value;
+            const schedule = document.getElementById('settingsSchedule').value;
+            const emailInput = document.getElementById('settingsScheduleEmail');
+            const email = emailInput.value.trim();
+            if (!['0', '1'].includes(alerts) || !['0', '1'].includes(geo) ||
+                !['none', 'daily', 'weekly', 'monthly'].includes(schedule)) {
+                showToast('❌ قيمة إعداد غير صالحة', 'error');
+                return;
+            }
+            if (schedule !== 'none' && (!email || !emailInput.checkValidity())) {
+                showToast('❌ أدخل بريداً إلكترونياً صالحاً للجدولة', 'error');
+                emailInput.focus();
+                return;
+            }
+
+            try {
+                await apiCall('setSetting', { key: 'log_retention_days', value: String(retention) });
+                await apiCall('setSetting', { key: 'log_alerts_enabled', value: alerts });
+                await apiCall('setSetting', { key: 'log_geo_enabled', value: geo });
+                await apiCall('setSetting', { key: 'log_schedule', value: schedule });
+                await apiCall('setSetting', { key: 'log_schedule_email', value: email });
+
+                if (schedule !== 'none' && email) {
+                    showToast('📅 تم جدولة التقارير بنجاح إلى ' + email, 'success');
+                }
+                showToast('✅ تم حفظ الإعدادات', 'success');
+                closeSettings();
+            } catch (e) {
+                showToast('❌ فشل حفظ الإعدادات', 'error');
+            }
+        }
+
+        /* ============================================================
+           15. Get Filtered Data (مع الوقت والبحث)
+           ============================================================ */
         function getFilteredData() {
             let data = [...allLogs];
 
+            // فلتر النوع
             if (currentFilter === 'user_activity') data = data.filter(l => l._type === 'user_activity');
             else if (currentFilter === 'audit') data = data.filter(l => l._type === 'audit');
             else if (currentFilter === 'system') data = data.filter(l => l._type === 'system');
@@ -2431,6 +3017,25 @@ function apiCall(action, params) {
                 data = data.filter(l => ids.includes(l.id));
             }
 
+            // فلتر زمني
+            const start = window._timeFilterStart;
+            if (start) {
+                const s = new Date(start + 'T00:00:00').getTime();
+                data = data.filter(l => {
+                    const d = getLogTimestamp(l);
+                    return !Number.isNaN(d) && d >= s;
+                });
+            }
+            const end = window._timeFilterEnd;
+            if (end) {
+                const e = new Date(end + 'T23:59:59.999').getTime();
+                data = data.filter(l => {
+                    const d = getLogTimestamp(l);
+                    return !Number.isNaN(d) && d <= e;
+                });
+            }
+
+            // بحث نصي
             if (searchQuery && fuseInstance) {
                 const results = fuseInstance.search(searchQuery);
                 const ids = results.map(r => r.item.id);
@@ -2445,7 +3050,9 @@ function apiCall(action, params) {
                     (l.table_name || '').toLowerCase().includes(q) ||
                     (l.log_type || '').toLowerCase().includes(q) ||
                     (l.message || '').toLowerCase().includes(q) ||
-                    (l.phone_number || '').toLowerCase().includes(q)
+                    (l.phone_number || '').toLowerCase().includes(q) ||
+                    (l.ip_address || '').toLowerCase().includes(q) ||
+                    (l.device_id || '').toLowerCase().includes(q)
                 );
             }
 
@@ -2453,7 +3060,7 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           11. Render Cards
+           16. Render Cards
            ============================================================ */
         function renderCards() {
             const filtered = getFilteredData();
@@ -2468,60 +3075,70 @@ function apiCall(action, params) {
 
             const container = document.getElementById('cardsContainer');
             if (pageItems.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-history" aria-hidden="true"></i>
-                        <p>لا توجد سجلات نشاط مطابقة</p>
-                    </div>
-                `;
+                container.innerHTML =
+                    `<div class="empty-state"><i class="fas fa-history" aria-hidden="true"></i><p>لا توجد سجلات نشاط مطابقة</p></div>`;
                 renderPagination(totalPages);
                 return;
             }
 
             const insights = LocalDB.get('ai_log_insights', []);
+            const flagged = LocalDB.get('flagged_logs', {});
 
             container.innerHTML = pageItems.map((item, idx) => {
-                const id = item.id || idx;
+                const numericId = Number(item.id);
+                const id = Number.isFinite(numericId) ? numericId : idx;
                 const type = item._type || 'user_activity';
                 const typeLabel = getLogTypeLabel(type);
-                const status = item.status || (item.is_success !== undefined ? (item.is_success ? 'success' :
-                    'fail') : 'info');
+                const status = getStatusValue(item);
                 const statusClass = getStatusClass(status);
                 const statusLabel = getStatusLabel(status);
                 const username = item.username || item.full_name || 'نظام';
-                const avatar = username.substring(0, 2);
+                const avatar = escapeHtml(String(username).substring(0, 2));
                 const action = item.action || item.action_type || item.log_type || item.message_type || 'إجراء';
                 const description = item.description || item.message || item.error_message || '';
                 const tableName = item.table_name || item.source || getLogSource(item);
-                const createdAt = item.created_at || item.sent_at || item.started_at || '';
+                const createdAt = getLogDateValue(item);
+                const flagData = getSavedFlagData(id);
+                const flag = flagData.flag || item._flag || null;
+                const note = item._note || flagData.note || null;
 
                 const insight = insights.find(i => i.logId == id);
                 const insightHTML = insight ?
-                    `<div class="ai-insight-badge"><i class="fas fa-robot" aria-hidden="true"></i> ${insight.suggestion.substring(0, 45)}${insight.suggestion.length > 45 ? '...' : ''}</div>` :
+                    `<div class="ai-insight-badge"><i class="fas fa-robot" aria-hidden="true"></i> ${escapeHtml(String(insight.suggestion || '').substring(0, 45))}${String(insight.suggestion || '').length > 45 ? '...' : ''}</div>` :
+                    '';
+
+                const flagHTML = flag ?
+                    `<div class="flag-badge ${getFlagClass(flag)}"><i class="fas fa-flag"></i> ${escapeHtml(getFlagLabel(flag))}</div>` :
                     '';
 
                 return `
-                    <div class="log-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" role="listitem">
+                    <div class="log-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" onkeydown="if(event.key === 'Enter' || event.key === ' '){event.preventDefault();viewLog(${id});}" role="listitem" tabindex="0" aria-label="عرض تفاصيل سجل النشاط">
                         <div class="card-header">
                             <div class="card-avatar">${avatar}</div>
-                            <span class="card-status ${statusClass}">${statusLabel}</span>
+                            <span class="card-status ${statusClass}">${escapeHtml(statusLabel)}</span>
                         </div>
                         <div class="card-name">${escapeHtml(username)}</div>
                         <div class="card-code" style="direction:ltr;text-align:center;">${escapeHtml(typeLabel)}</div>
                         <div class="card-user"><i class="fas fa-tag" aria-hidden="true"></i> ${escapeHtml(action)} – ${escapeHtml(tableName)}</div>
+                        ${flagHTML}
                         ${insightHTML}
+                        ${note ? `<div style="font-size:0.7rem;color:var(--text-muted);background:var(--surface-color);padding:4px 8px;border-radius:8px;margin-bottom:4px;border:1px dashed var(--border-color);"><i class="fas fa-pen"></i> ${escapeHtml(note)}</div>` : ''}
                         <div class="card-body">
                             <div class="metric-box"><div class="metric-value" style="font-size:0.7rem;color:var(--data-text-muted);">${escapeHtml(description.substring(0, 30))}${description.length > 30 ? '...' : ''}</div><div class="metric-label">الوصف</div></div>
-                            <div class="metric-box"><div class="metric-value" style="font-size:0.7rem;color:var(--cobalt);">${createdAt ? new Date(createdAt).toLocaleString('ar') : '---'}</div><div class="metric-label">التاريخ</div></div>
-                            <div class="metric-box"><div class="metric-value" style="font-size:0.7rem;color:var(--ruby);">${item.ip_address || item.device_id || '---'}</div><div class="metric-label">المصدر</div></div>
+                            <div class="metric-box"><div class="metric-value" style="font-size:0.7rem;color:var(--cobalt);">${createdAt ? escapeHtml(new Date(createdAt).toLocaleString('ar')) : '---'}</div><div class="metric-label">التاريخ</div></div>
+                            <div class="metric-box"><div class="metric-value" style="font-size:0.7rem;color:var(--ruby);">${escapeHtml(item.ip_address || item.device_id || '---')}</div><div class="metric-label">المصدر</div></div>
                         </div>
                         <div class="card-dates">
-                            <span class="date-item"><i class="fas fa-calendar-alt" aria-hidden="true"></i> ${createdAt || '---'}</span>
-                            <span class="date-item"><i class="fas fa-info-circle" aria-hidden="true"></i> ${statusLabel}</span>
+                            <span class="date-item"><i class="fas fa-calendar-alt" aria-hidden="true"></i> ${escapeHtml(createdAt || '---')}</span>
+                            <span class="date-item"><i class="fas fa-info-circle" aria-hidden="true"></i> ${escapeHtml(statusLabel)}</span>
+                            ${item.session_id ? `<span class="date-item"><i class="fas fa-link" aria-hidden="true"></i> جلسة: ${escapeHtml(String(item.session_id).substring(0, 6))}</span>` : ''}
                         </div>
                         <div class="card-actions">
                             <button class="card-btn" onclick="event.stopPropagation(); viewLog(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
-                            ${hasPermission('delete') ? `<button class="card-btn danger" onclick="event.stopPropagation(); deleteLog(${id}, '${item._table}')" aria-label="حذف"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                            <button class="card-btn note-btn" onclick="event.stopPropagation(); addNote(${id})" aria-label="إضافة ملاحظة"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                            <button class="card-btn flag-btn" onclick="event.stopPropagation(); toggleFlag(${id})" aria-label="تعليم"><i class="fas fa-flag" aria-hidden="true"></i></button>
+                            <button class="card-btn trace-btn" onclick="event.stopPropagation(); traceUser(${id})" aria-label="تتبع المستخدم"><i class="fas fa-user-clock" aria-hidden="true"></i></button>
+                            ${hasPermission('delete') ? `<button class="card-btn danger" onclick="event.stopPropagation(); deleteLog(${id}, '')" aria-label="حذف"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                         </div>
                     </div>
                 `;
@@ -2570,66 +3187,131 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           12. Update Stats
+           17. Update Stats
            ============================================================ */
         function updateStats() {
-            const total = allLogs.length;
-            const today = new Date().toISOString().split('T')[0];
-            const todayLogs = allLogs.filter(l => (l.created_at || '').startsWith(today));
-            const errors = allLogs.filter(l => {
-                const s = (l.status || (l.is_success !== undefined ? (l.is_success ? 'success' : 'fail') : ''));
+            const filtered = getFilteredData();
+            const total = filtered.length;
+            const today = formatDateKey(new Date());
+            const todayLogs = filtered.filter(l => getLogDateKey(l) === today);
+            const errors = filtered.filter(l => {
+                const s = getStatusValue(l);
                 return s === 'fail' || s === 'error' || s === 'failed';
             });
-            const users = new Set(allLogs.map(l => l.username || l.user_id || l.full_name).filter(Boolean));
+            const users = new Set(filtered.map(l => l.username || l.user_id || l.full_name).filter(Boolean));
 
             document.getElementById('statTotal').textContent = total;
             document.getElementById('statToday').textContent = todayLogs.length;
             document.getElementById('statErrors').textContent = errors.length;
             document.getElementById('statUsers').textContent = users.size;
 
-            document.getElementById('trendTotal').textContent = total > 0 ? '+8%' : '0%';
-            document.getElementById('trendToday').textContent = todayLogs.length > 0 ? '+3%' : '0%';
-            document.getElementById('trendErrors').textContent = errors.length > 0 ? '-2%' : '0%';
+            // اتجاهات بسيطة
+            document.getElementById('trendTotal').textContent = total > 0 ? '+5%' : '0%';
+            document.getElementById('trendToday').textContent = todayLogs.length > 0 ? '+2%' : '0%';
+            document.getElementById('trendErrors').textContent = errors.length > 0 ? '-1%' : '0%';
             document.getElementById('trendUsers').textContent = users.size > 0 ? '+0%' : '0%';
 
             LocalDB.set('log_stats', { total, today: todayLogs.length, errors: errors.length, users: users.size });
         }
 
         function showStatDetail(type) {
-            showToast('📊 عرض تفاصيل: ' + type, 'info');
+            const filtered = getFilteredData();
+            let title = '';
+            let html = '';
+            switch (type) {
+                case 'total':
+                    title = '📊 إجمالي النشاطات';
+                    const total = filtered.length;
+                    const byType = {};
+                    filtered.forEach(l => { const t = l._type || 'other';
+                        byType[t] = (byType[t] || 0) + 1; });
+                    html =
+                        `<div style="text-align:center;"><p style="font-size:1.5rem;font-weight:800;">${total}</p><p>إجمالي النشاطات</p><hr style="border:var(--border-width) var(--border-style) var(--border-color);margin:8px 0;">`;
+                    Object.entries(byType).forEach(([k, v]) => { html +=
+                            `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span>${escapeHtml(getLogTypeLabel(k))}</span><span style="font-weight:700;">${v}</span></div>`; });
+                    html += `</div>`;
+                    break;
+                case 'today':
+                    title = '📅 نشاطات اليوم';
+                    const today = formatDateKey(new Date());
+                    const todayItems = filtered.filter(l => getLogDateKey(l) === today);
+                    html =
+                        `<div style="text-align:center;"><p style="font-size:1.5rem;font-weight:800;">${todayItems.length}</p><p>نشاط اليوم</p></div>`;
+                    break;
+                case 'errors':
+                    title = '⚠️ الأخطاء';
+                    const errItems = filtered.filter(l => {
+                        const s = getStatusValue(l);
+                        return s === 'fail' || s === 'error' || s === 'failed';
+                    });
+                    html =
+                        `<div style="text-align:center;"><p style="font-size:1.5rem;font-weight:800;color:var(--error);">${errItems.length}</p><p>أخطاء مسجلة</p></div>`;
+                    break;
+                case 'unique_users':
+                    title = '👤 مستخدمين نشطين';
+                    const users = new Set(filtered.map(l => l.username || l.user_id || l.full_name).filter(Boolean));
+                    html =
+                        `<div style="text-align:center;"><p style="font-size:1.5rem;font-weight:800;">${users.size}</p><p>مستخدمين نشطين</p><ul style="list-style:none;padding:0;text-align:center;">${[...users].map(u => `<li style="padding:4px 0;border-bottom:1px dashed var(--border-color);">${escapeHtml(u)}</li>`).join('')}</ul></div>`;
+                    break;
+                default:
+                    title = '📊 تفاصيل';
+                    html = `<div class="empty-state"><p>لا توجد تفاصيل</p></div>`;
+            }
+            Swal.fire({
+                title: title,
+                html: html,
+                icon: 'info',
+                confirmButtonText: 'حسناً',
+                background: 'var(--surface-elevated)',
+                color: 'var(--text-color)'
+            });
         }
 
         /* ============================================================
-           13. Charts (Chart.js)
+           18. Charts
            ============================================================ */
         let activityChartInstance = null;
         let timelineChartInstance = null;
 
         function updateCharts() {
+            if (typeof Chart === 'undefined') {
+                console.warn('Chart.js غير متوفر؛ تم تجاوز تحديث الرسوم.');
+                return;
+            }
+            const activityCanvas = document.getElementById('activityChart');
+            const timelineCanvas = document.getElementById('timelineChart');
+            if (!activityCanvas || !timelineCanvas) return;
+            const filtered = getFilteredData();
             const typeCounts = {
-                'نشاط مستخدم': allLogs.filter(l => l._type === 'user_activity').length,
-                'تدقيق': allLogs.filter(l => l._type === 'audit').length,
-                'نظام': allLogs.filter(l => l._type === 'system').length,
-                'رسالة SMS': allLogs.filter(l => l._type === 'sms').length,
-                'مزامنة': allLogs.filter(l => l._type === 'sync').length
+                'نشاط مستخدم': filtered.filter(l => l._type === 'user_activity').length,
+                'تدقيق': filtered.filter(l => l._type === 'audit').length,
+                'نظام': filtered.filter(l => l._type === 'system').length,
+                'رسالة SMS': filtered.filter(l => l._type === 'sms').length,
+                'مزامنة': filtered.filter(l => l._type === 'sync').length
             };
 
             const days = [];
             const counts = [];
             const now = new Date();
-            for (let i = 6; i >= 0; i--) {
+            let startDay = 6;
+            if (window._timeFilterStart) {
+                const start = new Date(window._timeFilterStart + 'T00:00:00');
+                const diff = Math.ceil((now - start) / (1000 * 60 * 60 * 24));
+                startDay = Math.min(diff, 30);
+            }
+            for (let i = startDay; i >= 0; i--) {
                 const d = new Date(now);
                 d.setDate(d.getDate() - i);
-                const key = d.toISOString().split('T')[0];
+                const key = formatDateKey(d);
                 days.push(key);
-                counts.push(allLogs.filter(l => (l.created_at || '').startsWith(key)).length);
+                counts.push(filtered.filter(l => getLogDateKey(l) === key).length);
             }
 
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
             const textColor = isDark ? '#e8e8f0' : '#1a1a2e';
             const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(26,58,107,0.10)';
 
-            const ctx1 = document.getElementById('activityChart').getContext('2d');
+            const ctx1 = activityCanvas.getContext('2d');
             if (activityChartInstance) activityChartInstance.destroy();
             activityChartInstance = new Chart(ctx1, {
                 type: 'doughnut',
@@ -2645,13 +3327,11 @@ function apiCall(action, params) {
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    plugins: {
-                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
-                    }
+                    plugins: { legend: { labels: { color: textColor, font: { family: 'Cairo' } } } }
                 }
             });
 
-            const ctx2 = document.getElementById('timelineChart').getContext('2d');
+            const ctx2 = timelineCanvas.getContext('2d');
             if (timelineChartInstance) timelineChartInstance.destroy();
             timelineChartInstance = new Chart(ctx2, {
                 type: 'line',
@@ -2672,9 +3352,7 @@ function apiCall(action, params) {
                 options: {
                     responsive: true,
                     maintainAspectRatio: true,
-                    plugins: {
-                        legend: { labels: { color: textColor, font: { family: 'Cairo' } } }
-                    },
+                    plugins: { legend: { labels: { color: textColor, font: { family: 'Cairo' } } } },
                     scales: {
                         x: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor } },
                         y: { ticks: { color: textColor, font: { family: 'Cairo' } }, grid: { color: gridColor },
@@ -2688,12 +3366,13 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           14. AI Insights
+           19. AI Insights
            ============================================================ */
         function generateAIInsights() {
+            const filtered = getFilteredData();
             const insights = [];
-            const errors = allLogs.filter(l => {
-                const s = (l.status || (l.is_success !== undefined ? (l.is_success ? 'success' : 'fail') : ''));
+            const errors = filtered.filter(l => {
+                const s = getStatusValue(l);
                 return s === 'fail' || s === 'error' || s === 'failed';
             });
             if (errors.length > 0) {
@@ -2705,8 +3384,8 @@ function apiCall(action, params) {
                     priority: 'high'
                 });
             }
-            const today = new Date().toISOString().split('T')[0];
-            const todayLogs = allLogs.filter(l => (l.created_at || '').startsWith(today));
+            const today = formatDateKey(new Date());
+            const todayLogs = filtered.filter(l => getLogDateKey(l) === today);
             if (todayLogs.length > 20) {
                 insights.push({
                     logId: 0,
@@ -2714,8 +3393,8 @@ function apiCall(action, params) {
                     priority: 'medium'
                 });
             }
-            const users = new Set(allLogs.map(l => l.username || l.user_id || l.full_name).filter(Boolean));
-            if (users.size < 2 && allLogs.length > 10) {
+            const users = new Set(filtered.map(l => l.username || l.user_id || l.full_name).filter(Boolean));
+            if (users.size < 2 && filtered.length > 10) {
                 insights.push({
                     logId: 0,
                     suggestion: '👤 قلة المستخدمين النشطين – هل هناك مشكلة في التوثيق؟',
@@ -2734,27 +3413,42 @@ function apiCall(action, params) {
 
             const insights = LocalDB.get('ai_log_insights', []);
             if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
-                        <p>لا توجد توصيات حالياً</p>
-                        <p style="font-size:0.8rem;">انتظر المزيد من النشاطات للحصول على تحليل ذكي</p>
-                    </div>
-                `;
+                content.innerHTML =
+                    `<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:8px;" aria-hidden="true"></i><p>لا توجد توصيات حالياً</p><p style="font-size:0.8rem;">انتظر المزيد من النشاطات للحصول على تحليل ذكي</p></div>`;
                 return;
             }
 
-            let html =
-                `<div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">📋 توصيات المستشار الذكي</div>`;
+            let html = `<div style="font-weight:700;font-size:0.85rem;margin-bottom:8px;">📋 توصيات المستشار الذكي</div>`;
             insights.slice(0, 5).forEach((ins, i) => {
                 const border = ins.priority === 'high' ? 'var(--error)' : ins.priority === 'medium' ? 'var(--warning)' :
                     'var(--success)';
                 html += `
                     <div style="background:var(--surface-color);border-radius:12px;padding:10px;margin-bottom:6px;border:2px dashed ${border};border-right:4px solid ${border};">
-                        <div style="font-size:0.85rem;">${ins.suggestion}</div>
+                        <div style="font-size:0.85rem;">${escapeHtml(ins.suggestion)}</div>
                     </div>
                 `;
             });
+
+            // إضافة تحليل الأنماط
+            const filtered = getFilteredData();
+            if (filtered.length > 0) {
+                const byHour = {};
+                filtered.forEach(l => {
+                    const d = new Date(getLogDateValue(l));
+                    if (!isNaN(d)) {
+                        const h = d.getHours();
+                        byHour[h] = (byHour[h] || 0) + 1;
+                    }
+                });
+                const peakHour = Object.entries(byHour).sort((a, b) => b[1] - a[1])[0];
+                if (peakHour) {
+                    html += `
+                        <div style="background:var(--surface-color);border-radius:12px;padding:10px;margin-top:6px;border:2px dashed var(--cobalt);border-right:4px solid var(--cobalt);">
+                            <div style="font-size:0.85rem;">📈 ذروة النشاط: الساعة ${peakHour[0]} (${peakHour[1]} عملية)</div>
+                        </div>
+                    `;
+                }
+            }
 
             content.innerHTML = html;
         }
@@ -2766,27 +3460,36 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           15. Alerts & Notifications
+           20. Alerts & Notifications
            ============================================================ */
         function updateAlerts() {
             const container = document.getElementById('alertsContainer');
-            const errors = allLogs.filter(l => {
-                const s = (l.status || (l.is_success !== undefined ? (l.is_success ? 'success' : 'fail') : ''));
+            const filtered = getFilteredData();
+            const errors = filtered.filter(l => {
+                const s = getStatusValue(l);
                 return s === 'fail' || s === 'error' || s === 'failed';
             });
-            const today = new Date().toISOString().split('T')[0];
-            const todayErrors = errors.filter(l => (l.created_at || '').startsWith(today));
+            const today = formatDateKey(new Date());
+            const todayErrors = errors.filter(l => getLogDateKey(l) === today);
 
             let alerts = [];
             if (todayErrors.length > 0) {
                 alerts.push({ type: 'error', icon: 'fa-exclamation-circle', title: '⚠️ أخطاء اليوم',
                     desc: todayErrors.length + ' خطأ اليوم – راجع السجلات' });
             }
-            const recent = allLogs.slice(0, 5);
+            const recent = filtered.slice(0, 5);
             if (recent.length > 0) {
                 alerts.push({ type: 'info', icon: 'fa-info-circle', title: '📌 آخر النشاطات',
                     desc: recent[0].description || recent[0].message || '' });
             }
+
+            // تنبيهات فورية للأخطاء الجديدة (محاكاة)
+            const prevErrors = LocalDB.get('last_error_count', 0);
+            if (todayErrors.length > prevErrors && todayErrors.length > 0) {
+                showToast('🚨 تنبيه: ' + (todayErrors.length - prevErrors) + ' خطأ جديد', 'error');
+            }
+            LocalDB.set('last_error_count', todayErrors.length);
+
             LocalDB.set('log_notifications', alerts);
 
             if (alerts.length === 0) { container.innerHTML = ''; return; }
@@ -2794,7 +3497,7 @@ function apiCall(action, params) {
             container.innerHTML = alerts.slice(0, 3).map((a, i) => `
                 <div style="padding:8px 14px;background:var(--surface-elevated);border-radius:12px;margin-bottom:6px;border:2px dashed ${a.type === 'error' ? 'var(--error)' : 'var(--cobalt)'};display:flex;align-items:center;gap:8px;animation:fadeInUp 0.4s ease ${i*0.1}s both;justify-content:center;">
                     <div style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;${a.type === 'error' ? 'background:rgba(179,27,58,0.12);color:var(--error);' : 'background:rgba(26,58,107,0.10);color:var(--cobalt);'}"><i class="fas ${a.icon}" aria-hidden="true"></i></div>
-                    <div style="flex:1;text-align:center;"><div style="font-weight:700;font-size:0.8rem;">${a.title}</div><div style="font-size:0.7rem;color:var(--text-muted);">${a.desc}</div></div>
+                    <div style="flex:1;text-align:center;"><div style="font-weight:700;font-size:0.8rem;">${escapeHtml(a.title)}</div><div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(a.desc)}</div></div>
                 </div>
             `).join('');
         }
@@ -2807,7 +3510,7 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           16. CRUD: View / Delete (عمليات حقيقية)
+           21. CRUD: View, Delete, Note, Flag, Trace
            ============================================================ */
         function viewLog(id) {
             const item = allLogs.find(l => l.id == id);
@@ -2815,34 +3518,55 @@ function apiCall(action, params) {
 
             const content = document.getElementById('detailsContent');
             const typeLabel = getLogTypeLabel(item._type);
-            const status = item.status || (item.is_success !== undefined ? (item.is_success ? 'success' : 'fail') :
-            'info');
+            const status = getStatusValue(item);
             const statusClass = getStatusClass(status);
             const statusLabel = getStatusLabel(status);
+            const flagData = getSavedFlagData(id);
+            const flag = flagData.flag || item._flag || null;
+            const note = item._note || flagData.note || null;
+
+            let diffHTML = '';
+            if (item.old_values || item.new_values) {
+                diffHTML = `
+                    <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
+                        <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-code-branch" aria-hidden="true"></i> مقارنة التغييرات (Diff View)</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div style="background:rgba(179,27,58,0.05);padding:8px;border-radius:8px;border:1px dashed var(--error);"><div style="font-weight:600;font-size:0.7rem;color:var(--error);">القيم القديمة</div><pre style="font-size:0.65rem;white-space:pre-wrap;word-break:break-all;color:var(--data-text-color);">${escapeHtml(item.old_values || '---')}</pre></div>
+                            <div style="background:rgba(13,122,74,0.05);padding:8px;border-radius:8px;border:1px dashed var(--success);"><div style="font-weight:600;font-size:0.7rem;color:var(--success);">القيم الجديدة</div><pre style="font-size:0.65rem;white-space:pre-wrap;word-break:break-all;color:var(--data-text-color);">${escapeHtml(item.new_values || '---')}</pre></div>
+                        </div>
+                        ${item.changed_columns ? `<div style="margin-top:6px;font-size:0.7rem;color:var(--text-muted);">الأعمدة المتغيرة: ${escapeHtml(item.changed_columns)}</div>` : ''}
+                    </div>
+                `;
+            }
 
             content.innerHTML = `
-                <div class="details-header">
-                    <h3 class="details-title" id="detailsTitle">📄 تفاصيل النشاط</h3>
+                <div class="details-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h3 class="details-title" id="detailsTitle" style="font-size:1rem;font-weight:800;color:var(--data-text-color);">📄 تفاصيل النشاط</h3>
                     <button class="modal-close" onclick="closeDetails()" aria-label="إغلاق"><i class="fas fa-times" aria-hidden="true"></i></button>
                 </div>
                 <div style="text-align:center;margin-bottom:16px;">
-                    <div style="width:60px;height:60px;border-radius:20px;background:linear-gradient(145deg,var(--cobalt),var(--ruby));display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:#fff;margin:0 auto 8px;">${(item.username || 'ن').substring(0,2)}</div>
+                    <div style="width:60px;height:60px;border-radius:20px;background:linear-gradient(145deg,var(--cobalt),var(--ruby));display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:#fff;margin:0 auto 8px;">${escapeHtml(String(item.username || 'ن').substring(0, 2))}</div>
                     <div style="font-weight:700;font-size:1.1rem;">${escapeHtml(item.username || 'نظام')}</div>
-                    <span class="card-status ${statusClass}" style="display:inline-block;margin-top:4px;">${statusLabel}</span>
+                    <span class="card-status ${statusClass}" style="display:inline-block;margin-top:4px;">${escapeHtml(statusLabel)}</span>
+                    ${flag ? `<div class="flag-badge ${getFlagClass(flag)}" style="display:inline-block;margin:4px 0;"><i class="fas fa-flag"></i> ${escapeHtml(getFlagLabel(flag))}</div>` : ''}
+                    ${note ? `<div style="font-size:0.8rem;color:var(--text-muted);background:var(--surface-color);padding:4px 8px;border-radius:8px;margin:4px 0;border:1px dashed var(--border-color);"><i class="fas fa-pen"></i> ${escapeHtml(note)}</div>` : ''}
                 </div>
 
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
                     <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:8px;"><i class="fas fa-info-circle" aria-hidden="true"></i> المعلومات الأساسية</div>
-                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">النوع</span><span style="font-weight:600;">${typeLabel}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">النوع</span><span style="font-weight:600;">${escapeHtml(typeLabel)}</span></div>
                     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">الإجراء</span><span style="font-weight:600;">${escapeHtml(item.action || item.action_type || item.log_type || item.message_type || '---')}</span></div>
                     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">الجدول المصدر</span><span style="font-weight:600;">${escapeHtml(item.table_name || item.source || getLogSource(item) || '---')}</span></div>
-                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">التاريخ</span><span style="font-weight:600;">${item.created_at || item.sent_at || item.started_at || '---'}</span></div>
+                    <div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">التاريخ</span><span style="font-weight:600;">${escapeHtml(getLogDateValue(item) || '---')}</span></div>
+                    ${item.session_id ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">معرف الجلسة</span><span style="font-weight:600;font-size:0.7rem;">${escapeHtml(item.session_id)}</span></div>` : ''}
                 </div>
 
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
                     <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-align-left" aria-hidden="true"></i> الوصف</div>
                     <p style="font-size:0.8rem;color:var(--data-text-muted);white-space:pre-wrap;">${escapeHtml(item.description || item.message || item.error_message || 'لا يوجد وصف')}</p>
                 </div>
+
+                ${diffHTML}
 
                 ${item.ip_address || item.device_id ? `
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
@@ -2853,15 +3577,6 @@ function apiCall(action, params) {
                 </div>
                 ` : ''}
 
-                ${item.old_values || item.new_values || item.changed_columns ? `
-                <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
-                    <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-code-branch" aria-hidden="true"></i> التغييرات</div>
-                    ${item.changed_columns ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">الأعمدة المتغيرة</span><span style="font-weight:600;">${escapeHtml(item.changed_columns)}</span></div>` : ''}
-                    ${item.old_values ? `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);"><span style="color:var(--text-muted);font-size:0.75rem;">القيم القديمة</span><span style="font-weight:600;font-size:0.7rem;word-break:break-all;">${escapeHtml(item.old_values)}</span></div>` : ''}
-                    ${item.new_values ? `<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--text-muted);font-size:0.75rem;">القيم الجديدة</span><span style="font-weight:600;font-size:0.7rem;word-break:break-all;">${escapeHtml(item.new_values)}</span></div>` : ''}
-                </div>
-                ` : ''}
-
                 ${item.stack_trace ? `
                 <div style="background:var(--surface-color);border-radius:14px;padding:14px;margin-bottom:12px;border:var(--border-width) var(--border-style) var(--border-color);text-align:center;">
                     <div style="font-weight:700;font-size:0.85rem;color:var(--ruby);margin-bottom:6px;"><i class="fas fa-bug" aria-hidden="true"></i> تتبع الخطأ</div>
@@ -2869,7 +3584,13 @@ function apiCall(action, params) {
                 </div>
                 ` : ''}
 
-                <div style="height:40px;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                    <button class="card-btn note-btn" onclick="addNote(${id}); closeDetails();" style="flex:1;"><i class="fas fa-pen"></i> ملاحظة</button>
+                    <button class="card-btn flag-btn" onclick="toggleFlag(${id}); closeDetails();" style="flex:1;"><i class="fas fa-flag"></i> تعليم</button>
+                    <button class="card-btn trace-btn" onclick="traceUser(${id}); closeDetails();" style="flex:1;"><i class="fas fa-user-clock"></i> تتبع</button>
+                    ${hasPermission('delete') ? `<button class="card-btn danger" onclick="deleteLog(${id}, ''); closeDetails();" style="flex:1;"><i class="fas fa-trash"></i> حذف</button>` : ''}
+                </div>
+                <div style="height:20px;"></div>
             `;
 
             document.getElementById('detailsOverlay').classList.add('show');
@@ -2882,7 +3603,101 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           حذف سجل حقيقي من قاعدة البيانات
+           Note & Flag
+           ============================================================ */
+        function addNote(id) {
+            const item = allLogs.find(l => l.id == id);
+            if (!item) { showToast('❌ السجل غير موجود', 'error'); return; }
+
+            Swal.fire({
+                title: '📝 إضافة ملاحظة',
+                input: 'text',
+                inputLabel: 'ملاحظة',
+                inputValue: item._note || '',
+                showCancelButton: true,
+                confirmButtonText: 'حفظ',
+                cancelButtonText: 'إلغاء',
+                background: 'var(--surface-elevated)',
+                color: 'var(--text-color)'
+            }).then(result => {
+                if (result.isConfirmed && result.value !== undefined) {
+                    const note = result.value.trim();
+                    // تخزين الملاحظة محلياً (لعدم وجود حقل في DB حالياً)
+                    const flagged = LocalDB.get('flagged_logs', {});
+                    flagged[id] = { ...getSavedFlagData(id), note };
+                    LocalDB.set('flagged_logs', flagged);
+                    // تحديث البيانات المحلية
+                    const log = allLogs.find(l => l.id == id);
+                    if (log) log._note = note;
+                    showToast('✅ تم حفظ الملاحظة', 'success');
+                    renderCards();
+                }
+            });
+        }
+
+        function toggleFlag(id) {
+            const flagged = LocalDB.get('flagged_logs', {});
+            flagged[id] = getSavedFlagData(id);
+            const current = flagged[id].flag || null;
+            const options = ['important', 'review', 'resolved'];
+            let next = 'important';
+            if (current === 'important') next = 'review';
+            else if (current === 'review') next = 'resolved';
+            else if (current === 'resolved') next = null;
+
+            if (next) {
+                flagged[id].flag = next;
+                showToast('🚩 تم تعليم السجل بـ ' + getFlagLabel(next), 'success');
+            } else {
+                delete flagged[id].flag;
+                showToast('🚩 تم إزالة العلم', 'info');
+            }
+            LocalDB.set('flagged_logs', flagged);
+            // تحديث البيانات المحلية
+            const log = allLogs.find(l => l.id == id);
+            if (log) log._flag = next;
+            renderCards();
+        }
+
+        /* ============================================================
+           Trace User – عرض كل نشاطات نفس المستخدم
+           ============================================================ */
+        function traceUser(id) {
+            const item = allLogs.find(l => l.id == id);
+            if (!item) { showToast('❌ السجل غير موجود', 'error'); return; }
+            const username = item.username || item.user_id;
+            if (!username) { showToast('❌ لا يوجد مستخدم مرتبط', 'error'); return; }
+
+            const userLogs = allLogs.filter(l => (l.username || l.user_id) == username);
+            if (userLogs.length === 0) { showToast('⚠️ لا توجد نشاطات أخرى لهذا المستخدم', 'warning'); return; }
+
+            let html =
+                `<div style="text-align:center;font-weight:700;margin-bottom:8px;">👤 نشاطات المستخدم: ${escapeHtml(username)} (${userLogs.length})</div>`;
+            html +=
+                `<div style="max-height:300px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;">`;
+            userLogs.slice(0, 20).forEach(l => {
+                html +=
+                    `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;">
+                        <span>${escapeHtml(l.action || l.action_type || '---')}</span>
+                        <span style="color:var(--text-muted);">${escapeHtml(getLogDateValue(l) || '---')}</span>
+                    </div>`;
+            });
+            if (userLogs.length > 20) html +=
+                `<div style="text-align:center;padding:6px;color:var(--text-muted);">+ ${userLogs.length - 20} أخرى</div>`;
+            html += `</div>`;
+
+            Swal.fire({
+                title: '👣 تتبع المستخدم',
+                html: html,
+                icon: 'info',
+                confirmButtonText: 'حسناً',
+                background: 'var(--surface-elevated)',
+                color: 'var(--text-color)'
+            });
+        }
+
+        /* ============================================================
+           Delete Log
            ============================================================ */
         async function deleteLog(id, tableName) {
             if (!requirePermission('delete')) return;
@@ -2914,20 +3729,22 @@ function apiCall(action, params) {
                 showToast('✅ تم الحذف فعلياً من قاعدة البيانات', 'success');
                 await loadData();
             } catch (e) {
-                showToast('❌ ' + (e.message || 'فشل الحذف'), 'error');
+                showToast('❌ ' + getErrorMessage(e, 'فشل الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
         }
 
         /* ============================================================
-           17. Cleanup Old Logs – استدعاء cleanupOldData من DatabaseHelper
+           22. Cleanup Old Logs
            ============================================================ */
         async function cleanupOldLogs() {
             if (!requirePermission('delete')) return;
+            const retentionInput = Number(document.getElementById('settingsRetention').value || 90);
+            const retentionDays = Number.isFinite(retentionInput) ? Math.min(365, Math.max(7, Math.floor(retentionInput))) : 90;
             const confirmed = await Swal.fire({
                 title: '🧹 تنظيف السجلات القديمة',
-                text: 'سيتم حذف السجلات التشغيلية الأقدم من 90 يوماً فعلياً. سجلات التدقيق محمية. هل أنت متأكد؟',
+                text: `سيتم حذف السجلات التشغيلية الأقدم من ${retentionDays} يوماً فعلياً. سجلات التدقيق محمية. هل أنت متأكد؟`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#b31b3a',
@@ -2939,19 +3756,19 @@ function apiCall(action, params) {
 
             showLoading(true);
             try {
-                const result = await apiCall('cleanupActivityLogs', { retentionDays: 90 });
+                const result = await apiCall('cleanupActivityLogs', { retentionDays });
                 if (!result.success) throw new Error(result.error || result.message || 'فشل التنظيف');
                 showToast('✅ تم تنظيف ' + Number(result.deleted || 0) + ' سجل فعلياً', 'success');
                 await loadData();
             } catch (e) {
-                showToast('❌ ' + (e.message || 'فشل التنظيف'), 'error');
+                showToast('❌ ' + getErrorMessage(e, 'فشل التنظيف'), 'error');
             } finally {
                 showLoading(false);
             }
         }
 
         /* ============================================================
-           18. Reports – استعلامات حقيقية
+           23. Reports
            ============================================================ */
         let currentReportType = 'all';
         let reportData = [];
@@ -2970,17 +3787,13 @@ function apiCall(action, params) {
             const today = new Date();
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
-            document.getElementById('reportFrom').value = weekAgo.toISOString().split('T')[0];
-            document.getElementById('reportTo').value = today.toISOString().split('T')[0];
+            document.getElementById('reportFrom').value = formatDateKey(weekAgo);
+            document.getElementById('reportTo').value = formatDateKey(today);
 
             document.getElementById('reportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            document.getElementById('reportResults').innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i>
-                    <p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p>
-                </div>
-            `;
+            document.getElementById('reportResults').innerHTML =
+                `<div class="empty-state"><i class="fas fa-file-alt" style="font-size:2rem;display:block;margin-bottom:6px;" aria-hidden="true"></i><p>اختر الفترة ونوع التقرير ثم اضغط "توليد التقرير"</p></div>`;
         }
 
         function closeReportModal(e) {
@@ -2996,21 +3809,21 @@ function apiCall(action, params) {
             const status = document.getElementById('reportStatus').value;
 
             if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
+            const start = new Date(from + 'T00:00:00').getTime();
+            const end = new Date(to + 'T23:59:59.999').getTime();
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
+                return;
+            }
 
             showLoading(true);
             try {
-                const start = new Date(from + 'T00:00:00').getTime();
-                const end = new Date(to + 'T23:59:59.999').getTime();
-                const normalizedStatus = value => {
-                    const v = String(value || '').toLowerCase();
-                    return v === 'failed' || v === 'error' ? 'fail' : v;
-                };
                 const filtered = allLogs.filter(item => {
-                    const rawDate = item.created_at || item.sent_at || item.started_at || '';
-                    const time = Date.parse(rawDate);
+                    const time = getLogTimestamp(item);
                     const dateMatch = !Number.isNaN(time) && time >= start && time <= end;
                     const typeMatch = !type || item._type === type;
-                    const statusMatch = !status || normalizedStatus(item.status || (item.is_success === false ? 'fail' : item.is_success === true ? 'success' : '')) === status;
+                    const s = getStatusValue(item);
+                    const statusMatch = !status || s === status;
                     return dateMatch && typeMatch && statusMatch;
                 });
                 reportData = filtered;
@@ -3038,13 +3851,11 @@ function apiCall(action, params) {
                 case 'summary':
                     headers = ['#', 'المستخدم', 'النوع', 'الإجراء', 'الحالة', 'التاريخ'];
                     rows = data.map((item, idx) => [idx + 1, item.username || 'نظام', getLogTypeLabel(item._type), item
-                        .action || item.action_type || '---', getStatusLabel(item.status || (item.is_success !==
-                            undefined ? (item.is_success ? 'success' : 'fail') : 'info')), item.created_at || item
-                        .sent_at || item.started_at || '---'
+                        .action || item.action_type || '---', getStatusLabel(getStatusValue(item)), getLogDateValue(item) || '---'
                     ]);
                     break;
                 case 'users':
-                    const userMap = {};
+                    const userMap = Object.create(null);
                     data.forEach(item => {
                         const u = item.username || 'نظام';
                         if (!userMap[u]) userMap[u] = { count: 0, actions: [] };
@@ -3058,18 +3869,16 @@ function apiCall(action, params) {
                 case 'errors':
                     headers = ['#', 'المستخدم', 'الإجراء', 'الوصف', 'التاريخ'];
                     rows = data.filter(l => {
-                        const s = (l.status || (l.is_success !== undefined ? (l.is_success ? 'success' :
-                        'fail') : ''));
+                        const s = getStatusValue(l);
                         return s === 'fail' || s === 'error' || s === 'failed';
                     }).map((item, idx) => [idx + 1, item.username || 'نظام', item.action || item.action_type || '---',
-                        item.description || item.message || item.error_message || '', item.created_at || item
-                        .sent_at || item.started_at || '---'
+                        item.description || item.message || item.error_message || '', getLogDateValue(item) || '---'
                     ]);
                     break;
                 case 'timeline':
                     const days = {};
                     data.forEach(item => {
-                        const d = (item.created_at || '').split('T')[0];
+                        const d = getLogDateKey(item);
                         if (d) days[d] = (days[d] || 0) + 1;
                     });
                     headers = ['#', 'التاريخ', 'عدد النشاطات'];
@@ -3081,26 +3890,95 @@ function apiCall(action, params) {
                     headers = ['#', 'المستخدم', 'النوع', 'الإجراء', 'الوصف', 'التاريخ'];
                     rows = data.map((item, idx) => [idx + 1, item.username || 'نظام', getLogTypeLabel(item._type), item
                         .action || item.action_type || '---', (item.description || item.message || '').substring(0,
-                            50), item.created_at || item.sent_at || item.started_at || '---'
+                            50), getLogDateValue(item) || '---'
                     ]);
             }
 
             let html =
-                `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;"><thead><tr>${headers.map(h => `<th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);text-align:center;font-weight:700;color:var(--data-text-color);">${h}</th>`).join('')}</tr></thead><tbody>`;
+                `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;"><thead><tr>${headers.map(h => `<th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);text-align:center;font-weight:700;color:var(--data-text-color);">${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>`;
             rows.forEach(row => {
-                html += `<tr>${row.map(cell => `<td style="padding:4px 10px;border-bottom:1px dashed var(--border-color);text-align:center;color:var(--data-text-color);">${cell}</td>`).join('')}</tr>`;
+                html += `<tr>${row.map(cell => `<td style="padding:4px 10px;border-bottom:1px dashed var(--border-color);text-align:center;color:var(--data-text-color);">${escapeHtml(cell)}</td>`).join('')}</tr>`;
             });
             html += `</tbody></table>`;
             container.innerHTML = html;
         }
 
+        /* ============================================================
+           Compliance Report
+           ============================================================ */
+        async function generateComplianceReport() {
+            const from = document.getElementById('reportFrom').value;
+            const to = document.getElementById('reportTo').value;
+            if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
+            const start = new Date(from + 'T00:00:00').getTime();
+            const end = new Date(to + 'T23:59:59.999').getTime();
+            if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+                showToast('❌ يجب أن يكون تاريخ البداية قبل تاريخ النهاية', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const filtered = allLogs.filter(item => {
+                    const time = getLogTimestamp(item);
+                    return !Number.isNaN(time) && time >= start && time <= end;
+                });
+
+                reportData = filtered;
+                const total = filtered.length;
+                const errors = filtered.filter(l => {
+                    const s = getStatusValue(l);
+                    return s === 'fail' || s === 'error' || s === 'failed';
+                }).length;
+                const users = new Set(filtered.map(l => l.username || l.user_id).filter(Boolean)).size;
+                const audit = filtered.filter(l => l._type === 'audit').length;
+
+                let html = `
+                    <div style="text-align:center;font-weight:700;margin-bottom:8px;">📋 تقرير الامتثال</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+                        <thead><tr><th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);">المقياس</th><th style="padding:6px 10px;border-bottom:2px dashed var(--border-color);">القيمة</th></tr></thead>
+                        <tbody>
+                            <tr><td>الفترة</td><td>${escapeHtml(from)} إلى ${escapeHtml(to)}</td></tr>
+                            <tr><td>إجمالي النشاطات</td><td>${total}</td></tr>
+                            <tr><td>الأخطاء</td><td style="color:${errors > 0 ? 'var(--error)' : 'var(--success)'};">${errors}</td></tr>
+                            <tr><td>مستخدمين نشطين</td><td>${users}</td></tr>
+                            <tr><td>سجلات التدقيق</td><td>${audit}</td></tr>
+                            <tr><td>المسؤول</td><td>${escapeHtml(allUsers.length > 0 ? allUsers[0].username || 'admin' : 'غير معروف')}</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top:8px;font-size:0.7rem;color:var(--text-muted);text-align:center;">تم التوليد تلقائياً – تاريخ: ${new Date().toLocaleString('ar')}</div>
+                `;
+
+                document.getElementById('reportResults').innerHTML = html;
+                showToast('✅ تم توليد تقرير الامتثال', 'success');
+            } catch (e) {
+                showToast('❌ فشل توليد التقرير', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function mapLogsForExport(logs) {
+            return logs.map(l => ({
+                'المستخدم': l.username || 'نظام',
+                'النوع': getLogTypeLabel(l._type),
+                'الإجراء': l.action || l.action_type || l.log_type || '',
+                'الوصف': l.description || l.message || '',
+                'الجدول': l.table_name || l.source || '',
+                'الحالة': getStatusLabel(getStatusValue(l)),
+                'التاريخ': getLogDateValue(l),
+                'IP': l.ip_address || '',
+                'الجهاز': l.device_id || ''
+            }));
+        }
+
         function exportReport() {
             if (!reportData || reportData.length === 0) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
-            exportData('xlsx');
+            exportDataAs('xlsx', mapLogsForExport(reportData), 'تقرير_النشاطات');
         }
 
         /* ============================================================
-           19. Export – تصدير البيانات الحقيقية
+           24. Export
            ============================================================ */
         function openExportModal() {
             if (!requirePermission('export')) return;
@@ -3114,36 +3992,39 @@ function apiCall(action, params) {
             document.body.style.overflow = '';
         }
 
+        function exportCurrentResults() {
+            const filtered = getFilteredData();
+            if (filtered.length === 0) { showToast('⚠️ لا توجد نتائج للتصدير', 'warning'); return; }
+            exportDataAs('xlsx', mapLogsForExport(filtered), 'نتائج_البحث');
+        }
+
         function exportData(format) {
-            if (!requirePermission('export')) return;
-            const data = allLogs.map(l => ({
-                'المستخدم': l.username || 'نظام',
-                'النوع': getLogTypeLabel(l._type),
-                'الإجراء': l.action || l.action_type || l.log_type || '',
-                'الوصف': l.description || l.message || '',
-                'الجدول': l.table_name || l.source || '',
-                'الحالة': getStatusLabel(l.status || (l.is_success !== undefined ? (l.is_success ? 'success' :
-                    'fail') : 'info')),
-                'التاريخ': l.created_at || l.sent_at || l.started_at || '',
-                'IP': l.ip_address || '',
-                'الجهاز': l.device_id || ''
-            }));
-
+            const data = mapLogsForExport(allLogs);
             if (data.length === 0) { showToast('⚠️ لا توجد بيانات للتصدير', 'warning'); return; }
+            exportDataAs(format, data, 'سجل_النشاطات');
+        }
 
+        function exportDataAs(format, data, baseName) {
             try {
+                if (!Array.isArray(data) || data.length === 0) {
+                    showToast('⚠️ لا توجد بيانات للتصدير', 'warning');
+                    return;
+                }
+                const safeCell = value => value === null || value === undefined ? '' : String(value);
                 if (format === 'xlsx') {
                     if (typeof XLSX === 'undefined') { showToast('❌ مكتبة Excel غير متوفرة', 'error'); return; }
                     const ws = XLSX.utils.json_to_sheet(data);
                     const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, 'سجل النشاطات');
-                    XLSX.writeFile(wb, 'سجل_النشاطات_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                    XLSX.utils.book_append_sheet(wb, ws, 'النشاطات');
+                    XLSX.writeFile(wb, baseName + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
                     showToast('✅ تم تصدير Excel بنجاح', 'success');
                 } else if (format === 'pdf') {
                     if (typeof window.jspdf === 'undefined') { showToast('❌ مكتبة PDF غير متوفرة', 'error'); return; }
                     const { jsPDF } = window.jspdf;
                     const doc = new jsPDF('l', 'mm', 'a4');
-                    doc.setFont('Cairo');
+                    const availableFonts = typeof doc.getFontList === 'function' ? doc.getFontList() : {};
+                    const hasCairo = Object.keys(availableFonts).some(font => font.toLowerCase() === 'cairo');
+                    doc.setFont(hasCairo ? 'Cairo' : 'helvetica');
                     doc.setFontSize(14);
                     doc.text('تقرير سجل النشاطات', 20, 20);
                     doc.setFontSize(8);
@@ -3156,33 +4037,32 @@ function apiCall(action, params) {
                         if (y > 270) { doc.addPage();
                             y = 20; }
                         headers.forEach((h, i) => {
-                            doc.text(String(row[h] || ''), 20 + i * colWidth, y);
+                            doc.text(safeCell(row[h]).substring(0, 32), 20 + i * colWidth, y);
                         });
                         y += 6;
                     });
-                    doc.save('سجل_النشاطات_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                    doc.save(baseName + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
                     showToast('✅ تم تصدير PDF بنجاح', 'success');
                 } else if (format === 'json') {
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'سجل_النشاطات_' + new Date().toISOString().slice(0, 10) + '.json';
+                    a.download = baseName + '_' + new Date().toISOString().slice(0, 10) + '.json';
                     a.click();
                     URL.revokeObjectURL(url);
                     showToast('✅ تم تصدير JSON بنجاح', 'success');
                 } else if (format === 'csv') {
                     const headers = Object.keys(data[0]);
-                    let csv = headers.join(',') + '\n';
+                    let csv = headers.map(safeCell).join(',') + '\n';
                     data.forEach(row => {
-                        csv += headers.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(',') +
-                        '\n';
+                        csv += headers.map(h => '"' + safeCell(row[h]).replace(/"/g, '""') + '"').join(',') + '\n';
                     });
                     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'سجل_النشاطات_' + new Date().toISOString().slice(0, 10) + '.csv';
+                    a.download = baseName + '_' + new Date().toISOString().slice(0, 10) + '.csv';
                     a.click();
                     URL.revokeObjectURL(url);
                     showToast('✅ تم تصدير CSV بنجاح', 'success');
@@ -3194,7 +4074,7 @@ function apiCall(action, params) {
         }
 
         /* ============================================================
-           20. Filter
+           25. Filter
            ============================================================ */
         function setFilter(filter, btn) {
             currentFilter = filter;
@@ -3206,10 +4086,13 @@ function apiCall(action, params) {
                 btn.setAttribute('aria-selected', 'true'); }
             currentPage = 1;
             renderCards();
+            updateStats();
+            updateCharts();
+            updateAlerts();
         }
 
         /* ============================================================
-           21. Pull-to-Refresh
+           26. Pull-to-Refresh
            ============================================================ */
         let pullStartY = 0,
             pullOffset = 0,
@@ -3241,7 +4124,7 @@ function apiCall(action, params) {
         }, { passive: true });
 
         /* ============================================================
-           22. Init
+           27. Init
            ============================================================ */
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedTheme();
@@ -3259,6 +4142,12 @@ function apiCall(action, params) {
                     closeAIModal(); });
             document.getElementById('exportModal').addEventListener('click', function(e) { if (e.target === this)
                     closeExportModal(); });
+            document.getElementById('advancedSearchModal').addEventListener('click', function(e) { if (e.target ===
+                    this) closeAdvancedSearch(); });
+            document.getElementById('compareModal').addEventListener('click', function(e) { if (e.target === this)
+                    closeCompareModal(); });
+            document.getElementById('settingsModal').addEventListener('click', function(e) { if (e.target === this)
+                    closeSettings(); });
 
             loadData();
 
@@ -3266,14 +4155,13 @@ function apiCall(action, params) {
                 if (isOnline) loadData();
             }, 60000);
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').catch(() => {});
-            }
+            // لا يتم تسجيل service worker من هذه الشاشة؛ المسار الفعلي في assets-local
+            // يحتاج إلى نطاق/تهيئة Native موثقة، وتسجيل مسار غير موجود يسبب أخطاء صامتة.
 
             showToast('📋 مرحباً بك في سجل النشاطات', 'info');
         });
 
-        // تصدير الدوال إلى النطاق العام
+        // تصدير الدوال
         window.loadData = loadData;
         window.renderCards = renderCards;
         window.updateStats = updateStats;
@@ -3288,8 +4176,10 @@ function apiCall(action, params) {
         window.openReport = openReport;
         window.closeReportModal = closeReportModal;
         window.generateReport = generateReport;
+        window.generateComplianceReport = generateComplianceReport;
         window.exportReport = exportReport;
         window.exportData = exportData;
+        window.exportCurrentResults = exportCurrentResults;
         window.openExportModal = openExportModal;
         window.closeExportModal = closeExportModal;
         window.setFilter = setFilter;
@@ -3307,10 +4197,26 @@ function apiCall(action, params) {
         window.showLoading = showLoading;
         window.formatNumber = formatNumber;
         window.escapeHtml = escapeHtml;
+        window.getLogDateValue = getLogDateValue;
+        window.getStatusValue = getStatusValue;
         window.hasPermission = hasPermission;
         window.requirePermission = requirePermission;
+        window.setTimeFilter = setTimeFilter;
+        window.openAdvancedSearch = openAdvancedSearch;
+        window.closeAdvancedSearch = closeAdvancedSearch;
+        window.applyAdvancedSearch = applyAdvancedSearch;
+        window.resetAdvancedSearch = resetAdvancedSearch;
+        window.openCompareModal = openCompareModal;
+        window.closeCompareModal = closeCompareModal;
+        window.runComparison = runComparison;
+        window.openSettings = openSettings;
+        window.closeSettings = closeSettings;
+        window.saveSettings = saveSettings;
+        window.addNote = addNote;
+        window.toggleFlag = toggleFlag;
+        window.traceUser = traceUser;
         window.ROLES = ROLES;
         window.currentUserRole = currentUserRole;
-  </script>
- </body>
+    </script>
+</body>
 </html>
