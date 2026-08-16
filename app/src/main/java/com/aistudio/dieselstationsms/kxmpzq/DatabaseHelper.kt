@@ -11543,7 +11543,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         WHERE $finalWhere
                         GROUP BY p.id
                         ORDER BY p.commercial_name
-                        """.trimIndent(), args.toTypedArray())
+                        """.trimIndent(), args.toTypedArray()
                     ).use { cursorToJsonArray(it) }
                 }
             }
