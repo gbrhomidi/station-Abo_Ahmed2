@@ -4362,6 +4362,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun updatePartyCreditLimit(jsonData: String): String {
+            val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الحد الائتماني غير صالحة") }
+            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية تعديل الحد الائتماني")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val id = payload.optLong("id", 0L)
+                val creditLimit = payload.optDouble("credit_limit", Double.NaN)
+                val reason = payload.optString("reason", "تعديل من تقرير العملاء").trim()
+                if (id <= 0L || !creditLimit.isFinite() || creditLimit < 0.0) return errorResponse("بيانات الحد الائتماني غير صالحة")
+                val rows = db.updatePartyCreditLimit(id, creditLimit, reason, activity.currentUserId)
+                successResponse(rows > 0, if (rows > 0) "تم تعديل الحد الائتماني وتسجيل العملية" else "لم يتم العثور على العميل")
+            } catch (e: Exception) {
+                DebugLogger.logException("PartyCreditLimit", e)
+                errorResponse(e.message)
+            }
+        }
+        @JavascriptInterface
         fun generateCRMReport(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير CRM")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")

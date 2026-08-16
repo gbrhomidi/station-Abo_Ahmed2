@@ -1181,7 +1181,7 @@
   <div class="offline-banner" id="offlineBanner">
    <i class="fas fa-wifi-slash">
    </i>
-   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+   لا يوجد اتصال بقاعدة بيانات التطبيق؛ لا يمكن تحميل التقرير حالياً
   </div>
   <!-- Loading -->
   <div class="loading-indicator" id="loadingIndicator">
@@ -1255,9 +1255,6 @@
       <option value="5">
        مقاول
       </option>
-      <option value="6">
-       مورد
-      </option>
      </select>
     </div>
     <div class="filter-group">
@@ -1282,19 +1279,24 @@
      </select>
     </div>
     <div class="filter-group">
-     <i class="fas fa-flag">
-     </i>
+     <i class="fas fa-flag"></i>
      <select id="filterStatus">
-      <option value="">
-       الكل
-      </option>
-      <option value="active">
-       نشط
-      </option>
-      <option value="inactive">
-       غير نشط
-      </option>
+      <option value="">الكل</option>
+      <option value="active">نشط</option>
+      <option value="inactive">غير نشط</option>
      </select>
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-search"></i>
+     <input id="filterSearch" type="search" placeholder="بحث بالاسم أو الكود أو الهاتف" aria-label="بحث العملاء">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-arrow-down-1-9"></i>
+     <input id="filterDebtMin" type="number" min="0" step="0.01" placeholder="أدنى دين" aria-label="أدنى دين">
+    </div>
+    <div class="filter-group">
+     <i class="fas fa-arrow-up-1-9"></i>
+     <input id="filterDebtMax" type="number" min="0" step="0.01" placeholder="أقصى دين" aria-label="أقصى دين">
     </div>
     <div class="filter-actions">
      <button class="btn-filter primary" onclick="generateReport()">
@@ -1424,10 +1426,10 @@
      <span class="chart-title">
       <i class="fas fa-chart-line">
       </i>
-      رحلة الديون
+      نشاط العملاء
      </span>
      <span class="chart-badge">
-      آخر 30 يوم
+      آخر 30 يوم فعلي
      </span>
     </div>
     <div class="chart-container">
@@ -1436,6 +1438,20 @@
     </div>
    </div>
   </div>
+  <!-- ===================================================================
+    تقرير أعمار الديون
+    =================================================================== -->
+  <section class="table-section" id="agingSection" aria-label="تقرير أعمار الديون">
+   <div class="table-wrapper">
+    <div class="details-section-title" style="padding:16px 20px 0;"><i class="fas fa-hourglass-half"></i> توزيع الديون حسب العمر</div>
+    <div class="table-scroll">
+     <table class="data-table" id="agingTable">
+      <thead><tr><th>الفئة</th><th>عدد السجلات</th><th>المتبقي</th><th>النسبة من الديون</th></tr></thead>
+      <tbody id="agingTableBody"><tr><td colspan="4"><div class="empty-state">سيظهر التقرير بعد توليد البيانات</div></td></tr></tbody>
+     </table>
+    </div>
+   </div>
+  </section>
   <!-- ===================================================================
     جدول العملاء
     =================================================================== -->
@@ -1470,6 +1486,18 @@
          إجمالي الديون
         </th>
         <th>
+         إجمالي المبيعات
+        </th>
+        <th>
+         عدد الفواتير
+        </th>
+        <th>
+         متوسط الفاتورة
+        </th>
+        <th>
+         آخر عملية شراء
+        </th>
+        <th>
          نقاط الولاء
         </th>
         <th>
@@ -1485,7 +1513,7 @@
       </thead>
       <tbody id="customerTableBody">
        <tr>
-        <td colspan="12">
+        <td colspan="16">
          <div class="empty-state">
           <i class="fas fa-users">
           </i>
@@ -1559,6 +1587,13 @@
      </i>
      <span>
       PDF
+     </span>
+    </button>
+    <button class="sidebar-btn" onclick="handleAction('json')">
+     <i class="fas fa-file-code">
+     </i>
+     <span>
+      JSON
      </span>
     </button>
     <button class="sidebar-btn" onclick="handleAction('print')">
@@ -1678,40 +1713,71 @@
    // ===================================================================
         // 1. apiCall الموحدة
         // ===================================================================
-        function apiCall(action, params) {
+        function invokeExistingBridgeAction(action, params = {}) {
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('AndroidInterface غير متاح');
+            const p = params || {};
+            switch (action) {
+                case 'generateCRMReport':
+                    return bridge.generateCRMReport(JSON.stringify({
+                        report_type: String(p.report_type || 'customers'),
+                        start_date: p.start_date || '',
+                        end_date: p.end_date || '',
+                        party_type: Number(p.party_type || 0),
+                        status: p.status === '' || p.status === null || p.status === undefined ? null : Number(p.status)
+                    }));
+                case 'getPartyTypes':
+                    return bridge.getPartyTypes();
+                case 'getCustomerDebts':
+                    return bridge.getCustomerDebts(p.start_date || null, p.end_date || null);
+                case 'getPartyCrmBundle':
+                    return bridge.getPartyCrmBundle(Number(p.id || p.party_id || 0));
+                case 'updatePartyCreditLimit':
+                    return bridge.updatePartyCreditLimit(JSON.stringify(p));
+                default:
+                    throw new Error(`Bridge action غير مدعوم: ${action}`);
+            }
+        }
+
+        function normalizeBridgeResult(result) {
+            if (typeof result === 'string') {
+                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
+            }
+            if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) return result;
+            if (Array.isArray(result)) return { success: true, data: result };
+            if (result && typeof result === 'object') return { success: true, data: result };
+            return { success: true, data: result };
+        }
+
+        function apiCall(action, params = {}) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                if (!window.AndroidInterface) {
+                    reject({ success: false, error: 'AndroidInterface غير متاح؛ شغّل الشاشة داخل التطبيق' });
+                    return;
+                }
+                try {
+                    resolve(normalizeBridgeResult(invokeExistingBridgeAction(action, params)));
+                } catch (e) {
+                    reject({ success: false, error: e.message || 'فشل الاتصال بالجسر' });
                 }
             });
         }
 
         // ===================================================================
-        // 2. LocalDB
+        // 2. حالة تشغيلية مؤقتة داخل الذاكرة فقط.
+        // مصدر البيانات التجاري الوحيد هو SQLite عبر Typed Bridge.
         // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getCustomers: function() { return this.get('customer_report_data', []); },
-            setCustomers: function(data) { this.set('customer_report_data', data); },
-            getAIInsights: function() { return this.get('customer_ai_insights', []); },
-            setAIInsights: function(data) { this.set('customer_ai_insights', data); }
+        const runtimeState = {
+            rawCustomers: [],
+            visibleCustomers: [],
+            alerts: [],
+            aiInsights: [],
+            sortKey: null,
+            sortDirection: 'asc',
+            agingRows: [],
+            rawAgingDebts: [],
+            salesAvailable: false,
+            lastLoadedAt: null
         };
 
         // ===================================================================
@@ -1796,49 +1862,182 @@
         // 5. توليد التقرير
         // ===================================================================
         let customersData = [];
-        let typeChart = null,
-            debtChart = null;
+        let typeChart = null;
+        let debtChart = null;
+
+        function finiteNumber(value, fallback = 0) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
+        }
+
+        function normalizeCustomerRow(item) {
+            const row = item && typeof item === 'object' ? item : {};
+            const totalSales = finiteNumber(row.total_sales);
+            const invoiceCount = finiteNumber(row.invoice_count);
+            const risk = String(row.risk_level || '').toLowerCase() || 'low';
+            return {
+                ...row,
+                id: finiteNumber(row.id || row.party_id),
+                party_code: row.party_code || '',
+                commercial_name: row.commercial_name || row.commercial_name_ar || '---',
+                phone: row.phone || '---',
+                type_name: row.type_name_ar || row.type_name || '---',
+                credit_limit: finiteNumber(row.credit_limit),
+                current_balance: finiteNumber(row.current_balance),
+                total_due: finiteNumber(row.total_due),
+                overdue_amount: finiteNumber(row.overdue_amount),
+                loyalty_points: finiteNumber(row.loyalty_points),
+                loyalty_tier: row.loyalty_tier || 'برونز',
+                risk_level: risk,
+                is_active: finiteNumber(row.is_active, 1),
+                status: finiteNumber(row.is_active, 1) === 1 ? 'active' : 'inactive',
+                total_sales: totalSales,
+                invoice_count: invoiceCount,
+                average_invoice: invoiceCount > 0 ? totalSales / invoiceCount : 0,
+                total_payments: finiteNumber(row.total_payments),
+                outstanding_amount: finiteNumber(row.outstanding_amount, row.total_due),
+                last_activity: row.last_activity || ''
+            };
+        }
+
+        function filterCustomers(data) {
+            const type = document.getElementById('filterType').value;
+            const risk = document.getElementById('filterRisk').value;
+            const status = document.getElementById('filterStatus').value;
+            const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+            const minDebt = document.getElementById('filterDebtMin').value;
+            const maxDebt = document.getElementById('filterDebtMax').value;
+            const min = minDebt === '' ? null : finiteNumber(minDebt, NaN);
+            const max = maxDebt === '' ? null : finiteNumber(maxDebt, NaN);
+            return data.filter(row => {
+                const searchText = `${row.commercial_name || ''} ${row.commercial_name_ar || ''} ${row.party_code || ''} ${row.phone || ''}`.toLowerCase();
+                const debt = finiteNumber(row.total_due);
+                return (!type || String(row.party_type_id) === String(type)) &&
+                    (!risk || row.risk_level === risk) && (!status || row.status === status) &&
+                    (!search || searchText.includes(search)) &&
+                    (min === null || (Number.isFinite(min) && debt >= min)) &&
+                    (max === null || (Number.isFinite(max) && debt <= max));
+            });
+        }
+
+        function sortCustomers(data) {
+            const key = runtimeState.sortKey;
+            if (!key) return data;
+            const direction = runtimeState.sortDirection === 'asc' ? 1 : -1;
+            return [...data].sort((a, b) => {
+                const left = a[key] ?? '';
+                const right = b[key] ?? '';
+                if (typeof left === 'number' || typeof right === 'number') return (finiteNumber(left) - finiteNumber(right)) * direction;
+                return String(left).localeCompare(String(right), 'ar') * direction;
+            });
+        }
+
+        function buildAgingRows(rows) {
+            const buckets = [
+                { label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
+                { label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
+                { label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
+                { label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
+                { label: 'تاريخ غير محدد', min: null, max: null, count: 0, amount: 0 }
+            ];
+            const now = Date.now();
+            (Array.isArray(rows) ? rows : []).forEach(row => {
+                const amount = Math.max(0, finiteNumber(row.remaining_amount));
+                if (amount <= 0) return;
+                const due = Date.parse(row.due_date || row.created_at || '');
+                const bucket = Number.isFinite(due) ? buckets.find(item => item.min !== null && Math.max(0, Math.floor((now - due) / 86400000)) >= item.min && Math.max(0, Math.floor((now - due) / 86400000)) <= item.max) : buckets[buckets.length - 1];
+                bucket.count += 1;
+                bucket.amount += amount;
+            });
+            return buckets;
+        }
+
+        function renderAgingTable() {
+            const body = document.getElementById('agingTableBody');
+            if (!body) return;
+            const rows = runtimeState.agingRows || [];
+            const total = rows.reduce((sum, row) => sum + row.amount, 0);
+            if (!rows.length || total <= 0) {
+                body.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="fas fa-hourglass"></i> لا توجد ديون مستحقة في الفترة</div></td></tr>';
+                return;
+            }
+            body.innerHTML = rows.map(row => `
+                <tr><td>${escapeHtml(row.label)}</td><td>${formatNumber(row.count)}</td><td class="amount">${formatCurrency(row.amount)}</td><td>${((row.amount / total) * 100).toFixed(1)}%</td></tr>
+            `).join('');
+        }
+
+        function renderCurrentCustomerView() {
+            const filtered = sortCustomers(filterCustomers(runtimeState.rawCustomers));
+            runtimeState.visibleCustomers = filtered;
+            customersData = filtered;
+            const visibleIds = new Set(filtered.map(row => String(row.id)));
+            runtimeState.agingRows = buildAgingRows((runtimeState.rawAgingDebts || []).filter(row => visibleIds.has(String(row.customer_party_id || row.customer_id))));
+            renderTable(filtered);
+            updateKPIs(filtered);
+            updateCharts(filtered);
+            updateFooter(filtered);
+            renderAgingTable();
+            generateAlerts(filtered);
+            generateAIInsights(filtered);
+        }
 
         async function generateReport() {
             const from = document.getElementById('filterDateFrom').value;
             const to = document.getElementById('filterDateTo').value;
             const type = document.getElementById('filterType').value;
-            const risk = document.getElementById('filterRisk').value;
-            const status = document.getElementById('filterStatus').value;
+            const statusValue = document.getElementById('filterStatus').value;
+            const status = statusValue === '' ? null : (statusValue === 'active' ? 1 : 0);
 
             if (!from || !to) {
                 showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
-                return;
+                return false;
+            }
+            if (from > to) {
+                showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+                return false;
+            }
+            const minDebt = document.getElementById('filterDebtMin').value;
+            const maxDebt = document.getElementById('filterDebtMax').value;
+            if (minDebt !== '' && maxDebt !== '' && finiteNumber(minDebt) > finiteNumber(maxDebt)) {
+                showToast('❌ الحد الأدنى للدين يجب ألا يتجاوز الحد الأقصى', 'error');
+                return false;
             }
 
             showLoading(true);
             try {
-                const params = {
-                    start_date: from,
-                    end_date: to,
-                    party_type_id: type || null,
-                    risk_level: risk || null,
-                    status: status || null
-                };
-                const result = await apiCall('getCustomerReport', params);
-                if (result.success && result.data) {
-                    customersData = result.data;
-                    LocalDB.setCustomers(customersData);
-                    renderTable(customersData);
-                    updateKPIs(customersData);
-                    updateCharts(customersData);
-                    updateFooter(customersData);
-                    generateAlerts(customersData);
-                    generateAIInsights(customersData);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                } else {
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                    document.getElementById('customerTableBody').innerHTML =
-                        '<tr><td colspan="12"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات مطابقة</div></td></tr>';
-                    resetKPIs();
-                }
+                const common = { start_date: from, end_date: to, party_type: type ? Number(type) : 0, status };
+                const [balanceResult, salesResult, debtsResult] = await Promise.all([
+                    apiCall('generateCRMReport', { ...common, report_type: 'customers' }),
+                    apiCall('generateCRMReport', { ...common, report_type: 'profitability' }),
+                    apiCall('getCustomerDebts', { start_date: from, end_date: to })
+                ]);
+                if (!balanceResult.success) throw new Error(balanceResult.error || balanceResult.message || 'فشل تحميل بيانات العملاء');
+                const balanceRows = Array.isArray(balanceResult.data) ? balanceResult.data : [];
+                const salesRows = salesResult.success && Array.isArray(salesResult.data) ? salesResult.data : [];
+                const salesById = new Map(salesRows.map(row => [String(row.id), row]));
+                runtimeState.rawCustomers = balanceRows.map(row => normalizeCustomerRow({ ...row, ...(salesById.get(String(row.id)) || {}) }));
+                runtimeState.rawAgingDebts = debtsResult.success && Array.isArray(debtsResult.data) ? debtsResult.data : [];
+                runtimeState.agingRows = buildAgingRows(runtimeState.rawAgingDebts);
+                runtimeState.lastLoadedAt = new Date();
+                runtimeState.salesAvailable = salesResult.success;
+                runtimeState.agingAvailable = debtsResult.success;
+                renderCurrentCustomerView();
+                if (salesResult.success && debtsResult.success) showToast(`✅ تم تحميل ${runtimeState.rawCustomers.length} عميلاً وتحليل المبيعات والديون للفترة`, 'success');
+                else if (salesResult.success) showToast('⚠️ تم تحميل العملاء والمبيعات، لكن تقرير Aging غير متاح حالياً', 'warning');
+                else if (debtsResult.success) showToast('⚠️ تم تحميل العملاء وAging، لكن تحليل المبيعات غير متاح حالياً', 'warning');
+                else showToast('⚠️ تم تحميل العملاء فقط؛ بعض التحليلات غير متاحة', 'warning');
+                return true;
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                runtimeState.rawCustomers = [];
+                runtimeState.visibleCustomers = [];
+                runtimeState.salesAvailable = false;
+                runtimeState.agingAvailable = false;
+                runtimeState.agingRows = [];
+                runtimeState.rawAgingDebts = [];
+                renderCurrentCustomerView();
+                showToast(`❌ ${e.message || 'فشل توليد التقرير من SQLite'}`, 'error');
+                console.error('Customer report failed:', e);
+                return false;
             } finally {
                 showLoading(false);
             }
@@ -1851,7 +2050,7 @@
             const tbody = document.getElementById('customerTableBody');
             if (!data || data.length === 0) {
                 tbody.innerHTML =
-                    '<tr><td colspan="12"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات للعرض</div></td></tr>';
+                    '<tr><td colspan="16"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات للعرض</div></td></tr>';
                 return;
             }
             tbody.innerHTML = data.map((item, idx) => {
@@ -1861,8 +2060,8 @@
                 const riskClass = getRiskClass(risk);
                 const statusLabel = getStatusLabel(status);
                 const statusClass = getStatusClass(status);
-                const balance = parseFloat(item.current_balance || 0);
-                const totalDue = parseFloat(item.total_due || 0);
+                const balance = finiteNumber(item.current_balance);
+                const totalDue = finiteNumber(item.total_due);
                 return `
                     <tr>
                         <td>${idx + 1}</td>
@@ -1870,14 +2069,18 @@
                         <td>${escapeHtml(item.commercial_name || item.commercial_name_ar || '---')}</td>
                         <td>${escapeHtml(item.phone || '---')}</td>
                         <td>${escapeHtml(item.type_name || '---')}</td>
-                        <td class="amount">${formatCurrency(item.credit_limit || 0)}</td>
+                        <td class="amount">${formatCurrency(item.credit_limit)}</td>
                         <td class="amount ${balance >= 0 ? 'debit' : 'credit'}">${formatCurrency(balance)}</td>
                         <td class="amount ${totalDue > 0 ? 'debit' : ''}">${formatCurrency(totalDue)}</td>
-                        <td>${formatNumber(item.loyalty_points || 0)}</td>
+                        <td class="amount">${formatCurrency(item.total_sales)}</td>
+                        <td>${formatNumber(item.invoice_count)}</td>
+                        <td class="amount">${formatCurrency(item.average_invoice)}</td>
+                        <td>${item.last_activity ? escapeHtml(String(item.last_activity).slice(0, 10)) : 'غير متاح'}</td>
+                        <td>${formatNumber(item.loyalty_points)}</td>
                         <td><span class="status-badge ${riskClass}">${riskLabel}</span></td>
                         <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                         <td>
-                            <button class="btn-view" onclick="viewCustomer('${item.id || item.party_id}')" title="تفاصيل">
+                            <button class="btn-view" onclick="viewCustomer(${item.id})" title="تفاصيل">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </td>
@@ -1886,12 +2089,32 @@
             }).join('');
         }
 
+        function setupSortableHeaders() {
+            const keys = [null, 'party_code', 'commercial_name', 'phone', 'type_name', 'credit_limit', 'current_balance', 'total_due', 'total_sales', 'invoice_count', 'average_invoice', 'last_activity', 'loyalty_points', 'risk_level', 'status', null];
+            document.querySelectorAll('#customerTable thead th').forEach((header, index) => {
+                const key = keys[index];
+                if (!key) return;
+                header.style.cursor = 'pointer';
+                header.setAttribute('role', 'button');
+                header.setAttribute('tabindex', '0');
+                header.title = 'فرز حسب هذا العمود';
+                const sort = () => {
+                    if (runtimeState.sortKey === key) runtimeState.sortDirection = runtimeState.sortDirection === 'asc' ? 'desc' : 'asc';
+                    else { runtimeState.sortKey = key; runtimeState.sortDirection = 'asc'; }
+                    renderCurrentCustomerView();
+                };
+                header.addEventListener('click', sort);
+                header.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); sort(); } });
+            });
+        }
+
         // ===================================================================
         // 7. تحديث بطاقات الإحصائيات (وسط‌چین)
         // ===================================================================
         function updateKPIs(data) {
             const total = data.length;
-            const totalDebt = data.reduce((s, item) => s + parseFloat(item.total_due || 0), 0);
+            const totalDebt = data.reduce((sum, item) => sum + finiteNumber(item.total_due), 0);
+            const totalSales = data.reduce((sum, item) => sum + finiteNumber(item.total_sales), 0);
             const avgDebt = total > 0 ? totalDebt / total : 0;
             const highRisk = data.filter(item => item.risk_level === 'high' || item.risk_level === 'blacklisted').length;
 
@@ -1899,12 +2122,10 @@
             document.getElementById('kpiTotalDebt').textContent = formatCurrency(totalDebt);
             document.getElementById('kpiAvgDebt').textContent = formatCurrency(avgDebt);
             document.getElementById('kpiHighRisk').textContent = highRisk;
-
-            // محاكاة الاتجاهات
-            document.getElementById('trendTotal').textContent = (Math.random() * 8 + 1).toFixed(1) + '%';
-            document.getElementById('trendDebt').textContent = (Math.random() * 12 + 2).toFixed(1) + '%';
-            document.getElementById('trendAvg').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
-            document.getElementById('trendRisk').textContent = (Math.random() * 4 + 0.5).toFixed(1) + '%';
+            document.getElementById('trendTotal').textContent = `${total} عميل`;
+            document.getElementById('trendDebt').textContent = runtimeState.salesAvailable ? `مبيعات ${formatCurrency(totalSales)}` : 'غير متاح';
+            document.getElementById('trendAvg').textContent = total > 0 ? `متوسط ${formatCurrency(avgDebt)}` : 'لا توجد بيانات';
+            document.getElementById('trendRisk').textContent = highRisk > 0 ? `${highRisk} يحتاج متابعة` : 'لا توجد مخاطر مرتفعة';
         }
 
         function resetKPIs() {
@@ -1912,6 +2133,10 @@
             document.getElementById('kpiTotalDebt').textContent = '0.00';
             document.getElementById('kpiAvgDebt').textContent = '0.00';
             document.getElementById('kpiHighRisk').textContent = '0';
+            document.getElementById('trendTotal').textContent = '—';
+            document.getElementById('trendDebt').textContent = '—';
+            document.getElementById('trendAvg').textContent = '—';
+            document.getElementById('trendRisk').textContent = '—';
         }
 
         // ===================================================================
@@ -1960,19 +2185,25 @@
                 }
             });
 
-            // رحلة الديون (محاكاة - سيتم جلبها من API)
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const debtValues = data.slice(0, 7).map(() => Math.floor(Math.random() * 1500 + 200));
+            // نشاط العملاء الفعلي حسب آخر عملية مسجلة، دون توليد بيانات محاكاة.
+            const activityMap = {};
+            data.forEach(item => {
+                const date = String(item.last_activity || '').slice(0, 10);
+                if (date) activityMap[date] = (activityMap[date] || 0) + 1;
+            });
+            const activityDates = Object.keys(activityMap).sort().slice(-30);
+            const labels = activityDates.length ? activityDates.map(date => date.slice(5)) : ['لا توجد بيانات'];
+            const activityValues = activityDates.length ? activityDates.map(date => activityMap[date]) : [0];
 
             const ctx2 = document.getElementById('debtTrendChart').getContext('2d');
             if (debtChart) debtChart.destroy();
             debtChart = new Chart(ctx2, {
                 type: 'line',
                 data: {
-                    labels: days,
+                        labels: labels,
                     datasets: [{
-                        label: 'متوسط الدين اليومي',
-                        data: debtValues,
+                        label: 'عدد العملاء حسب آخر نشاط',
+                        data: activityValues,
                         borderColor: '#f5c842',
                         backgroundColor: 'rgba(245,200,66,0.08)',
                         tension: 0.3,
@@ -2014,7 +2245,7 @@
                 alerts.push({ type: 'info', icon: 'fa-user-slash', title: '👤 عملاء غير نشطين',
                     desc: inactive.length + ' عميل غير نشط', time: 'الآن' });
             }
-            LocalDB.set('customer_notifications', alerts);
+            runtimeState.alerts = alerts;
             renderAlerts(alerts);
         }
 
@@ -2035,7 +2266,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('customer_notifications', []);
+            const alerts = runtimeState.alerts || [];
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2044,7 +2275,10 @@
         // 11. AI Advisor
         // ===================================================================
         function generateAIInsights(data) {
-            if (!data || data.length === 0) return;
+            if (!data || data.length === 0) {
+                runtimeState.aiInsights = [];
+                return;
+            }
             const insights = [];
             const total = data.length;
             const totalDebt = data.reduce((s, item) => s + parseFloat(item.total_due || 0), 0);
@@ -2068,13 +2302,13 @@
                 insights.push({ title: '🏆 أعلى دين', desc: (maxDebtItem.commercial_name || '') + ' - ' +
                         formatCurrency(maxDebt) });
             }
-            LocalDB.setAIInsights(insights);
+            runtimeState.aiInsights = insights;
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = runtimeState.aiInsights || [];
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2098,59 +2332,123 @@
         // 12. تفاصيل العميل
         // ===================================================================
         async function viewCustomer(customerId) {
-            if (!customerId) { showToast('❌ لا توجد تفاصيل', 'warning'); return; }
+            const id = finiteNumber(customerId);
+            if (!id) { showToast('❌ معرف العميل غير صالح', 'warning'); return; }
             showLoading(true);
             try {
-                const result = await apiCall('getCustomerDetails', { customer_id: customerId });
-                if (result.success && result.data) {
-                    const c = result.data;
-                    const content = document.getElementById('detailsContent');
-                    const riskLabel = getRiskLabel(c.risk_level || 'low');
-                    const riskClass = getRiskClass(c.risk_level || 'low');
-                    const statusLabel = getStatusLabel(c.status || 'active');
-                    const statusClass = getStatusClass(c.status || 'active');
-                    const balance = parseFloat(c.current_balance || 0);
-                    const totalDue = parseFloat(c.total_due || 0);
-                    content.innerHTML = `
-                        <div class="details-header">
-                            <h3 class="details-title">👤 ${escapeHtml(c.commercial_name || 'عميل')}</h3>
-                            <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="details-profile">
-                            <div class="details-avatar">${(c.commercial_name || 'ع').substring(0,2)}</div>
-                            <div class="details-name">${escapeHtml(c.commercial_name || '---')}</div>
-                            <span class="details-status ${statusClass}">${statusLabel}</span>
-                            <span class="details-status ${riskClass}" style="margin-right:8px;">${riskLabel}</span>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-id-card"></i> المعلومات الأساسية</div>
-                            <div class="details-row"><span class="details-label">كود العميل</span><span class="details-value code red">${escapeHtml(c.party_code || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">الاسم بالعربية</span><span class="details-value">${escapeHtml(c.commercial_name_ar || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(c.phone || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(c.email || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">النوع</span><span class="details-value">${escapeHtml(c.type_name || '---')}</span></div>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> البيانات المالية</div>
-                            <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${formatCurrency(c.credit_limit || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value ${balance >= 0 ? '' : 'red'}">${formatCurrency(balance)}</span></div>
-                            <div class="details-row"><span class="details-label">إجمالي الديون</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(totalDue)}</span></div>
-                            <div class="details-row"><span class="details-label">نقاط الولاء</span><span class="details-value">${formatNumber(c.loyalty_points || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">مستوى الولاء</span><span class="details-value">${escapeHtml(c.loyalty_tier || 'برونز')}</span></div>
-                        </div>
-                        <div class="details-section">
-                            <div class="details-section-title"><i class="fas fa-clock"></i> التواريخ</div>
-                            <div class="details-row"><span class="details-label">تاريخ الإضافة</span><span class="details-value">${escapeHtml(c.created_at || '---')}</span></div>
-                            <div class="details-row"><span class="details-label">آخر تحديث</span><span class="details-value">${escapeHtml(c.updated_at || '---')}</span></div>
-                        </div>
-                        <div style="height:30px;"></div>
-                    `;
-                    document.getElementById('detailsOverlay').classList.add('show');
-                    document.body.style.overflow = 'hidden';
-                } else {
-                    showToast(result.message || '❌ فشل في جلب التفاصيل', 'error');
+                const result = await apiCall('getPartyCrmBundle', { id });
+                if (!result.success || !result.data) throw new Error(result.error || result.message || 'تعذر تحميل ملف العميل');
+                const c = result.data;
+                runtimeState.currentCustomerBundle = c;
+                runtimeState.currentCustomerId = id;
+                const invoices = Array.isArray(c.invoices) ? c.invoices : [];
+                const contracts = Array.isArray(c.contracts) ? c.contracts : [];
+                const contacts = Array.isArray(c.contacts) ? c.contacts : [];
+                const attachments = Array.isArray(c.attachments) ? c.attachments : [];
+                const audit = Array.isArray(c.audit) ? c.audit : [];
+                const risk = c.risk_level || 'low';
+                const status = finiteNumber(c.is_active, 1) === 1 ? 'active' : 'inactive';
+                const balance = finiteNumber(c.current_balance);
+                const totalDue = finiteNumber(c.total_due);
+                const invoiceRows = invoices.slice(0, 50).map(invoice => `
+                    <tr><td>${escapeHtml(invoice.invoice_number || invoice.sale_code || '---')}</td><td>${escapeHtml(String(invoice.created_at || '').slice(0, 10) || '---')}</td><td class="amount">${formatCurrency(invoice.net_amount)}</td><td class="amount">${formatCurrency(invoice.remaining_amount)}</td><td>${escapeHtml(invoice.payment_status || '---')}</td></tr>
+                `).join('');
+                const content = document.getElementById('detailsContent');
+                const name = c.commercial_name || c.commercial_name_ar || 'عميل';
+                content.innerHTML = `
+                    <div class="details-header">
+                        <h3 class="details-title">👤 ${escapeHtml(name)}</h3>
+                        <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="details-profile">
+                        <div class="details-avatar">${escapeHtml(name.substring(0, 2))}</div>
+                        <div class="details-name">${escapeHtml(name)}</div>
+                        <span class="details-status ${getStatusClass(status)}">${getStatusLabel(status)}</span>
+                        <span class="details-status ${getRiskClass(risk)}" style="margin-right:8px;">${getRiskLabel(risk)}</span>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-id-card"></i> المعلومات الأساسية</div>
+                        <div class="details-row"><span class="details-label">كود العميل</span><span class="details-value code red">${escapeHtml(c.party_code || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(c.phone || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(c.email || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">النوع</span><span class="details-value">${escapeHtml(c.type_name_ar || c.type_name || '---')}</span></div>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> البيانات المالية</div>
+                        <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${finiteNumber(c.credit_limit) > 0 ? formatCurrency(c.credit_limit) : 'غير محدد'}</span></div>
+                        <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value ${balance < 0 ? 'red' : ''}">${formatCurrency(balance)}</span></div>
+                        <div class="details-row"><span class="details-label">إجمالي الديون</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(totalDue)}</span></div>
+                        <div class="details-row"><span class="details-label">نقاط الولاء</span><span class="details-value">${formatNumber(c.loyalty_points)}</span></div>
+                        <div class="details-row"><span class="details-label">مستوى الولاء</span><span class="details-value">${escapeHtml(c.loyalty_tier || 'غير محدد')}</span></div>
+                        <div style="margin-top:14px;text-align:center;"><button class="btn-filter primary" type="button" onclick="editCustomerCreditLimit(${id})"><i class="fas fa-pen-to-square"></i> تعديل الحد الائتماني</button></div>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-file-invoice-dollar"></i> الفواتير (${invoices.length})</div>
+                        ${invoiceRows ? `<div class="table-scroll"><table class="details-items-table"><thead><tr><th>الفاتورة</th><th>التاريخ</th><th>الإجمالي</th><th>المتبقي</th><th>الحالة</th></tr></thead><tbody>${invoiceRows}</tbody></table></div>` : '<div class="empty-state">لا توجد فواتير مسجلة</div>'}
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-link"></i> بيانات CRM المرتبطة</div>
+                        <div class="details-row"><span class="details-label">جهات الاتصال</span><span class="details-value">${contacts.length}</span></div>
+                        <div class="details-row"><span class="details-label">العقود</span><span class="details-value">${contracts.length}</span></div>
+                        <div class="details-row"><span class="details-label">المرفقات</span><span class="details-value">${attachments.length}</span></div>
+                        <div class="details-row"><span class="details-label">سجل التدقيق</span><span class="details-value">${audit.length}</span></div>
+                    </div>
+                    <div style="height:30px;"></div>`;
+                document.getElementById('detailsOverlay').classList.add('show');
+                document.body.style.overflow = 'hidden';
+            } catch (e) {
+                showToast(`❌ ${e.message || 'فشل في جلب التفاصيل'}`, 'error');
+                console.error('Customer bundle failed:', e);
+            } finally { showLoading(false); }
+        }
+
+        async function editCustomerCreditLimit(customerId) {
+            const id = finiteNumber(customerId);
+            const current = runtimeState.currentCustomerBundle;
+            if (!id || !current || id !== runtimeState.currentCustomerId) {
+                showToast('❌ لم يتم تحميل ملف العميل كاملاً', 'error');
+                return;
+            }
+            if (!window.Swal || typeof window.Swal.fire !== 'function') {
+                showToast('❌ نافذة التعديل غير متاحة', 'error');
+                return;
+            }
+            const dialog = await Swal.fire({
+                title: 'تعديل الحد الائتماني',
+                html: `<input id="creditLimitInput" class="swal2-input" type="number" min="0" step="0.01" value="${finiteNumber(current.credit_limit)}" placeholder="الحد الائتماني"><textarea id="creditLimitReason" class="swal2-textarea" placeholder="سبب التعديل"></textarea><div style="font-size:0.78rem;color:#777">سيتم تسجيل التعديل في سجل التدقيق.</div>`,
+                showCancelButton: true,
+                confirmButtonText: 'حفظ',
+                cancelButtonText: 'إلغاء',
+                preConfirm: () => {
+                    const value = finiteNumber(document.getElementById('creditLimitInput').value, NaN);
+                    const reason = document.getElementById('creditLimitReason').value.trim();
+                    if (!Number.isFinite(value) || value < 0) {
+                        Swal.showValidationMessage('أدخل قيمة حد ائتماني غير سالبة');
+                        return false;
+                    }
+                    if (!reason) {
+                        Swal.showValidationMessage('أدخل سبب التعديل');
+                        return false;
+                    }
+                    return { creditLimit: value, reason };
                 }
-            } catch (e) { showToast('❌ حدث خطأ', 'error'); } finally { showLoading(false); }
+            });
+            if (!dialog.isConfirmed || !dialog.value) return;
+            const creditLimit = dialog.value.creditLimit;
+            const reason = dialog.value.reason;
+            showLoading(true);
+            try {
+                const result = await apiCall('updatePartyCreditLimit', { id, credit_limit: creditLimit, reason });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل حفظ الحد الائتماني');
+                showToast('✅ تم حفظ الحد الائتماني وتسجيل التعديل', 'success');
+                await generateReport();
+                await viewCustomer(id);
+            } catch (e) {
+                showToast(`❌ ${e.message || 'فشل تعديل الحد الائتماني'}`, 'error');
+                console.error('Credit limit update failed:', e);
+            } finally {
+                showLoading(false);
+            }
         }
 
         function closeDetails() {
@@ -2161,103 +2459,139 @@
         // ===================================================================
         // 13. تصدير CSV و PDF
         // ===================================================================
+        function csvEscape(value) {
+            const text = String(value ?? '');
+            return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        }
+
+        function exportRows() {
+            return customersData.map(row => [
+                row.party_code,
+                row.commercial_name,
+                row.phone,
+                row.type_name,
+                formatCurrency(row.credit_limit),
+                formatCurrency(row.current_balance),
+                formatCurrency(row.total_due),
+                formatCurrency(row.total_sales),
+                row.invoice_count,
+                formatCurrency(row.average_invoice),
+                row.last_activity || 'غير متاح',
+                row.loyalty_points,
+                getRiskLabel(row.risk_level),
+                getStatusLabel(row.status)
+            ]);
+        }
+
         function exportCSV() {
-            const rows = document.querySelectorAll('#customerTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات للتصدير', 'error');
+            const rows = exportRows();
+            if (!rows.length) {
+                showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
                 return;
             }
-            let csv = 'كود العميل,الاسم,الهاتف,النوع,الحد الائتماني,الرصيد الحالي,إجمالي الديون,نقاط الولاء,مستوى المخاطرة,الحالة\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 11 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || '',
-                        cells[10]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
-            });
+            const headers = ['كود العميل', 'الاسم', 'الهاتف', 'النوع', 'الحد الائتماني', 'الرصيد الحالي', 'إجمالي الديون', 'إجمالي المبيعات', 'عدد الفواتير', 'متوسط الفاتورة', 'آخر عملية شراء', 'نقاط الولاء', 'المخاطرة', 'الحالة'];
+            const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\n') + '\n';
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const from = document.getElementById('filterDateFrom').value || 'start';
             const to = document.getElementById('filterDateTo').value || 'end';
             link.download = `تقرير_العملاء_${from}_${to}.csv`;
             link.href = URL.createObjectURL(blob);
+            document.body.appendChild(link);
             link.click();
-            showToast('✅ تم تصدير CSV', 'success');
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            showToast('✅ تم تصدير CSV من البيانات الفعلية', 'success');
+        }
+
+        function exportJSON() {
+            if (!customersData.length) {
+                showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
+                return;
+            }
+            const payload = {
+                generated_at: new Date().toISOString(),
+                period: {
+                    start_date: document.getElementById('filterDateFrom').value || null,
+                    end_date: document.getElementById('filterDateTo').value || null
+                },
+                filters: {
+                    party_type: document.getElementById('filterType').value || null,
+                    risk_level: document.getElementById('filterRisk').value || null,
+                    status: document.getElementById('filterStatus').value || null,
+                    search: document.getElementById('filterSearch').value || null
+                },
+                customers: customersData,
+                aging: runtimeState.agingRows || []
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `customer-report_${payload.period.start_date || 'start'}_${payload.period.end_date || 'end'}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            showToast('✅ تم تصدير JSON من البيانات الفعلية', 'success');
         }
 
         function exportPDF() {
-            const rows = document.querySelectorAll('#customerTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات', 'error');
+            const rows = exportRows();
+            if (!rows.length) {
+                showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
+                return;
+            }
+            if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+                showToast('❌ مكتبة PDF المحلية غير متوفرة', 'error');
                 return;
             }
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'pt', 'a4');
-            doc.setFontSize(18);
-            doc.setTextColor(168, 130, 255);
-            doc.text('📊 تقرير العملاء', 40, 50);
-            doc.setFontSize(10);
-            doc.setTextColor(180, 167, 230);
-            const from = document.getElementById('filterDateFrom').value || 'البداية';
-            const to = document.getElementById('filterDateTo').value || 'النهاية';
-            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
-
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 11 && !row.classList.contains('empty-state')) {
-                    tableData.push([
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || '',
-                        cells[10]?.textContent?.trim() || ''
-                    ]);
-                }
-            });
-            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
-            const headers = ['كود العميل', 'الاسم', 'الهاتف', 'النوع', 'الحد', 'الرصيد', 'الديون', 'النقاط', 'المخاطرة',
-                'الحالة'
-            ];
-            doc.autoTable({
-                head: [headers],
-                body: tableData,
-                startY: 100,
-                styles: { fontSize: 7, font: 'helvetica', textColor: [200, 200, 200] },
-                headStyles: { fillColor: [168, 130, 255], textColor: [11, 7, 25], fontSize: 8 },
-                alternateRowStyles: { fillColor: [20, 16, 43] },
-                margin: { left: 25, right: 25 },
-                tableWidth: 'auto'
-            });
-            doc.save(`تقرير_العملاء_${from}_${to}.pdf`);
-            showToast('✅ تم تصدير PDF', 'success');
+            const from = document.getElementById('filterDateFrom').value || 'start';
+            const to = document.getElementById('filterDateTo').value || 'end';
+            doc.setFontSize(16);
+            doc.text('Customer Report', 40, 45);
+            doc.setFontSize(9);
+            doc.text(`Period: ${from} - ${to}`, 40, 65);
+            if (typeof doc.autoTable === 'function') {
+                doc.autoTable({
+                    head: [['Code', 'Name', 'Phone', 'Type', 'Credit limit', 'Balance', 'Due', 'Sales', 'Invoices', 'Avg invoice', 'Last activity', 'Points', 'Risk', 'Status']],
+                    body: rows.map(row => row.map(value => String(value ?? '').slice(0, 24))),
+                    startY: 85,
+                    styles: { fontSize: 6 },
+                    headStyles: { fillColor: [168, 130, 255], textColor: [11, 7, 25] },
+                    margin: { left: 20, right: 20 }
+                });
+            } else {
+                let y = 85;
+                doc.setFontSize(6);
+                doc.text('Code | Name | Phone | Type | Credit | Balance | Due | Sales | Invoices | Avg | Last | Points | Risk | Status', 20, y);
+                y += 12;
+                rows.forEach(row => {
+                    if (y > 800) { doc.addPage(); y = 40; }
+                    doc.text(row.join(' | ').slice(0, 160), 20, y);
+                    y += 10;
+                });
+            }
+            doc.save(`customer-report_${from}_${to}.pdf`);
+            showToast('✅ تم إنشاء PDF من البيانات الفعلية', 'success');
         }
 
         // ===================================================================
         // 14. إعادة تعيين الفلاتر
         // ===================================================================
         function resetFilters() {
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(today.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().slice(0, 10);
+            document.getElementById('filterDateTo').value = today.toISOString().slice(0, 10);
             document.getElementById('filterType').value = '';
             document.getElementById('filterRisk').value = '';
             document.getElementById('filterStatus').value = '';
-            showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterDebtMin').value = '';
+            document.getElementById('filterDebtMax').value = '';
             generateReport();
         }
 
@@ -2268,8 +2602,28 @@
             document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
             const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
             if (target) target.classList.add('active');
-            // تغيير نوع التقرير حسب التبويب
-            generateReport();
+            switch (tab) {
+                case 'summary': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+                case 'customers': document.getElementById('customerTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); break;
+                case 'debt':
+                    runtimeState.sortKey = 'total_due';
+                    runtimeState.sortDirection = 'desc';
+                    renderCurrentCustomerView();
+                    document.getElementById('customerTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    break;
+                case 'risk':
+                    document.getElementById('filterRisk').value = 'high';
+                    renderCurrentCustomerView();
+                    document.getElementById('alertsContainer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    break;
+                case 'loyalty':
+                    runtimeState.sortKey = 'loyalty_points';
+                    runtimeState.sortDirection = 'desc';
+                    renderCurrentCustomerView();
+                    document.getElementById('customerTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    break;
+                default: break;
+            }
         }
 
         // ===================================================================
@@ -2282,13 +2636,15 @@
             switch (action) {
                 case 'refresh':
                     generateReport();
-                    showToast('🔄 تم التحديث', 'success');
                     break;
                 case 'csv':
                     exportCSV();
                     break;
                 case 'pdf':
                     exportPDF();
+                    break;
+                case 'json':
+                    exportJSON();
                     break;
                 case 'print':
                     window.print();
@@ -2330,9 +2686,10 @@
                 if (result.success && result.data) {
                     sel.innerHTML = '<option value="">جميع الأنواع</option>';
                     result.data.forEach(t => {
+                        if (Number(t.id) > 5) return;
                         const opt = document.createElement('option');
                         opt.value = t.id;
-                        opt.textContent = t.type_name || t.type_name_ar || 'نوع';
+                        opt.textContent = t.type_name_ar || t.type_name || 'نوع';
                         sel.appendChild(opt);
                     });
                 }
@@ -2353,6 +2710,7 @@
             document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
             document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
 
+            setupSortableHeaders();
             loadDropdowns();
             setTimeout(generateReport, 600);
 

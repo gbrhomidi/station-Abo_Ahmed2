@@ -11318,6 +11318,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun updatePartyCreditLimit(partyId: Long, creditLimit: Double, reason: String, userId: Long = 0L): Int {
+        require(partyId > 0) { "معرف العميل غير صالح" }
+        require(creditLimit.isFinite() && creditLimit >= 0.0) { "حد الائتمان غير صالح" }
+        dbLock.lock()
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val oldParty = getParty(partyId.toInt()) ?: return 0
+            val rows = db.update("parties", ContentValues().apply {
+                put("credit_limit", creditLimit)
+                put("updated_at", getCurrentDateTime())
+            }, "id = ? AND is_deleted = 0", arrayOf(partyId.toString()))
+            if (rows != 1) return 0
+            val newParty = getParty(partyId.toInt())
+            recordPartyAudit(partyId, "update_credit_limit", oldParty, newParty, userId)
+            runCatching { logActivity("system", "update_credit_limit", "تعديل حد ائتمان العميل $partyId: $reason") }
+            db.setTransactionSuccessful()
+            return rows
+        } finally {
+            db.endTransaction()
+            dbLock.unlock()
+        }
+    }
+
     fun getPartyCrmBundle(partyId: Long): JSONObject {
         dbLock.lock()
         return try {
@@ -11430,18 +11454,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     """.trimIndent(), args.toTypedArray()
                 ).use { cursorToJsonArray(it) }
                 else -> {
-                    val order = if (reportType == "suppliers") "p.party_type_id = 6" else if (reportType == "customers") "p.party_type_id IN (1, 2)" else "1=1"
+                    val order = if (reportType == "suppliers") "p.party_type_id = 6" else if (reportType == "customers") "p.party_type_id IN (1, 2, 3, 4, 5)" else "1=1"
                     val finalWhere = if (where.isEmpty()) order else "$where AND $order"
                     db.rawQuery(
                         """
                         SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
-                               p.legal_name, p.party_type_id, p.phone, p.email,
-                               p.credit_limit, p.current_balance, p.total_purchases,
-                               p.total_payments, p.total_due, p.overdue_amount,
-                               p.is_active, p.created_at, p.updated_at
-                        FROM parties p WHERE $finalWhere
+                               p.legal_name, p.party_type_id, pt.type_name, pt.type_name_ar,
+                               p.phone, p.email, p.credit_limit, p.current_balance,
+                               p.total_purchases, p.total_payments, p.total_due,
+                               p.overdue_amount, p.loyalty_points, p.loyalty_tier,
+                               p.risk_level, p.is_active, p.created_at, p.updated_at,
+                               MAX(s.created_at) AS last_activity
+                        FROM parties p
+                        LEFT JOIN party_types pt ON pt.id = p.party_type_id AND pt.is_deleted = 0
+                        LEFT JOIN sales_transactions s ON s.customer_party_id = p.id AND s.is_deleted = 0 $dateClause
+                        WHERE $finalWhere
+                        GROUP BY p.id
                         ORDER BY p.commercial_name
-                        """.trimIndent(), whereArgs.toTypedArray()
+                        """.trimIndent(), args.toTypedArray())
                     ).use { cursorToJsonArray(it) }
                 }
             }
