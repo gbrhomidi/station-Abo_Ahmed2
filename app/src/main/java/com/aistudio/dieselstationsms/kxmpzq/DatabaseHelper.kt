@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 17
+        const val VERSION = 18
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -177,6 +177,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     14 -> migrateV14ToV15(db)
                     15 -> migrateV15ToV16(db)
                     16 -> migrateV16ToV17(db)
+                    17 -> migrateV17ToV18(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -604,6 +605,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun migrateV16ToV17(db: SQLiteDatabase) {
         createSmsOutboundDedupeTable(db)
         Log.d(TAG, "Migrated SMS outbound dedupe schema to V17 successfully")
+    }
+
+    private fun migrateV17ToV18(db: SQLiteDatabase) {
+        ensureColumn(db, "inventory_movements", "warehouse_id", "INTEGER")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_warehouse_date ON inventory_movements(warehouse_id, created_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_product_date ON inventory_movements(product_id, created_at)")
+        Log.d(TAG, "Migrated inventory reporting schema to V18 successfully")
     }
 
     private fun tableHasColumn(db: SQLiteDatabase, tableName: String, columnName: String): Boolean {
@@ -2240,6 +2248,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 movement_code VARCHAR(30) UNIQUE NOT NULL,
                 product_id INTEGER NOT NULL,
                 station_id INTEGER NOT NULL,
+                warehouse_id INTEGER,
                 movement_type VARCHAR(20) NOT NULL CHECK(movement_type IN ('in', 'out', 'adjustment', 'transfer', 'return', 'damage')),
                 movement_subtype VARCHAR(30),
                 quantity_before DECIMAL(12,2) NOT NULL,
@@ -6972,10 +6981,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val totalCost = quantity * unitCost
             val stationId = data.optInt("station_id", 1)
             val warehouseId = data.optLong("warehouse_id", 1L).takeIf { it > 0L } ?: 1L
+            val signedAdjustment = data.optDouble("signed_quantity", 0.0)
 
             require(productId > 0) { "المنتج مطلوب" }
             require(quantity > 0.0) { "كمية الحركة يجب أن تكون أكبر من صفر" }
             require(movementType in setOf("in", "out", "adjustment", "transfer", "return", "damage")) { "نوع حركة المخزون غير صحيح" }
+            if (movementType == "adjustment") {
+                require(signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
+            }
 
             var currentQty = 0.0
             db.rawQuery(
@@ -6986,7 +6999,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
 
             val quantityBefore = currentQty
-            val quantityAfter = if (movementType == "in") currentQty + quantity else currentQty - quantity
+            val quantityAfter = when {
+                movementType == "adjustment" -> currentQty + signedAdjustment
+                movementType == "in" || movementType == "return" -> currentQty + quantity
+                else -> currentQty - quantity
+            }
             require(quantityAfter >= 0.0) { "لا يمكن خصم كمية أكبر من المخزون المتاح" }
 
             val cv = ContentValues().apply {
@@ -6994,10 +7011,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
                 put("product_id", productId)
                 put("station_id", stationId)
+                put("warehouse_id", warehouseId)
                 put("movement_type", movementType)
                 put("movement_subtype", data.optString("movement_subtype", ""))
                 put("quantity_before", quantityBefore)
-                put("quantity_change", quantity)
+                put("quantity_change", if (movementType == "adjustment") signedAdjustment else quantity)
                 put("quantity_after", quantityAfter)
                 put("unit_cost", unitCost)
                 put("total_cost", totalCost)
@@ -7039,18 +7057,59 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getStockMovements(): JSONArray {
+    fun getStockMovements(data: JSONObject = JSONObject()): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            db.rawQuery(
-                """SELECT im.*, p.product_name
-                   FROM inventory_movements im
-                   LEFT JOIN products p ON im.product_id = p.id
-                   WHERE im.is_deleted = 0
-                   ORDER BY im.created_at DESC LIMIT 200""",
-                null
-            ).use { cursor -> cursorToJsonArray(cursor) }
+            val where = mutableListOf("im.is_deleted = 0")
+            val args = mutableListOf<String>()
+            data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let {
+                where += "date(im.created_at) >= date(?)"
+                args += it
+            }
+            data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let {
+                where += "date(im.created_at) <= date(?)"
+                args += it
+            }
+            data.optString("movement_type").trim().takeIf { it in setOf("in", "out", "adjustment", "transfer", "return", "damage") }?.let {
+                where += "im.movement_type = ?"
+                args += it
+            }
+            data.optString("status").trim().takeIf { it in setOf("draft", "completed", "cancelled", "reversed") }?.let {
+                where += "im.status = ?"
+                args += it
+            }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0L }?.let {
+                where += "im.warehouse_id = ?"
+                args += it.toString()
+            }
+            data.optLong("product_id", 0L).takeIf { it > 0L }?.let {
+                where += "im.product_id = ?"
+                args += it.toString()
+            }
+            data.optLong("movement_id", 0L).takeIf { it > 0L }?.let {
+                where += "im.id = ?"
+                args += it.toString()
+            }
+            data.optString("query").trim().takeIf { it.isNotEmpty() }?.let {
+                where += "(p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.product_code LIKE ? OR p.barcode LIKE ?)"
+                val pattern = "%$it%"
+                repeat(4) { args += pattern }
+            }
+            val limit = data.optInt("limit", 50).coerceIn(1, 200)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val sql = """
+                SELECT im.*, p.product_name, p.product_name_ar, p.product_code,
+                       w.warehouse_name, u.username AS performed_by_name
+                FROM inventory_movements im
+                LEFT JOIN products p ON im.product_id = p.id
+                LEFT JOIN warehouses w ON im.warehouse_id = w.id
+                LEFT JOIN users u ON im.performed_by = u.id
+                WHERE ${where.joinToString(" AND ")}
+                ORDER BY datetime(im.created_at) DESC, im.id DESC
+                LIMIT $limit OFFSET $offset
+            """.trimIndent()
+            db.rawQuery(sql, args.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
@@ -7075,6 +7134,320 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun checkLowStock(): JSONArray = getLowStockItems()
+    fun transferStockMovement(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val productId = data.optLong("product_id", 0L)
+            val sourceWarehouseId = data.optLong("source_warehouse_id", 0L)
+            val targetWarehouseId = data.optLong("target_warehouse_id", 0L)
+            val quantity = data.optDouble("quantity", 0.0)
+            val unitCost = data.optDouble("unit_cost", 0.0)
+            val stationId = data.optInt("station_id", 1)
+            val performedBy = data.optLong("performed_by", 1L)
+            require(productId > 0L) { "المنتج مطلوب" }
+            require(sourceWarehouseId > 0L && targetWarehouseId > 0L && sourceWarehouseId != targetWarehouseId) { "مستودعا المصدر والهدف مطلوبان ويجب أن يكونا مختلفين" }
+            require(quantity > 0.0) { "كمية التحويل يجب أن تكون أكبر من صفر" }
+            require(performedBy > 0L) { "المستخدم المنفذ مطلوب" }
+
+            db.beginTransaction()
+            try {
+                fun currentQuantity(warehouseId: Long): Double = db.rawQuery(
+                    "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
+                    arrayOf(productId.toString(), warehouseId.toString())
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+                fun nextMovementCode(suffix: String): String = "TRF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}-$suffix"
+                fun insertMovement(warehouseId: Long, before: Double, after: Double, subtype: String, from: Long, to: Long): Long {
+                    val values = ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("movement_code", nextMovementCode(subtype.take(3)))
+                        put("product_id", productId)
+                        put("station_id", stationId)
+                        put("warehouse_id", warehouseId)
+                        put("movement_type", "transfer")
+                        put("movement_subtype", subtype)
+                        put("quantity_before", before)
+                        put("quantity_change", quantity)
+                        put("quantity_after", after)
+                        put("unit_cost", unitCost)
+                        put("total_cost", quantity * unitCost)
+                        put("from_location", from.toString())
+                        put("to_location", to.toString())
+                        put("reference_code", data.optString("reference_code", ""))
+                        put("reason", data.optString("notes", "تحويل مخزون"))
+                        put("performed_by", performedBy)
+                        put("created_by", performedBy)
+                        put("status", "completed")
+                        put("created_at", getCurrentDateTime())
+                    }
+                    val id = db.insertOrThrow("inventory_movements", null, values)
+                    return id
+                }
+                fun updateLevel(warehouseId: Long, quantityAfter: Double) {
+                    val existing = db.rawQuery("SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?", arrayOf(productId.toString(), warehouseId.toString())).use { it -> it.moveToFirst() }
+                    if (existing) {
+                        db.execSQL("UPDATE inventory_levels SET quantity_on_hand = ?, average_cost = ? WHERE product_id = ? AND warehouse_id = ?", arrayOf(quantityAfter, unitCost, productId, warehouseId))
+                    } else {
+                        db.execSQL("INSERT INTO inventory_levels(product_id, warehouse_id, quantity_on_hand, average_cost) VALUES (?, ?, ?, ?)", arrayOf(productId, warehouseId, quantityAfter, unitCost))
+                    }
+                }
+
+                val sourceBefore = currentQuantity(sourceWarehouseId)
+                val targetBefore = currentQuantity(targetWarehouseId)
+                require(sourceBefore >= quantity) { "الرصيد في المستودع المصدر غير كافٍ" }
+                val sourceId = insertMovement(sourceWarehouseId, sourceBefore, sourceBefore - quantity, "transfer_out", sourceWarehouseId, targetWarehouseId)
+                insertMovement(targetWarehouseId, targetBefore, targetBefore + quantity, "transfer_in", sourceWarehouseId, targetWarehouseId)
+                updateLevel(sourceWarehouseId, sourceBefore - quantity)
+                updateLevel(targetWarehouseId, targetBefore + quantity)
+                db.setTransactionSuccessful()
+                logActivity("system", "stock_transfer", "تحويل $quantity من المستودع $sourceWarehouseId إلى $targetWarehouseId للمنتج $productId")
+                sourceId
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun archiveStockMovement(movementId: Long, userId: Long): Int {
+        dbLock.lock()
+        return try {
+            require(movementId > 0L) { "معرّف الحركة غير صالح" }
+            require(userId > 0L) { "المستخدم المنفذ مطلوب" }
+            val values = ContentValues().apply {
+                put("is_deleted", 1)
+                put("deleted_at", getCurrentDateTime())
+                put("deleted_by", userId)
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", userId)
+            }
+            writableDatabase.update("inventory_movements", values, "id = ? AND is_deleted = 0", arrayOf(movementId.toString()))
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getInventoryMovementStats(data: JSONObject = JSONObject()): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val where = mutableListOf("is_deleted = 0")
+            val args = mutableListOf<String>()
+            data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(created_at) >= date(?)"; args += it }
+            data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(created_at) <= date(?)"; args += it }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0L }?.let { where += "warehouse_id = ?"; args += it.toString() }
+            val sql = """
+                SELECT COUNT(*) AS total_movements,
+                       COALESCE(SUM(total_cost), 0) AS total_value,
+                       COALESCE(SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END), 0) AS today_movements,
+                       COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0) AS pending_count,
+                       COALESCE(SUM(CASE WHEN movement_type IN ('in', 'return') THEN 1 ELSE 0 END), 0) AS inbound_count,
+                       COALESCE(SUM(CASE WHEN movement_type IN ('out', 'damage') THEN 1 ELSE 0 END), 0) AS outbound_count,
+                       COALESCE(SUM(CASE WHEN movement_type = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count,
+                       COALESCE(SUM(CASE WHEN movement_type = 'adjustment' THEN 1 ELSE 0 END), 0) AS adjustment_count
+                FROM inventory_movements
+                WHERE ${where.joinToString(" AND ")}
+            """.trimIndent()
+            db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+                if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getInventoryReport(data: JSONObject = JSONObject()): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val reportType = data.optString("report_type", "summary").ifBlank { "summary" }
+            val warehouseId = data.optLong("warehouse_id", 0L)
+            val categoryId = data.optLong("category_id", 0L)
+            val statusFilter = data.optString("status").trim()
+            val rows = JSONArray()
+            val categoryTotals = linkedMapOf<String, Double>()
+            val movementSeries = JSONArray()
+
+            if (reportType == "movement") {
+                val where = mutableListOf("im.is_deleted = 0")
+                val args = mutableListOf<String>()
+                data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
+                data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
+                if (warehouseId > 0L) { where += "im.warehouse_id = ?"; args += warehouseId.toString() }
+                if (categoryId > 0L) { where += "p.category_id = ?"; args += categoryId.toString() }
+                data.optString("movement_type").trim().takeIf { it in setOf("in", "out", "adjustment", "transfer", "return", "damage") }?.let { where += "im.movement_type = ?"; args += it }
+                val sql = """
+                    SELECT im.id AS movement_id, im.movement_code, im.created_at AS movement_date,
+                           im.movement_type, im.movement_subtype, im.product_id,
+                           p.product_code, p.product_name, p.product_name_ar,
+                           c.category_name, w.warehouse_name, im.quantity_change AS quantity,
+                           im.unit_cost, im.total_cost AS total_value, im.status,
+                           im.reason, im.remarks, im.performed_by, u.username AS performed_by_name
+                    FROM inventory_movements im
+                    LEFT JOIN products p ON im.product_id = p.id
+                    LEFT JOIN product_categories c ON p.category_id = c.id
+                    LEFT JOIN warehouses w ON im.warehouse_id = w.id
+                    LEFT JOIN users u ON im.performed_by = u.id
+                    WHERE ${where.joinToString(" AND ")}
+                    ORDER BY datetime(im.created_at) DESC, im.id DESC
+                    LIMIT 500
+                """.trimIndent()
+                db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+                    while (cursor.moveToNext()) rows.put(cursorToJsonObject(cursor))
+                }
+                db.rawQuery(
+                    """SELECT date(im.created_at) AS day, COUNT(*) AS movement_count,
+                              COALESCE(SUM(im.total_cost), 0) AS total_value
+                       FROM inventory_movements im
+                       LEFT JOIN products p ON im.product_id = p.id
+                       WHERE im.is_deleted = 0
+                       GROUP BY date(im.created_at)
+                       ORDER BY day ASC LIMIT 90""",
+                    null
+                ).use { cursor -> while (cursor.moveToNext()) movementSeries.put(cursorToJsonObject(cursor)) }
+            } else {
+                val levelSource = if (warehouseId > 0L) {
+                    "LEFT JOIN inventory_levels il ON p.id = il.product_id AND il.warehouse_id = ${warehouseId} LEFT JOIN warehouses w ON w.id = il.warehouse_id"
+                } else {
+                    "LEFT JOIN (SELECT product_id, SUM(quantity_on_hand) AS quantity_on_hand, AVG(average_cost) AS average_cost, MAX(last_count_date) AS last_count_date FROM inventory_levels GROUP BY product_id) il ON p.id = il.product_id LEFT JOIN warehouses w ON 1 = 0"
+                }
+                val where = mutableListOf("p.is_deleted = 0", "p.status = 'active'")
+                val args = mutableListOf<String>()
+                if (categoryId > 0L) { where += "p.category_id = ?"; args += categoryId.toString() }
+                data.optLong("product_id", 0L).takeIf { it > 0L }?.let { where += "p.id = ?"; args += it.toString() }
+                val sql = """
+                    SELECT p.id AS product_id, p.product_code, p.barcode, p.product_name, p.product_name_ar,
+                           p.category_id, c.category_name, w.warehouse_name,
+                           COALESCE(il.quantity_on_hand, p.quantity, 0) AS quantity,
+                           COALESCE(il.average_cost, p.purchase_price, 0) AS purchase_price,
+                           p.sale_price, p.minimum_stock, p.maximum_stock, p.reorder_quantity,
+                           il.last_count_date,
+                           CASE WHEN COALESCE(il.quantity_on_hand, p.quantity, 0) <= 0 THEN 'critical'
+                                WHEN COALESCE(il.quantity_on_hand, p.quantity, 0) <= p.minimum_stock THEN 'low'
+                                ELSE 'active' END AS status
+                    FROM products p
+                    LEFT JOIN product_categories c ON p.category_id = c.id
+                    $levelSource
+                    WHERE ${where.joinToString(" AND ")}
+                    ORDER BY p.product_name ASC
+                    LIMIT 1000
+                """.trimIndent()
+                db.rawQuery(sql, args.toTypedArray()).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val item = cursorToJsonObject(cursor)
+                        val itemStatus = item.optString("status", "active")
+                        if (statusFilter.isNotEmpty() && itemStatus != statusFilter) continue
+                        if (reportType == "below_min" && itemStatus != "low" && itemStatus != "critical") continue
+                        rows.put(item)
+                        val category = item.optString("category_name", "أخرى").ifBlank { "أخرى" }
+                        val value = item.optDouble("quantity", 0.0) * item.optDouble("purchase_price", 0.0)
+                        categoryTotals[category] = (categoryTotals[category] ?: 0.0) + value
+                    }
+                }
+            }
+
+            var totalQuantity = 0.0
+            var totalValue = 0.0
+            var lowStock = 0
+            var criticalStock = 0
+            val warehouses = mutableSetOf<String>()
+            for (i in 0 until rows.length()) {
+                val item = rows.optJSONObject(i) ?: continue
+                totalQuantity += item.optDouble("quantity", item.optDouble("quantity_change", 0.0))
+                totalValue += item.optDouble("total_value", item.optDouble("quantity", 0.0) * item.optDouble("purchase_price", 0.0))
+                when (item.optString("status")) { "low" -> lowStock++; "critical" -> criticalStock++ }
+                item.optString("warehouse_name").takeIf { it.isNotBlank() }?.let { warehouses.add(it) }
+            }
+            val stats = JSONObject().apply {
+                put("total_items", rows.length())
+                put("total_quantity", totalQuantity)
+                put("total_value", totalValue)
+                put("low_stock", lowStock)
+                put("critical_stock", criticalStock)
+                put("warehouse_count", warehouses.size)
+                put("category_count", categoryTotals.size)
+                put("inventory_health_score", if (rows.length() == 0) 0 else (100.0 - ((criticalStock * 60.0 + lowStock * 30.0) / rows.length())).coerceIn(0.0, 100.0))
+            }
+            val categories = JSONArray()
+            categoryTotals.forEach { (name, value) -> categories.put(JSONObject().put("category_name", name).put("total_value", value)) }
+            JSONObject().apply {
+                put("report_type", reportType)
+                put("rows", rows)
+                put("stats", stats)
+                put("categories", categories)
+                put("movement_series", movementSeries)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getInventoryProductDetails(productId: Long): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val product = db.rawQuery(
+                """SELECT p.id AS product_id, p.product_code, p.barcode, p.product_name, p.product_name_ar,
+                          p.purchase_price, p.sale_price, p.minimum_stock, p.maximum_stock, p.reorder_quantity,
+                          p.status, c.category_name, COALESCE(SUM(il.quantity_on_hand), p.quantity, 0) AS quantity
+                   FROM products p
+                   LEFT JOIN product_categories c ON p.category_id = c.id
+                   LEFT JOIN inventory_levels il ON p.id = il.product_id
+                   WHERE p.id = ? AND p.is_deleted = 0
+                   GROUP BY p.id""",
+                arrayOf(productId.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null } ?: return null
+            val movements = JSONArray()
+            db.rawQuery(
+                """SELECT im.id AS movement_id, im.movement_code, im.created_at AS movement_date,
+                          im.movement_type, im.quantity_change AS quantity, im.unit_cost, im.total_cost,
+                          im.status, im.reason, w.warehouse_name, u.username AS performed_by_name
+                   FROM inventory_movements im
+                   LEFT JOIN warehouses w ON im.warehouse_id = w.id
+                   LEFT JOIN users u ON im.performed_by = u.id
+                   WHERE im.product_id = ? AND im.is_deleted = 0
+                   ORDER BY datetime(im.created_at) DESC, im.id DESC LIMIT 50""",
+                arrayOf(productId.toString())
+            ).use { cursor -> while (cursor.moveToNext()) movements.put(cursorToJsonObject(cursor)) }
+            product.put("movements", movements)
+            product
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getProductMovementTrend(productId: Long, days: Int = 30): JSONObject {
+        dbLock.lock()
+        return try {
+            val safeDays = days.coerceIn(1, 365)
+            val labels = JSONArray()
+            val inbound = JSONArray()
+            val outbound = JSONArray()
+            val counts = JSONArray()
+            readableDatabase.rawQuery(
+                """SELECT date(created_at) AS day,
+                          COALESCE(SUM(CASE WHEN movement_type IN ('in', 'return') THEN ABS(quantity_change) ELSE 0 END), 0) AS inbound,
+                          COALESCE(SUM(CASE WHEN movement_type IN ('out', 'damage') THEN ABS(quantity_change) ELSE 0 END), 0) AS outbound,
+                          COUNT(*) AS movement_count
+                   FROM inventory_movements
+                   WHERE product_id = ? AND is_deleted = 0 AND date(created_at) >= date('now', ?)
+                   GROUP BY date(created_at) ORDER BY day ASC""".trimIndent(),
+                arrayOf(productId.toString(), "-${safeDays} days")
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    labels.put(cursor.getString(cursor.getColumnIndexOrThrow("day")))
+                    inbound.put(cursor.getDouble(cursor.getColumnIndexOrThrow("inbound")))
+                    outbound.put(cursor.getDouble(cursor.getColumnIndexOrThrow("outbound")))
+                    counts.put(cursor.getInt(cursor.getColumnIndexOrThrow("movement_count")))
+                }
+            }
+            JSONObject().apply { put("labels", labels); put("inbound", inbound); put("outbound", outbound); put("values", counts) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 
     fun createStockAlert(productId: Long, threshold: Double): Long {
         dbLock.lock()

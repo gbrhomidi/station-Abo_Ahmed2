@@ -185,7 +185,7 @@
     }
     .btn-sm {
       padding: 4px 8px;
-      font-size: 0.75rem;
+      font-size: 0.9rem;
     }
 
     .main-content {
@@ -1350,6 +1350,13 @@
           </label>
           <input class="form-control numeric" id="unit-price" step="0.01" type="number">
          </div>
+         <div class="form-group-half" id="adjustment-direction-group" style="display:none;">
+          <label class="form-label">⚖️ اتجاه التسوية</label>
+          <select class="form-control" id="adjustment-direction">
+           <option value="increase">زيادة الرصيد</option>
+           <option value="decrease">خفض الرصيد</option>
+          </select>
+         </div>
          <div class="form-group-half" id="source-warehouse-group" style="display:none;">
           <label class="form-label">
            📤 المستودع المصدر
@@ -1496,26 +1503,40 @@
    // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
-function apiCall(action, params) {
+function invokeTypedBridge(method, args = []) {
     return new Promise((resolve, reject) => {
-        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-            try {
-                const jsonParams = JSON.stringify(params || {});
-                const result = window.AndroidInterface.execute(action, jsonParams);
-                try {
-                    const parsed = JSON.parse(result);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ success: true, data: result });
-                }
-            } catch (e) {
-                reject({ success: false, error: e.message });
-            }
-        } else {
-            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
-            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+        if (!window.AndroidInterface || typeof window.AndroidInterface[method] !== 'function') {
+            reject({ success: false, error: `عقد الجسر ${method} غير متاح في إصدار التطبيق الحالي` });
+            return;
         }
+        try {
+            const raw = window.AndroidInterface[method](...args);
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!parsed || parsed.success !== true) { reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' }); return; }
+            resolve(parsed);
+        } catch (error) { reject({ success: false, error: error.message || 'فشل استدعاء الجسر' }); }
     });
+}
+
+function apiCall(action, params = {}) {
+    const p = params || {};
+    const json = JSON.stringify(p);
+    switch (action) {
+        case 'getProducts': return invokeTypedBridge('getProducts');
+        case 'getWarehouses': return invokeTypedBridge('getWarehouses', [json]);
+        case 'getSuppliers': return invokeTypedBridge('getSuppliers');
+        case 'getCustomers': return invokeTypedBridge('getCustomers');
+        case 'getMovements': return invokeTypedBridge('getStockMovements', [json]);
+        case 'getMovementStats': return invokeTypedBridge('getInventoryMovementStats', [json]);
+        case 'getInventoryDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
+        case 'getMovement': return invokeTypedBridge('getStockMovements', [JSON.stringify({ movement_id: Number(p.movement_id), limit: 1 })]);
+        case 'deleteMovement': return invokeTypedBridge('archiveStockMovement', [Number(p.movement_id)]);
+        case 'saveMovement': return invokeTypedBridge(p.movement_type === 'transfer' ? 'transferStockMovement' : 'addStockMovement', [json]);
+        case 'generateReport': return invokeTypedBridge('generateInventoryReport', [json]);
+        case 'getInventoryAnalytics': return invokeTypedBridge('generateInventoryReport', [JSON.stringify({ report_type: 'summary' })]);
+        case 'getProductTrend': return invokeTypedBridge('getProductMovementTrend', [Number(p.product_id), Number(p.days || 30)]);
+        default: return Promise.reject({ success: false, error: `الإجراء غير مدعوم: ${action}` });
+    }
 }
 
 function handleAndroidResult(action, data) {
@@ -1769,8 +1790,8 @@ function populateMovementsTable(movements) {
             <td>${warehouseName}</td>
             <td>${sourceTarget + targetInfo || '---'}</td>
             <td>${entityInfo}</td>
-            <td class="numeric">${(m.unit_cost || 0).toFixed(2)}</td>
-            <td class="numeric">${(m.total_cost || 0).toFixed(2)}</td>
+            <td class="numeric">${Number(m.unit_cost || 0).toFixed(2)}</td>
+            <td class="numeric">${Number(m.total_cost || 0).toFixed(2)}</td>
             <td>${statusBadge}</td>
             <td>
                 <div class="btn-action-group">
@@ -1792,18 +1813,16 @@ function selectRow(row) {
     row.classList.add('selected');
 }
 
-function getMovementTypeLabel(type) {
-    const map = {
-        'in': '<span class="badge badge-success status-indicator">📥 دخول مخزني</span>',
-        'out': '<span class="badge badge-danger status-indicator">📤 خروج مخزني</span>',
-        'return_customer': '<span class="badge badge-pink status-indicator">🔄 إرجاع من عميل</span>',
-        'return_supplier': '<span class="badge badge-purple status-indicator">🔄 إرجاع لمورد</span>',
-        'waste': '<span class="badge badge-cyan status-indicator">🗑️ هالك</span>',
-        'transfer': '<span class="badge badge-info status-indicator">🔄 تحويل بين مستودعات</span>',
-        'adjustment': '<span class="badge badge-indigo status-indicator">⚖️ تسوية مخزنية</span>',
-        'stocktake': '<span class="badge badge-teal status-indicator">📋 جرد</span>'
+function getMovementTypeLabel(type, subtype = '') {
+    const labels = {
+        in: '<span class="badge badge-success status-indicator">دخول مخزني</span>',
+        out: `<span class="badge badge-danger status-indicator">${subtype === 'return_supplier' ? 'إرجاع لمورد' : 'خروج مخزني'}</span>`,
+        return: '<span class="badge badge-pink status-indicator">إرجاع من عميل</span>',
+        damage: '<span class="badge badge-cyan status-indicator">هالك / تلف</span>',
+        transfer: '<span class="badge badge-info status-indicator">تحويل بين مستودعات</span>',
+        adjustment: '<span class="badge badge-indigo status-indicator">تسوية مخزنية</span>'
     };
-    return map[type] || `<span class="badge badge-secondary">${type}</span>`;
+    return labels[type] || `<span class="badge badge-secondary">${escapeHtml(type || 'غير محدد')}</span>`;
 }
 
 function updatePagination(total) {
@@ -1851,7 +1870,8 @@ async function loadStats() {
 // ============================================================
 function applyFilters() {
     const product = document.getElementById('search-product').value.trim();
-    const type = document.getElementById('filter-type').value;
+    const selectedType = document.getElementById('filter-type').value;
+    const type = ({ return_customer: 'return', return_supplier: 'out', waste: 'damage', stocktake: 'adjustment' })[selectedType] || selectedType;
     const from = document.getElementById('filter-from').value;
     const to = document.getElementById('filter-to').value;
     const warehouse = document.getElementById('filter-warehouse').value;
@@ -1908,178 +1928,92 @@ function showCreateModal() {
 
 function toggleMovementFields() {
     const type = document.getElementById('movement-type').value;
-    document.getElementById('source-warehouse-group').style.display = 'none';
-    document.getElementById('target-warehouse-group').style.display = 'none';
-    document.getElementById('supplier-group').style.display = 'none';
-    document.getElementById('customer-group').style.display = 'none';
-
-    if (type === 'in' || type === 'return_supplier' || type === 'waste') {
-        document.getElementById('supplier-group').style.display = 'block';
-        document.getElementById('target-warehouse-group').style.display = 'block';
-    } else if (type === 'out' || type === 'return_customer') {
-        document.getElementById('customer-group').style.display = 'block';
-        document.getElementById('source-warehouse-group').style.display = 'block';
-    } else if (type === 'transfer') {
-        document.getElementById('source-warehouse-group').style.display = 'block';
-        document.getElementById('target-warehouse-group').style.display = 'block';
-    } else if (type === 'adjustment' || type === 'stocktake') {
-        document.getElementById('source-warehouse-group').style.display = 'block';
-    }
+    ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group', 'adjustment-direction-group']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    if (type === 'in') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
+    else if (type === 'return_customer') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
+    else if (type === 'out') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
+    else if (type === 'return_supplier') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
+    else if (type === 'waste') { document.getElementById('source-warehouse-group').style.display = 'block'; }
+    else if (type === 'transfer') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('target-warehouse-group').style.display = 'block'; }
+    else if (type === 'adjustment' || type === 'stocktake') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('adjustment-direction-group').style.display = 'block'; }
 }
 
 async function loadProductInfo() {
-    const productId = document.getElementById('product-select').value;
-    const warehouseId = document.getElementById('source-warehouse').value || document.getElementById('target-warehouse').value || 0;
+    const productId = Number(document.getElementById('product-select').value);
     if (!productId) { document.getElementById('product-info').style.display = 'none'; return; }
     try {
-        const result = await apiCall('getInventoryDetails', { product_id: productId, warehouse_id: warehouseId });
-        if (result.success && result.data) {
-            const d = result.data;
-            document.getElementById('current-quantity').textContent = (d.quantity_on_hand || 0).toLocaleString('en');
-            document.getElementById('current-cost').textContent = (d.average_cost || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
-            document.getElementById('min-stock').textContent = (d.min_stock_level || 0).toLocaleString('en');
-            document.getElementById('last-movement').textContent = d.last_movement_date || '---';
-            if (!document.getElementById('unit-price').value && d.average_cost > 0) {
-                document.getElementById('unit-price').value = d.average_cost;
-            }
-            document.getElementById('product-info').style.display = 'block';
-        }
-    } catch (e) {
-        console.error('Error loading product info:', e);
-    }
+        const result = await apiCall('getInventoryDetails', { product_id: productId });
+        const d = result.data || {};
+        document.getElementById('current-quantity').textContent = Number(d.quantity || 0).toLocaleString('en');
+        document.getElementById('current-cost').textContent = Number(d.purchase_price || 0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2});
+        document.getElementById('min-stock').textContent = Number(d.minimum_stock || 0).toLocaleString('en');
+        document.getElementById('last-movement').textContent = (d.movements || [])[0]?.movement_date || '---';
+        if (!document.getElementById('unit-price').value && Number(d.purchase_price || 0) > 0) document.getElementById('unit-price').value = Number(d.purchase_price);
+        document.getElementById('product-info').style.display = 'block';
+    } catch (e) { document.getElementById('product-info').style.display = 'none'; showToast(e.error || 'تعذر تحميل رصيد المنتج', 'error'); }
 }
 
 async function saveMovement() {
     const type = document.getElementById('movement-type').value;
-    const productId = document.getElementById('product-select').value;
-    const quantity = parseFloat(document.getElementById('movement-quantity').value);
+    const productId = Number(document.getElementById('product-select').value);
+    const quantity = Number(document.getElementById('movement-quantity').value);
     const date = document.getElementById('movement-date').value;
-    const unitPrice = parseFloat(document.getElementById('unit-price').value) || 0;
-    const sourceWarehouse = document.getElementById('source-warehouse').value;
-    const targetWarehouse = document.getElementById('target-warehouse').value;
-    const supplierId = document.getElementById('supplier-select').value;
-    const customerId = document.getElementById('customer-select').value;
+    const unitPrice = Number(document.getElementById('unit-price').value || 0);
+    const sourceWarehouse = Number(document.getElementById('source-warehouse').value || 0);
+    const targetWarehouse = Number(document.getElementById('target-warehouse').value || 0);
+    const supplierId = Number(document.getElementById('supplier-select').value || 0);
+    const customerId = Number(document.getElementById('customer-select').value || 0);
     const reference = document.getElementById('movement-reference').value.trim();
     const notes = document.getElementById('movement-notes').value.trim();
-
-    if (!type || !productId || !quantity || quantity <= 0 || !date) {
-        showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
-        return;
-    }
-    if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) {
-        showToast('يرجى اختيار مستودعين مختلفين للتحويل', 'error');
-        return;
-    }
-    if ((type === 'in' || type === 'return_supplier' || type === 'waste') && !targetWarehouse) {
-        showToast('يرجى اختيار المستودع الهدف', 'error');
-        return;
-    }
-    if ((type === 'out' || type === 'return_customer') && !sourceWarehouse) {
-        showToast('يرجى اختيار المستودع المصدر', 'error');
-        return;
-    }
-
-    const data = {
-        movement_type: type,
-        product_id: parseInt(productId),
-        quantity_change: quantity,
-        movement_date: date,
-        unit_cost: unitPrice,
-        source_warehouse_id: sourceWarehouse ? parseInt(sourceWarehouse) : null,
-        target_warehouse_id: targetWarehouse ? parseInt(targetWarehouse) : null,
-        supplier_id: supplierId ? parseInt(supplierId) : null,
-        customer_id: customerId ? parseInt(customerId) : null,
-        reference: reference,
-        notes: notes,
-        status: 'completed'
-    };
-
+    if (!type || !productId || !Number.isFinite(quantity) || quantity <= 0 || !date) { showToast('يرجى ملء الحقول المطلوبة بقيم صحيحة', 'error'); return; }
+    if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) { showToast('اختر مستودعين مختلفين للتحويل', 'error'); return; }
+    if (['in', 'return_customer'].includes(type) && !targetWarehouse) { showToast('اختر المستودع الهدف', 'error'); return; }
+    if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake'].includes(type) && !sourceWarehouse) { showToast('اختر المستودع المصدر', 'error'); return; }
+    const backendType = type === 'return_customer' ? 'return' : type === 'return_supplier' ? 'out' : type === 'waste' ? 'damage' : type === 'stocktake' ? 'adjustment' : type;
+    const signedQuantity = ['adjustment', 'stocktake'].includes(type) && document.getElementById('adjustment-direction').value === 'decrease' ? -quantity : quantity;
+    const data = { movement_type: backendType, movement_subtype: type, product_id: productId, quantity, signed_quantity: signedQuantity, movement_date: date, unit_cost: unitPrice, warehouse_id: ['in', 'return_customer'].includes(type) ? targetWarehouse : sourceWarehouse, source_warehouse_id: sourceWarehouse || null, target_warehouse_id: targetWarehouse || null, supplier_id: supplierId || null, customer_id: customerId || null, reference_code: reference, reference_type: type, notes };
     showLoading(true);
     try {
         const result = await apiCall('saveMovement', data);
-        if (result.success) {
-            showToast('تم حفظ الحركة بنجاح', 'success');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('createModal'));
-            modal.hide();
-            loadMovements();
-            loadStats();
-        } else {
-            showToast(result.message || 'خطأ في حفظ الحركة', 'error');
-        }
-    } catch (e) {
-        showToast('خطأ في الاتصال', 'error');
-    } finally {
-        showLoading(false);
-    }
+        showToast(result.message || 'تم حفظ الحركة بنجاح', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('createModal'))?.hide();
+        await Promise.all([loadMovements(), loadStats()]);
+    } catch (e) { showToast(e.error || 'فشل الحفظ ولم يتم اعتماد الحركة', 'error'); }
+    finally { showLoading(false); }
 }
 
 async function viewMovement(id) {
     showLoading(true);
     try {
-        const result = await apiCall('getMovement', { movement_id: id });
-        if (result.success) {
-            const m = result.data;
-            const details = document.getElementById('movement-details');
-            const typeLabel = getMovementTypeLabel(m.movement_type);
-            const statusBadge = m.status === 'completed' ? '✅ مكتمل' : m.status === 'pending' ? '⏳ قيد الانتظار' : '❌ ملغى';
-            details.innerHTML = `
-                <div class="info-grid">
-                    <div class="info-item"><span>#️⃣ رقم الحركة:</span><span class="numeric">${m.movement_id || m.id}</span></div>
-                    <div class="info-item"><span>📝 النوع:</span><span>${typeLabel}</span></div>
-                    <div class="info-item"><span>📅 التاريخ:</span><span class="numeric">${m.movement_date || '---'}</span></div>
-                    <div class="info-item"><span>🛒 المنتج:</span><span>${m.product_name || '---'}</span></div>
-                    <div class="info-item"><span>📦 الكمية:</span><span class="numeric">${m.quantity_change || 0}</span></div>
-                    <div class="info-item"><span>💰 السعر:</span><span class="numeric">${(m.unit_cost || 0).toFixed(2)}</span></div>
-                    <div class="info-item"><span>💵 القيمة:</span><span class="numeric">${(m.total_cost || 0).toFixed(2)}</span></div>
-                    <div class="info-item"><span>🏢 المستودع:</span><span>${m.warehouse_name || '---'}</span></div>
-                    ${m.source_warehouse_id ? `<div class="info-item"><span>📤 المصدر:</span><span>${m.source_warehouse_name || '---'}</span></div>` : ''}
-                    ${m.target_warehouse_id ? `<div class="info-item"><span>📥 الهدف:</span><span>${m.target_warehouse_name || '---'}</span></div>` : ''}
-                    ${m.supplier_id ? `<div class="info-item"><span>🏭 المورد:</span><span>${m.supplier_name || '---'}</span></div>` : ''}
-                    ${m.customer_id ? `<div class="info-item"><span>👥 العميل:</span><span>${m.customer_name || '---'}</span></div>` : ''}
-                    <div class="info-item"><span>📎 المرجع:</span><span>${m.reference || '---'}</span></div>
-                    <div class="info-item"><span>📊 الحالة:</span><span>${statusBadge}</span></div>
-                    <div class="info-item"><span>📝 الملاحظات:</span><span>${m.notes || '---'}</span></div>
-                </div>
-            `;
-            const modal = new bootstrap.Modal(document.getElementById('viewModal'));
-            modal.show();
-        } else {
-            showToast(result.message || 'خطأ في تحميل البيانات', 'error');
-        }
-    } catch (e) {
-        showToast('خطأ في الاتصال', 'error');
-    } finally {
-        showLoading(false);
-    }
+        const result = await apiCall('getMovement', { movement_id: Number(id) });
+        const m = (result.data || [])[0];
+        if (!m) throw { error: 'الحركة غير موجودة أو تمت أرشفتها' };
+        document.getElementById('movement-details').innerHTML = `<div class="info-grid">
+            <div class="info-item"><span>رقم الحركة:</span><span>${escapeHtml(String(m.movement_id || m.id || '---'))}</span></div>
+            <div class="info-item"><span>النوع:</span><span>${getMovementTypeLabel(m.movement_type, m.movement_subtype)}</span></div>
+            <div class="info-item"><span>التاريخ:</span><span>${escapeHtml(m.movement_date || m.created_at || '---')}</span></div>
+            <div class="info-item"><span>المنتج:</span><span>${escapeHtml(m.product_name_ar || m.product_name || '---')}</span></div>
+            <div class="info-item"><span>الكمية:</span><span>${Number(m.quantity_change || 0).toLocaleString('en')}</span></div>
+            <div class="info-item"><span>القيمة:</span><span>${Number(m.total_cost || 0).toFixed(2)}</span></div>
+            <div class="info-item"><span>المستودع:</span><span>${escapeHtml(m.warehouse_name || '---')}</span></div>
+            <div class="info-item"><span>المنفذ:</span><span>${escapeHtml(m.performed_by_name || '---')}</span></div>
+            <div class="info-item"><span>الحالة:</span><span>${escapeHtml(m.status || '---')}</span></div>
+            <div class="info-item"><span>المرجع:</span><span>${escapeHtml(m.reference_code || '---')}</span></div>
+            <div class="info-item"><span>السبب:</span><span>${escapeHtml(m.reason || m.remarks || '---')}</span></div>
+        </div>`;
+        new bootstrap.Modal(document.getElementById('viewModal')).show();
+    } catch (e) { showToast(e.error || 'تعذر تحميل تفاصيل الحركة', 'error'); }
+    finally { showLoading(false); }
 }
 
 async function deleteMovement(id) {
-    const result = await Swal.fire({
-        title: '⚠️ هل أنت متأكد؟',
-        text: "لا يمكن التراجع عن هذا الإجراء!",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: '🗑️ نعم، احذف!',
-        cancelButtonText: '❌ إلغاء'
-    });
-    if (!result.isConfirmed) return;
+    const confirmation = await Swal.fire({ title: 'أرشفة الحركة؟', text: 'سيتم إخفاؤها من القوائم دون حذفها من سجل التدقيق.', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
+    if (!confirmation.isConfirmed) return;
     showLoading(true);
-    try {
-        const res = await apiCall('deleteMovement', { movement_id: id });
-        if (res.success) {
-            showToast('تم حذف الحركة بنجاح', 'success');
-            loadMovements();
-            loadStats();
-        } else {
-            showToast(res.message || 'خطأ في الحذف', 'error');
-        }
-    } catch (e) {
-        showToast('خطأ في الاتصال', 'error');
-    } finally {
-        showLoading(false);
-    }
+    try { const result = await apiCall('deleteMovement', { movement_id: Number(id) }); showToast(result.message || 'تمت الأرشفة', 'success'); await Promise.all([loadMovements(), loadStats()]); }
+    catch (e) { showToast(e.error || 'فشلت الأرشفة ولم تتغير البيانات', 'error'); }
+    finally { showLoading(false); }
 }
 
 function printMovement() {
@@ -2272,72 +2206,29 @@ async function loadAnalytics() {
 }
 
 async function loadProductAnalytics() {
-    const productId = document.getElementById('analytics-product').value;
-    const days = parseInt(document.getElementById('analytics-days').value) || 30;
+    const productId = Number(document.getElementById('analytics-product').value);
+    const days = Number(document.getElementById('analytics-days').value) || 30;
     if (!productId) { showToast('يرجى اختيار منتج أولاً', 'warning'); return; }
     showLoading(true);
     try {
-        const result = await apiCall('getProductTrend', { product_id: productId, days: days });
-        if (result.success && result.data) {
-            const d = result.data;
-            document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
-            renderChart(d.labels || [], d.values || []);
-        } else {
-            // بيانات تجريبية للعرض
-            const mock = generateMockData(days);
-            document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
-            renderChart(mock.labels, mock.values);
-        }
-    } catch (e) {
-        const mock = generateMockData(days);
-        document.getElementById('product-analytics-range').textContent = `📅 الفترة: ${days} يوم`;
-        renderChart(mock.labels, mock.values);
-    } finally {
-        showLoading(false);
-    }
+        const result = await apiCall('getProductTrend', { product_id: productId, days });
+        const d = result.data || {};
+        document.getElementById('product-analytics-range').textContent = `الفترة: ${days} يوم`;
+        renderChart(d.labels || [], d.values || [], d.inbound || [], d.outbound || []);
+    } catch (e) { showToast(e.error || 'لا توجد بيانات حركة حقيقية لهذا المنتج', 'error'); renderChart([], [], [], []); }
+    finally { showLoading(false); }
 }
 
-function generateMockData(days) {
-    const labels = [];
-    const values = [];
-    const today = new Date();
-    for (let i = days-1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        labels.push(d.toLocaleDateString('ar-EG', {month:'2-digit', day:'2-digit'}));
-        values.push(Math.floor(Math.random() * 80) + 10);
-    }
-    return { labels, values };
-}
-
-function renderChart(labels, values) {
+function renderChart(labels, values, inbound = [], outbound = []) {
     const container = document.getElementById('product-analytics-chart');
     container.innerHTML = '<canvas id="productChart"></canvas>';
-    const ctx = document.getElementById('productChart').getContext('2d');
-    if (chartInstance) chartInstance.destroy();
-    chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'حركة المنتج',
-                data: values,
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: { display: true, text: 'تحليل حركة المنتج خلال الفترة' },
-                legend: { display: false }
-            },
-            scales: { y: { beginAtZero: true } }
-        }
-    });
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    const datasets = inbound.length || outbound.length ? [
+        { label: 'دخول / إرجاع', data: inbound, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.3, fill: true },
+        { label: 'خروج / تلف', data: outbound, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', tension: 0.3, fill: true }
+    ] : values.length ? [{ label: 'عدد الحركات', data: values, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', tension: 0.3, fill: true }] : [];
+    if (!datasets.length) { container.innerHTML = '<div class="empty-state"><i class="fas fa-chart-line"></i>لا توجد بيانات حركة للفترة المختارة</div>'; return; }
+    chartInstance = new Chart(document.getElementById('productChart').getContext('2d'), { type: 'line', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
 }
 
 // ============================================================

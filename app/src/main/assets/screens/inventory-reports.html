@@ -1544,46 +1544,28 @@
    // ================================================================
         // 1. دالة apiCall الموحدة
         // ================================================================
-        function apiCall(action, params) {
+        function invokeTypedBridge(method, args = []) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
-                }
+                if (!window.AndroidInterface || typeof window.AndroidInterface[method] !== 'function') { reject({ success: false, error: `عقد الجسر ${method} غير متاح في إصدار التطبيق الحالي` }); return; }
+                try {
+                    const raw = window.AndroidInterface[method](...args);
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (!parsed || parsed.success !== true) { reject(parsed || { success: false, error: 'استجابة غير صالحة من الجسر' }); return; }
+                    resolve(parsed);
+                } catch (error) { reject({ success: false, error: error.message || 'فشل استدعاء الجسر' }); }
             });
         }
 
-        // ================================================================
-        // 2. LocalDB للتخزين المحلي
-        // ================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            getInventory: function() { return this.get('inventory_data', []); },
-            setInventory: function(data) { this.set('inventory_data', data); },
-            getAIInsights: function() { return this.get('inventory_ai_insights', []); },
-            setAIInsights: function(data) { this.set('inventory_ai_insights', data); }
-        };
+        function apiCall(action, params = {}) {
+            const p = params || {};
+            switch (action) {
+                case 'generateInventoryReport': return invokeTypedBridge('generateInventoryReport', [JSON.stringify(p)]);
+                case 'getWarehouses': return invokeTypedBridge('getWarehouses', [JSON.stringify(p)]);
+                case 'getCategories': return invokeTypedBridge('getCategories');
+                case 'getProductDetails': return invokeTypedBridge('getInventoryProductDetails', [Number(p.product_id)]);
+                default: return Promise.reject({ success: false, error: `الإجراء غير مدعوم: ${action}` });
+            }
+        }
 
         // ================================================================
         // 3. دوال مساعدة
@@ -1641,13 +1623,13 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            localStorage.setItem('inventory_reports_theme', newTheme);
             const icon = document.getElementById('themeIcon');
             icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = localStorage.getItem('inventory_reports_theme') || 'light';
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -1657,114 +1639,66 @@
         // 5. توليد التقرير
         // ================================================================
         let inventoryData = [];
+        let currentReportPayload = {};
+        let currentAlerts = [];
+        let aiInsights = [];
         let movementChart = null,
-            categoryChart = null;
-
-        async function generateReport() {
+            categoryChart = null;async function generateReport() {
             const from = document.getElementById('filterDateFrom').value;
             const to = document.getElementById('filterDateTo').value;
             const warehouse = document.getElementById('filterWarehouse').value;
             const category = document.getElementById('filterCategory').value;
             const type = document.getElementById('filterReportType').value;
             const status = document.getElementById('filterStatus').value;
-
-            if (!from || !to) {
-                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
-                return;
-            }
-
+            if (from && to && from > to) { showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const params = {
-                    start_date: from,
-                    end_date: to,
-                    warehouse_id: warehouse || null,
-                    category_id: category || null,
-                    report_type: type,
-                    status: status || null
-                };
-                const result = await apiCall('generateInventoryReport', params);
-                if (result.success && result.data) {
-                    inventoryData = result.data;
-                    LocalDB.setInventory(inventoryData);
-                    renderTable(inventoryData);
-                    updateKPIs(inventoryData);
-                    updateCharts(inventoryData);
-                    updateFooter(inventoryData);
-                    generateAlerts(inventoryData);
-                    generateAIInsights(inventoryData);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                } else {
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                    document.getElementById('inventoryTableBody').innerHTML =
-                        '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات مطابقة</div></td></tr>';
-                    resetKPIs();
-                }
+                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null });
+                currentReportPayload = result.data || {};
+                inventoryData = currentReportPayload.rows || [];
+                renderTable(inventoryData, type);
+                updateKPIs(inventoryData, currentReportPayload.stats || {});
+                updateCharts(inventoryData, currentReportPayload);
+                updateFooter(inventoryData, currentReportPayload.stats || {});
+                generateAlerts(inventoryData);
+                generateAIInsights(inventoryData, currentReportPayload.stats || {});
+                showToast(inventoryData.length ? '✅ تم توليد التقرير من SQLite' : '⚠️ لا توجد بيانات مطابقة', inventoryData.length ? 'success' : 'warning');
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
-            } finally {
-                showLoading(false);
-            }
+                currentReportPayload = {}; inventoryData = [];
+                renderTable([], type); resetKPIs(); updateCharts([], {}); updateFooter([], {});
+                showToast(e.error || '❌ فشل توليد التقرير ولم تُستخدم بيانات بديلة', 'error');
+            } finally { showLoading(false); }
         }
 
         // ================================================================
         // 6. عرض الجدول
         // ================================================================
-        function renderTable(data) {
+        function renderTable(data, reportType = 'summary') {
             const tbody = document.getElementById('inventoryTableBody');
-            if (!data || data.length === 0) {
-                tbody.innerHTML =
-                    '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات للعرض</div></td></tr>';
-                return;
-            }
+            const thead = document.querySelector('#inventoryTable thead tr');
+            thead.innerHTML = reportType === 'movement' ? '<th>#</th><th>التاريخ</th><th>النوع</th><th>كود المنتج</th><th>المنتج</th><th>الفئة</th><th>المستودع</th><th>الكمية</th><th>القيمة</th><th>الحالة</th><th>المنفذ</th>' : '<th>#</th><th>كود المنتج</th><th>المنتج</th><th>الفئة</th><th>المستودع</th><th>الكمية</th><th>سعر الشراء</th><th>سعر البيع</th><th>القيمة</th><th>الحالة</th><th>إجراء</th>';
+            if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i>لا توجد بيانات مطابقة</div></td></tr>'; return; }
             tbody.innerHTML = data.map((item, idx) => {
+                if (reportType === 'movement') return `<tr><td>${idx + 1}</td><td>${escapeHtml(item.movement_date || '---')}</td><td>${escapeHtml(item.movement_type || '---')}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || '---')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.total_value || 0)}</td><td>${escapeHtml(item.status || '---')}</td><td>${escapeHtml(item.performed_by_name || '---')}</td></tr>`;
                 const status = item.status || 'active';
-                const statusLabel = getStatusLabel(status);
-                const statusClass = getStatusClass(status);
-                const value = parseFloat(item.quantity || 0) * parseFloat(item.purchase_price || 0);
-                return `
-                    <tr>
-                        <td>${idx + 1}</td>
-                        <td class="product-code">${escapeHtml(item.product_code || '---')}</td>
-                        <td>${escapeHtml(item.product_name || '---')}</td>
-                        <td>${escapeHtml(item.category_name || '---')}</td>
-                        <td>${escapeHtml(item.warehouse_name || '---')}</td>
-                        <td>${parseFloat(item.quantity || 0).toLocaleString('en')}</td>
-                        <td>${formatCurrency(item.purchase_price || 0)}</td>
-                        <td>${formatCurrency(item.sale_price || item.unit_price || 0)}</td>
-                        <td class="amount debit">${formatCurrency(value)}</td>
-                        <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                        <td>
-                            <button class="btn-view" onclick="viewProduct('${item.product_id || item.id}')" title="تفاصيل">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                const value = Number(item.quantity || 0) * Number(item.purchase_price || 0);
+                return `<tr><td>${idx + 1}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || 'جميع المستودعات')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.purchase_price)}</td><td>${formatCurrency(item.sale_price)}</td><td class="amount debit">${formatCurrency(value)}</td><td><span class="status-badge ${getStatusClass(status)}">${getStatusLabel(status)}</span></td><td><button class="btn-view" onclick="viewProduct(${Number(item.product_id || item.id || 0)})" title="تفاصيل"><i class="fas fa-eye"></i></button></td></tr>`;
             }).join('');
         }
 
         // ================================================================
         // 7. تحديث بطاقات الإحصائيات
         // ================================================================
-        function updateKPIs(data) {
-            const totalItems = data.length;
-            const totalValue = data.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item
-                .purchase_price || 0)), 0);
-            const lowStock = data.filter(item => item.status === 'low' || item.status === 'critical').length;
-            const turnover = data.length > 0 ? (data.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0) / data
-                .length) : 0;
-
-            document.getElementById('kpiTotalItems').textContent = totalItems;
+        function updateKPIs(data, stats = {}) {
+            const totalItems = Number(stats.total_items ?? data.length);
+            const totalValue = Number(stats.total_value ?? data.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.purchase_price || 0), 0));
+            const lowStock = Number(stats.low_stock ?? data.filter(item => item.status === 'low' || item.status === 'critical').length);
+            const turnover = totalItems ? Number(stats.total_quantity ?? 0) / totalItems : 0;
+            document.getElementById('kpiTotalItems').textContent = totalItems.toLocaleString('en');
             document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
             document.getElementById('kpiTurnover').textContent = turnover.toFixed(1);
-            document.getElementById('kpiLowStock').textContent = lowStock;
-
-            // تحديث الاتجاهات (محاكاة)
-            document.getElementById('trendTotal').textContent = (Math.random() * 10 + 1).toFixed(1) + '%';
-            document.getElementById('trendValue').textContent = (Math.random() * 8 + 2).toFixed(1) + '%';
-            document.getElementById('trendTurnover').textContent = (Math.random() * 5 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendLow').textContent = (Math.random() * 3 + 1).toFixed(1) + '%';
+            document.getElementById('kpiLowStock').textContent = lowStock.toLocaleString('en');
+            ['trendTotal', 'trendValue', 'trendTurnover', 'trendLow'].forEach(id => document.getElementById(id).textContent = '—');
         }
 
         function resetKPIs() {
@@ -1777,107 +1711,36 @@
         // ================================================================
         // 8. تحديث ملخص الجدول
         // ================================================================
-        function updateFooter(data) {
-            const totalValue = data.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item
-                .purchase_price || 0)), 0);
-            const totalItems = data.length;
-            const avgPrice = totalItems > 0 ? totalValue / totalItems : 0;
+        function updateFooter(data, stats = {}) {
+            const totalValue = Number(stats.total_value ?? data.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.purchase_price || 0), 0));
+            const totalItems = Number(stats.total_items ?? data.length);
             document.getElementById('footerTotal').textContent = formatCurrency(totalValue);
-            document.getElementById('footerItems').textContent = totalItems;
-            document.getElementById('footerAvg').textContent = formatCurrency(avgPrice);
+            document.getElementById('footerItems').textContent = totalItems.toLocaleString('en');
+            document.getElementById('footerAvg').textContent = formatCurrency(totalItems ? totalValue / totalItems : 0);
         }
 
         // ================================================================
         // 9. الرسوم البيانية
         // ================================================================
-        function updateCharts(data) {
-            // حركة المخزون (محاكاة - سيتم جلبها من API)
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const values = data.slice(0, 7).map(() => Math.floor(Math.random() * 80 + 20));
-
+        function updateCharts(data, payload = {}) {
+            const series = payload.movement_series || [];
             const ctx1 = document.getElementById('movementChart').getContext('2d');
             if (movementChart) movementChart.destroy();
-            movementChart = new Chart(ctx1, {
-                type: 'line',
-                data: {
-                    labels: days,
-                    datasets: [{
-                        label: 'حركة المخزون',
-                        data: values,
-                        borderColor: '#00d4ff',
-                        backgroundColor: 'rgba(0,212,255,0.1)',
-                        tension: 0.3,
-                        fill: true,
-                        borderWidth: 2,
-                        pointBackgroundColor: '#00d4ff',
-                        pointBorderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-
-            // توزيع القيمة حسب الفئة
-            const catMap = {};
-            data.forEach(item => {
-                const cat = item.category_name || 'أخرى';
-                if (!catMap[cat]) catMap[cat] = 0;
-                catMap[cat] += parseFloat(item.quantity || 0) * parseFloat(item.purchase_price || 0);
-            });
-            const labels = Object.keys(catMap);
-            const vals = Object.values(catMap);
-            const colors = ['#00d4ff', '#f5c842', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#3b82f6'];
-
+            movementChart = new Chart(ctx1, { type: 'line', data: { labels: series.map(x => x.day || ''), datasets: [{ label: 'عدد الحركات', data: series.map(x => Number(x.movement_count || 0)), borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)', tension: 0.3, fill: true }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+            const categories = payload.categories || [];
             const ctx2 = document.getElementById('categoryChart').getContext('2d');
             if (categoryChart) categoryChart.destroy();
-            categoryChart = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: vals,
-                        backgroundColor: colors.slice(0, vals.length),
-                        borderColor: 'transparent',
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'left', labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10,
-                                color: '#8aa3c9' } }
-                    },
-                    cutout: '65%'
-                }
-            });
+            categoryChart = new Chart(ctx2, { type: 'doughnut', data: { labels: categories.map(x => x.category_name || 'أخرى'), datasets: [{ data: categories.map(x => Number(x.total_value || 0)), backgroundColor: ['#00d4ff', '#f5c842', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444'] }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%' } });
         }
 
         // ================================================================
         // 10. التنبيهات
         // ================================================================
         function generateAlerts(data) {
-            const alerts = [];
+            currentAlerts = [];
             const lowItems = data.filter(item => item.status === 'low' || item.status === 'critical');
-            if (lowItems.length > 0) {
-                alerts.push({ type: 'warning', icon: 'fa-exclamation-triangle', title: '⚠️ أصناف منخفضة المخزون',
-                    desc: lowItems.length + ' صنف تحت الحد الأدنى', time: 'الآن' });
-            }
-            const totalValue = data.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item
-                .purchase_price || 0)), 0);
-            if (totalValue > 1000000) {
-                alerts.push({ type: 'info', icon: 'fa-flag', title: '💰 قيمة مخزون مرتفعة',
-                    desc: 'إجمالي قيمة المخزون: ' + formatCurrency(totalValue), time: 'الآن' });
-            }
-            LocalDB.set('inventory_notifications', alerts);
-            renderAlerts(alerts);
+            if (lowItems.length) currentAlerts.push({ type: 'warning', icon: 'fa-exclamation-triangle', title: 'أصناف منخفضة المخزون', desc: `${lowItems.length} صنف تحت الحد الأدنى`, time: 'الآن' });
+            renderAlerts(currentAlerts);
         }
 
         function renderAlerts(alerts) {
@@ -1897,7 +1760,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('inventory_notifications', []);
+            const alerts = currentAlerts;
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -1905,38 +1768,20 @@
         // ================================================================
         // 11. AI Advisor
         // ================================================================
-        function generateAIInsights(data) {
-            if (!data || data.length === 0) return;
-            const insights = [];
-            const totalValue = data.reduce((sum, item) => sum + (parseFloat(item.quantity || 0) * parseFloat(item
-                .purchase_price || 0)), 0);
+        function generateAIInsights(data, stats = {}) {
+            aiInsights = [];
+            if (!data.length) return;
+            aiInsights.push({ title: 'نظرة عامة', desc: `${Number(stats.total_items ?? data.length).toLocaleString('en')} صنف - قيمة إجمالية ${formatCurrency(stats.total_value ?? 0)}` });
             const lowItems = data.filter(item => item.status === 'low' || item.status === 'critical');
-            const totalItems = data.length;
-
-            insights.push({ title: '📊 نظرة عامة', desc: totalItems + ' صنف - قيمة إجمالية ' + formatCurrency(
-                    totalValue) });
-            if (lowItems.length > 0) {
-                insights.push({ title: '⚠️ تنبيه المخزون', desc: lowItems.length + ' صنف يحتاج إعادة طلب' });
-            }
-            // أعلى قيمة صنف
-            let maxItem = null,
-                maxVal = 0;
-            data.forEach(item => {
-                const val = parseFloat(item.quantity || 0) * parseFloat(item.purchase_price || 0);
-                if (val > maxVal) { maxVal = val;
-                    maxItem = item; }
-            });
-            if (maxItem) {
-                insights.push({ title: '🏆 أعلى قيمة صنف', desc: (maxItem.product_name || '') + ' - ' + formatCurrency(
-                        maxVal) });
-            }
-            LocalDB.setAIInsights(insights);
+            if (lowItems.length) aiInsights.push({ title: 'تنبيه المخزون', desc: `${lowItems.length} صنف يحتاج إلى مراجعة أو إعادة طلب` });
+            const maxItem = data.reduce((best, item) => Number(item.quantity || 0) * Number(item.purchase_price || 0) > Number(best?.quantity || 0) * Number(best?.purchase_price || 0) ? item : best, null);
+            if (maxItem) aiInsights.push({ title: 'أعلى قيمة صنف', desc: `${maxItem.product_name_ar || maxItem.product_name || 'منتج'} - ${formatCurrency(Number(maxItem.quantity || 0) * Number(maxItem.purchase_price || 0))}` });
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = aiInsights;
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2076,16 +1921,12 @@
             });
             if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
             const headers = ['كود المنتج', 'المنتج', 'الفئة', 'المستودع', 'الكمية', 'سعر البيع', 'القيمة', 'الحالة'];
-            doc.autoTable({
-                head: [headers],
-                body: tableData,
-                startY: 100,
-                styles: { fontSize: 8, font: 'helvetica', textColor: [200, 200, 200] },
-                headStyles: { fillColor: [0, 212, 255], textColor: [8, 14, 26], fontSize: 9 },
-                alternateRowStyles: { fillColor: [15, 26, 46] },
-                margin: { left: 30, right: 30 },
-                tableWidth: 'auto'
-            });
+            if (typeof doc.autoTable === 'function') {
+                doc.autoTable({ head: [headers], body: tableData, startY: 100, styles: { fontSize: 8 }, headStyles: { fillColor: [0, 212, 255], textColor: [8, 14, 26] }, margin: { left: 30, right: 30 } });
+            } else {
+                let y = 105; doc.setFontSize(8);
+                tableData.forEach(row => { doc.text(row.join(' | ').slice(0, 130), 30, y); y += 14; if (y > 780) { doc.addPage(); y = 40; } });
+            }
             doc.save(`تقرير_المخزون_${from}_${to}.pdf`);
             showToast('✅ تم تصدير PDF', 'success');
         }

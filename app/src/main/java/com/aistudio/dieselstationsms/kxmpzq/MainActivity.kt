@@ -2392,8 +2392,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "addStockMovement called")
             if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                val data = JSONObject(jsonData)
+                val data = JSONObject(jsonData).apply {
+                    put("performed_by", activity.currentUserId)
+                    put("created_by", activity.currentUserId)
+                    put("station_id", getCurrentStationId(db, activity.currentUserId))
+                }
                 val id = db.addStockMovement(data)
                 DebugLogger.info("Stock", "Added stock movement id=$id")
                 successResponse(id, "تم إضافة حركة المخزون بنجاح")
@@ -2404,17 +2409,89 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun getStockMovements(): String {
+        fun transferStockMovement(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "transferStockMovement called")
+            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val data = JSONObject(jsonData).apply {
+                    put("performed_by", activity.currentUserId)
+                    put("station_id", getCurrentStationId(db, activity.currentUserId))
+                }
+                val id = db.transferStockMovement(data)
+                successResponse(id, "تم تنفيذ التحويل الذري بين المستودعين")
+            } catch (e: Exception) {
+                DebugLogger.logException("StockTransfer", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getStockMovements(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getStockMovements called")
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val movements = db.getStockMovements()
+                val movements = db.getStockMovements(JSONObject(jsonData.ifBlank { "{}" }))
                 dataResponse(movements)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
                 errorResponse(e.message)
             }
+        }
+
+        @JavascriptInterface
+        fun generateInventoryReport(jsonData: String = "{}"): String = getInventoryReport(jsonData)
+
+        @JavascriptInterface
+        fun archiveStockMovement(movementId: Long): String {
+            DebugLogger.info("WebAppInterface", "archiveStockMovement called")
+            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val rows = db.archiveStockMovement(movementId, activity.currentUserId)
+                successResponse(rows > 0, if (rows > 0) "تمت أرشفة الحركة" else "لم يتم العثور على الحركة")
+            } catch (e: Exception) { DebugLogger.logException("StockArchive", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getInventoryMovementStats(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getInventoryMovementStats called")
+            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }))) }
+            catch (e: Exception) { DebugLogger.logException("StockStats", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getInventoryReport(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getInventoryReport called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))) }
+            catch (e: Exception) { DebugLogger.logException("InventoryReport", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getInventoryProductDetails(productId: Long): String {
+            DebugLogger.info("WebAppInterface", "getInventoryProductDetails called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { db.getInventoryProductDetails(productId)?.let { dataResponse(it) } ?: errorResponse("المنتج غير موجود") }
+            catch (e: Exception) { DebugLogger.logException("InventoryProductDetails", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getProductMovementTrend(productId: Long, days: Int = 30): String {
+            DebugLogger.info("WebAppInterface", "getProductMovementTrend called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getProductMovementTrend(productId, days)) }
+            catch (e: Exception) { DebugLogger.logException("InventoryTrend", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -3937,30 +4014,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 report.put("revenue", report.optDouble("total_sales", 0.0))
                 report.put("cost", report.optDouble("total_payments", 0.0))
                 dataResponse(report)
-            } catch (e: Exception) {
-                DebugLogger.logException("Reports", e)
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
-        fun getInventoryReport(): String {
-            DebugLogger.info("WebAppInterface", "getInventoryReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val products = db.getProducts(1)
-                val result = JSONArray()
-                for (i in 0 until products.length()) {
-                    val p = products.getJSONObject(i)
-                    val item = JSONObject().apply {
-                        put("product_name", p.optString("product_name", ""))
-                        put("quantity", p.optDouble("quantity", 0.0))
-                        put("unit", p.optString("unit_id", "لتر"))
-                    }
-                    result.put(item)
-                }
-                dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
                 errorResponse(e.message)
