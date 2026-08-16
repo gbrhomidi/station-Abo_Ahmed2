@@ -186,11 +186,24 @@ class SmsProcessor(
 
                 var allProcessed = true
 
-                for (sms in messages) {
+                /*
+                 * getMessagesFromIntent يعيد أجزاء الرسالة متعددة الأجزاء
+                 * كعناصر منفصلة. يجب جمعها قبل claim والتحليل حتى لا
+                 * ينتج كل جزء ردًا مستقلًا أو أمرًا ناقصًا.
+                 */
+                val messageGroups = messages.groupBy { sms ->
+                    "${sms.displayOriginatingAddress.orEmpty()}|${sms.serviceCenterAddress.orEmpty()}"
+                }
+
+                for (group in messageGroups.values) {
+                    val first = group.first()
+                    val combinedBody = group.joinToString(separator = "") {
+                        it.displayMessageBody.orEmpty()
+                    }
 
                     val processed =
                         runCatching {
-                            processSingleMessage(sms)
+                            processSingleMessage(first, combinedBody)
                         }.getOrElse {
 
                             Log.e(
@@ -239,14 +252,15 @@ class SmsProcessor(
      * معالجة رسالة SMS واحدة.
      */
     private suspend fun processSingleMessage(
-        sms: SmsMessage
+        sms: SmsMessage,
+        bodyOverride: String? = null
     ): Boolean {
 
         val sender =
             sms.displayOriginatingAddress?.trim()
 
         val rawBody =
-            sms.displayMessageBody?.trim()
+            (bodyOverride ?: sms.displayMessageBody)?.trim()
 
         if (sender.isNullOrEmpty() ||
             rawBody.isNullOrEmpty()
@@ -439,36 +453,32 @@ class SmsProcessor(
 
             /*
              * البحث عن العميل.
+             *
+             * الأوامر العامة وطلبات الديزل يجب أن تعمل حتى لو لم
+             * يكن الرقم موجودًا في party_contacts. نستخدم عميلًا
+             * ضيفًا للقراءة والرد، بينما تبقى العمليات المحاسبية
+             * الحساسة مرتبطة ببيانات قاعدة البيانات الفعلية.
              */
-            val customer =
+            val resolvedCustomer =
                 customerResolver.findCustomer(sender)
 
-            if (customer == null) {
+            val customer =
+                resolvedCustomer ?: createPublicSmsCustomer(
+                    normalizedSender.ifBlank { sender }
+                )
 
+            if (resolvedCustomer == null) {
                 safeLogSms(
                     sender,
                     msgBody,
                     "received",
-                    "ignored: unregistered"
+                    "accepted: public command"
                 )
-
                 metrics.recordEvent(
-                    SmsMetrics.EventType.SMS_REJECTED,
+                    SmsMetrics.EventType.SMS_RECEIVED,
                     normalizedSender,
-                    "Unregistered"
+                    "Public sender"
                 )
-
-                /*
-                 * العميل غير المسجل لا يعتبر crash.
-                 */
-                smsClaim?.let {
-                    security.completeSmsClaim(
-                        it,
-                        sender,
-                        rawBody
-                    )
-                }
-                return true
             }
 
             /*
@@ -734,6 +744,23 @@ class SmsProcessor(
         }
     }
 
+    private fun createPublicSmsCustomer(
+        phone: String
+    ): SmsCustomerResolver.CustomerInfo {
+        return SmsCustomerResolver.CustomerInfo(
+            name = "عميل SMS",
+            phone = phone,
+            balance = 0.0,
+            points = 0,
+            vipLevel = 0,
+            commercialName = "",
+            email = "",
+            address = "",
+            vehicleType = "",
+            fleetSize = 0
+        )
+    }
+
     /**
      * إرسال الرد مع إبقاء فشل Business مستقلاً عن فشل Reply.
      */
@@ -741,7 +768,7 @@ class SmsProcessor(
         phone: String,
         message: String
     ): Boolean {
-        val sent = replyManager.sendReply(phone, message)
+        val sent = replyManager.sendReplyOnce(phone, message)
         if (!sent) {
             Log.e(TAG, "SMS reply failed for the current processing step")
         }
@@ -1106,7 +1133,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             GASOLINE_UNSUPPORTED_MESSAGE
         )
@@ -1239,7 +1266,7 @@ class SmsProcessor(
             quantityInfo.liters > MAX_ORDER_LITERS
         ) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "⚠️ ${customerDisplayName(customer)}،\n" +
                     "الكمية غير صالحة.\n" +
@@ -1338,7 +1365,7 @@ class SmsProcessor(
             location.length > 200
         ) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "⚠️ ${customerDisplayName(customer)}،\n" +
                     "الموقع غير صالح.\n" +
@@ -1416,7 +1443,7 @@ class SmsProcessor(
 
         if (timeInfo == null) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "⚠️ ${customerDisplayName(customer)}،\n" +
                     "لم أفهم الوقت.\n" +
@@ -1505,7 +1532,7 @@ class SmsProcessor(
             order.step != 4
         ) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "⚠️ $name، لا يوجد طلب ديزل قيد التأكيد.\n" +
                     "أرسل 'اريد ديزل' لبدء طلب جديد."
@@ -1550,7 +1577,7 @@ class SmsProcessor(
             val managerPhone =
                 customerResolver.getManagerPhone()
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "❌ $name،\n" +
                     "حدث خطأ في تسجيل الطلب. رمز: $errorId\n" +
@@ -1727,7 +1754,7 @@ class SmsProcessor(
 
         if (order != null) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "❌ ${customerDisplayName(customer)}،\n" +
                     "تم إلغاء الطلب.\n" +
@@ -1760,7 +1787,7 @@ class SmsProcessor(
 
         } else {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 sender,
                 "📦 ${customerDisplayName(customer)}،\n" +
                     "لا يوجد طلب نشط للإلغاء."
@@ -1848,7 +1875,7 @@ class SmsProcessor(
                     "${order.quantityLiters.toInt()} لتر"
                 }
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 driverPhone,
                 "🚚 توريد ديزل\n" +
                     "═══════════════════\n" +
@@ -1907,7 +1934,7 @@ class SmsProcessor(
                     "${kotlin.math.abs(bal).toInt()} ريال"
             }
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "💳 ${customerDisplayName(customer)}،\n" +
                 "═══════════════════\n" +
@@ -1936,7 +1963,7 @@ class SmsProcessor(
 
         if (amount > 0) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "💳 ${customerDisplayName(customer)}،\n" +
                     "مبلغ الدفع: ${amount.toInt()} ريال\n\n" +
@@ -1948,7 +1975,7 @@ class SmsProcessor(
 
         } else {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "💳 ${customerDisplayName(customer)}،\n" +
                     "الرصيد: ${customer.balance.toInt()} ريال\n\n" +
@@ -1967,7 +1994,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🏦 ${customerDisplayName(customer)}،\n" +
                 "معلومات التحويل:\n" +
@@ -2013,7 +2040,7 @@ class SmsProcessor(
         val dieselPrice =
             customerResolver.getDieselPrice()
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🎁 ${customerDisplayName(customer)}،\n" +
                 "═══════════════════\n" +
@@ -2046,7 +2073,7 @@ class SmsProcessor(
         val dieselPrice =
             customerResolver.getDieselPrice()
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "⛽ سعر الديزل: " +
                 "${dieselPrice.toInt()} ريال/لتر"
@@ -2080,7 +2107,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🏆 ${customerDisplayName(customer)}،\n" +
                 "═══════════════════\n" +
@@ -2118,7 +2145,7 @@ class SmsProcessor(
 
         if (points <= 0) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "أرسل 'استبدال [النقاط]'"
             )
@@ -2128,7 +2155,7 @@ class SmsProcessor(
 
         if (customer.points < points) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "❌ نقاطك غير كافية!\n" +
                     "المطلوب: $points\n" +
@@ -2157,7 +2184,7 @@ class SmsProcessor(
                     0.0
             }
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🎉 تم احتساب استبدال $points نقطة!\n" +
                 "القيمة: ${value.toInt()} ريال\n" +
@@ -2202,7 +2229,7 @@ class SmsProcessor(
                         "⏳ قيد المعالجة"
                 }
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📦 ${customerDisplayName(customer)}،\n" +
                     "آخر طلب:\n" +
@@ -2224,7 +2251,7 @@ class SmsProcessor(
 
         } else {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📦 ${customerDisplayName(customer)}،\n" +
                     "لا توجد طلبات سابقة.\n" +
@@ -2290,14 +2317,14 @@ class SmsProcessor(
                 "═══════════════════"
             )
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 sb.toString()
             )
 
         } else {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "لا يوجد سجل طلبات."
             )
@@ -2340,7 +2367,7 @@ class SmsProcessor(
                     it
                 )
 
-                replyManager.sendReply(
+                replyManager.sendReplyOnce(
                     customer.phone,
                     "❌ ${customerDisplayName(customer)}،\n" +
                         "تعذر الوصول إلى بيانات الفاتورة من قاعدة البيانات حاليًا.\n" +
@@ -2352,7 +2379,7 @@ class SmsProcessor(
 
         if (history.length() == 0) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📄 ${customerDisplayName(customer)}،\n" +
                     "لا توجد عمليات أو طلبات مسجلة فعليًا في قاعدة البيانات لإصدار فاتورة."
@@ -2369,7 +2396,7 @@ class SmsProcessor(
 
         if (filtered.length() == 0) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📄 ${customerDisplayName(customer)}،\n" +
                     "لم يتم العثور على عمليات فعلية مطابقة للفترة المطلوبة في قاعدة البيانات."
@@ -2385,7 +2412,7 @@ class SmsProcessor(
                 msgBody
             )
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             invoice
         )
@@ -2932,7 +2959,7 @@ class SmsProcessor(
                 )
         }
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "📊 ${customerDisplayName(customer)}،\n" +
                 "التقرير الأسبوعي:\n" +
@@ -2977,7 +3004,7 @@ class SmsProcessor(
 
         if (timeInfo != null) {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📅 ${customerDisplayName(customer)}،\n" +
                     "تم حجز موعد:\n" +
@@ -2987,7 +3014,7 @@ class SmsProcessor(
 
         } else {
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "📅 ${customerDisplayName(customer)}،\n" +
                     "أرسل 'حجز [الوقت]'\n" +
@@ -3058,7 +3085,7 @@ class SmsProcessor(
                     recurring
                 )
 
-                replyManager.sendReply(
+                replyManager.sendReplyOnce(
                     customer.phone,
                     "📅 ${customerDisplayName(customer)}،\n" +
                         "تم جدولة طلبك:\n" +
@@ -3252,7 +3279,7 @@ class SmsProcessor(
                         "شكراً!"
                 }
 
-            replyManager.sendReply(
+            replyManager.sendReplyOnce(
                 customer.phone,
                 "⭐ ${customerDisplayName(customer)}،\n" +
                     "تقييمك: $rating/5\n" +
@@ -3328,7 +3355,7 @@ class SmsProcessor(
                 ""
             }
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "$greeting ${customerDisplayName(customer)}! 🌟\n" +
                 "أهلاً بك في محطة أبو أحمد." +
@@ -3346,7 +3373,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🙏 ${customerDisplayName(customer)}،\n" +
                 "شكراً لك! نسعد بخدمتك دائماً.\n\n" +
@@ -3365,7 +3392,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "📋 ${customerDisplayName(customer)}،\n" +
                 "قائمة الخدمات:\n" +
@@ -3400,7 +3427,7 @@ class SmsProcessor(
         val managerPhone =
             customerResolver.getManagerPhone()
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "📝 ${customerDisplayName(customer)}،\n" +
                 "تم استلام شكواك.\n" +
@@ -3434,7 +3461,7 @@ class SmsProcessor(
             customerResolver.getManagerPhone()
                 ?: "غير متوفر"
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🚨 ${customerDisplayName(customer)}،\n" +
                 "تم تفعيل الطوارئ!\n" +
@@ -3469,7 +3496,7 @@ class SmsProcessor(
             customerResolver.getManagerPhone()
                 ?: "غير متوفر"
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "📞 ${customerDisplayName(customer)}،\n" +
                 "تم طلب الاتصال.\n" +
@@ -3496,7 +3523,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "📍 ${customerDisplayName(customer)}،\n" +
                 "محطة أبو أحمد:\n" +
@@ -3518,7 +3545,7 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo
     ): Boolean {
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             customer.phone,
             "🕐 ${customerDisplayName(customer)}،\n" +
                 "المحطة مفتوحة 24 ساعة\n" +
@@ -3659,7 +3686,7 @@ class SmsProcessor(
         val managerPhone =
             customerResolver.getManagerPhone()
 
-        replyManager.sendReply(
+        replyManager.sendReplyOnce(
             sender,
             "🤔 ${customerDisplayName(customer)}،\n" +
                 "لم أفهم طلبك.\n\n" +

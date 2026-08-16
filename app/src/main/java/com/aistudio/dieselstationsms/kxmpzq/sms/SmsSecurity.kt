@@ -657,17 +657,25 @@ class SmsSecurity(
         }
 
         val normalizedSmsc = normalizePhone(smsc)
-
         if (normalizedSmsc.isBlank()) {
             return true
         }
 
         return try {
-            val trustedList = getTrustedSmscList()
-
-            /**
-             * عدم وجود قائمة بيضاء يعني عدم فرض سياسة منع إضافية.
+            /*
+             * sms_whitelist هي قائمة أرقام العملاء وليست قائمة SMSC.
+             * استخدامها هنا كان يحجب كل الرسائل عندما تحتوي القائمة
+             * على عميل واحد لا يساوي مركز خدمة شركة الاتصالات.
+             * لا نفرض تقييد SMSC إلا إذا ضبط المدير إعدادًا صريحًا.
              */
+            val configured = db.getSetting("sms_trusted_smsc")
+                .trim()
+
+            val trustedList = configured
+                .split(',', ';', '\n')
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+
             if (trustedList.isEmpty()) {
                 return true
             }
@@ -681,45 +689,8 @@ class SmsSecurity(
                 "Trusted SMSC check failed: ${e.javaClass.simpleName}",
                 e
             )
-
-            /**
-             * الفشل لا يجب أن يحول النظام تلقائياً إلى حظر شامل.
-             */
-            !isStrictMode()
+            true
         }
-    }
-
-    private fun getTrustedSmscList(): List<String> {
-        val result = mutableListOf<String>()
-
-        try {
-            db.readableDatabase.rawQuery(
-                """
-                SELECT phone
-                FROM $WHITELIST_TABLE
-                WHERE enabled = 1
-                ORDER BY name, phone
-                """.trimIndent(),
-                null
-            ).use { cursor ->
-
-                while (cursor.moveToNext()) {
-                    val phone = cursor.getString(0)
-
-                    if (!phone.isNullOrBlank()) {
-                        result.add(phone)
-                    }
-                }
-            }
-        } catch (e: SQLiteException) {
-            Log.e(
-                TAG,
-                "Failed to load SMS whitelist: ${e.javaClass.simpleName}",
-                e
-            )
-        }
-
-        return result
     }
 
     /**

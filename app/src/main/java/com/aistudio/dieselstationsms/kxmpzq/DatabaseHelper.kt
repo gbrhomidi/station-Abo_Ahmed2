@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 16
+        const val VERSION = 17
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -176,6 +176,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     13 -> migrateV13ToV14(db)
                     14 -> migrateV14ToV15(db)
                     15 -> migrateV15ToV16(db)
+                    16 -> migrateV16ToV17(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -198,6 +199,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
+        createSmsOutboundDedupeTable(db)
         ensureActivityPermissions(db)
         ensureSmsSettings(db)
     }
@@ -599,6 +601,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         Log.d(TAG, "Migrated IAM schema to V16 successfully")
     }
 
+    private fun migrateV16ToV17(db: SQLiteDatabase) {
+        createSmsOutboundDedupeTable(db)
+        Log.d(TAG, "Migrated SMS outbound dedupe schema to V17 successfully")
+    }
+
     private fun tableHasColumn(db: SQLiteDatabase, tableName: String, columnName: String): Boolean {
         return db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
             val nameIndex = cursor.getColumnIndexOrThrow("name")
@@ -872,6 +879,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsMetricsTable(db)
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
+        createSmsOutboundDedupeTable(db)
         createIndexes(db)
     }
 
@@ -4855,6 +4863,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_hashes_phone ON sms_processed_hashes(phone)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_hashes_time ON sms_processed_hashes(processed_at)")
         Log.d(TAG, "SMS processed hashes table created successfully")
+    }
+
+    private fun createSmsOutboundDedupeTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_outbound_dedupe (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dedupe_key TEXT NOT NULL UNIQUE,
+                phone TEXT NOT NULL,
+                message_hash TEXT NOT NULL,
+                message_preview TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'reserved',
+                reserved_at INTEGER NOT NULL,
+                sent_at INTEGER,
+                CHECK(status IN ('reserved', 'sent'))
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbound_dedupe_phone ON sms_outbound_dedupe(phone)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbound_dedupe_reserved ON sms_outbound_dedupe(reserved_at)")
     }
 
     private fun createSmsRateLimitsTable(db: SQLiteDatabase) {
@@ -13260,11 +13286,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             if (type == "sale") {
                 db.rawQuery("SELECT * FROM fuel_sales WHERE sale_id = ?", arrayOf(id.toString())).use { cursor ->
-                    if (cursor.moveToFirst()) cursorToJson(cursor) else null
+                    if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null
                 }
             } else if (type == "refill") {
                 db.rawQuery("SELECT * FROM tank_refills WHERE id = ?", arrayOf(id.toString())).use { cursor ->
-                    if (cursor.moveToFirst()) cursorToJson(cursor) else null
+                    if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null
                 }
             } else null
         } finally {

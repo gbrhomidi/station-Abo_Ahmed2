@@ -7,6 +7,7 @@ import android.os.PowerManager
 import android.provider.Telephony
 import android.util.Log
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -158,6 +159,10 @@ class SmsReceiver : BroadcastReceiver() {
                         )
                         false
                     }
+
+                if (processed) {
+                    SMSService.getInstance()?.incrementProcessedCount()
+                }
 
                 Log.d(
                     TAG,

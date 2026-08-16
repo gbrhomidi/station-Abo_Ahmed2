@@ -1,7 +1,5 @@
 package com.aistudio.dieselstationsms.kxmpzq.utils
 
-import android.util.Log
-
 /**
  * ═══════════════════════════════════════════════════════════════
  * PhoneUtils – أدوات مساعدة موحدة للتعامل مع أرقام الهواتف
@@ -19,7 +17,6 @@ import android.util.Log
  */
 object PhoneUtils {
 
-    private const val TAG = "PhoneUtils"
     private const val COUNTRY_CODE = "967"
 
     // Yemen mobile prefixes per project contract
@@ -65,20 +62,17 @@ object PhoneUtils {
 
             // التحقق من الطول القياسي
             if (normalized.length != 12) {
-                Log.w(TAG, "Phone number length invalid: ${normalized.length} for input: ${maskPhone(phone)}")
                 return null
             }
 
             // التحقق من بادئة الشركة اليمنية
             val nationalPrefix = normalized.substring(3, 5)
             if (nationalPrefix !in YEMEN_MOBILE_PREFIXES) {
-                Log.w(TAG, "Unsupported Yemen mobile prefix: $nationalPrefix for input: ${maskPhone(phone)}")
                 return null
             }
 
             normalized
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to normalize phone: ${maskPhone(phone)}", e)
             null
         }
     }

@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -11,6 +12,8 @@ import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -47,6 +50,8 @@ class SmsReplyManager(
          * من خلال sendReplyOnce().
          */
         private const val RATE_LIMIT_MS = 60_000L
+        private const val OUTBOUND_DEDUPE_RETENTION_MS = 24L * 60L * 60L * 1000L
+        private const val OUTBOUND_DEDUPE_TABLE = "sms_outbound_dedupe"
 
         /**
          * الحد الأعلى لحجم النص الذي يسمح به المدير.
@@ -78,9 +83,8 @@ class SmsReplyManager(
     }
 
     /**
-     * Cache محلي لمنع الردود المتكررة.
-     *
-     * المفتاح هو رقم الهاتف بعد التطبيع.
+     * Cache محلي سريع لمنع تكرار نفس النص لنفس الرقم.
+     * الحماية الدائمة موجودة في SQLite حتى تعمل بين BroadcastReceiver instances.
      */
     private val recentReplies =
         ConcurrentHashMap<String, Long>()
@@ -306,9 +310,10 @@ class SmsReplyManager(
         }
 
         val now = System.currentTimeMillis()
+        val dedupeKey = buildDedupeKey(normalizedPhone, message.trim())
 
         val lastSent =
-            recentReplies[normalizedPhone] ?: 0L
+            recentReplies[dedupeKey] ?: 0L
 
         if (lastSent > 0L &&
             now - lastSent < RATE_LIMIT_MS
@@ -324,19 +329,30 @@ class SmsReplyManager(
         }
 
         /*
-         * نحاول الإرسال أولاً.
+         * الحجز ذري ودائم قبل استدعاء SmsManager؛ لذلك لا يستطيع
+         * BroadcastReceiver ثانٍ إرسال النص نفسه بالتوازي.
          */
-        val sent = sendReply(
-            phone = normalizedPhone,
-            message = message
-        )
+        if (!reserveOutboundReply(normalizedPhone, message.trim(), dedupeKey, now)) {
+            Log.d(TAG, "Persistent duplicate reply suppressed for ${maskPhone(normalizedPhone)}")
+            return@withContext false
+        }
 
-        /*
-         * لا نحجز الرقم إلا بعد نجاح الإرسال.
-         */
+        val sent = try {
+            sendReply(
+                phone = normalizedPhone,
+                message = message
+            )
+        } catch (exception: Exception) {
+            Log.e(TAG, "Reply send threw after reservation", exception)
+            false
+        }
+
         if (sent) {
-            recentReplies[normalizedPhone] = now
+            markOutboundReplySent(dedupeKey, now)
+            recentReplies[dedupeKey] = now
             cleanupReplyCache(now)
+        } else {
+            releaseOutboundReply(dedupeKey)
         }
 
         sent
@@ -353,7 +369,7 @@ class SmsReplyManager(
 
         return try {
 
-            sendReply(
+            sendReplyOnce(
                 phone = phone,
                 message = message
             )
@@ -385,7 +401,7 @@ class SmsReplyManager(
 
         val smsSent = try {
 
-            sendReply(
+            sendReplyOnce(
                 phone = managerPhone,
                 message = message
             )
@@ -595,6 +611,88 @@ class SmsReplyManager(
             )
 
             null
+        }
+    }
+
+    private fun buildDedupeKey(phone: String, message: String): String {
+        val normalizedMessage = message.trim().replace(Regex("\\s+"), " ")
+        val raw = "$phone|$normalizedMessage"
+        return sha256(raw)
+    }
+
+    private fun sha256(value: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(value.toByteArray(StandardCharsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+    }
+
+    private fun reserveOutboundReply(
+        phone: String,
+        message: String,
+        dedupeKey: String,
+        now: Long
+    ): Boolean {
+        return try {
+            val database = db.writableDatabase
+            database.beginTransaction()
+            try {
+                val cutoff = now - OUTBOUND_DEDUPE_RETENTION_MS
+                database.delete(
+                    OUTBOUND_DEDUPE_TABLE,
+                    "reserved_at < ?",
+                    arrayOf(cutoff.toString())
+                )
+
+                val values = ContentValues().apply {
+                    put("dedupe_key", dedupeKey)
+                    put("phone", phone)
+                    put("message_hash", sha256(message))
+                    put("message_preview", message.take(120))
+                    put("status", "reserved")
+                    put("reserved_at", now)
+                }
+                val inserted = database.insertWithOnConflict(
+                    OUTBOUND_DEDUPE_TABLE,
+                    null,
+                    values,
+                    android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
+                )
+                database.setTransactionSuccessful()
+                inserted != -1L
+            } finally {
+                database.endTransaction()
+            }
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to reserve outbound reply", exception)
+            false
+        }
+    }
+
+    private fun markOutboundReplySent(dedupeKey: String, now: Long) {
+        runCatching {
+            db.writableDatabase.update(
+                OUTBOUND_DEDUPE_TABLE,
+                ContentValues().apply {
+                    put("status", "sent")
+                    put("sent_at", now)
+                },
+                "dedupe_key = ? AND status = 'reserved'",
+                arrayOf(dedupeKey)
+            )
+        }.onFailure {
+            Log.e(TAG, "Failed to finalize outbound reply reservation", it)
+        }
+    }
+
+    private fun releaseOutboundReply(dedupeKey: String) {
+        runCatching {
+            db.writableDatabase.delete(
+                OUTBOUND_DEDUPE_TABLE,
+                "dedupe_key = ? AND status = 'reserved'",
+                arrayOf(dedupeKey)
+            )
+        }.onFailure {
+            Log.e(TAG, "Failed to release outbound reply reservation", it)
         }
     }
 

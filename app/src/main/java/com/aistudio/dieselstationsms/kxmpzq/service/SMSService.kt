@@ -130,15 +130,10 @@ class SMSService : Service() {
         const val MODE_ONLINE = "online"
         const val MODE_HYBRID = "hybrid"
 
-        // ==================== أذونات ====================
+        // الأذونات التي تمنع معالجة SMS فقط؛ بقية الأذونات اختيارية أو خاصة بالواجهة.
         val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.WAKE_LOCK
+            Manifest.permission.SEND_SMS
         )
 
         // ==================== أسماء الجداول ====================
@@ -268,6 +263,13 @@ class SMSService : Service() {
         processedMessageCount.set(0)
 
         try {
+            // يجب نشر إشعار foreground قبل أي تهيئة طويلة حتى لا يقتل
+            // Android الخدمة بسبب انتهاء مهلة foreground service.
+            initializeNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForeground(NOTIFICATION_ID, buildForegroundNotification())
+            }
+
             // 1. تهيئة Coroutine Scope
             initializeCoroutineScope()
 
@@ -277,7 +279,7 @@ class SMSService : Service() {
             // 3. تهيئة قاعدة البيانات
             initializeDatabase()
 
-            // 4. تهيئة الإشعارات
+            // 4. قناة الإشعار مهيأة أعلاه؛ الاستدعاء هنا idempotent فقط.
             initializeNotification()
 
             // 5. تحميل الإعدادات
@@ -992,7 +994,7 @@ class SMSService : Service() {
                 lastHealthCheckResult.set(STATUS_HEALTHY)
                 logHealthStatus(STATUS_HEALTHY)
                 notifyServiceHealthy()
-                updateNotification("نظام SMS يعمل بكفاءة")
+                updateNotification("محرك SMS نشط، بانتظار الرسائل")
                 Log.d(TAG, "Health check passed - all systems healthy")
             } else {
                 lastHealthCheckResult.set(STATUS_UNHEALTHY)
@@ -2090,7 +2092,7 @@ class SMSService : Service() {
      */
     private fun notifyServiceHealthy() {
         try {
-            updateNotification("نظام SMS يعمل بكفاءة")
+            updateNotification("محرك SMS نشط، بانتظار الرسائل")
             val intent = Intent(ACTION_HEALTH_STATUS).apply {
                 putExtra("status", STATUS_HEALTHY)
                 putExtra("timestamp", System.currentTimeMillis())

@@ -15,6 +15,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -507,21 +509,53 @@ class MainActivity : AppCompatActivity() {
         if (!isPermissionGranted(Manifest.permission.READ_SMS)) {
             permissions.add(Manifest.permission.READ_SMS)
         }
-        if (!isPermissionGranted(Manifest.permission.CAMERA)) {
-            permissions.add(Manifest.permission.CAMERA)
-        }
-        if (!isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-            if (!isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        val runtimePermissions = listOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.WRITE_CONTACTS,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_PHONE_NUMBERS,
+            Manifest.permission.CALL_PHONE
+        )
+        runtimePermissions.forEach { permission ->
+            if (!isPermissionGranted(permission)) {
+                permissions.add(permission)
             }
+        }
+
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 &&
+            !isPermissionGranted(Manifest.permission.READ_EXTERNAL_STORAGE)
+        ) {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+            !isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        ) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (!isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)) {
-                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            listOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO
+            ).forEach { permission ->
+                if (!isPermissionGranted(permission)) {
+                    permissions.add(permission)
+                }
             }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            !isPermissionGranted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        ) {
+            permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         if (permissions.isNotEmpty()) {
@@ -555,22 +589,27 @@ class MainActivity : AppCompatActivity() {
             .filter { it.second != PackageManager.PERMISSION_GRANTED }
             .map { it.first }
 
-        if (denied.isNotEmpty()) {
-            val criticalPermissions = listOf(
-                Manifest.permission.SEND_SMS,
-                Manifest.permission.RECEIVE_SMS
-            )
-            val hasCriticalDenied = denied.any { it in criticalPermissions }
+        val criticalPermissions = listOf(
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.RECEIVE_SMS
+        )
+        val hasCriticalDenied = denied.any { it in criticalPermissions }
 
-            if (hasCriticalDenied) {
-                Toast.makeText(
-                    this,
-                    "بعض الأذونات الأساسية مفقودة. قد لا تعمل بعض الميزات.",
-                    Toast.LENGTH_LONG
-                ).show()
-                DebugLogger.warn("Permissions", "Critical permissions denied: $denied")
-            }
-        } else {
+        if (denied.isNotEmpty()) {
+            Toast.makeText(
+                this,
+                if (hasCriticalDenied) {
+                    "أذونات SMS الأساسية مفقودة؛ لن يعمل الرد التلقائي حتى تمنحها."
+                } else {
+                    "بعض الأذونات الاختيارية مفقودة، لكن نظام SMS سيستمر بالعمل."
+                },
+                Toast.LENGTH_LONG
+            ).show()
+            DebugLogger.warn("Permissions", "Permissions denied: $denied")
+        }
+
+        // لا تجعل أذونات الواجهة الاختيارية حاجزًا أمام تشغيل SMS.
+        if (!hasCriticalDenied) {
             startSMSService()
         }
     }
@@ -587,6 +626,7 @@ class MainActivity : AppCompatActivity() {
             when (val result = smsServiceLauncher.launch(StartupReason.MANUAL)) {
                 is ServiceLaunchResult.Success -> {
                     DebugLogger.logEvent("sms_service_started", result.message.orEmpty())
+                    requestBatteryOptimizationExemption()
                 }
                 is ServiceLaunchResult.AlreadyRunning -> {
                     DebugLogger.logEvent("sms_service_already_running", result.message.orEmpty())
@@ -600,6 +640,22 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "فشل في بدء خدمة SMS", Toast.LENGTH_SHORT).show()
             DebugLogger.logException("SMS", e)
             handleApplicationError(e)
+        }
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        runCatching {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                startActivity(
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
+            }
+        }.onFailure {
+            DebugLogger.warn("Permissions", "Battery optimization request unavailable: ${it.message}")
         }
     }
 

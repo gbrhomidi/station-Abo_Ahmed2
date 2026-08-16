@@ -28,8 +28,9 @@ class SmsServiceLauncher(
                 context.startService(intent)
             }
 
-            statusRepository.setRunning(true)
-            ServiceLaunchResult.Success("SMSService launched")
+            // تُضبط حالة التشغيل من SMSService بعد اكتمال onCreate والتهيئة.
+            // لا نكتب true هنا لأن startForegroundService قد يفشل لاحقًا.
+            ServiceLaunchResult.Success("SMSService launch requested")
 
         } catch (e: SecurityException) {
             ServiceLaunchResult.Failure("Security: ${e.message}", retryable = false)

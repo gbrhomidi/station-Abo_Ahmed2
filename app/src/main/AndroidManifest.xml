@@ -13,7 +13,9 @@
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
     <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
 
-    <!-- ✅ Phone Permissions -->
+    <!-- ✅ Contacts and Phone Permissions -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
@@ -25,7 +27,7 @@
 
     <!-- ✅ Foreground Service Permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
 
     <!-- ✅ Boot Initialization Permission -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -40,8 +42,9 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- ✅ Camera Permission -->
+    <!-- ✅ Camera and microphone permissions -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- ✅ Location Permissions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -50,10 +53,13 @@
     <!-- ✅ Battery Optimization Permission -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- ✅ Media Permissions (إذا كان التطبيق يتعامل مع الوسائط) -->
+    <!-- ✅ Media Permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!-- ════════════════════════════════════════════════════════ -->
     <!-- 📱 الميزات المطلوبة (Features)                            -->
@@ -162,7 +168,7 @@
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
             android:name=".receiver.BootReceiver"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -179,7 +185,7 @@
         <!-- ════════════════════════════════════════════════════════ -->
         <receiver
             android:name=".receiver.PackageUpdatedReceiver"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -247,7 +253,7 @@
             android:name=".service.SMSService"
             android:directBootAware="false"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="remoteMessaging"
             android:stopWithTask="false" />
 
         <!-- ════════════════════════════════════════════════════════ -->
