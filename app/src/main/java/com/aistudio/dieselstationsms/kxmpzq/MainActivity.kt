@@ -77,6 +77,10 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_USER_ROLE = "user_role"
         private const val KEY_USER_NAME = "user_name"
 
+        // DEV_MODE: يمنح المستخدم رقم 1 صلاحيات التطوير الكاملة في نسخ Debug فقط.
+        // يجب تعطيل/إزالة هذا الاستثناء قبل إنتاج نسخة Release.
+        private const val DEV_MODE_ADMIN_USER_ID = 1L
+
         private var webViewInstanceId = 0
 
         // ============================
@@ -1335,8 +1339,40 @@ class MainActivity : AppCompatActivity() {
             val activity = getActivity() ?: return false
             val userId = activity.currentUserId
             if (userId == 0L) return false
+
+            // DEV_MODE: تجاوز الصلاحيات محصور بالمستخدم admin رقم 1 ونسخ Debug.
+            // لا يُستخدم هذا المسار في Release؛ بقية المستخدمين يمرون عبر SQLite كالمعتاد.
+            if (activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID) {
+                DebugLogger.info("DEV_MODE", "Full permission bypass for development admin userId=$userId action=$permissionCode.$action")
+                return true
+            }
+
             val db = getDbHelper() ?: return false
             return db.checkUserPermission(userId, "$permissionCode.$action")
+        }
+
+        private fun getScreensForUser(
+            activity: MainActivity,
+            db: DatabaseHelper,
+            userId: Long
+        ): JSONArray {
+            if (!activity.isDebugMode || userId != DEV_MODE_ADMIN_USER_ID) {
+                return db.getUserScreens(userId)
+            }
+
+            // DEV_MODE: الشاشات المسجلة في SQLite + ملفات HTML الموجودة فعلياً في assets.
+            val combined = db.getAllActiveScreens()
+            val knownNames = mutableSetOf<String>()
+            for (index in 0 until combined.length()) {
+                combined.optJSONObject(index)?.optString("screen_name")?.let { knownNames.add(it) }
+            }
+            val assetScreens = db.getAvailableAssetScreens()
+            for (index in 0 until assetScreens.length()) {
+                val screen = assetScreens.optJSONObject(index) ?: continue
+                val name = screen.optString("screen_name")
+                if (name.isNotBlank() && knownNames.add(name)) combined.put(screen)
+            }
+            return combined
         }
 
         private fun getCurrentStationId(db: DatabaseHelper, userId: Long): Int {
@@ -1374,30 +1410,7 @@ class MainActivity : AppCompatActivity() {
             }.toString()
         }
 
-        private 
-        @JavascriptInterface
-        fun screenExists(path: String): String {
-            val normalized = path.trim().removePrefix("/")
-            if (!normalized.startsWith("screens/") ||
-                !normalized.endsWith(".html") ||
-                normalized.contains("..") ||
-                normalized.contains('\\') ||
-                normalized.length > 160
-            ) {
-                return errorResponse("مسار شاشة غير صالح")
-            }
-            return try {
-                val exists = contextRef.get()?.assets?.open(normalized)?.use { true } ?: false
-                dataResponse(exists)
-            } catch (_: java.io.FileNotFoundException) {
-                dataResponse(false)
-            } catch (e: Exception) {
-                DebugLogger.logException("ScreenExists", e)
-                errorResponse("تعذر فحص الشاشة")
-            }
-        }
-
-        fun errorResponse(error: String?): String {
+        private fun errorResponse(error: String?): String {
             return JSONObject().apply {
                 put("success", false)
                 put("error", error ?: "خطأ غير معروف")
@@ -1482,6 +1495,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
     }
 }
 
+        @JavascriptInterface
+        fun screenExists(path: String): String {
+            val normalizedPath = path.trim().removePrefix("/")
+            if (!normalizedPath.startsWith("screens/") || normalizedPath.contains("..") || normalizedPath.contains('\\')) {
+                return errorResponse("مسار الشاشة غير صالح")
+            }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.assets.open(normalizedPath).use { }
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", true)
+                    put("path", normalizedPath)
+                }.toString()
+            } catch (e: java.io.FileNotFoundException) {
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", false)
+                    put("path", normalizedPath)
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("ScreenExists", e)
+                errorResponse(e.message ?: "تعذر التحقق من الشاشة")
+            }
+        }
+
         // ============================================================
         // 1. المصادقة – مع تسجيل محسن
         // ============================================================
@@ -1505,30 +1544,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 if (authResult != null) {
                     DebugLogger.info("LOGIN", "AUTHENTICATION_RESULT success=true")
                     val userId = authResult.optLong("user_id", 0)
-                    val permissionsArray = db.getUserPermissions(userId)
-                    val permissionsObject = JSONObject()
-                    for (i in 0 until permissionsArray.length()) {
-                        val item = permissionsArray.getJSONObject(i)
-                        val code = item.getString("permission_code")
-                        permissionsObject.put(
-                            code,
-                            JSONObject().apply {
-                                put("can_create", item.optBoolean("can_create"))
-                                put("can_read", item.optBoolean("can_read"))
-                                put("can_update", item.optBoolean("can_update"))
-                                put("can_delete", item.optBoolean("can_delete"))
-                                put("can_export", item.optBoolean("can_export"))
-                                put("can_print", item.optBoolean("can_print"))
-                                put("can_approve", item.optBoolean("can_approve"))
-                            }
-                        )
+                    val isDevAdmin = activity?.isDebugMode == true && userId == DEV_MODE_ADMIN_USER_ID
+                    val permissionsArray = if (isDevAdmin) {
+                        // DEV_MODE: كل الصلاحيات المعرفة فعلياً في SQLite للمستخدم admin رقم 1.
+                        db.getAllActivePermissions()
+                    } else {
+                        db.getUserPermissions(userId)
                     }
-                    authResult.put("permissions", permissionsObject)
+                    authResult.put("permissions", permissionsArray)
 
-                    val screensArray = db.getUserScreens(userId)
+                    val screensArray = if (activity != null) {
+                        getScreensForUser(activity, db, userId)
+                    } else {
+                        db.getUserScreens(userId)
+                    }
                     authResult.put("screens", screensArray)
+                    authResult.put("dev_mode_full_access", isDevAdmin)
 
-                    val role = authResult.optString("role", "USER")
+                    // إعادة بناء الدور من users/roles بدلاً من الاعتماد على authResult المختصر.
+                    val role = db.getUserById(userId)?.optString("role", "USER") ?: "USER"
                     authResult.put("role", role)
                     authResult.put("is_admin", role == "SUPER_ADMIN" || role == "ADMIN")
 
@@ -1567,24 +1601,58 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                // currentUserId محفوظ في auth_prefs، لذلك لا يعتمد هذا المسار على بقاء WebView نفسه.
                 var userId = activity.currentUserId
-                if (userId == 0L) {
-                    userId = 1L
-                    activity.currentUserId = 1L
+                if (userId <= 0L) {
+                    // استعادة آمنة من بيانات Remember-Me المحفوظة فقط؛ لا نثق ببيانات localStorage التجارية.
+                    val prefs = activity.sharedPrefs
+                    val remember = prefs.getBoolean("remember_me", false)
+                    val savedUserId = prefs.getLong("saved_user_id", 0L)
+                    val savedToken = prefs.getString("saved_token", "").orEmpty()
+                    if (remember && savedUserId > 0L && savedToken.isNotBlank()) {
+                        userId = savedUserId
+                        activity.currentAuthToken = savedToken
+                        activity.currentUserId = savedUserId
+                        DebugLogger.info("CurrentUser", "Session restored from persisted Remember-Me state for user=$userId")
+                    }
                 }
-                var user = db.getUserById(userId)
-                if (user == null && userId != 1L) {
-                    userId = 1L
-                    user = db.getUserById(userId)
+                if (userId <= 0L) {
+                    // استعادة أخيرة من auth_prefs نفسها إذا بقي token واسم المستخدم دون user_id.
+                    val authToken = activity.currentAuthToken.orEmpty()
+                    val persistedUsername = activity.currentUserName.trim()
+                    if (authToken.isNotBlank() && persistedUsername.isNotBlank()) {
+                        val persistedUser = db.getUserByUsername(persistedUsername)
+                        val persistedId = persistedUser?.optLong("user_id", 0L) ?: 0L
+                        if (persistedId > 0L) {
+                            userId = persistedId
+                            activity.currentUserId = persistedId
+                            activity.currentUserRole = persistedUser?.optString("role", "") ?: ""
+                            DebugLogger.info("CurrentUser", "Session restored from auth_prefs username=$persistedUsername user=$userId")
+                        }
+                    }
                 }
-                if (user == null) {
-                    return errorResponse("المستخدم غير موجود")
+                if (userId <= 0L) {
+                    return errorResponse("لا توجد جلسة مستخدم")
                 }
-                val permissions = db.getUserPermissions(userId)
-                val screens = db.getUserScreens(userId)
+
+                val user = db.getUserById(userId) ?: return errorResponse("المستخدم غير موجود")
+                val isDevAdmin = activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID
+                val permissions = if (isDevAdmin) {
+                    // DEV_MODE: الصلاحيات الكاملة تُقرأ من جدول permissions الفعلي، ولا تُنشأ بيانات وهمية.
+                    db.getAllActivePermissions()
+                } else {
+                    db.getUserPermissions(userId)
+                }
+                val screens = getScreensForUser(activity, db, userId)
                 user.put("permissions", permissions)
                 user.put("screens", screens)
-                dataResponse(user)
+                user.put("dev_mode_full_access", isDevAdmin)
+
+                // عقد Typed ثابت: { success: true, data: {...} }.
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", user)
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("CurrentUser", e)
                 errorResponse(e.message)
@@ -3904,11 +3972,30 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun getUserPermissions(userId: Long): String {
-            DebugLogger.info("WebAppInterface", "getUserPermissions called for user=$userId")
+        fun getUserScreens(userId: Long): String {
+            DebugLogger.info("WebAppInterface", "getUserScreens called for user=$userId")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val permissions = db.getUserPermissions(userId)
+                dataResponse(getScreensForUser(activity, db, userId))
+            } catch (e: Exception) {
+                DebugLogger.logException("Screens", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getUserPermissions(userId: Long): String {
+            DebugLogger.info("WebAppInterface", "getUserPermissions called for user=$userId")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val permissions = if (activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID) {
+                    // DEV_MODE: قراءة كل الصلاحيات النشطة من SQLite مع كل القدرات.
+                    db.getAllActivePermissions()
+                } else {
+                    db.getUserPermissions(userId)
+                }
                 dataResponse(permissions)
             } catch (e: Exception) {
                 DebugLogger.logException("Permissions", e)
@@ -4241,6 +4328,47 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
+
+
+        // ============================================================
+        // CRM_BUNDLE_V1_BRIDGE: العقود Typed الخاصة بشاشة CRM.
+        // ============================================================
+
+        @JavascriptInterface
+        fun savePartyBundle(jsonData: String): String {
+            val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الطرف غير صالحة") }
+            val action = if (payload.optLong("id", 0L) > 0) "update" else "create"
+            if (!checkPermission("parties", action)) return errorResponse("لا تملك صلاحية هذه العملية على الأطراف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val id = db.savePartyBundle(payload, activity.currentUserId)
+                successResponse(id, "تم حفظ الطرف وجهات اتصاله في SQLite")
+            } catch (e: Exception) {
+                DebugLogger.logException("PartyBundle", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getPartyCrmBundle(id: Long): String {
+            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل الطرف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getPartyCrmBundle(id)) } catch (e: Exception) {
+                DebugLogger.logException("PartyCrmBundle", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun generateCRMReport(jsonData: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير CRM")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateCRMReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) {
+                DebugLogger.logException("CRMReport", e)
+                errorResponse(e.message)
+            }
+        }
 
         // ============================================================
         // CONTRACTS_V15_BRIDGE: WebView -> DatabaseHelper -> SQLite
@@ -4720,6 +4848,27 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
                 DebugLogger.info("Credentials", "Saved credentials for $username (remember=$remember)")
                 successResponse(0, if (remember) "تم حفظ بيانات التسجيل" else "تم إلغاء التذكر")
+            } catch (e: Exception) {
+                DebugLogger.logException("Credentials", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun clearRememberedCredentials(): String {
+            DebugLogger.info("WebAppInterface", "clearRememberedCredentials called")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.sharedPrefs.edit().apply {
+                    remove("remember_me")
+                    remove("saved_username")
+                    remove("saved_token")
+                    remove("saved_user_id")
+                    remove("saved_timestamp")
+                    apply()
+                }
+                // لا نلمس auth_token/user_id: هذه جلسة الدخول النشطة وليست بيانات Remember-Me.
+                successResponse(0, "تم مسح بيانات التذكر فقط")
             } catch (e: Exception) {
                 DebugLogger.logException("Credentials", e)
                 errorResponse(e.message)

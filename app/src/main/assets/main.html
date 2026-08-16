@@ -1235,7 +1235,8 @@
                 showLoading(true);
                 const result = await apiCall('getCurrentUser');
                 if (!result.success || !result.data) {
-                    throw new Error(result.error || 'لم يتم العثور على جلسة مستخدم');
+                    const message = result.error || 'لم يتم العثور على جلسة مستخدم';
+                    throw new Error(message);
                 }
                 currentUser = result.data;
                 localStorage.setItem('user', JSON.stringify(currentUser));
@@ -1246,7 +1247,14 @@
             } catch (e) {
                 console.error('Error loading user from Kotlin:', e);
                 currentUser = null;
-                showToast(e.message || 'تعذر تحميل المستخدم من Android', 'error');
+                const message = e.message || 'تعذر تحميل المستخدم من Android';
+                showToast(message, 'error');
+                // لا نسمح ببقاء dashboard بلا session أو بعرض قائمة فارغة مضللة.
+                setTimeout(() => {
+                    if (window.location.pathname.endsWith('/main.html') || window.location.pathname.endsWith('main.html')) {
+                        window.location.replace('screens/login.html');
+                    }
+                }, 700);
                 return false;
             } finally {
                 showLoading(false);
@@ -1443,9 +1451,20 @@
 
         function renderSidebar() {
             const nav = document.getElementById('sidebarNav');
+            if (!nav) return;
             nav.innerHTML = '';
 
             const sidebarData = getSidebarData();
+            if (sidebarData.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'sidebar-empty-state';
+                empty.setAttribute('role', 'status');
+                empty.textContent = currentUser
+                    ? 'لا توجد شاشات متاحة لهذا المستخدم'
+                    : 'تعذر تحميل جلسة المستخدم';
+                nav.appendChild(empty);
+                return;
+            }
 
             sidebarData.forEach((item, index) => {
                 const btn = document.createElement('button');
@@ -1637,29 +1656,44 @@
         // دالة التوجيه مع التحقق من وجود الملف (باستخدام Kotlin)
         // ============================================================
         async function navigateTo(url) {
-            if (url === 'dashboard') {
-                closePanels();
+            if (typeof url !== 'string' || !url.trim()) {
+                showToast('مسار الشاشة غير صالح', 'error');
                 return;
             }
-            if (url.startsWith('screens/')) {
-                // التحقق من الصلاحية ووجود الملف باستخدام Kotlin
-                try {
-                    const result = await apiCall('screenExists', { path: url });
-                    if (result.success && result.data === false) {
-                        showToast('الشاشة غير موجودة', 'error');
-                        return;
-                    }
-                } catch (e) {
-                    // في حال فشل التحقق، ننتقل مباشرة (قد يكون الملف موجوداً)
-                    console.warn('Screen existence check failed, proceeding anyway', e);
+            if (url === 'dashboard') {
+                if (!currentUser || !hasScreenAccess('dashboard')) {
+                    showToast('لا تملك صلاحية فتح لوحة التحكم', 'error');
+                    return;
                 }
                 closePanels();
-                window.location.href = url;
                 return;
             }
             if (url.startsWith('/')) url = url.substring(1);
             if (!url.startsWith('screens/')) url = 'screens/' + url;
             if (!url.endsWith('.html')) url = url + '.html';
+
+            if (!currentUser || !hasScreenAccess(url)) {
+                showToast('لا تملك صلاحية فتح هذه الشاشة', 'error');
+                return;
+            }
+
+            // التحقق من وجود الملف عبر العقد Typed قبل تغيير الصفحة.
+            try {
+                const result = await apiCall('screenExists', { path: url });
+                if (!result.success) {
+                    showToast(result.error || 'تعذر التحقق من الشاشة', 'error');
+                    return;
+                }
+                if (result.data === false) {
+                    showToast('الشاشة غير موجودة في نسخة التطبيق الحالية', 'error');
+                    return;
+                }
+            } catch (e) {
+                // فشل الجسر ليس نجاحاً وهمياً؛ نمنع التنقل حتى لا تظهر صفحة بيضاء.
+                console.error('Screen existence check failed:', e);
+                showToast('تعذر التحقق من جاهزية الشاشة', 'error');
+                return;
+            }
             closePanels();
             window.location.href = url;
         }
@@ -1927,21 +1961,38 @@
 
         function initCardDoubleClick() {
             const cardRoutes = {
-                "card-pending-tasks": "screens/tasks.html",
-                "card-damaged-products": "screens/damaged-products.html",
+                "card-total-products": "screens/products.html",
+                "card-daily-sales": "screens/sales-reports.html",
+                "card-active-customers": "screens/customers.html",
+                "card-expiry-soon": "screens/expiry-soon.html",
+                "card-low-stock": "screens/stock-levels.html",
+                "card-due-invoices": "screens/customer-debts.html",
                 "card-returned-products": "screens/returned-products.html",
+                "card-damaged-products": "screens/damaged-products.html",
                 "card-customer-debts": "screens/customer-debts.html",
-                "card-expiry-soon": "screens/expiry-soon.html"
+                "card-supplier-debts": "screens/suppliers.html",
+                "card-inventory-value": "screens/inventory-reports.html",
+                "card-pending-tasks": "screens/tasks.html"
             };
 
-            Object.keys(cardRoutes).forEach(cardId => {
+            Object.entries(cardRoutes).forEach(([cardId, route]) => {
                 const card = document.getElementById(cardId);
-                if (card) {
-                    card.addEventListener("dblclick", function(event) {
-                        event.stopPropagation();
-                        navigateTo(cardRoutes[cardId]);
-                    });
-                }
+                if (!card || card.dataset.navigationBound === 'true') return;
+                card.dataset.navigationBound = 'true';
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('role', 'link');
+                card.setAttribute('title', 'انقر مرتين لفتح الشاشة المرتبطة');
+                const openRoute = (event) => {
+                    if (event) event.stopPropagation();
+                    navigateTo(route);
+                };
+                card.addEventListener('dblclick', openRoute);
+                card.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openRoute(event);
+                    }
+                });
             });
         }
 
@@ -1954,6 +2005,9 @@
 
             // 2. تحميل بيانات القائمة (JSON) من المسار الجديد
             await loadMenuData();
+
+            // ربط البطاقات مبكراً؛ الدالة idempotent وتُظهر رسالة واضحة عند غياب session.
+            initCardDoubleClick();
 
             // 3. تحميل المستخدم والبيانات من Android فقط؛ لا cache ولا مستخدم افتراضي.
             if (!bridgeReady) {

@@ -2021,6 +2021,7 @@
                     'save_credentials': 'saveCredentials',
                     'load_credentials': 'loadCredentials',
                     'clear_credentials': 'clearCredentials',
+                    'clear_remembered_credentials': 'clearRememberedCredentials',
                     'has_saved_credentials': 'hasSavedCredentials',
                     'biometric_auto_login': 'biometricAutoLogin'
                 };
@@ -2356,7 +2357,7 @@
             debugInfo("REMEMBER_ME_CLEAR", {});
             try {
                 if (hasAndroidBridge()) {
-                    await apiCall('clear_credentials');
+                    await apiCall('clear_remembered_credentials');
                 }
                 return true;
             } catch (e) {

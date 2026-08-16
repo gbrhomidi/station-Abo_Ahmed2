@@ -5991,11 +5991,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("tax_number", data.optString("tax_number", ""))
                 put("commercial_register", data.optString("commercial_register", ""))
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
-                put("current_balance", data.optDouble("current_balance", 0.0))
-                put("total_due", data.optDouble("total_due", 0.0))
-                put("loyalty_points", data.optInt("loyalty_points", 0))
+                if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
+                if (data.has("total_due")) put("total_due", data.optDouble("total_due", 0.0))
+                if (data.has("loyalty_points")) put("loyalty_points", data.optInt("loyalty_points", 0))
                 put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
                 put("notes", data.optString("notes", ""))
+                if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
             }
@@ -6024,11 +6025,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("tax_number", data.optString("tax_number", ""))
                 put("commercial_register", data.optString("commercial_register", ""))
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
-                put("current_balance", data.optDouble("current_balance", 0.0))
-                put("total_due", data.optDouble("total_due", 0.0))
-                put("loyalty_points", data.optInt("loyalty_points", 0))
+                if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
+                if (data.has("total_due")) put("total_due", data.optDouble("total_due", 0.0))
+                if (data.has("loyalty_points")) put("loyalty_points", data.optInt("loyalty_points", 0))
                 put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
                 put("notes", data.optString("notes", ""))
+                if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("updated_at", getCurrentDateTime())
             }
             val rows = db.update("parties", values, "id=?", arrayOf(id.toString()))
@@ -6084,37 +6086,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     arr.put(partyCursorToJson(cursor))
                 }
             }
-
-            if (targetUserId == 1L || arr.length() == 0) {
-                db.rawQuery("SELECT permission_code, permission_name, permission_name_ar, module, action FROM permissions WHERE is_deleted=0", null).use { allP ->
-                    while (allP.moveToNext()) {
-                        val code = allP.getString(0)
-                        var exists = false
-                        for (i in 0 until arr.length()) {
-                            if (arr.getJSONObject(i).optString("permission_code") == code) {
-                                exists = true
-                                break
-                            }
-                        }
-                        if (!exists) {
-                            arr.put(JSONObject().apply {
-                                put("permission_code", code)
-                                put("permission_name", allP.getString(1))
-                                put("permission_name_ar", allP.getString(2))
-                                put("module", allP.getString(3))
-                                put("action", allP.getString(4))
-                                put("can_create", true)
-                                put("can_read", true)
-                                put("can_update", true)
-                                put("can_delete", true)
-                                put("can_export", true)
-                                put("can_print", true)
-                                put("can_approve", true)
-                            })
-                        }
-                    }
-                }
-            }
             arr
         } finally {
             dbLock.unlock()
@@ -6123,23 +6094,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun partyCursorToJson(c: Cursor): JSONObject {
         return JSONObject().apply {
-            put("party_id", c.getInt(c.getColumnIndexOrThrow("id")))
+            put("id", c.getLong(c.getColumnIndexOrThrow("id")))
+            put("party_id", c.getLong(c.getColumnIndexOrThrow("id")))
             put("party_code", c.getString(c.getColumnIndexOrThrow("party_code")))
+            put("party_type_id", c.getInt(c.getColumnIndexOrThrow("party_type_id")))
             put("commercial_name", c.getString(c.getColumnIndexOrThrow("commercial_name")))
             put("commercial_name_ar", c.getString(c.getColumnIndexOrThrow("commercial_name_ar")))
+            put("legal_name", c.getString(c.getColumnIndexOrThrow("legal_name")))
             put("phone", c.getString(c.getColumnIndexOrThrow("phone")))
+            put("phone2", c.getString(c.getColumnIndexOrThrow("phone2")))
+            put("email", c.getString(c.getColumnIndexOrThrow("email")))
+            put("address", c.getString(c.getColumnIndexOrThrow("address")))
+            put("city", c.getString(c.getColumnIndexOrThrow("city")))
+            put("region", c.getString(c.getColumnIndexOrThrow("region")))
+            put("tax_number", c.getString(c.getColumnIndexOrThrow("tax_number")))
+            put("commercial_register", c.getString(c.getColumnIndexOrThrow("commercial_register")))
             put("credit_limit", c.getDouble(c.getColumnIndexOrThrow("credit_limit")))
             put("current_balance", c.getDouble(c.getColumnIndexOrThrow("current_balance")))
+            put("total_purchases", c.getDouble(c.getColumnIndexOrThrow("total_purchases")))
+            put("total_payments", c.getDouble(c.getColumnIndexOrThrow("total_payments")))
             put("total_due", c.getDouble(c.getColumnIndexOrThrow("total_due")))
+            put("overdue_amount", c.getDouble(c.getColumnIndexOrThrow("overdue_amount")))
             put("loyalty_points", c.getInt(c.getColumnIndexOrThrow("loyalty_points")))
             put("loyalty_tier", c.getString(c.getColumnIndexOrThrow("loyalty_tier")))
             put("risk_level", c.getString(c.getColumnIndexOrThrow("risk_level")))
-            put("status", c.getString(c.getColumnIndexOrThrow("status")))
             put("is_active", c.getInt(c.getColumnIndexOrThrow("is_active")))
+            put("extra_data", c.getString(c.getColumnIndexOrThrow("extra_data")))
             put("created_at", c.getString(c.getColumnIndexOrThrow("created_at")))
+            put("updated_at", c.getString(c.getColumnIndexOrThrow("updated_at")))
         }
     }
-
     // ========================================================================
     // دوال الخزانات والمضخات (جزء منها)
     // ========================================================================
@@ -7108,7 +7092,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val arr = JSONArray()
             val db = readableDatabase
-            val targetUserId = if (userId <= 0L) 1L else userId
             db.rawQuery(
                 """SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
                           rp.can_create, rp.can_read, rp.can_update, rp.can_delete, rp.can_export, rp.can_print, rp.can_approve
@@ -7198,6 +7181,106 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             arr
         } finally {
             dbLock.unlock()
+        }
+    }
+
+    /**
+     * يعيد جميع الصلاحيات النشطة مع تفعيل كل القدرات.
+     *
+     * DEV_MODE: يُستدعى من MainActivity للمستخدم admin رقم 1 في نسخ Debug فقط.
+     * لا يغيّر البيانات ولا ينشئ صلاحيات؛ يقرأ فقط السجل الفعلي من جدول permissions.
+     */
+    fun getAllActivePermissions(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT permission_code, permission_name, permission_name_ar, module, action
+                   FROM permissions
+                   WHERE is_active = 1 AND is_deleted = 0
+                   ORDER BY id""",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("permission_code", cursor.getString(0))
+                        put("permission_name", cursor.getString(1))
+                        put("permission_name_ar", cursor.getString(2))
+                        put("module", cursor.getString(3))
+                        put("action", cursor.getString(4))
+                        put("can_create", true)
+                        put("can_read", true)
+                        put("can_update", true)
+                        put("can_delete", true)
+                        put("can_export", true)
+                        put("can_print", true)
+                        put("can_approve", true)
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * يعيد جميع الشاشات النشطة المسجلة فعلياً في جدول screens.
+     *
+     * DEV_MODE: يُستدعى فقط عبر مسار admin في نسخ Debug، ولا يضيف أسماء شاشات
+     * غير موجودة في قاعدة البيانات.
+     */
+    fun getAllActiveScreens(): JSONArray {
+        dbLock.lock()
+        return try {
+            val arr = JSONArray()
+            val db = readableDatabase
+            db.rawQuery(
+                """SELECT screen_name, module, description
+                   FROM screens
+                   WHERE is_active = 1 AND archived = 0
+                   ORDER BY id""",
+                null
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    arr.put(JSONObject().apply {
+                        put("screen_name", cursor.getString(0))
+                        put("module", cursor.getString(1))
+                        put("description", cursor.getString(2))
+                    })
+                }
+            }
+            arr
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * يقرأ أسماء شاشات WebView الموجودة فعلياً في assets/screens.
+     * لا ينشئ سجلات SQLite ولا يُستخدم كبديل عن جدول screens؛ الغرض الوحيد هو
+     * مزامنة قائمة الشاشات الفعلية مع DEV_MODE أثناء التطوير.
+     */
+    fun getAvailableAssetScreens(): JSONArray {
+        val arr = JSONArray()
+        return try {
+            contextRef.assets.list("screens")
+                ?.asSequence()
+                ?.filter { it.endsWith(".html", ignoreCase = true) }
+                ?.sorted()
+                ?.forEach { fileName ->
+                    val screenName = fileName.substringBeforeLast('.')
+                    arr.put(JSONObject().apply {
+                        put("screen_name", screenName)
+                        put("module", "webview")
+                        put("description", "شاشة WebView موجودة في assets")
+                    })
+                }
+            arr
+        } catch (e: Exception) {
+            Log.w(TAG, "Unable to enumerate asset screens: ${e.message}")
+            arr
         }
     }
 
@@ -8560,7 +8643,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 7. كمية المنتجات المرتجعة اليوم في المحطة
         db.rawQuery(
-            """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
+            """SELECT COALESCE(SUM(quantity),0) FROM inventory_movements
                WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->
@@ -8569,7 +8652,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 8. كمية المنتجات التالفة اليوم في المحطة (مع station_id)
         db.rawQuery(
-            "SELECT COALESCE(SUM(quantity_change),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
+            "SELECT COALESCE(SUM(quantity),0) FROM damaged_products WHERE station_id=? AND date(report_date)=date('now') AND status='approved'",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("damaged_products_today", cursor.getDouble(0))
@@ -11074,6 +11157,229 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+
+    // =========================================================================
+    // CRM_BUNDLE_V1: تفاصيل الطرف وتقارير CRM من الجداول الموجودة فعلياً.
+    // =========================================================================
+
+
+    private fun recordPartyAudit(partyId: Long, action: String, oldRow: JSONObject?, newRow: JSONObject?, userId: Long) {
+        val values = ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            put("user_id", if (userId > 0) userId else null)
+            put("action_type", action)
+            put("table_name", "parties")
+            put("record_id", partyId)
+            put("old_row_json", oldRow?.toString())
+            put("new_row_json", newRow?.toString())
+            put("created_at", getCurrentDateTime())
+        }
+        writableDatabase.insert("audit_logs", null, values)
+    }
+
+    fun savePartyBundle(data: JSONObject, userId: Long = 0L): Long {
+        dbLock.lock()
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val requestedId = data.optLong("id", 0L)
+            val oldParty = if (requestedId > 0) getParty(requestedId.toInt()) else null
+            val partyId = if (requestedId > 0) {
+                require(updateParty(requestedId, data) > 0) { "الطرف غير موجود أو لم يتم تحديثه" }
+                requestedId
+            } else {
+                val inserted = insertParty(data)
+                require(inserted > 0) { "لم يتم إنشاء الطرف" }
+                inserted
+            }
+            db.delete("party_contacts", "party_id = ?", arrayOf(partyId.toString()))
+            val contacts = data.optJSONArray("contacts") ?: JSONArray()
+            for (i in 0 until contacts.length()) {
+                val contact = contacts.optJSONObject(i) ?: continue
+                val contactName = contact.optString("contact_name").trim().ifEmpty {
+                    if (i == 0) data.optString("commercial_name").trim().ifEmpty { "جهة اتصال" } else "جهة اتصال"
+                }
+                val values = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("party_id", partyId)
+                    put("contact_name", contactName)
+                    put("contact_name_ar", contact.optString("contact_name_ar", contactName).trim())
+                    put("job_title", contact.optString("job_title").trim())
+                    put("department", contact.optString("department").trim())
+                    put("phone", contact.optString("phone").trim())
+                    put("phone2", contact.optString("phone2").trim())
+                    put("email", contact.optString("email").trim())
+                    put("whatsapp", contact.optString("whatsapp").trim())
+                    put("is_primary", if (contact.optBoolean("is_primary", i == 0)) 1 else 0)
+                    put("is_billing", if (contact.optBoolean("is_billing", false)) 1 else 0)
+                    put("is_technical", if (contact.optBoolean("is_technical", false)) 1 else 0)
+                    put("created_at", getCurrentDateTime())
+                    put("updated_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("party_contacts", null, values)
+            }
+            db.delete("party_addresses", "party_id = ? AND is_default = 1", arrayOf(partyId.toString()))
+            val address = data.optJSONObject("address")
+            if (address != null && address.toString() != "{}") {
+                val values = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("party_id", partyId)
+                    put("address_type", address.optString("address_type", "main"))
+                    put("address_line1", address.optString("address_line1").trim())
+                    put("address_line2", address.optString("address_line2").trim())
+                    put("city", address.optString("city").trim())
+                    put("state", address.optString("state").trim())
+                    put("postal_code", address.optString("postal_code").trim())
+                    put("country", address.optString("country", "").trim())
+                    put("is_default", 1)
+                    put("created_at", getCurrentDateTime())
+                    put("updated_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("party_addresses", null, values)
+            }
+            val newParty = getParty(partyId.toInt())
+            recordPartyAudit(partyId, if (requestedId > 0) "update" else "insert", oldParty, newParty, userId)
+            logActivity("system", if (requestedId > 0) "update_party_bundle" else "insert_party_bundle", "حفظ بيانات CRM للطرف: $partyId")
+            db.setTransactionSuccessful()
+            return partyId
+        } finally {
+            db.endTransaction()
+            dbLock.unlock()
+        }
+    }
+
+    fun getPartyCrmBundle(partyId: Long): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val party = getParty(partyId.toInt()) ?: throw IllegalArgumentException("الطرف غير موجود")
+            party.put("contacts", getPartyContacts(partyId))
+            party.put("addresses", getPartyAddresses(partyId))
+            party.put("contracts", db.rawQuery(
+                """
+                SELECT id, uuid, contract_code, contract_name, contract_name_ar,
+                       contract_type, start_date, end_date, total_value, status,
+                       auto_renew, created_at, updated_at
+                FROM contracts
+                WHERE party_id = ? AND is_deleted = 0
+                ORDER BY COALESCE(end_date, '9999-12-31'), id DESC
+                """.trimIndent(), arrayOf(partyId.toString())
+            ).use { cursorToJsonArray(it) })
+            party.put("invoices", db.rawQuery(
+                """
+                SELECT id, sale_code, invoice_number, invoice_type,
+                       created_at, net_amount, paid_amount, remaining_amount,
+                       payment_status, status, due_date
+                FROM sales_transactions
+                WHERE customer_party_id = ? AND is_deleted = 0
+                ORDER BY datetime(created_at) DESC, id DESC
+                LIMIT 200
+                """.trimIndent(), arrayOf(partyId.toString())
+            ).use { cursorToJsonArray(it) })
+            party.put("attachments", db.rawQuery(
+                """
+                SELECT id, uuid, file_name, file_name_original, file_path, file_url,
+                       file_size, file_type, file_extension, description, description_ar, created_at
+                FROM attachments
+                WHERE entity_type = 'party' AND entity_id = ? AND is_active = 1 AND is_deleted = 0
+                ORDER BY id DESC
+                """.trimIndent(), arrayOf(partyId.toString())
+            ).use { cursorToJsonArray(it) })
+            party.put("audit", db.rawQuery(
+                """
+                SELECT id, uuid, user_id, action_type, table_name, record_id,
+                       old_row_json, new_row_json, created_at
+                FROM audit_logs
+                WHERE table_name = 'parties' AND record_id = ?
+                ORDER BY id DESC LIMIT 100
+                """.trimIndent(), arrayOf(partyId.toString())
+            ).use { cursorToJsonArray(it) })
+            party
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun generateCRMReport(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val reportType = data.optString("report_type", "parties")
+            val startDate = data.optString("start_date").trim()
+            val endDate = data.optString("end_date").trim()
+            val requestedPartyType = data.optInt("party_type", 0)
+            val requestedStatus = if (data.isNull("status")) -1 else data.optInt("status", -1)
+            val where = StringBuilder("p.is_deleted = 0")
+            val whereArgs = mutableListOf<String>()
+            if (requestedPartyType > 0) { where.append(" AND p.party_type_id = ?"); whereArgs.add(requestedPartyType.toString()) }
+            if (requestedStatus >= 0) { where.append(" AND p.is_active = ?"); whereArgs.add(requestedStatus.toString()) }
+            val dateClause = StringBuilder()
+            val dateArgs = mutableListOf<String>()
+            if (startDate.isNotEmpty()) { dateClause.append(" AND date(s.created_at) >= date(?)"); dateArgs.add(startDate) }
+            if (endDate.isNotEmpty()) { dateClause.append(" AND date(s.created_at) <= date(?)"); dateArgs.add(endDate) }
+            val args = dateArgs + whereArgs
+            when (reportType) {
+                "activity" -> db.rawQuery(
+                    """
+                    SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
+                           p.party_type_id, p.phone, p.email, p.is_active,
+                           MAX(s.created_at) AS last_activity,
+                           MAX(s.invoice_number) AS last_invoice,
+                           COUNT(s.id) AS invoice_count,
+                           COALESCE(SUM(s.paid_amount), 0) AS total_payments
+                    FROM parties p LEFT JOIN sales_transactions s
+                      ON s.customer_party_id = p.id AND s.is_deleted = 0 $dateClause
+                    WHERE $where
+                    GROUP BY p.id ORDER BY last_activity DESC, p.commercial_name
+                    """.trimIndent(), args.toTypedArray()
+                ).use { cursorToJsonArray(it) }
+                "balance" -> db.rawQuery(
+                    """
+                    SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
+                           p.party_type_id, p.credit_limit, p.current_balance,
+                           p.total_purchases, p.total_payments, p.total_due,
+                           p.overdue_amount, p.is_active
+                    FROM parties p WHERE $where
+                    ORDER BY CASE WHEN p.credit_limit > 0 THEN p.current_balance / p.credit_limit ELSE 0 END DESC,
+                             p.current_balance DESC
+                    """.trimIndent(), whereArgs.toTypedArray()
+                ).use { cursorToJsonArray(it) }
+                "profitability", "purchase_behavior" -> db.rawQuery(
+                    """
+                    SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
+                           p.party_type_id, p.is_active,
+                           COUNT(s.id) AS invoice_count,
+                           COALESCE(SUM(s.net_amount), 0) AS total_sales,
+                           COALESCE(SUM(s.paid_amount), 0) AS total_payments,
+                           COALESCE(SUM(s.remaining_amount), 0) AS outstanding_amount,
+                           MAX(s.created_at) AS last_activity
+                    FROM parties p LEFT JOIN sales_transactions s
+                      ON s.customer_party_id = p.id AND s.is_deleted = 0 $dateClause
+                    WHERE $where
+                    GROUP BY p.id ORDER BY total_sales DESC, invoice_count DESC
+                    """.trimIndent(), args.toTypedArray()
+                ).use { cursorToJsonArray(it) }
+                else -> {
+                    val order = if (reportType == "suppliers") "p.party_type_id = 6" else if (reportType == "customers") "p.party_type_id IN (1, 2)" else "1=1"
+                    val finalWhere = if (where.isEmpty()) order else "$where AND $order"
+                    db.rawQuery(
+                        """
+                        SELECT p.id, p.party_code, p.commercial_name, p.commercial_name_ar,
+                               p.legal_name, p.party_type_id, p.phone, p.email,
+                               p.credit_limit, p.current_balance, p.total_purchases,
+                               p.total_payments, p.total_due, p.overdue_amount,
+                               p.is_active, p.created_at, p.updated_at
+                        FROM parties p WHERE $finalWhere
+                        ORDER BY p.commercial_name
+                        """.trimIndent(), whereArgs.toTypedArray()
+                    ).use { cursorToJsonArray(it) }
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     // =========================================================================
     // CONTRACTS_V15_DATA: عمليات العقود الفعلية عبر SQLite فقط.

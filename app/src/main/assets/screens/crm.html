@@ -201,38 +201,6 @@
         .skeleton-row.short { width: 40%; }
         .skeleton-row.medium { width: 60%; }
         .skeleton-row.long { width: 80%; }
-
-        /* ===== Offline Banner ===== */
-        .offline-banner {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(90deg, var(--warning), #f97316);
-            color: #000;
-            text-align: center;
-            padding: 8px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            z-index: 2000;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-        }
-        .offline-banner.show { transform: translateY(0); }
-
-        /* ============================================================
-           الشريط العلوي (Header)
-           ============================================================ */
-        .top-bar {
-            position: sticky;
-            top: 0;
-            display: flex;
-            flex-direction: column;
-            padding: 16px;
-            background: var(--header-bg);
-            border-bottom: var(--border-width) var(--border-style) var(--border-color);
-            z-index: 100;
-            backdrop-filter: blur(20px);
-            transition: background 0.4s ease;
-        }
         .header-top {
             display: flex;
             justify-content: space-between;
@@ -1313,11 +1281,7 @@
     </div>
 
     <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
-    </div>
-
-    <!-- Loading -->
+<!-- Loading -->
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
     </div>
@@ -1592,6 +1556,16 @@
                         <input type="number" class="form-input" id="paymentTerms" placeholder="0">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">المجموعة</label>
+                        <input type="text" class="form-input" id="partyGroup" placeholder="VIP، منتظم، جديد">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">الوسوم</label>
+                        <input type="text" class="form-input" id="partyTags" placeholder="افصل الوسوم بفاصلة">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label class="form-label">الحالة</label>
                     <select class="form-input" id="isActive">
@@ -1635,6 +1609,14 @@
                         </select>
                     </div>
                 </div>
+
+                <div class="section-divider" style="border-top:var(--border-width) var(--border-style) var(--border-color);margin:16px 0;padding-top:8px;">
+                    <span style="font-size:0.8rem;font-weight:600;color:var(--primary-color);">👥 جهات الاتصال المتعددة</span>
+                </div>
+                <div id="contactsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+                <button type="button" class="card-btn" onclick="addContactRow()" style="width:100%;margin-bottom:12px;">
+                    <i class="fas fa-user-plus"></i> إضافة جهة اتصال
+                </button>
 
                 <!-- من جدول party_addresses -->
                 <div class="section-divider" style="border-top:var(--border-width) var(--border-style) var(--border-color);margin:16px 0;padding-top:8px;">
@@ -1704,111 +1686,46 @@
     ============================================================ -->
     <script>
         // ============================================================
-        // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+        // 1. Typed Android Bridge – WebView -> MainActivity -> SQLite
+        // ============================================================
+        function parseBridgeResponse(raw) {
+            if (raw === null || raw === undefined) throw new Error('لم تُرجع طبقة Android نتيجة');
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!parsed || parsed.success === false) throw new Error((parsed && (parsed.error || parsed.message)) || 'فشلت العملية في SQLite');
+            return parsed;
+        }
+        function parseBridgeObject(raw) {
+            const parsed = parseBridgeResponse(raw);
+            if (parsed && parsed.success === true && !Object.prototype.hasOwnProperty.call(parsed, 'data')) {
+                const data = { ...parsed };
+                delete data.success;
+                parsed.data = data;
+            }
+            return parsed;
+        }
+        function apiCall(action, params = {}) {
+            return Promise.resolve().then(() => {
+                const bridge = window.AndroidInterface;
+                if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
+                switch (action) {
+                    case 'getParties': return parseBridgeResponse(bridge.getParties(''));
+                    case 'getPartyTypes': return parseBridgeResponse(bridge.getPartyTypes());
+                    case 'getPartyById': return parseBridgeObject(bridge.getPartyById(Number(params.id)));
+                    case 'getPartyCrmBundle': return parseBridgeResponse(bridge.getPartyCrmBundle(Number(params.id)));
+                    case 'savePartyBundle': return parseBridgeResponse(bridge.savePartyBundle(JSON.stringify(params)));
+                    case 'deleteParty': return parseBridgeResponse(bridge.deleteParty(Number(params.id)));
+                    case 'archiveParty': return parseBridgeResponse(bridge.archiveParty(Number(params.id)));
+                    case 'generateCRMReport': return parseBridgeResponse(bridge.generateCRMReport(JSON.stringify(params)));
+                    default: throw new Error('عملية Bridge غير مدعومة: ' + action);
                 }
             });
         }
 
-        // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getParties: function() { return this.get('parties', []); },
-            setParties: function(data) { this.set('parties', data); },
-            getPartyTypes: function() { return this.get('party_types', []); },
-            setPartyTypes: function(data) { this.set('party_types', data); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            getStats: function() { return this.get('crm_stats', {}); },
-            setStats: function(stats) { this.set('crm_stats', stats); },
-            getNotifications: function() { return this.get('crm_notifications', []); },
-            setNotifications: function(notifications) { this.set('crm_notifications', notifications); },
-            getAIInsights: function() { return this.get('crm_ai_insights', []); },
-            setAIInsights: function(insights) { this.set('crm_ai_insights', insights); }
-        };
-
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
-        let isOnline = navigator.onLine;
-
-        function updateOnlineStatus() {
-            isOnline = navigator.onLine;
-            const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
-            }
-        }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadParties();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
+        // حالة واجهة مؤقتة فقط؛ لا تُحفظ بيانات الأعمال في المتصفح.
+        let aiInsightsCache = [];
+        let alertsCache = [];
+        let currentTheme = 'light';
         // ============================================================
         // 5. Haptic Feedback
         // ============================================================
@@ -1912,7 +1829,7 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            currentTheme = newTheme;
 
             const icon = document.getElementById('themeIcon');
             if (newTheme === 'dark') {
@@ -1924,7 +1841,7 @@
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = currentTheme;
             document.documentElement.setAttribute('data-theme', saved);
 
             const icon = document.getElementById('themeIcon');
@@ -2048,12 +1965,12 @@
                 const analysis = analyzeParty(p);
                 if (analysis) insights.push(analysis);
             });
-            LocalDB.setAIInsights(insights);
+            aiInsightsCache = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = aiInsightsCache;
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
@@ -2172,8 +2089,8 @@
                     report_type: currentReportType,
                     start_date: from,
                     end_date: to,
-                    party_type: type || null,
-                    status: status || null
+                    party_type: type ? Number(type) : 0,
+                    status: status === '' ? -1 : Number(status)
                 };
                 const result = await apiCall('generateCRMReport', params);
                 if (result.success && result.data) {
@@ -2191,7 +2108,7 @@
                     showToast(result.message || '❌ لا توجد بيانات', 'warning');
                 }
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                showToast('❌ فشل توليد التقرير من SQLite: ' + (e.message || ''), 'error');
                 console.error(e);
             } finally {
                 showLoading(false);
@@ -2339,46 +2256,32 @@
 
         async function loadParties() {
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
                 const [partiesRes, typesRes] = await Promise.all([
                     apiCall('getParties', {}),
                     apiCall('getPartyTypes', {})
                 ]);
-
-                if (partiesRes.success && partiesRes.data) {
-                    allParties = partiesRes.data;
-                    LocalDB.setParties(allParties);
-                } else {
-                    allParties = LocalDB.getParties();
-                }
-
-                if (typesRes.success && typesRes.data) {
-                    allPartyTypes = typesRes.data;
-                    LocalDB.setPartyTypes(allPartyTypes);
-                } else {
-                    allPartyTypes = LocalDB.getPartyTypes();
-                }
-
-                if (allParties.length === 0) {
-                    showToast('⚠️ لا توجد أطراف', 'warning');
-                }
-
+                allParties = Array.isArray(partiesRes.data) ? partiesRes.data : [];
+                allPartyTypes = Array.isArray(typesRes.data) ? typesRes.data : [];
+                populatePartyTypeDropdown();
+                renderCards();
+                updateStats();
+                generateAIInsights();
+                generateAlerts();
+                if (allParties.length === 0) showToast('⚠️ لا توجد أطراف في قاعدة البيانات', 'warning');
             } catch (e) {
-                allParties = LocalDB.getParties();
-                allPartyTypes = LocalDB.getPartyTypes();
-                if (allParties.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allParties = [];
+                allPartyTypes = [];
+                populatePartyTypeDropdown();
+                renderCards();
+                updateStats();
+                generateAlerts();
+                showToast('❌ تعذر قراءة الأطراف من SQLite: ' + (e.message || 'خطأ غير معروف'), 'error');
+            } finally {
+                isInitialLoad = false;
+                showLoading(false);
             }
-
-            populatePartyTypeDropdown();
-            renderCards();
-            updateStats();
-            generateAIInsights();
-            isInitialLoad = false;
-            showLoading(false);
         }
 
         function populatePartyTypeDropdown() {
@@ -2408,7 +2311,7 @@
             } else if (currentFilter === 'inactive') {
                 filtered = filtered.filter(s => s.is_active == 0 || s.isActive == 0);
             } else if (currentFilter === 'ai_suggest') {
-                const insights = LocalDB.getAIInsights();
+                const insights = aiInsightsCache;
                 const suggestedIds = insights.map(i => i.partyId);
                 filtered = filtered.filter(s => suggestedIds.includes(s.id));
             }
@@ -2438,13 +2341,14 @@
                 return;
             }
 
-            const insights = LocalDB.getAIInsights();
+            const insights = aiInsightsCache;
 
             container.innerHTML = filtered.map((s, idx) => {
                 const id = s.id;
                 const code = s.party_code || '---';
                 const commercialName = s.commercial_name || s.name || '---';
                 const legalName = s.legal_name || '';
+                const meta = getPartyMeta(s);
                 const phone = s.phone || '---';
                 const email = s.email || '---';
                 const typeId = s.party_type_id || s.partyTypeId || 0;
@@ -2477,6 +2381,7 @@
                         </div>
                         <div class="card-name">${escapeHtml(commercialName)}</div>
                         <div class="card-code">${escapeHtml(code)} ${legalName ? '| ' + escapeHtml(legalName) : ''}</div>
+                        ${meta.group || meta.tags.length ? '<div class="card-contact"><i class="fas fa-tags"></i> ' + escapeHtml(meta.group || '') + (meta.tags.length ? ' | ' + escapeHtml(meta.tags.join(', ')) : '') + '</div>' : ''}
                         <div class="card-contact"><i class="fas fa-phone"></i> ${escapeHtml(phone)} ${email ? '| <i class="fas fa-envelope"></i> ' + escapeHtml(email) : ''}</div>
                         ${insightHTML}
                         <div class="card-body">
@@ -2541,7 +2446,7 @@
             document.getElementById('statSuppliers').textContent = suppliers;
             document.getElementById('statActive').textContent = active;
 
-            LocalDB.setStats({ total, customers, suppliers, active });
+
         }
 
         function showStatDetail(type) {
@@ -2604,7 +2509,7 @@
                 }
             });
 
-            LocalDB.setNotifications(alerts);
+            alertsCache = alerts;
             renderAlerts(alerts);
         }
 
@@ -2625,7 +2530,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = alertsCache;
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2642,6 +2547,7 @@
             document.getElementById('modalTitle').textContent = '➕ إضافة طرف جديد';
             document.getElementById('editId').value = '0';
             document.getElementById('partyForm').reset();
+            renderContacts([]);
             document.getElementById('modalOverlay').classList.add('show');
             document.body.style.overflow = 'hidden';
             hapticFeedback('light');
@@ -2658,270 +2564,191 @@
         // ============================================================
         // 18. حفظ الطرف
         // ============================================================
+
+        function addContactRow(contact = {}) {
+            const container = document.getElementById('contactsList');
+            const row = document.createElement('div');
+            row.className = 'contact-row';
+            row.style.cssText = 'display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr auto;gap:5px;align-items:center;';
+            row.innerHTML = '<input class="form-input contact-name" placeholder="الاسم" value="' + escapeHtml(contact.contact_name_ar || contact.contact_name || '') + '">' +
+                '<input class="form-input contact-phone" placeholder="الهاتف" value="' + escapeHtml(contact.phone || '') + '">' +
+                '<input class="form-input contact-email" type="email" placeholder="البريد" value="' + escapeHtml(contact.email || '') + '">' +
+                '<label style="font-size:.7rem;display:flex;gap:3px;align-items:center;"><input class="contact-primary" type="checkbox" ' + (contact.is_primary ? 'checked' : '') + '> رئيسية</label>' +
+                '<button class="modal-close" type="button" onclick="this.closest(\'.contact-row\').remove()" aria-label="حذف جهة الاتصال">×</button>';
+            container.appendChild(row);
+        }
+        function renderContacts(contacts) {
+            const container = document.getElementById('contactsList');
+            if (!container) return;
+            container.innerHTML = '';
+            (contacts || []).forEach(contact => addContactRow(contact));
+            if (!container.children.length) addContactRow();
+        }
+        function collectContacts() {
+            return Array.from(document.querySelectorAll('.contact-row')).map(row => ({
+                contact_name: row.querySelector('.contact-name').value.trim(),
+                phone: row.querySelector('.contact-phone').value.trim(),
+                email: row.querySelector('.contact-email').value.trim(),
+                is_primary: row.querySelector('.contact-primary').checked
+            })).filter(contact => contact.contact_name || contact.phone || contact.email);
+        }
+        function openPartyAttachmentHint() {
+            showToast('المرفقات الموجودة تُعرض من SQLite. رفع ملف جديد يحتاج URI Native آمناً.', 'warning');
+        }
+
+
         async function saveParty() {
             const partyCode = document.getElementById('partyCode').value.trim();
             const commercialName = document.getElementById('commercialName').value.trim();
             const partyType = document.getElementById('partyType').value;
             const phone = document.getElementById('phone').value.trim();
-
-            if (!partyCode) {
-                showToast('❌ الرجاء إدخال كود الطرف', 'error');
-                document.getElementById('partyCode').focus();
-                return;
-            }
-            if (!commercialName) {
-                showToast('❌ الرجاء إدخال الاسم التجاري', 'error');
-                document.getElementById('commercialName').focus();
-                return;
-            }
-            if (!partyType) {
-                showToast('❌ الرجاء اختيار نوع الطرف', 'error');
-                document.getElementById('partyType').focus();
-                return;
-            }
-            if (!phone) {
-                showToast('❌ الرجاء إدخال رقم الهاتف', 'error');
-                document.getElementById('phone').focus();
-                return;
-            }
-
+            if (!partyCode) { showToast('❌ الرجاء إدخال كود الطرف', 'error'); document.getElementById('partyCode').focus(); return; }
+            if (!commercialName) { showToast('❌ الرجاء إدخال الاسم التجاري', 'error'); document.getElementById('commercialName').focus(); return; }
+            if (!partyType) { showToast('❌ الرجاء اختيار نوع الطرف', 'error'); document.getElementById('partyType').focus(); return; }
+            if (!phone) { showToast('❌ الرجاء إدخال رقم الهاتف', 'error'); document.getElementById('phone').focus(); return; }
+            const contacts = collectContacts();
+            if (contacts.length === 0) contacts.push({ contact_name: commercialName, phone, phone2: document.getElementById('phone2').value.trim(), email: document.getElementById('email').value.trim(), whatsapp: document.getElementById('whatsapp').value.trim(), is_primary: true });
             const data = {
                 id: currentEditId || 0,
-                // من parties
                 party_code: partyCode,
                 commercial_name: commercialName,
                 legal_name: document.getElementById('legalName').value.trim(),
-                party_type_id: parseInt(partyType),
+                party_type_id: parseInt(partyType, 10),
                 tax_number: document.getElementById('taxNumber').value.trim(),
                 commercial_register: document.getElementById('commercialRegister').value.trim(),
                 credit_limit: parseFloat(document.getElementById('creditLimit').value) || 0,
-                payment_terms: parseInt(document.getElementById('paymentTerms').value) || 0,
-                is_active: parseInt(document.getElementById('isActive').value),
+                payment_terms: parseInt(document.getElementById('paymentTerms').value, 10) || 0,
+                is_active: parseInt(document.getElementById('isActive').value, 10),
                 notes: document.getElementById('notes').value.trim(),
-                // من party_contacts
-                phone: phone,
-                phone2: document.getElementById('phone2').value.trim(),
-                email: document.getElementById('email').value.trim(),
-                whatsapp: document.getElementById('whatsapp').value.trim(),
-                is_primary_contact: parseInt(document.getElementById('isPrimaryContact').value),
-                // من party_addresses
-                address_line1: document.getElementById('addressLine1').value.trim(),
-                city: document.getElementById('city').value.trim(),
-                state: document.getElementById('state').value.trim()
+                extra_data: JSON.stringify({
+                    group: document.getElementById('partyGroup').value.trim(),
+                    tags: document.getElementById('partyTags').value.split(',').map(tag => tag.trim()).filter(Boolean)
+                }),
+                contacts,
+                address: { address_type: 'main', address_line1: document.getElementById('addressLine1').value.trim(), city: document.getElementById('city').value.trim(), state: document.getElementById('state').value.trim(), is_default: true }
             };
-
             showLoading(true);
-
             try {
-                const result = await apiCall('saveParty', data);
-                if (result.success) {
-                    showToast(result.message || '✅ تم حفظ الطرف بنجاح', 'success');
-                    closeModal();
-                    await loadParties();
-                } else {
-                    throw new Error(result.message || 'فشل في الحفظ');
-                }
+                const result = await apiCall('savePartyBundle', data);
+                if (!result.success) throw new Error(result.error || result.message || 'فشل الحفظ');
+                showToast(result.message || '✅ تم حفظ الطرف في SQLite', 'success');
+                closeModal();
+                await loadParties();
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({
-                        action: currentEditId ? 'updateParty' : 'saveParty',
-                        data: data
-                    });
-                    if (currentEditId) {
-                        const idx = allParties.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) { allParties[idx] = { ...allParties[idx], ...data }; }
-                    } else {
-                        allParties.push({ ...data, id: Date.now() });
-                    }
-                    LocalDB.setParties(allParties);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
-            } finally {
-                showLoading(false);
-            }
+                showToast('❌ لم يتم حفظ الطرف: ' + (e.message || 'خطأ غير معروف'), 'error');
+            } finally { showLoading(false); }
         }
-
         // ============================================================
         // 19. تعديل طرف
         // ============================================================
-        async function editParty(id) {
-            const item = allParties.find(s => s.id == id);
-            if (!item) {
-                showToast('❌ الطرف غير موجود', 'error');
-                return;
-            }
-
-            currentEditId = id;
-            document.getElementById('modalTitle').textContent = '✏️ تعديل طرف';
-            document.getElementById('editId').value = id;
-
-            document.getElementById('partyCode').value = item.party_code || '';
-            document.getElementById('commercialName').value = item.commercial_name || '';
-            document.getElementById('legalName').value = item.legal_name || '';
-            document.getElementById('partyType').value = item.party_type_id || '';
-            document.getElementById('taxNumber').value = item.tax_number || '';
-            document.getElementById('commercialRegister').value = item.commercial_register || '';
-            document.getElementById('creditLimit').value = item.credit_limit || '';
-            document.getElementById('paymentTerms').value = item.payment_terms || '';
-            document.getElementById('isActive').value = (item.is_active || item.isActive || 1).toString();
-            document.getElementById('notes').value = item.notes || '';
-            document.getElementById('phone').value = item.phone || '';
-            document.getElementById('phone2').value = item.phone2 || '';
-            document.getElementById('email').value = item.email || '';
-            document.getElementById('whatsapp').value = item.whatsapp || '';
-            document.getElementById('isPrimaryContact').value = (item.is_primary_contact !== undefined && item
-                .is_primary_contact !== null) ? (item.is_primary_contact ? '1' : '0') : '1';
-            document.getElementById('addressLine1').value = item.address_line1 || '';
-            document.getElementById('city').value = item.city || '';
-            document.getElementById('state').value = item.state || '';
-
-            document.getElementById('modalOverlay').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            hapticFeedback('light');
-
-            setTimeout(() => { document.getElementById('partyCode').focus(); }, 400);
+        function getPartyMeta(party) {
+            try {
+                const raw = party && party.extra_data;
+                const parsed = typeof raw === 'string' && raw.trim() ? JSON.parse(raw) : (raw || {});
+                return { group: parsed.group || '', tags: Array.isArray(parsed.tags) ? parsed.tags : [] };
+            } catch (e) { return { group: '', tags: [] }; }
         }
 
+        async function editParty(id) {
+            const item = allParties.find(s => s.id == id);
+            if (!item) { showToast('❌ الطرف غير موجود', 'error'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall('getPartyCrmBundle', { id });
+                const bundle = result.data || item;
+                currentEditId = id;
+                document.getElementById('modalTitle').textContent = '✏️ تعديل طرف';
+                document.getElementById('editId').value = id;
+                document.getElementById('partyCode').value = bundle.party_code || '';
+                document.getElementById('commercialName').value = bundle.commercial_name || '';
+                document.getElementById('legalName').value = bundle.legal_name || '';
+                document.getElementById('partyType').value = bundle.party_type_id || '';
+                document.getElementById('taxNumber').value = bundle.tax_number || '';
+                document.getElementById('commercialRegister').value = bundle.commercial_register || '';
+                document.getElementById('creditLimit').value = bundle.credit_limit || '';
+                document.getElementById('paymentTerms').value = bundle.payment_terms || '';
+                document.getElementById('isActive').value = String(bundle.is_active ?? 1);
+                document.getElementById('notes').value = bundle.notes || '';
+                const meta = getPartyMeta(bundle);
+                document.getElementById('partyGroup').value = meta.group;
+                document.getElementById('partyTags').value = meta.tags.join(', ');
+                const contacts = Array.isArray(bundle.contacts) && bundle.contacts.length ? bundle.contacts : [{ contact_name: bundle.commercial_name || '', phone: bundle.phone || '', phone2: bundle.phone2 || '', email: bundle.email || '', whatsapp: bundle.whatsapp || '', is_primary: true }];
+                renderContacts(contacts);
+                const address = Array.isArray(bundle.addresses) && bundle.addresses.length ? bundle.addresses[0] : bundle;
+                document.getElementById('addressLine1').value = address.address_line1 || bundle.address || '';
+                document.getElementById('city').value = address.city || bundle.city || '';
+                document.getElementById('state').value = address.state || bundle.region || '';
+                document.getElementById('modalOverlay').classList.add('show');
+                document.body.style.overflow = 'hidden';
+                hapticFeedback('light');
+            } catch (e) { showToast('❌ تعذر قراءة بيانات الطرف من SQLite: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
         // ============================================================
         // 20. حذف طرف
         // ============================================================
         async function deleteParty(id) {
             const item = allParties.find(s => s.id == id);
             const name = item ? (item.commercial_name || item.name || 'هذا الطرف') : 'هذا الطرف';
-
-            const confirmed = await Swal.fire({
-                title: '⚠️ هل أنت متأكد؟',
-                text: 'سيتم حذف الطرف "' + name + '" - لا يمكن التراجع!',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: 'نعم، احذف',
-                cancelButtonText: 'إلغاء',
-                background: '#1a2236',
-                color: '#f1f5f9'
-            });
-
+            const confirmed = await Swal.fire({ title: '⚠️ هل أنت متأكد؟', text: 'سيتم حذف الطرف "' + name + '" حذفاً منطقياً وتسجيل العملية.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', background: '#1a2236', color: '#f1f5f9' });
             if (!confirmed.isConfirmed) return;
-
             showLoading(true);
-
             try {
-                const result = await apiCall('deleteParty', { id: id });
-                if (result.success) {
-                    showToast('✅ تم الحذف بنجاح', 'success');
-                    allParties = allParties.filter(s => s.id != id);
-                    LocalDB.setParties(allParties);
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    throw new Error(result.message || 'فشل في الحذف');
-                }
-            } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteParty', data: { id: id } });
-                    allParties = allParties.filter(s => s.id != id);
-                    LocalDB.setParties(allParties);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
-            } finally {
-                showLoading(false);
-            }
+                const result = await apiCall('deleteParty', { id });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل الحذف');
+                showToast(result.message || '✅ تم الحذف المنطقي في SQLite', 'success');
+                await loadParties();
+                hapticFeedback('success');
+            } catch (e) { showToast('❌ لم يتم حذف الطرف: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
         }
-
         // ============================================================
         // 21. عرض تفاصيل الطرف
         // ============================================================
         async function viewParty(id) {
             const party = allParties.find(s => s.id == id);
-            if (!party) {
-                showToast('❌ الطرف غير موجود', 'error');
-                return;
-            }
+            if (!party) { showToast('❌ الطرف غير موجود', 'error'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall('getPartyCrmBundle', { id });
+                const bundle = result.data || party;
+                renderPartyDetails(bundle);
+                document.getElementById('detailsOverlay').classList.add('show');
+                document.body.style.overflow = 'hidden';
+                hapticFeedback('light');
+            } catch (e) { showToast('❌ تعذر تحميل تفاصيل الطرف من SQLite: ' + (e.message || ''), 'error'); }
+            finally { showLoading(false); }
+        }
 
+        function renderPartyDetails(party) {
             const content = document.getElementById('detailsContent');
-
-            // بيانات وهمية للعرض - سيتم جلبها من apiCall في الإنتاج
-            const invoices = [];
-            const payments = [];
-            const visits = [];
-            const calls = [];
-            const notes = party.notes ? [{ content: party.notes, created_at: new Date().toISOString() }] : [];
-
+            const contacts = Array.isArray(party.contacts) ? party.contacts : [];
+            const contracts = Array.isArray(party.contracts) ? party.contracts : [];
+            const invoices = Array.isArray(party.invoices) ? party.invoices : [];
+            const attachments = Array.isArray(party.attachments) ? party.attachments : [];
+            const audit = Array.isArray(party.audit) ? party.audit : [];
+            const meta = getPartyMeta(party);
             const typeLabel = getPartyTypeLabel(party.party_type_id);
-            const statusClass = party.is_active ? 'active' : 'inactive';
-            const statusLabel = party.is_active ? 'نشط' : 'غير نشط';
-
+            const isActive = Number(party.is_active) === 1;
+            const contactsHtml = contacts.length ? contacts.map(c => '<div class="details-row"><span class="details-label">' + escapeHtml(c.contact_name_ar || c.contact_name || 'جهة اتصال') + (Number(c.is_primary) === 1 ? ' (رئيسية)' : '') + '</span><span class="details-value" style="color:var(--data-text-color);">' + escapeHtml(c.phone || c.email || '---') + '</span></div>').join('') : '<p class="details-muted">لا توجد جهات اتصال مسجلة</p>';
+            const contractsHtml = contracts.length ? contracts.map(c => '<div class="details-row"><span class="details-label">' + escapeHtml(c.contract_code || c.contract_name || 'عقد') + '</span><span class="details-value">' + escapeHtml(c.status || '') + ' | ' + formatCurrency(c.total_value || 0) + '</span></div>').join('') : '<p class="details-muted">لا توجد عقود مرتبطة</p>';
+            const invoicesHtml = invoices.length ? invoices.slice(0, 50).map(i => '<div class="details-row"><span class="details-label">' + escapeHtml(i.invoice_number || i.sale_code || 'فاتورة') + '</span><span class="details-value">' + formatCurrency(i.net_amount || 0) + ' | ' + escapeHtml(i.payment_status || '') + '</span></div>').join('') : '<p class="details-muted">لا توجد فواتير مرتبطة</p>';
+            const attachmentsHtml = attachments.length ? attachments.map(a => '<div class="details-row"><span class="details-label">' + escapeHtml(a.file_name_original || a.file_name || 'مرفق') + '</span><span class="details-value">' + escapeHtml(a.created_at || '') + '</span></div>').join('') : '<p class="details-muted">لا توجد مرفقات محفوظة</p>';
+            const auditHtml = audit.length ? audit.slice(0, 20).map(a => '<div class="details-row"><span class="details-label">' + escapeHtml(a.action_type || 'إجراء') + '</span><span class="details-value">' + escapeHtml(a.created_at || '') + '</span></div>').join('') : '<p class="details-muted">لا يوجد سجل تدقيق</p>';
             content.innerHTML = `
-                <div class="details-header">
-                    <h3 class="details-title">📋 تفاصيل الطرف</h3>
-                    <button class="details-close" onclick="closeDetails()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="details-profile">
-                    <div class="details-avatar">${(party.commercial_name || 'ط').substring(0, 2)}</div>
-                    <div class="details-name" style="color:var(--data-text-color);">${escapeHtml(party.commercial_name || party.name || '---')}</div>
-                    <span class="details-status ${statusClass}">${statusLabel}</span>
-                    <span class="card-type-badge ${getPartyTypeClass(party.party_type_id)}" style="display:inline-block;margin-top:6px;">${typeLabel}</span>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div>
-                    <div class="details-row"><span class="details-label">كود الطرف</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.party_code || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">الاسم القانوني</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.legal_name || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">الرقم الضريبي</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.tax_number || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">السجل التجاري</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.commercial_register || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">شروط الدفع</span><span class="details-value" style="color:var(--data-text-color);">${party.payment_terms || 0} يوم</span></div>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-phone"></i> معلومات الاتصال</div>
-                    <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.phone || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">الهاتف البديل</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.phone2 || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.email || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">واتساب</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.whatsapp || '---')}</span></div>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-map-marker-alt"></i> العنوان</div>
-                    <div class="details-row"><span class="details-label">العنوان التفصيلي</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.address_line1 || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">المدينة</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.city || '---')}</span></div>
-                    <div class="details-row"><span class="details-label">المنطقة</span><span class="details-value" style="color:var(--data-text-color);">${escapeHtml(party.state || '---')}</span></div>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المعلومات المالية</div>
-                    <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value" style="color:var(--primary-color)">${formatCurrency(party.credit_limit || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">إجمالي المشتريات</span><span class="details-value" style="color:var(--success)">${formatCurrency(party.total_purchases || 0)}</span></div>
-                    <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value" style="color:${(party.current_balance || 0) > (party.credit_limit || 0) * 0.9 ? 'var(--error)' : 'var(--primary-color)'}">${formatCurrency(party.current_balance || 0)}</span></div>
-                </div>
-
-                ${party.notes ? `
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div>
-                    <p style="font-size:0.85rem;color:var(--data-text-muted);line-height:1.8;">${escapeHtml(party.notes)}</p>
-                </div>
-                ` : ''}
-
-                <div style="height:40px;"></div>
-            `;
-
-            document.getElementById('detailsOverlay').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            hapticFeedback('light');
+                <div class="details-header"><h3 class="details-title">📋 تفاصيل الطرف</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>
+                <div class="details-profile"><div class="details-avatar">${escapeHtml((party.commercial_name || 'ط').substring(0, 2))}</div><div class="details-name" style="color:var(--data-text-color);">${escapeHtml(party.commercial_name || party.name || '---')}</div><span class="details-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span><span class="card-type-badge ${getPartyTypeClass(party.party_type_id)}" style="display:inline-block;margin-top:6px;">${escapeHtml(typeLabel)}</span></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div><div class="details-row"><span class="details-label">كود الطرف</span><span class="details-value">${escapeHtml(party.party_code || '---')}</span></div><div class="details-row"><span class="details-label">الاسم القانوني</span><span class="details-value">${escapeHtml(party.legal_name || '---')}</span></div><div class="details-row"><span class="details-label">الرقم الضريبي</span><span class="details-value">${escapeHtml(party.tax_number || '---')}</span></div><div class="details-row"><span class="details-label">السجل التجاري</span><span class="details-value">${escapeHtml(party.commercial_register || '---')}</span></div></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-users"></i> جهات الاتصال</div>${contactsHtml}</div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-tags"></i> التصنيف والوسوم</div><div class="details-row"><span class="details-label">المجموعة</span><span class="details-value">${escapeHtml(meta.group || '---')}</span></div><div class="details-row"><span class="details-label">الوسوم</span><span class="details-value">${escapeHtml(meta.tags.join(', ') || '---')}</span></div></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-map-marker-alt"></i> العنوان</div><div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(party.address_line1 || (party.addresses && party.addresses[0] && party.addresses[0].address_line1) || '---')}</span></div><div class="details-row"><span class="details-label">المدينة</span><span class="details-value">${escapeHtml(party.city || (party.addresses && party.addresses[0] && party.addresses[0].city) || '---')}</span></div></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المعلومات المالية</div><div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${formatCurrency(party.credit_limit || 0)}</span></div><div class="details-row"><span class="details-label">إجمالي المشتريات</span><span class="details-value">${formatCurrency(party.total_purchases || 0)}</span></div><div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value">${formatCurrency(party.current_balance || 0)}</span></div><div class="details-row"><span class="details-label">نقاط الولاء</span><span class="details-value">${formatNumber(party.loyalty_points || 0)}</span></div></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-file-contract"></i> العقود المرتبطة</div>${contractsHtml}</div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-receipt"></i> الفواتير المرتبطة</div>${invoicesHtml}</div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-paperclip"></i> المرفقات</div>${attachmentsHtml}<p class="details-muted" style="margin-top:8px;">رفع ملف جديد يحتاج عقد URI Native غير متوفر في WebView الحالي.</p></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-history"></i> سجل التدقيق</div>${auditHtml}</div>
+                ${party.notes ? '<div class="details-section"><div class="details-section-title"><i class="fas fa-sticky-note"></i> ملاحظات</div><p style="font-size:0.85rem;color:var(--data-text-muted);line-height:1.8;">' + escapeHtml(party.notes) + '</p></div>' : ''}
+                <div style="height:40px;"></div>`;
         }
 
         function closeDetails() {
@@ -3000,7 +2827,6 @@
             loadSavedTheme();
             setupSidebar();
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-            updateOnlineStatus();
             loadParties();
 
             document.getElementById('reportModal').addEventListener('click', function(e) {
@@ -3011,13 +2837,10 @@
                 if (e.target === this) closeAIModal();
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
 
             setTimeout(() => {
                 if (allParties.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = aiInsightsCache;
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }
