@@ -2329,9 +2329,11 @@
                         else if (action === 'addNotification') result = window.AndroidInterface.addNotification(jsonParams);
                         else if (action === 'addSmsMessage') result = window.AndroidInterface.addSmsMessage(jsonParams);
                         else if (action === 'getSmsLogs') result = window.AndroidInterface.getSmsLogs();
-                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(p.days || 30);
-                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
-                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
+                        else if (action === 'getDashboardStats') result = window.AndroidInterface.getDashboardStats(jsonParams);
+                        else if (action === 'getLowStockItems') result = window.AndroidInterface.getLowStockItems();
+                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(Number(p.days || 30));
+                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(Number(p.product_id || p.id), String(p.new_expiry_date || p.new_date || ''));
+                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(Number(p.product_id || p.id));
                         else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
                         else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
                         else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
@@ -2339,7 +2341,7 @@
                         else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
                         else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
                         else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
-                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks();
                         else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
                         else {
                             reject({ success: false, error: 'Unknown action: ' + action });
@@ -2362,16 +2364,15 @@
         }
         
         // ===================================================================
-        // 2. LocalDB
         // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getPendingOps: function() { return []; },
-            addPendingOp: function(op) { },
-            clearPendingOps: function() { }
+        // 2. حالة التشغيل دون تخزين تجاري محلي
+        // ===================================================================
+        // البيانات التجارية لا تُخزّن في localStorage؛ المصدر الوحيد هو SQLite عبر الجسر.
+        const RuntimeState = {
+            values: Object.create(null),
+            set: function(key, value) { this.values[key] = value; },
+            get: function(key, def) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : def; },
+            remove: function(key) { delete this.values[key]; }
         };
 
         // ===================================================================
@@ -2443,6 +2444,14 @@
             return 'safe';
         }
 
+        function getExpiryDays(item) {
+            if (item && item.days_left !== undefined && item.days_left !== null && item.days_left !== '') return Number(item.days_left);
+            if (item && item.expiry_date) return Math.ceil((new Date(item.expiry_date) - new Date()) / 86400000);
+            return 0;
+        }
+
+        function getExpiryStatus(item) { return getDaysStatus(getExpiryDays(item)); }
+
         function closeModalById(id) {
             document.getElementById(id).classList.remove('show');
             document.body.style.overflow = '';
@@ -2456,13 +2465,13 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            localStorage.setItem('expiry_screen_theme', newTheme);
             const icon = document.getElementById('themeIcon');
             icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = localStorage.getItem('expiry_screen_theme') || 'light';
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -2489,17 +2498,17 @@
 
             showLoading(true);
             try {
-                const params = {
-                    start_date: from,
-                    end_date: to,
-                    product_id: productId || null,
-                    category_id: categoryId || null,
-                    status: status || null,
-                    station_id: 1
-                };
-                const result = await apiCall('getExpirySoonProducts', params);
+                const endDate = new Date(`${to}T23:59:59`);
+                const startDate = new Date(`${from}T00:00:00`);
+                const days = Math.max(0, Math.ceil((endDate - new Date()) / 86400000));
+                const result = await apiCall('getExpirySoonProducts', { days });
                 if (result.success && result.data) {
-                    expiryData = result.data;
+                    expiryData = result.data.filter(item => {
+                        const id = item.product_id || item.id;
+                        const expiry = item.expiry_date ? new Date(item.expiry_date) : null;
+                        const derivedStatus = getExpiryStatus(item);
+                        return (!expiry || (expiry >= startDate && expiry <= endDate)) && (!productId || String(id) === String(productId)) && (!categoryId || String(item.category_id || '') === String(categoryId)) && (!status || derivedStatus === status);
+                    });
                     
                     renderTable(expiryData);
                     updateKPIs(expiryData);
@@ -2533,7 +2542,7 @@
                 return;
             }
             tbody.innerHTML = data.map((item, idx) => {
-                const daysLeft = parseInt(item.days_left || 0);
+                const daysLeft = getExpiryDays(item);
                 const status = item.status || getDaysStatus(daysLeft);
                 const statusLabel = getStatusLabel(status);
                 const statusClass = getStatusClass(status);
@@ -2581,7 +2590,7 @@
                 safe = 0,
                 totalValue = 0;
             data.forEach(item => {
-                const status = item.status || getDaysStatus(item.days_left || 0);
+                const status = getExpiryStatus(item);
                 if (status === 'critical') critical++;
                 else if (status === 'warning') warning++;
                 else safe++;
@@ -2617,7 +2626,7 @@
                 critical = 0;
             data.forEach(item => {
                 totalValue += parseFloat(item.value || item.total_value || 0);
-                const status = item.status || getDaysStatus(item.days_left || 0);
+                const status = getExpiryStatus(item);
                 if (status === 'critical') critical++;
             });
             document.getElementById('footerTotalCount').textContent = data.length;
@@ -2633,7 +2642,7 @@
                 warning = 0,
                 safe = 0;
             data.forEach(item => {
-                const status = item.status || getDaysStatus(item.days_left || 0);
+                const status = getExpiryStatus(item);
                 if (status === 'critical') critical++;
                 else if (status === 'warning') warning++;
                 else safe++;
@@ -2666,7 +2675,7 @@
             });
 
             // أيام الصلاحية المتبقية (محاكاة)
-            const daysData = data.slice(0, 10).map(item => Math.max(0, item.days_left || 0));
+            const daysData = data.slice(0, 10).map(item => Math.max(0, getExpiryDays(item)));
             const labels = data.slice(0, 10).map(item => item.product_name || item.product_name_ar || 'منتج');
             const ctx2 = document.getElementById('daysChart').getContext('2d');
             if (daysChart) daysChart.destroy();
@@ -2702,7 +2711,7 @@
         // ===================================================================
         function generateAlerts(data) {
             const alerts = [];
-            const criticalItems = data.filter(item => (item.status || getDaysStatus(item.days_left || 0)) === 'critical');
+            const criticalItems = data.filter(item => (getExpiryStatus(item)) === 'critical');
             if (criticalItems.length > 0) {
                 alerts.push({
                     type: 'danger',
@@ -2712,7 +2721,7 @@
                     time: 'الآن'
                 });
             }
-            const warningItems = data.filter(item => (item.status || getDaysStatus(item.days_left || 0)) === 'warning');
+            const warningItems = data.filter(item => (getExpiryStatus(item)) === 'warning');
             if (warningItems.length > 0) {
                 alerts.push({
                     type: 'warning',
@@ -2722,8 +2731,7 @@
                     time: 'الآن'
                 });
             }
-            const highValue = data.filter(item => parseFloat(item.value || 0) > 50000 && (item.status || getDaysStatus(item
-                .days_left || 0)) !== 'safe');
+            const highValue = data.filter(item => parseFloat(item.value || 0) > 50000 && getExpiryStatus(item) !== 'safe');
             if (highValue.length > 0) {
                 alerts.push({
                     type: 'info',
@@ -2733,7 +2741,7 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('expiry_notifications', alerts);
+            RuntimeState.set('expiry_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -2754,7 +2762,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('expiry_notifications', []);
+            const alerts = RuntimeState.get('expiry_notifications', []);
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2765,9 +2773,9 @@
         function generateAIInsights(data) {
             if (!data || data.length === 0) return;
             const insights = [];
-            const critical = data.filter(i => (i.status || getDaysStatus(i.days_left || 0)) === 'critical').length;
-            const warning = data.filter(i => (i.status || getDaysStatus(i.days_left || 0)) === 'warning').length;
-            const safe = data.filter(i => (i.status || getDaysStatus(i.days_left || 0)) === 'safe').length;
+            const critical = data.filter(i => (getExpiryStatus(i)) === 'critical').length;
+            const warning = data.filter(i => (getExpiryStatus(i)) === 'warning').length;
+            const safe = data.filter(i => (getExpiryStatus(i)) === 'safe').length;
 
             insights.push({
                 title: '📊 نظرة عامة',
@@ -2775,7 +2783,7 @@
                     safe
             });
 
-            const expiringSoon = data.filter(i => (i.days_left || 0) <= 7);
+            const expiringSoon = data.filter(i => getExpiryDays(i) <= 7);
             if (expiringSoon.length > 0) {
                 const names = expiringSoon.map(i => i.product_name || i.product_name_ar).slice(0, 3).join('، ');
                 insights.push({
@@ -2789,13 +2797,13 @@
                     desc: 'يوجد ' + critical + ' منتج حرج، يُرجى اتخاذ إجراء سريع (بيع، تخفيض، أو تمديد الصلاحية).'
                 });
             }
-            
+            RuntimeState.set('expiry_insights', insights);
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = [];
+            const insights = RuntimeState.get('expiry_insights', []);
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2886,21 +2894,21 @@
                     sel.innerHTML = '<option value="">اختر المنتج</option>';
                     result.data.forEach(p => {
                         const opt = document.createElement('option');
-                        opt.value = p.id;
+                        opt.value = p.product_id || p.id;
                         opt.textContent = (p.product_name || p.product_name_ar || 'منتج') + (p.expiry_date ?
                             ' - ينتهي: ' + p.expiry_date : '');
-                        if (selectedId && p.id == selectedId) opt.selected = true;
+                        if (selectedId && (p.product_id || p.id) == selectedId) opt.selected = true;
                         sel.appendChild(opt);
                     });
                     if (currentVal && !selectedId) sel.value = currentVal;
                     // تحديث تاريخ الصلاحية الحالي عند تغيير المنتج
                     sel.onchange = function() {
-                        const selected = result.data.find(p => p.id == this.value);
+                        const selected = result.data.find(p => (p.product_id || p.id) == this.value);
                         document.getElementById('eCurrentExpiry').value = selected ? selected.expiry_date || '---' :
                             '---';
                     };
                     if (selectedId) {
-                        const selected = result.data.find(p => p.id == selectedId);
+                        const selected = result.data.find(p => (p.product_id || p.id) == selectedId);
                         document.getElementById('eCurrentExpiry').value = selected ? selected.expiry_date || '---' :
                             '---';
                     }
@@ -2945,7 +2953,7 @@
         function viewDetails(id) {
             const item = expiryData.find(d => d.id === id);
             if (!item) { showToast('❌ المنتج غير موجود', 'error'); return; }
-            const status = item.status || getDaysStatus(item.days_left || 0);
+            const status = getExpiryStatus(item);
             const statusLabel = getStatusLabel(status);
             const statusClass = getStatusClass(status);
             const productName = item.product_name || item.product_name_ar || '---';
@@ -3229,8 +3237,10 @@
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
                 const from = monthAgo.toISOString().split('T')[0];
-                const countResult = await apiCall('getExpirySoonProducts', { start_date: from, end_date: today,
-                    station_id: 1 });
+                const untilDate = new Date();
+                untilDate.setDate(untilDate.getDate() + 30);
+                const countDays = Math.max(0, Math.ceil((untilDate - new Date()) / 86400000));
+                const countResult = await apiCall('getExpirySoonProducts', { days: countDays });
                 let totalCount = 0;
                 if (countResult.success && countResult.data) {
                     totalCount = countResult.data.length;
@@ -3283,7 +3293,7 @@
                 for (const key of keys) {
                     try {
                         const res = await apiCall('getSetting', { key: key });
-                        if (res.success) settings[key] = res.data || '';
+                        if (res.success) settings[key] = res.value ?? '';
                     } catch (e) { settings[key] = ''; }
                 }
                 const lowStock = settings.low_stock_threshold || '10';
@@ -3449,10 +3459,10 @@
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
             const today = new Date();
-            const monthAgo = new Date();
-            monthAgo.setDate(monthAgo.getDate() - 30);
-            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
-            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
+            const monthAhead = new Date();
+            monthAhead.setDate(monthAhead.getDate() + 30);
+            document.getElementById('filterDateFrom').value = today.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = monthAhead.toISOString().split('T')[0];
 
             loadDropdowns();
             setTimeout(loadExpiryProducts, 600);

@@ -1271,7 +1271,7 @@
                         else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
                         else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
                         else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
-                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks();
                         else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
                         else {
                             reject({ success: false, error: 'Unknown action: ' + action });
@@ -1294,16 +1294,20 @@
         }
         
         // ============================================================
-        // 2. التخزين المحلي (Offline Mode)
         // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getPendingOps: function() { return []; },
-            addPendingOp: function(op) { },
-            clearPendingOps: function() { }
+        // 2. حالة تشغيل الجسر دون تخزين تجاري محلي
+        // ============================================================
+        // لا تُعتمد العمليات التجارية خارج SQLite عبر Android Bridge.
+        const RuntimeState = {
+            prefix: 'fuel_station_runtime_',
+            values: Object.create(null),
+            pending: [],
+            set: function(key, value) { this.values[this.prefix + key] = value; return true; },
+            get: function(key, def) { return Object.prototype.hasOwnProperty.call(this.values, this.prefix + key) ? this.values[this.prefix + key] : def; },
+            remove: function(key) { delete this.values[this.prefix + key]; },
+            getPendingOps: function() { return this.pending.slice(); },
+            addPendingOp: function(op) { this.pending.push(op); },
+            clearPendingOps: function() { this.pending.length = 0; }
         };
 
         // ============================================================
@@ -1316,10 +1320,10 @@
             const banner = document.getElementById('offlineBanner');
             if (!isOnline) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ الجسر غير متاح؛ لا يمكن اعتماد تذكيرات تجارية خارج SQLite', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
+                showToast('✅ تم استعادة الاتصال بالجسر - جاري إعادة تحميل البيانات', 'success');
                 syncPendingOperations();
             }
         }
@@ -1331,7 +1335,7 @@
         // ============================================================
         async function syncPendingOperations() {
             if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
+            const pendingOps = RuntimeState.getPendingOps();
             if (pendingOps.length === 0) return;
             showLoading(true);
             let successCount = 0,
@@ -1344,7 +1348,7 @@
                 } catch (e) { failCount++; }
             }
             if (successCount > 0) {
-                LocalDB.clearPendingOps();
+                RuntimeState.clearPendingOps();
                 showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
                 await loadDebts();
             }
@@ -1573,7 +1577,7 @@
             } catch (e) {
                 allDebts = [];
                 if (allDebts.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
+                    showToast(e.message || '⚠️ تعذر تحميل الديون من قاعدة بيانات التطبيق', 'error');
                 }
             }
 
@@ -1768,7 +1772,7 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('debt_alerts', alerts);
+            RuntimeState.set('debt_alerts', alerts);
             renderAlerts(alerts);
         }
 
@@ -1777,7 +1781,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('debt_alerts', []);
+            const alerts = RuntimeState.get('debt_alerts', []);
             if (alerts.length === 0) {
                 showToast('🔔 لا توجد تنبيهات جديدة', 'info');
                 return;
@@ -1976,9 +1980,7 @@
             } catch (e) {
                 if (!isOnline) {
                     // حفظ العملية محلياً للمزامنة لاحقاً
-                    LocalDB.addPendingOp({ action: 'addNotification', data: { customer_party_id: customerId, message: message } });
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
+                    showToast('❌ لم يتم إرسال التذكير ولم يُحفظ محلياً: استعد الاتصال ثم أعد المحاولة', 'error');
                 } else {
                     showToast('❌ ' + (e.message || 'خطأ في الإرسال'), 'error');
                 }
@@ -2169,10 +2171,10 @@
                             const dailyLimit = await apiCall('getSetting', { key: 'sms_max_daily_messages' });
                             const retryAttempts = await apiCall('getSetting', { key: 'retry_attempts' });
                             // تحديث النموذج بالقيم الفعلية
-                            document.getElementById('setting_sms_enabled').checked = smsEnabled.data === '1';
-                            document.getElementById('setting_sms_rate').value = smsRate.data || '10';
-                            document.getElementById('setting_daily_limit').value = dailyLimit.data || '100';
-                            document.getElementById('setting_retry_attempts').value = retryAttempts.data || '3';
+                            document.getElementById('setting_sms_enabled').checked = smsEnabled.value === '1';
+                            document.getElementById('setting_sms_rate').value = smsRate.value ?? '10';
+                            document.getElementById('setting_daily_limit').value = dailyLimit.value ?? '100';
+                            document.getElementById('setting_retry_attempts').value = retryAttempts.value ?? '3';
                         } catch (e) { /* استخدام القيم الافتراضية */ }
                     })();
                     html = `
@@ -2422,6 +2424,7 @@
             }).length;
             const totalAmount = allDebts.reduce((sum, d) => sum + (d.remaining_amount || d.remainingAmount || 0), 0);
             const customers = new Set(allDebts.map(d => d.customer_party_id || d.customerPartyId || d.customer_id)).size;
+            const highRisk = allDebts.filter(d => getDebtStatus(d.remaining_amount || d.remainingAmount || 0, d.due_date || d.dueDate).status === 'overdue').length;
 
             let suggestion = '';
             if (total === 0) {
@@ -2431,6 +2434,8 @@
             } else {
                 suggestion = `🟡 يوجد ${total} دين مستحق بقيمة ${formatCurrency(totalAmount)} ريال. يُنصح بمتابعة العملاء قبل حلول موعد الاستحقاق.`;
             }
+
+            suggestion += highRisk > 0 ? ` عدد الحالات عالية المخاطر: ${highRisk}.` : '';
 
             Swal.fire({
                 title: '🤖 المستشار الذكي - الديون',

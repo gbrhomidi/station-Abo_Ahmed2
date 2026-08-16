@@ -1662,7 +1662,7 @@
                         else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
                         else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
                         else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
-                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks();
                         else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
                         else {
                             reject({ success: false, error: 'Unknown action: ' + action });
@@ -1685,16 +1685,15 @@
         }
         
         // ===================================================================
-        // 2. LocalDB
         // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getPendingOps: function() { return []; },
-            addPendingOp: function(op) { },
-            clearPendingOps: function() { }
+        // 2. حالة التشغيل دون تخزين تجاري محلي
+        // ===================================================================
+        // البيانات التجارية لا تُخزّن في localStorage؛ المصدر الوحيد هو SQLite عبر الجسر.
+        const RuntimeState = {
+            values: Object.create(null),
+            set: function(key, value) { this.values[key] = value; },
+            get: function(key, def) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : def; },
+            remove: function(key) { delete this.values[key]; }
         };
 
         // ===================================================================
@@ -1757,13 +1756,13 @@
             const isDark = current === 'dark';
             const newTheme = isDark ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            localStorage.setItem('fuel_reports_theme', newTheme);
             const icon = document.getElementById('themeIcon');
             icon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
         }
 
         function loadSavedTheme() {
-            const saved = localStorage.getItem('theme') || 'light';
+            const saved = localStorage.getItem('fuel_reports_theme') || 'light';
             document.documentElement.setAttribute('data-theme', saved);
             const icon = document.getElementById('themeIcon');
             icon.className = saved === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -1791,15 +1790,18 @@
             showLoading(true);
             try {
                 const params = {
-                    start_date: from,
-                    end_date: to,
-                    fuel_type_id: fuelType || null,
-                    tank_id: tank || null,
-                    report_type: reportType
+                    from_date: from,
+                    to_date: to,
+                    station_id: 1
                 };
-                const result = await apiCall('getFuelReport', params);
+                const result = reportType === 'tanks'
+                    ? await apiCall('getFuelInventoryReconciliation', { date: to, station_id: 1 })
+                    : await apiCall('getFuelReport', params);
                 if (result.success && result.data) {
-                    fuelData = result.data;
+                    fuelData = normalizeFuelRows(result.data, reportType);
+                    if (reportType === 'readings') { showToast('⚠️ القراءات غير متاحة في عقد الجسر الحالي', 'warning'); return; }
+                    if (fuelType && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.fuel_type_id || '') === String(fuelType));
+                    if (tank && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.tank_id || '') === String(tank));
                     
                     renderTable(fuelData, reportType);
                     updateKPIs(fuelData);
@@ -1824,6 +1826,13 @@
         // ===================================================================
         // 6. عرض الجدول
         // ===================================================================
+        function normalizeFuelRows(data, reportType) {
+            const rows = Array.isArray(data) ? data : [];
+            if (reportType === 'readings') return [];
+            if (reportType === 'tanks') return rows.map(item => ({ ...item, id: item.tank_id || item.id, type: 'tank', code: `TANK-${item.tank_id || item.id || ''}`, difference: Number(item.difference || 0), quantity: Number(item.measured_level || item.closing_level || 0), fuel_name: item.fuel_name || '---', status: Math.abs(Number(item.difference || 0)) > 5 ? 'rejected' : 'completed' }));
+            return rows.filter(item => reportType === 'summary' || (reportType === 'sales' && item.type === 'sale') || (reportType === 'refills' && item.type === 'refill')).map(item => item.type === 'sale' ? ({ ...item, sale_code: item.code, sale_date: item.date, liters: item.quantity, net_amount: item.amount, transaction_id: item.id, transaction_type: 'sale' }) : ({ ...item, refill_code: item.code, arrival_date: item.date, delivered_quantity: item.quantity, total_amount: item.amount, transaction_id: item.id, transaction_type: 'refill' }));
+        }
+
         function renderTable(data, reportType) {
             const tbody = document.getElementById('fuelTableBody');
             if (!data || data.length === 0) {
@@ -1833,10 +1842,12 @@
             }
             // دمج البيانات من مصادر مختلفة (مبيعات، تزود، قراءات) حسب نوع التقرير
             let rows = [];
-            if (reportType === 'sales' || reportType === 'summary') {
+            if ((reportType === 'sales' || reportType === 'summary') && item.type === 'sale') {
                 data.forEach((item, idx) => {
                     rows.push({
-                        id: idx + 1,
+                        id: item.id,
+                        transactionId: item.transaction_id || item.id,
+                        transactionType: item.transaction_type || 'sale',
                         code: item.sale_code || 'SALE-' + item.id,
                         date: item.sale_date || item.created_at,
                         fuel: item.fuel_name || '---',
@@ -1849,11 +1860,13 @@
                     });
                 });
             }
-            if (reportType === 'refills' || reportType === 'summary') {
+            if ((reportType === 'refills' || reportType === 'summary') && item.type === 'refill') {
                 data.forEach((item, idx) => {
                     if (item.refill_code) {
                         rows.push({
-                            id: idx + 100,
+                            id: item.id,
+                            transactionId: item.transaction_id || item.id,
+                            transactionType: item.transaction_type || 'refill',
                             code: item.refill_code || 'REF-' + item.id,
                             date: item.arrival_date || item.created_at,
                             fuel: item.fuel_name || '---',
@@ -1904,7 +1917,7 @@
                         <td>${escapeHtml(row.source)}</td>
                         <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                         <td>
-                            <button class="btn-view" onclick="viewTransaction('${row.code}')" title="تفاصيل">
+                            <button class="btn-view" onclick="viewTransaction(${row.transactionId || row.id}, '${row.transactionType || (row.type === 'تزود' ? 'refill' : 'sale')}')" title="تفاصيل">
                                 <i class="fas fa-eye"></i>
                             </button>
                         </td>
@@ -1935,10 +1948,10 @@
             document.getElementById('kpiTransactions').textContent = count;
 
             // محاكاة الاتجاهات
-            document.getElementById('trendLiters').textContent = '0.0%';
-            document.getElementById('trendAmount').textContent = '0.0%';
-            document.getElementById('trendPrice').textContent = (0 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendTx').textContent = '0.0%';
+            document.getElementById('trendLiters').textContent = '—';
+            document.getElementById('trendAmount').textContent = '—';
+            document.getElementById('trendPrice').textContent = '—';
+            document.getElementById('trendTx').textContent = '—';
         }
 
         function resetKPIs() {
@@ -1973,8 +1986,10 @@
         // ===================================================================
         function updateCharts(data) {
             // اتجاه المبيعات (آخر 7 أيام)
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const salesData = data.slice(0, 7).map(() => Math.floor(0 + 100));
+            const dailyLiters = {};
+            data.forEach(item => { const day = item.date || item.created_at || 'غير محدد'; dailyLiters[String(day).slice(0, 10)] = (dailyLiters[String(day).slice(0, 10)] || 0) + parseFloat(item.liters || item.quantity || item.delivered_quantity || 0); });
+            const days = Object.keys(dailyLiters).sort().slice(-7);
+            const salesData = days.map(day => dailyLiters[day]);
 
             const ctx1 = document.getElementById('salesTrendChart').getContext('2d');
             if (salesTrendChart) salesTrendChart.destroy();
@@ -2061,7 +2076,7 @@
                 alerts.push({ type: 'info', icon: 'fa-gauge-high', title: '📊 قراءات غير متطابقة',
                     desc: mismatches.length + ' قراءة بها فرق > 5 لتر', time: 'الآن' });
             }
-            LocalDB.set('fuel_notifications', alerts);
+            RuntimeState.set('fuel_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -2082,7 +2097,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('fuel_notifications', []);
+            const alerts = RuntimeState.get('fuel_notifications', []);
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2113,13 +2128,13 @@
             if (maxFuel) {
                 insights.push({ title: '⛽ الأكثر مبيعاً', desc: maxFuel + ' - ' + formatNumber(maxQty) + ' لتر' });
             }
-            
+            RuntimeState.set('fuel_insights', insights);
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = [];
+            const insights = RuntimeState.get('fuel_insights', []);
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2142,19 +2157,24 @@
         // ===================================================================
         // 12. تفاصيل المعاملة
         // ===================================================================
-        async function viewTransaction(code) {
-            if (!code) { showToast('❌ لا توجد تفاصيل', 'warning'); return; }
+        async function viewTransaction(id, type) {
+            if (!id || !['sale', 'refill'].includes(type)) { showToast('❌ لا توجد تفاصيل صحيحة للمعاملة', 'warning'); return; }
             showLoading(true);
             try {
-                const result = await apiCall('getFuelTransactionDetails', { code: code });
+                const result = await apiCall('getFuelTransactionDetails', { id: Number(id), type });
                 if (result.success && result.data) {
                     const t = result.data;
+                    const transactionCode = t.code || t.sale_code || t.refill_code || `${type}-${id}`;
+                    const transactionDate = t.date || t.created_at || t.sale_date || '---';
+                    const transactionQuantity = t.quantity || t.liters || t.delivered_quantity || 0;
+                    const transactionPrice = t.price || t.price_per_liter || 0;
+                    const transactionTotal = t.total || t.net_amount || t.total_amount || t.amount || 0;
                     const content = document.getElementById('detailsContent');
                     const statusLabel = getStatusLabel(t.status);
                     const statusClass = getStatusClass(t.status);
                     content.innerHTML = `
                         <div class="details-header">
-                            <h3 class="details-title">⛽ ${escapeHtml(t.code)}</h3>
+                            <h3 class="details-title">⛽ ${escapeHtml(transactionCode)}</h3>
                             <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
                         </div>
                         <div class="details-profile">
@@ -2164,16 +2184,16 @@
                         </div>
                         <div class="details-section">
                             <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات</div>
-                            <div class="details-row"><span class="details-label">كود المعاملة</span><span class="details-value code red">${escapeHtml(t.code)}</span></div>
-                            <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value">${t.date || '---'}</span></div>
+                            <div class="details-row"><span class="details-label">كود المعاملة</span><span class="details-value code red">${escapeHtml(transactionCode)}</span></div>
+                            <div class="details-row"><span class="details-label">التاريخ</span><span class="details-value">${transactionDate}</span></div>
                             <div class="details-row"><span class="details-label">نوع الوقود</span><span class="details-value">${escapeHtml(t.fuel_name || '---')}</span></div>
                             <div class="details-row"><span class="details-label">نوع العملية</span><span class="details-value">${t.type || '---'}</span></div>
                         </div>
                         <div class="details-section">
                             <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> البيانات المالية</div>
-                            <div class="details-row"><span class="details-label">الكمية (لتر)</span><span class="details-value">${formatNumber(t.quantity || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">سعر الوحدة</span><span class="details-value">${formatCurrency(t.price || 0)}</span></div>
-                            <div class="details-row"><span class="details-label">الإجمالي</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(t.total || 0)}</span></div>
+                            <div class="details-row"><span class="details-label">الكمية (لتر)</span><span class="details-value">${formatNumber(transactionQuantity)}</span></div>
+                            <div class="details-row"><span class="details-label">سعر الوحدة</span><span class="details-value">${formatCurrency(transactionPrice)}</span></div>
+                            <div class="details-row"><span class="details-label">الإجمالي</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(transactionTotal)}</span></div>
                         </div>
                         <div style="height:30px;"></div>
                     `;
@@ -2280,8 +2300,11 @@
         // 14. إعادة تعيين الفلاتر
         // ===================================================================
         function resetFilters() {
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
             document.getElementById('filterFuelType').value = '';
             document.getElementById('filterTank').value = '';
             document.getElementById('filterReportType').value = 'summary';
@@ -2357,14 +2380,14 @@
             try {
                 const [fuelRes, tankRes] = await Promise.all([
                     apiCall('getFuelTypes', {}),
-                    apiCall('getTanks', {})
+                    apiCall('getTanks')
                 ]);
                 const fuelSel = document.getElementById('filterFuelType');
                 if (fuelRes.success && fuelRes.data) {
                     fuelSel.innerHTML = '<option value="">جميع أنواع الوقود</option>';
                     fuelRes.data.forEach(f => {
                         const opt = document.createElement('option');
-                        opt.value = f.id;
+                        opt.value = f.fuel_type_id || f.id;
                         opt.textContent = f.fuel_name || f.fuel_name_ar || 'نوع';
                         fuelSel.appendChild(opt);
                     });
@@ -2374,7 +2397,7 @@
                     tankSel.innerHTML = '<option value="">جميع الخزانات</option>';
                     tankRes.data.forEach(t => {
                         const opt = document.createElement('option');
-                        opt.value = t.id;
+                        opt.value = t.tank_id || t.id;
                         opt.textContent = t.tank_name || t.tank_code || 'خزان';
                         tankSel.appendChild(opt);
                     });

@@ -13626,7 +13626,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val sql = """
                 SELECT 'sale' as type, s.id, s.sale_code as code, s.created_at as date, 
                        s.liters as quantity, s.net_amount as amount, f.fuel_name,
-                       p.commercial_name as party_name, '---' as tank_name
+                       p.commercial_name as party_name, '---' as tank_name,
+                       s.fuel_type_id as fuel_type_id, NULL as tank_id
                 FROM sales_transactions s
                 LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
                 LEFT JOIN parties p ON s.customer_party_id = p.id
@@ -13634,7 +13635,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 UNION ALL
                 SELECT 'refill' as type, r.id, r.refill_code as code, r.created_at as date,
                        r.delivered_quantity as quantity, 0 as amount, f.fuel_name,
-                       p.commercial_name as party_name, t.tank_name
+                       p.commercial_name as party_name, t.tank_name,
+                       r.fuel_type_id as fuel_type_id, r.tank_id as tank_id
                 FROM tank_refills r
                 LEFT JOIN fuel_types f ON r.fuel_type_id = f.id
                 LEFT JOIN parties p ON r.supplier_id = p.id
