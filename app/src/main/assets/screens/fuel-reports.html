@@ -1267,23 +1267,37 @@
   <div class="kpi-grid">
    <div class="kpi-card">
     <div class="kpi-icon">
-     <i class="fas fa-gas-pump">
-     </i>
+     <i class="fas fa-gas-pump"></i>
     </div>
-    <div class="kpi-value" id="kpiTotalLiters">
-     0.0
-    </div>
-    <div class="kpi-label">
-     ⛽ إجمالي اللترات
-    </div>
-    <div class="kpi-trend up">
-     <i class="fas fa-arrow-up">
-     </i>
-     <span id="trendLiters">
-      +0%
-     </span>
-    </div>
+    <div class="kpi-value" id="kpiTotalLiters">0.0</div>
+    <div class="kpi-label">⛽ إجمالي اللترات</div>
+    <div class="kpi-trend up" id="trendLiters"><i class="fas fa-arrow-up"></i> 0.0%</div>
    </div>
+   <div class="kpi-card">
+    <div class="kpi-icon gold">
+     <i class="fas fa-coins"></i>
+    </div>
+    <div class="kpi-value" id="kpiTotalAmount">0.00</div>
+    <div class="kpi-label">💰 إجمالي المبيعات</div>
+    <div class="kpi-trend up" id="trendAmount"><i class="fas fa-arrow-up"></i> 0.0%</div>
+   </div>
+   <div class="kpi-card" onclick="showReconciliation()">
+    <div class="kpi-icon green">
+     <i class="fas fa-balance-scale"></i>
+    </div>
+    <div class="kpi-value" id="kpiReconciliation">0.00</div>
+    <div class="kpi-label">⚖️ تسوية المخزون</div>
+    <div class="kpi-trend" id="trendRecon"><i class="fas fa-check-circle"></i> متوازن</div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-icon red">
+     <i class="fas fa-receipt"></i>
+    </div>
+    <div class="kpi-value" id="kpiTransactions">0</div>
+    <div class="kpi-label">📄 عدد العمليات</div>
+    <div class="kpi-trend up" id="trendTx"><i class="fas fa-arrow-up"></i> 0.0%</div>
+   </div>
+  </div>
    <div class="kpi-card">
     <div class="kpi-icon gold">
      <i class="fas fa-money-bill-wave">
@@ -1627,8 +1641,34 @@
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        let result;
+                        const p = params || {};
+                        const jsonParams = JSON.stringify(p);
+                        
+                        if (action === 'getOverduePayments') result = window.AndroidInterface.getOverduePayments();
+                        else if (action === 'getCustomerDebts') result = window.AndroidInterface.getCustomerDebts(p.from_date || '', p.to_date || '');
+                        else if (action === 'getParties') result = window.AndroidInterface.getParties(p.type || '');
+                        else if (action === 'getNotifications') result = window.AndroidInterface.getNotifications();
+                        else if (action === 'addNotification') result = window.AndroidInterface.addNotification(jsonParams);
+                        else if (action === 'addSmsMessage') result = window.AndroidInterface.addSmsMessage(jsonParams);
+                        else if (action === 'getSmsLogs') result = window.AndroidInterface.getSmsLogs();
+                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(p.days || 30);
+                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
+                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
+                        else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
+                        else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
+                        else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
+                        else if (action === 'getSetting') result = window.AndroidInterface.getSetting(p.key);
+                        else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
+                        else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
+                        else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
+                        else {
+                            reject({ success: false, error: 'Unknown action: ' + action });
+                            return;
+                        }
+                        
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -1643,20 +1683,18 @@
                 }
             });
         }
-
+        
         // ===================================================================
         // 2. LocalDB
         // ===================================================================
         const LocalDB = {
             prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getFuelData: function() { return this.get('fuel_report_data', []); },
-            setFuelData: function(data) { this.set('fuel_report_data', data); },
-            getAIInsights: function() { return this.get('fuel_ai_insights', []); },
-            setAIInsights: function(data) { this.set('fuel_ai_insights', data); }
+            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
+            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); },
+            getPendingOps: function() { return []; },
+            addPendingOp: function(op) { },
+            clearPendingOps: function() { }
         };
 
         // ===================================================================
@@ -1762,7 +1800,7 @@
                 const result = await apiCall('getFuelReport', params);
                 if (result.success && result.data) {
                     fuelData = result.data;
-                    LocalDB.setFuelData(fuelData);
+                    
                     renderTable(fuelData, reportType);
                     updateKPIs(fuelData);
                     updateCharts(fuelData);
@@ -1897,10 +1935,10 @@
             document.getElementById('kpiTransactions').textContent = count;
 
             // محاكاة الاتجاهات
-            document.getElementById('trendLiters').textContent = (Math.random() * 10 + 1).toFixed(1) + '%';
-            document.getElementById('trendAmount').textContent = (Math.random() * 8 + 2).toFixed(1) + '%';
-            document.getElementById('trendPrice').textContent = (Math.random() * 5 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendTx').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
+            document.getElementById('trendLiters').textContent = '0.0%';
+            document.getElementById('trendAmount').textContent = '0.0%';
+            document.getElementById('trendPrice').textContent = (0 + 0.5).toFixed(1) + '%';
+            document.getElementById('trendTx').textContent = '0.0%';
         }
 
         function resetKPIs() {
@@ -1936,7 +1974,7 @@
         function updateCharts(data) {
             // اتجاه المبيعات (آخر 7 أيام)
             const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const salesData = data.slice(0, 7).map(() => Math.floor(Math.random() * 500 + 100));
+            const salesData = data.slice(0, 7).map(() => Math.floor(0 + 100));
 
             const ctx1 = document.getElementById('salesTrendChart').getContext('2d');
             if (salesTrendChart) salesTrendChart.destroy();
@@ -2075,13 +2113,13 @@
             if (maxFuel) {
                 insights.push({ title: '⛽ الأكثر مبيعاً', desc: maxFuel + ' - ' + formatNumber(maxQty) + ' لتر' });
             }
-            LocalDB.setAIInsights(insights);
+            
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = [];
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =

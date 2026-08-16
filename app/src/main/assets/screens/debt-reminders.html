@@ -979,28 +979,28 @@
     <!-- ============================================================
     بطاقات الإحصائيات
     ============================================================ -->
-    <div class="stats-grid">
-        <div class="stat-card animate-fade-up" onclick="showStatDetail('total')">
-            <div class="stat-icon blue"><i class="fas fa-hand-holding-usd"></i></div>
-            <div class="stat-value" id="statTotalDebts">0</div>
-            <div class="stat-label">إجمالي الديون</div>
+        <div class="stats-grid">
+            <div class="stat-card" onclick="filterByStatus('overdue')">
+                <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
+                <div class="stat-value" id="statOverdue">0.00</div>
+                <div class="stat-label">ديون متأخرة</div>
+            </div>
+            <div class="stat-card" onclick="filterByStatus('due_soon')">
+                <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+                <div class="stat-value" id="statDueSoon">0.00</div>
+                <div class="stat-label">تستحق قريباً</div>
+            </div>
+            <div class="stat-card" onclick="showPredictiveAnalytics()">
+                <div class="stat-icon purple"><i class="fas fa-brain"></i></div>
+                <div class="stat-value" id="statPredictive">0.00</div>
+                <div class="stat-label">تحصيل متوقع (AI)</div>
+            </div>
+            <div class="stat-card" onclick="filterByStatus('all')">
+                <div class="stat-icon green"><i class="fas fa-users"></i></div>
+                <div class="stat-value" id="statCustomers">0</div>
+                <div class="stat-label">إجمالي العملاء</div>
+            </div>
         </div>
-        <div class="stat-card animate-fade-up" onclick="showStatDetail('overdue')">
-            <div class="stat-icon red"><i class="fas fa-exclamation-circle"></i></div>
-            <div class="stat-value" id="statOverdue">0</div>
-            <div class="stat-label">متأخرة</div>
-        </div>
-        <div class="stat-card animate-fade-up" onclick="showStatDetail('amount')">
-            <div class="stat-icon orange"><i class="fas fa-money-bill-wave"></i></div>
-            <div class="stat-value" id="statTotalAmount">0</div>
-            <div class="stat-label">إجمالي المبالغ</div>
-        </div>
-        <div class="stat-card animate-fade-up" onclick="showStatDetail('customers')">
-            <div class="stat-icon purple"><i class="fas fa-users"></i></div>
-            <div class="stat-value" id="statCustomers">0</div>
-            <div class="stat-label">عملاء مدينون</div>
-        </div>
-    </div>
 
     <!-- ============================================================
     عنوان القسم
@@ -1250,8 +1250,34 @@
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        let result;
+                        const p = params || {};
+                        const jsonParams = JSON.stringify(p);
+                        
+                        if (action === 'getOverduePayments') result = window.AndroidInterface.getOverduePayments();
+                        else if (action === 'getCustomerDebts') result = window.AndroidInterface.getCustomerDebts(p.from_date || '', p.to_date || '');
+                        else if (action === 'getParties') result = window.AndroidInterface.getParties(p.type || '');
+                        else if (action === 'getNotifications') result = window.AndroidInterface.getNotifications();
+                        else if (action === 'addNotification') result = window.AndroidInterface.addNotification(jsonParams);
+                        else if (action === 'addSmsMessage') result = window.AndroidInterface.addSmsMessage(jsonParams);
+                        else if (action === 'getSmsLogs') result = window.AndroidInterface.getSmsLogs();
+                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(p.days || 30);
+                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
+                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
+                        else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
+                        else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
+                        else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
+                        else if (action === 'getSetting') result = window.AndroidInterface.getSetting(p.key);
+                        else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
+                        else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
+                        else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
+                        else {
+                            reject({ success: false, error: 'Unknown action: ' + action });
+                            return;
+                        }
+                        
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -1266,33 +1292,18 @@
                 }
             });
         }
-
+        
         // ============================================================
         // 2. التخزين المحلي (Offline Mode)
         // ============================================================
         const LocalDB = {
             prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
+            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
+            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
             remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getDebts: function() { return this.get('debt_reminders_debts', []); },
-            setDebts: function(data) { this.set('debt_reminders_debts', data); },
-            getStats: function() { return this.get('debt_reminders_stats', {}); },
-            setStats: function(stats) { this.set('debt_reminders_stats', stats); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); }
+            getPendingOps: function() { return []; },
+            addPendingOp: function(op) { },
+            clearPendingOps: function() { }
         };
 
         // ============================================================
@@ -1553,14 +1564,14 @@
                 }
 
                 // تخزين محلي للاستخدام في وضع عدم الاتصال
-                LocalDB.setDebts(allDebts);
+                
 
                 if (allDebts.length === 0) {
                     showToast('⚠️ لا توجد ديون مستحقة', 'warning');
                 }
 
             } catch (e) {
-                allDebts = LocalDB.getDebts();
+                allDebts = [];
                 if (allDebts.length === 0) {
                     showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
                 }
@@ -1706,7 +1717,7 @@
             document.getElementById('statTotalAmount').textContent = formatCurrency(totalAmount);
             document.getElementById('statCustomers').textContent = customers;
 
-            LocalDB.setStats({ total, overdue, totalAmount, customers });
+            
         }
 
         function showStatDetail(type) {

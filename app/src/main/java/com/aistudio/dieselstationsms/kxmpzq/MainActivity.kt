@@ -5445,6 +5445,85 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
+        // 12. تقارير الوقود والصلاحية والرسائل
+        // ============================================================
+
+        @JavascriptInterface
+        fun getExpirySoonProducts(days: Int): String {
+            DebugLogger.info("WebAppInterface", "getExpirySoonProducts called")
+            if (!checkPermission("inventory", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getExpirySoonProducts(days))
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun extendProductExpiry(id: Long, newDate: String): String {
+            DebugLogger.info("WebAppInterface", "extendProductExpiry called")
+            if (!checkPermission("inventory", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.extendProductExpiry(id, newDate)
+                successResponse(rows > 0, if (rows > 0) "تم تمديد الصلاحية بنجاح" else "لم يتم العثور على المنتج")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun markProductExpired(id: Long): String {
+            DebugLogger.info("WebAppInterface", "markProductExpired called")
+            if (!checkPermission("inventory", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.markProductExpired(id)
+                successResponse(rows > 0, if (rows > 0) "تم تمييز المنتج كمنتهي الصلاحية" else "لم يتم العثور على المنتج")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getFuelReport(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "getFuelReport called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                dataResponse(db.getFuelReport(data))
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getFuelTransactionDetails(id: Long, type: String): String {
+            DebugLogger.info("WebAppInterface", "getFuelTransactionDetails called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val details = db.getFuelTransactionDetails(id, type)
+                if (details != null) dataResponse(details) else errorResponse("لم يتم العثور على التفاصيل")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getSmsLogs(): String {
+            DebugLogger.info("WebAppInterface", "getSmsLogs called")
+            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                dataResponse(db.getSmsLogs())
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getFuelInventoryReconciliation(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "getFuelInventoryReconciliation called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                dataResponse(db.getFuelInventoryReconciliation(data))
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        // ============================================================
         // دالة ping للتشخيص (اختبار Bridge)
         // ============================================================
 

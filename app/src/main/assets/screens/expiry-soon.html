@@ -2318,8 +2318,34 @@
             return new Promise((resolve, reject) => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
                     try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
+                        let result;
+                        const p = params || {};
+                        const jsonParams = JSON.stringify(p);
+                        
+                        if (action === 'getOverduePayments') result = window.AndroidInterface.getOverduePayments();
+                        else if (action === 'getCustomerDebts') result = window.AndroidInterface.getCustomerDebts(p.from_date || '', p.to_date || '');
+                        else if (action === 'getParties') result = window.AndroidInterface.getParties(p.type || '');
+                        else if (action === 'getNotifications') result = window.AndroidInterface.getNotifications();
+                        else if (action === 'addNotification') result = window.AndroidInterface.addNotification(jsonParams);
+                        else if (action === 'addSmsMessage') result = window.AndroidInterface.addSmsMessage(jsonParams);
+                        else if (action === 'getSmsLogs') result = window.AndroidInterface.getSmsLogs();
+                        else if (action === 'getExpirySoonProducts') result = window.AndroidInterface.getExpirySoonProducts(p.days || 30);
+                        else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
+                        else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
+                        else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
+                        else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
+                        else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
+                        else if (action === 'getSetting') result = window.AndroidInterface.getSetting(p.key);
+                        else if (action === 'setSetting') result = window.AndroidInterface.setSetting(p.key, p.value);
+                        else if (action === 'getProducts') result = window.AndroidInterface.getProducts();
+                        else if (action === 'getFuelTypes') result = window.AndroidInterface.getFuelTypes();
+                        else if (action === 'getTanks') result = window.AndroidInterface.getTanks(p.station_id || 1);
+                        else if (action === 'getCategories') result = window.AndroidInterface.getCategories();
+                        else {
+                            reject({ success: false, error: 'Unknown action: ' + action });
+                            return;
+                        }
+                        
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -2334,20 +2360,18 @@
                 }
             });
         }
-
+        
         // ===================================================================
         // 2. LocalDB
         // ===================================================================
         const LocalDB = {
             prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (
-                    e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getExpiryData: function() { return this.get('expiry_data', []); },
-            setExpiryData: function(data) { this.set('expiry_data', data); },
-            getAIInsights: function() { return this.get('expiry_ai_insights', []); },
-            setAIInsights: function(data) { this.set('expiry_ai_insights', data); }
+            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; } },
+            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(item) : def; } catch (e) { return def; } },
+            remove: function(key) { localStorage.removeItem(this.prefix + key); },
+            getPendingOps: function() { return []; },
+            addPendingOp: function(op) { },
+            clearPendingOps: function() { }
         };
 
         // ===================================================================
@@ -2476,7 +2500,7 @@
                 const result = await apiCall('getExpirySoonProducts', params);
                 if (result.success && result.data) {
                     expiryData = result.data;
-                    LocalDB.setExpiryData(expiryData);
+                    
                     renderTable(expiryData);
                     updateKPIs(expiryData);
                     updateCharts(expiryData);
@@ -2536,6 +2560,9 @@
                                 <button class="btn-action extend" onclick="openExtendForProduct(${item.id})" title="تمديد الصلاحية">
                                     <i class="fas fa-calendar-plus"></i>
                                 </button>
+                                <button class="btn-action success" onclick="returnToSupplier(${item.id})" title="إرجاع للمورد">
+                                    <i class="fas fa-truck-loading"></i>
+                                </button>
                                 ${status === 'critical' ? `<button class="btn-action delete" onclick="markExpired(${item.id})" title="تحديد كمنتهي الصلاحية">
                                     <i class="fas fa-hourglass-end"></i>
                                 </button>` : ''}
@@ -2567,11 +2594,11 @@
             document.getElementById('kpiTotalProducts').textContent = data.length;
             document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
 
-            document.getElementById('trendCritical').textContent = (Math.random() * 10 + 1).toFixed(1) + '%';
-            document.getElementById('trendWarning').textContent = (Math.random() * 8 + 2).toFixed(1) + '%';
-            document.getElementById('trendSafe').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
-            document.getElementById('trendTotal').textContent = (Math.random() * 5 + 1).toFixed(1) + '%';
-            document.getElementById('trendValue').textContent = (Math.random() * 7 + 1).toFixed(1) + '%';
+            document.getElementById('trendCritical').textContent = '0.0%';
+            document.getElementById('trendWarning').textContent = '0.0%';
+            document.getElementById('trendSafe').textContent = '0.0%';
+            document.getElementById('trendTotal').textContent = '0.0%';
+            document.getElementById('trendValue').textContent = '0.0%';
         }
 
         function resetKPIs() {
@@ -2762,13 +2789,13 @@
                     desc: 'يوجد ' + critical + ' منتج حرج، يُرجى اتخاذ إجراء سريع (بيع، تخفيض، أو تمديد الصلاحية).'
                 });
             }
-            LocalDB.setAIInsights(insights);
+            
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = [];
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -3392,7 +3419,7 @@
             try {
                 const [productsRes, categoriesRes] = await Promise.all([
                     apiCall('getProducts', { station_id: 1 }),
-                    apiCall('getProductCategories', { station_id: 1 })
+                    apiCall('getCategories', { station_id: 1 })
                 ]);
 
                 const productSel = document.getElementById('filterProduct');

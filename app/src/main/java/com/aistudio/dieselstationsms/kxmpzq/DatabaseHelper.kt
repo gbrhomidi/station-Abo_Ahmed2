@@ -13149,4 +13149,151 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    // ========================================================================
+    // دوال تقارير الوقود والصلاحية — مضافة للإصدار 16
+    // ========================================================================
+
+    fun getExpirySoonProducts(days: Int = 30): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = """
+                SELECT p.*, c.category_name 
+                FROM products p
+                LEFT JOIN product_categories c ON p.category_id = c.id
+                WHERE p.has_expiry = 1 
+                AND p.is_deleted = 0
+                AND date(p.expiry_date) <= date('now', '+' || ? || ' days')
+                ORDER BY p.expiry_date ASC
+            """
+            db.rawQuery(sql, arrayOf(days.toString())).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun extendProductExpiry(id: Long, newDate: String): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("expiry_date", newDate)
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("products", cv, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "extend_expiry", "تمديد صلاحية المنتج ${id} إلى ${newDate}")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun markProductExpired(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                put("status", "expired")
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = db.update("products", cv, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "mark_expired", "تمييز المنتج ${id} كمنتهي الصلاحية")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getFuelReport(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val fromDate = data.optString("from_date")
+            val toDate = data.optString("to_date")
+            val stationId = data.optInt("station_id", 1)
+            
+            val conditions = StringBuilder()
+            val args = mutableListOf<String>()
+            args.add(stationId.toString())
+            
+            if (fromDate.isNotBlank()) {
+                conditions.append(" AND date(created_at) >= ?")
+                args.add(fromDate)
+            }
+            if (toDate.isNotBlank()) {
+                conditions.append(" AND date(created_at) <= ?")
+                args.add(toDate)
+            }
+
+            val sql = """
+                SELECT 'sale' as type, s.id, s.sale_code as code, s.created_at as date, 
+                       s.liters as quantity, s.net_amount as amount, f.fuel_name,
+                       p.commercial_name as party_name, '---' as tank_name
+                FROM sales_transactions s
+                LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
+                LEFT JOIN parties p ON s.customer_party_id = p.id
+                WHERE s.station_id = ? AND s.is_deleted = 0 AND s.order_type = 'fuel' ${conditions}
+                UNION ALL
+                SELECT 'refill' as type, r.id, r.refill_code as code, r.created_at as date,
+                       r.delivered_quantity as quantity, 0 as amount, f.fuel_name,
+                       p.commercial_name as party_name, t.tank_name
+                FROM tank_refills r
+                LEFT JOIN fuel_types f ON r.fuel_type_id = f.id
+                LEFT JOIN parties p ON r.supplier_id = p.id
+                LEFT JOIN tanks t ON r.tank_id = t.id
+                WHERE r.station_id = ? ${conditions}
+                ORDER BY date DESC
+            """
+            
+            val allArgs = mutableListOf<String>()
+            allArgs.addAll(args)
+            allArgs.addAll(args)
+            
+            readableDatabase.rawQuery(sql, allArgs.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getFuelTransactionDetails(id: Long, type: String): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            if (type == "sale") {
+                db.rawQuery("SELECT * FROM fuel_sales WHERE sale_id = ?", arrayOf(id.toString())).use { cursor ->
+                    if (cursor.moveToFirst()) cursorToJson(cursor) else null
+                }
+            } else if (type == "refill") {
+                db.rawQuery("SELECT * FROM tank_refills WHERE id = ?", arrayOf(id.toString())).use { cursor ->
+                    if (cursor.moveToFirst()) cursorToJson(cursor) else null
+                }
+            } else null
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getFuelInventoryReconciliation(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val stationId = data.optInt("station_id", 1)
+            val date = data.optString("date", getCurrentDate())
+            val sql = """
+                SELECT t.id as tank_id, t.tank_name, f.fuel_name,
+                       COALESCE(l.opening_level, 0) as opening_level,
+                       COALESCE((SELECT SUM(delivered_quantity) FROM tank_refills WHERE tank_id = t.id AND date(created_at) = ?), 0) as refills,
+                       COALESCE((SELECT SUM(liters) FROM sales_transactions WHERE fuel_type_id = t.fuel_type_id AND station_id = t.station_id AND date(created_at) = ? AND is_deleted = 0), 0) as sold,
+                       COALESCE(l.closing_level, 0) as closing_level,
+                       COALESCE(l.measured_level, 0) as measured_level,
+                       COALESCE(l.difference, 0) as difference
+                FROM tanks t
+                LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
+                LEFT JOIN tank_level_log l ON t.id = l.tank_id AND date(l.reading_date) = ?
+                WHERE t.station_id = ?
+            """
+            readableDatabase.rawQuery(sql, arrayOf(date, date, date, stationId.toString())).use { cursorToJsonArray(it) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
 }
