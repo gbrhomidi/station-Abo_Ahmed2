@@ -6888,17 +6888,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val unitCost = data.optDouble("unit_cost", 0.0)
             val totalCost = quantity * unitCost
             val stationId = data.optInt("station_id", 1)
+            val warehouseId = data.optLong("warehouse_id", 1L).takeIf { it > 0L } ?: 1L
+
+            require(productId > 0) { "المنتج مطلوب" }
+            require(quantity > 0.0) { "كمية الحركة يجب أن تكون أكبر من صفر" }
+            require(movementType in setOf("in", "out", "adjustment", "transfer", "return", "damage")) { "نوع حركة المخزون غير صحيح" }
 
             var currentQty = 0.0
             db.rawQuery(
-                "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
-                arrayOf(productId.toString())
+                "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
+                arrayOf(productId.toString(), warehouseId.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) currentQty = cursor.getDouble(0)
             }
 
             val quantityBefore = currentQty
             val quantityAfter = if (movementType == "in") currentQty + quantity else currentQty - quantity
+            require(quantityAfter >= 0.0) { "لا يمكن خصم كمية أكبر من المخزون المتاح" }
 
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
@@ -6923,18 +6929,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
             if (id > 0) {
                 db.rawQuery(
-                    "SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = 1",
-                    arrayOf(productId.toString())
+                    "SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
+                    arrayOf(productId.toString(), warehouseId.toString())
                 ).use { exists ->
+
                     if (exists.moveToFirst()) {
                         db.execSQL(
-                            "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = 1",
-                            arrayOf(quantityAfter, productId)
+                            "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = ?",
+                            arrayOf(quantityAfter, productId, warehouseId)
                         )
                     } else {
                         val cvInv = ContentValues().apply {
                             put("product_id", productId)
-                            put("warehouse_id", 1)
+                            put("warehouse_id", warehouseId)
                             put("quantity_on_hand", quantityAfter)
                             put("average_cost", unitCost)
                         }
@@ -9453,14 +9460,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("user_id", data.optLong("user_id", 0))
-                put("role_id", data.optLong("role_id", 0))
+                val userId = data.optLong("user_id", 0L)
+                val roleId = data.optLong("role_id", 0L)
+                if (userId > 0L) put("user_id", userId) else putNull("user_id")
+                if (roleId > 0L) put("role_id", roleId) else putNull("role_id")
                 put("notification_type", data.optString("notification_type", "info"))
                 put("title", data.optString("title", ""))
                 put("title_ar", data.optString("title_ar", ""))
                 put("message", data.optString("message", ""))
                 put("message_ar", data.optString("message_ar", ""))
                 put("priority", data.optString("priority", "normal"))
+                put("channel", data.optString("channel", "in_app"))
+                if (data.optString("reference_type").isNotBlank()) put("reference_type", data.optString("reference_type"))
+                if (data.optLong("reference_id", 0L) > 0L) put("reference_id", data.optLong("reference_id"))
+                if (data.optLong("created_by", 0L) > 0L) put("created_by", data.optLong("created_by"))
                 put("is_read", 0)
                 put("status", "pending")
                 put("created_at", getCurrentDateTime())
@@ -9932,6 +9945,248 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
+
+    // ========================================================================
+    // دوال المنتجات التالفة والمستودعات
+    // ========================================================================
+
+    fun getWarehouses(stationId: Int? = null): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = if (stationId != null && stationId > 0) {
+                "SELECT id, uuid, station_id, warehouse_name, location_details, is_default, is_active, created_at FROM warehouses WHERE station_id = ? AND is_active = 1 ORDER BY warehouse_name"
+            } else {
+                "SELECT id, uuid, station_id, warehouse_name, location_details, is_default, is_active, created_at FROM warehouses WHERE is_active = 1 ORDER BY warehouse_name"
+            }
+            val args = if (stationId != null && stationId > 0) arrayOf(stationId.toString()) else null
+            db.rawQuery(sql, args).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getDamagedProducts(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val conditions = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            if (!data.optBoolean("include_archived", false)) {
+                conditions += "dp.archived = 0"
+            }
+            data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let {
+                conditions += "date(dp.report_date) >= date(?)"
+                args += it
+            }
+            data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let {
+                conditions += "date(dp.report_date) <= date(?)"
+                args += it
+            }
+            data.optLong("product_id", 0L).takeIf { it > 0 }?.let {
+                conditions += "dp.product_id = ?"
+                args += it.toString()
+            }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0 }?.let {
+                conditions += "dp.warehouse_id = ?"
+                args += it.toString()
+            }
+            data.optLong("station_id", 0L).takeIf { it > 0 }?.let {
+                conditions += "dp.station_id = ?"
+                args += it.toString()
+            }
+            data.optString("status").trim().takeIf { it in setOf("pending", "approved", "rejected") }?.let {
+                conditions += "dp.status = ?"
+                args += it
+            }
+            val where = if (conditions.isEmpty()) "" else " WHERE ${conditions.joinToString(" AND ")}"
+            val requestedLimit = data.optInt("limit", 0)
+            val limit = if (requestedLimit > 0) requestedLimit.coerceAtMost(1000) else 0
+            val limitSql = if (limit > 0) " LIMIT $limit" else ""
+            val sql = """
+                SELECT dp.id, dp.product_id, dp.warehouse_id, dp.tank_id, dp.station_id,
+                       dp.quantity, dp.reason, dp.notes, dp.report_date, dp.reported_by,
+                       dp.status, dp.approved_by, dp.approved_at, dp.archived, dp.created_at,
+                       p.product_code, p.product_name, p.product_name_ar,
+                       COALESCE(p.purchase_price, 0) AS unit_price,
+                       COALESCE(p.purchase_price, 0) * dp.quantity AS total_value,
+                       w.warehouse_name,
+                       t.tank_name,
+                       ru.full_name AS reported_by_name,
+                       au.full_name AS approved_by_name
+                FROM damaged_products dp
+                LEFT JOIN products p ON p.id = dp.product_id
+                LEFT JOIN warehouses w ON w.id = dp.warehouse_id
+                LEFT JOIN tanks t ON t.id = dp.tank_id
+                LEFT JOIN users ru ON ru.id = dp.reported_by
+                LEFT JOIN users au ON au.id = dp.approved_by
+                $where
+                ORDER BY datetime(dp.report_date) DESC, dp.id DESC$limitSql
+            """.trimIndent()
+            db.rawQuery(sql, args.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addDamagedProduct(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val productId = data.optLong("product_id", 0L)
+            val quantity = data.optDouble("quantity", 0.0)
+            val reportedBy = data.optLong("reported_by", 0L)
+            require(productId > 0) { "المنتج مطلوب" }
+            require(quantity > 0.0) { "الكمية يجب أن تكون أكبر من صفر" }
+            require(reportedBy > 0) { "المبلّغ مطلوب" }
+
+            val db = writableDatabase
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND is_deleted = 0", arrayOf(productId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج غير موجود أو غير نشط" }
+            }
+            val values = ContentValues().apply {
+                put("product_id", productId)
+                if (data.optLong("warehouse_id", 0L) > 0) put("warehouse_id", data.optLong("warehouse_id")) else putNull("warehouse_id")
+                if (data.optLong("tank_id", 0L) > 0) put("tank_id", data.optLong("tank_id")) else putNull("tank_id")
+                if (data.optLong("station_id", 0L) > 0) put("station_id", data.optLong("station_id")) else putNull("station_id")
+                put("quantity", quantity)
+                put("reason", data.optString("reason").trim())
+                put("notes", data.optString("notes").trim())
+                if (data.optString("report_date").trim().isNotEmpty()) put("report_date", data.optString("report_date").trim())
+                put("reported_by", reportedBy)
+                put("status", "pending")
+                put("archived", 0)
+            }
+            val id = db.insert("damaged_products", null, values)
+            require(id > 0) { "تعذر حفظ سجل التالف" }
+            logActivity("system", "damaged_product_created", "تم إنشاء سجل تالف رقم $id")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateDamagedProduct(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف السجل غير صالح" }
+            val productId = data.optLong("product_id", 0L)
+            val quantity = data.optDouble("quantity", 0.0)
+            require(productId > 0) { "المنتج مطلوب" }
+            require(quantity > 0.0) { "الكمية يجب أن تكون أكبر من صفر" }
+            val db = writableDatabase
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND is_deleted = 0", arrayOf(productId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج غير موجود أو غير نشط" }
+            }
+            val values = ContentValues().apply {
+                put("product_id", productId)
+                if (data.has("warehouse_id")) {
+                    if (data.isNull("warehouse_id")) putNull("warehouse_id") else put("warehouse_id", data.optLong("warehouse_id"))
+                }
+                if (data.has("tank_id")) {
+                    if (data.isNull("tank_id")) putNull("tank_id") else put("tank_id", data.optLong("tank_id"))
+                }
+                if (data.has("station_id")) {
+                    if (data.isNull("station_id")) putNull("station_id") else put("station_id", data.optLong("station_id"))
+                }
+                put("quantity", quantity)
+                put("reason", data.optString("reason").trim())
+                put("notes", data.optString("notes").trim())
+                if (data.has("report_date") && data.optString("report_date").trim().isNotEmpty()) {
+                    put("report_date", data.optString("report_date").trim())
+                }
+            }
+            val rows = db.update("damaged_products", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "damaged_product_updated", "تم تحديث سجل تالف رقم $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateDamagedProductStatus(id: Long, status: String, approvedBy: Long): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف السجل غير صالح" }
+            require(status in setOf("pending", "approved", "rejected")) { "حالة التالف غير صحيحة" }
+            require(approvedBy > 0) { "المستخدم المعتمد مطلوب" }
+            val db = writableDatabase
+            var currentStatus = ""
+            var productId = 0L
+            var quantity = 0.0
+            var warehouseId = 1L
+            var stationId = 1
+            var unitCost = 0.0
+            db.rawQuery(
+                "SELECT dp.status, dp.product_id, dp.quantity, COALESCE(dp.warehouse_id, 1), COALESCE(dp.station_id, 1), COALESCE(p.purchase_price, 0) FROM damaged_products dp LEFT JOIN products p ON p.id = dp.product_id WHERE dp.id = ? AND dp.archived = 0",
+                arrayOf(id.toString())
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) return 0
+                currentStatus = cursor.getString(0) ?: "pending"
+                productId = cursor.getLong(1)
+                quantity = cursor.getDouble(2)
+                warehouseId = cursor.getLong(3)
+                stationId = cursor.getInt(4)
+                unitCost = cursor.getDouble(5)
+            }
+            if (currentStatus == status) return 1
+            require(!(currentStatus == "approved" && status != "approved")) { "لا يمكن التراجع عن اعتماد خصم المخزون" }
+
+            db.beginTransaction()
+            try {
+                if (status == "approved") {
+                    val movement = JSONObject().apply {
+                        put("product_id", productId)
+                        put("warehouse_id", warehouseId)
+                        put("station_id", stationId)
+                        put("movement_type", "damage")
+                        put("movement_subtype", "damaged_product")
+                        put("quantity", quantity)
+                        put("unit_cost", unitCost)
+                        put("reference_type", "damaged_products")
+                        put("reference_id", id)
+                        put("notes", "اعتماد سجل التالف رقم $id")
+                        put("performed_by", approvedBy)
+                    }
+                    val movementId = addStockMovement(movement)
+                    require(movementId > 0) { "تعذر تسجيل خصم المخزون" }
+                }
+                val values = ContentValues().apply {
+                    put("status", status)
+                    if (status == "pending") {
+                        putNull("approved_by")
+                        putNull("approved_at")
+                    } else {
+                        put("approved_by", approvedBy)
+                        put("approved_at", getCurrentDateTime())
+                    }
+                }
+                val rows = db.update("damaged_products", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+                require(rows > 0) { "تعذر تحديث حالة سجل التالف" }
+                logActivity("system", "damaged_product_status", "تم تحديث حالة سجل التالف رقم $id إلى $status")
+                db.setTransactionSuccessful()
+                rows
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun archiveDamagedProduct(id: Long): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف السجل غير صالح" }
+            val values = ContentValues().apply { put("archived", 1) }
+            val rows = writableDatabase.update("damaged_products", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "damaged_product_archived", "تمت أرشفة سجل التالف رقم $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteDamagedProduct(id: Long): Int = archiveDamagedProduct(id)
 
     // ========================================================================
     // دوال المنتجات (Overload)

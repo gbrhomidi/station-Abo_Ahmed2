@@ -1456,7 +1456,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         val stationId = params.optInt(
             "station_id",
-            1
+            getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
         )
 
         if (stationId <= 0) {
@@ -2376,7 +2376,120 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
-        // 10. الأصول
+        // 10. المنتجات التالفة والمستودعات
+        // ============================================================
+
+        @JavascriptInterface
+        fun getWarehouses(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getWarehouses called")
+            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                val stationId = data.optInt("station_id", getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
+                dataResponse(db.getWarehouses(stationId.takeIf { it > 0 }))
+            } catch (e: Exception) {
+                DebugLogger.logException("Warehouse", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getDamagedProducts(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getDamagedProducts called")
+            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val data = JSONObject(jsonData.ifBlank { "{}" }).apply {
+                    if (optInt("station_id", 0) <= 0) put("station_id", getCurrentStationId(db, activity.currentUserId))
+                }
+                dataResponse(db.getDamagedProducts(data))
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun addDamagedProduct(jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "addDamagedProduct called")
+            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val data = JSONObject(jsonData).apply {
+                    if (optLong("reported_by", 0L) <= 0L) put("reported_by", activity.currentUserId)
+                    if (optInt("station_id", 0) <= 0) put("station_id", getCurrentStationId(db, activity.currentUserId))
+                }
+                val id = db.addDamagedProduct(data)
+                DebugLogger.info("DamagedProduct", "Added damaged product id=$id")
+                successResponse(id, "تم إضافة سجل التالف بنجاح")
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun updateDamagedProduct(id: Long, jsonData: String): String {
+            DebugLogger.info("WebAppInterface", "updateDamagedProduct called id=$id")
+            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.updateDamagedProduct(id, JSONObject(jsonData))
+                successResponse(rows > 0, if (rows > 0) "تم تحديث سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun updateDamagedProductStatus(id: Long, status: String): String {
+            DebugLogger.info("WebAppInterface", "updateDamagedProductStatus called id=$id status=$status")
+            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية اعتماد التالف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.updateDamagedProductStatus(id, status, activity.currentUserId)
+                successResponse(rows > 0, if (rows > 0) "تم تحديث حالة سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun archiveDamagedProduct(id: Long): String {
+            DebugLogger.info("WebAppInterface", "archiveDamagedProduct called id=$id")
+            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.archiveDamagedProduct(id)
+                successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteDamagedProduct(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteDamagedProduct called id=$id")
+            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteDamagedProduct(id)
+                successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
+            } catch (e: Exception) {
+                DebugLogger.logException("DamagedProduct", e)
+                errorResponse(e.message)
+            }
+        }
+
+        // ============================================================
+        // 11. الأصول
         // ============================================================
 
         @JavascriptInterface

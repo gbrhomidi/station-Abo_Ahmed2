@@ -1722,10 +1722,11 @@
         <span>اسحب للتحديث</span>
     </div>
     <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
+            <div class="offline-banner" id="offlineBanner">
         <i class="fas fa-wifi-slash"></i>
-        أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+        لا يمكن تنفيذ عمليات البيانات دون اتصال جسر Android
     </div>
+
     <!-- Loading -->
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
@@ -2057,12 +2058,40 @@
                     </div>
                     <div class="form-group">
                         <label>الكمية *</label>
-                        <input id="fQuantity" type="number" step="0.01" placeholder="أدخل الكمية" />
+                        <input id="fQuantity" type="number" min="0.01" step="0.01" placeholder="أدخل الكمية" />
+                    </div>
+                </div>
+                <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div class="form-group">
+                        <label>نوع التلف *</label>
+                        <select id="fDamageType">
+                            <option value="">اختر نوع التلف</option>
+                            <option value="expired">منتهي الصلاحية</option>
+                            <option value="broken">تالف/مكسور</option>
+                            <option value="transport">تلف أثناء النقل</option>
+                            <option value="other">أخرى</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>المبلّغ *</label>
+                        <select id="fReportedBy">
+                            <option value="">اختر المستخدم</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div class="form-group">
+                        <label>سعر الوحدة</label>
+                        <input id="fUnitPrice" type="text" value="0.00" readonly aria-readonly="true" />
+                    </div>
+                    <div class="form-group">
+                        <label>القيمة الإجمالية</label>
+                        <input id="fTotalValue" type="text" value="0.00" readonly aria-readonly="true" />
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>سبب التلف *</label>
-                    <input id="fReason" type="text" placeholder="سبب التلف (مثل: انتهاء صلاحية، تلف أثناء النقل)" />
+                    <label>تفصيل السبب</label>
+                    <input id="fReasonDetails" type="text" placeholder="تفصيل اختياري لسبب التلف" />
                 </div>
                 <div class="form-group">
                     <label>ملاحظات</label>
@@ -2230,44 +2259,57 @@
     =================================================================== -->
     <script>
         // ===================================================================
-        // 1. apiCall الموحدة
+        // 1. Typed Android Bridge — لا يوجد fallback تجاري أو خادم بديل
         // ===================================================================
+        function parseBridgeResponse(raw) {
+            if (raw && typeof raw === 'object') return raw;
+            if (typeof raw !== 'string') return { success: false, error: 'استجابة الجسر غير صالحة' };
+            try { return JSON.parse(raw); } catch (e) {
+                return { success: false, error: 'تعذر تحليل استجابة الجسر' };
+            }
+        }
+
+        const BridgeContracts = {
+            getDashboardStats: p => window.AndroidInterface.getDashboardStats(JSON.stringify(p || {})),
+            getDamagedProducts: p => window.AndroidInterface.getDamagedProducts(JSON.stringify(p || {})),
+            addDamagedProduct: p => window.AndroidInterface.addDamagedProduct(JSON.stringify(p || {})),
+            updateDamagedProduct: p => window.AndroidInterface.updateDamagedProduct(Number(p.id), JSON.stringify(p || {})),
+            updateDamagedProductStatus: p => window.AndroidInterface.updateDamagedProductStatus(Number(p.id), String(p.status || '')),
+            archiveDamagedProduct: p => window.AndroidInterface.archiveDamagedProduct(Number(p.id)),
+            deleteDamagedProduct: p => window.AndroidInterface.deleteDamagedProduct(Number(p.id)),
+            addStockMovement: p => window.AndroidInterface.addStockMovement(JSON.stringify(p || {})),
+            getLowStockItems: () => window.AndroidInterface.getLowStockItems(),
+            getUsers: () => window.AndroidInterface.getUsers(),
+            addNotification: p => window.AndroidInterface.addNotification(JSON.stringify(p || {})),
+            getSetting: p => window.AndroidInterface.getSetting(String((p || {}).key || '')),
+            setSetting: p => window.AndroidInterface.setSetting(String((p || {}).key || ''), String((p || {}).value || '')),
+            getProducts: () => window.AndroidInterface.getProducts(),
+            getWarehouses: p => window.AndroidInterface.getWarehouses(JSON.stringify(p || {})),
+            getTanks: () => window.AndroidInterface.getTanks()
+        };
+
         function apiCall(action, params) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    // محاكاة للاختبار (سيتم استبدالها بالاتصال الحقيقي)
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                if (!window.AndroidInterface) {
+                    reject({ success: false, error: 'جسر Android غير متاح؛ لم يتم تنفيذ العملية' });
+                    return;
+                }
+                const contract = BridgeContracts[action];
+                if (typeof contract !== 'function') {
+                    reject({ success: false, error: 'العقد غير مدعوم: ' + action });
+                    return;
+                }
+                try {
+                    resolve(parseBridgeResponse(contract(params || {})));
+                } catch (e) {
+                    reject({ success: false, error: e && e.message ? e.message : 'فشل استدعاء الجسر' });
                 }
             });
         }
 
-        // ===================================================================
-        // 2. LocalDB
-        // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (
-                    e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getDamagedData: function() { return this.get('damaged_products_data', []); },
-            setDamagedData: function(data) { this.set('damaged_products_data', data); },
-            getAIInsights: function() { return this.get('damaged_ai_insights', []); },
-            setAIInsights: function(data) { this.set('damaged_ai_insights', data); }
-        };
+        // هذه الحالة مؤقتة للعرض داخل الجلسة فقط وليست مخزناً تجارياً.
+        let currentAlerts = [];
+        let currentAIInsights = [];
 
         // ===================================================================
         // 3. دوال مساعدة
@@ -2327,6 +2369,16 @@
             return map[st] || 'pending';
         }
 
+        function getDamageTypeLabel(type) {
+            const map = {
+                expired: 'منتهي الصلاحية',
+                broken: 'تالف/مكسور',
+                transport: 'تلف أثناء النقل',
+                other: 'أخرى'
+            };
+            return map[type] || type || 'غير محدد';
+        }
+
         function getStatusBadge(st) {
             return `<span class="status-badge ${getStatusClass(st)}">${getStatusLabel(st)}</span>`;
         }
@@ -2360,6 +2412,7 @@
         // 5. تحميل المنتجات التالفة (الصفحة الرئيسية)
         // ===================================================================
         let damagedData = [];
+        let loadedProducts = [];
         let statusChart = null;
         let trendChart = null;
 
@@ -2370,11 +2423,6 @@
             const warehouseId = document.getElementById('filterWarehouse').value;
             const status = document.getElementById('filterStatus').value;
 
-            if (!from || !to) {
-                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
-                return;
-            }
-
             showLoading(true);
             try {
                 const params = {
@@ -2383,12 +2431,10 @@
                     product_id: productId || null,
                     warehouse_id: warehouseId || null,
                     status: status || null,
-                    station_id: 1
                 };
                 const result = await apiCall('getDamagedProducts', params);
                 if (result.success && result.data) {
                     damagedData = result.data;
-                    LocalDB.setDamagedData(damagedData);
                     renderTable(damagedData);
                     updateKPIs(damagedData);
                     updateCharts(damagedData);
@@ -2397,13 +2443,17 @@
                     generateAIInsights(damagedData);
                     showToast('✅ تم تحميل البيانات بنجاح', 'success');
                 } else {
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                    document.getElementById('damagedTableBody').innerHTML =
-                        '<tr><td colspan="11"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد بيانات مطابقة</div></td></tr>';
+                    damagedData = [];
+                    renderTable([]);
                     resetKPIs();
+                    updateCharts([]);
+                    updateFooter([]);
+                    generateAlerts([]);
+                    generateAIInsights([]);
+                    showToast(result.message || result.error || 'لا توجد بيانات مطابقة', 'warning');
                 }
             } catch (e) {
-                showToast('❌ فشل تحميل البيانات', 'error');
+                showToast(e.error || e.message || '❌ فشل تحميل البيانات من قاعدة البيانات', 'error');
                 console.error(e);
             } finally {
                 showLoading(false);
@@ -2426,9 +2476,9 @@
                 const productName = item.product_name || item.product_name_ar || '---';
                 const warehouseName = item.warehouse_name || '---';
                 const tankName = item.tank_name || '---';
-                const reason = item.reason || '---';
+                const reason = getDamageTypeLabel(item.reason);
                 const quantity = parseFloat(item.quantity || 0);
-                const value = parseFloat(item.value || item.total_value || 0);
+                const value = parseFloat(item.total_value || item.value || 0);
                 const reportedBy = item.reported_by_name || item.reported_by || '---';
 
                 return `
@@ -2455,8 +2505,8 @@
                                         <i class="fas fa-times-circle"></i>
                                     </button>
                                 ` : ''}
-                                <button class="btn-action delete" onclick="deleteProduct(${item.id})" title="حذف">
-                                    <i class="fas fa-trash"></i>
+                                <button class="btn-action delete" onclick="archiveProduct(${item.id})" title="أرشفة">
+                                    <i class="fas fa-archive"></i>
                                 </button>
                                 <button class="btn-action" onclick="viewDetails(${item.id})" title="تفاصيل">
                                     <i class="fas fa-eye"></i>
@@ -2478,7 +2528,7 @@
                 rejected = 0;
             data.forEach(item => {
                 const qty = parseFloat(item.quantity || 0);
-                const val = parseFloat(item.value || item.total_value || 0);
+                const val = parseFloat(item.total_value || item.value || 0);
                 totalQty += qty;
                 totalValue += val;
                 if (item.status === 'pending') pending++;
@@ -2492,12 +2542,17 @@
             document.getElementById('kpiRejected').textContent = rejected;
             document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
 
-            // محاكاة الاتجاهات (سيتم تحديثها لاحقاً من الإحصائيات الحقيقية)
-            document.getElementById('trendTotal').textContent = (Math.random() * 10 + 1).toFixed(1) + '%';
-            document.getElementById('trendPending').textContent = (Math.random() * 8 + 2).toFixed(1) + '%';
-            document.getElementById('trendApproved').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
-            document.getElementById('trendRejected').textContent = (Math.random() * 5 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendValue').textContent = (Math.random() * 7 + 1).toFixed(1) + '%';
+            // لا تُعرض اتجاهات وهمية؛ تُملأ من مقارنة البيانات الحالية إذا توفرت.
+            const total = data.length;
+            const previousTotal = Number(window.previousDamagedCount || 0);
+            const trend = previousTotal > 0 ? ((total - previousTotal) / previousTotal * 100) : 0;
+            const trendText = (trend >= 0 ? '+' : '') + trend.toFixed(1) + '%';
+            document.getElementById('trendTotal').textContent = trendText;
+            document.getElementById('trendPending').textContent = pending + ' سجل';
+            document.getElementById('trendApproved').textContent = approved + ' سجل';
+            document.getElementById('trendRejected').textContent = rejected + ' سجل';
+            document.getElementById('trendValue').textContent = formatCurrency(totalValue);
+            window.previousDamagedCount = total;
         }
 
         function resetKPIs() {
@@ -2516,7 +2571,7 @@
                 totalValue = 0;
             data.forEach(item => {
                 totalQty += parseFloat(item.quantity || 0);
-                totalValue += parseFloat(item.value || item.total_value || 0);
+                totalValue += parseFloat(item.total_value || item.value || 0);
             });
             document.getElementById('footerTotalQty').textContent = formatNumber(totalQty);
             document.getElementById('footerTotalValue').textContent = formatCurrency(totalValue);
@@ -2563,7 +2618,15 @@
             });
 
             const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const trendData = data.slice(0, 7).map(() => Math.floor(Math.random() * 20 + 5));
+            const trendData = days.map((_, dayIndex) => data.reduce((sum, item) => {
+                const rawDate = item.report_date || item.created_at || '';
+                const date = rawDate.slice(0, 10);
+                const target = new Date();
+                target.setHours(0, 0, 0, 0);
+                target.setDate(target.getDate() - (6 - dayIndex));
+                const targetDate = target.toISOString().slice(0, 10);
+                return sum + (date === targetDate ? Number(item.quantity || 0) : 0);
+            }, 0));
             const ctx2 = document.getElementById('trendChart').getContext('2d');
             if (trendChart) trendChart.destroy();
             trendChart = new Chart(ctx2, {
@@ -2619,7 +2682,7 @@
                     time: 'الآن'
                 });
             }
-            const highValue = data.filter(item => parseFloat(item.value || 0) > 100000);
+            const highValue = data.filter(item => parseFloat(item.total_value || item.value || 0) > 100000);
             if (highValue.length > 0) {
                 alerts.push({
                     type: 'info',
@@ -2629,8 +2692,8 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('damaged_notifications', alerts);
-            renderAlerts(alerts);
+            currentAlerts = alerts;
+            renderAlerts(currentAlerts);
         }
 
         function renderAlerts(alerts) {
@@ -2650,19 +2713,21 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('damaged_notifications', []);
-            if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
-            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
+            if (currentAlerts.length === 0) { showToast('🔔 لا توجد تنبيهات حالية', 'info'); return; }
+            showToast('🔔 لديك ' + currentAlerts.length + ' تنبيهات حالية', 'success');
         }
 
         // ===================================================================
         // 11. AI Advisor
         // ===================================================================
         function generateAIInsights(data) {
-            if (!data || data.length === 0) return;
+            if (!data || data.length === 0) {
+                currentAIInsights = [];
+                return;
+            }
             const insights = [];
             const totalQty = data.reduce((s, item) => s + parseFloat(item.quantity || 0), 0);
-            const totalValue = data.reduce((s, item) => s + parseFloat(item.value || item.total_value || 0), 0);
+            const totalValue = data.reduce((s, item) => s + parseFloat(item.total_value || item.value || 0), 0);
             const pending = data.filter(i => i.status === 'pending').length;
             const approved = data.filter(i => i.status === 'approved').length;
             const rejected = data.filter(i => i.status === 'rejected').length;
@@ -2675,7 +2740,7 @@
 
             const reasons = {};
             data.forEach(item => {
-                const r = item.reason || 'غير محدد';
+                const r = getDamageTypeLabel(item.reason);
                 reasons[r] = (reasons[r] || 0) + 1;
             });
             let maxReason = '',
@@ -2691,13 +2756,13 @@
                     desc: 'يوجد ' + pending + ' طلب تلف معلق، يُرجى مراجعتها واتخاذ القرار المناسب.'
                 });
             }
-            LocalDB.setAIInsights(insights);
+            currentAIInsights = insights;
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = currentAIInsights;
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2720,139 +2785,159 @@
         // ===================================================================
         // 12. عمليات CRUD (نفس السابق)
         // ===================================================================
+        let mutatingOperation = false;
+
+        async function sendDamagedNotification(item, title, message, priority, referenceId) {
+            const userId = Number(item && (item.reported_by || item.reported_by_id) || 0);
+            if (userId <= 0) return { success: false, error: 'لا يوجد مستخدم مستهدف للإشعار' };
+            try {
+                return await apiCall('addNotification', {
+                    user_id: userId,
+                    notification_type: 'damaged_product',
+                    title: title,
+                    title_ar: title,
+                    message: message,
+                    message_ar: message,
+                    priority: priority || 'normal',
+                    reference_type: 'damaged_products',
+                    reference_id: Number(referenceId || item.id || 0)
+                });
+            } catch (e) {
+                return { success: false, error: e.error || e.message || 'فشل إرسال الإشعار' };
+            }
+        }
+
         async function saveDamagedProduct() {
-            const id = parseInt(document.getElementById('editId').value) || 0;
+            if (mutatingOperation) return;
+            const id = Number(document.getElementById('editId').value) || 0;
             const productId = document.getElementById('fProductId').value;
             const warehouseId = document.getElementById('fWarehouseId').value || null;
             const tankId = document.getElementById('fTankId').value || null;
-            const quantity = parseFloat(document.getElementById('fQuantity').value);
-            const reason = document.getElementById('fReason').value.trim();
+            const quantity = Number(document.getElementById('fQuantity').value);
+            const damageType = document.getElementById('fDamageType').value;
+            const reportedBy = document.getElementById('fReportedBy').value;
+            const reasonDetails = document.getElementById('fReasonDetails').value.trim();
             const notes = document.getElementById('fNotes').value.trim();
-            const status = document.getElementById('fStatus').value;
             const reportDate = document.getElementById('fReportDate').value || new Date().toISOString().split('T')[0];
 
             if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
-            if (!quantity || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
-            if (!reason) { showToast('❌ الرجاء إدخال سبب التلف', 'error'); return; }
+            if (!Number.isFinite(quantity) || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
+            if (!damageType) { showToast('❌ الرجاء اختيار نوع التلف', 'error'); return; }
+            if (!reportedBy) { showToast('❌ الرجاء اختيار المبلّغ', 'error'); return; }
 
+            const params = {
+                product_id: Number(productId),
+                warehouse_id: warehouseId ? Number(warehouseId) : null,
+                tank_id: tankId ? Number(tankId) : null,
+                quantity: quantity,
+                reason: damageType,
+                notes: [reasonDetails, notes].filter(Boolean).join(' — '),
+                report_date: reportDate,
+                reported_by: Number(reportedBy)
+            };
+            mutatingOperation = true;
             showLoading(true);
             try {
-                const params = {
-                    id: id,
-                    product_id: parseInt(productId),
-                    warehouse_id: warehouseId ? parseInt(warehouseId) : null,
-                    tank_id: tankId ? parseInt(tankId) : null,
-                    quantity: quantity,
-                    reason: reason,
-                    notes: notes,
-                    status: status,
-                    report_date: reportDate,
-                    station_id: 1,
-                    reported_by: 1
-                };
                 const action = id > 0 ? 'updateDamagedProduct' : 'addDamagedProduct';
+                if (id > 0) params.id = id;
                 const result = await apiCall(action, params);
-                if (result.success) {
-                    showToast(id > 0 ? '✅ تم التعديل بنجاح' : '✅ تمت الإضافة بنجاح', 'success');
-                    closeModal();
-                    loadDamagedProducts();
-                } else {
-                    showToast(result.message || '❌ فشلت العملية', 'error');
+                if (!result.success) {
+                    showToast(result.message || result.error || '❌ فشلت العملية ولم يتم حفظ البيانات', 'error');
+                    return;
                 }
+                const notification = await sendDamagedNotification(
+                    { reported_by: Number(reportedBy) },
+                    'تسجيل منتج تالف',
+                    'تم تسجيل منتج تالف جديد للمراجعة',
+                    'normal',
+                    id > 0 ? id : result.id
+                );
+                closeModal();
+                showToast(notification.success ? (id > 0 ? '✅ تم التعديل وإرسال الإشعار' : '✅ تمت الإضافة وإرسال الإشعار') : (id > 0 ? '✅ تم التعديل؛ تعذر إرسال الإشعار' : '✅ تمت الإضافة؛ تعذر إرسال الإشعار'), notification.success ? 'success' : 'warning');
+                await loadDamagedProducts();
             } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
-                console.error(e);
+                showToast(e.error || e.message || '❌ حدث خطأ ولم يتم تأكيد العملية', 'error');
             } finally {
+                mutatingOperation = false;
                 showLoading(false);
             }
         }
 
-        async function approveProduct(id) {
-            if (!id) return;
+        async function updateDamagedStatus(id, status, confirmationTitle, confirmationText) {
+            if (!id || mutatingOperation) return;
             const confirmed = await Swal.fire({
-                title: 'اعتماد المنتج التالف؟',
-                text: 'هل أنت متأكد من اعتماد هذا المنتج كتالف؟',
+                title: confirmationTitle,
+                text: confirmationText,
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonColor: '#10b981',
-                cancelButtonColor: '#ef4444',
-                confirmButtonText: 'نعم، اعتماد',
+                confirmButtonColor: status === 'approved' ? '#10b981' : '#ef4444',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: status === 'approved' ? 'نعم، اعتماد' : 'نعم، رفض',
                 cancelButtonText: 'إلغاء'
             });
             if (!confirmed.isConfirmed) return;
 
+            mutatingOperation = true;
             showLoading(true);
             try {
-                const result = await apiCall('updateDamagedProductStatus', { id: id, status: 'approved' });
-                if (result.success) {
-                    showToast('✅ تم اعتماد المنتج', 'success');
-                    loadDamagedProducts();
-                } else {
-                    showToast(result.message || '❌ فشل الاعتماد', 'error');
+                const item = damagedData.find(d => Number(d.id) === Number(id)) || { id: id };
+                const result = await apiCall('updateDamagedProductStatus', { id: Number(id), status: status });
+                if (!result.success) {
+                    showToast(result.message || result.error || '❌ فشل تحديث الحالة ولم يتم خصم المخزون', 'error');
+                    return;
                 }
+                const notification = await sendDamagedNotification(
+                    item,
+                    status === 'approved' ? 'اعتماد منتج تالف' : 'رفض منتج تالف',
+                    status === 'approved' ? 'تم اعتماد سجل التالف وتحديث المخزون' : 'تم رفض سجل التالف',
+                    status === 'approved' ? 'high' : 'normal',
+                    id
+                );
+                showToast(notification.success ? '✅ تم تحديث الحالة وإرسال الإشعار' : '✅ تم تحديث الحالة؛ تعذر إرسال الإشعار', notification.success ? 'success' : 'warning');
+                await loadDamagedProducts();
             } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
+                showToast(e.error || e.message || '❌ حدث خطأ ولم يتم تأكيد الحالة', 'error');
             } finally {
+                mutatingOperation = false;
                 showLoading(false);
             }
         }
 
-        async function rejectProduct(id) {
-            if (!id) return;
-            const confirmed = await Swal.fire({
-                title: 'رفض المنتج التالف؟',
-                text: 'هل أنت متأكد من رفض هذا المنتج؟',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#10b981',
-                confirmButtonText: 'نعم، رفض',
-                cancelButtonText: 'إلغاء'
-            });
-            if (!confirmed.isConfirmed) return;
-
-            showLoading(true);
-            try {
-                const result = await apiCall('updateDamagedProductStatus', { id: id, status: 'rejected' });
-                if (result.success) {
-                    showToast('✅ تم رفض المنتج', 'success');
-                    loadDamagedProducts();
-                } else {
-                    showToast(result.message || '❌ فشل الرفض', 'error');
-                }
-            } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
-            } finally {
-                showLoading(false);
-            }
+        function approveProduct(id) {
+            return updateDamagedStatus(id, 'approved', 'اعتماد المنتج التالف؟', 'سيؤدي الاعتماد إلى خصم الكمية من المخزون مرة واحدة.');
         }
 
-        async function deleteProduct(id) {
-            if (!id) return;
+        function rejectProduct(id) {
+            return updateDamagedStatus(id, 'rejected', 'رفض المنتج التالف؟', 'هل أنت متأكد من رفض هذا المنتج؟');
+        }
+
+        async function archiveProduct(id) {
+            if (!id || mutatingOperation) return;
             const confirmed = await Swal.fire({
-                title: 'حذف المنتج التالف؟',
-                text: 'هل أنت متأكد من حذف هذا السجل؟',
+                title: 'أرشفة سجل التالف؟',
+                text: 'سيختفي السجل من العرض الافتراضي دون حذف البيانات نهائياً.',
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#10b981',
-                confirmButtonText: 'نعم، حذف',
+                confirmButtonColor: '#f59e0b',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'نعم، أرشفة',
                 cancelButtonText: 'إلغاء'
             });
             if (!confirmed.isConfirmed) return;
-
+            mutatingOperation = true;
             showLoading(true);
             try {
-                const result = await apiCall('deleteDamagedProduct', { id: id });
+                const result = await apiCall('archiveDamagedProduct', { id: Number(id) });
                 if (result.success) {
-                    showToast('✅ تم الحذف بنجاح', 'success');
-                    loadDamagedProducts();
+                    showToast('✅ تمت أرشفة سجل التالف', 'success');
+                    await loadDamagedProducts();
                 } else {
-                    showToast(result.message || '❌ فشل الحذف', 'error');
+                    showToast(result.message || result.error || '❌ فشلت الأرشفة', 'error');
                 }
             } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
+                showToast(e.error || e.message || '❌ حدث خطأ أثناء الأرشفة', 'error');
             } finally {
+                mutatingOperation = false;
                 showLoading(false);
             }
         }
@@ -2860,39 +2945,62 @@
         // ===================================================================
         // 13. مودال الإضافة / التعديل
         // ===================================================================
+        function setFormValue(id, value) {
+            const element = document.getElementById(id);
+            if (element) element.value = value === null || value === undefined ? '' : value;
+        }
+
+        function updateFormValue() {
+            const productId = Number(document.getElementById('fProductId').value || 0);
+            const quantity = Number(document.getElementById('fQuantity').value || 0);
+            const product = loadedProducts.find(p => Number(p.id || p.product_id) === productId);
+            const unitPrice = Number(product && (product.purchase_price || product.unit_price) || 0);
+            document.getElementById('fUnitPrice').value = formatCurrency(unitPrice);
+            document.getElementById('fTotalValue').value = formatCurrency(unitPrice * (Number.isFinite(quantity) ? quantity : 0));
+        }
+
         function openAddModal() {
             document.getElementById('editId').value = '0';
             document.getElementById('formModalTitle').textContent = '➕ إضافة منتج تالف';
-            document.getElementById('fProductId').value = '';
-            document.getElementById('fWarehouseId').value = '';
-            document.getElementById('fTankId').value = '';
-            document.getElementById('fQuantity').value = '';
-            document.getElementById('fReason').value = '';
-            document.getElementById('fNotes').value = '';
-            document.getElementById('fStatus').value = 'pending';
-            document.getElementById('fReportDate').value = new Date().toISOString().split('T')[0];
+            setFormValue('fProductId', '');
+            setFormValue('fWarehouseId', '');
+            setFormValue('fTankId', '');
+            setFormValue('fQuantity', '');
+            setFormValue('fDamageType', '');
+            setFormValue('fReportedBy', '');
+            setFormValue('fReasonDetails', '');
+            setFormValue('fNotes', '');
+            setFormValue('fStatus', 'pending');
+            document.getElementById('fStatus').disabled = false;
+            setFormValue('fReportDate', new Date().toISOString().split('T')[0]);
+            updateFormValue();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            loadDropdowns();
+            loadDropdowns({});
         }
 
         function openEditModal(id) {
-            const item = damagedData.find(d => d.id === id);
+            const item = damagedData.find(d => Number(d.id) === Number(id));
             if (!item) { showToast('❌ المنتج غير موجود', 'error'); return; }
-            document.getElementById('editId').value = item.id;
+            const knownType = ['expired', 'broken', 'transport', 'other'].includes(item.reason) ? item.reason : 'other';
+            const detail = knownType === 'other' && item.reason && item.reason !== 'other' ? item.reason : '';
+            setFormValue('editId', item.id);
             document.getElementById('formModalTitle').textContent = '✏️ تعديل منتج تالف';
-            document.getElementById('fProductId').value = item.product_id || '';
-            document.getElementById('fWarehouseId').value = item.warehouse_id || '';
-            document.getElementById('fTankId').value = item.tank_id || '';
-            document.getElementById('fQuantity').value = item.quantity || '';
-            document.getElementById('fReason').value = item.reason || '';
-            document.getElementById('fNotes').value = item.notes || '';
-            document.getElementById('fStatus').value = item.status || 'pending';
-            document.getElementById('fReportDate').value = item.report_date ? item.report_date.split('T')[0] : new Date().toISOString()
-                .split('T')[0];
+            setFormValue('fProductId', item.product_id);
+            setFormValue('fWarehouseId', item.warehouse_id);
+            setFormValue('fTankId', item.tank_id);
+            setFormValue('fQuantity', item.quantity);
+            setFormValue('fDamageType', knownType);
+            setFormValue('fReportedBy', item.reported_by);
+            setFormValue('fReasonDetails', detail);
+            setFormValue('fNotes', item.notes);
+            setFormValue('fStatus', item.status || 'pending');
+            document.getElementById('fStatus').disabled = item.status !== 'pending';
+            setFormValue('fReportDate', item.report_date ? item.report_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+            updateFormValue();
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            loadDropdowns();
+            loadDropdowns({ productId: item.product_id, warehouseId: item.warehouse_id, tankId: item.tank_id, reportedBy: item.reported_by });
         }
 
         function closeModal() {
@@ -2936,8 +3044,9 @@
                     <div class="details-section">
                         <div class="details-section-title"><i class="fas fa-box"></i> التفاصيل</div>
                         <div class="details-row"><span class="details-label">الكمية</span><span class="details-value">${formatNumber(item.quantity || 0)}</span></div>
-                        <div class="details-row"><span class="details-label">القيمة</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(item.value || item.total_value || 0)}</span></div>
-                        <div class="details-row"><span class="details-label">السبب</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.reason || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">سعر الوحدة</span><span class="details-value">${formatCurrency(item.unit_price || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">القيمة</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(item.total_value || item.value || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">نوع التلف</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(getDamageTypeLabel(item.reason))}</span></div>
                         <div class="details-row"><span class="details-label">ملاحظات</span><span class="details-value" style="font-size:0.8rem;">${escapeHtml(item.notes || '---')}</span></div>
                     </div>
                     <div class="details-section">
@@ -2960,29 +3069,31 @@
         // ===================================================================
         // 15. تصدير CSV و PDF
         // ===================================================================
+        function csvEscape(value) {
+            const text = value === null || value === undefined ? '' : String(value);
+            return '"' + text.replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+        }
+
         function exportCSV() {
-            const rows = document.querySelectorAll('#damagedTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
+            if (!Array.isArray(damagedData) || damagedData.length === 0) {
                 showToast('❌ لا توجد بيانات للتصدير', 'error');
                 return;
             }
-            let csv = 'كود التالف,المنتج,المستودع,الخزان,الكمية,القيمة,السبب,المبلغ,الحالة\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 11 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || '',
-                        cells[9]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
-            });
+            const headers = ['كود التالف', 'المنتج', 'المستودع', 'الخزان', 'الكمية', 'سعر الوحدة', 'القيمة', 'نوع التلف', 'المبلّغ', 'الحالة', 'تاريخ التقرير'];
+            const rows = damagedData.map(item => [
+                item.id,
+                item.product_name || item.product_name_ar || '',
+                item.warehouse_name || '',
+                item.tank_name || '',
+                item.quantity || 0,
+                item.unit_price || 0,
+                item.total_value || item.value || 0,
+                getDamageTypeLabel(item.reason),
+                item.reported_by_name || item.reported_by || '',
+                getStatusLabel(item.status),
+                item.report_date || ''
+            ]);
+            const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\r\n') + '\r\n';
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const from = document.getElementById('filterDateFrom').value || 'start';
@@ -2990,7 +3101,33 @@
             link.download = `تالف_${from}_${to}.csv`;
             link.href = URL.createObjectURL(blob);
             link.click();
+            URL.revokeObjectURL(link.href);
             showToast('✅ تم تصدير CSV', 'success');
+        }
+
+        function exportJSON() {
+            if (!Array.isArray(damagedData) || damagedData.length === 0) {
+                showToast('❌ لا توجد بيانات للتصدير', 'error');
+                return;
+            }
+            const payload = {
+                exported_at: new Date().toISOString(),
+                filters: {
+                    start_date: document.getElementById('filterDateFrom').value || null,
+                    end_date: document.getElementById('filterDateTo').value || null,
+                    product_id: document.getElementById('filterProduct').value || null,
+                    warehouse_id: document.getElementById('filterWarehouse').value || null,
+                    status: document.getElementById('filterStatus').value || null
+                },
+                data: damagedData
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.download = 'damaged-products.json';
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+            showToast('✅ تم تصدير JSON', 'success');
         }
 
         function exportPDF() {
@@ -3047,8 +3184,11 @@
         // 16. إعادة تعيين الفلاتر
         // ===================================================================
         function resetFilters() {
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
+            const today = new Date();
+            const monthAgo = new Date();
+            monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
+            document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
             document.getElementById('filterProduct').value = '';
             document.getElementById('filterWarehouse').value = '';
             document.getElementById('filterStatus').value = '';
@@ -3106,7 +3246,7 @@
                 `;
 
             try {
-                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                const result = await apiCall('getDashboardStats', {});
                 if (result.success && result.data) {
                     const stats = result.data;
                     body.innerHTML = `
@@ -3148,11 +3288,11 @@
                         `;
                 } else {
                     body.innerHTML =
-                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'فشل تحميل البيانات'}</div>`;
+                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || result.error || 'فشل تحميل البيانات'}</div>`;
                 }
             } catch (e) {
                 body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
                 console.error(e);
             }
         }
@@ -3176,7 +3316,7 @@
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
                 const from = monthAgo.toISOString().split('T')[0];
-                const params = { start_date: from, end_date: today, station_id: 1, limit: 5 };
+                const params = { start_date: from, end_date: today, limit: 5 };
                 const result = await apiCall('getDamagedProducts', params);
                 if (result.success && result.data) {
                     const items = result.data.slice(0, 5);
@@ -3200,11 +3340,11 @@
                     body.innerHTML = html;
                 } else {
                     body.innerHTML =
-                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'لا توجد بيانات'}</div>`;
+                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || result.error || 'لا توجد بيانات'}</div>`;
                 }
             } catch (e) {
                 body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
                 console.error(e);
             }
         }
@@ -3224,7 +3364,7 @@
                 `;
 
             try {
-                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                const result = await apiCall('getLowStockItems', {});
                 if (result.success && result.data) {
                     const items = result.data;
                     if (items.length === 0) {
@@ -3248,11 +3388,11 @@
                     body.innerHTML = html;
                 } else {
                     body.innerHTML =
-                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || 'فشل تحميل البيانات'}</div>`;
+                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || result.error || 'فشل تحميل البيانات'}</div>`;
                 }
             } catch (e) {
                 body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
                 console.error(e);
             }
         }
@@ -3277,11 +3417,20 @@
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
                 const from = monthAgo.toISOString().split('T')[0];
-                const countResult = await apiCall('getDamagedProducts', { start_date: from, end_date: today, station_id: 1 });
-                let totalCount = 0;
-                if (countResult.success && countResult.data) {
-                    totalCount = countResult.data.length;
-                }
+                const countResult = await apiCall('getDamagedProducts', { start_date: from, end_date: today });
+                const reportItems = countResult.success && Array.isArray(countResult.data) ? countResult.data : [];
+                const totalCount = reportItems.length;
+                const groupBy = (items, key, fallback) => {
+                    const counts = {};
+                    items.forEach(item => {
+                        const label = item[key] || fallback;
+                        counts[label] = (counts[label] || 0) + 1;
+                    });
+                    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                };
+                const reasonRows = groupBy(reportItems, 'reason', 'other').map(([key, count]) => `<tr><td>${escapeHtml(getDamageTypeLabel(key))}</td><td>${count}</td></tr>`).join('');
+                const productRows = groupBy(reportItems, 'product_name', 'غير محدد').map(([key, count]) => `<tr><td>${escapeHtml(key)}</td><td>${count}</td></tr>`).join('');
+                const warehouseRows = groupBy(reportItems, 'warehouse_name', 'غير محدد').map(([key, count]) => `<tr><td>${escapeHtml(key)}</td><td>${count}</td></tr>`).join('');
 
                 body.innerHTML = `
                         <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
@@ -3290,9 +3439,21 @@
                                 <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${totalCount}</span>
                             </div>
                         </div>
+                        <div class="modal-stats-grid" style="margin-bottom:16px;">
+                            <div class="modal-stat-card"><div class="stat-value">${formatNumber(reportItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</div><div class="stat-label">إجمالي الكمية</div></div>
+                            <div class="modal-stat-card"><div class="stat-value">${formatCurrency(reportItems.reduce((sum, item) => sum + Number(item.total_value || 0), 0))}</div><div class="stat-label">إجمالي القيمة</div></div>
+                        </div>
+                        <div class="mini-table-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+                            <div><h4>أسباب التلف الأكثر تكراراً</h4><table class="mini-table"><thead><tr><th>السبب</th><th>العدد</th></tr></thead><tbody>${reasonRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
+                            <div><h4>أكثر المنتجات تالفاً</h4><table class="mini-table"><thead><tr><th>المنتج</th><th>العدد</th></tr></thead><tbody>${productRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
+                            <div><h4>التحليل حسب المستودع</h4><table class="mini-table"><thead><tr><th>المستودع</th><th>العدد</th></tr></thead><tbody>${warehouseRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
+                        </div>
                         <div class="report-actions">
                             <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');">
                                 <i class="fas fa-file-csv"></i> تصدير CSV
+                            </button>
+                            <button class="btn-report" onclick="exportJSON(); closeModalById('reportsModal');">
+                                <i class="fas fa-file-code"></i> تصدير JSON
                             </button>
                             <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');">
                                 <i class="fas fa-file-pdf"></i> تصدير PDF
@@ -3310,7 +3471,7 @@
                     `;
             } catch (e) {
                 body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
+                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
                 console.error(e);
             }
         }
@@ -3415,7 +3576,7 @@
                     // إعادة تحميل المودال لتحديث القيم
                     if (modalId === 'settingsModal') openSettingsModal();
                 } else {
-                    showToast(result.message || '❌ فشل الحفظ', 'error');
+                    showToast(result.message || result.error || '❌ فشل الحفظ', 'error');
                 }
             } catch (e) {
                 showToast('❌ حدث خطأ', 'error');
@@ -3476,39 +3637,67 @@
         // ===================================================================
         // 21. تحميل القوائم المنسدلة
         // ===================================================================
-        async function loadDropdowns() {
+        async function loadDropdowns(preferred) {
+            const selected = preferred || {};
             try {
-                const [productsRes, warehousesRes, tanksRes] = await Promise.all([
-                    apiCall('getProducts', { station_id: 1 }),
-                    apiCall('getWarehouses', { station_id: 1 }),
-                    apiCall('getTanks', { station_id: 1 })
+                const [productsRes, warehousesRes, tanksRes, usersRes] = await Promise.all([
+                    apiCall('getProducts', {}),
+                    apiCall('getWarehouses', {}),
+                    apiCall('getTanks', {}),
+                    apiCall('getUsers', {})
                 ]);
 
                 const productSel = document.getElementById('fProductId');
                 const filterProductSel = document.getElementById('filterProduct');
-                if (productsRes.success && productsRes.data) {
-                    const opts = productsRes.data.map(p =>
-                        `<option value="${p.id}">${p.product_name || p.product_name_ar || 'منتج'}</option>`).join('');
+                if (productsRes.success && Array.isArray(productsRes.data)) {
+                    loadedProducts = productsRes.data;
+                    const opts = loadedProducts.map(p => {
+                        const productId = p.id || p.product_id;
+                        const productName = p.product_name || p.product_name_ar || 'منتج';
+                        return `<option value="${productId}">${escapeHtml(productName)}</option>`;
+                    }).join('');
                     productSel.innerHTML = '<option value="">اختر المنتج</option>' + opts;
                     filterProductSel.innerHTML = '<option value="">جميع المنتجات</option>' + opts;
+                    if (selected.productId) productSel.value = String(selected.productId);
+                } else if (!productsRes.success) {
+                    showToast(productsRes.message || productsRes.error || 'تعذر تحميل المنتجات', 'error');
                 }
 
                 const warehouseSel = document.getElementById('fWarehouseId');
                 const filterWarehouseSel = document.getElementById('filterWarehouse');
-                if (warehousesRes.success && warehousesRes.data) {
+                if (warehousesRes.success && Array.isArray(warehousesRes.data)) {
                     const opts = warehousesRes.data.map(w =>
-                        `<option value="${w.id}">${w.warehouse_name || 'مستودع'}</option>`).join('');
+                        `<option value="${w.id}">${escapeHtml(w.warehouse_name || 'مستودع')}</option>`).join('');
                     warehouseSel.innerHTML = '<option value="">اختر المستودع</option>' + opts;
                     filterWarehouseSel.innerHTML = '<option value="">جميع المستودعات</option>' + opts;
+                    if (selected.warehouseId) warehouseSel.value = String(selected.warehouseId);
+                } else if (!warehousesRes.success) {
+                    showToast(warehousesRes.message || warehousesRes.error || 'تعذر تحميل المستودعات', 'warning');
                 }
 
                 const tankSel = document.getElementById('fTankId');
-                if (tanksRes.success && tanksRes.data) {
+                if (tanksRes.success && Array.isArray(tanksRes.data)) {
                     const opts = tanksRes.data.map(t =>
-                        `<option value="${t.id}">${t.tank_name || t.tank_code || 'خزان'}</option>`).join('');
+                        `<option value="${t.id}">${escapeHtml(t.tank_name || t.tank_code || 'خزان')}</option>`).join('');
                     tankSel.innerHTML = '<option value="">اختر الخزان</option>' + opts;
+                    if (selected.tankId) tankSel.value = String(selected.tankId);
                 }
+
+                const reporterSel = document.getElementById('fReportedBy');
+                if (usersRes.success && Array.isArray(usersRes.data)) {
+                    const opts = usersRes.data.filter(u => Number(u.id || u.user_id) > 0).map(u => {
+                        const userId = u.id || u.user_id;
+                        const userName = u.full_name || u.username || u.email || ('مستخدم ' + userId);
+                        return `<option value="${userId}">${escapeHtml(userName)}</option>`;
+                    }).join('');
+                    reporterSel.innerHTML = '<option value="">اختر المستخدم</option>' + opts;
+                    if (selected.reportedBy) reporterSel.value = String(selected.reportedBy);
+                } else if (!usersRes.success) {
+                    showToast(usersRes.message || usersRes.error || 'تعذر تحميل قائمة المستخدمين', 'warning');
+                }
+                updateFormValue();
             } catch (e) {
+                showToast(e.error || e.message || 'تعذر تحميل القوائم من قاعدة البيانات', 'error');
                 console.error('Error loading dropdowns:', e);
             }
         }
@@ -3527,7 +3716,9 @@
             document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
             document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
 
-            loadDropdowns();
+            loadDropdowns({});
+            document.getElementById('fProductId').addEventListener('change', updateFormValue);
+            document.getElementById('fQuantity').addEventListener('input', updateFormValue);
             setTimeout(loadDamagedProducts, 600);
 
             // إغلاق المودالات عند النقر خارجها
