@@ -1852,7 +1852,7 @@
     <!-- Offline Banner -->
     <div class="offline-banner" id="offlineBanner">
         <i class="fas fa-wifi-slash"></i>
-        أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+        لا يوجد اتصال بقاعدة بيانات التطبيق؛ لا يمكن تنفيذ العمليات التجارية حالياً
     </div>
     <!-- Loading -->
     <div class="loading-indicator" id="loadingIndicator">
@@ -2314,40 +2314,82 @@
         // ===================================================================
         // 1. apiCall الموحدة
         // ===================================================================
-        function apiCall(action, params) {
+        function invokeExistingBridgeAction(action, params = {}) {
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('AndroidInterface غير متاح');
+            const p = params || {};
+            const toId = (value) => Number(value ?? 0);
+            switch (action) {
+                case 'getCustomerDebts':
+                    return bridge.getCustomerDebts(p.start_date ?? p.from_date ?? null, p.end_date ?? p.to_date ?? null);
+                case 'getCustomerLedger':
+                    return bridge.getCustomerLedger(toId(p.customer_id ?? p.customer_party_id ?? p.party_id));
+                case 'getCustomerSales':
+                    return bridge.getCustomerSales(toId(p.customer_id ?? p.customer_party_id ?? p.party_id));
+                case 'getCustomers':
+                    return bridge.getCustomers();
+                case 'getPayments':
+                    return bridge.getPayments();
+                case 'getPartyById':
+                    return bridge.getPartyById(toId(p.customer_id ?? p.customer_party_id ?? p.party_id));
+                case 'getDashboardStats':
+                    return bridge.getDashboardStats(JSON.stringify(p));
+                case 'getLowStockItems':
+                    return bridge.getLowStockItems();
+                case 'makePayment':
+                    return bridge.makePayment(JSON.stringify({
+                        customer_party_id: toId(p.customer_party_id ?? p.customer_id),
+                        amount: Number(p.amount ?? 0),
+                        payment_method: String(p.payment_method ?? p.method ?? 'cash'),
+                        operator: String(p.operator ?? 'WebView'),
+                        notes: String(p.notes ?? '')
+                    }));
+                case 'getSetting':
+                    return bridge.getSetting(String(p.key ?? ''));
+                case 'setSetting':
+                    return bridge.setSetting(String(p.key ?? ''), String(p.value ?? ''));
+                default:
+                    throw new Error(`Bridge action غير مدعوم: ${action}`);
+            }
+        }
+
+        function normalizeBridgeResult(result) {
+            if (typeof result === 'string') {
+                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
+            }
+            if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) {
+                return result;
+            }
+            if (Array.isArray(result)) return { success: true, data: result };
+            if (result && typeof result === 'object') return { success: true, data: result };
+            return { success: true, data: result };
+        }
+
+        function apiCall(action, params = {}) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                if (typeof window.AndroidInterface === 'undefined' || !window.AndroidInterface) {
+                    reject({ success: false, error: 'AndroidInterface غير متاح؛ شغّل الشاشة داخل التطبيق' });
+                    return;
+                }
+                try {
+                    resolve(normalizeBridgeResult(invokeExistingBridgeAction(action, params)));
+                } catch (e) {
+                    reject({ success: false, error: e.message || 'فشل الاتصال بالجسر' });
                 }
             });
         }
 
         // ===================================================================
-        // 2. LocalDB
+        // 2. حالة تشغيلية مؤقتة داخل الذاكرة فقط
+        // لا تُحفظ البيانات التجارية في localStorage؛ المصدر المرجعي هو SQLite عبر Bridge.
         // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (
-                    e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getDebtsData: function() { return this.get('debts_data', []); },
-            setDebtsData: function(data) { this.set('debts_data', data); },
-            getAIInsights: function() { return this.get('debts_ai_insights', []); },
-            setAIInsights: function(data) { this.set('debts_ai_insights', data); }
+        const runtimeState = {
+            rawDebts: [],
+            visibleDebts: [],
+            alerts: [],
+                aiInsights: [],
+            todayPayments: null,
+            lastLoadedAt: null
         };
 
         // ===================================================================
@@ -2394,9 +2436,10 @@
             const map = {
                 'current': 'جاري',
                 'overdue': 'متأخر',
-                'partial': 'مدفوع جزئياً'
+                'partial': 'مدفوع جزئياً',
+                'paid': 'مسدد'
             };
-            return map[st] || st;
+            return map[st] || st || 'غير محدد';
         }
 
         function getStatusClass(st) {
@@ -2441,49 +2484,112 @@
         // 5. تحميل ديون العملاء
         // ===================================================================
         let debtsData = [];
+        let allDebtsData = [];
+        let paymentInFlight = false;
         let statusChart = null;
         let trendChart = null;
 
-        async function loadDebts() {
+        function finiteNumber(value, fallback = 0) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
+        }
+
+        function normalizeDebtRow(item) {
+            const row = item && typeof item === 'object' ? item : {};
+            const total = finiteNumber(row.net_amount ?? row.total_debt ?? row.total_amount ?? row.remaining_amount);
+            const paid = finiteNumber(row.paid_amount);
+            const remaining = Math.max(0, finiteNumber(row.remaining_amount, Math.max(0, total - paid)));
+            const customerId = finiteNumber(row.customer_party_id ?? row.customer_id ?? row.party_id);
+            const dueDate = row.due_date || row.created_at || '';
+            const explicitStatus = String(row.payment_status ?? row.status ?? '').toLowerCase();
+            const today = new Date().toISOString().slice(0, 10);
+            let status = explicitStatus;
+            if (remaining <= 0) status = 'paid';
+            else if (explicitStatus === 'overdue' || (dueDate && dueDate.slice(0, 10) < today)) status = 'overdue';
+            else if (paid > 0 || explicitStatus === 'partial') status = 'partial';
+            else status = 'current';
+            return {
+                ...row,
+                customer_party_id: customerId,
+                customer_id: customerId,
+                customer_name: row.customer_name || row.commercial_name || '---',
+                customer_phone: row.customer_phone || row.phone || '---',
+                total_debt: total,
+                net_amount: total,
+                paid_amount: paid,
+                remaining_amount: remaining,
+                due_date: dueDate,
+                payment_status: status,
+                status
+            };
+        }
+
+        function filterDebts(data) {
             const from = document.getElementById('filterDateFrom').value;
             const to = document.getElementById('filterDateTo').value;
             const customerId = document.getElementById('filterCustomer').value;
             const status = document.getElementById('filterStatus').value;
+            return data.filter((row) => {
+                const date = String(row.due_date || row.created_at || '').slice(0, 10);
+                const dateMatch = (!from || !date || date >= from) && (!to || !date || date <= to);
+                const customerMatch = !customerId || String(row.customer_party_id) === String(customerId);
+                const statusMatch = !status || row.status === status;
+                return dateMatch && customerMatch && statusMatch;
+            });
+        }
 
-            if (!from || !to) {
-                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
-                return;
+        async function loadTodayPayments() {
+            try {
+                const result = await apiCall('getPayments');
+                runtimeState.todayPayments = result.success && Array.isArray(result.data) ? result.data : null;
+            } catch (e) {
+                runtimeState.todayPayments = null;
+                console.warn('تعذر تحميل المدفوعات اليومية:', e);
+            }
+        }
+
+        function renderCurrentDebtView(showSuccess = false) {
+            debtsData = filterDebts(allDebtsData);
+            runtimeState.visibleDebts = debtsData;
+            renderTable(debtsData);
+            updateKPIs(debtsData);
+            updateCharts(debtsData);
+            updateFooter(debtsData);
+            generateAlerts(debtsData);
+            generateAIInsights(debtsData);
+            if (showSuccess) showToast(`✅ تم عرض ${debtsData.length} سجل فعلي`, 'success');
+        }
+
+        async function loadDebts() {
+            const from = document.getElementById('filterDateFrom').value;
+            const to = document.getElementById('filterDateTo').value;
+            if (from && to && from > to) {
+                showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error');
+                return false;
             }
 
             showLoading(true);
             try {
-                const params = {
-                    start_date: from,
-                    end_date: to,
-                    customer_id: customerId || null,
-                    status: status || null,
-                    station_id: 1
-                };
-                const result = await apiCall('getCustomerDebts', params);
-                if (result.success && result.data) {
-                    debtsData = result.data;
-                    LocalDB.setDebtsData(debtsData);
-                    renderTable(debtsData);
-                    updateKPIs(debtsData);
-                    updateCharts(debtsData);
-                    updateFooter(debtsData);
-                    generateAlerts(debtsData);
-                    generateAIInsights(debtsData);
-                    showToast('✅ تم تحميل البيانات بنجاح', 'success');
-                } else {
-                    showToast(result.message || '❌ لا توجد بيانات', 'warning');
-                    document.getElementById('debtTableBody').innerHTML =
-                        '<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i> لا توجد ديون مطابقة</div></td></tr>';
-                    resetKPIs();
-                }
+                const result = await apiCall('getCustomerDebts', {
+                    start_date: from || null,
+                    end_date: to || null
+                });
+                if (!result.success) throw new Error(result.error || 'فشل تحميل ديون العملاء من SQLite');
+                const rows = Array.isArray(result.data) ? result.data : [];
+                allDebtsData = rows.map(normalizeDebtRow);
+                runtimeState.rawDebts = allDebtsData;
+                await loadTodayPayments();
+                runtimeState.lastLoadedAt = new Date();
+                renderCurrentDebtView(true);
+                return true;
             } catch (e) {
-                showToast('❌ فشل تحميل البيانات', 'error');
-                console.error(e);
+                allDebtsData = [];
+                debtsData = [];
+                runtimeState.rawDebts = [];
+                renderCurrentDebtView(false);
+                showToast(`❌ ${e.message || 'فشل تحميل البيانات من SQLite'}`, 'error');
+                console.error('Customer debts load failed:', e);
+                return false;
             } finally {
                 showLoading(false);
             }
@@ -2504,9 +2610,9 @@
                 const statusClass = getStatusClass(item.status);
                 const customerName = item.customer_name || '---';
                 const phone = item.customer_phone || '---';
-                const totalDebt = parseFloat(item.total_debt || item.remaining_amount || 0);
-                const paid = parseFloat(item.paid_amount || 0);
-                const remaining = totalDebt - paid;
+                const totalDebt = finiteNumber(item.net_amount ?? item.total_debt ?? item.remaining_amount);
+                const paid = finiteNumber(item.paid_amount);
+                const remaining = finiteNumber(item.remaining_amount, Math.max(0, totalDebt - paid));
                 const dueDate = item.due_date ? new Date(item.due_date).toLocaleDateString('en-GB') : '---';
 
                 return `
@@ -2539,35 +2645,36 @@
         // 7. تحديث بطاقات الإحصائيات
         // ===================================================================
         function updateKPIs(data) {
-            let totalDebts = 0,
-                overdue = 0,
-                paidToday = 0,
-                highest = 0;
-            let debtors = new Set();
+            let totalDebts = 0;
+            let overdue = 0;
+            let highest = 0;
+            const debtors = new Set();
+            const today = new Date().toISOString().slice(0, 10);
+            const paidToday = Array.isArray(runtimeState.todayPayments) ? runtimeState.todayPayments.reduce((sum, payment) => {
+                const date = String(payment.created_at || payment.payment_date || payment.paid_at || '').slice(0, 10);
+                return date === today ? sum + finiteNumber(payment.amount) : sum;
+            }, 0) : null;
 
             data.forEach(item => {
-                const total = parseFloat(item.total_debt || item.remaining_amount || 0);
-                const paid = parseFloat(item.paid_amount || 0);
-                const remaining = total - paid;
+                const remaining = finiteNumber(item.remaining_amount);
                 totalDebts += remaining;
                 if (item.status === 'overdue') overdue += remaining;
-                if (item.customer_id) debtors.add(item.customer_id);
+                if (item.customer_party_id > 0) debtors.add(item.customer_party_id);
                 if (remaining > highest) highest = remaining;
-                // محاكاة المدفوع اليوم (سيتم جلبها من قاعدة البيانات لاحقاً)
-                paidToday += Math.random() * 1000;
             });
 
             document.getElementById('kpiTotalDebts').textContent = formatCurrency(totalDebts);
             document.getElementById('kpiOverdue').textContent = formatCurrency(overdue);
             document.getElementById('kpiDebtorsCount').textContent = debtors.size;
-            document.getElementById('kpiPaidToday').textContent = formatCurrency(paidToday);
+            document.getElementById('kpiPaidToday').textContent = paidToday === null ? '—' : formatCurrency(paidToday);
             document.getElementById('kpiHighestDebt').textContent = formatCurrency(highest);
 
-            document.getElementById('trendTotal').textContent = (Math.random() * 8 + 1).toFixed(1) + '%';
-            document.getElementById('trendOverdue').textContent = (Math.random() * 10 + 2).toFixed(1) + '%';
-            document.getElementById('trendDebtors').textContent = (Math.random() * 5 + 1).toFixed(1) + '%';
-            document.getElementById('trendPaid').textContent = (Math.random() * 12 + 3).toFixed(1) + '%';
-            document.getElementById('trendHighest').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
+            // لا يوجد endpoint تاريخي لنسب الاتجاه الحالية؛ نعرض مؤشرات وصفية حقيقية بدلاً من أرقام مولدة.
+            document.getElementById('trendTotal').textContent = `${data.length} سجل`;
+            document.getElementById('trendOverdue').textContent = overdue > 0 ? 'تحتاج متابعة' : 'لا توجد متأخرات';
+            document.getElementById('trendDebtors').textContent = `${debtors.size} عميل`;
+            document.getElementById('trendPaid').textContent = paidToday === null ? 'غير متاح' : `اليوم ${formatCurrency(paidToday)}`;
+            document.getElementById('trendHighest').textContent = highest > 0 ? 'أعلى رصيد' : 'لا يوجد';
         }
 
         function resetKPIs() {
@@ -2582,16 +2689,14 @@
         // 8. فوتر الجدول
         // ===================================================================
         function updateFooter(data) {
-            let totalDebts = 0,
-                overdue = 0;
-            let debtors = new Set();
+            let totalDebts = 0;
+            let overdue = 0;
+            const debtors = new Set();
             data.forEach(item => {
-                const total = parseFloat(item.total_debt || item.remaining_amount || 0);
-                const paid = parseFloat(item.paid_amount || 0);
-                const remaining = total - paid;
+                const remaining = finiteNumber(item.remaining_amount);
                 totalDebts += remaining;
                 if (item.status === 'overdue') overdue += remaining;
-                if (item.customer_id) debtors.add(item.customer_id);
+                if (item.customer_party_id > 0) debtors.add(item.customer_party_id);
             });
             document.getElementById('footerTotalDebts').textContent = formatCurrency(totalDebts);
             document.getElementById('footerOverdue').textContent = formatCurrency(overdue);
@@ -2637,14 +2742,27 @@
                 }
             });
 
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const trendData = data.slice(0, 7).map(() => Math.floor(Math.random() * 20000 + 5000));
+            const labels = [];
+            const trendData = [];
+            const today = new Date();
+            const byDate = new Map();
+            data.forEach((item) => {
+                const date = String(item.created_at || item.due_date || '').slice(0, 10);
+                if (date) byDate.set(date, (byDate.get(date) || 0) + finiteNumber(item.remaining_amount));
+            });
+            for (let offset = 6; offset >= 0; offset -= 1) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - offset);
+                const key = date.toISOString().slice(0, 10);
+                labels.push(date.toLocaleDateString('ar-SA', { weekday: 'short' }));
+                trendData.push(byDate.get(key) || 0);
+            }
             const ctx2 = document.getElementById('trendChart').getContext('2d');
             if (trendChart) trendChart.destroy();
             trendChart = new Chart(ctx2, {
                 type: 'line',
                 data: {
-                    labels: days,
+                        labels: labels,
                     datasets: [{
                         label: 'إجمالي الديون',
                         data: trendData,
@@ -2704,7 +2822,7 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('debts_notifications', alerts);
+            runtimeState.alerts = alerts;
             renderAlerts(alerts);
         }
 
@@ -2725,7 +2843,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('debts_notifications', []);
+            const alerts = runtimeState.alerts || [];
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2765,13 +2883,13 @@
                     desc: 'يوجد ' + overdue + ' عميل بديون متأخرة، يُرجى التواصل معهم لتحصيل المستحقات.'
                 });
             }
-            LocalDB.setAIInsights(insights);
+            runtimeState.aiInsights = insights;
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = runtimeState.aiInsights || [];
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2795,36 +2913,40 @@
         // 12. عمليات التسديد
         // ===================================================================
         async function submitPayment() {
-            const customerId = document.getElementById('pCustomerId').value;
-            const amount = parseFloat(document.getElementById('pAmount').value);
+            if (paymentInFlight) return;
+            const customerId = finiteNumber(document.getElementById('pCustomerId').value);
+            const amount = finiteNumber(document.getElementById('pAmount').value);
             const method = document.getElementById('pMethod').value;
             const notes = document.getElementById('pNotes').value.trim();
+            const currentRemaining = finiteNumber(document.getElementById('pCurrentRemaining').textContent.replace(/,/g, ''));
 
             if (!customerId) { showToast('❌ الرجاء اختيار العميل', 'error'); return; }
             if (!amount || amount <= 0) { showToast('❌ الرجاء إدخال مبلغ صحيح', 'error'); return; }
+            if (currentRemaining > 0 && amount > currentRemaining + 0.000001) {
+                showToast('❌ مبلغ التسديد أكبر من الرصيد المتبقي', 'error');
+                return;
+            }
 
+            paymentInFlight = true;
             showLoading(true);
             try {
-                const params = {
-                    customer_id: parseInt(customerId),
-                    amount: amount,
-                    method: method,
-                    notes: notes,
-                    operator: 'system',
-                    station_id: 1
-                };
-                const result = await apiCall('processPayment', params);
-                if (result.success) {
-                    showToast('✅ تم تسديد المبلغ بنجاح', 'success');
-                    closePaymentModal();
-                    loadDebts();
-                } else {
-                    showToast(result.message || '❌ فشل التسديد', 'error');
-                }
+                const result = await apiCall('makePayment', {
+                    customer_party_id: customerId,
+                    amount,
+                    payment_method: method,
+                    operator: 'WebView',
+                    notes
+                });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل التسديد في قاعدة البيانات');
+                const reloaded = await loadDebts();
+                if (!reloaded) throw new Error('تمت العملية، لكن تعذر إعادة تحميل الرصيد للتحقق منه');
+                showToast('✅ تم التسديد والتحقق من الرصيد المحدث', 'success');
+                closePaymentModal();
             } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
-                console.error(e);
+                showToast(`❌ ${e.message || 'فشل التسديد'}`, 'error');
+                console.error('Customer payment failed:', e);
             } finally {
+                paymentInFlight = false;
                 showLoading(false);
             }
         }
@@ -2878,48 +3000,71 @@
         // 13. تفاصيل العميل وسجل المعاملات
         // ===================================================================
         async function viewCustomerDetails(customerId) {
-            if (!customerId) return;
+            const id = finiteNumber(customerId);
+            if (!id) return;
             showLoading(true);
             try {
-                const result = await apiCall('getCustomerDetails', { customer_id: customerId });
-                if (result.success && result.data) {
-                    const c = result.data;
-                    const statusLabel = getStatusLabel(c.status);
-                    const statusClass = getStatusClass(c.status);
-                    const content = document.getElementById('detailsContent');
-                    content.innerHTML = `
-                            <div class="details-header">
-                                <h3 class="details-title">👤 ${escapeHtml(c.customer_name || 'عميل')}</h3>
-                                <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
-                            </div>
-                            <div class="details-profile">
-                                <div class="details-avatar">${(c.customer_name || 'ع').substring(0,2)}</div>
-                                <div class="details-name">${escapeHtml(c.customer_name || '---')}</div>
-                                <span class="details-status ${statusClass}">${statusLabel}</span>
-                            </div>
-                            <div class="details-section">
-                                <div class="details-section-title"><i class="fas fa-info-circle"></i> معلومات العميل</div>
-                                <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(c.phone || '---')}</span></div>
-                                <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(c.email || '---')}</span></div>
-                                <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(c.address || '---')}</span></div>
-                            </div>
-                            <div class="details-section">
-                                <div class="details-section-title"><i class="fas fa-hand-holding-usd"></i> الديون</div>
-                                <div class="details-row"><span class="details-label">إجمالي الدين</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(c.total_debt || 0)}</span></div>
-                                <div class="details-row"><span class="details-label">المدفوع</span><span class="details-value">${formatCurrency(c.paid_amount || 0)}</span></div>
-                                <div class="details-row"><span class="details-label">المتبقي</span><span class="details-value ${parseFloat(c.remaining_amount || 0) > 0 ? 'red' : 'green'}">${formatCurrency(c.remaining_amount || 0)}</span></div>
-                                <div class="details-row"><span class="details-label">تاريخ الاستحقاق</span><span class="details-value">${c.due_date || '---'}</span></div>
-                            </div>
-                            <div style="height:30px;"></div>
-                        `;
-                    document.getElementById('detailsOverlay').classList.add('show');
-                    document.body.style.overflow = 'hidden';
-                } else {
-                    showToast(result.message || '❌ فشل تحميل بيانات العميل', 'error');
+                const [partyResult, salesResult] = await Promise.all([
+                    apiCall('getPartyById', { customer_id: id }),
+                    apiCall('getCustomerSales', { customer_id: id })
+                ]);
+                if (!partyResult.success || !partyResult.data) {
+                    throw new Error(partyResult.error || partyResult.message || 'العميل غير موجود');
                 }
+                const c = partyResult.data;
+                const sales = salesResult.success && Array.isArray(salesResult.data) ? salesResult.data : [];
+                const customerDebts = allDebtsData.filter(row => row.customer_party_id === id);
+                const sourceRows = customerDebts.length ? customerDebts : sales.map(normalizeDebtRow);
+                const totalDebt = sourceRows.reduce((sum, row) => sum + finiteNumber(row.net_amount ?? row.total_debt), 0);
+                const paidAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.paid_amount), 0);
+                const remainingAmount = sourceRows.reduce((sum, row) => sum + finiteNumber(row.remaining_amount), 0);
+                const overdue = sourceRows.some(row => row.status === 'overdue');
+                const status = remainingAmount <= 0 ? 'paid' : overdue ? 'overdue' : paidAmount > 0 ? 'partial' : 'current';
+                const name = c.commercial_name || c.customer_name || c.name || 'عميل';
+                const invoiceRows = sales.slice(0, 50).map((sale) => `
+                    <tr>
+                        <td>${escapeHtml(sale.invoice_number || sale.sale_code || '---')}</td>
+                        <td>${sale.due_date ? escapeHtml(String(sale.due_date).slice(0, 10)) : '---'}</td>
+                        <td class="amount">${formatCurrency(sale.net_amount || 0)}</td>
+                        <td class="amount">${formatCurrency(sale.paid_amount || 0)}</td>
+                        <td class="amount ${finiteNumber(sale.remaining_amount) > 0 ? 'credit' : 'debit'}">${formatCurrency(sale.remaining_amount || 0)}</td>
+                    </tr>`).join('');
+                const content = document.getElementById('detailsContent');
+                content.innerHTML = `
+                    <div class="details-header">
+                        <h3 class="details-title">👤 ${escapeHtml(name)}</h3>
+                        <button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="details-profile">
+                        <div class="details-avatar">${escapeHtml(name.substring(0, 2))}</div>
+                        <div class="details-name">${escapeHtml(name)}</div>
+                        <span class="details-status ${getStatusClass(status)}">${status === 'paid' ? 'مسدد' : getStatusLabel(status)}</span>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-info-circle"></i> معلومات العميل</div>
+                        <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(c.phone || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(c.email || '---')}</span></div>
+                        <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(c.address || '---')}</span></div>
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-hand-holding-usd"></i> الديون</div>
+                        <div class="details-row"><span class="details-label">إجمالي الدين</span><span class="details-value" style="color:var(--gold-primary);">${formatCurrency(totalDebt)}</span></div>
+                        <div class="details-row"><span class="details-label">المدفوع</span><span class="details-value">${formatCurrency(paidAmount)}</span></div>
+                        <div class="details-row"><span class="details-label">المتبقي</span><span class="details-value ${remainingAmount > 0 ? 'red' : 'green'}">${formatCurrency(remainingAmount)}</span></div>
+                        <div class="details-row"><span class="details-label">الرصيد المحاسبي</span><span class="details-value">${formatCurrency(c.current_balance || c.total_due || 0)}</span></div>
+                        <div class="details-row"><span class="details-label">حد الائتمان</span><span class="details-value">${finiteNumber(c.credit_limit) > 0 ? formatCurrency(c.credit_limit) : 'غير محدد'}</span></div>
+                        ${finiteNumber(c.credit_limit) > 0 && remainingAmount > finiteNumber(c.credit_limit) ? '<div style="color:var(--danger);font-size:0.8rem;margin-top:8px;">⚠️ المتبقي يتجاوز حد الائتمان المسجل</div>' : ''}
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-file-invoice-dollar"></i> الفواتير المرتبطة</div>
+                        ${invoiceRows ? `<div class="table-scroll"><table class="mini-table"><thead><tr><th>الفاتورة</th><th>الاستحقاق</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>${invoiceRows}</tbody></table></div>` : '<div class="empty-state">لا توجد فواتير مسجلة لهذا العميل</div>'}
+                    </div>
+                    <div style="height:30px;"></div>`;
+                document.getElementById('detailsOverlay').classList.add('show');
+                document.body.style.overflow = 'hidden';
             } catch (e) {
-                showToast('❌ حدث خطأ', 'error');
-                console.error(e);
+                showToast(`❌ ${e.message || 'فشل تحميل بيانات العميل'}`, 'error');
+                console.error('Customer details failed:', e);
             } finally {
                 showLoading(false);
             }
@@ -2983,83 +3128,88 @@
         // ===================================================================
         // 14. تصدير CSV و PDF
         // ===================================================================
+        function csvEscape(value) {
+            const text = String(value ?? '');
+            return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        }
+
         function exportCSV() {
-            const rows = document.querySelectorAll('#debtTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات للتصدير', 'error');
+            if (!debtsData.length) {
+                showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
                 return;
             }
-            let csv = 'العميل,الهاتف,إجمالي الدين,المدفوع,المتبقي,تاريخ الاستحقاق,الحالة\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 9 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
-            });
+            const headers = ['العميل', 'الهاتف', 'إجمالي الدين', 'المدفوع', 'المتبقي', 'تاريخ الاستحقاق', 'الحالة'];
+            const rows = debtsData.map(row => [
+                row.customer_name,
+                row.customer_phone,
+                formatCurrency(row.net_amount),
+                formatCurrency(row.paid_amount),
+                formatCurrency(row.remaining_amount),
+                row.due_date || '---',
+                getStatusLabel(row.status)
+            ]);
+            const csv = [headers, ...rows].map(row => row.map(csvEscape).join(',')).join('\n') + '\n';
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             const from = document.getElementById('filterDateFrom').value || 'start';
             const to = document.getElementById('filterDateTo').value || 'end';
             link.download = `ديون_العملاء_${from}_${to}.csv`;
             link.href = URL.createObjectURL(blob);
+            document.body.appendChild(link);
             link.click();
-            showToast('✅ تم تصدير CSV', 'success');
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            showToast('✅ تم تصدير CSV من البيانات الحالية', 'success');
         }
 
         function exportPDF() {
-            const rows = document.querySelectorAll('#debtTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات', 'error');
+            if (!debtsData.length) {
+                showToast('❌ لا توجد بيانات فعلية للتصدير', 'error');
+                return;
+            }
+            if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+                showToast('❌ مكتبة PDF المحلية غير متوفرة', 'error');
                 return;
             }
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'pt', 'a4');
-            doc.setFontSize(18);
-            doc.setTextColor(16, 185, 129);
-            doc.text('📊 تقرير ديون العملاء', 40, 50);
-            doc.setFontSize(10);
-            doc.setTextColor(143, 196, 168);
-            const from = document.getElementById('filterDateFrom').value || 'البداية';
-            const to = document.getElementById('filterDateTo').value || 'النهاية';
-            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
-
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 9 && !row.classList.contains('empty-state')) {
-                    tableData.push([
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || ''
-                    ]);
-                }
-            });
-            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
-            const headers = ['العميل', 'الهاتف', 'إجمالي الدين', 'المدفوع', 'المتبقي', 'تاريخ الاستحقاق', 'الحالة'];
-            doc.autoTable({
-                head: [headers],
-                body: tableData,
-                startY: 100,
-                styles: { fontSize: 7, font: 'helvetica', textColor: [200, 200, 200] },
-                headStyles: { fillColor: [16, 185, 129], textColor: [10, 26, 18], fontSize: 8 },
-                alternateRowStyles: { fillColor: [14, 38, 26] },
-                margin: { left: 25, right: 25 },
-                tableWidth: 'auto'
-            });
-            doc.save(`ديون_العملاء_${from}_${to}.pdf`);
-            showToast('✅ تم تصدير PDF', 'success');
+            const from = document.getElementById('filterDateFrom').value || 'start';
+            const to = document.getElementById('filterDateTo').value || 'end';
+            doc.setFontSize(16);
+            doc.text('Customer Debts Report', 40, 45);
+            doc.setFontSize(9);
+            doc.text(`Period: ${from} - ${to}`, 40, 65);
+            const tableData = debtsData.map(row => [
+                String(row.customer_name || '').slice(0, 24),
+                String(row.customer_phone || '').slice(0, 18),
+                formatCurrency(row.net_amount),
+                formatCurrency(row.paid_amount),
+                formatCurrency(row.remaining_amount),
+                String(row.due_date || '---').slice(0, 10),
+                getStatusLabel(row.status)
+            ]);
+            if (typeof doc.autoTable === 'function') {
+                doc.autoTable({
+                    head: [['Customer', 'Phone', 'Total', 'Paid', 'Remaining', 'Due date', 'Status']],
+                    body: tableData,
+                    startY: 85,
+                    styles: { fontSize: 7 },
+                    headStyles: { fillColor: [16, 185, 129], textColor: [10, 26, 18] },
+                    margin: { left: 25, right: 25 }
+                });
+            } else {
+                let y = 85;
+                doc.setFontSize(7);
+                doc.text('Customer | Phone | Total | Paid | Remaining | Due date | Status', 25, y);
+                y += 14;
+                tableData.forEach(row => {
+                    if (y > 800) { doc.addPage(); y = 40; }
+                    doc.text(row.join(' | ').slice(0, 145), 25, y);
+                    y += 12;
+                });
+            }
+            doc.save(`customer-debts_${from}_${to}.pdf`);
+            showToast('✅ تم إنشاء ملف PDF من البيانات الفعلية', 'success');
         }
 
         // ===================================================================
@@ -3122,34 +3272,34 @@
                     body.innerHTML = `
                             <div class="modal-stats-grid">
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.total_sales || 0)}</div>
-                                    <div class="stat-label">💰 إجمالي المبيعات</div>
+                                    <div class="stat-value">${formatCurrency(stats.daily_sales)}</div>
+                                    <div class="stat-label">💰 مبيعات اليوم</div>
                                 </div>
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${formatNumber(stats.total_liters || 0)}</div>
-                                    <div class="stat-label">⛽ إجمالي اللترات</div>
+                                    <div class="stat-value">${formatNumber(stats.active_customers)}</div>
+                                    <div class="stat-label">👥 العملاء النشطون</div>
                                 </div>
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${stats.total_customers || 0}</div>
-                                    <div class="stat-label">👥 العملاء</div>
+                                    <div class="stat-value">${formatNumber(stats.total_products)}</div>
+                                    <div class="stat-label">📦 المنتجات النشطة</div>
                                 </div>
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${formatCurrency(stats.total_due || 0)}</div>
-                                    <div class="stat-label">📄 المستحق</div>
+                                    <div class="stat-value">${formatNumber(stats.due_invoices)}</div>
+                                    <div class="stat-label">📄 فواتير تستحق خلال 7 أيام</div>
                                 </div>
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${stats.pending_tasks || 0}</div>
-                                    <div class="stat-label">⚙️ مهام معلقة</div>
+                                    <div class="stat-value">${formatNumber(stats.low_stock)}</div>
+                                    <div class="stat-label">⚠️ منتجات منخفضة المخزون</div>
                                 </div>
                                 <div class="modal-stat-card">
-                                    <div class="stat-value">${stats.overdue_count || 0}</div>
-                                    <div class="stat-label">⏰ متأخرات</div>
+                                    <div class="stat-value">${formatNumber(stats.expiry_soon)}</div>
+                                    <div class="stat-label">⏳ منتجات تنتهي قريباً</div>
                                 </div>
                             </div>
                             <div style="margin-top:16px;background:var(--bg-glass);padding:12px;border-radius:var(--radius-small);border:1px solid var(--border-color);">
                                 <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                    <span style="color:var(--text-muted);font-size:0.8rem;">اتجاه المبيعات: <strong style="color:var(--gold-primary);">${stats.sales_trend || '+0%'}</strong></span>
-                                    <span style="color:var(--text-muted);font-size:0.8rem;">اتجاه المنتجات: <strong style="color:var(--gold-primary);">${stats.products_trend || '+0%'}</strong></span>
+                                    <span style="color:var(--text-muted);font-size:0.8rem;">المرتجعات اليوم: <strong style="color:var(--gold-primary);">${formatNumber(stats.returned_products_today)}</strong></span>
+                                    <span style="color:var(--text-muted);font-size:0.8rem;">التالف اليوم: <strong style="color:var(--gold-primary);">${formatNumber(stats.damaged_products_today)}</strong></span>
                                 </div>
                             </div>
                             <div style="margin-top:12px;text-align:center;font-size:0.8rem;color:var(--text-muted);">آخر تحديث: ${new Date().toLocaleString('ar-SA')}</div>
@@ -3208,55 +3358,58 @@
             }
         }
 
+        function buildAgingSummary(data) {
+            const buckets = [
+                { key: '0-30', label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
+                { key: '31-60', label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
+                { key: '61-90', label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
+                { key: '90+', label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 }
+            ];
+            const now = Date.now();
+            data.forEach((row) => {
+                const due = Date.parse(row.due_date || row.created_at || '');
+                const ageDays = Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 86400000)) : 0;
+                const bucket = buckets.find(item => ageDays >= item.min && ageDays <= item.max) || buckets[0];
+                bucket.count += 1;
+                bucket.amount += finiteNumber(row.remaining_amount);
+            });
+            return buckets;
+        }
+
         async function openReportsModal() {
             const modal = document.getElementById('reportsModal');
             const body = document.getElementById('reportsBody');
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
-
             body.innerHTML =
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p></div>`;
-
             try {
-                const today = new Date().toISOString().split('T')[0];
-                const monthAgo = new Date();
-                monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
-                const countResult = await apiCall('getCustomerDebts', { start_date: from, end_date: today, station_id: 1 });
-                let totalCount = 0;
-                if (countResult.success && countResult.data) {
-                    totalCount = countResult.data.length;
-                }
-
+                if (!runtimeState.rawDebts.length) await loadDebts();
+                const rows = runtimeState.rawDebts || [];
+                const aging = buildAgingSummary(rows);
+                const agingRows = aging.map(bucket => `
+                    <tr><td>${bucket.label}</td><td>${bucket.count}</td><td class="amount">${formatCurrency(bucket.amount)}</td></tr>
+                `).join('');
                 body.innerHTML = `
-                        <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
-                            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                <span style="color:var(--text-muted);">📊 إجمالي الديون (آخر 30 يوم)</span>
-                                <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${totalCount}</span>
-                            </div>
+                    <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
+                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                            <span style="color:var(--text-muted);">📊 إجمالي سجلات الديون المحملة</span>
+                            <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${rows.length}</span>
                         </div>
-                        <div class="report-actions">
-                            <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');">
-                                <i class="fas fa-file-csv"></i> تصدير CSV
-                            </button>
-                            <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');">
-                                <i class="fas fa-file-pdf"></i> تصدير PDF
-                            </button>
-                            <button class="btn-report" onclick="window.print(); closeModalById('reportsModal');">
-                                <i class="fas fa-print"></i> طباعة
-                            </button>
-                            <button class="btn-report" onclick="loadDebts(); closeModalById('reportsModal'); showToast('🔄 تم التحديث', 'success');">
-                                <i class="fas fa-sync-alt"></i> تحديث البيانات
-                            </button>
-                        </div>
-                        <div style="margin-top:14px;font-size:0.8rem;color:var(--text-muted);text-align:center;">
-                            يمكنك تصدير التقرير الحالي بصيغة CSV أو PDF، أو طباعته مباشرة.
-                        </div>
-                    `;
+                    </div>
+                    <div class="details-section">
+                        <div class="details-section-title"><i class="fas fa-hourglass-half"></i> تقرير أعمار الديون</div>
+                        <div class="table-scroll"><table class="mini-table"><thead><tr><th>الفئة العمرية</th><th>عدد السجلات</th><th>المتبقي</th></tr></thead><tbody>${agingRows}</tbody></table></div>
+                    </div>
+                    <div class="report-actions">
+                        <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');"><i class="fas fa-file-csv"></i> تصدير CSV</button>
+                        <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');"><i class="fas fa-file-pdf"></i> تصدير PDF</button>
+                        <button class="btn-report" onclick="window.print(); closeModalById('reportsModal');"><i class="fas fa-print"></i> طباعة</button>
+                        <button class="btn-report" onclick="loadDebts(); closeModalById('reportsModal');"><i class="fas fa-sync-alt"></i> تحديث البيانات</button>
+                    </div>`;
             } catch (e) {
-                body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>حدث خطأ في الاتصال</div>`;
-                console.error(e);
+                body.innerHTML = `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${escapeHtml(e.message || 'فشل تحميل التقرير')}</div>`;
+                console.error('Debt reports failed:', e);
             }
         }
 
@@ -3273,15 +3426,14 @@
                 const keys = ['low_stock_threshold', 'max_discount_percent', 'auto_print_receipt', 'vat_percentage'];
                 const settings = {};
                 for (const key of keys) {
-                    try {
-                        const res = await apiCall('getSetting', { key: key });
-                        if (res.success) settings[key] = res.data || '';
-                    } catch (e) { settings[key] = ''; }
+                    const res = await apiCall('getSetting', { key });
+                    if (!res.success) throw new Error(res.error || res.message || `تعذر قراءة الإعداد ${key}`);
+                    settings[key] = res.value ?? res.data ?? '';
                 }
-                const lowStock = settings.low_stock_threshold || '10';
-                const maxDiscount = settings.max_discount_percent || '20';
-                const autoPrint = settings.auto_print_receipt === '1' ? true : false;
-                const vat = settings.vat_percentage || '0';
+                const lowStock = settings.low_stock_threshold ?? '';
+                const maxDiscount = settings.max_discount_percent ?? '';
+                const autoPrint = String(settings.auto_print_receipt) === '1';
+                const vat = settings.vat_percentage ?? '';
 
                 body.innerHTML = `
                         <div class="settings-group">
@@ -3339,15 +3491,25 @@
 
         async function saveSetting(key, value, modalId) {
             if (!key || value === undefined) return;
+            const numericRules = {
+                low_stock_threshold: [0, 1000000],
+                max_discount_percent: [0, 100],
+                vat_percentage: [0, 100]
+            };
+            if (Object.prototype.hasOwnProperty.call(numericRules, key)) {
+                const number = finiteNumber(value, NaN);
+                const [min, max] = numericRules[key];
+                if (!Number.isFinite(number) || number < min || number > max) {
+                    showToast('❌ قيمة الإعداد غير صالحة', 'error');
+                    return;
+                }
+            }
             showLoading(true);
             try {
-                const result = await apiCall('setSetting', { key: key, value: value.toString() });
-                if (result.success) {
-                    showToast('✅ تم حفظ الإعداد', 'success');
-                    if (modalId === 'settingsModal') openSettingsModal();
-                } else {
-                    showToast(result.message || '❌ فشل الحفظ', 'error');
-                }
+                const result = await apiCall('setSetting', { key, value: String(value) });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل حفظ الإعداد');
+                showToast('✅ تم حفظ الإعداد في قاعدة البيانات', 'success');
+                if (modalId === 'settingsModal') await openSettingsModal();
             } catch (e) {
                 showToast('❌ حدث خطأ', 'error');
                 console.error(e);

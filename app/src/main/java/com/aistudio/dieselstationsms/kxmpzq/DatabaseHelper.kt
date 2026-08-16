@@ -7696,14 +7696,64 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System"): Boolean {
+    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = ""): Boolean {
+        require(customerId > 0) { "معرف العميل غير صالح" }
+        require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
         val db = writableDatabase
         db.beginTransaction()
         try {
-            db.execSQL(
-                "UPDATE parties SET current_balance = current_balance - ?, total_due = total_due - ? WHERE id = ?",
-                arrayOf(amount, amount, customerId)
+            val partyBalance = db.rawQuery(
+                "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1",
+                arrayOf(customerId.toString())
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) return false
+                cursor.getDouble(0)
+            }
+            if (partyBalance + 0.000001 < amount) return false
+
+            var unapplied = amount
+            val invoices = db.rawQuery(
+                """SELECT id, COALESCE(remaining_amount, 0)
+                   FROM sales_transactions
+                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0
+                   ORDER BY due_date ASC, id ASC""",
+                arrayOf(customerId.toString())
             )
+            invoices.use { cursor ->
+                while (cursor.moveToNext() && unapplied > 0.000001) {
+                    val invoiceId = cursor.getLong(0)
+                    val invoiceRemaining = cursor.getDouble(1)
+                    val applied = minOf(unapplied, invoiceRemaining)
+                    val updated = db.compileStatement(
+                        """UPDATE sales_transactions
+                           SET paid_amount = COALESCE(paid_amount, 0) + ?,
+                               remaining_amount = MAX(0, COALESCE(remaining_amount, 0) - ?),
+                               payment_status = CASE WHEN COALESCE(remaining_amount, 0) - ? <= 0 THEN 'paid' ELSE 'partial' END
+                           WHERE id = ? AND is_deleted = 0"""
+                    ).apply {
+                        bindDouble(1, applied)
+                        bindDouble(2, applied)
+                        bindDouble(3, applied)
+                        bindLong(4, invoiceId)
+                    }.executeUpdateDelete()
+                    if (updated != 1) throw IllegalStateException("تعذر تحديث الفاتورة $invoiceId")
+                    unapplied -= applied
+                }
+            }
+            if (unapplied > 0.000001) return false
+
+            val partyUpdated = db.compileStatement(
+                """UPDATE parties
+                   SET current_balance = MAX(0, COALESCE(current_balance, 0) - ?),
+                       total_due = MAX(0, COALESCE(total_due, 0) - ?)
+                   WHERE id = ? AND is_deleted = 0"""
+            ).apply {
+                bindDouble(1, amount)
+                bindDouble(2, amount)
+                bindLong(3, customerId.toLong())
+            }.executeUpdateDelete()
+            if (partyUpdated != 1) throw IllegalStateException("تعذر تحديث رصيد العميل")
+
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("payment_code", "PAY-${System.currentTimeMillis()}")
@@ -7713,21 +7763,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("amount", amount)
                 put("status", "completed")
                 put("operator", operator)
-                put("notes", "تسديد عبر API")
+                put("notes", notes.ifBlank { "تسديد عبر Bridge" })
                 put("created_at", getCurrentDateTime())
             }
-            db.insert("payments", null, cv)
-
-            db.execSQL(
-                """UPDATE sales_transactions
-                   SET paid_amount = paid_amount + ?, remaining_amount = remaining_amount - ?,
-                       payment_status = CASE WHEN remaining_amount - ? <= 0 THEN 'paid' ELSE 'partial' END
-                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0 ORDER BY id LIMIT 1""",
-                arrayOf(amount, amount, amount, customerId)
-            )
+            val paymentId = db.insert("payments", null, cv)
+            if (paymentId <= 0) throw IllegalStateException("تعذر تسجيل عملية التسديد")
 
             db.setTransactionSuccessful()
-            logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId")
+            runCatching { logActivity(operator, "payment", "تسديد مبلغ $amount للعميل $customerId") }
             return true
         } finally {
             db.endTransaction()
@@ -10259,7 +10302,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getCustomerDebts(fromDate: String?, toDate: String?): JSONArray = getCustomerDebts(null)
+    fun getCustomerDebts(fromDate: String?, toDate: String?): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val predicates = mutableListOf("s.remaining_amount > 0", "s.is_deleted = 0")
+            val args = mutableListOf<String>()
+            if (!fromDate.isNullOrBlank()) {
+                predicates += "date(COALESCE(s.due_date, s.created_at)) >= date(?)"
+                args += fromDate
+            }
+            if (!toDate.isNullOrBlank()) {
+                predicates += "date(COALESCE(s.due_date, s.created_at)) <= date(?)"
+                args += toDate
+            }
+            val sql = """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
+                              s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
+                              s.payment_status, s.invoice_number, s.created_at,
+                              p.commercial_name as customer_name, p.phone as customer_phone
+                       FROM sales_transactions s
+                       LEFT JOIN parties p ON s.customer_party_id = p.id
+                       WHERE ${predicates.joinToString(" AND ")}
+                       ORDER BY s.due_date ASC, s.id ASC"""
+            db.rawQuery(sql, args.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     // ========================================================================
     // دوال التنظيف

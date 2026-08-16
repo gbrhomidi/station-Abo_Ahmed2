@@ -3445,8 +3445,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val amount = data.optDouble("amount", 0.0)
                 val method = data.optString("payment_method", "cash")
                 val operator = data.optString("operator", "System")
+                val notes = data.optString("notes", "").trim()
                 if (customerId <= 0 || amount <= 0) return errorResponse("بيانات غير صالحة")
-                val success = db.processPayment(customerId, amount, method, operator)
+                val success = db.processPayment(customerId, amount, method, operator, notes)
                 successResponse(success, if (success) "تم التسديد بنجاح" else "فشل التسديد")
             } catch (e: Exception) {
                 DebugLogger.logException("Payment", e)
@@ -4814,7 +4815,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val debts = db.getCustomerDebts()
+                val debts = db.getCustomerDebts(fromDate, toDate)
                 dataResponse(debts)
             } catch (e: Exception) {
                 DebugLogger.logException("Debts", e)
