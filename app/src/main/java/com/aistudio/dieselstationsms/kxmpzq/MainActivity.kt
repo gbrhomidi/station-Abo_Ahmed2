@@ -5632,6 +5632,120 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message) }
         }
 
+
+        // ========================================================================
+        // ACCOUNTING_REPORTS_V1_BRIDGE: typed contracts for accounting screens.
+        // ========================================================================
+        @JavascriptInterface
+        fun getJournalEntries(jsonData: String): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val page = db.getJournalEntries(JSONObject(jsonData.ifBlank { "{}" }))
+                JSONObject().apply { put("success", true); put("data", page.optJSONArray("entries") ?: JSONArray()); put("total", page.optInt("total", 0)); put("stats", page.optJSONObject("stats") ?: JSONObject()) }.toString()
+            } catch (e: Exception) { DebugLogger.logException("JournalEntries", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getJournalItems(jsonData: String): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة بنود القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getJournalItems()) } catch (e: Exception) { DebugLogger.logException("JournalItems", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getNextEntryNumber(): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة رقم القيد")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { JSONObject().apply { put("success", true); put("data", JSONObject().put("next_number", db.getNextJournalEntryNumber())) }.toString() } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun saveJournalEntry(jsonData: String): String {
+            val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات القيد غير صالحة") }
+            val permission = if (payload.optLong("id", 0L) > 0) "update" else "create"
+            if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية حفظ القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { successResponse(db.saveJournalEntry(payload, activity.currentUserId), "تم حفظ القيد فعلياً في SQLite") } catch (e: Exception) { DebugLogger.logException("JournalSave", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun updateJournalEntry(jsonData: String): String = saveJournalEntry(jsonData)
+
+        @JavascriptInterface
+        fun deleteJournalEntry(id: Long): String {
+            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { val rows = db.deleteJournalEntry(id, activity.currentUserId); if (rows > 0) successResponse(true, "تم حذف القيد من SQLite") else errorResponse("لم يتم حذف القيد") } catch (e: Exception) { DebugLogger.logException("JournalDelete", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun postJournalEntry(id: Long): String {
+            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية ترحيل القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { val rows = db.postJournalEntry(id, activity.currentUserId); if (rows > 0) successResponse(true, "تم ترحيل القيد في SQLite") else errorResponse("لم يتم ترحيل القيد") } catch (e: Exception) { DebugLogger.logException("JournalPost", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun reverseJournalEntry(id: Long, reason: String): String {
+            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إلغاء القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { successResponse(db.reverseJournalEntry(id, reason, activity.currentUserId), "تم إنشاء القيد العكسي وتحديث القيد الأصلي") } catch (e: Exception) { DebugLogger.logException("JournalReverse", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getJournalEntryDetails(id: Long): String {
+            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل القيد")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { db.getJournalEntryDetails(id)?.let { dataResponse(it) } ?: errorResponse("القيد غير موجود") } catch (e: Exception) { DebugLogger.logException("JournalDetails", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun generateJournalReport(jsonData: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير القيود")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateJournalReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("JournalReport", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getKPIDashboard(jsonData: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة مؤشرات الأداء")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getKPIDashboard(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("KPIDashboard", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getKPIDetails(code: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل المؤشر")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { db.getKPIDetails(code)?.let { dataResponse(it) } ?: errorResponse("المؤشر غير موجود") } catch (e: Exception) { DebugLogger.logException("KPIDetails", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getLedgerStats(): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة إحصائيات الأستاذ")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getLedgerStats()) } catch (e: Exception) { DebugLogger.logException("LedgerStats", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getLedgerEntries(jsonData: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة دفتر الأستاذ")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getLedgerEntries(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("LedgerEntries", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun generateLedgerReport(jsonData: String): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير الأستاذ")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateLedgerReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("LedgerReport", e); errorResponse(e.message) }
+        }
+
         // ============================================================
         // دالة ping للتشخيص (اختبار Bridge)
         // ============================================================

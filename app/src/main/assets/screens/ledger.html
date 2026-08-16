@@ -1452,57 +1452,54 @@
         // ============================================================
         // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
-                }
-            });
+                // 1. Typed Bridge contracts: WebView -> MainActivity -> SQLite
+        function parseBridgeResult(raw) {
+            if (raw && typeof raw === 'object') return raw;
+            try { return JSON.parse(raw); } catch (e) { return { success: true, data: raw }; }
         }
 
-        // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getAccounts: function() { return this.get('accounts', []); },
-            setAccounts: function(data) { this.set('accounts', data); },
-            getLedgerEntries: function() { return this.get('ledger_entries', []); },
-            setLedgerEntries: function(data) { this.set('ledger_entries', data); },
-            getStats: function() { return this.get('ledger_stats', {}); },
-            setStats: function(stats) { this.set('ledger_stats', stats); },
-            getNotifications: function() { return this.get('ledger_notifications', []); },
-            setNotifications: function(notifications) { this.set('ledger_notifications', notifications); },
-            getAIInsights: function() { return this.get('ledger_ai_insights', []); },
-            setAIInsights: function(insights) { this.set('ledger_ai_insights', insights); }
+        function invokeTypedBridge(action, params) {
+            if (!window.AndroidInterface) {
+                return Promise.reject({ success: false, error: 'جسر Android غير متاح؛ لم يتم تنفيذ العملية' });
+            }
+            const p = params || {};
+            try {
+                let raw;
+                switch (action) {
+                    case 'getChartAccounts': raw = window.AndroidInterface.getChartAccounts(); break;
+                    case 'getLedgerStats': raw = window.AndroidInterface.getLedgerStats(); break;
+                    case 'getLedgerEntries': raw = window.AndroidInterface.getLedgerEntries(JSON.stringify(p)); break;
+                    case 'generateLedgerReport': raw = window.AndroidInterface.generateLedgerReport(JSON.stringify(p)); break;
+                    case 'getJournalEntryDetails': raw = window.AndroidInterface.getJournalEntryDetails(Number(p.id)); break;
+                    default: return Promise.reject({ success: false, error: 'عملية Bridge غير مدعومة: ' + action });
+                }
+                return Promise.resolve(parseBridgeResult(raw));
+            } catch (error) {
+                return Promise.reject({ success: false, error: error && error.message ? error.message : 'فشل استدعاء Bridge' });
+            }
+        }
+
+        function apiCall(action, params) { return invokeTypedBridge(action, params); }
+
+        // حالة واجهة مؤقتة فقط؛ لا تُستخدم لتخزين بيانات الأستاذ أو التقارير.
+        const RuntimeState = {
+            values: Object.create(null),
+            set(key, value) { this.values[key] = value; return true; },
+            get(key, defaultValue) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : defaultValue; },
+            getAccounts() { return this.get('accounts', []); },
+            setAccounts(value) { return this.set('accounts', value); },
+            getLedgerEntries() { return this.get('ledgerEntries', []); },
+            setLedgerEntries(value) { return this.set('ledgerEntries', value); },
+            getStats() { return this.get('stats', {}); },
+            setStats(value) { return this.set('stats', value); },
+            getNotifications() { return this.get('notifications', []); },
+            setNotifications(value) { return this.set('notifications', value); },
+            getAIInsights() { return this.get('aiInsights', []); },
+            setAIInsights(value) { return this.set('aiInsights', value); }
         };
 
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
+        // 3. حالة الجسر/الشبكة؛ SQLite داخل التطبيق هو مصدر البيانات الوحيد.
+        // 3. حالة الجسر/الشبكة؛ لا توجد طوابير محلية للعمليات التجارية.
         let isOnline = navigator.onLine;
 
         function updateOnlineStatus() {
@@ -1510,25 +1507,22 @@
             const banner = document.getElementById('offlineBanner');
             if (!isOnline) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ لا يوجد اتصال شبكي؛ تُقرأ البيانات فقط عبر SQLite وجسر Android', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة (لا توجد عمليات كتابة في هذه الشاشة)
-        // ============================================================
         async function syncPendingOperations() {
-            // لا توجد عمليات معلقة عادة في شاشة دفتر الأستاذ، ولكن نتركها للتوافق
+            return;
         }
 
         // ============================================================
         // 5. Haptic Feedback
+        // ============================================================
+
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1757,12 +1751,12 @@
                 }
             }
 
-            LocalDB.setAIInsights(insights);
+            RuntimeState.setAIInsights(insights);
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = RuntimeState.getAIInsights();
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
@@ -1899,8 +1893,9 @@
                     showToast(result.message || '❌ لا توجد بيانات', 'warning');
                 }
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
-                console.error(e);
+                reportData = [];
+                document.getElementById('reportResults').innerHTML = '<div class="empty-state">تعذر توليد التقرير من SQLite</div>';
+                showToast('❌ تعذر توليد التقرير من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2026,45 +2021,27 @@
 
         async function loadAccounts() {
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
                 const result = await apiCall('getChartAccounts', {});
-                if (result.success && result.data) {
-                    allAccounts = result.data;
-                    LocalDB.setAccounts(allAccounts);
-                } else {
-                    allAccounts = LocalDB.getAccounts();
-                }
-
-                if (allAccounts.length === 0) {
-                    showToast('⚠️ لا توجد حسابات', 'warning');
-                }
-
+                if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الحسابات');
+                allAccounts = Array.isArray(result.data) ? result.data : [];
+                RuntimeState.setAccounts(allAccounts);
+                if (allAccounts.length === 0) showToast('لا توجد حسابات في SQLite', 'warning');
                 populateAccountDropdown();
-
-                // تعيين التواريخ الافتراضية
                 const today = new Date();
-                const monthAgo = new Date();
-                monthAgo.setDate(monthAgo.getDate() - 30);
+                const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30);
                 document.getElementById('ledgerDateFrom').value = monthAgo.toISOString().split('T')[0];
                 document.getElementById('ledgerDateTo').value = today.toISOString().split('T')[0];
-
-                // تحميل الإحصائيات العامة
                 await loadStats();
-
-                // اختيار أول حساب افتراضياً
                 if (allAccounts.length > 0) {
                     document.getElementById('ledgerAccount').value = allAccounts[0].id;
                     await loadLedger();
                 }
-
             } catch (e) {
-                allAccounts = LocalDB.getAccounts();
-                if (allAccounts.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allAccounts = [];
                 populateAccountDropdown();
+                showToast('❌ تعذر تحميل الحسابات من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 isInitialLoad = false;
                 showLoading(false);
@@ -2092,23 +2069,19 @@
         async function loadStats() {
             try {
                 const result = await apiCall('getLedgerStats', {});
-                if (result.success && result.data) {
-                    const s = result.data;
-                    document.getElementById('statTotalAccounts').textContent = s.total_accounts || allAccounts.length;
-                    document.getElementById('statTotalEntries').textContent = s.total_entries || 0;
-                    document.getElementById('statTotalDebit').textContent = formatNumber(s.total_debit || 0);
-                    document.getElementById('statTotalCredit').textContent = formatNumber(s.total_credit || 0);
-                    LocalDB.setStats(s);
-                }
+                if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الإحصائيات');
+                const s = result.data || {};
+                RuntimeState.setStats(s);
+                document.getElementById('statTotalAccounts').textContent = s.total_accounts || 0;
+                document.getElementById('statTotalEntries').textContent = s.total_entries || 0;
+                document.getElementById('statTotalDebit').textContent = formatNumber(Number(s.total_debit || 0));
+                document.getElementById('statTotalCredit').textContent = formatNumber(Number(s.total_credit || 0));
             } catch (e) {
-                // استخدام البيانات المحلية
-                const stats = LocalDB.getStats();
-                if (stats.total_accounts !== undefined) {
-                    document.getElementById('statTotalAccounts').textContent = stats.total_accounts;
-                    document.getElementById('statTotalEntries').textContent = stats.total_entries || 0;
-                    document.getElementById('statTotalDebit').textContent = formatNumber(stats.total_debit || 0);
-                    document.getElementById('statTotalCredit').textContent = formatNumber(stats.total_credit || 0);
-                }
+                document.getElementById('statTotalAccounts').textContent = '0';
+                document.getElementById('statTotalEntries').textContent = '0';
+                document.getElementById('statTotalDebit').textContent = '0';
+                document.getElementById('statTotalCredit').textContent = '0';
+                showToast('❌ تعذر تحميل إحصائيات الأستاذ من SQLite', 'error');
             }
         }
 
@@ -2119,54 +2092,26 @@
             const accountId = document.getElementById('ledgerAccount').value;
             const from = document.getElementById('ledgerDateFrom').value;
             const to = document.getElementById('ledgerDateTo').value;
-
             if (!accountId) {
-                document.getElementById('ledgerTableBody').innerHTML = `
-                    <tr><td colspan="7" class="empty-state">يرجى اختيار حساب لعرض دفتر الأستاذ</td></tr>
-                `;
+                document.getElementById('ledgerTableBody').innerHTML = '<tr><td colspan="7" class="empty-state">يرجى اختيار حساب لعرض دفتر الأستاذ</td></tr>';
                 document.getElementById('accountSummary').style.display = 'none';
                 document.getElementById('ledgerCount').textContent = '0';
                 return;
             }
-
             showLoading(true);
             try {
-                const params = {
-                    account_id: parseInt(accountId),
-                    start_date: from,
-                    end_date: to
-                };
-                const result = await apiCall('getLedgerEntries', params);
-                if (result.success && result.data) {
-                    ledgerEntries = result.data;
-                    LocalDB.setLedgerEntries(ledgerEntries);
-                    renderLedger(ledgerEntries);
-                    updateAccountSummary(ledgerEntries);
-                } else {
-                    ledgerEntries = LocalDB.getLedgerEntries();
-                    if (ledgerEntries.length > 0) {
-                        renderLedger(ledgerEntries);
-                        updateAccountSummary(ledgerEntries);
-                    } else {
-                        document.getElementById('ledgerTableBody').innerHTML = `
-                            <tr><td colspan="7" class="empty-state">لا توجد حركات لهذا الحساب في الفترة المحددة</td></tr>
-                        `;
-                        document.getElementById('accountSummary').style.display = 'none';
-                        document.getElementById('ledgerCount').textContent = '0';
-                    }
-                }
+                const result = await apiCall('getLedgerEntries', { account_id: Number(accountId), start_date: from, end_date: to });
+                if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل دفتر الأستاذ');
+                ledgerEntries = Array.isArray(result.data) ? result.data : [];
+                RuntimeState.setLedgerEntries(ledgerEntries);
+                renderLedger(ledgerEntries);
+                updateAccountSummary(ledgerEntries);
+                analyzeLedger();
             } catch (e) {
-                ledgerEntries = LocalDB.getLedgerEntries();
-                if (ledgerEntries.length > 0) {
-                    renderLedger(ledgerEntries);
-                    updateAccountSummary(ledgerEntries);
-                } else {
-                    document.getElementById('ledgerTableBody').innerHTML = `
-                        <tr><td colspan="7" class="empty-state">لا توجد بيانات متاحة حالياً</td></tr>
-                    `;
-                    document.getElementById('accountSummary').style.display = 'none';
-                    document.getElementById('ledgerCount').textContent = '0';
-                }
+                ledgerEntries = [];
+                renderLedger([]);
+                document.getElementById('accountSummary').style.display = 'none';
+                showToast('❌ تعذر تحميل دفتر الأستاذ من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2474,7 +2419,7 @@
                     });
                 }
             });
-            LocalDB.setNotifications(alerts);
+            RuntimeState.setNotifications(alerts);
             renderAlerts(alerts);
         }
 
@@ -2495,7 +2440,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = RuntimeState.getNotifications();
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2582,13 +2527,9 @@
             // توليد التنبيهات
             setTimeout(generateAlerts, 1000);
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
-
             setTimeout(() => {
                 if (allAccounts.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = RuntimeState.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }

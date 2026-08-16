@@ -1425,6 +1425,13 @@
             <button class="filter-chip" onclick="setFilter('purchase', this)">🛒 مشتريات</button>
             <button class="filter-chip" onclick="setFilter('payroll', this)">👤 رواتب</button>
         </div>
+
+        <div class="journal-advanced-filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;">
+            <label style="font-size:.75rem;color:var(--text-muted);">من <input id="filterFrom" type="date" style="min-height:36px;border-radius:8px;padding:4px 8px;"></label>
+            <label style="font-size:.75rem;color:var(--text-muted);">إلى <input id="filterTo" type="date" style="min-height:36px;border-radius:8px;padding:4px 8px;"></label>
+            <button type="button" class="filter-chip" onclick="applyJournalDateFilter()"><i class="fas fa-filter"></i> تطبيق</button>
+            <button type="button" class="filter-chip" onclick="resetJournalFilters()"><i class="fas fa-undo"></i> إعادة ضبط</button>
+        </div>
     </header>
 
     <!-- ============================================================
@@ -1476,6 +1483,19 @@
     <div class="cards-container" id="cardsContainer">
         <!-- سيتم تعبئتها عبر JavaScript -->
     </div>
+
+    <div id="paginationBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;color:var(--text-muted);font-size:.8rem;">
+        <span>عرض <b id="paginationStart">0</b>-<b id="paginationEnd">0</b> من <b id="paginationTotal">0</b></span>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <button type="button" class="card-btn" id="prevPage" onclick="goToPage(currentPage - 1)" disabled>السابق</button>
+            <span id="paginationPageLabel">1 / 1</span>
+            <button type="button" class="card-btn" id="nextPage" onclick="goToPage(currentPage + 1)" disabled>التالي</button>
+            <select id="pageSize" onchange="changePageSize(this.value)" style="min-height:36px;border-radius:8px;padding:4px 8px;">
+                <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option>
+            </select>
+        </div>
+    </div>
+
 
     <!-- ============================================================
     الزر العائم (FAB)
@@ -1770,68 +1790,65 @@
         // ============================================================
         // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
-                }
-            });
+                // 1. Typed Bridge contracts: WebView -> MainActivity -> SQLite
+        function parseBridgeResult(raw) {
+            if (raw && typeof raw === 'object') return raw;
+            try { return JSON.parse(raw); } catch (e) { return { success: true, data: raw }; }
         }
 
-        // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getEntries: function() { return this.get('journal_entries', []); },
-            setEntries: function(data) { this.set('journal_entries', data); },
-            getItems: function() { return this.get('journal_items', []); },
-            setItems: function(data) { this.set('journal_items', data); },
-            getAccounts: function() { return this.get('accounts', []); },
-            setAccounts: function(data) { this.set('accounts', data); },
-            getCurrencies: function() { return this.get('currencies', []); },
-            setCurrencies: function(data) { this.set('currencies', data); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            getStats: function() { return this.get('journal_stats', {}); },
-            setStats: function(stats) { this.set('journal_stats', stats); },
-            getNotifications: function() { return this.get('journal_notifications', []); },
-            setNotifications: function(notifications) { this.set('journal_notifications', notifications); },
-            getAIInsights: function() { return this.get('journal_ai_insights', []); },
-            setAIInsights: function(insights) { this.set('journal_ai_insights', insights); }
+        function invokeTypedBridge(action, params) {
+            if (!window.AndroidInterface) {
+                return Promise.reject({ success: false, error: 'جسر Android غير متاح؛ لم يتم تنفيذ العملية' });
+            }
+            const p = params || {};
+            try {
+                let raw;
+                switch (action) {
+                    case 'getJournalEntries': raw = window.AndroidInterface.getJournalEntries(JSON.stringify(p)); break;
+                    case 'getJournalItems': raw = window.AndroidInterface.getJournalItems(JSON.stringify(p)); break;
+                    case 'getChartAccounts': raw = window.AndroidInterface.getChartAccounts(); break;
+                    case 'getCurrencies': raw = window.AndroidInterface.getCurrencies(); break;
+                    case 'getNextEntryNumber': raw = window.AndroidInterface.getNextEntryNumber(); break;
+                    case 'saveJournalEntry': raw = window.AndroidInterface.saveJournalEntry(JSON.stringify(p)); break;
+                    case 'updateJournalEntry': raw = window.AndroidInterface.updateJournalEntry(JSON.stringify(p)); break;
+                    case 'deleteJournalEntry': raw = window.AndroidInterface.deleteJournalEntry(Number(p.id)); break;
+                    case 'postJournalEntry': raw = window.AndroidInterface.postJournalEntry(Number(p.id)); break;
+                    case 'reverseJournalEntry': raw = window.AndroidInterface.reverseJournalEntry(Number(p.id), String(p.reason || '')) ; break;
+                    case 'getJournalEntryDetails': raw = window.AndroidInterface.getJournalEntryDetails(Number(p.id)); break;
+                    case 'generateJournalReport': raw = window.AndroidInterface.generateJournalReport(JSON.stringify(p)); break;
+                    default: return Promise.reject({ success: false, error: 'عملية Bridge غير مدعومة: ' + action });
+                }
+                return Promise.resolve(parseBridgeResult(raw));
+            } catch (error) {
+                return Promise.reject({ success: false, error: error && error.message ? error.message : 'فشل استدعاء Bridge' });
+            }
+        }
+
+        function apiCall(action, params) { return invokeTypedBridge(action, params); }
+
+        // حالة واجهة مؤقتة فقط؛ لا تُستخدم لتخزين بيانات تجارية أو محاسبية.
+        const RuntimeState = {
+            values: Object.create(null),
+            set(key, value) { this.values[key] = value; return true; },
+            get(key, defaultValue) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : defaultValue; },
+            getEntries() { return this.get('entries', []); },
+            setEntries(value) { return this.set('entries', value); },
+            getItems() { return this.get('items', []); },
+            setItems(value) { return this.set('items', value); },
+            getAccounts() { return this.get('accounts', []); },
+            setAccounts(value) { return this.set('accounts', value); },
+            getCurrencies() { return this.get('currencies', []); },
+            setCurrencies(value) { return this.set('currencies', value); },
+            getStats() { return this.get('stats', {}); },
+            setStats(value) { return this.set('stats', value); },
+            getNotifications() { return this.get('notifications', []); },
+            setNotifications(value) { return this.set('notifications', value); },
+            getAIInsights() { return this.get('aiInsights', []); },
+            setAIInsights(value) { return this.set('aiInsights', value); }
         };
 
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
+        // 3. حالة الجسر/الشبكة؛ SQLite داخل التطبيق هو مصدر البيانات الوحيد.
+        // 3. حالة الجسر/الشبكة؛ لا توجد طوابير محلية للعمليات التجارية.
         let isOnline = navigator.onLine;
 
         function updateOnlineStatus() {
@@ -1839,46 +1856,23 @@
             const banner = document.getElementById('offlineBanner');
             if (!isOnline) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ لا يوجد اتصال شبكي؛ لن تُعرض أي عملية محاسبية كناجحة دون تأكيد SQLite', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
         async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadEntries();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
+            // لا توجد مزامنة محلية؛ العمليات المحاسبية لا تُخزّن خارج SQLite.
+            return;
         }
 
         // ============================================================
         // 5. Haptic Feedback
+        // ============================================================
+
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -2125,12 +2119,12 @@
                 });
             }
 
-            LocalDB.setAIInsights(insights);
+            RuntimeState.setAIInsights(insights);
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = RuntimeState.getAIInsights();
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
@@ -2378,6 +2372,10 @@
         let isInitialLoad = true;
         let itemCounter = 0;
         let tempItems = [];
+        let currentPage = 1;
+        let pageSize = 20;
+        let totalEntries = 0;
+        let totalPages = 1;
         let nextEntryNumber = 'JE-0001';
 
         // ============================================================
@@ -2409,80 +2407,63 @@
             container.innerHTML = `<div class="skeleton-grid">${skeleton}</div>`;
         }
 
-        async function loadEntries() {
+        async function loadEntries(page = currentPage) {
+            currentPage = Math.max(1, Number(page) || 1);
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
+            const filter = getJournalServerFilter();
             try {
                 const [entriesRes, itemsRes, accountsRes, currenciesRes] = await Promise.all([
-                    apiCall('getJournalEntries', {}),
+                    apiCall('getJournalEntries', {
+                        limit: pageSize,
+                        offset: (currentPage - 1) * pageSize,
+                        ...filter
+                    }),
                     apiCall('getJournalItems', {}),
                     apiCall('getChartAccounts', {}),
                     apiCall('getCurrencies', {})
                 ]);
+                if (!entriesRes.success) throw new Error(entriesRes.error || entriesRes.message || 'فشل تحميل القيود');
+                if (!itemsRes.success) throw new Error(itemsRes.error || itemsRes.message || 'فشل تحميل بنود القيود');
+                if (!accountsRes.success) throw new Error(accountsRes.error || accountsRes.message || 'فشل تحميل الحسابات');
+                if (!currenciesRes.success) throw new Error(currenciesRes.error || currenciesRes.message || 'فشل تحميل العملات');
 
-                if (entriesRes.success && entriesRes.data) {
-                    allEntries = entriesRes.data;
-                    LocalDB.setEntries(allEntries);
-                } else {
-                    allEntries = LocalDB.getEntries();
+                allEntries = Array.isArray(entriesRes.data) ? entriesRes.data : [];
+                allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+                allAccounts = Array.isArray(accountsRes.data) ? accountsRes.data : [];
+                allCurrencies = Array.isArray(currenciesRes.data) ? currenciesRes.data : [];
+                totalEntries = Number(entriesRes.total || allEntries.length);
+                totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
+                if (currentPage > totalPages) {
+                    currentPage = totalPages;
+                    return await loadEntries(currentPage);
                 }
-
-                if (itemsRes.success && itemsRes.data) {
-                    allItems = itemsRes.data;
-                    LocalDB.setItems(allItems);
-                } else {
-                    allItems = LocalDB.getItems();
-                }
-
-                if (accountsRes.success && accountsRes.data) {
-                    allAccounts = accountsRes.data;
-                    LocalDB.setAccounts(allAccounts);
-                } else {
-                    allAccounts = LocalDB.getAccounts();
-                }
-
-                if (currenciesRes.success && currenciesRes.data) {
-                    allCurrencies = currenciesRes.data;
-                    LocalDB.setCurrencies(allCurrencies);
-                } else {
-                    allCurrencies = LocalDB.getCurrencies();
-                }
-
-                if (allEntries.length === 0) {
-                    showToast('⚠️ لا توجد قيود محاسبية', 'warning');
-                }
-
-                // تحديث الرقم التالي للقيد
+                RuntimeState.setEntries(allEntries);
+                RuntimeState.setItems(allItems);
+                RuntimeState.setAccounts(allAccounts);
+                RuntimeState.setCurrencies(allCurrencies);
+                RuntimeState.setStats(entriesRes.stats || {});
+                if (allEntries.length === 0 && totalEntries === 0) showToast('لا توجد قيود محاسبية مطابقة', 'warning');
                 await loadNextEntryNumber();
-
             } catch (e) {
-                allEntries = LocalDB.getEntries();
-                allItems = LocalDB.getItems();
-                allAccounts = LocalDB.getAccounts();
-                allCurrencies = LocalDB.getCurrencies();
-                if (allEntries.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
-                // محاولة تقدير الرقم التالي من البيانات المحلية
-                if (allEntries.length > 0) {
-                    const maxNumber = allEntries.reduce((max, e) => {
-                        const num = parseInt(e.entry_number?.replace(/\D/g, '') || 0);
-                        return num > max ? num : max;
-                    }, 0);
-                    nextEntryNumber = 'JE-' + String(maxNumber + 1).padStart(4, '0');
-                } else {
-                    nextEntryNumber = 'JE-0001';
-                }
+                allEntries = [];
+                allItems = [];
+                totalEntries = 0;
+                totalPages = 1;
+                nextEntryNumber = '';
+                document.getElementById('entryNumber').value = '';
+                showToast('❌ تعذر تحميل البيانات من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
+            } finally {
+                populateAccountSelects();
+                populateCurrencySelects();
+                updateStats();
+                renderCards();
+                updatePagination();
+                generateAlerts();
+                analyzeJournalEntries();
+                isInitialLoad = false;
+                showLoading(false);
             }
-
-            populateAccountSelects();
-            populateCurrencySelects();
-            updateStats();
-            renderCards();
-            analyzeJournalEntries();
-            isInitialLoad = false;
-            showLoading(false);
         }
 
         // ============================================================
@@ -2491,33 +2472,13 @@
         async function loadNextEntryNumber() {
             try {
                 const result = await apiCall('getNextEntryNumber', {});
-                if (result.success && result.data) {
-                    nextEntryNumber = result.data.next_number || 'JE-0001';
-                } else {
-                    // حساب من البيانات المحلية
-                    if (allEntries.length > 0) {
-                        const maxNumber = allEntries.reduce((max, e) => {
-                            const num = parseInt(e.entry_number?.replace(/\D/g, '') || 0);
-                            return num > max ? num : max;
-                        }, 0);
-                        nextEntryNumber = 'JE-' + String(maxNumber + 1).padStart(4, '0');
-                    } else {
-                        nextEntryNumber = 'JE-0001';
-                    }
-                }
+                if (!result.success) throw new Error(result.error || result.message || 'فشل توليد رقم القيد');
+                nextEntryNumber = result.data?.next_number || result.next_number || '';
                 document.getElementById('entryNumber').value = nextEntryNumber;
             } catch (e) {
-                // في حالة الفشل، استخدام التقدير المحلي
-                if (allEntries.length > 0) {
-                    const maxNumber = allEntries.reduce((max, e) => {
-                        const num = parseInt(e.entry_number?.replace(/\D/g, '') || 0);
-                        return num > max ? num : max;
-                    }, 0);
-                    nextEntryNumber = 'JE-' + String(maxNumber + 1).padStart(4, '0');
-                } else {
-                    nextEntryNumber = 'JE-0001';
-                }
-                document.getElementById('entryNumber').value = nextEntryNumber;
+                nextEntryNumber = '';
+                document.getElementById('entryNumber').value = '';
+                showToast('⚠️ سيولّد SQLite رقم القيد عند الحفظ؛ تعذر جلب الرقم المقترح', 'warning');
             }
         }
 
@@ -2555,6 +2516,58 @@
                 });
                 if (currentVal) sel.value = currentVal;
             });
+        }
+
+
+        function getJournalServerFilter() {
+            const filter = {};
+            if (['posted', 'draft', 'reversed'].includes(currentFilter)) filter.status = currentFilter;
+            if (['general', 'sales', 'purchase', 'payroll', 'adjustment', 'closing'].includes(currentFilter)) filter.entry_type = currentFilter;
+            const search = document.getElementById('searchInput')?.value?.trim() || '';
+            const from = document.getElementById('filterFrom')?.value || '';
+            const to = document.getElementById('filterTo')?.value || '';
+            if (search) filter.search = search;
+            if (from) filter.start_date = from;
+            if (to) filter.end_date = to;
+            return filter;
+        }
+
+        function updatePagination() {
+            const start = totalEntries > 0 ? ((currentPage - 1) * pageSize) + 1 : 0;
+            const end = totalEntries > 0 ? Math.min(currentPage * pageSize, totalEntries) : 0;
+            const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+            set('paginationStart', start); set('paginationEnd', end); set('paginationTotal', totalEntries);
+            set('paginationPageLabel', currentPage + ' / ' + Math.max(totalPages, 1));
+            const prev = document.getElementById('prevPage');
+            const next = document.getElementById('nextPage');
+            if (prev) prev.disabled = currentPage <= 1;
+            if (next) next.disabled = currentPage >= totalPages || totalEntries === 0;
+        }
+
+        function goToPage(page) {
+            const target = Number(page);
+            if (!Number.isFinite(target) || target < 1 || target > totalPages || target === currentPage) return;
+            loadEntries(target);
+        }
+
+        function changePageSize(size) {
+            const parsed = Number(size);
+            if (!Number.isFinite(parsed) || parsed < 1) return;
+            pageSize = Math.min(parsed, 100);
+            currentPage = 1;
+            loadEntries(1);
+        }
+
+        function applyJournalDateFilter() { currentPage = 1; loadEntries(1); }
+        function resetJournalFilters() {
+            const from = document.getElementById('filterFrom');
+            const to = document.getElementById('filterTo');
+            if (from) from.value = '';
+            if (to) to.value = '';
+            document.getElementById('searchInput').value = '';
+            currentFilter = 'all';
+            document.querySelectorAll('.filter-chip').forEach((chip, index) => chip.classList.toggle('active', index === 0));
+            loadEntries(1);
         }
 
         // ============================================================
@@ -2690,7 +2703,7 @@
             document.getElementById('statTotalValue').textContent = formatNumber(totalValue);
             document.getElementById('statDraft').textContent = draft;
 
-            LocalDB.setStats({ total, posted, draft, total_value: totalValue });
+            RuntimeState.setStats({ total, posted, draft, total_value: totalValue });
         }
 
         function showStatDetail(type) {
@@ -2700,13 +2713,17 @@
         // ============================================================
         // 16. البحث والفلاتر
         // ============================================================
-        function handleSearch(query) { renderCards(); }
+        function handleSearch(query) {
+            clearTimeout(window.__journalSearchTimer);
+            window.__journalSearchTimer = setTimeout(() => loadEntries(1), 250);
+        }
 
         function setFilter(filter, btn) {
             currentFilter = filter;
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
-            renderCards();
+            currentPage = 1;
+            loadEntries(1);
             hapticFeedback('light');
         }
 
@@ -2742,7 +2759,7 @@
                 });
             }
 
-            LocalDB.setNotifications(alerts);
+            RuntimeState.setNotifications(alerts);
             renderAlerts(alerts);
         }
 
@@ -2763,7 +2780,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = RuntimeState.getNotifications();
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2995,47 +3012,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({
-                        action: currentEditId ? 'updateJournalEntry' : 'saveJournalEntry',
-                        data: data
-                    });
-                    // محاكاة الإضافة محلياً
-                    const newEntry = {
-                        ...data,
-                        id: currentEditId || Date.now(),
-                        created_at: new Date().toISOString()
-                    };
-                    if (currentEditId) {
-                        const idx = allEntries.findIndex(e => e.id == currentEditId);
-                        if (idx >= 0) allEntries[idx] = newEntry;
-                    } else {
-                        allEntries.unshift(newEntry);
-                    }
-                    LocalDB.setEntries(allEntries);
-                    // إضافة البنود محلياً
-                    data.items.forEach((item, idx) => {
-                        allItems.push({
-                            ...item,
-                            id: Date.now() + idx,
-                            journal_entry_id: newEntry.id,
-                            line_number: idx + 1
-                        });
-                    });
-                    LocalDB.setItems(allItems);
-                    // تحديث الرقم التالي محلياً
-                    const maxNumber = allEntries.reduce((max, e) => {
-                        const num = parseInt(e.entry_number?.replace(/\D/g, '') || 0);
-                        return num > max ? num : max;
-                    }, 0);
-                    nextEntryNumber = 'JE-' + String(maxNumber + 1).padStart(4, '0');
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ لم يتم حفظ القيد في SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3132,8 +3109,8 @@
                     showToast('✅ تم الحذف بنجاح', 'success');
                     allEntries = allEntries.filter(e => e.id != id);
                     allItems = allItems.filter(i => i.journal_entry_id != id);
-                    LocalDB.setEntries(allEntries);
-                    LocalDB.setItems(allItems);
+                    RuntimeState.setEntries(allEntries);
+                    RuntimeState.setItems(allItems);
                     renderCards();
                     updateStats();
                     hapticFeedback('success');
@@ -3141,19 +3118,7 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteJournalEntry', data: { id: id } });
-                    allEntries = allEntries.filter(e => e.id != id);
-                    allItems = allItems.filter(i => i.journal_entry_id != id);
-                    LocalDB.setEntries(allEntries);
-                    LocalDB.setItems(allItems);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ لم يتم حذف القيد من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3201,20 +3166,7 @@
                     throw new Error(result.message || 'فشل في الترحيل');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'postJournalEntry', data: { id: id } });
-                    const idx = allEntries.findIndex(e => e.id == id);
-                    if (idx >= 0) {
-                        allEntries[idx].status = 'posted';
-                    }
-                    LocalDB.setEntries(allEntries);
-                    showToast('✅ تم الترحيل محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الترحيل'), 'error');
-                }
+                showToast('❌ لم يتم ترحيل القيد في SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3373,6 +3325,48 @@
             document.body.style.overflow = '';
         }
 
+
+        function getExportRows() {
+            return allEntries.map(entry => ({
+                number: entry.entry_number || '', date: entry.entry_date || '', description: entry.description || '',
+                type: getEntryTypeLabel(entry.entry_type), debit: Number(entry.total_debit || 0),
+                credit: Number(entry.total_credit || 0), status: getEntryStatusLabel(entry.status)
+            }));
+        }
+
+        function exportEntriesCSV() {
+            const rows = getExportRows();
+            if (!rows.length) { showToast('لا توجد بيانات حقيقية للتصدير', 'warning'); return; }
+            const header = ['رقم القيد','التاريخ','الوصف','النوع','المدين','الدائن','الحالة'];
+            const body = rows.map(row => [row.number,row.date,row.description,row.type,row.debit.toFixed(2),row.credit.toFixed(2),row.status]);
+            const csv = '\ufeff' + [header, ...body].map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\n');
+            const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+            const link = document.createElement('a'); link.href = url; link.download = 'journal-entries.csv'; link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast('تم تصدير القيود المعروضة فعلياً', 'success');
+        }
+
+        function exportEntriesPDF() {
+            const rows = getExportRows();
+            if (!rows.length) { showToast('لا توجد بيانات حقيقية للتصدير', 'warning'); return; }
+            if (!window.jspdf || !window.jspdf.jsPDF) { showToast('مكتبة PDF المحلية غير متاحة', 'error'); return; }
+            const doc = new window.jspdf.jsPDF({ orientation: 'landscape' });
+            doc.setFontSize(10); doc.text('Journal Entries', 14, 14);
+            let y = 24;
+            rows.forEach((row, index) => {
+                const line = [index + 1, row.number, row.date, row.description, row.debit.toFixed(2), row.credit.toFixed(2), row.status].join(' | ');
+                doc.text(line.substring(0, 170), 10, y); y += 6;
+                if (y > 195) { doc.addPage(); y = 14; }
+            });
+            doc.save('journal-entries.pdf');
+            showToast('تم تصدير PDF من البيانات المعروضة فعلياً', 'success');
+        }
+
+        function printEntries() {
+            if (!allEntries.length) { showToast('لا توجد بيانات حقيقية للطباعة', 'warning'); return; }
+            window.print();
+        }
+
         // ============================================================
         // 26. معالج أزرار القائمة الجانبية
         // ============================================================
@@ -3418,7 +3412,7 @@
                     }
                     break;
                 case 'export':
-                    showToast('📤 جاري تجهيز التصدير...', 'info');
+                    exportEntriesCSV();
                     break;
                 case 'ai_advisor':
                     openAIAdvisor();
@@ -3486,13 +3480,9 @@
                 }
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
-
             setTimeout(() => {
                 if (allEntries.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = RuntimeState.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }

@@ -1626,44 +1626,45 @@
    // ===================================================================
         // 1. apiCall الموحدة
         // ===================================================================
-        function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
-                }
-            });
+                // 1. Typed Bridge contracts: WebView -> MainActivity -> SQLite
+        function parseBridgeResult(raw) {
+            if (raw && typeof raw === 'object') return raw;
+            try { return JSON.parse(raw); } catch (e) { return { success: true, data: raw }; }
         }
 
-        // ===================================================================
-        // 2. LocalDB
-        // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                catch (e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getKpiData: function() { return this.get('kpi_report_data', []); },
-            setKpiData: function(data) { this.set('kpi_report_data', data); },
-            getAIInsights: function() { return this.get('kpi_ai_insights', []); },
-            setAIInsights: function(data) { this.set('kpi_ai_insights', data); }
+        function invokeTypedBridge(action, params) {
+            if (!window.AndroidInterface) {
+                return Promise.reject({ success: false, error: 'جسر Android غير متاح؛ لم يتم تنفيذ العملية' });
+            }
+            const p = params || {};
+            try {
+                let raw;
+                switch (action) {
+                    case 'getKPIDashboard': raw = window.AndroidInterface.getKPIDashboard(JSON.stringify(p)); break;
+                    case 'getKPIDetails': raw = window.AndroidInterface.getKPIDetails(String(p.kpi_code || '')); break;
+                    default: return Promise.reject({ success: false, error: 'عملية Bridge غير مدعومة: ' + action });
+                }
+                return Promise.resolve(parseBridgeResult(raw));
+            } catch (error) {
+                return Promise.reject({ success: false, error: error && error.message ? error.message : 'فشل استدعاء Bridge' });
+            }
+        }
+
+        function apiCall(action, params) { return invokeTypedBridge(action, params); }
+
+        // حالة واجهة مؤقتة فقط؛ لا تُستخدم لتخزين بيانات KPI أو التقارير.
+        const RuntimeState = {
+            values: Object.create(null),
+            set(key, value) { this.values[key] = value; return true; },
+            get(key, defaultValue) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : defaultValue; },
+            getKpiData() { return this.get('kpiData', []); },
+            setKpiData(value) { return this.set('kpiData', value); },
+            getAIInsights() { return this.get('aiInsights', []); },
+            setAIInsights(value) { return this.set('aiInsights', value); }
         };
 
-        // ===================================================================
         // 3. دوال مساعدة
+
         // ===================================================================
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
@@ -1761,7 +1762,7 @@
                 const result = await apiCall('getKPIDashboard', params);
                 if (result.success && result.data) {
                     kpiData = result.data;
-                    LocalDB.setKpiData(kpiData);
+                    RuntimeState.setKpiData(kpiData);
                     renderTable(kpiData);
                     updateKPIs(kpiData);
                     updateCharts(kpiData);
@@ -1776,7 +1777,10 @@
                     resetKPIs();
                 }
             } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
+                kpiData = [];
+                renderTable(kpiData);
+                resetKPIs();
+                showToast('❌ تعذر تحميل مؤشرات KPI من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -1841,11 +1845,13 @@
             document.getElementById('kpiOnTrack').textContent = onTrack;
             document.getElementById('kpiCritical').textContent = critical;
 
-            // محاكاة الاتجاهات
-            document.getElementById('trendTotal').textContent = (Math.random() * 8 + 1).toFixed(1) + '%';
-            document.getElementById('trendAchiev').textContent = (Math.random() * 6 + 2).toFixed(1) + '%';
-            document.getElementById('trendOnTrack').textContent = (Math.random() * 5 + 1).toFixed(1) + '%';
-            document.getElementById('trendCritical').textContent = (Math.random() * 4 + 0.5).toFixed(1) + '%';
+            const trendValue = item => item && item.trend_percent !== null && item.trend_percent !== undefined && Number.isFinite(Number(item.trend_percent))
+                ? Number(item.trend_percent).toFixed(1) + '%' : '—';
+            document.getElementById('trendTotal').textContent = data.length ? '—' : '0%';
+            document.getElementById('trendAchiev').textContent = data.length ? avgAchiev.toFixed(1) + '%' : '0%';
+            document.getElementById('trendOnTrack').textContent = data.length ? ((onTrack / data.length) * 100).toFixed(1) + '%' : '0%';
+            const criticalTrend = data.find(item => item.trend_percent !== null && item.trend_percent !== undefined);
+            document.getElementById('trendCritical').textContent = trendValue(criticalTrend);
         }
 
         function resetKPIs() {
@@ -1968,7 +1974,7 @@
                 alerts.push({ type: 'info', icon: 'fa-info-circle', title: '📊 مؤشرات تحذير',
                     desc: low.length + ' مؤشر قريب من الحد', time: 'الآن' });
             }
-            LocalDB.set('kpi_notifications', alerts);
+            RuntimeState.set('kpi_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -1989,7 +1995,7 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('kpi_notifications', []);
+            const alerts = RuntimeState.get('kpi_notifications', []);
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2024,13 +2030,13 @@
                 insights.push({ title: '🏆 أعلى إنجاز', desc: (maxItem.kpi_name || '') + ' - ' + maxPct.toFixed(1) +
                         '%' });
             }
-            LocalDB.setAIInsights(insights);
+            RuntimeState.setAIInsights(insights);
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = RuntimeState.getAIInsights();
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =

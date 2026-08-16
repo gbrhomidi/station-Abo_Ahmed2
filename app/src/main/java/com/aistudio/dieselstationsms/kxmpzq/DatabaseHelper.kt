@@ -13210,6 +13210,441 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
+
+    // ========================================================================
+    // ACCOUNTING_REPORTS_V1: قيود اليومية ودفتر الأستاذ وKPI عبر SQLite فقط.
+    // ========================================================================
+
+    private fun journalEntryRow(db: SQLiteDatabase, id: Long, includeDeleted: Boolean = false): JSONObject? {
+        val where = if (includeDeleted) "je.id = ?" else "je.id = ? AND je.is_deleted = 0"
+        return db.rawQuery(
+            """
+            SELECT je.*,
+                   COALESCE(u.full_name_ar, u.full_name, u.username, 'نظام') AS created_by_name,
+                   COALESCE(pu.full_name_ar, pu.full_name, pu.username, 'نظام') AS posted_by_name,
+                   COALESCE(je.reference_code, je.reference_type, '') AS reference,
+                   (SELECT COUNT(*) FROM journal_entry_items ji WHERE ji.journal_entry_id = je.id) AS item_count
+            FROM journal_entries je
+            LEFT JOIN users u ON u.id = je.created_by
+            LEFT JOIN users pu ON pu.id = je.posted_by
+            WHERE $where
+            LIMIT 1
+            """.trimIndent(), arrayOf(id.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
+    }
+
+    private fun journalItemsForEntry(db: SQLiteDatabase, id: Long): JSONArray {
+        return db.rawQuery(
+            """
+            SELECT ji.*, a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
+                   c.currency_code
+            FROM journal_entry_items ji
+            LEFT JOIN accounts a ON a.id = ji.account_id
+            LEFT JOIN currencies c ON c.id = ji.currency_id
+            WHERE ji.journal_entry_id = ?
+            ORDER BY ji.line_number, ji.id
+            """.trimIndent(), arrayOf(id.toString())
+        ).use { cursorToJsonArray(it) }
+    }
+
+    private fun writeJournalAudit(db: SQLiteDatabase, userId: Long, action: String, recordId: Long, oldRow: JSONObject?, newRow: JSONObject?) {
+        val values = ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString())
+            if (userId > 0) put("user_id", userId) else putNull("user_id")
+            put("action_type", action)
+            put("table_name", "journal_entries")
+            put("record_id", recordId)
+            put("old_row_json", oldRow?.toString())
+            put("new_row_json", newRow?.toString())
+            put("created_at", getCurrentDateTime())
+        }
+        db.insert("audit_logs", null, values)
+    }
+
+    private fun journalEntryNumber(db: SQLiteDatabase): String {
+        val maxNumber = db.rawQuery(
+            "SELECT MAX(CAST(REPLACE(REPLACE(entry_number, 'JE-', ''), '-R', '') AS INTEGER)) FROM journal_entries WHERE is_deleted = 0",
+            null
+        ).use { cursor -> if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getInt(0) else 0 }
+        return "JE-" + (maxNumber + 1).toString().padStart(4, '0')
+    }
+
+    fun getNextJournalEntryNumber(): String {
+        dbLock.lock()
+        return try { journalEntryNumber(readableDatabase) } finally { dbLock.unlock() }
+    }
+
+    fun getJournalEntries(params: JSONObject = JSONObject()): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val limit = params.optInt("limit", 20).coerceIn(1, 100)
+            val offset = params.optInt("offset", 0).coerceAtLeast(0)
+            val where = StringBuilder("WHERE je.is_deleted = 0")
+            val args = mutableListOf<String>()
+            params.optString("status", "").takeIf { it.isNotBlank() }?.let { where.append(" AND je.status = ?"); args.add(it) }
+            params.optString("entry_type", "").takeIf { it.isNotBlank() }?.let { where.append(" AND je.entry_type = ?"); args.add(it) }
+            params.optString("start_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) >= date(?)"); args.add(it) }
+            params.optString("end_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) <= date(?)"); args.add(it) }
+            params.optString("search", "").trim().takeIf { it.isNotBlank() }?.let {
+                where.append(" AND (je.entry_number LIKE ? OR je.description LIKE ? OR je.description_ar LIKE ? OR je.reference_code LIKE ?)")
+                val query = "%$it%"; repeat(4) { args.add(query) }
+            }
+            val count = db.rawQuery("SELECT COUNT(*) FROM journal_entries je $where", args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+            val rows = db.rawQuery(
+                """
+                SELECT je.*, COALESCE(u.full_name_ar, u.full_name, u.username, 'نظام') AS created_by_name,
+                       COALESCE(pu.full_name_ar, pu.full_name, pu.username, 'نظام') AS posted_by_name,
+                       COALESCE(je.reference_code, je.reference_type, '') AS reference,
+                       (SELECT COUNT(*) FROM journal_entry_items ji WHERE ji.journal_entry_id = je.id) AS item_count
+                FROM journal_entries je
+                LEFT JOIN users u ON u.id = je.created_by
+                LEFT JOIN users pu ON pu.id = je.posted_by
+                $where
+                ORDER BY date(je.entry_date) DESC, je.id DESC
+                LIMIT ? OFFSET ?
+                """.trimIndent(), (args + listOf(limit.toString(), offset.toString())).toTypedArray()
+            ).use { cursorToJsonArray(it) }
+            val stats = JSONObject().apply {
+                put("total", count)
+                put("posted", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE is_deleted = 0 AND status = 'posted'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
+                put("draft", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE is_deleted = 0 AND status = 'draft'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
+                put("total_value", db.rawQuery("SELECT COALESCE(SUM(total_debit), 0) FROM journal_entries WHERE is_deleted = 0", null).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
+            }
+            JSONObject().apply { put("entries", rows); put("total", count); put("stats", stats) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getJournalItems(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """
+                SELECT ji.*, a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
+                       c.currency_code
+                FROM journal_entry_items ji
+                INNER JOIN journal_entries je ON je.id = ji.journal_entry_id AND je.is_deleted = 0
+                LEFT JOIN accounts a ON a.id = ji.account_id
+                LEFT JOIN currencies c ON c.id = ji.currency_id
+                ORDER BY ji.journal_entry_id DESC, ji.line_number, ji.id
+                """.trimIndent(), null
+            ).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun saveJournalEntry(data: JSONObject, userId: Long): Long {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val id = data.optLong("id", 0L)
+            val entryDate = data.optString("entry_date", "").trim()
+            val description = data.optString("description", "").trim()
+            val entryType = data.optString("entry_type", "general").trim()
+            val status = data.optString("status", "draft").trim()
+            val items = data.optJSONArray("items") ?: JSONArray()
+            require(entryDate.isNotEmpty()) { "تاريخ القيد مطلوب" }
+            require(description.isNotEmpty()) { "وصف القيد مطلوب" }
+            require(entryType in setOf("general", "sales", "purchase", "payroll", "adjustment", "closing")) { "نوع القيد غير صالح" }
+            require(status in setOf("draft", "posted")) { "لا يمكن إنشاء القيد بهذه الحالة" }
+            require(items.length() > 0) { "يجب أن يحتوي القيد على بند واحد على الأقل" }
+            var debit = 0.0
+            var credit = 0.0
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: throw IllegalArgumentException("بند القيد غير صالح")
+                val accountId = item.optLong("account_id", 0L)
+                val itemDebit = item.optDouble("debit", 0.0)
+                val itemCredit = item.optDouble("credit", 0.0)
+                require(accountId > 0 && getAccountRow(db, accountId) != null) { "الحساب المرتبط بالبند غير موجود" }
+                require(itemDebit >= 0 && itemCredit >= 0 && ((itemDebit > 0) xor (itemCredit > 0))) { "يجب أن يحتوي كل بند على مدين أو دائن فقط" }
+                debit += itemDebit; credit += itemCredit
+            }
+            require(kotlin.math.abs(debit - credit) < 0.000001) { "القيد غير متوازن" }
+            val values = ContentValues().apply {
+                put("entry_number", data.optString("entry_number", "").trim().ifEmpty { journalEntryNumber(db) })
+                put("entry_date", entryDate)
+                put("entry_type", entryType)
+                if (data.optString("reference", "").trim().isNotEmpty()) put("reference_code", data.optString("reference").trim()) else putNull("reference_code")
+                put("description", description)
+                put("description_ar", data.optString("description_ar", "").trim())
+                put("total_debit", debit)
+                put("total_credit", credit)
+                put("is_balanced", 1)
+                put("status", status)
+                put("fiscal_year", data.optInt("fiscal_year", entryDate.take(4).toIntOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)))
+                put("fiscal_period", data.optInt("fiscal_period", entryDate.substringAfter('-', "01").substringBefore('-').toIntOrNull() ?: 1))
+                put("remarks", data.optString("remarks", ""))
+                put("updated_at", getCurrentDateTime())
+                if (userId > 0) put("updated_by", userId) else putNull("updated_by")
+            }
+            val savedId: Long
+            if (id > 0) {
+                val old = journalEntryRow(db, id) ?: throw IllegalArgumentException("القيد غير موجود")
+                require(old.optString("status") == "draft") { "لا يمكن تعديل قيد مرحل أو ملغى" }
+                val rows = db.update("journal_entries", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+                require(rows == 1) { "لم يتم تحديث القيد" }
+                db.delete("journal_entry_items", "journal_entry_id = ?", arrayOf(id.toString()))
+                savedId = id
+                writeJournalAudit(db, userId, "update", id, old, journalEntryRow(db, id))
+            } else {
+                values.put("uuid", UUID.randomUUID().toString())
+                values.put("created_at", getCurrentDateTime())
+                if (userId > 0) values.put("created_by", userId) else values.putNull("created_by")
+                values.put("is_deleted", 0)
+                savedId = db.insertOrThrow("journal_entries", null, values)
+                writeJournalAudit(db, userId, "insert", savedId, null, journalEntryRow(db, savedId))
+            }
+            for (index in 0 until items.length()) {
+                val item = items.getJSONObject(index)
+                val itemValues = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("journal_entry_id", savedId)
+                    put("line_number", index + 1)
+                    put("account_id", item.optLong("account_id"))
+                    put("debit", item.optDouble("debit", 0.0))
+                    put("credit", item.optDouble("credit", 0.0))
+                    if (item.optLong("currency_id", 0L) > 0) put("currency_id", item.optLong("currency_id")) else putNull("currency_id")
+                    put("exchange_rate", item.optDouble("exchange_rate", 1.0))
+                    put("description", item.optString("description", ""))
+                    put("description_ar", item.optString("description_ar", ""))
+                    put("cost_center", item.optString("cost_center", ""))
+                    put("project_code", item.optString("project_code", ""))
+                }
+                db.insertOrThrow("journal_entry_items", null, itemValues)
+            }
+            db.setTransactionSuccessful()
+            return savedId
+        } finally { db.endTransaction() }
+    }
+
+    fun deleteJournalEntry(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val old = journalEntryRow(db, id) ?: throw IllegalArgumentException("القيد غير موجود")
+            require(old.optString("status") != "posted") { "لا يمكن حذف قيد مرحل؛ استخدم الإلغاء" }
+            val values = ContentValues().apply {
+                put("is_deleted", 1); put("status", "cancelled"); put("deleted_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime())
+                if (userId > 0) { put("deleted_by", userId); put("updated_by", userId) } else { putNull("deleted_by"); putNull("updated_by") }
+            }
+            val rows = db.update("journal_entries", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) writeJournalAudit(db, userId, "delete", id, old, journalEntryRow(db, id, true))
+            db.setTransactionSuccessful(); return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun postJournalEntry(id: Long, userId: Long): Int {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val old = journalEntryRow(db, id) ?: throw IllegalArgumentException("القيد غير موجود")
+            require(old.optString("status") == "draft") { "القيد مرحل أو ملغى مسبقاً" }
+            require(old.optInt("is_balanced", 0) == 1 && kotlin.math.abs(old.optDouble("total_debit") - old.optDouble("total_credit")) < 0.000001) { "لا يمكن ترحيل قيد غير متوازن" }
+            val values = ContentValues().apply { put("status", "posted"); put("posted_at", getCurrentDateTime()); if (userId > 0) put("posted_by", userId); put("updated_at", getCurrentDateTime()); if (userId > 0) put("updated_by", userId) }
+            val rows = db.update("journal_entries", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) writeJournalAudit(db, userId, "post", id, old, journalEntryRow(db, id))
+            db.setTransactionSuccessful(); return rows
+        } finally { db.endTransaction() }
+    }
+
+    fun reverseJournalEntry(id: Long, reason: String, userId: Long): Long {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val original = journalEntryRow(db, id) ?: throw IllegalArgumentException("القيد غير موجود")
+            require(original.optString("status") == "posted") { "يمكن إلغاء القيود المرحّلة فقط" }
+            require(original.optLong("reversed_entry_id", 0L) <= 0L) { "تم إلغاء القيد مسبقاً" }
+            val items = journalItemsForEntry(db, id)
+            require(items.length() > 0) { "لا توجد بنود لإنشاء القيد العكسي" }
+            val reverseValues = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("entry_number", journalEntryNumber(db) + "-R")
+                put("entry_date", getDateOnlyFormat().format(Date()))
+                put("entry_type", original.optString("entry_type", "general"))
+                put("reference_code", original.optString("entry_number"))
+                put("description", "عكس: " + original.optString("description"))
+                put("description_ar", "قيد عكسي: " + original.optString("description_ar", original.optString("description")))
+                put("total_debit", original.optDouble("total_credit", 0.0))
+                put("total_credit", original.optDouble("total_debit", 0.0))
+                put("is_balanced", 1); put("status", "posted"); put("posted_at", getCurrentDateTime())
+                if (userId > 0) put("posted_by", userId)
+                put("reversed_entry_id", id); put("reversal_reason", reason.trim()); put("fiscal_year", Calendar.getInstance().get(Calendar.YEAR)); put("fiscal_period", Calendar.getInstance().get(Calendar.MONTH) + 1)
+                put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime()); put("is_deleted", 0)
+                if (userId > 0) { put("created_by", userId); put("updated_by", userId) }
+            }
+            val reverseId = db.insertOrThrow("journal_entries", null, reverseValues)
+            for (index in 0 until items.length()) {
+                val oldItem = items.getJSONObject(index)
+                val values = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString()); put("journal_entry_id", reverseId); put("line_number", index + 1); put("account_id", oldItem.optLong("account_id")); put("debit", oldItem.optDouble("credit", 0.0)); put("credit", oldItem.optDouble("debit", 0.0));
+                    if (oldItem.optLong("currency_id", 0L) > 0) put("currency_id", oldItem.optLong("currency_id")) else putNull("currency_id")
+                    put("exchange_rate", oldItem.optDouble("exchange_rate", 1.0)); put("description", "عكس: " + oldItem.optString("description", "")); put("description_ar", "عكس: " + oldItem.optString("description_ar", ""))
+                }
+                db.insertOrThrow("journal_entry_items", null, values)
+            }
+            val originalValues = ContentValues().apply { put("status", "reversed"); put("reversed_entry_id", reverseId); put("reversal_reason", reason.trim()); put("updated_at", getCurrentDateTime()); if (userId > 0) put("updated_by", userId) }
+            db.update("journal_entries", originalValues, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            writeJournalAudit(db, userId, "reverse", id, original, journalEntryRow(db, id))
+            writeJournalAudit(db, userId, "insert_reversal", reverseId, null, journalEntryRow(db, reverseId))
+            db.setTransactionSuccessful(); return reverseId
+        } finally { db.endTransaction() }
+    }
+
+    fun getJournalEntryDetails(id: Long): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val entry = journalEntryRow(db, id) ?: return null
+            entry.put("items", journalItemsForEntry(db, id))
+            entry
+        } finally { dbLock.unlock() }
+    }
+
+    fun generateJournalReport(params: JSONObject): JSONArray {
+        val type = params.optString("report_type", "entries")
+        if (type == "trial_balance" || type == "general_ledger") {
+            val trial = getChartTrialBalance(params.optString("start_date", ""), params.optString("end_date", ""))
+            for (i in 0 until trial.length()) {
+                val item = trial.optJSONObject(i) ?: continue
+                val opening = item.optDouble("opening_balance", 0.0); val debit = item.optDouble("total_debit", 0.0); val credit = item.optDouble("total_credit", 0.0)
+                val closing = opening + debit - credit
+                item.put("debit_balance", if (closing > 0) closing else 0.0); item.put("credit_balance", if (closing < 0) -closing else 0.0); item.put("closing_balance", closing); item.put("balance", closing)
+            }
+            return trial
+        }
+        if (type == "detailed") {
+            return getLedgerEntries(JSONObject(params.toString()).apply { put("account_id", 0); put("include_all", true) })
+        }
+        val page = getJournalEntries(params)
+        val entries = page.optJSONArray("entries") ?: JSONArray()
+        if (params.optString("status", "").isNotBlank()) return entries
+        return entries
+    }
+
+    fun getLedgerStats(): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            JSONObject().apply {
+                put("total_accounts", db.rawQuery("SELECT COUNT(*) FROM accounts WHERE is_deleted = 0 AND is_active = 1", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
+                put("total_entries", db.rawQuery("SELECT COUNT(*) FROM journal_entries WHERE is_deleted = 0 AND status = 'posted'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 })
+                put("total_debit", db.rawQuery("SELECT COALESCE(SUM(total_debit), 0) FROM journal_entries WHERE is_deleted = 0 AND status = 'posted'", null).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
+                put("total_credit", db.rawQuery("SELECT COALESCE(SUM(total_credit), 0) FROM journal_entries WHERE is_deleted = 0 AND status = 'posted'", null).use { c -> if (c.moveToFirst()) c.getDouble(0) else 0.0 })
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getLedgerEntries(params: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val accountId = params.optLong("account_id", 0L)
+            val includeAll = params.optBoolean("include_all", false)
+            val where = StringBuilder("je.is_deleted = 0 AND je.status = 'posted'")
+            val args = mutableListOf<String>()
+            if (!includeAll && accountId > 0) { where.append(" AND ji.account_id = ?"); args.add(accountId.toString()) }
+            params.optString("start_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) >= date(?)"); args.add(it) }
+            params.optString("end_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) <= date(?)"); args.add(it) }
+            val rows = db.rawQuery(
+                """
+                SELECT ji.id, ji.journal_entry_id, ji.line_number, ji.account_id, ji.debit, ji.credit, ji.description, ji.description_ar, ji.currency_id, ji.exchange_rate,
+                       je.entry_date, je.entry_number, je.description AS entry_description, je.reference_code,
+                       a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name,
+                       a.account_type, COALESCE(a.current_balance, 0) AS opening_balance, c.currency_code
+                FROM journal_entry_items ji
+                INNER JOIN journal_entries je ON je.id = ji.journal_entry_id
+                LEFT JOIN accounts a ON a.id = ji.account_id
+                LEFT JOIN currencies c ON c.id = ji.currency_id
+                WHERE $where
+                ORDER BY date(je.entry_date), je.id, ji.line_number
+                """.trimIndent(), args.toTypedArray()
+            ).use { cursorToJsonArray(it) }
+            var balance = 0.0
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                balance += row.optDouble("debit", 0.0) - row.optDouble("credit", 0.0)
+                row.put("balance", balance)
+                row.put("description", row.optString("description", row.optString("entry_description", "")))
+            }
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun generateLedgerReport(params: JSONObject): JSONArray {
+        val type = params.optString("report_type", "trial_balance")
+        return when (type) {
+            "trial_balance", "summary" -> {
+                val rows = getChartTrialBalance(params.optString("start_date", ""), params.optString("end_date", ""))
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    val closing = row.optDouble("opening_balance", 0.0) + row.optDouble("total_debit", 0.0) - row.optDouble("total_credit", 0.0)
+                    row.put("debit_balance", if (closing > 0) closing else 0.0); row.put("credit_balance", if (closing < 0) -closing else 0.0); row.put("closing_balance", closing); row.put("balance", closing)
+                }
+                rows
+            }
+            "ledger" -> getLedgerEntries(params)
+            "detailed" -> getLedgerEntries(JSONObject(params.toString()).apply { put("account_id", 0); put("include_all", true) })
+            "general_ledger" -> {
+                dbLock.lock()
+                try {
+                    val db = readableDatabase
+                    val where = StringBuilder("je.is_deleted = 0 AND je.status = 'posted'"); val args = mutableListOf<String>()
+                    params.optString("start_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) >= date(?)"); args.add(it) }
+                    params.optString("end_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND date(je.entry_date) <= date(?)"); args.add(it) }
+                    db.rawQuery("""
+                        SELECT a.id, a.account_code, COALESCE(a.account_name_ar, a.account_name, '') AS account_name, a.account_type,
+                               COALESCE(a.opening_balance, 0) AS opening_balance, COALESCE(SUM(ji.debit), 0) AS total_debit,
+                               COALESCE(SUM(ji.credit), 0) AS total_credit
+                        FROM accounts a LEFT JOIN journal_entry_items ji ON ji.account_id = a.id
+                        LEFT JOIN journal_entries je ON je.id = ji.journal_entry_id AND $where
+                        WHERE a.is_deleted = 0 GROUP BY a.id ORDER BY a.account_code COLLATE NOCASE
+                    """.trimIndent(), args.toTypedArray()).use { cursor ->
+                        cursorToJsonArray(cursor).also { rows ->
+                            for (i in 0 until rows.length()) { val row = rows.optJSONObject(i) ?: continue; val closing = row.optDouble("opening_balance") + row.optDouble("total_debit") - row.optDouble("total_credit"); row.put("balance", closing); row.put("closing_balance", closing) }
+                        }
+                    }
+                } finally { dbLock.unlock() }
+            }
+            else -> getLedgerEntries(params)
+        }
+    }
+
+    fun getKPIDashboard(params: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val start = params.optString("start_date", ""); val end = params.optString("end_date", "")
+            val category = params.optString("kpi_category", "")
+            val rows = db.rawQuery("""
+                SELECT d.id, d.kpi_code, d.kpi_name, d.kpi_name_ar, d.category, d.description, d.unit,
+                       COALESCE(r.actual_value, 0) AS actual_value, COALESCE(r.target_value, d.target_value, 0) AS target_value,
+                       COALESCE(r.status, CASE WHEN COALESCE(d.target_value, 0) <= 0 THEN 'warning' WHEN COALESCE(r.actual_value, 0) >= d.target_value THEN 'exceeded' WHEN COALESCE(r.actual_value, 0) >= d.target_value * 0.8 THEN 'on_track' ELSE 'critical' END) AS status,
+                       r.calculated_at, r.period_start, r.period_end,
+                       (SELECT previous.actual_value FROM kpi_results previous WHERE previous.kpi_id = d.id AND previous.period_end < COALESCE(r.period_start, ?) ORDER BY previous.period_end DESC LIMIT 1) AS previous_actual
+                FROM kpi_definitions d
+                LEFT JOIN kpi_results r ON r.id = (SELECT latest.id FROM kpi_results latest WHERE latest.kpi_id = d.id AND (? = '' OR latest.period_start >= ?) AND (? = '' OR latest.period_end <= ?) ORDER BY latest.period_end DESC, latest.id DESC LIMIT 1)
+                WHERE d.is_active = 1 ${if (category.isNotBlank()) "AND d.category = ?" else ""}
+                ORDER BY d.category, d.kpi_code
+            """.trimIndent(), buildList {
+                add(end.ifBlank { "9999-12-31" }); add(start); add(start); add(end); add(end); if (category.isNotBlank()) add(category)
+            }.toTypedArray()).use { cursorToJsonArray(it) }
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                val previous = row.optDouble("previous_actual", Double.NaN); val actual = row.optDouble("actual_value", 0.0)
+                if (!previous.isNaN() && previous != 0.0) row.put("trend_percent", ((actual - previous) / kotlin.math.abs(previous)) * 100.0) else row.put("trend_percent", JSONObject.NULL)
+                row.remove("previous_actual")
+            }
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getKPIDetails(code: String): JSONObject? {
+        val params = JSONObject().put("kpi_category", "")
+        return getKPIDashboard(params).let { rows ->
+            for (i in 0 until rows.length()) { val row = rows.optJSONObject(i) ?: continue; if (row.optString("kpi_code") == code) return row }
+            null
+        }
+    }
+
     // =========================================================================
     // COA_RECOMMENDATIONS_V1: عمليات شجرة الحسابات المحلية عبر SQLite فقط.
     // لا تستخدم هذه الدوال خادماً أو localStorage أو قاعدة بيانات بديلة.
