@@ -5968,17 +5968,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val partyType = data.optString("party_type", "customer")
-            val typeId = when (partyType.lowercase()) {
-                "customer" -> 1
-                "supplier" -> 6
-                "driver" -> 4
-                else -> data.optInt("party_type_id", 1)
+            val partyType = data.optString("party_type", "").trim()
+            val typeId = if (data.has("party_type_id") && data.optInt("party_type_id", 0) > 0) {
+                data.optInt("party_type_id", 1)
+            } else {
+                when (partyType.lowercase()) {
+                    "customer" -> 1
+                    "supplier" -> 6
+                    "driver" -> 4
+                    else -> 1
+                }
             }
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("party_code", data.optString("party_code", "PTY-${System.currentTimeMillis()}"))
+                put("barcode", data.optString("barcode", "").trim())
+                put("qr_code", data.optString("qr_code", "").trim())
                 put("party_type_id", typeId)
+                put("station_id", data.optInt("station_id", 1))
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
@@ -5990,10 +5997,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("region", data.optString("region", ""))
                 put("tax_number", data.optString("tax_number", ""))
                 put("commercial_register", data.optString("commercial_register", ""))
+                put("vat_number", data.optString("vat_number", "").trim())
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
                 if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
                 if (data.has("total_due")) put("total_due", data.optDouble("total_due", 0.0))
+                put("payment_terms", data.optString("payment_terms", "").trim())
+                if (data.has("currency_id") && !data.isNull("currency_id")) put("currency_id", data.optLong("currency_id"))
                 if (data.has("loyalty_points")) put("loyalty_points", data.optInt("loyalty_points", 0))
+                put("loyalty_tier", data.optString("loyalty_tier", "bronze"))
+                put("risk_level", data.optString("risk_level", "low"))
+                put("blacklist_reason", data.optString("blacklist_reason", "").trim())
+                if (data.has("blacklist_date") && !data.isNull("blacklist_date")) put("blacklist_date", data.optString("blacklist_date"))
+                if (data.has("blacklist_by") && !data.isNull("blacklist_by")) put("blacklist_by", data.optLong("blacklist_by"))
+                if (data.has("referred_by") && !data.isNull("referred_by")) put("referred_by", data.optLong("referred_by"))
+                if (data.has("assigned_to") && !data.isNull("assigned_to")) put("assigned_to", data.optLong("assigned_to"))
+                put("rating", data.optDouble("rating", 3.0))
+                put("total_orders", data.optInt("total_orders", 0))
+                put("total_order_amount", data.optDouble("total_order_amount", 0.0))
+                put("on_time_rate", data.optDouble("on_time_rate", 100.0))
+                if (data.has("fuel_type_preference_id") && !data.isNull("fuel_type_preference_id")) put("fuel_type_preference_id", data.optLong("fuel_type_preference_id"))
+                put("fleet_size", data.optInt("fleet_size", 0))
                 put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
                 put("notes", data.optString("notes", ""))
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
@@ -6013,6 +6036,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = writableDatabase
             val values = ContentValues().apply {
+                if (data.has("barcode")) put("barcode", data.optString("barcode").trim())
+                if (data.has("qr_code")) put("qr_code", data.optString("qr_code").trim())
+                if (data.has("party_type_id")) put("party_type_id", data.optInt("party_type_id", 1))
+                if (data.has("station_id")) put("station_id", data.optInt("station_id", 1))
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
@@ -6024,10 +6051,38 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("region", data.optString("region", ""))
                 put("tax_number", data.optString("tax_number", ""))
                 put("commercial_register", data.optString("commercial_register", ""))
+                if (data.has("vat_number")) put("vat_number", data.optString("vat_number").trim())
                 put("credit_limit", data.optDouble("credit_limit", 0.0))
                 if (data.has("current_balance")) put("current_balance", data.optDouble("current_balance", 0.0))
                 if (data.has("total_due")) put("total_due", data.optDouble("total_due", 0.0))
+                if (data.has("payment_terms")) put("payment_terms", data.optString("payment_terms").trim())
+                if (data.has("currency_id")) {
+                    if (data.isNull("currency_id")) putNull("currency_id") else put("currency_id", data.optLong("currency_id"))
+                }
                 if (data.has("loyalty_points")) put("loyalty_points", data.optInt("loyalty_points", 0))
+                if (data.has("loyalty_tier")) put("loyalty_tier", data.optString("loyalty_tier"))
+                if (data.has("risk_level")) put("risk_level", data.optString("risk_level"))
+                if (data.has("blacklist_reason")) put("blacklist_reason", data.optString("blacklist_reason").trim())
+                if (data.has("blacklist_date")) {
+                    if (data.isNull("blacklist_date")) putNull("blacklist_date") else put("blacklist_date", data.optString("blacklist_date"))
+                }
+                if (data.has("blacklist_by")) {
+                    if (data.isNull("blacklist_by")) putNull("blacklist_by") else put("blacklist_by", data.optLong("blacklist_by"))
+                }
+                if (data.has("referred_by")) {
+                    if (data.isNull("referred_by")) putNull("referred_by") else put("referred_by", data.optLong("referred_by"))
+                }
+                if (data.has("assigned_to")) {
+                    if (data.isNull("assigned_to")) putNull("assigned_to") else put("assigned_to", data.optLong("assigned_to"))
+                }
+                if (data.has("rating")) put("rating", data.optDouble("rating", 3.0))
+                if (data.has("total_orders")) put("total_orders", data.optInt("total_orders", 0))
+                if (data.has("total_order_amount")) put("total_order_amount", data.optDouble("total_order_amount", 0.0))
+                if (data.has("on_time_rate")) put("on_time_rate", data.optDouble("on_time_rate", 100.0))
+                if (data.has("fuel_type_preference_id")) {
+                    if (data.isNull("fuel_type_preference_id")) putNull("fuel_type_preference_id") else put("fuel_type_preference_id", data.optLong("fuel_type_preference_id"))
+                }
+                if (data.has("fleet_size")) put("fleet_size", data.optInt("fleet_size", 0))
                 put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
                 put("notes", data.optString("notes", ""))
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
@@ -6097,7 +6152,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("id", c.getLong(c.getColumnIndexOrThrow("id")))
             put("party_id", c.getLong(c.getColumnIndexOrThrow("id")))
             put("party_code", c.getString(c.getColumnIndexOrThrow("party_code")))
+            put("barcode", c.getString(c.getColumnIndexOrThrow("barcode")))
+            put("qr_code", c.getString(c.getColumnIndexOrThrow("qr_code")))
             put("party_type_id", c.getInt(c.getColumnIndexOrThrow("party_type_id")))
+            put("station_id", c.getInt(c.getColumnIndexOrThrow("station_id")))
             put("commercial_name", c.getString(c.getColumnIndexOrThrow("commercial_name")))
             put("commercial_name_ar", c.getString(c.getColumnIndexOrThrow("commercial_name_ar")))
             put("legal_name", c.getString(c.getColumnIndexOrThrow("legal_name")))
@@ -6109,15 +6167,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("region", c.getString(c.getColumnIndexOrThrow("region")))
             put("tax_number", c.getString(c.getColumnIndexOrThrow("tax_number")))
             put("commercial_register", c.getString(c.getColumnIndexOrThrow("commercial_register")))
+            put("vat_number", c.getString(c.getColumnIndexOrThrow("vat_number")))
             put("credit_limit", c.getDouble(c.getColumnIndexOrThrow("credit_limit")))
             put("current_balance", c.getDouble(c.getColumnIndexOrThrow("current_balance")))
             put("total_purchases", c.getDouble(c.getColumnIndexOrThrow("total_purchases")))
             put("total_payments", c.getDouble(c.getColumnIndexOrThrow("total_payments")))
             put("total_due", c.getDouble(c.getColumnIndexOrThrow("total_due")))
             put("overdue_amount", c.getDouble(c.getColumnIndexOrThrow("overdue_amount")))
+            put("payment_terms", c.getString(c.getColumnIndexOrThrow("payment_terms")))
+            put("currency_id", c.getInt(c.getColumnIndexOrThrow("currency_id")))
             put("loyalty_points", c.getInt(c.getColumnIndexOrThrow("loyalty_points")))
             put("loyalty_tier", c.getString(c.getColumnIndexOrThrow("loyalty_tier")))
             put("risk_level", c.getString(c.getColumnIndexOrThrow("risk_level")))
+            put("blacklist_reason", c.getString(c.getColumnIndexOrThrow("blacklist_reason")))
+            put("blacklist_date", c.getString(c.getColumnIndexOrThrow("blacklist_date")))
+            put("blacklist_by", c.getInt(c.getColumnIndexOrThrow("blacklist_by")))
+            put("referred_by", c.getInt(c.getColumnIndexOrThrow("referred_by")))
+            put("assigned_to", c.getInt(c.getColumnIndexOrThrow("assigned_to")))
+            put("rating", c.getDouble(c.getColumnIndexOrThrow("rating")))
+            put("total_orders", c.getInt(c.getColumnIndexOrThrow("total_orders")))
+            put("total_order_amount", c.getDouble(c.getColumnIndexOrThrow("total_order_amount")))
+            put("on_time_rate", c.getDouble(c.getColumnIndexOrThrow("on_time_rate")))
+            put("fuel_type_preference_id", c.getInt(c.getColumnIndexOrThrow("fuel_type_preference_id")))
+            put("fleet_size", c.getInt(c.getColumnIndexOrThrow("fleet_size")))
             put("is_active", c.getInt(c.getColumnIndexOrThrow("is_active")))
             put("extra_data", c.getString(c.getColumnIndexOrThrow("extra_data")))
             put("created_at", c.getString(c.getColumnIndexOrThrow("created_at")))

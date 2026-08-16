@@ -827,7 +827,8 @@
                 <div class="page-actions">
                     <button class="btn btn-primary" onclick="openCustomerModal()"><i class="fas fa-plus"></i> عميل جديد</button>
                     <button class="btn btn-secondary btn-sm" onclick="loadCustomers()"><i class="fas fa-sync-alt"></i> تحديث</button>
-                    <button class="btn btn-outline btn-sm" onclick="exportCustomers()"><i class="fas fa-file-export"></i> تصدير</button>
+                    <button class="btn btn-outline btn-sm" onclick="exportCustomers()"><i class="fas fa-file-csv"></i> CSV</button>
+                    <button class="btn btn-outline btn-sm" onclick="exportCustomersJSON()"><i class="fas fa-file-code"></i> JSON</button>
                     <button class="btn btn-warning" onclick="openReportsModal()"><i class="fas fa-chart-bar"></i> التقارير</button>
                 </div>
             </div>
@@ -938,6 +939,21 @@
                         <div class="report-name">تقرير المخزون</div>
                         <div class="report-desc">المنتجات والمخزون الحالي</div>
                     </div>
+                    <div class="report-card" onclick="openReportViewer('loyalty')">
+                        <div class="report-icon"><i class="fas fa-award"></i></div>
+                        <div class="report-name">تقرير الولاء</div>
+                        <div class="report-desc">توزيع المستويات والنقاط</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('risk')">
+                        <div class="report-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                        <div class="report-name">تقرير المخاطر</div>
+                        <div class="report-desc">التصنيف والعملاء المحظورون</div>
+                    </div>
+                    <div class="report-card" onclick="openReportViewer('aging')">
+                        <div class="report-icon"><i class="fas fa-hourglass-half"></i></div>
+                        <div class="report-name">أعمار الديون</div>
+                        <div class="report-desc">0–30 و31–60 و61–90 و+90</div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1000,6 +1016,9 @@
                     <button class="tab" data-tab="tab-addresses">العناوين</button>
                     <button class="tab" data-tab="tab-financial">المالية</button>
                     <button class="tab" data-tab="tab-sales">المبيعات</button>
+                    <button class="tab" data-tab="tab-contracts">العقود</button>
+                    <button class="tab" data-tab="tab-attachments">المرفقات</button>
+                    <button class="tab" data-tab="tab-audit">سجل التدقيق</button>
                 </div>
 
                 <!-- تبويب المعلومات الأساسية -->
@@ -1017,6 +1036,26 @@
                                 <select class="form-control" id="partyType" required>
                                     <option value="">-- اختر --</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>الباركود</label>
+                                <input type="text" class="form-control" id="barcode" placeholder="Barcode">
+                            </div>
+                            <div class="form-group">
+                                <label>رمز QR</label>
+                                <input type="text" class="form-control" id="qrCode" placeholder="QR code">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>المحطة</label>
+                                <input type="number" class="form-control" id="stationId" min="1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label>العميل المُحيل</label>
+                                <select class="form-control" id="referredBy"><option value="">لا يوجد</option></select>
                             </div>
                         </div>
 
@@ -1122,6 +1161,14 @@
                                 <input type="number" class="form-control" id="rating" value="3" min="1" max="5" step="0.5">
                             </div>
                         </div>
+                        <div class="form-check">
+                            <input type="checkbox" id="isBlacklisted">
+                            <label for="isBlacklisted">العميل محظور</label>
+                        </div>
+                        <div class="form-group">
+                            <label>سبب الحظر</label>
+                            <textarea class="form-control" id="blacklistReason" rows="2" placeholder="يُحفظ مع بيانات الحظر"></textarea>
+                        </div>
 
                         <div class="form-group">
                             <label>ملاحظات</label>
@@ -1132,6 +1179,11 @@
                             <input type="checkbox" id="isActive" checked>
                             <label for="isActive">نشط</label>
                         </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>إجمالي الطلبات (قراءة فقط)</label><input type="number" class="form-control" id="totalOrders" readonly></div>
+                            <div class="form-group"><label>إجمالي قيمة الطلبات (قراءة فقط)</label><input type="number" class="form-control" id="totalOrderAmount" readonly></div>
+                        </div>
+                        <div class="form-group"><label>معدل الالتزام (قراءة فقط)</label><input type="number" class="form-control" id="onTimeRate" readonly></div>
                     </form>
                 </div>
 
@@ -1145,6 +1197,7 @@
                             <thead>
                                 <tr>
                                     <th>الاسم</th>
+                                    <th>القسم</th>
                                     <th>المسمى</th>
                                     <th>الهاتف</th>
                                     <th>البريد</th>
@@ -1155,7 +1208,7 @@
                                 </tr>
                             </thead>
                             <tbody id="contactsTableBody">
-                                <tr><td colspan="8" class="text-center text-muted">لا توجد جهات اتصال</td></tr>
+                                <tr><td colspan="9" class="text-center text-muted">لا توجد جهات اتصال</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1173,13 +1226,15 @@
                                     <th>النوع</th>
                                     <th>العنوان</th>
                                     <th>المدينة</th>
+                                    <th>المنطقة</th>
+                                    <th>الرمز البريدي</th>
                                     <th>الدولة</th>
                                     <th>افتراضي</th>
                                     <th>الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="addressesTableBody">
-                                <tr><td colspan="6" class="text-center text-muted">لا توجد عناوين</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted">لا توجد عناوين</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1211,6 +1266,31 @@
                                 <tr><td colspan="6" class="text-center text-muted">لا توجد معاملات</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- تبويب العقود -->
+                <div class="tab-content" id="tab-contracts">
+                    <div class="sub-table-wrap">
+                        <table><thead><tr><th>رمز العقد</th><th>الاسم</th><th>النوع</th><th>البداية</th><th>النهاية</th><th>القيمة</th><th>الحالة</th></tr></thead>
+                        <tbody id="contractsTableBody"><tr><td colspan="7" class="text-center text-muted">لا توجد عقود</td></tr></tbody></table>
+                    </div>
+                </div>
+
+                <!-- تبويب المرفقات -->
+                <div class="tab-content" id="tab-attachments">
+                    <p class="text-muted" style="margin-bottom:10px;">تُعرض المرفقات المسجلة في SQLite. رفع ملفات جديدة يحتاج عقد Native خاصاً بالملفات، لذلك لا يتم إنشاء رفع وهمي من WebView.</p>
+                    <div class="sub-table-wrap">
+                        <table><thead><tr><th>الملف</th><th>النوع</th><th>الوصف</th><th>التاريخ</th></tr></thead>
+                        <tbody id="attachmentsTableBody"><tr><td colspan="4" class="text-center text-muted">لا توجد مرفقات</td></tr></tbody></table>
+                    </div>
+                </div>
+
+                <!-- تبويب سجل التدقيق -->
+                <div class="tab-content" id="tab-audit">
+                    <div class="sub-table-wrap">
+                        <table><thead><tr><th>الإجراء</th><th>المستخدم</th><th>السجل</th><th>التاريخ</th></tr></thead>
+                        <tbody id="auditTableBody"><tr><td colspan="4" class="text-center text-muted">لا يوجد سجل تدقيق</td></tr></tbody></table>
                     </div>
                 </div>
 
@@ -1289,7 +1369,8 @@
         // ============================================================
         // الإعدادات والحالة
         // ============================================================
-        const API_BASE = 'http://127.0.0.1:8080/api';
+        // مصدر البيانات التجاري الوحيد هو SQLite عبر Typed Android Bridge.
+        // لا يوجد خادم شبكي أو fallback أو تخزين محلي للبيانات التجارية.
         let allCustomers = [];
         let filteredCustomers = [];
         let currentPage = 1;
@@ -1299,156 +1380,99 @@
         let addressesData = [];
         let ledgerData = [];
         let salesData = [];
+        let currentCustomerBundle = null;
+        let reportRequestInFlight = false;
 
         // حالة التقارير
         let currentReportType = 'customers';
         let reportData = [];
 
-        // ============================================================
-        // دالة apiCall الموحدة (مع دعم AndroidInterface)
-        // ============================================================
-        
-function waitForAndroidBridge(timeout = 5000) {
-    return new Promise((resolve) => {
-        const start = Date.now();
-
-        const timer = setInterval(() => {
-            if (typeof AndroidInterface !== 'undefined' &&
-                AndroidInterface !== null) {
-                clearInterval(timer);
-                resolve(true);
-                return;
-            }
-
-            if (Date.now() - start >= timeout) {
-                clearInterval(timer);
-                resolve(false);
-            }
-        }, 100);
-    });
-}
-
-async function apiCall(action, params = {}) {
-    const bridgeReady = await waitForAndroidBridge();
-    if (!bridgeReady) {
-        console.error("AndroidInterface bridge not ready");
-        throw new Error("AndroidInterface not injected");
-    }
-
-            const hasBridge = (typeof AndroidInterface !== 'undefined' && AndroidInterface !== null);
-
-            if (hasBridge) {
-                try {
-                    const actionMap = {
-                        'get_customers': 'getCustomers',
-                        'add_customer': 'addParty',
-                        'update_customer': 'updateParty',
-                        'delete_customer': 'deleteParty',
-                        'get_party_types': 'getPartyTypes',
-                        'get_currencies': 'getCurrencies',
-                        'get_users': 'getUsers',
-                        'get_fuel_types': 'getFuelTypes',
-                        'get_customer_ledger': 'getCustomerLedger',
-                        'get_customer_sales': 'getCustomerSales',
-                        'get_customer_contacts': 'getPartyContacts',
-                        'get_customer_addresses': 'getPartyAddresses',
-                        'add_contact': 'addPartyContact',
-                        'update_contact': 'updatePartyContact',
-                        'delete_contact': 'deletePartyContact',
-                        'add_address': 'addPartyAddress',
-                        'update_address': 'updatePartyAddress',
-                        'delete_address': 'deletePartyAddress',
-                        'make_payment': 'makePayment',
-                        'get_dashboard_stats': 'getDashboardStats',
-                        'get_sales': 'getSales',
-                        'get_payments': 'getPayments',
-                        'get_tanks': 'getTanks',
-                        'get_products': 'getProducts',
-                        'get_customer_debts': 'getCustomerDebts'
-                    };
-
-                    const methodName = actionMap[action];
-                    if (!methodName) {
-                        if (typeof AndroidInterface[action] === 'function') {
-                            const result = AndroidInterface[action]();
-                            return handleAndroidResult(result);
-                        }
-                        throw new Error(`الإجراء غير معروف: ${action}`);
-                    }
-
-                    const method = AndroidInterface[methodName];
-                    if (typeof method !== 'function') {
-                        throw new Error(`الدالة ${methodName} غير موجودة`);
-                    }
-
-                    let result;
-                    switch (action) {
-                        case 'add_customer':
-                        case 'update_customer':
-                        case 'add_contact':
-                        case 'update_contact':
-                        case 'delete_contact':
-                        case 'add_address':
-                        case 'update_address':
-                        case 'delete_address':
-                        case 'make_payment':
-                            result = method(JSON.stringify(params));
-                            break;
-                        case 'delete_customer':
-                            result = method(parseInt(params.party_id));
-                            break;
-                        default:
-                            result = method();
-                            break;
-                    }
-                    return handleAndroidResult(result);
-                } catch (e) {
-                    console.error('AndroidInterface error:', e);
-                    showToast('خطأ في الاتصال الداخلي', 'error');
-                    throw e;
-                }
-            }
-
-            // Fallback: استخدام fetch
-            const url = new URL(API_BASE);
-            url.searchParams.append('action', action);
-            Object.keys(params).forEach(key => {
-                if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-                    url.searchParams.append(key, params[key]);
-                }
-            });
-            try {
-                const response = await fetch(url.toString(), {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
-            } catch (e) {
-                console.error('API Error:', e);
-                showToast('خطأ في الاتصال بالخادم', 'error');
-                throw e;
-            }
-        }
-
-        function handleAndroidResult(result) {
+        function normalizeBridgeResult(raw) {
+            let result = raw;
             if (typeof result === 'string') {
-                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
+                try { result = JSON.parse(result); }
+                catch (e) { return { success: false, error: result || 'نتيجة Bridge غير صالحة' }; }
             }
-            if (result && typeof result === 'object' && 'success' in result) return result;
+            if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) return result;
             if (Array.isArray(result)) return { success: true, data: result };
             if (result && typeof result === 'object') return { success: true, data: result };
             return { success: true, data: result };
         }
 
+        function getBridge() {
+            if (!window.AndroidInterface) throw new Error('AndroidInterface غير متاح؛ افتح الشاشة داخل تطبيق Android');
+            return window.AndroidInterface;
+        }
+
+        function invokeBridgeAction(action, params = {}) {
+            const bridge = getBridge();
+            const p = params || {};
+            switch (action) {
+                case 'get_customers': return bridge.getCustomers();
+                case 'add_customer': return bridge.addParty(JSON.stringify(p));
+                case 'update_customer': return bridge.updateParty(Number(p.party_id || p.id), JSON.stringify(p));
+                case 'delete_customer': return bridge.deleteParty(Number(p.party_id || p.id));
+                case 'get_party_types': return bridge.getPartyTypes();
+                case 'get_currencies': return bridge.getCurrencies();
+                case 'get_users': return bridge.getUsers();
+                case 'get_fuel_types': return bridge.getFuelTypes();
+                case 'get_customer_ledger': return bridge.getCustomerLedger(Number(p.party_id || p.id));
+                case 'get_customer_sales': return bridge.getCustomerSales(Number(p.party_id || p.id));
+                case 'get_customer_contacts': return bridge.getPartyContacts(Number(p.party_id || p.id));
+                case 'get_customer_addresses': return bridge.getPartyAddresses(Number(p.party_id || p.id));
+                case 'get_customer_bundle': return bridge.getPartyCrmBundle(Number(p.party_id || p.id));
+                case 'add_contact': return bridge.addPartyContact(JSON.stringify(p));
+                case 'update_contact': return bridge.updatePartyContact(JSON.stringify(p));
+                case 'delete_contact': return bridge.deletePartyContact(Number(p.contact_id || p.id));
+                case 'add_address': return bridge.addPartyAddress(JSON.stringify(p));
+                case 'update_address': return bridge.updatePartyAddress(JSON.stringify(p));
+                case 'delete_address': return bridge.deletePartyAddress(Number(p.address_id || p.id));
+                case 'make_payment': return bridge.makePayment(JSON.stringify(p));
+                case 'get_payments': return bridge.getPayments();
+                case 'get_tanks': return bridge.getTanks();
+                case 'get_products': return bridge.getProducts();
+                case 'get_customer_debts': return bridge.getCustomerDebts(p.from_date || null, p.to_date || null);
+                case 'get_party_report': return bridge.generateCRMReport(JSON.stringify({
+                    report_type: p.report_type || 'customers',
+                    start_date: p.from_date || '',
+                    end_date: p.to_date || '',
+                    party_type: Number(p.party_type || 0),
+                    status: p.status === '' || p.status === undefined || p.status === null ? null : Number(p.status)
+                }));
+                default: throw new Error(`إجراء Bridge غير مدعوم: ${action}`);
+            }
+        }
+
+        async function apiCall(action, params = {}) {
+            try {
+                return normalizeBridgeResult(invokeBridgeAction(action, params));
+            } catch (error) {
+                console.error(`Bridge action ${action} failed:`, error);
+                throw error;
+            }
+        }
+
         // ============================================================
         // الأدوات المساعدة
         // ============================================================
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+        }
+
+        function numberValue(value, fallback = 0) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : fallback;
+        }
+
+        function customerIdOf(customer) {
+            return Number(customer?.party_id || customer?.id || 0);
+        }
+
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            toast.innerHTML = `<span>${message}</span>`;
+            toast.textContent = String(message ?? '');
             container.appendChild(toast);
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
         }
@@ -1485,8 +1509,9 @@ async function apiCall(action, params = {}) {
             try {
                 const result = await apiCall('get_customers');
                 if (result.success) {
-                    allCustomers = result.data || [];
+                    allCustomers = Array.isArray(result.data) ? result.data : [];
                     filteredCustomers = [...allCustomers];
+                    updateReferredByOptions();
                     updateStats();
                     renderPage();
                 } else {
@@ -1528,20 +1553,21 @@ async function apiCall(action, params = {}) {
                     const status = c.is_active === 1 || c.is_active === true ? 'نشط' : 'غير نشط';
                     const statusBadge = (c.is_active === 1 || c.is_active === true) ? 'badge-success' : 'badge-danger';
                     const phone = c.phone || '';
+                    const id = customerIdOf(c);
                     return `
                         <tr>
-                            <td><strong>${c.party_code || ''}</strong></td>
-                            <td>${c.commercial_name || c.legal_name || ''}</td>
-                            <td>${phone}</td>
+                            <td><strong>${escapeHtml(c.party_code || '')}</strong></td>
+                            <td>${escapeHtml(c.commercial_name || c.legal_name || '')}</td>
+                            <td>${escapeHtml(phone)}</td>
                             <td>${balance.toFixed(2)}</td>
                             <td>${due.toFixed(2)}</td>
                             <td>${overdue.toFixed(2)}</td>
                             <td><span class="badge ${statusBadge}">${status}</span></td>
                             <td>
                                 <div class="table-actions">
-                                    <button class="ta-btn view" onclick="viewCustomer(${c.party_id})" title="عرض"><i class="fas fa-eye"></i></button>
-                                    <button class="ta-btn edit" onclick="editCustomer(${c.party_id})" title="تعديل"><i class="fas fa-edit"></i></button>
-                                    <button class="ta-btn delete" onclick="deleteCustomer(${c.party_id})" title="حذف"><i class="fas fa-trash"></i></button>
+                                    <button class="ta-btn view" onclick="viewCustomer(${id})" title="عرض"><i class="fas fa-eye"></i></button>
+                                    <button class="ta-btn edit" onclick="editCustomer(${id})" title="تعديل"><i class="fas fa-edit"></i></button>
+                                    <button class="ta-btn delete" onclick="deleteCustomer(${id})" title="حذف"><i class="fas fa-trash"></i></button>
                                 </div>
                             </td>
                         </tr>
@@ -1657,13 +1683,33 @@ async function apiCall(action, params = {}) {
             }
         }
 
+        function updateReferredByOptions(selectedId = '') {
+            const select = document.getElementById('referredBy');
+            if (!select) return;
+            select.innerHTML = '<option value="">لا يوجد</option>';
+            allCustomers.forEach(customer => {
+                const id = customerIdOf(customer);
+                if (!id || id === Number(currentCustomerId)) return;
+                const option = document.createElement('option');
+                option.value = String(id);
+                option.textContent = `${customer.party_code || id} – ${customer.commercial_name || customer.commercial_name_ar || 'عميل'}`;
+                select.appendChild(option);
+            });
+            select.value = selectedId ? String(selectedId) : '';
+        }
+
         // ============================================================
         // فتح / إغلاق نافذة العميل
         // ============================================================
         function openCustomerModal(data) {
-            currentCustomerId = data ? data.party_id : null;
-            document.getElementById('customerFormId').value = data ? data.party_id : '';
+            currentCustomerId = data ? customerIdOf(data) : null;
+            currentCustomerBundle = data || null;
+            document.getElementById('customerFormId').value = data ? customerIdOf(data) : '';
             document.getElementById('partyCode').value = data ? data.party_code : '';
+            document.getElementById('barcode').value = data ? (data.barcode || '') : '';
+            document.getElementById('qrCode').value = data ? (data.qr_code || '') : '';
+            document.getElementById('stationId').value = data ? (data.station_id || 1) : 1;
+            updateReferredByOptions(data ? (data.referred_by || '') : '');
             document.getElementById('commercialName').value = data ? data.commercial_name : '';
             document.getElementById('commercialNameAr').value = data ? data.commercial_name_ar : '';
             document.getElementById('legalName').value = data ? data.legal_name : '';
@@ -1678,9 +1724,14 @@ async function apiCall(action, params = {}) {
             document.getElementById('fleetSize').value = data ? data.fleet_size : 0;
             document.getElementById('loyaltyTier').value = data ? data.loyalty_tier : 'bronze';
             document.getElementById('loyaltyPoints').value = data ? data.loyalty_points : 0;
-            document.getElementById('riskLevel').value = data ? data.risk_level : 'low';
-            document.getElementById('rating').value = data ? data.rating : 3;
-            document.getElementById('notes').value = data ? data.notes : '';
+            document.getElementById('riskLevel').value = data ? (data.risk_level || 'low') : 'low';
+            document.getElementById('rating').value = data ? (data.rating ?? 3) : 3;
+            document.getElementById('blacklistReason').value = data ? (data.blacklist_reason || '') : '';
+            document.getElementById('isBlacklisted').checked = data ? data.risk_level === 'blacklisted' : false;
+            document.getElementById('totalOrders').value = data ? (data.total_orders ?? 0) : 0;
+            document.getElementById('totalOrderAmount').value = data ? (data.total_order_amount ?? 0) : 0;
+            document.getElementById('onTimeRate').value = data ? (data.on_time_rate ?? 100) : 100;
+            document.getElementById('notes').value = data ? (data.notes || '') : '';
             document.getElementById('isActive').checked = data ? (data.is_active === 1 || data.is_active === true) : true;
             document.getElementById('partyType').value = data ? data.party_type_id : '';
 
@@ -1690,12 +1741,13 @@ async function apiCall(action, params = {}) {
             document.getElementById('deleteCustomerBtn').style.display = data ? 'inline-flex' : 'none';
 
             if (data) {
-                loadCustomerDetails(data.party_id);
+                loadCustomerDetails(customerIdOf(data));
             } else {
                 contactsData = [];
                 addressesData = [];
                 ledgerData = [];
                 salesData = [];
+                currentCustomerBundle = null;
                 renderContacts();
                 renderAddresses();
                 renderLedger();
@@ -1717,13 +1769,13 @@ async function apiCall(action, params = {}) {
         }
 
         function editCustomer(id) {
-            const customer = allCustomers.find(c => c.party_id === id);
+            const customer = allCustomers.find(c => customerIdOf(c) === Number(id));
             if (customer) openCustomerModal(customer);
             else showToast('العميل غير موجود', 'error');
         }
 
         function viewCustomer(id) {
-            const customer = allCustomers.find(c => c.party_id === id);
+            const customer = allCustomers.find(c => customerIdOf(c) === Number(id));
             if (customer) {
                 openCustomerModal(customer);
                 document.querySelectorAll('#customerForm .form-control').forEach(el => el.disabled = true);
@@ -1740,30 +1792,37 @@ async function apiCall(action, params = {}) {
         // تحميل تفاصيل العميل
         // ============================================================
         async function loadCustomerDetails(partyId) {
+            const id = Number(partyId);
+            if (!id) { showToast('معرف العميل غير صالح', 'error'); return; }
             showLoading(true);
             try {
-                const [contacts, addresses, ledger, sales] = await Promise.all([
-                    apiCall('get_customer_contacts', { party_id: partyId }),
-                    apiCall('get_customer_addresses', { party_id: partyId }),
-                    apiCall('get_customer_ledger', { party_id: partyId }),
-                    apiCall('get_customer_sales', { party_id: partyId })
+                const [bundle, ledger, sales] = await Promise.all([
+                    apiCall('get_customer_bundle', { party_id: id }),
+                    apiCall('get_customer_ledger', { party_id: id }),
+                    apiCall('get_customer_sales', { party_id: id })
                 ]);
-
-                contactsData = contacts.success ? contacts.data : [];
-                addressesData = addresses.success ? addresses.data : [];
-                ledgerData = ledger.success ? ledger.data : [];
-                salesData = sales.success ? sales.data : [];
-
+                if (!bundle.success || !bundle.data) throw new Error(bundle.error || bundle.message || 'تعذر تحميل ملف العميل');
+                currentCustomerBundle = bundle.data;
+                contactsData = Array.isArray(bundle.data.contacts) ? bundle.data.contacts : [];
+                addressesData = Array.isArray(bundle.data.addresses) ? bundle.data.addresses : [];
+                ledgerData = ledger.success && Array.isArray(ledger.data) ? ledger.data : [];
+                salesData = sales.success && Array.isArray(sales.data) ? sales.data : (Array.isArray(bundle.data.invoices) ? bundle.data.invoices : []);
                 renderContacts();
                 renderAddresses();
                 renderLedger();
                 renderSales();
+                renderContracts();
+                renderAttachments();
+                renderAudit();
                 updateFinancialSummary();
-
+                const failed = [ledger, sales].filter(item => !item.success);
+                if (failed.length) showToast('تم تحميل ملف العميل، لكن بعض التفاصيل المالية غير متاحة', 'warning');
             } catch (e) {
-                showToast('فشل تحميل التفاصيل', 'error');
+                console.error('Customer bundle load failed:', e);
+                showToast(e.message || 'فشل تحميل تفاصيل العميل', 'error');
+            } finally {
+                showLoading(false);
             }
-            showLoading(false);
         }
 
         // ============================================================
@@ -1772,22 +1831,23 @@ async function apiCall(action, params = {}) {
         function renderContacts() {
             const tbody = document.getElementById('contactsTableBody');
             if (!contactsData || !contactsData.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا توجد جهات اتصال</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">لا توجد جهات اتصال</td></tr>';
                 return;
             }
             tbody.innerHTML = contactsData.map(c => `
                 <tr>
-                    <td>${c.contact_name || ''}</td>
-                    <td>${c.job_title || ''}</td>
-                    <td>${c.phone || ''}</td>
-                    <td>${c.email || ''}</td>
-                    <td>${c.is_primary ? '✅' : ''}</td>
-                    <td>${c.is_billing ? '✅' : ''}</td>
-                    <td>${c.is_technical ? '✅' : ''}</td>
+                    <td>${escapeHtml(c.contact_name || '')}</td>
+                    <td>${escapeHtml(c.department || '')}</td>
+                    <td>${escapeHtml(c.job_title || '')}</td>
+                    <td>${escapeHtml(c.phone || '')}</td>
+                    <td>${escapeHtml(c.email || '')}</td>
+                    <td>${c.is_primary ? '✓' : ''}</td>
+                    <td>${c.is_billing ? '✓' : ''}</td>
+                    <td>${c.is_technical ? '✓' : ''}</td>
                     <td>
                         <div class="table-actions">
-                            <button class="ta-btn edit" onclick="editContact(${c.id})"><i class="fas fa-edit"></i></button>
-                            <button class="ta-btn delete" onclick="deleteContact(${c.id})"><i class="fas fa-trash"></i></button>
+                            <button class="ta-btn edit" onclick="editContact(${Number(c.id || 0)})"><i class="fas fa-edit"></i></button>
+                            <button class="ta-btn delete" onclick="deleteContact(${Number(c.id || 0)})"><i class="fas fa-trash"></i></button>
                         </div>
                     </td>
                 </tr>
@@ -1800,20 +1860,22 @@ async function apiCall(action, params = {}) {
         function renderAddresses() {
             const tbody = document.getElementById('addressesTableBody');
             if (!addressesData || !addressesData.length) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">لا توجد عناوين</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">لا توجد عناوين</td></tr>';
                 return;
             }
             tbody.innerHTML = addressesData.map(a => `
                 <tr>
-                    <td>${a.address_type || 'رئيسي'}</td>
-                    <td>${a.address_line1 || ''} ${a.address_line2 || ''}</td>
-                    <td>${a.city || ''}</td>
-                    <td>${a.country || ''}</td>
-                    <td>${a.is_default ? '✅' : ''}</td>
+                    <td>${escapeHtml(a.address_type || 'رئيسي')}</td>
+                    <td>${escapeHtml(`${a.address_line1 || ''} ${a.address_line2 || ''}`.trim())}</td>
+                    <td>${escapeHtml(a.city || '')}</td>
+                    <td>${escapeHtml(a.state || '')}</td>
+                    <td>${escapeHtml(a.postal_code || '')}</td>
+                    <td>${escapeHtml(a.country || '')}</td>
+                    <td>${a.is_default ? '✓' : ''}</td>
                     <td>
                         <div class="table-actions">
-                            <button class="ta-btn edit" onclick="editAddress(${a.id})"><i class="fas fa-edit"></i></button>
-                            <button class="ta-btn delete" onclick="deleteAddress(${a.id})"><i class="fas fa-trash"></i></button>
+                            <button class="ta-btn edit" onclick="editAddress(${Number(a.id || 0)})"><i class="fas fa-edit"></i></button>
+                            <button class="ta-btn delete" onclick="deleteAddress(${Number(a.id || 0)})"><i class="fas fa-trash"></i></button>
                         </div>
                     </td>
                 </tr>
@@ -1831,12 +1893,12 @@ async function apiCall(action, params = {}) {
             }
             tbody.innerHTML = ledgerData.map(l => `
                 <tr>
-                    <td>${l.transaction_date || ''}</td>
-                    <td>${l.transaction_type || ''}</td>
-                    <td>${(l.debit || 0).toFixed(2)}</td>
-                    <td>${(l.credit || 0).toFixed(2)}</td>
-                    <td>${(l.balance || 0).toFixed(2)}</td>
-                    <td>${l.description || ''}</td>
+                    <td>${escapeHtml(l.transaction_date || '')}</td>
+                    <td>${escapeHtml(l.transaction_type || '')}</td>
+                    <td>${numberValue(l.debit).toFixed(2)}</td>
+                    <td>${numberValue(l.credit).toFixed(2)}</td>
+                    <td>${numberValue(l.balance).toFixed(2)}</td>
+                    <td>${escapeHtml(l.description || '')}</td>
                 </tr>
             `).join('');
         }
@@ -1844,6 +1906,27 @@ async function apiCall(action, params = {}) {
         // ============================================================
         // عرض المبيعات
         // ============================================================
+        function renderContracts() {
+            const tbody = document.getElementById('contractsTableBody');
+            const rows = Array.isArray(currentCustomerBundle?.contracts) ? currentCustomerBundle.contracts : [];
+            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">لا توجد عقود</td></tr>'; return; }
+            tbody.innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.contract_code || '---')}</td><td>${escapeHtml(item.contract_name_ar || item.contract_name || '---')}</td><td>${escapeHtml(item.contract_type || '---')}</td><td>${escapeHtml(item.start_date || '---')}</td><td>${escapeHtml(item.end_date || '---')}</td><td>${numberValue(item.total_value).toFixed(2)}</td><td><span class="badge ${item.status === 'active' ? 'badge-success' : 'badge-secondary'}">${escapeHtml(item.status || '---')}</span></td></tr>`).join('');
+        }
+
+        function renderAttachments() {
+            const tbody = document.getElementById('attachmentsTableBody');
+            const rows = Array.isArray(currentCustomerBundle?.attachments) ? currentCustomerBundle.attachments : [];
+            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد مرفقات</td></tr>'; return; }
+            tbody.innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.file_name_original || item.file_name || '---')}</td><td>${escapeHtml(item.file_type || item.file_extension || '---')}</td><td>${escapeHtml(item.description_ar || item.description || '---')}</td><td>${escapeHtml(item.created_at || '---')}</td></tr>`).join('');
+        }
+
+        function renderAudit() {
+            const tbody = document.getElementById('auditTableBody');
+            const rows = Array.isArray(currentCustomerBundle?.audit) ? currentCustomerBundle.audit : [];
+            if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا يوجد سجل تدقيق</td></tr>'; return; }
+            tbody.innerHTML = rows.map(item => `<tr><td>${escapeHtml(item.action_type || '---')}</td><td>${escapeHtml(item.user_id || '---')}</td><td>${escapeHtml(item.table_name || '---')} #${escapeHtml(item.record_id || '')}</td><td>${escapeHtml(item.created_at || '---')}</td></tr>`).join('');
+        }
+
         function renderSales() {
             const tbody = document.getElementById('salesTableBody');
             if (!salesData || !salesData.length) {
@@ -1852,11 +1935,11 @@ async function apiCall(action, params = {}) {
             }
             tbody.innerHTML = salesData.map(s => `
                 <tr>
-                    <td>${s.invoice_number || s.sale_code || ''}</td>
-                    <td>${s.created_at || ''}</td>
-                    <td>${(s.liters || 0).toFixed(2)}</td>
-                    <td>${(s.net_amount || 0).toFixed(2)}</td>
-                    <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${s.status || ''}</span></td>
+                    <td>${escapeHtml(s.invoice_number || s.sale_code || '')}</td>
+                    <td>${escapeHtml(s.created_at || '')}</td>
+                    <td>${numberValue(s.liters).toFixed(2)}</td>
+                    <td>${numberValue(s.net_amount).toFixed(2)}</td>
+                    <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${escapeHtml(s.status || '')}</span></td>
                 </tr>
             `).join('');
         }
@@ -1865,11 +1948,11 @@ async function apiCall(action, params = {}) {
         // تحديث الملخص المالي
         // ============================================================
         function updateFinancialSummary() {
-            const totalBalance = ledgerData.length ? ledgerData[ledgerData.length - 1]?.balance || 0 : 0;
+            const totalBalance = ledgerData.length ? numberValue(ledgerData[ledgerData.length - 1]?.balance) : 0;
             const totalDue = ledgerData.filter(l => l.transaction_type === 'sale_credit' || l.transaction_type === 'sale')
-                .reduce((sum, l) => sum + (l.debit || 0), 0);
+                .reduce((sum, l) => sum + numberValue(l.debit), 0);
             const totalPaid = ledgerData.filter(l => l.transaction_type === 'payment' || l.transaction_type === 'deposit')
-                .reduce((sum, l) => sum + (l.credit || 0), 0);
+                .reduce((sum, l) => sum + numberValue(l.credit), 0);
             const due = totalDue - totalPaid;
             const overdue = due > 0 ? due : 0;
 
@@ -1911,6 +1994,7 @@ async function apiCall(action, params = {}) {
             const phone = prompt('رقم الهاتف:') || '';
             const email = prompt('البريد الإلكتروني:') || '';
             const jobTitle = prompt('المسمى الوظيفي:') || '';
+            const department = prompt('القسم:') || '';
             const isPrimary = confirm('جهة اتصال أساسية؟');
 
             const newContact = {
@@ -1918,6 +2002,7 @@ async function apiCall(action, params = {}) {
                 phone: phone,
                 email: email,
                 job_title: jobTitle,
+                department: department,
                 is_primary: isPrimary ? 1 : 0,
                 is_billing: 0,
                 is_technical: 0,
@@ -1964,6 +2049,7 @@ async function apiCall(action, params = {}) {
             const phone = prompt('الهاتف:', contact.phone) || contact.phone;
             const email = prompt('البريد:', contact.email) || contact.email;
             const jobTitle = prompt('المسمى:', contact.job_title) || contact.job_title;
+            const department = prompt('القسم:', contact.department || '') || contact.department || '';
             const isPrimary = confirm('جهة اتصال أساسية؟');
 
             const updated = {
@@ -1972,6 +2058,7 @@ async function apiCall(action, params = {}) {
                 phone: phone,
                 email: email,
                 job_title: jobTitle,
+                department: department,
                 is_primary: isPrimary ? 1 : 0
             };
             showLoading(true);
@@ -1993,12 +2080,16 @@ async function apiCall(action, params = {}) {
             const addr1 = prompt('العنوان (سطر 1):');
             if (!addr1) return;
             const city = prompt('المدينة:') || '';
+            const state = prompt('المنطقة:') || '';
+            const postalCode = prompt('الرمز البريدي:') || '';
             const country = prompt('الدولة:') || '';
             const isDefault = confirm('عنوان افتراضي؟');
 
             const newAddress = {
                 address_line1: addr1,
                 city: city,
+                state: state,
+                postal_code: postalCode,
                 country: country,
                 is_default: isDefault ? 1 : 0,
                 address_type: 'main',
@@ -2042,6 +2133,8 @@ async function apiCall(action, params = {}) {
             if (!addr) { showToast('غير موجود', 'error'); return; }
             const addr1 = prompt('العنوان:', addr.address_line1) || addr.address_line1;
             const city = prompt('المدينة:', addr.city) || addr.city;
+            const state = prompt('المنطقة:', addr.state || '') || addr.state || '';
+            const postalCode = prompt('الرمز البريدي:', addr.postal_code || '') || addr.postal_code || '';
             const country = prompt('الدولة:', addr.country) || addr.country;
             const isDefault = confirm('عنوان افتراضي؟');
 
@@ -2049,6 +2142,8 @@ async function apiCall(action, params = {}) {
                 ...addr,
                 address_line1: addr1,
                 city: city,
+                state: state,
+                postal_code: postalCode,
                 country: country,
                 is_default: isDefault ? 1 : 0
             };
@@ -2069,50 +2164,69 @@ async function apiCall(action, params = {}) {
         // ============================================================
         async function saveCustomer(e) {
             e.preventDefault();
-            const id = document.getElementById('customerFormId').value;
+            const form = document.getElementById('customerForm');
+            if (form.dataset.saving === 'true') return;
+            const id = Number(document.getElementById('customerFormId').value || 0);
+            const isBlacklisted = document.getElementById('isBlacklisted').checked;
+            const creditLimit = numberValue(document.getElementById('creditLimit').value);
+            const rating = numberValue(document.getElementById('rating').value, 3);
+            const loyaltyPoints = Math.max(0, Math.trunc(numberValue(document.getElementById('loyaltyPoints').value)));
+            const riskLevel = isBlacklisted ? 'blacklisted' : document.getElementById('riskLevel').value;
             const data = {
-                party_code: document.getElementById('partyCode').value,
-                commercial_name: document.getElementById('commercialName').value,
-                commercial_name_ar: document.getElementById('commercialNameAr').value,
-                legal_name: document.getElementById('legalName').value,
-                tax_number: document.getElementById('taxNumber').value,
-                commercial_register: document.getElementById('commercialRegister').value,
-                vat_number: document.getElementById('vatNumber').value,
-                credit_limit: parseFloat(document.getElementById('creditLimit').value) || 0,
-                payment_terms: document.getElementById('paymentTerms').value,
-                currency_id: document.getElementById('currencyId').value || null,
-                assigned_to: document.getElementById('assignedTo').value || null,
-                fuel_type_preference_id: document.getElementById('fuelPreference').value || null,
-                fleet_size: parseInt(document.getElementById('fleetSize').value) || 0,
+                party_code: document.getElementById('partyCode').value.trim(),
+                barcode: document.getElementById('barcode').value.trim(),
+                qr_code: document.getElementById('qrCode').value.trim(),
+                station_id: Math.max(1, Math.trunc(numberValue(document.getElementById('stationId').value, 1))),
+                referred_by: document.getElementById('referredBy').value ? Number(document.getElementById('referredBy').value) : null,
+                commercial_name: document.getElementById('commercialName').value.trim(),
+                commercial_name_ar: document.getElementById('commercialNameAr').value.trim(),
+                legal_name: document.getElementById('legalName').value.trim(),
+                tax_number: document.getElementById('taxNumber').value.trim(),
+                commercial_register: document.getElementById('commercialRegister').value.trim(),
+                vat_number: document.getElementById('vatNumber').value.trim(),
+                credit_limit: creditLimit,
+                payment_terms: document.getElementById('paymentTerms').value.trim(),
+                currency_id: document.getElementById('currencyId').value ? Number(document.getElementById('currencyId').value) : null,
+                assigned_to: document.getElementById('assignedTo').value ? Number(document.getElementById('assignedTo').value) : null,
+                fuel_type_preference_id: document.getElementById('fuelPreference').value ? Number(document.getElementById('fuelPreference').value) : null,
+                fleet_size: Math.max(0, Math.trunc(numberValue(document.getElementById('fleetSize').value))),
                 loyalty_tier: document.getElementById('loyaltyTier').value,
-                loyalty_points: parseInt(document.getElementById('loyaltyPoints').value) || 0,
-                risk_level: document.getElementById('riskLevel').value,
-                rating: parseFloat(document.getElementById('rating').value) || 3,
-                notes: document.getElementById('notes').value,
+                loyalty_points: loyaltyPoints,
+                risk_level: riskLevel,
+                blacklist_reason: document.getElementById('blacklistReason').value.trim(),
+                blacklist_date: isBlacklisted ? (currentCustomerBundle?.blacklist_date || new Date().toISOString().slice(0, 10)) : null,
+                rating,
+                notes: document.getElementById('notes').value.trim(),
                 is_active: document.getElementById('isActive').checked ? 1 : 0,
-                party_type_id: document.getElementById('partyType').value
+                party_type_id: Number(document.getElementById('partyType').value)
             };
 
             if (!data.party_code || !data.commercial_name || !data.party_type_id) {
                 showToast('الرمز والاسم ونوع العميل مطلوبة', 'warning');
                 return;
             }
+            if (creditLimit < 0 || rating < 1 || rating > 5) {
+                showToast('تحقق من الحد الائتماني والتقييم', 'warning');
+                return;
+            }
 
+            form.dataset.saving = 'true';
             showLoading(true);
             try {
-                const action = id ? 'update_customer' : 'add_customer';
-                const params = id ? { ...data, party_id: parseInt(id) } : data;
-                const result = await apiCall(action, params);
-                if (result.success) {
-                    showToast(id ? 'تم التحديث' : 'تم الإضافة', 'success');
-                    closeCustomerModal();
-                    loadCustomers();
-                    loadDropdowns();
-                } else {
-                    showToast(result.error || 'فشل الحفظ', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-            showLoading(false);
+                const params = id ? { ...data, party_id: id } : data;
+                const result = await apiCall(id ? 'update_customer' : 'add_customer', params);
+                if (!result.success) throw new Error(result.error || result.message || 'فشل الحفظ');
+                showToast(id ? 'تم تحديث العميل فعلياً' : 'تمت إضافة العميل فعلياً', 'success');
+                closeCustomerModal();
+                await loadCustomers();
+                await loadDropdowns();
+            } catch (error) {
+                console.error('Customer save failed:', error);
+                showToast(error.message || 'فشل حفظ العميل', 'error');
+            } finally {
+                form.dataset.saving = 'false';
+                showLoading(false);
+            }
         }
 
         // ============================================================
@@ -2120,7 +2234,7 @@ async function apiCall(action, params = {}) {
         // ============================================================
         async function deleteCustomer(id) {
             if (!confirm('هل أنت متأكد من حذف هذا العميل؟')) return;
-            const customer = allCustomers.find(c => c.party_id === id);
+            const customer = allCustomers.find(c => customerIdOf(c) === Number(id));
             if (customer && parseFloat(customer.total_due || 0) > 0) {
                 showToast('لا يمكن حذف العميل لأنه لديه ديون مستحقة', 'warning');
                 return;
@@ -2195,23 +2309,39 @@ async function apiCall(action, params = {}) {
         // ============================================================
         // تصدير العملاء
         // ============================================================
+        function downloadBlob(content, type, filename) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+
+        function csvCell(value) {
+            return `"${String(value ?? '').replace(/"/g, '""')}"`;
+        }
+
         function exportCustomers() {
             if (!allCustomers.length) { showToast('لا توجد بيانات للتصدير', 'warning'); return; }
-            let csv = 'الرمز,الاسم التجاري,الاسم القانوني,النوع,الهاتف,البريد,الرصيد,الديون,المتأخرات,الحالة\n';
-            allCustomers.forEach(c => {
-                const phone = c.phone || '';
-                const email = c.email || '';
-                csv +=
-                    `${c.party_code||''},${c.commercial_name||''},${c.legal_name||''},${c.party_type_id||''},${phone},${email},${c.current_balance||0},${c.total_due||0},${c.overdue_amount||0},${c.is_active?'نشط':'غير نشط'}\n`;
-            });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `customers_${new Date().toISOString().slice(0,10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('تم التصدير', 'success');
+            const headers = ['الرمز', 'الاسم التجاري', 'الاسم القانوني', 'النوع', 'الهاتف', 'البريد', 'الرصيد', 'الديون', 'المتأخرات', 'الحالة'];
+            const rows = allCustomers.map(c => [
+                c.party_code, c.commercial_name, c.legal_name, c.party_type_id, c.phone, c.email,
+                numberValue(c.current_balance), numberValue(c.total_due), numberValue(c.overdue_amount),
+                c.is_active === 1 || c.is_active === true ? 'نشط' : 'غير نشط'
+            ]);
+            const csv = '\ufeff' + [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+            downloadBlob(csv, 'text/csv;charset=utf-8', `customers_${new Date().toISOString().slice(0,10)}.csv`);
+            showToast('تم تصدير بيانات العملاء الحالية', 'success');
+        }
+
+        function exportCustomersJSON() {
+            if (!allCustomers.length) { showToast('لا توجد بيانات للتصدير', 'warning'); return; }
+            downloadBlob(JSON.stringify(allCustomers, null, 2), 'application/json;charset=utf-8', `customers_${new Date().toISOString().slice(0,10)}.json`);
+            showToast('تم تصدير JSON من بيانات SQLite الحالية', 'success');
         }
 
         // ============================================================
@@ -2232,7 +2362,10 @@ async function apiCall(action, params = {}) {
                 'debts': 'تقرير الديون',
                 'payments': 'تقرير المدفوعات',
                 'tanks': 'تقرير الخزانات',
-                'products': 'تقرير المخزون'
+                'products': 'تقرير المخزون',
+                'loyalty': 'تقرير ولاء العملاء',
+                'risk': 'تقرير مخاطر العملاء',
+                'aging': 'تقرير أعمار الديون'
             };
             document.getElementById('reportViewerTitle').innerHTML = `<i class="fas fa-file-alt"></i> ${titles[type] || 'تقرير'}`;
             // تعيين التواريخ الافتراضية
@@ -2247,10 +2380,13 @@ async function apiCall(action, params = {}) {
         }
 
         async function refreshReport() {
+            if (reportRequestInFlight) return;
+            reportRequestInFlight = true;
             const fromDate = document.getElementById('reportFromDate').value;
             const toDate = document.getElementById('reportToDate').value;
 
             if (!fromDate || !toDate) {
+                reportRequestInFlight = false;
                 showToast('يرجى اختيار الفترة الزمنية', 'warning');
                 return;
             }
@@ -2260,30 +2396,33 @@ async function apiCall(action, params = {}) {
                 let result;
                 switch (currentReportType) {
                     case 'customers':
-                        result = await apiCall('get_customers');
+                        result = await apiCall('get_party_report', { report_type: 'customers', from_date: fromDate, to_date: toDate });
                         if (result.success) {
-                            reportData = result.data || [];
+                            reportData = Array.isArray(result.data) ? result.data : [];
                             renderCustomerReport(reportData);
                         }
                         break;
                     case 'sales':
-                        result = await apiCall('get_sales', { from_date: fromDate, to_date: toDate });
+                        result = await apiCall('get_party_report', { report_type: 'purchase_behavior', from_date: fromDate, to_date: toDate });
                         if (result.success) {
-                            reportData = result.data || [];
+                            reportData = Array.isArray(result.data) ? result.data : [];
                             renderSalesReport(reportData);
                         }
                         break;
                     case 'debts':
                         result = await apiCall('get_customer_debts', { from_date: fromDate, to_date: toDate });
                         if (result.success) {
-                            reportData = result.data || [];
+                            reportData = Array.isArray(result.data) ? result.data : [];
                             renderDebtsReport(reportData);
                         }
                         break;
                     case 'payments':
-                        result = await apiCall('get_payments', { from_date: fromDate, to_date: toDate });
+                        result = await apiCall('get_payments');
                         if (result.success) {
-                            reportData = result.data || [];
+                            reportData = (Array.isArray(result.data) ? result.data : []).filter(item => {
+                                const date = String(item.created_at || item.payment_date || '').slice(0, 10);
+                                return (!fromDate || !date || date >= fromDate) && (!toDate || !date || date <= toDate);
+                            });
                             renderPaymentsReport(reportData);
                         }
                         break;
@@ -2297,8 +2436,29 @@ async function apiCall(action, params = {}) {
                     case 'products':
                         result = await apiCall('get_products');
                         if (result.success) {
-                            reportData = result.data || [];
+                            reportData = Array.isArray(result.data) ? result.data : [];
                             renderProductsReport(reportData);
+                        }
+                        break;
+                    case 'loyalty':
+                        result = await apiCall('get_party_report', { report_type: 'customers', from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = Array.isArray(result.data) ? result.data : [];
+                            renderLoyaltyReport(reportData);
+                        }
+                        break;
+                    case 'risk':
+                        result = await apiCall('get_party_report', { report_type: 'customers', from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = Array.isArray(result.data) ? result.data : [];
+                            renderRiskReport(reportData);
+                        }
+                        break;
+                    case 'aging':
+                        result = await apiCall('get_customer_debts', { from_date: fromDate, to_date: toDate });
+                        if (result.success) {
+                            reportData = Array.isArray(result.data) ? result.data : [];
+                            renderAgingReport(reportData);
                         }
                         break;
                     default:
@@ -2309,9 +2469,12 @@ async function apiCall(action, params = {}) {
                     showToast(result?.error || 'فشل تحميل التقرير', 'error');
                 }
             } catch (e) {
-                showToast('خطأ في تحميل التقرير', 'error');
+                console.error('Report load failed:', e);
+                showToast(e.message || 'خطأ في تحميل التقرير', 'error');
+            } finally {
+                reportRequestInFlight = false;
+                showLoading(false);
             }
-            showLoading(false);
         }
 
         // ============================================================
@@ -2344,13 +2507,13 @@ async function apiCall(action, params = {}) {
                 html += `
                     <tr>
                         <td>${i+1}</td>
-                        <td>${c.party_code || ''}</td>
-                        <td>${c.commercial_name || c.legal_name || ''}</td>
-                        <td>${c.phone || ''}</td>
-                        <td>${(c.current_balance || 0).toFixed(2)}</td>
-                        <td>${(c.total_due || 0).toFixed(2)}</td>
-                        <td>${(c.overdue_amount || 0).toFixed(2)}</td>
-                        <td><span class="badge ${c.is_active ? 'badge-success' : 'badge-danger'}">${c.is_active ? 'نشط' : 'غير نشط'}</span></td>
+                        <td>${escapeHtml(c.party_code || '')}</td>
+                        <td>${escapeHtml(c.commercial_name || c.legal_name || '')}</td>
+                        <td>${escapeHtml(c.phone || '')}</td>
+                        <td>${numberValue(c.current_balance).toFixed(2)}</td>
+                        <td>${numberValue(c.total_due).toFixed(2)}</td>
+                        <td>${numberValue(c.overdue_amount).toFixed(2)}</td>
+                        <td><span class="badge ${c.is_active === 1 || c.is_active === true ? 'badge-success' : 'badge-danger'}">${c.is_active === 1 || c.is_active === true ? 'نشط' : 'غير نشط'}</span></td>
                     </tr>
                 `;
             });
@@ -2370,46 +2533,52 @@ async function apiCall(action, params = {}) {
                 container.innerHTML = '<div class="text-center text-muted">لا توجد مبيعات في هذه الفترة</div>';
                 return;
             }
-            let totalAmount = 0;
-            let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>رقم الفاتورة</th>
-                            <th>العميل</th>
-                            <th>الكمية (لتر)</th>
-                            <th>الإجمالي</th>
-                            <th>طريقة الدفع</th>
-                            <th>التاريخ</th>
-                            <th>الحالة</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            data.forEach((s, i) => {
-                totalAmount += parseFloat(s.net_amount || 0);
-                html += `
-                    <tr>
-                        <td>${i+1}</td>
-                        <td>${s.invoice_number || s.sale_code || ''}</td>
-                        <td>${s.customer_name || ''}</td>
-                        <td>${(s.liters || 0).toFixed(2)}</td>
-                        <td>${(s.net_amount || 0).toFixed(2)}</td>
-                        <td>${s.payment_method || ''}</td>
-                        <td>${s.created_at || ''}</td>
-                        <td><span class="badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}">${s.status || ''}</span></td>
-                    </tr>
-                `;
-            });
-            html += `
-                    </tbody>
-                </table>
-                <div style="margin-top:12px;font-weight:600;color:var(--primary);">
-                    إجمالي المبيعات: ${totalAmount.toFixed(2)} ريال
-                </div>
-            `;
+            const totalAmount = data.reduce((sum, item) => sum + numberValue(item.total_sales), 0);
+            const html = `<table><thead><tr><th>#</th><th>العميل</th><th>عدد الفواتير</th><th>إجمالي المبيعات</th><th>المدفوعات</th><th>المتبقي</th><th>آخر نشاط</th></tr></thead><tbody>${data.map((item, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(item.commercial_name_ar || item.commercial_name || '---')}</td><td>${numberValue(item.invoice_count)}</td><td>${numberValue(item.total_sales).toFixed(2)}</td><td>${numberValue(item.total_payments).toFixed(2)}</td><td>${numberValue(item.outstanding_amount).toFixed(2)}</td><td>${escapeHtml(item.last_activity || '---')}</td></tr>`).join('')}</tbody></table><div style="margin-top:12px;font-weight:600;color:var(--primary);">إجمالي المبيعات: ${totalAmount.toFixed(2)} ريال</div>`;
             container.innerHTML = html;
+        }
+
+        function renderLoyaltyReport(data) {
+            const groups = {};
+            data.forEach(item => {
+                const tier = item.loyalty_tier || 'غير محدد';
+                if (!groups[tier]) groups[tier] = { count: 0, points: 0 };
+                groups[tier].count += 1;
+                groups[tier].points += numberValue(item.loyalty_points);
+            });
+            const rows = Object.entries(groups);
+            document.getElementById('reportContent').innerHTML = rows.length ? `<table><thead><tr><th>مستوى الولاء</th><th>عدد العملاء</th><th>إجمالي النقاط</th><th>متوسط النقاط</th></tr></thead><tbody>${rows.map(([tier, item]) => `<tr><td>${escapeHtml(tier)}</td><td>${item.count}</td><td>${item.points}</td><td>${(item.points / item.count).toFixed(2)}</td></tr>`).join('')}</tbody></table>` : '<div class="text-center text-muted">لا توجد بيانات ولاء</div>';
+        }
+
+        function renderRiskReport(data) {
+            const groups = {};
+            data.forEach(item => {
+                const risk = item.risk_level || 'غير محدد';
+                groups[risk] = (groups[risk] || 0) + 1;
+            });
+            const rows = Object.entries(groups);
+            document.getElementById('reportContent').innerHTML = rows.length ? `<table><thead><tr><th>مستوى المخاطرة</th><th>عدد العملاء</th></tr></thead><tbody>${rows.map(([risk, count]) => `<tr><td>${escapeHtml(risk)}</td><td>${count}</td></tr>`).join('')}</tbody></table>` : '<div class="text-center text-muted">لا توجد بيانات مخاطر</div>';
+        }
+
+        function renderAgingReport(data) {
+            const buckets = [
+                { label: '0–30 يوم', min: 0, max: 30, count: 0, amount: 0 },
+                { label: '31–60 يوم', min: 31, max: 60, count: 0, amount: 0 },
+                { label: '61–90 يوم', min: 61, max: 90, count: 0, amount: 0 },
+                { label: 'أكثر من 90 يوم', min: 91, max: Number.MAX_SAFE_INTEGER, count: 0, amount: 0 },
+                { label: 'تاريخ غير محدد', min: null, max: null, count: 0, amount: 0 }
+            ];
+            const now = Date.now();
+            data.forEach(item => {
+                const amount = Math.max(0, numberValue(item.remaining_amount));
+                if (!amount) return;
+                const due = Date.parse(item.due_date || item.created_at || '');
+                const age = Number.isFinite(due) ? Math.max(0, Math.floor((now - due) / 86400000)) : null;
+                const bucket = age === null ? buckets[4] : buckets.find(entry => entry.min !== null && age >= entry.min && age <= entry.max);
+                if (bucket) { bucket.count += 1; bucket.amount += amount; }
+            });
+            const total = buckets.reduce((sum, item) => sum + item.amount, 0);
+            document.getElementById('reportContent').innerHTML = total ? `<table><thead><tr><th>الفئة</th><th>عدد السجلات</th><th>المبلغ</th><th>النسبة</th></tr></thead><tbody>${buckets.map(item => `<tr><td>${item.label}</td><td>${item.count}</td><td>${item.amount.toFixed(2)}</td><td>${((item.amount / total) * 100).toFixed(1)}%</td></tr>`).join('')}</tbody></table>` : '<div class="text-center text-muted">لا توجد ديون مستحقة</div>';
         }
 
         function renderDebtsReport(data) {
@@ -2436,11 +2605,11 @@ async function apiCall(action, params = {}) {
                 html += `
                     <tr>
                         <td>${i+1}</td>
-                        <td>${d.customer_name || ''}</td>
-                        <td>${(d.total_due || 0).toFixed(2)}</td>
-                        <td>${(d.overdue_amount || 0).toFixed(2)}</td>
-                        <td>${d.due_date || ''}</td>
-                        <td><span class="badge ${d.overdue_amount > 0 ? 'badge-danger' : 'badge-warning'}">${d.overdue_amount > 0 ? 'متأخر' : 'مستحق'}</span></td>
+                        <td>${escapeHtml(d.customer_name || d.commercial_name || '---')}</td>
+                        <td>${numberValue(d.total_due || d.remaining_amount).toFixed(2)}</td>
+                        <td>${numberValue(d.overdue_amount).toFixed(2)}</td>
+                        <td>${escapeHtml(d.due_date || '')}</td>
+                        <td><span class="badge ${numberValue(d.overdue_amount) > 0 ? 'badge-danger' : 'badge-warning'}">${numberValue(d.overdue_amount) > 0 ? 'متأخر' : 'مستحق'}</span></td>
                     </tr>
                 `;
             });
@@ -2477,16 +2646,16 @@ async function apiCall(action, params = {}) {
                     <tbody>
             `;
             data.forEach((p, i) => {
-                totalPayments += parseFloat(p.amount || 0);
+                totalPayments += numberValue(p.amount);
                 html += `
                     <tr>
                         <td>${i+1}</td>
-                        <td>${p.customer_name || ''}</td>
-                        <td>${(p.amount || 0).toFixed(2)}</td>
-                        <td>${p.payment_method || ''}</td>
-                        <td>${p.cheque_number || p.transfer_reference || ''}</td>
-                        <td>${p.created_at || ''}</td>
-                        <td><span class="badge ${p.status === 'completed' ? 'badge-success' : 'badge-warning'}">${p.status || ''}</span></td>
+                        <td>${escapeHtml(p.customer_name || p.commercial_name || '---')}</td>
+                        <td>${numberValue(p.amount).toFixed(2)}</td>
+                        <td>${escapeHtml(p.payment_method || '')}</td>
+                        <td>${escapeHtml(p.cheque_number || p.transfer_reference || '')}</td>
+                        <td>${escapeHtml(p.created_at || '')}</td>
+                        <td><span class="badge ${p.status === 'completed' ? 'badge-success' : 'badge-warning'}">${escapeHtml(p.status || '')}</span></td>
                     </tr>
                 `;
             });
@@ -2523,18 +2692,20 @@ async function apiCall(action, params = {}) {
                     <tbody>
             `;
             data.forEach((t, i) => {
-                const pct = t.capacity_liters ? Math.round((t.current_quantity || 0) / t.capacity_liters * 100) : 0;
+                const capacity = numberValue(t.capacity_liters);
+                const quantity = numberValue(t.current_quantity);
+                const pct = capacity > 0 ? Math.round(quantity / capacity * 100) : 0;
                 const color = pct > 50 ? 'badge-success' : pct > 25 ? 'badge-warning' : 'badge-danger';
                 html += `
                     <tr>
                         <td>${i+1}</td>
-                        <td>${t.tank_code || ''}</td>
-                        <td>${t.tank_name || ''}</td>
-                        <td>${t.fuel_name || ''}</td>
-                        <td>${(t.capacity_liters || 0).toFixed(0)}</td>
-                        <td>${(t.current_quantity || 0).toFixed(0)}</td>
+                        <td>${escapeHtml(t.tank_code || '')}</td>
+                        <td>${escapeHtml(t.tank_name || '')}</td>
+                        <td>${escapeHtml(t.fuel_name || '')}</td>
+                        <td>${numberValue(t.capacity_liters).toFixed(0)}</td>
+                        <td>${numberValue(t.current_quantity).toFixed(0)}</td>
                         <td><span class="badge ${color}">${pct}%</span></td>
-                        <td><span class="badge ${t.status === 'active' ? 'badge-success' : 'badge-danger'}">${t.status || ''}</span></td>
+                        <td><span class="badge ${t.status === 'active' ? 'badge-success' : 'badge-danger'}">${escapeHtml(t.status || '')}</span></td>
                     </tr>
                 `;
             });
@@ -2572,18 +2743,18 @@ async function apiCall(action, params = {}) {
                     <tbody>
             `;
             data.forEach((p, i) => {
-                const value = (p.quantity || 0) * (p.sale_price || 0);
+                const value = numberValue(p.quantity) * numberValue(p.sale_price);
                 totalValue += value;
                 html += `
                     <tr>
                         <td>${i+1}</td>
-                        <td>${p.product_code || ''}</td>
-                        <td>${p.product_name || ''}</td>
-                        <td>${p.category_name || ''}</td>
-                        <td>${(p.quantity || 0).toFixed(2)}</td>
-                        <td>${(p.sale_price || 0).toFixed(2)}</td>
+                        <td>${escapeHtml(p.product_code || '')}</td>
+                        <td>${escapeHtml(p.product_name || '')}</td>
+                        <td>${escapeHtml(p.category_name || '')}</td>
+                        <td>${numberValue(p.quantity).toFixed(2)}</td>
+                        <td>${numberValue(p.sale_price).toFixed(2)}</td>
                         <td>${value.toFixed(2)}</td>
-                        <td><span class="badge ${p.status === 'active' ? 'badge-success' : 'badge-danger'}">${p.status || ''}</span></td>
+                        <td><span class="badge ${p.status === 'active' ? 'badge-success' : 'badge-danger'}">${escapeHtml(p.status || '')}</span></td>
                     </tr>
                 `;
             });
