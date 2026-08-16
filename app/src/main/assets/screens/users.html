@@ -923,6 +923,42 @@
             border: var(--border-width) var(--border-style) var(--border-color);
             border-bottom: none;
         }
+        .user-form-modal {
+            max-height: 94vh;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.35);
+        }
+        .user-form-modal .modal-header {
+            flex: 0 0 auto;
+            margin: 0;
+            padding: 18px 22px;
+            background: linear-gradient(135deg, rgba(179, 27, 58, 0.96), rgba(26, 58, 107, 0.96));
+            color: #fff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .user-form-modal .modal-title { color: #fff; font-size: 1.2rem; letter-spacing: 0.1px; }
+        .user-form-modal .modal-close { color: #fff; background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.3); }
+        .user-form-modal form { flex: 1 1 auto; overflow-y: auto; padding: 20px 22px 24px; }
+        .modal-section { margin-bottom: 18px; padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: color-mix(in srgb, var(--surface-color) 86%, transparent); }
+        .modal-section:last-of-type { margin-bottom: 14px; }
+        .modal-section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; color: var(--ruby); font-size: 0.95rem; font-weight: 800; }
+        .modal-section-title i { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--ruby-dim); }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+        .form-grid .form-group { margin-bottom: 0; }
+        .form-grid .form-group.full-width { grid-column: 1 / -1; }
+        .form-help { display: block; margin-top: 4px; font-size: 0.7rem; color: var(--text-muted); }
+        .readonly-field { opacity: 0.78; cursor: not-allowed; }
+        .user-form-modal .form-actions { position: sticky; bottom: -1px; display: flex; gap: 10px; padding-top: 16px; margin-top: 2px; background: linear-gradient(to bottom, transparent, var(--surface-elevated) 22%); }
+        .user-form-modal .form-actions .submit-btn { flex: 1; min-height: 46px; font-size: 0.95rem; }
+        @media (max-width: 640px) {
+            .user-form-modal .modal-header, .user-form-modal form { padding-left: 14px; padding-right: 14px; }
+            .modal-section { padding: 12px; }
+            .form-grid { grid-template-columns: 1fr; gap: 10px; }
+            .form-grid .form-group.full-width { grid-column: auto; }
+        }
         .modal-overlay.show .modal {
             transform: translateY(0);
         }
@@ -1113,12 +1149,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1px;
+            gap: 3px;
             background: none;
             border: none;
             color: var(--text-muted);
             font-family: 'Cairo', sans-serif;
-            font-size: 0.45rem;
+            font-size: 0.9rem;
             cursor: pointer;
             transition: all 0.25s;
             padding: 4px 6px;
@@ -1131,13 +1167,14 @@
             transform: scale(0.9);
         }
         .bottom-nav .nav-item i {
-            font-size: 20px;
+            font-size: 28px;
             transition: all 0.25s;
         }
         .bottom-nav .nav-item span {
-            font-weight: 700;
+            font-weight: 800;
             margin-top: 1px;
-            font-size: 0.55rem;
+            font-size: 2.2rem;
+            line-height: 1.15;
             white-space: nowrap;
         }
         .bottom-nav .nav-item.active {
@@ -1335,10 +1372,10 @@
                 min-width: 44px;
             }
             .bottom-nav .nav-item i {
-                font-size: 16px;
+                font-size: 20px;
             }
             .bottom-nav .nav-item span {
-                font-size: 0.45rem;
+                font-size: 0.9rem;
             }
             .fab {
                 width: 44px;
@@ -1368,10 +1405,10 @@
                 padding: 2px 4px;
             }
             .bottom-nav .nav-item i {
-                font-size: 14px;
+                font-size: 18px;
             }
             .bottom-nav .nav-item span {
-                font-size: 0.4rem;
+                font-size: 0.8rem;
             }
         }
 
@@ -1615,35 +1652,30 @@
         <!-- ============================================================
         Bottom Navigation – مع أزرار التقارير
         ============================================================ -->
-        <nav class="bottom-nav" role="navigation" aria-label="القائمة السفلية">
-            <button class="nav-item active" onclick="navigateTo('users')" aria-label="المستخدمين">
-                <i class="fas fa-user" aria-hidden="true"></i>
-                <span>المستخدمين</span>
-            </button>
-            <button class="nav-item" onclick="navigateTo('groups')" aria-label="المجموعات">
-                <i class="fas fa-users" aria-hidden="true"></i>
-                <span>المجموعات</span>
-            </button>
-            <button class="nav-item" onclick="navigateTo('permissions')" aria-label="الصلاحيات">
-                <i class="fas fa-lock" aria-hidden="true"></i>
-                <span>الصلاحيات</span>
-            </button>
-            <!-- أزرار التقارير الأربعة -->
-            <button class="nav-item report-item" onclick="openReport('user-activity')" aria-label="نشاط المستخدمين">
+        <nav class="bottom-nav" role="navigation" aria-label="تقارير عمليات المستخدمين">
+            <button class="nav-item report-item active" onclick="openReport('user-activity')" aria-label="تقرير نشاط المستخدمين">
                 <i class="fas fa-user-clock" aria-hidden="true"></i>
                 <span>النشاط</span>
             </button>
-            <button class="nav-item report-item" onclick="openReport('user-permissions')" aria-label="أذونات المستخدمين">
+            <button class="nav-item report-item" onclick="openReport('active-sessions')" aria-label="تقرير الجلسات النشطة">
+                <i class="fas fa-laptop" aria-hidden="true"></i>
+                <span>الجلسات</span>
+            </button>
+            <button class="nav-item report-item" onclick="openReport('user-permissions')" aria-label="تقرير أذونات المستخدمين">
                 <i class="fas fa-lock-open" aria-hidden="true"></i>
                 <span>الأذونات</span>
             </button>
-            <button class="nav-item report-item" onclick="openReport('login-audit')" aria-label="تسجيلات الدخول">
+            <button class="nav-item report-item" onclick="openReport('login-audit')" aria-label="تقرير تسجيلات الدخول">
                 <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
                 <span>الدخول</span>
             </button>
-            <button class="nav-item report-item" onclick="openReport('password-changes')" aria-label="تغييرات كلمة المرور">
+            <button class="nav-item report-item" onclick="openReport('password-changes')" aria-label="تقرير تغييرات كلمة المرور">
                 <i class="fas fa-key" aria-hidden="true"></i>
                 <span>كلمات المرور</span>
+            </button>
+            <button class="nav-item report-item" onclick="openReport('notifications')" aria-label="تقرير الإشعارات">
+                <i class="fas fa-bell" aria-hidden="true"></i>
+                <span>الإشعارات</span>
             </button>
         </nav>
 
@@ -1651,115 +1683,104 @@
         MODAL: إضافة / تعديل مستخدم
         ============================================================ -->
         <div class="modal-overlay" id="userModal" onclick="closeUserModal(event)" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
-            <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal user-form-modal" onclick="event.stopPropagation()">
                 <div class="modal-header">
-                    <h3 class="modal-title" id="userModalTitle">👤 إضافة مستخدم جديد</h3>
+                    <h3 class="modal-title" id="userModalTitle"><i class="fas fa-user-plus" aria-hidden="true"></i> إضافة مستخدم جديد</h3>
                     <button class="modal-close" onclick="closeUserModal()" aria-label="إغلاق النافذة">
                         <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
                 <form id="userForm" onsubmit="return false;">
                     <input type="hidden" id="editUserId" value="0">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="username">اسم المستخدم *</label>
-                            <input type="text" class="form-input" id="username" placeholder="أدخل اسم المستخدم" required>
+
+                    <section class="modal-section">
+                        <h4 class="modal-section-title"><i class="fas fa-id-card" aria-hidden="true"></i>البيانات الأساسية</h4>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label" for="username">اسم المستخدم *</label><input type="text" class="form-input" id="username" required autocomplete="username"></div>
+                            <div class="form-group"><label class="form-label" for="fullName">الاسم الكامل *</label><input type="text" class="form-input" id="fullName" required></div>
+                            <div class="form-group"><label class="form-label" for="fullNameAr">الاسم الكامل بالعربية</label><input type="text" class="form-input" id="fullNameAr"></div>
+                            <div class="form-group"><label class="form-label" for="displayName">اسم العرض</label><input type="text" class="form-input" id="displayName"></div>
+                            <div class="form-group"><label class="form-label" for="email">البريد الإلكتروني</label><input type="email" class="form-input" id="email" autocomplete="email"></div>
+                            <div class="form-group"><label class="form-label" for="phone">الهاتف</label><input type="tel" class="form-input" id="phone" autocomplete="tel"></div>
+                            <div class="form-group"><label class="form-label" for="nationalId">الرقم الوطني</label><input type="text" class="form-input" id="nationalId"></div>
+                            <div class="form-group"><label class="form-label" for="passportNumber">رقم جواز السفر</label><input type="text" class="form-input" id="passportNumber"></div>
+                            <div class="form-group"><label class="form-label" for="nationality">الجنسية</label><input type="text" class="form-input" id="nationality"></div>
+                            <div class="form-group"><label class="form-label" for="gender">الجنس</label><select class="form-input" id="gender"><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option></select></div>
+                            <div class="form-group"><label class="form-label" for="birthDate">تاريخ الميلاد</label><input type="date" class="form-input" id="birthDate"></div>
+                            <div class="form-group"><label class="form-label" for="hireDate">تاريخ التعيين</label><input type="date" class="form-input" id="hireDate"></div>
+                            <div class="form-group"><label class="form-label" for="employeeId">معرف الموظف المرتبط</label><input type="number" class="form-input" id="employeeId" min="1"></div>
+                            <div class="form-group"><label class="form-label" for="jobTitle">المسمى الوظيفي</label><input type="text" class="form-input" id="jobTitle"></div>
+                            <div class="form-group"><label class="form-label" for="department">القسم</label><input type="text" class="form-input" id="department"></div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="fullName">الاسم الكامل *</label>
-                            <input type="text" class="form-input" id="fullName" placeholder="الاسم الثلاثي" required>
+                    </section>
+
+                    <section class="modal-section">
+                        <h4 class="modal-section-title"><i class="fas fa-sitemap" aria-hidden="true"></i>الصلاحيات والارتباط التنظيمي</h4>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label" for="roleId">الدور *</label><select class="form-input" id="roleId" required><option value="">اختر الدور</option></select></div>
+                            <div class="form-group"><label class="form-label" for="stationId">المحطة</label><select class="form-input" id="stationId"><option value="">اختر المحطة</option></select></div>
+                            <div class="form-group"><label class="form-label" for="branchId">الفرع</label><input type="number" class="form-input" id="branchId" min="1"></div>
+                            <div class="form-group"><label class="form-label" for="companyId">الشركة</label><input type="number" class="form-input" id="companyId" min="1"></div>
+                            <div class="form-group"><label class="form-label" for="accountStatus">حالة الحساب *</label><select class="form-input" id="accountStatus"><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="locked">مقفل</option><option value="suspended">موقوف</option></select></div>
+                            <div class="form-group"><label class="form-label" for="statusReason">سبب الحالة</label><input type="text" class="form-input" id="statusReason"></div>
                         </div>
+                    </section>
+
+                    <section class="modal-section">
+                        <h4 class="modal-section-title"><i class="fas fa-sliders-h" aria-hidden="true"></i>التفضيلات والسياسات</h4>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label" for="preferredLanguage">اللغة</label><select class="form-input" id="preferredLanguage"><option value="ar">العربية</option><option value="en">English</option></select></div>
+                            <div class="form-group"><label class="form-label" for="theme">الثيم</label><select class="form-input" id="theme"><option value="light">فاتح</option><option value="dark">داكن</option></select></div>
+                            <div class="form-group"><label class="form-label" for="timezone">المنطقة الزمنية</label><input type="text" class="form-input" id="timezone" value="UTC"></div>
+                            <div class="form-group"><label class="form-label" for="dateFormat">تنسيق التاريخ</label><input type="text" class="form-input" id="dateFormat" value="YYYY-MM-DD"></div>
+                            <div class="form-group"><label class="form-label" for="passwordExpiryDays">مدة صلاحية كلمة المرور (أيام)</label><input type="number" class="form-input" id="passwordExpiryDays" min="1" value="90"></div>
+                            <div class="form-group"><label class="form-label" for="sessionTimeout">مهلة الجلسة (دقيقة)</label><input type="number" class="form-input" id="sessionTimeout" min="1" value="30"></div>
+                            <div class="form-group"><label class="form-label" for="deviceLimit">حد الأجهزة</label><input type="number" class="form-input" id="deviceLimit" min="1" value="3"></div>
+                            <div class="form-group"><label class="form-label" for="twoFactorMethod">طريقة المصادقة الثنائية</label><select class="form-input" id="twoFactorMethod"><option value="none">غير مفعلة</option><option value="sms">رسالة SMS</option><option value="email">البريد الإلكتروني</option><option value="totp">تطبيق المصادقة</option></select></div>
+                            <div class="form-group"><label class="form-label" for="biometricType">نوع المصادقة البيومترية</label><select class="form-input" id="biometricType"><option value="none">غير محدد</option><option value="fingerprint">بصمة</option><option value="face">وجه</option><option value="iris">قزحية</option></select></div>
+                            <div class="form-group full-width"><div class="form-check-grid"><label class="form-check"><input type="checkbox" id="mustChangePassword"><span>إجبار تغيير كلمة المرور عند أول دخول</span></label><label class="form-check"><input type="checkbox" id="twoFactorEnabled"><span>تفعيل المصادقة الثنائية</span></label><label class="form-check"><input type="checkbox" id="biometricEnabled"><span>تفعيل المصادقة البيومترية</span></label><label class="form-check"><input type="checkbox" id="hasBiometrics"><span>لديه بيانات بيومترية مسجلة</span></label><label class="form-check"><input type="checkbox" id="emailVerified"><span>البريد الإلكتروني مؤكد</span></label><label class="form-check"><input type="checkbox" id="phoneVerified"><span>الهاتف مؤكد</span></label></div></div>
+                        </div>
+                    </section>
+
+                    <section class="modal-section">
+                        <h4 class="modal-section-title"><i class="fas fa-key" aria-hidden="true"></i>كلمة المرور</h4>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label" for="password">كلمة المرور <span id="passwordHint">(للإضافة فقط)</span></label><input type="password" class="form-input" id="password" autocomplete="new-password"></div>
+                            <div class="form-group"><label class="form-label" for="passwordConfirm">تأكيد كلمة المرور</label><input type="password" class="form-input" id="passwordConfirm" autocomplete="new-password"></div>
+                        </div>
+                        <small class="form-help">لا يتم عرض password_hash أو password_salt أو otp_secret أو مفاتيح WebAuthn في WebView. يتم توليدها وإدارتها داخل طبقة Android فقط.</small>
+                    </section>
+
+                    <section class="modal-section">
+                        <h4 class="modal-section-title"><i class="fas fa-cogs" aria-hidden="true"></i>البيانات التقنية وسجل النظام</h4>
+                        <div class="form-grid">
+                            <div class="form-group"><label class="form-label" for="avatarPath">مسار الصورة</label><input type="text" class="form-input" id="avatarPath"></div>
+                            <div class="form-group"><label class="form-label" for="deviceId">معرف الجهاز</label><input type="text" class="form-input" id="deviceId"></div>
+                            <div class="form-group"><label class="form-label" for="lockedUntil">مقفل حتى</label><input type="datetime-local" class="form-input" id="lockedUntil"></div>
+                            <div class="form-group"><label class="form-label" for="passwordExpiryDate">انتهاء كلمة المرور</label><input type="datetime-local" class="form-input readonly-field" id="passwordExpiryDate" readonly></div>
+                            <div class="form-group"><label class="form-label" for="failedLoginAttempts">محاولات الدخول الفاشلة</label><input type="number" class="form-input readonly-field" id="failedLoginAttempts" readonly></div>
+                            <div class="form-group"><label class="form-label" for="lastPasswordChange">آخر تغيير كلمة مرور</label><input type="text" class="form-input readonly-field" id="lastPasswordChange" readonly></div>
+                            <div class="form-group"><label class="form-label" for="lastLoginAt">آخر تسجيل دخول</label><input type="text" class="form-input readonly-field" id="lastLoginAt" readonly></div>
+                            <div class="form-group"><label class="form-label" for="lastLoginIp">آخر عنوان IP</label><input type="text" class="form-input readonly-field" id="lastLoginIp" readonly></div>
+                            <div class="form-group"><label class="form-label" for="lastLoginDevice">آخر جهاز</label><input type="text" class="form-input readonly-field" id="lastLoginDevice" readonly></div>
+                            <div class="form-group"><label class="form-label" for="uuidField">UUID</label><input type="text" class="form-input readonly-field" id="uuidField" readonly></div>
+                            <div class="form-group"><label class="form-label" for="createdAt">تاريخ الإنشاء</label><input type="text" class="form-input readonly-field" id="createdAt" readonly></div>
+                            <div class="form-group"><label class="form-label" for="updatedAt">آخر تحديث</label><input type="text" class="form-input readonly-field" id="updatedAt" readonly></div>
+                            <div class="form-group"><label class="form-label" for="deletedAt">تاريخ الأرشفة</label><input type="text" class="form-input readonly-field" id="deletedAt" readonly></div>
+                            <div class="form-group"><label class="form-label" for="syncStatus">حالة المزامنة</label><input type="text" class="form-input readonly-field" id="syncStatus" readonly></div>
+                            <div class="form-group"><label class="form-label" for="syncVersion">إصدار المزامنة</label><input type="number" class="form-input readonly-field" id="syncVersion" readonly></div>
+                            <div class="form-group"><label class="form-label" for="syncAt">آخر مزامنة</label><input type="text" class="form-input readonly-field" id="syncAt" readonly></div>
+                            <div class="form-group full-width"><label class="form-label" for="extraData">بيانات إضافية JSON</label><textarea class="form-input" id="extraData" rows="3" placeholder="بيانات إضافية اختيارية بصيغة JSON"></textarea></div>
+                            <div class="form-group full-width"><label class="form-label" for="remarks">ملاحظات</label><textarea class="form-input" id="remarks" rows="3"></textarea></div>
+                        </div>
+                    </section>
+
+                    <div class="form-actions">
+                        <button type="button" class="submit-btn" onclick="saveUser()"><i class="fas fa-save" aria-hidden="true"></i> حفظ المستخدم</button>
+                        <button type="button" class="submit-btn secondary" onclick="closeUserModal()"><i class="fas fa-times" aria-hidden="true"></i> إلغاء</button>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="email">البريد الإلكتروني *</label>
-                            <input type="email" class="form-input" id="email" placeholder="example@domain.com" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="phone">الهاتف *</label>
-                            <input type="tel" class="form-input" id="phone" placeholder="+967 7XX XXX XXX" required>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="password">كلمة المرور <span id="passwordHint">(للإضافة فقط)</span></label>
-                            <input type="password" class="form-input" id="password" placeholder="أدخل كلمة مرور">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="passwordConfirm">تأكيد كلمة المرور</label>
-                            <input type="password" class="form-input" id="passwordConfirm" placeholder="أعد إدخال كلمة المرور">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="roleId">الدور *</label>
-                            <select class="form-input" id="roleId" required>
-                                <option value="">اختر الدور</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="stationId">المحطة</label>
-                            <select class="form-input" id="stationId">
-                                <option value="">اختر المحطة</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="jobTitle">المسمى الوظيفي</label>
-                            <input type="text" class="form-input" id="jobTitle" placeholder="مدير، محاسب، ...">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="department">القسم</label>
-                            <input type="text" class="form-input" id="department" placeholder="المحطة، المالية، ...">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label" for="preferredLanguage">اللغة</label>
-                            <select class="form-input" id="preferredLanguage">
-                                <option value="ar">العربية</option>
-                                <option value="en">English</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="theme">الثيم</label>
-                            <select class="form-input" id="theme">
-                                <option value="light">فاتح</option>
-                                <option value="dark">داكن</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <div class="form-check">
-                                <input type="checkbox" id="isActive" checked>
-                                <label for="isActive">الحساب مفعل</label>
-                            </div>
-                            <div class="form-check">
-                                <input type="checkbox" id="mustChangePassword">
-                                <label for="mustChangePassword">يجب تغيير كلمة المرور عند أول دخول</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <div class="form-check">
-                                <input type="checkbox" id="isLocked">
-                                <label for="isLocked">الحساب مقفل</label>
-                            </div>
-                            <div class="form-check">
-                                <input type="checkbox" id="twoFactorEnabled">
-                                <label for="twoFactorEnabled">تفعيل المصادقة الثنائية</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="remarks">ملاحظات</label>
-                        <textarea class="form-input" id="remarks" rows="2" placeholder="أي ملاحظات إضافية..."></textarea>
-                    </div>
-                    <button type="button" class="submit-btn" onclick="saveUser()">
-                        <i class="fas fa-save" aria-hidden="true"></i> حفظ المستخدم
-                    </button>
                 </form>
+
             </div>
         </div>
 
@@ -1840,21 +1861,10 @@
                 AUDITOR: 'auditor'
             };
 
-            let currentUserRole = ROLES.ADMIN;
+            let currentUserRole = null;
 
-            function hasPermission(action) {
-                if (currentUserRole === ROLES.ADMIN) return true;
-                if (currentUserRole === ROLES.MANAGER) {
-                    if (action === 'delete' || action === 'delete_user') return false;
-                    return true;
-                }
-                if (currentUserRole === ROLES.VIEWER) {
-                    return action === 'read' || action === 'view' || action === 'export';
-                }
-                if (currentUserRole === ROLES.AUDITOR) {
-                    return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
-                }
-                return false;
+            function hasPermission(_action) {
+                return true; // التفويض النهائي يتم داخل Typed Bridge وcheckPermission في Android
             }
 
             function requirePermission(action) {
@@ -1865,88 +1875,90 @@
                 return true;
             }
 
-            /* ============================================================
-               1. API Call – جسر حقيقي مع DatabaseHelper.kt
+                        /* ============================================================
+               1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
                ============================================================ */
+            function parseBridgeResponse(raw) {
+                if (raw && typeof raw === 'object') return raw;
+                if (typeof raw !== 'string') return { success: false, error: 'استجابة الجسر غير صالحة' };
+                try { return JSON.parse(raw); } catch (e) {
+                    return { success: false, error: 'تعذر تحليل استجابة قاعدة البيانات' };
+                }
+            }
+
+            const BridgeContracts = {
+                getUsers: () => window.AndroidInterface.getUsers(),
+                getRoles: () => window.AndroidInterface.getRoles(),
+                getStations: () => window.AndroidInterface.getStations(),
+                getEmployees: () => window.AndroidInterface.getEmployees(),
+                getGroups: () => window.AndroidInterface.getGroups(),
+                getPermissions: () => window.AndroidInterface.getPermissions(),
+                getScreens: () => window.AndroidInterface.getScreens(),
+                getModules: () => window.AndroidInterface.getModules(),
+                getUserPermissions: p => window.AndroidInterface.getUserPermissions(Number((p || {}).userId || (p || {}).user_id || 0)),
+                getUserSessions: p => window.AndroidInterface.getUserSessions(Number((p || {}).userId || (p || {}).user_id || 0)),
+                terminateSession: p => window.AndroidInterface.terminateSession(Number((p || {}).sessionId || (p || {}).session_id || 0)),
+                getUserActivityLog: p => window.AndroidInterface.getUserActivityLog(JSON.stringify(p || {})),
+                getUserNotifications: p => window.AndroidInterface.getUserNotifications(Number((p || {}).userId || (p || {}).user_id || 0)),
+                markNotificationRead: p => window.AndroidInterface.markNotificationRead(Number((p || {}).id || 0)),
+                getScreenPermissions: p => window.AndroidInterface.getScreenPermissions(Number((p || {}).screenId || (p || {}).screen_id || 0)),
+                addUser: p => window.AndroidInterface.addUser(JSON.stringify(p || {})),
+                updateUser: p => window.AndroidInterface.updateUser(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteUser: p => window.AndroidInterface.deleteUser(Number((p || {}).id || 0)),
+                addGroup: p => window.AndroidInterface.addGroup(JSON.stringify(p || {})),
+                updateGroup: p => window.AndroidInterface.updateGroup(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteGroup: p => window.AndroidInterface.deleteGroup(Number((p || {}).id || 0)),
+                addScreen: p => window.AndroidInterface.addScreen(JSON.stringify(p || {})),
+                updateScreen: p => window.AndroidInterface.updateScreen(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteScreen: p => window.AndroidInterface.deleteScreen(Number((p || {}).id || 0)),
+                addPermission: p => window.AndroidInterface.addPermission(JSON.stringify(p || {})),
+                updatePermission: p => window.AndroidInterface.updatePermission(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deletePermission: p => window.AndroidInterface.deletePermission(Number((p || {}).id || 0)),
+                grantUserPermission: p => window.AndroidInterface.grantUserPermission(JSON.stringify(p || {})),
+                getGrantedPermissions: () => window.AndroidInterface.getGrantedPermissions(),
+                revokeUserPermission: p => window.AndroidInterface.revokeUserPermission(Number((p || {}).upsId || (p || {}).id || 0)),
+                getSetting: p => window.AndroidInterface.getSetting(String((p || {}).key || '')),
+                setSetting: p => window.AndroidInterface.setSetting(String((p || {}).key || ''), String((p || {}).value || ''))
+            };
+
             function apiCall(action, params) {
                 return new Promise((resolve, reject) => {
-                    if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                        try {
-                            const jsonParams = JSON.stringify(params || {});
-                            const result = window.AndroidInterface.execute(action, jsonParams);
-                            try {
-                                const parsed = JSON.parse(result);
-                                resolve(parsed);
-                            } catch (e) {
-                                resolve({ success: true, data: result });
-                            }
-                        } catch (e) {
-                            reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
-                        }
-                    } else {
-                        // بيئة تطوير – عرض خطأ واضح
-                        console.warn('AndroidInterface غير موجود.');
-                        reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+                    if (!window.AndroidInterface) {
+                        reject({ success: false, error: 'الجسر غير متاح؛ شغّل الشاشة داخل تطبيق Android' });
+                        return;
+                    }
+                    const contract = BridgeContracts[action];
+                    if (typeof contract !== 'function') {
+                        reject({ success: false, error: 'العقد غير مدعوم في التطبيق: ' + action });
+                        return;
+                    }
+                    try {
+                        const result = parseBridgeResponse(contract(params || {}));
+                        if (result && result.success === false) reject(result); else resolve(result);
+                    } catch (e) {
+                        reject({ success: false, error: e && e.message ? e.message : 'فشل تنفيذ العملية عبر قاعدة البيانات' });
                     }
                 });
             }
-
             /* ============================================================
-               2. Local Storage (للتخزين المؤقت عند عدم الاتصال)
+               2. Runtime connectivity — لا يتم تخزين بيانات تجارية في WebView
                ============================================================ */
-            const LocalDB = {
-                prefix: 'fuel_station_',
-                set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                    catch (e) { return false; } },
-                get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
-                        JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
-                remove: function(key) { localStorage.removeItem(this.prefix + key); }
+            const RuntimeCache = {
+                set: () => false,
+                get: (_key, defaultValue) => defaultValue,
+                remove: () => undefined
             };
-
-            /* ============================================================
-               3. Offline / Online – مزامنة العمليات المعلقة
-               ============================================================ */
-            let isOnline = navigator.onLine;
-
+            let isOnline = true;
             function updateOnlineStatus() {
-                isOnline = navigator.onLine;
                 const banner = document.getElementById('offlineBanner');
-                if (!isOnline) {
-                    banner.classList.add('show');
-                    showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
-                } else {
-                    banner.classList.remove('show');
-                    showToast('✅ تم استعادة الاتصال', 'success');
-                    syncPendingOperations();
-                }
+                const bridgeAvailable = !!window.AndroidInterface;
+                if (banner) banner.classList.toggle('show', !bridgeAvailable);
+                if (!bridgeAvailable) showToast('قاعدة البيانات تتطلب تشغيل الشاشة داخل تطبيق Android', 'warning');
             }
             window.addEventListener('online', updateOnlineStatus);
             window.addEventListener('offline', updateOnlineStatus);
 
-            async function syncPendingOperations() {
-                if (!isOnline) return;
-                const pending = LocalDB.get('pending_ops', []);
-                if (pending.length === 0) return;
-                showLoading(true);
-                let ok = 0,
-                    fail = 0;
-                for (const op of pending) {
-                    try {
-                        const result = await apiCall(op.action, op.data);
-                        if (result.success) ok++;
-                        else fail++;
-                    } catch (e) { fail++; }
-                }
-                if (ok > 0) {
-                    const remaining = pending.slice(fail);
-                    LocalDB.set('pending_ops', remaining);
-                    showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
-                }
-                if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
-                showLoading(false);
-            }
-
-            /* ============================================================
+/* ============================================================
                4. Toast, Loading, Helpers
                ============================================================ */
             function showToast(message, type) {
@@ -2094,77 +2106,37 @@
                 showLoading(true);
                 try {
                     const [usersRes, rolesRes, stationsRes, groupsRes, permissionsRes] = await Promise.all([
-                        apiCall('getUsers', { limit: 1000 }),
+                        apiCall('getUsers', {}),
                         apiCall('getRoles', {}),
                         apiCall('getStations', {}),
                         apiCall('getGroups', {}),
                         apiCall('getPermissions', {})
                     ]);
-
-                    if (usersRes.success && usersRes.data) {
-                        allUsers = usersRes.data;
-                        LocalDB.set('users', allUsers);
-                    } else {
-                        allUsers = LocalDB.get('users', []);
-                    }
-
-                    if (rolesRes.success && rolesRes.data) {
-                        allRoles = rolesRes.data;
-                        LocalDB.set('roles', allRoles);
-                    } else {
-                        allRoles = LocalDB.get('roles', []);
-                    }
-
-                    if (stationsRes.success && stationsRes.data) {
-                        allStations = stationsRes.data;
-                        LocalDB.set('stations', allStations);
-                    } else {
-                        allStations = LocalDB.get('stations', []);
-                    }
-
-                    if (groupsRes.success && groupsRes.data) {
-                        allGroups = groupsRes.data;
-                        LocalDB.set('groups', allGroups);
-                    } else {
-                        allGroups = LocalDB.get('groups', []);
-                    }
-
-                    if (permissionsRes.success && permissionsRes.data) {
-                        allPermissions = permissionsRes.data;
-                        LocalDB.set('permissions', allPermissions);
-                    } else {
-                        allPermissions = LocalDB.get('permissions', []);
-                    }
-
-                    // تحديث دور المستخدم الحالي
-                    if (allUsers.length > 0) {
-                        const u = allUsers[0];
-                        const role = u.role_name || u.role || 'admin';
-                        if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
-                        else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
-                        else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
-                        else currentUserRole = ROLES.VIEWER;
-                    }
-
+                    const responses = [usersRes, rolesRes, stationsRes, groupsRes, permissionsRes];
+                    const failed = responses.find(r => !r || r.success !== true);
+                    if (failed) throw new Error(failed.error || failed.message || 'فشل تحميل بيانات إدارة المستخدمين');
+                    allUsers = Array.isArray(usersRes.data) ? usersRes.data : [];
+                    allRoles = Array.isArray(rolesRes.data) ? rolesRes.data : [];
+                    allStations = Array.isArray(stationsRes.data) ? stationsRes.data : [];
+                    allGroups = Array.isArray(groupsRes.data) ? groupsRes.data : [];
+                    allPermissions = Array.isArray(permissionsRes.data) ? permissionsRes.data : [];
                     populateDropdowns();
                     renderUsersTable();
                     renderGroupsTable();
                     populateUserSelect();
-                    showLoading(false);
                 } catch (e) {
-                    console.error('Load error:', e);
-                    // استخدام التخزين المحلي
-                    allUsers = LocalDB.get('users', []);
-                    allRoles = LocalDB.get('roles', []);
-                    allStations = LocalDB.get('stations', []);
-                    allGroups = LocalDB.get('groups', []);
-                    allPermissions = LocalDB.get('permissions', []);
+                    allUsers = [];
+                    allRoles = [];
+                    allStations = [];
+                    allGroups = [];
+                    allPermissions = [];
                     populateDropdowns();
                     renderUsersTable();
                     renderGroupsTable();
                     populateUserSelect();
+                    showToast(e.error || e.message || 'فشل تحميل البيانات من قاعدة البيانات', 'error');
+                } finally {
                     showLoading(false);
-                    showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
                 }
             }
 
@@ -2369,8 +2341,7 @@
                     .then(res => {
                         if (res.success && res.data) {
                             allGroups = res.data;
-                            LocalDB.set('groups', allGroups);
-                            renderGroupsTable();
+                                renderGroupsTable();
                             showToast('✅ تم تحديث المجموعات', 'success');
                         }
                     })
@@ -2424,72 +2395,27 @@
 
             function renderPermissionsDisplay(data) {
                 const container = document.getElementById('permissionsDisplay');
-                if (!data || data.length === 0) {
-                    container.innerHTML = `
-                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
-                            <i class="fas fa-lock-open" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
-                            لا توجد صلاحيات مباشرة لهذا المستخدم
-                        </div>
-                    `;
+                if (!Array.isArray(data) || data.length === 0) {
+                    container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-lock-open" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>لا توجد صلاحيات لهذا المستخدم</div>`;
                     return;
                 }
-
                 const direct = data.filter(p => p.source === 'direct');
-                const fromGroups = data.filter(p => p.source === 'group');
-
-                let html = `
-                    <div style="font-weight:700;margin:12px 0 6px;color:var(--ruby);">صلاحيات مباشرة</div>
-                    <div class="table-wrapper" style="margin:0 0 12px 0;">
-                        <table>
-                            <thead><tr><th>الصلاحية</th><th>الشاشة</th><th>تاريخ المنح</th><th>تاريخ الانتهاء</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
-                            <tbody>
-                `;
-                if (direct.length === 0) {
-                    html += `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات مباشرة</td></tr>`;
-                } else {
-                    direct.forEach(p => {
-                        const status = p.is_active ? 'نشطة' : 'منتهية';
-                        const statusClass = p.is_active ? 'active' : 'inactive';
-                        html += `
-                            <tr>
-                                <td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td>
-                                <td>${escapeHtml(p.screen_name || p.module || '---')}</td>
-                                <td>${p.granted_at || '---'}</td>
-                                <td>${p.expires_at || '---'}</td>
-                                <td><span class="status-badge ${statusClass}">${status}</span></td>
-                                <td class="table-actions">
-                                    ${hasPermission('update') ? `<button class="action-btn danger" onclick="revokePermission(${p.ups_id})" title="سحب الصلاحية"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-                html += `</tbody></table></div>`;
-
-                html += `
-                    <div style="font-weight:700;margin:12px 0 6px;color:var(--cobalt);">صلاحيات من المجموعات</div>
-                    <div class="table-wrapper" style="margin:0 0 12px 0;">
-                        <table>
-                            <thead><tr><th>الصلاحية</th><th>الشاشة</th><th>المجموعة</th><th>تاريخ المنح</th></tr></thead>
-                            <tbody>
-                `;
-                if (fromGroups.length === 0) {
-                    html += `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات من مجموعات</td></tr>`;
-                } else {
-                    fromGroups.forEach(p => {
-                        html += `
-                            <tr>
-                                <td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td>
-                                <td>${escapeHtml(p.screen_name || p.module || '---')}</td>
-                                <td>${escapeHtml(p.group_name || '---')}</td>
-                                <td>${p.granted_at || '---'}</td>
-                            </tr>
-                        `;
-                    });
-                }
-                html += `</tbody></table></div>`;
-
-                container.innerHTML = html;
+                const inherited = data.filter(p => p.source === 'role');
+                const renderRows = items => items.length ? items.map(p => `
+                    <tr>
+                        <td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td>
+                        <td>${escapeHtml(p.module || '---')}</td>
+                        <td>${escapeHtml(p.action || '---')}</td>
+                        <td>${p.granted_at || p.set_at || '---'}</td>
+                        <td><span class="status-badge ${p.is_active === false ? 'inactive' : 'active'}">${p.is_active === false ? 'غير نشطة' : 'نشطة'}</span></td>
+                        <td class="table-actions">${p.source === 'direct' && p.user_permission_id ? `<button class="action-btn danger" onclick="revokePermission(${p.user_permission_id})" title="سحب الصلاحية"><i class="fas fa-trash" aria-hidden="true"></i></button>` : '—'}</td>
+                    </tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">لا توجد سجلات</td></tr>`;
+                container.innerHTML = `
+                    <div style="font-weight:700;margin:12px 0 6px;color:var(--ruby);">الصلاحيات المباشرة</div>
+                    <div class="table-wrapper" style="margin:0 0 12px 0;"><table><thead><tr><th>الصلاحية</th><th>الوحدة</th><th>الإجراء</th><th>تاريخ المنح</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${renderRows(direct)}</tbody></table></div>
+                    <div style="font-weight:700;margin:12px 0 6px;color:var(--cobalt);">الصلاحيات الموروثة من الدور</div>
+                    <div class="table-wrapper" style="margin:0;"><table><thead><tr><th>الصلاحية</th><th>الوحدة</th><th>الإجراء</th><th>المصدر</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody>${inherited.length ? inherited.map(p => `
+                        <tr><td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td><td>${escapeHtml(p.module || '---')}</td><td>${escapeHtml(p.action || '---')}</td><td>الدور</td><td><span class="status-badge active">نشطة</span></td><td>—</td></tr>`).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">لا توجد صلاحيات موروثة</td></tr>`}</tbody></table></div>`;
             }
 
             function refreshPermissions() {
@@ -2534,18 +2460,35 @@
             /* ============================================================
                13. CRUD: Users (Add, Edit, Delete, View) – حقيقي
                ============================================================ */
+            function setUserField(id, value) {
+                const element = document.getElementById(id);
+                if (element) element.value = value === null || value === undefined ? '' : String(value);
+            }
+
+            function setUserCheck(id, value) {
+                const element = document.getElementById(id);
+                if (element) element.checked = Number(value) === 1 || value === true;
+            }
+
             function openAddUserModal() {
                 if (!requirePermission('create')) return;
-                document.getElementById('userModalTitle').textContent = '👤 إضافة مستخدم جديد';
+                document.getElementById('userModalTitle').innerHTML = '<i class="fas fa-user-plus" aria-hidden="true"></i> إضافة مستخدم جديد';
                 document.getElementById('editUserId').value = '0';
                 document.getElementById('userForm').reset();
-                document.getElementById('passwordHint').textContent = '(للإضافة فقط)';
+                document.getElementById('username').readOnly = false;
+                document.getElementById('passwordHint').textContent = '(مطلوبة للإضافة)';
                 document.getElementById('password').required = true;
                 document.getElementById('passwordConfirm').required = true;
-                document.getElementById('isActive').checked = true;
-                document.getElementById('isLocked').checked = false;
-                document.getElementById('mustChangePassword').checked = false;
-                document.getElementById('twoFactorEnabled').checked = false;
+                setUserField('accountStatus', 'active');
+                setUserField('timezone', 'UTC');
+                setUserField('dateFormat', 'YYYY-MM-DD');
+                setUserField('passwordExpiryDays', 90);
+                setUserField('sessionTimeout', 30);
+                setUserField('deviceLimit', 3);
+                setUserField('twoFactorMethod', 'none');
+                setUserField('biometricType', 'none');
+                ['mustChangePassword', 'twoFactorEnabled', 'biometricEnabled', 'hasBiometrics', 'emailVerified', 'phoneVerified'].forEach(id => setUserCheck(id, false));
+                ['passwordExpiryDate', 'failedLoginAttempts', 'lastPasswordChange', 'lastLoginAt', 'lastLoginIp', 'lastLoginDevice', 'uuidField', 'createdAt', 'updatedAt', 'deletedAt', 'syncStatus', 'syncVersion', 'syncAt'].forEach(id => setUserField(id, ''));
                 document.getElementById('userModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
@@ -2561,159 +2504,147 @@
                 const user = allUsers.find(u => (u.id || u.user_id) == id);
                 if (!user) { showToast('❌ المستخدم غير موجود', 'error'); return; }
 
-                document.getElementById('userModalTitle').textContent = '✏️ تعديل مستخدم';
+                document.getElementById('userModalTitle').innerHTML = '<i class="fas fa-user-edit" aria-hidden="true"></i> تعديل مستخدم';
                 document.getElementById('editUserId').value = id;
-                document.getElementById('username').value = user.username || '';
-                document.getElementById('fullName').value = user.full_name || '';
-                document.getElementById('email').value = user.email || '';
-                document.getElementById('phone').value = user.phone || '';
-                document.getElementById('roleId').value = user.role_id || user.roleId || '';
-                document.getElementById('stationId').value = user.station_id || user.stationId || '';
-                document.getElementById('jobTitle').value = user.job_title || '';
-                document.getElementById('department').value = user.department || '';
-                document.getElementById('preferredLanguage').value = user.preferred_language || 'ar';
-                document.getElementById('theme').value = user.theme || 'light';
-                document.getElementById('remarks').value = user.remarks || '';
-                document.getElementById('isActive').checked = user.status === 'active';
-                document.getElementById('isLocked').checked = user.status === 'locked';
-                document.getElementById('mustChangePassword').checked = user.must_change_password == 1;
-                document.getElementById('twoFactorEnabled').checked = user.two_factor_enabled == 1;
+                setUserField('username', user.username || '');
+                document.getElementById('username').readOnly = true;
+                setUserField('fullName', user.full_name || '');
+                setUserField('fullNameAr', user.full_name_ar || '');
+                setUserField('displayName', user.display_name || '');
+                setUserField('email', user.email || '');
+                setUserField('phone', user.phone || '');
+                setUserField('nationalId', user.national_id || '');
+                setUserField('passportNumber', user.passport_number || '');
+                setUserField('nationality', user.nationality || '');
+                setUserField('gender', user.gender || '');
+                setUserField('birthDate', user.birth_date || '');
+                setUserField('hireDate', user.hire_date || '');
+                setUserField('employeeId', user.employee_id || '');
+                setUserField('jobTitle', user.job_title || '');
+                setUserField('department', user.department || '');
+                setUserField('roleId', user.role_id || user.roleId || '');
+                setUserField('stationId', user.station_id || user.stationId || '');
+                setUserField('branchId', user.branch_id || '');
+                setUserField('companyId', user.company_id || '');
+                setUserField('accountStatus', user.status || 'active');
+                setUserField('statusReason', user.status_reason || '');
+                setUserField('preferredLanguage', user.preferred_language || 'ar');
+                setUserField('theme', user.theme || 'light');
+                setUserField('timezone', user.timezone || 'UTC');
+                setUserField('dateFormat', user.date_format || 'YYYY-MM-DD');
+                setUserField('passwordExpiryDays', user.password_expiry_days || 90);
+                setUserField('sessionTimeout', user.session_timeout || 30);
+                setUserField('deviceLimit', user.device_limit || 3);
+                setUserField('twoFactorMethod', user.two_factor_method || 'none');
+                setUserField('biometricType', user.biometric_type || 'none');
+                ['mustChangePassword', 'twoFactorEnabled', 'biometricEnabled', 'hasBiometrics', 'emailVerified', 'phoneVerified'].forEach(id => setUserCheck(id, user[id.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase())]));
+                setUserField('avatarPath', user.avatar_path || '');
+                setUserField('deviceId', user.device_id || '');
+                setUserField('lockedUntil', user.locked_until || '');
+                setUserField('passwordExpiryDate', user.password_expiry_date || '');
+                setUserField('failedLoginAttempts', user.failed_login_attempts || 0);
+                setUserField('lastPasswordChange', user.last_password_change || '');
+                setUserField('lastLoginAt', user.last_login_at || '');
+                setUserField('lastLoginIp', user.last_login_ip || '');
+                setUserField('lastLoginDevice', user.last_login_device || '');
+                setUserField('uuidField', user.uuid || '');
+                setUserField('createdAt', user.created_at || '');
+                setUserField('updatedAt', user.updated_at || '');
+                setUserField('deletedAt', user.deleted_at || '');
+                setUserField('syncStatus', user.sync_status || '');
+                setUserField('syncVersion', user.sync_version || '');
+                setUserField('syncAt', user.sync_at || '');
+                setUserField('extraData', user.extra_data || '');
+                setUserField('remarks', user.remarks || '');
                 document.getElementById('passwordHint').textContent = '(اتركها فارغة للإبقاء على القديمة)';
                 document.getElementById('password').required = false;
                 document.getElementById('passwordConfirm').required = false;
-                document.getElementById('password').value = '';
-                document.getElementById('passwordConfirm').value = '';
-
+                setUserField('password', '');
+                setUserField('passwordConfirm', '');
                 document.getElementById('userModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
 
             async function saveUser() {
-                const id = parseInt(document.getElementById('editUserId').value);
+                const id = Number(document.getElementById('editUserId').value || 0);
+                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
                 const username = document.getElementById('username').value.trim();
                 const fullName = document.getElementById('fullName').value.trim();
-                const email = document.getElementById('email').value.trim();
-                const phone = document.getElementById('phone').value.trim();
-                const roleId = document.getElementById('roleId').value;
+                const roleId = Number(document.getElementById('roleId').value || 0);
                 const password = document.getElementById('password').value;
                 const passwordConfirm = document.getElementById('passwordConfirm').value;
-
-                if (!username) { showToast('❌ اسم المستخدم مطلوب', 'error');
-                    document.getElementById('username').focus(); return; }
-                if (!fullName) { showToast('❌ الاسم الكامل مطلوب', 'error');
-                    document.getElementById('fullName').focus(); return; }
-                if (!email) { showToast('❌ البريد الإلكتروني مطلوب', 'error');
-                    document.getElementById('email').focus(); return; }
-                if (!phone) { showToast('❌ رقم الهاتف مطلوب', 'error');
-                    document.getElementById('phone').focus(); return; }
-                if (!roleId) { showToast('❌ يرجى اختيار دور', 'error');
-                    document.getElementById('roleId').focus(); return; }
-
-                if (id === 0) {
-                    if (!password) { showToast('❌ كلمة المرور مطلوبة للمستخدم الجديد', 'error');
-                        document.getElementById('password').focus(); return; }
-                    if (password !== passwordConfirm) { showToast('❌ كلمة المرور وتأكيدها غير متطابقين', 'error'); return; }
-                    if (password.length < 6) { showToast('❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error'); return; }
-                } else if (password) {
-                    if (password !== passwordConfirm) { showToast('❌ كلمة المرور وتأكيدها غير متطابقين', 'error'); return; }
-                    if (password.length < 6) { showToast('❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error'); return; }
-                }
-
+                if (!username || !fullName || !roleId) { showToast('اسم المستخدم والاسم الكامل والدور مطلوبة', 'error'); return; }
+                if (id === 0 && !password) { showToast('كلمة المرور مطلوبة للمستخدم الجديد', 'error'); return; }
+                if (password && (password.length < 6 || password !== passwordConfirm)) { showToast('تحقق من كلمة المرور وتأكيدها؛ الحد الأدنى 6 أحرف', 'error'); return; }
+                const extraData = document.getElementById('extraData').value.trim();
+                if (extraData) { try { JSON.parse(extraData); } catch (e) { showToast('البيانات الإضافية يجب أن تكون JSON صحيحة', 'error'); return; } }
                 const data = {
-                    id: id || 0,
-                    username: username,
-                    full_name: fullName,
-                    email: email,
-                    phone: phone,
-                    role_id: parseInt(roleId),
-                    station_id: document.getElementById('stationId').value ? parseInt(document.getElementById('stationId')
-                        .value) : null,
-                    job_title: document.getElementById('jobTitle').value.trim(),
-                    department: document.getElementById('department').value.trim(),
+                    username, full_name: fullName,
+                    email: document.getElementById('email').value.trim(),
+                    phone: document.getElementById('phone').value.trim(),
+                    role_id: roleId,
+                    station_id: document.getElementById('stationId').value ? Number(document.getElementById('stationId').value) : null,
+                    full_name_ar: document.getElementById('fullNameAr').value.trim(),
+                    display_name: document.getElementById('displayName').value.trim(),
+                    avatar_path: document.getElementById('avatarPath').value.trim(),
+                    national_id: document.getElementById('nationalId').value.trim(),
+                    passport_number: document.getElementById('passportNumber').value.trim(),
+                    nationality: document.getElementById('nationality').value.trim(),
+                    gender: document.getElementById('gender').value || null,
+                    birth_date: document.getElementById('birthDate').value || null,
+                    hire_date: document.getElementById('hireDate').value || null,
+                    employee_id: document.getElementById('employeeId').value ? Number(document.getElementById('employeeId').value) : null,
+                    branch_id: document.getElementById('branchId').value ? Number(document.getElementById('branchId').value) : null,
+                    company_id: document.getElementById('companyId').value ? Number(document.getElementById('companyId').value) : null,
+                    status: document.getElementById('accountStatus').value,
+                    status_reason: document.getElementById('statusReason').value.trim(),
                     preferred_language: document.getElementById('preferredLanguage').value,
                     theme: document.getElementById('theme').value,
-                    remarks: document.getElementById('remarks').value.trim(),
-                    status: document.getElementById('isActive').checked ? 'active' : (document.getElementById('isLocked')
-                        .checked ? 'locked' : 'inactive'),
+                    timezone: document.getElementById('timezone').value.trim() || 'UTC',
+                    date_format: document.getElementById('dateFormat').value.trim() || 'YYYY-MM-DD',
                     must_change_password: document.getElementById('mustChangePassword').checked ? 1 : 0,
-                    two_factor_enabled: document.getElementById('twoFactorEnabled').checked ? 1 : 0
+                    two_factor_enabled: document.getElementById('twoFactorEnabled').checked ? 1 : 0,
+                    two_factor_method: document.getElementById('twoFactorMethod').value,
+                    biometric_enabled: document.getElementById('biometricEnabled').checked ? 1 : 0,
+                    biometric_type: document.getElementById('biometricType').value,
+                    has_biometrics: document.getElementById('hasBiometrics').checked ? 1 : 0,
+                    email_verified: document.getElementById('emailVerified').checked ? 1 : 0,
+                    phone_verified: document.getElementById('phoneVerified').checked ? 1 : 0,
+                    password_expiry_date: document.getElementById('passwordExpiryDate').value || null,
+                    password_expiry_days: Number(document.getElementById('passwordExpiryDays').value || 90),
+                    session_timeout: Number(document.getElementById('sessionTimeout').value || 30),
+                    device_limit: Number(document.getElementById('deviceLimit').value || 3),
+                    locked_until: document.getElementById('lockedUntil').value || null,
+                    device_id: document.getElementById('deviceId').value.trim(),
+                    remarks: document.getElementById('remarks').value.trim(),
+                    extra_data: extraData
                 };
                 if (password) data.password = password;
-
                 showLoading(true);
                 try {
-                    const action = id > 0 ? 'updateUser' : 'addUser';
-                    const result = await apiCall(action, data);
-                    if (result.success) {
-                        showToast(result.message || '✅ تم حفظ المستخدم بنجاح', 'success');
-                        closeUserModal();
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحفظ');
-                    }
+                    const result = await apiCall(id > 0 ? 'updateUser' : 'addUser', data);
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل حفظ المستخدم');
+                    showToast(result.message || 'تم حفظ المستخدم', 'success');
+                    closeUserModal();
+                    await loadAllData();
                 } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: id > 0 ? 'updateUser' :
-                                'addUser', data }]);
-                        if (id > 0) {
-                            const idx = allUsers.findIndex(u => (u.id || u.user_id) == id);
-                            if (idx >= 0) allUsers[idx] = { ...allUsers[idx], ...data };
-                        } else {
-                            allUsers.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
-                        }
-                        LocalDB.set('users', allUsers);
-                        showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
-                        closeUserModal();
-                        renderUsersTable();
-                        populateUserSelect();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    showToast(e.error || e.message || 'فشل حفظ المستخدم في قاعدة البيانات', 'error');
+                } finally { showLoading(false); }
             }
 
             async function deleteUser(id) {
                 if (!requirePermission('delete')) return;
-                const user = allUsers.find(u => (u.id || u.user_id) == id);
-                const name = user ? (user.full_name || user.username || 'هذا المستخدم') : 'هذا المستخدم';
-
-                const confirmed = await Swal.fire({
-                    title: '⚠️ هل أنت متأكد؟',
-                    text: 'سيتم حذف المستخدم "' + name + '" نهائياً!',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#b31b3a',
-                    cancelButtonColor: '#5a5a7a',
-                    confirmButtonText: 'نعم، احذف',
-                    cancelButtonText: 'إلغاء'
-                });
+                const user = allUsers.find(u => Number(u.id || u.user_id) === Number(id));
+                const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: `سيتم أرشفة المستخدم ${user ? (user.full_name || user.username) : ''}`, icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
-
                 showLoading(true);
                 try {
-                    const result = await apiCall('deleteUser', { id });
-                    if (result.success) {
-                        showToast('✅ تم حذف المستخدم بنجاح', 'success');
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحذف');
-                    }
-                } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteUser', data: { id } }]);
-                        allUsers = allUsers.filter(u => (u.id || u.user_id) != id);
-                        LocalDB.set('users', allUsers);
-                        showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
-                        renderUsersTable();
-                        populateUserSelect();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    const result = await apiCall('deleteUser', { id: Number(id) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل أرشفة المستخدم');
+                    showToast(result.message || 'تمت أرشفة المستخدم', 'success');
+                    await loadAllData();
+                } catch (e) { showToast(e.error || e.message || 'فشل أرشفة المستخدم في قاعدة البيانات', 'error'); }
+                finally { showLoading(false); }
             }
 
             function viewUser(id) {
@@ -2739,7 +2670,12 @@
                             <strong>آخر تسجيل دخول:</strong> ${user.last_login_at ? new Date(user.last_login_at).toLocaleString('ar') : '---'}<br>
                             <strong>المصادقة الثنائية:</strong> ${user.two_factor_enabled ? 'مفعلة' : 'غير مفعلة'}<br>
                             <strong>البصمة:</strong> ${user.biometric_enabled ? 'مفعلة' : 'غير مفعلة'}<br>
-                            ${user.remarks ? `<strong>ملاحظات:</strong> ${escapeHtml(user.remarks)}` : ''}
+                            ${user.remarks ? `<strong>ملاحظات:</strong> ${escapeHtml(user.remarks)}<br>` : ''}
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;">
+                                <button class="action-btn primary" onclick="openUserSessions(${id})"><i class="fas fa-laptop" aria-hidden="true"></i> الجلسات</button>
+                                <button class="action-btn primary" onclick="openUserActivity(${id})"><i class="fas fa-history" aria-hidden="true"></i> النشاط</button>
+                                <button class="action-btn primary" onclick="openUserNotifications(${id})"><i class="fas fa-bell" aria-hidden="true"></i> الإشعارات</button>
+                            </div>
                         </div>
                     `,
                     confirmButtonText: 'إغلاق',
@@ -2747,6 +2683,62 @@
                     background: document.documentElement.getAttribute('data-theme') === 'dark' ? '#1f1f3a' : '#fffcf7',
                     color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#e8e8f0' : '#1a1a2e'
                 });
+            }
+
+            async function openUserSessions(userId) {
+                showLoading(true);
+                try {
+                    const result = await apiCall('getUserSessions', { userId: Number(userId) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الجلسات');
+                    const rows = Array.isArray(result.data) ? result.data : [];
+                    const body = rows.length ? rows.map(s => `<tr><td>${escapeHtml(s.device_name || '---')}</td><td>${escapeHtml(s.device_type || '---')}</td><td>${escapeHtml(s.ip_address || '---')}</td><td>${s.login_at || '---'}</td><td>${s.last_activity_at || '---'}</td><td><button class="action-btn danger" onclick="terminateUserSession(${s.id}, ${userId})"><i class="fas fa-times" aria-hidden="true"></i> إنهاء</button></td></tr>`).join('') : '<tr><td colspan="6">لا توجد جلسات نشطة</td></tr>';
+                    await Swal.fire({ title: 'الجلسات النشطة', html: `<div class="table-wrapper"><table><thead><tr><th>الجهاز</th><th>النوع</th><th>IP</th><th>الدخول</th><th>آخر نشاط</th><th>الإجراء</th></tr></thead><tbody>${body}</tbody></table></div>`, width: '95%', confirmButtonText: 'إغلاق' });
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل الجلسات', 'error'); }
+                finally { showLoading(false); }
+            }
+
+            async function terminateUserSession(sessionId, userId) {
+                if (!requirePermission('update')) return;
+                const confirmed = await Swal.fire({ title: 'إنهاء الجلسة؟', icon: 'warning', showCancelButton: true, confirmButtonText: 'إنهاء', cancelButtonText: 'إلغاء' });
+                if (!confirmed.isConfirmed) return;
+                try {
+                    const result = await apiCall('terminateSession', { sessionId: Number(sessionId) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل إنهاء الجلسة');
+                    showToast(result.message || 'تم إنهاء الجلسة', 'success');
+                    await openUserSessions(userId);
+                } catch (e) { showToast(e.error || e.message || 'فشل إنهاء الجلسة', 'error'); }
+            }
+
+            async function openUserActivity(userId) {
+                showLoading(true);
+                try {
+                    const result = await apiCall('getUserActivityLog', { userId: Number(userId), limit: 100 });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل سجل النشاط');
+                    const rows = Array.isArray(result.data) ? result.data : [];
+                    const body = rows.length ? rows.map(a => `<tr><td>${a.created_at || '---'}</td><td>${escapeHtml(a.action || '---')}</td><td>${escapeHtml(a.description_ar || a.description || '---')}</td><td>${escapeHtml(a.is_success === 0 ? 'فشل' : 'نجاح')}</td></tr>`).join('') : '<tr><td colspan="4">لا يوجد نشاط مسجل</td></tr>';
+                    await Swal.fire({ title: 'سجل نشاط المستخدم', html: `<div class="table-wrapper"><table><thead><tr><th>التاريخ</th><th>الإجراء</th><th>الوصف</th><th>النتيجة</th></tr></thead><tbody>${body}</tbody></table></div>`, width: '95%', confirmButtonText: 'إغلاق' });
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل سجل النشاط', 'error'); }
+                finally { showLoading(false); }
+            }
+
+            async function openUserNotifications(userId) {
+                showLoading(true);
+                try {
+                    const result = await apiCall('getUserNotifications', { userId: Number(userId) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الإشعارات');
+                    const rows = Array.isArray(result.data) ? result.data : [];
+                    const body = rows.length ? rows.map(n => `<tr><td>${escapeHtml(n.title_ar || n.title || '---')}</td><td>${escapeHtml(n.message_ar || n.message || '---')}</td><td>${n.created_at || '---'}</td><td>${Number(n.is_read) === 1 ? 'مقروء' : `<button class="action-btn primary" onclick="markUserNotificationRead(${n.id}, ${userId})">تعيين كمقروء</button>`}</td></tr>`).join('') : '<tr><td colspan="4">لا توجد إشعارات</td></tr>';
+                    await Swal.fire({ title: 'إشعارات المستخدم', html: `<div class="table-wrapper"><table><thead><tr><th>العنوان</th><th>الرسالة</th><th>التاريخ</th><th>الحالة</th></tr></thead><tbody>${body}</tbody></table></div>`, width: '95%', confirmButtonText: 'إغلاق' });
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل الإشعارات', 'error'); }
+                finally { showLoading(false); }
+            }
+
+            async function markUserNotificationRead(notificationId, userId) {
+                try {
+                    const result = await apiCall('markNotificationRead', { id: Number(notificationId) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل تحديث الإشعار');
+                    await openUserNotifications(userId);
+                } catch (e) { showToast(e.error || e.message || 'فشل تحديث الإشعار', 'error'); }
             }
 
             /* ============================================================
@@ -2783,93 +2775,31 @@
             }
 
             async function saveGroup() {
-                const id = parseInt(document.getElementById('editGroupId').value);
+                const id = Number(document.getElementById('editGroupId').value || 0);
+                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
                 const name = document.getElementById('groupName').value.trim();
-                const description = document.getElementById('groupDescription').value.trim();
-                const isActive = document.getElementById('groupIsActive').checked ? 1 : 0;
-
-                if (!name) { showToast('❌ اسم المجموعة مطلوب', 'error');
-                    document.getElementById('groupName').focus(); return; }
-
-                const data = {
-                    id: id || 0,
-                    group_name: name,
-                    description: description,
-                    is_active: isActive
-                };
-
+                if (!name) { showToast('اسم المجموعة مطلوب', 'error'); return; }
+                const data = { group_name: name, description: document.getElementById('groupDescription').value.trim(), is_active: document.getElementById('groupIsActive').checked ? 1 : 0 };
                 showLoading(true);
                 try {
-                    const action = id > 0 ? 'updateGroup' : 'addGroup';
-                    const result = await apiCall(action, data);
-                    if (result.success) {
-                        showToast(result.message || '✅ تم حفظ المجموعة بنجاح', 'success');
-                        closeGroupModal();
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحفظ');
-                    }
-                } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: id > 0 ? 'updateGroup' :
-                                'addGroup', data }]);
-                        if (id > 0) {
-                            const idx = allGroups.findIndex(g => (g.id || g.group_id) == id);
-                            if (idx >= 0) allGroups[idx] = { ...allGroups[idx], ...data };
-                        } else {
-                            allGroups.push({ ...data, id: Date.now() });
-                        }
-                        LocalDB.set('groups', allGroups);
-                        showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
-                        closeGroupModal();
-                        renderGroupsTable();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    const result = await apiCall(id > 0 ? 'updateGroup' : 'addGroup', id > 0 ? { ...data, id } : data);
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل حفظ المجموعة');
+                    showToast(result.message || 'تم حفظ المجموعة', 'success'); closeGroupModal(); await loadAllData();
+                } catch (e) { showToast(e.error || e.message || 'فشل حفظ المجموعة في قاعدة البيانات', 'error'); }
+                finally { showLoading(false); }
             }
 
             async function deleteGroup(id) {
                 if (!requirePermission('delete')) return;
-                const group = allGroups.find(g => (g.id || g.group_id) == id);
-                const name = group ? (group.group_name || 'هذه المجموعة') : 'هذه المجموعة';
-
-                const confirmed = await Swal.fire({
-                    title: '⚠️ هل أنت متأكد؟',
-                    text: 'سيتم حذف المجموعة "' + name + '" نهائياً!',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#b31b3a',
-                    cancelButtonColor: '#5a5a7a',
-                    confirmButtonText: 'نعم، احذف',
-                    cancelButtonText: 'إلغاء'
-                });
+                const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: 'سيتم أرشفة المجموعة المحددة', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
-
                 showLoading(true);
                 try {
-                    const result = await apiCall('deleteGroup', { id });
-                    if (result.success) {
-                        showToast('✅ تم حذف المجموعة بنجاح', 'success');
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحذف');
-                    }
-                } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteGroup', data: { id } }]);
-                        allGroups = allGroups.filter(g => (g.id || g.group_id) != id);
-                        LocalDB.set('groups', allGroups);
-                        showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
-                        renderGroupsTable();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    const result = await apiCall('deleteGroup', { id: Number(id) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل أرشفة المجموعة');
+                    showToast(result.message || 'تمت أرشفة المجموعة', 'success'); await loadAllData();
+                } catch (e) { showToast(e.error || e.message || 'فشل أرشفة المجموعة في قاعدة البيانات', 'error'); }
+                finally { showLoading(false); }
             }
 
             function viewGroup(id) {
@@ -2963,16 +2893,18 @@
                 document.querySelectorAll('.bottom-nav .report-item').forEach(el => el.classList.remove('active'));
                 // تفعيل التقرير المحدد
                 const items = document.querySelectorAll('.bottom-nav .report-item');
-                const indexMap = { 'user-activity': 0, 'user-permissions': 1, 'login-audit': 2, 'password-changes': 3 };
+                const indexMap = { 'user-activity': 0, 'active-sessions': 1, 'user-permissions': 2, 'login-audit': 3, 'password-changes': 4, 'notifications': 5 };
                 if (indexMap[type] !== undefined) {
                     items[indexMap[type]].classList.add('active');
                 }
 
                 const titleMap = {
                     'user-activity': '📊 تقرير نشاط المستخدمين',
+                    'active-sessions': '📊 تقرير الجلسات النشطة',
                     'user-permissions': '📊 تقرير أذونات المستخدمين',
                     'login-audit': '📊 تقرير تسجيلات الدخول',
-                    'password-changes': '📊 تقرير تغييرات كلمة المرور'
+                    'password-changes': '📊 تقرير تغييرات كلمة المرور',
+                    'notifications': '📊 تقرير إشعارات المستخدمين'
                 };
                 document.getElementById('reportTitle').textContent = titleMap[type] || '📊 تقرير';
 
@@ -2985,28 +2917,35 @@
                 `;
 
                 showLoading(true);
-                // استدعاء API حقيقي لتوليد التقرير
-                apiCall('generateUserReport', { report_type: type })
-                    .then(res => {
-                        if (res.success && res.data) {
-                            renderReport(type, res.data);
-                        } else {
-                            container.innerHTML = `
-                                <div style="text-align:center;padding:20px;color:var(--text-muted);">
-                                    <i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
-                                    ${res.message || 'لا توجد بيانات لهذا التقرير'}
-                                </div>
-                            `;
-                        }
-                    })
+                const reportUsers = allUsers.filter(user => Number(user.id || user.user_id || 0) > 0);
+                const reportPromise = type === 'user-permissions'
+                    ? Promise.all(reportUsers.map(async user => {
+                        const userId = Number(user.id || user.user_id);
+                        const response = await apiCall('getUserPermissions', { userId });
+                        return { ...user, permissions: response.success && Array.isArray(response.data) ? response.data : [] };
+                    }))
+                    : type === 'active-sessions'
+                        ? Promise.all(reportUsers.map(async user => {
+                            const userId = Number(user.id || user.user_id);
+                            const response = await apiCall('getUserSessions', { userId });
+                            return (response.success && Array.isArray(response.data) ? response.data : []).map(item => ({ ...item, user_name: user.full_name || user.username, username: user.username }));
+                        })).then(groups => groups.flat())
+                        : type === 'notifications'
+                            ? Promise.all(reportUsers.map(async user => {
+                                const userId = Number(user.id || user.user_id);
+                                const response = await apiCall('getUserNotifications', { userId });
+                                return (response.success && Array.isArray(response.data) ? response.data : []).map(item => ({ ...item, user_name: user.full_name || user.username, username: user.username }));
+                            })).then(groups => groups.flat())
+                            : type === 'user-activity'
+                                ? Promise.all(reportUsers.map(async user => {
+                                    const userId = Number(user.id || user.user_id);
+                                    const response = await apiCall('getUserActivityLog', { userId, limit: 100 });
+                                    return (response.success && Array.isArray(response.data) ? response.data : []).map(item => ({ ...item, user_name: user.full_name || user.username, username: user.username }));
+                                })).then(groups => groups.flat())
+                                : Promise.resolve(allUsers);
+                reportPromise.then(data => renderReport(type, data))
                     .catch(err => {
-                        container.innerHTML = `
-                            <div style="text-align:center;padding:20px;color:var(--error);">
-                                <i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
-                                فشل تحميل التقرير
-                            </div>
-                        `;
-                        console.error(err);
+                        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--error);">${escapeHtml(err.error || err.message || 'فشل تحميل التقرير من قاعدة البيانات')}</div>`;
                     })
                     .finally(() => showLoading(false));
             }
@@ -3016,13 +2955,16 @@
                 let html = '';
 
                 switch (type) {
-                    case 'user-activity':
-                        let headersUA = ['#', 'اسم المستخدم', 'الاسم الكامل', 'عدد مرات الدخول', 'آخر دخول'];
-                        let rowsUA = data.map((item, idx) => [idx + 1, item.username || '---', item.full_name || '---',
-                            item.login_count || 0, item.last_login_at || '---'
-                        ]);
-                        html = buildTable('تقرير نشاط المستخدمين', headersUA, rowsUA);
+                    case 'user-activity': {
+                        const rowsUA = data.map((item, idx) => [idx + 1, escapeHtml(item.username || '---'), escapeHtml(item.user_name || '---'), escapeHtml(item.action || '---'), escapeHtml(item.description_ar || item.description || '---'), item.created_at || '---', Number(item.is_success) === 0 ? 'فشل' : 'نجاح']);
+                        html = buildTable('تقرير نشاط المستخدمين الفعلي', ['#', 'اسم المستخدم', 'الاسم الكامل', 'الإجراء', 'الوصف', 'التاريخ', 'النتيجة'], rowsUA);
                         break;
+                    }
+                    case 'active-sessions': {
+                        const rowsAS = data.map((item, idx) => [idx + 1, escapeHtml(item.user_name || item.username || '---'), escapeHtml(item.device_name || '---'), escapeHtml(item.device_type || '---'), escapeHtml(item.ip_address || '---'), item.login_at || '---', item.last_activity_at || '---']);
+                        html = buildTable('تقرير الجلسات النشطة', ['#', 'المستخدم', 'الجهاز', 'النوع', 'عنوان IP', 'وقت الدخول', 'آخر نشاط'], rowsAS);
+                        break;
+                    }
                     case 'user-permissions':
                         html =
                         `<h4 style="margin-bottom:8px;">تقرير أذونات المستخدمين</h4>`;
@@ -3048,36 +2990,21 @@
                             html += `</ul></div>`;
                         });
                         break;
-                    case 'login-audit':
-                        let headersLA = ['#', 'اسم المستخدم', 'الاسم الكامل', 'وقت الدخول', 'عنوان IP', 'الحالة'];
-                        let rowsLA = data.map((item, idx) => [idx + 1, item.username || '---', item.full_name || '---',
-                            item.login_time || '---', item.ip_address || '---', item.success ? 'ناجح' : 'فاشل'
-                        ]);
-                        html = buildTable('تقرير تسجيلات الدخول', headersLA, rowsLA);
+                    case 'login-audit': {
+                        const rowsLA = data.map((item, idx) => [idx + 1, escapeHtml(item.username || '---'), escapeHtml(item.full_name || '---'), item.last_login_at || '---', escapeHtml(item.last_login_device || '---'), escapeHtml(item.last_login_ip || '---'), escapeHtml(getStatusLabel(item.status))]);
+                        html = buildTable('تقرير آخر تسجيل دخول مخزن للمستخدمين', ['#', 'اسم المستخدم', 'الاسم الكامل', 'وقت الدخول', 'الجهاز', 'عنوان IP', 'الحالة'], rowsLA);
                         break;
-                    case 'password-changes':
-                        html =
-                        `<h4 style="margin-bottom:8px;">تقرير تغييرات كلمة المرور</h4>`;
-                        data.forEach(user => {
-                            const changes = user.changes || [];
-                            html += `
-                                <div style="background:var(--surface-color);border-radius:12px;padding:10px;margin-bottom:8px;border:var(--border-width) var(--border-style) var(--border-color);">
-                                    <div style="font-weight:700;color:var(--cobalt);">${escapeHtml(user.full_name || user.username || 'مستخدم')}</div>
-                                    <div style="font-size:0.8rem;color:var(--text-muted);">آخر تغيير: ${user.last_change || '---'}</div>
-                                    <ul style="list-style:none;padding:4px 0;margin:0;font-size:0.8rem;">
-                            `;
-                            if (changes.length === 0) {
-                                html += `<li style="color:var(--text-muted);">لا توجد تغييرات مسجلة</li>`;
-                            } else {
-                                changes.slice(0, 5).forEach(c => {
-                                    html += `<li style="padding:2px 0;border-bottom:1px dashed var(--border-color);">
-                                        ${c.change_date || '---'} – ${c.changed_by || 'نظام'}
-                                    </li>`;
-                                });
-                            }
-                            html += `</ul></div>`;
-                        });
+                    }
+                    case 'password-changes': {
+                        const rowsPC = data.map((item, idx) => [idx + 1, escapeHtml(item.username || '---'), escapeHtml(item.full_name || '---'), item.last_password_change || '---', Number(item.must_change_password) === 1 ? 'نعم' : 'لا', item.password_expiry_date || '---']);
+                        html = buildTable('تقرير حالة تغييرات كلمات المرور', ['#', 'اسم المستخدم', 'الاسم الكامل', 'آخر تغيير', 'يجب التغيير', 'تاريخ الانتهاء'], rowsPC);
                         break;
+                    }
+                    case 'notifications': {
+                        const rowsN = data.map((item, idx) => [idx + 1, escapeHtml(item.user_name || item.username || '---'), escapeHtml(item.title_ar || item.title || '---'), escapeHtml(item.message_ar || item.message || '---'), item.created_at || '---', Number(item.is_read) === 1 ? 'مقروء' : 'غير مقروء']);
+                        html = buildTable('تقرير إشعارات المستخدمين', ['#', 'المستخدم', 'العنوان', 'الرسالة', 'التاريخ', 'الحالة'], rowsN);
+                        break;
+                    }
                     default:
                         html = `<div style="text-align:center;padding:20px;color:var(--text-muted);">نوع تقرير غير معروف</div>`;
                 }
@@ -3209,7 +3136,7 @@
                18. AI Advisor (بسيط)
                ============================================================ */
             function openAIAdvisor() {
-                const insights = LocalDB.get('ai_user_insights', []);
+                const insights = [];
                 if (insights.length === 0) {
                     showToast('🤖 لا توجد توصيات حالياً', 'info');
                     return;
@@ -3231,7 +3158,7 @@
                19. Notifications (بسيطة)
                ============================================================ */
             function showNotifications() {
-                const alerts = LocalDB.get('user_notifications', []);
+                const alerts = [];
                 if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
                 let msg = 'الإشعارات:\n';
                 alerts.forEach(a => {

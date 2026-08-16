@@ -990,6 +990,21 @@
         .modal-overlay.show .modal {
             transform: translateY(0);
         }
+        .screen-form-modal { max-height: 94vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 -16px 48px rgba(0,0,0,.35); }
+        .screen-form-modal .modal-header { flex: 0 0 auto; margin: 0; padding: 18px 22px; color: #fff; background: linear-gradient(135deg, rgba(179,27,58,.96), rgba(26,58,107,.96)); }
+        .screen-form-modal .modal-title { color: #fff; font-size: 1.2rem; }
+        .screen-form-modal .modal-close { color: #fff; background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.3); }
+        .screen-form-modal form { flex: 1 1 auto; overflow-y: auto; padding: 20px 22px 24px; }
+        .screen-section { margin-bottom: 18px; padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-color); }
+        .screen-section-title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; color: var(--ruby); font-weight: 800; font-size: .95rem; }
+        .screen-section-title i { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--ruby-dim); }
+        .screen-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px 14px; }
+        .screen-grid .form-group { margin-bottom: 0; }
+        .screen-grid .full-width { grid-column: 1 / -1; }
+        .screen-form-modal .form-actions { position: sticky; bottom: -1px; display: flex; gap: 10px; padding-top: 16px; background: linear-gradient(to bottom, transparent, var(--surface-elevated) 22%); }
+        .screen-form-modal .form-actions .submit-btn { flex: 1; min-height: 46px; }
+        .readonly-field { opacity: .78; cursor: not-allowed; }
+        @media (max-width: 640px) { .screen-form-modal .modal-header, .screen-form-modal form { padding-left: 14px; padding-right: 14px; } .screen-section { padding: 12px; } .screen-grid { grid-template-columns: 1fr; } .screen-grid .full-width { grid-column: auto; } }
 
         .modal-header {
             display: flex;
@@ -1582,7 +1597,7 @@
         <!-- ============================================================
         FAB – زر رجوع إلى إدارة الصلاحيات
         ============================================================ -->
-        <button class="fab" onclick="window.location.href='file:///android_asset/screens/roles.html';" aria-label="رجوع إلى إدارة الصلاحيات" title="رجوع">
+        <button class="fab" onclick="window.location.href='roles.html';" aria-label="رجوع إلى إدارة الصلاحيات" title="رجوع">
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             <span class="sr-only">رجوع</span>
         </button>
@@ -1614,81 +1629,44 @@
         </nav>
 
         <!-- ============================================================
-        Bottom Navigation – أزرار سريعة للتبويبات (حجم خط مضاعف)
+        Bottom Navigation – تقارير عمليات الشاشات
         ============================================================ -->
-        <nav class="bottom-nav" role="navigation" aria-label="القائمة السفلية">
-            <button class="nav-item active" onclick="navigateTo('screens')" aria-label="قائمة الشاشات">
-                <i class="fas fa-list" aria-hidden="true"></i>
-                <span>الشاشات</span>
-            </button>
-            <button class="nav-item" onclick="navigateTo('add')" aria-label="إضافة شاشة">
-                <i class="fas fa-plus" aria-hidden="true"></i>
-                <span>إضافة</span>
-            </button>
-            <button class="nav-item" onclick="navigateTo('permissions')" aria-label="صلاحيات الشاشات">
-                <i class="fas fa-lock" aria-hidden="true"></i>
-                <span>صلاحيات</span>
-            </button>
-            <button class="nav-item" onclick="navigateTo('modules')" aria-label="وحدات الشاشات">
-                <i class="fas fa-cubes" aria-hidden="true"></i>
-                <span>وحدات</span>
-            </button>
+        <nav class="bottom-nav reports-bottom-nav" role="navigation" aria-label="تقارير عمليات الشاشات">
+            <button class="nav-item active" onclick="openReport('screen_operations')" aria-label="تقرير عمليات الشاشات"><i class="fas fa-desktop" aria-hidden="true"></i><span>عمليات الشاشات</span></button>
+            <button class="nav-item" onclick="openReport('modules')" aria-label="تقرير الوحدات"><i class="fas fa-cubes" aria-hidden="true"></i><span>الوحدات</span></button>
+            <button class="nav-item" onclick="openReport('screen_permissions')" aria-label="تقرير صلاحيات الشاشات"><i class="fas fa-lock" aria-hidden="true"></i><span>الصلاحيات</span></button>
+            <button class="nav-item" onclick="openReport('activity')" aria-label="تقرير نشاط الشاشات"><i class="fas fa-chart-line" aria-hidden="true"></i><span>النشاط</span></button>
         </nav>
 
         <!-- ============================================================
         MODAL: إضافة / تعديل شاشة
         ============================================================ -->
         <div class="modal-overlay" id="screenModal" onclick="closeScreenModal(event)" role="dialog" aria-modal="true" aria-labelledby="screenModalTitle">
-            <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal screen-form-modal" onclick="event.stopPropagation()">
                 <div class="modal-header">
-                    <h3 class="modal-title" id="screenModalTitle">➕ إضافة شاشة جديدة</h3>
-                    <button class="modal-close" onclick="closeScreenModal()" aria-label="إغلاق النافذة">
-                        <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
+                    <h3 class="modal-title" id="screenModalTitle"><i class="fas fa-desktop" aria-hidden="true"></i> إضافة شاشة جديدة</h3>
+                    <button class="modal-close" onclick="closeScreenModal()" aria-label="إغلاق النافذة"><i class="fas fa-times" aria-hidden="true"></i></button>
                 </div>
-                <form id="screenForm" onsubmit="return false;" class="perm-modal-form">
+                <form id="screenForm" onsubmit="return false;">
                     <input type="hidden" id="editScreenId" value="0">
-                    <div class="form-group">
-                        <label class="form-label" for="modalScreenName">اسم الشاشة *</label>
-                        <input type="text" class="form-input" id="modalScreenName" placeholder="مثال: dashboard" required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="modalScreenModule">الوحدة *</label>
-                        <select class="form-input" id="modalScreenModule" required>
-                            <option value="">اختر الوحدة</option>
-                            <option value="users">المستخدمين</option>
-                            <option value="reports">التقارير</option>
-                            <option value="settings">الإعدادات</option>
-                            <option value="permissions">الصلاحيات</option>
-                            <option value="inventory">المخزون</option>
-                            <option value="finance">المالية</option>
-                            <option value="parties">الجهات</option>
-                            <option value="sales">المبيعات</option>
-                            <option value="tanks">الخزانات</option>
-                            <option value="pumps">المضخات</option>
-                            <option value="vehicles">المركبات</option>
-                            <option value="drivers">السائقين</option>
-                            <option value="employees">الموظفين</option>
-                            <option value="maintenance">الصيانة</option>
-                            <option value="sms">الرسائل القصيرة</option>
-                            <option value="notifications">الإشعارات</option>
-                            <option value="audit">التدقيق</option>
-                            <option value="backup">النسخ الاحتياطي</option>
-                            <option value="sync">المزامنة</option>
-                            <option value="ai">الذكاء الاصطناعي</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label" for="modalScreenDescription">الوصف</label>
-                        <textarea class="form-input" id="modalScreenDescription" rows="2" placeholder="وصف الشاشة"></textarea>
-                    </div>
-                    <div class="form-check">
-                        <input type="checkbox" id="modalScreenIsActive" checked>
-                        <label for="modalScreenIsActive">الشاشة مفعلة</label>
-                    </div>
-                    <button type="button" class="submit-btn" onclick="saveScreen()">
-                        <i class="fas fa-save" aria-hidden="true"></i> حفظ الشاشة
-                    </button>
+                    <section class="screen-section">
+                        <h4 class="screen-section-title"><i class="fas fa-layer-group" aria-hidden="true"></i>بيانات الشاشة</h4>
+                        <div class="screen-grid">
+                            <div class="form-group"><label class="form-label" for="modalScreenName">اسم الشاشة *</label><input type="text" class="form-input" id="modalScreenName" placeholder="مثال: dashboard" required></div>
+                            <div class="form-group"><label class="form-label" for="modalScreenModule">الوحدة *</label><select class="form-input" id="modalScreenModule" required><option value="">اختر الوحدة</option><option value="users">المستخدمين</option><option value="reports">التقارير</option><option value="settings">الإعدادات</option><option value="permissions">الصلاحيات</option><option value="inventory">المخزون</option><option value="finance">المالية</option><option value="parties">الجهات</option><option value="sales">المبيعات</option><option value="tanks">الخزانات</option><option value="pumps">المضخات</option><option value="vehicles">المركبات</option><option value="drivers">السائقين</option><option value="employees">الموظفين</option><option value="maintenance">الصيانة</option><option value="sms">الرسائل القصيرة</option><option value="notifications">الإشعارات</option><option value="audit">التدقيق</option><option value="backup">النسخ الاحتياطي</option><option value="sync">المزامنة</option><option value="ai">الذكاء الاصطناعي</option></select></div>
+                            <div class="form-group full-width"><label class="form-label" for="modalScreenDescription">الوصف</label><textarea class="form-input" id="modalScreenDescription" rows="3" placeholder="وصف الشاشة ووظيفتها"></textarea></div>
+                            <div class="form-group full-width"><label class="form-check"><input type="checkbox" id="modalScreenIsActive" checked><span>الشاشة مفعلة</span></label></div>
+                        </div>
+                    </section>
+                    <section class="screen-section">
+                        <h4 class="screen-section-title"><i class="fas fa-database" aria-hidden="true"></i>البيانات النظامية</h4>
+                        <div class="screen-grid">
+                            <div class="form-group"><label class="form-label" for="modalScreenUuid">UUID</label><input type="text" class="form-input readonly-field" id="modalScreenUuid" readonly></div>
+                            <div class="form-group"><label class="form-label" for="modalScreenCreatedAt">تاريخ الإنشاء</label><input type="text" class="form-input readonly-field" id="modalScreenCreatedAt" readonly></div>
+                            <div class="form-group"><label class="form-label" for="modalScreenArchived">الأرشفة</label><input type="text" class="form-input readonly-field" id="modalScreenArchived" readonly value="غير مؤرشفة"></div>
+                        </div>
+                    </section>
+                    <div class="form-actions"><button type="button" class="submit-btn" onclick="saveScreen()"><i class="fas fa-save" aria-hidden="true"></i> حفظ الشاشة</button><button type="button" class="submit-btn secondary" onclick="closeScreenModal()"><i class="fas fa-times" aria-hidden="true"></i> إلغاء</button></div>
                 </form>
             </div>
         </div>
@@ -1738,21 +1716,10 @@
                 AUDITOR: 'auditor'
             };
 
-            let currentUserRole = ROLES.ADMIN;
+            let currentUserRole = null;
 
-            function hasPermission(action) {
-                if (currentUserRole === ROLES.ADMIN) return true;
-                if (currentUserRole === ROLES.MANAGER) {
-                    if (action === 'delete' || action === 'delete_user') return false;
-                    return true;
-                }
-                if (currentUserRole === ROLES.VIEWER) {
-                    return action === 'read' || action === 'view' || action === 'export';
-                }
-                if (currentUserRole === ROLES.AUDITOR) {
-                    return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
-                }
-                return false;
+            function hasPermission(_action) {
+                return true; // التفويض النهائي يتم داخل Typed Bridge وcheckPermission في Android
             }
 
             function requirePermission(action) {
@@ -1763,87 +1730,90 @@
                 return true;
             }
 
-            /* ============================================================
-               1. API Call – جسر حقيقي مع DatabaseHelper.kt
+                        /* ============================================================
+               1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
                ============================================================ */
+            function parseBridgeResponse(raw) {
+                if (raw && typeof raw === 'object') return raw;
+                if (typeof raw !== 'string') return { success: false, error: 'استجابة الجسر غير صالحة' };
+                try { return JSON.parse(raw); } catch (e) {
+                    return { success: false, error: 'تعذر تحليل استجابة قاعدة البيانات' };
+                }
+            }
+
+            const BridgeContracts = {
+                getUsers: () => window.AndroidInterface.getUsers(),
+                getRoles: () => window.AndroidInterface.getRoles(),
+                getStations: () => window.AndroidInterface.getStations(),
+                getEmployees: () => window.AndroidInterface.getEmployees(),
+                getGroups: () => window.AndroidInterface.getGroups(),
+                getPermissions: () => window.AndroidInterface.getPermissions(),
+                getScreens: () => window.AndroidInterface.getScreens(),
+                getModules: () => window.AndroidInterface.getModules(),
+                getUserPermissions: p => window.AndroidInterface.getUserPermissions(Number((p || {}).userId || (p || {}).user_id || 0)),
+                getUserSessions: p => window.AndroidInterface.getUserSessions(Number((p || {}).userId || (p || {}).user_id || 0)),
+                terminateSession: p => window.AndroidInterface.terminateSession(Number((p || {}).sessionId || (p || {}).session_id || 0)),
+                getUserActivityLog: p => window.AndroidInterface.getUserActivityLog(JSON.stringify(p || {})),
+                getUserNotifications: p => window.AndroidInterface.getUserNotifications(Number((p || {}).userId || (p || {}).user_id || 0)),
+                markNotificationRead: p => window.AndroidInterface.markNotificationRead(Number((p || {}).id || 0)),
+                getScreenPermissions: p => window.AndroidInterface.getScreenPermissions(Number((p || {}).screenId || (p || {}).screen_id || 0)),
+                addUser: p => window.AndroidInterface.addUser(JSON.stringify(p || {})),
+                updateUser: p => window.AndroidInterface.updateUser(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteUser: p => window.AndroidInterface.deleteUser(Number((p || {}).id || 0)),
+                addGroup: p => window.AndroidInterface.addGroup(JSON.stringify(p || {})),
+                updateGroup: p => window.AndroidInterface.updateGroup(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteGroup: p => window.AndroidInterface.deleteGroup(Number((p || {}).id || 0)),
+                addScreen: p => window.AndroidInterface.addScreen(JSON.stringify(p || {})),
+                updateScreen: p => window.AndroidInterface.updateScreen(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deleteScreen: p => window.AndroidInterface.deleteScreen(Number((p || {}).id || 0)),
+                addPermission: p => window.AndroidInterface.addPermission(JSON.stringify(p || {})),
+                updatePermission: p => window.AndroidInterface.updatePermission(Number((p || {}).id || 0), JSON.stringify(p || {})),
+                deletePermission: p => window.AndroidInterface.deletePermission(Number((p || {}).id || 0)),
+                grantUserPermission: p => window.AndroidInterface.grantUserPermission(JSON.stringify(p || {})),
+                getGrantedPermissions: () => window.AndroidInterface.getGrantedPermissions(),
+                revokeUserPermission: p => window.AndroidInterface.revokeUserPermission(Number((p || {}).upsId || (p || {}).id || 0)),
+                getSetting: p => window.AndroidInterface.getSetting(String((p || {}).key || '')),
+                setSetting: p => window.AndroidInterface.setSetting(String((p || {}).key || ''), String((p || {}).value || ''))
+            };
+
             function apiCall(action, params) {
                 return new Promise((resolve, reject) => {
-                    if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                        try {
-                            const jsonParams = JSON.stringify(params || {});
-                            const result = window.AndroidInterface.execute(action, jsonParams);
-                            try {
-                                const parsed = JSON.parse(result);
-                                resolve(parsed);
-                            } catch (e) {
-                                resolve({ success: true, data: result });
-                            }
-                        } catch (e) {
-                            reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
-                        }
-                    } else {
-                        console.warn('AndroidInterface غير موجود.');
-                        reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+                    if (!window.AndroidInterface) {
+                        reject({ success: false, error: 'الجسر غير متاح؛ شغّل الشاشة داخل تطبيق Android' });
+                        return;
+                    }
+                    const contract = BridgeContracts[action];
+                    if (typeof contract !== 'function') {
+                        reject({ success: false, error: 'العقد غير مدعوم في التطبيق: ' + action });
+                        return;
+                    }
+                    try {
+                        const result = parseBridgeResponse(contract(params || {}));
+                        if (result && result.success === false) reject(result); else resolve(result);
+                    } catch (e) {
+                        reject({ success: false, error: e && e.message ? e.message : 'فشل تنفيذ العملية عبر قاعدة البيانات' });
                     }
                 });
             }
-
             /* ============================================================
-               2. Local Storage (للتخزين المؤقت عند عدم الاتصال)
+               2. Runtime connectivity — لا يتم تخزين بيانات تجارية في WebView
                ============================================================ */
-            const LocalDB = {
-                prefix: 'fuel_station_',
-                set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                    catch (e) { return false; } },
-                get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
-                        JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
-                remove: function(key) { localStorage.removeItem(this.prefix + key); }
+            const RuntimeCache = {
+                set: () => false,
+                get: (_key, defaultValue) => defaultValue,
+                remove: () => undefined
             };
-
-            /* ============================================================
-               3. Offline / Online – مزامنة العمليات المعلقة
-               ============================================================ */
-            let isOnline = navigator.onLine;
-
+            let isOnline = true;
             function updateOnlineStatus() {
-                isOnline = navigator.onLine;
                 const banner = document.getElementById('offlineBanner');
-                if (!isOnline) {
-                    banner.classList.add('show');
-                    showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning');
-                } else {
-                    banner.classList.remove('show');
-                    showToast('✅ تم استعادة الاتصال', 'success');
-                    syncPendingOperations();
-                }
+                const bridgeAvailable = !!window.AndroidInterface;
+                if (banner) banner.classList.toggle('show', !bridgeAvailable);
+                if (!bridgeAvailable) showToast('قاعدة البيانات تتطلب تشغيل الشاشة داخل تطبيق Android', 'warning');
             }
             window.addEventListener('online', updateOnlineStatus);
             window.addEventListener('offline', updateOnlineStatus);
 
-            async function syncPendingOperations() {
-                if (!isOnline) return;
-                const pending = LocalDB.get('pending_ops', []);
-                if (pending.length === 0) return;
-                showLoading(true);
-                let ok = 0,
-                    fail = 0;
-                for (const op of pending) {
-                    try {
-                        const result = await apiCall(op.action, op.data);
-                        if (result.success) ok++;
-                        else fail++;
-                    } catch (e) { fail++; }
-                }
-                if (ok > 0) {
-                    const remaining = pending.slice(fail);
-                    LocalDB.set('pending_ops', remaining);
-                    showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
-                }
-                if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
-                showLoading(false);
-            }
-
-            /* ============================================================
+/* ============================================================
                4. Toast, Loading, Helpers
                ============================================================ */
             function showToast(message, type) {
@@ -1974,53 +1944,20 @@
             async function loadAllData() {
                 showLoading(true);
                 try {
-                    const [screensRes, modulesRes, permissionsRes] = await Promise.all([
-                        apiCall('getScreens', {}),
-                        apiCall('getModules', {}),
-                        apiCall('getPermissions', {})
-                    ]);
-
-                    if (screensRes.success && screensRes.data) {
-                        allScreens = screensRes.data;
-                        LocalDB.set('screens', allScreens);
-                    } else {
-                        allScreens = LocalDB.get('screens', []);
-                    }
-
-                    if (modulesRes.success && modulesRes.data) {
-                        allModules = modulesRes.data;
-                        LocalDB.set('modules', allModules);
-                    } else {
-                        allModules = LocalDB.get('modules', []);
-                    }
-
-                    if (permissionsRes.success && permissionsRes.data) {
-                        allPermissions = permissionsRes.data;
-                        LocalDB.set('permissions', allPermissions);
-                    } else {
-                        allPermissions = LocalDB.get('permissions', []);
-                    }
-
-                    renderScreensTable();
-                    renderModulesTable();
-                    populateScreenSelectForPermissions();
-                    showLoading(false);
+                    const [screensRes, modulesRes, permissionsRes] = await Promise.all([apiCall('getScreens', {}), apiCall('getModules', {}), apiCall('getPermissions', {})]);
+                    const failed = [screensRes, modulesRes, permissionsRes].find(r => !r || r.success !== true);
+                    if (failed) throw new Error(failed.error || failed.message || 'فشل تحميل بيانات الشاشات');
+                    allScreens = Array.isArray(screensRes.data) ? screensRes.data : [];
+                    allModules = Array.isArray(modulesRes.data) ? modulesRes.data : [];
+                    allPermissions = Array.isArray(permissionsRes.data) ? permissionsRes.data : [];
+                    renderScreensTable(); renderModulesTable(); populateScreenSelectForPermissions();
                 } catch (e) {
-                    console.error('Load error:', e);
-                    allScreens = LocalDB.get('screens', []);
-                    allModules = LocalDB.get('modules', []);
-                    allPermissions = LocalDB.get('permissions', []);
-                    renderScreensTable();
-                    renderModulesTable();
-                    populateScreenSelectForPermissions();
-                    showLoading(false);
-                    showToast('⚠️ تم تحميل البيانات من التخزين المحلي', 'warning');
-                }
+                    allScreens = []; allModules = []; allPermissions = [];
+                    renderScreensTable(); renderModulesTable(); populateScreenSelectForPermissions();
+                    showToast(e.error || e.message || 'فشل تحميل البيانات من قاعدة البيانات', 'error');
+                } finally { showLoading(false); }
             }
 
-            /* ============================================================
-               10. Screens Table (حقيقي)
-               ============================================================ */
             function renderScreensTable() {
                 let filtered = [...allScreens];
                 if (screenSearchQuery) {
@@ -2111,18 +2048,15 @@
                 renderScreensTable();
             }
 
-            function loadAllScreensData() {
-                apiCall('getScreens', {})
-                    .then(res => {
-                        if (res.success && res.data) {
-                            allScreens = res.data;
-                            LocalDB.set('screens', allScreens);
-                            renderScreensTable();
-                            populateScreenSelectForPermissions();
-                            showToast('✅ تم تحديث الشاشات', 'success');
-                        }
-                    })
-                    .catch(() => showToast('⚠️ فشل تحميل الشاشات', 'warning'));
+            async function loadAllScreensData() {
+                try {
+                    const res = await apiCall('getScreens', {});
+                    if (!res.success) throw new Error(res.error || res.message || 'فشل تحميل الشاشات');
+                    allScreens = Array.isArray(res.data) ? res.data : [];
+                    renderScreensTable();
+                    populateScreenSelectForPermissions();
+                    showToast('تم تحديث الشاشات', 'success');
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل الشاشات', 'error'); }
             }
 
             /* ============================================================
@@ -2156,17 +2090,14 @@
                 }).join('');
             }
 
-            function loadModulesData() {
-                apiCall('getModules', {})
-                    .then(res => {
-                        if (res.success && res.data) {
-                            allModules = res.data;
-                            LocalDB.set('modules', allModules);
-                            renderModulesTable();
-                            showToast('✅ تم تحديث الوحدات', 'success');
-                        }
-                    })
-                    .catch(() => showToast('⚠️ فشل تحميل الوحدات', 'warning'));
+            async function loadModulesData() {
+                try {
+                    const res = await apiCall('getModules', {});
+                    if (!res.success) throw new Error(res.error || res.message || 'فشل تحميل الوحدات');
+                    allModules = Array.isArray(res.data) ? res.data : [];
+                    renderModulesTable();
+                    showToast('تم تحديث الوحدات', 'success');
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل الوحدات', 'error'); }
             }
 
             /* ============================================================
@@ -2220,45 +2151,27 @@
 
             function renderScreenPermissions(data) {
                 const container = document.getElementById('screenPermissionsContent');
-                if (!data || data.length === 0) {
-                    container.innerHTML = `
-                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
-                            <i class="fas fa-lock-open" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>
-                            لا توجد صلاحيات مرتبطة بهذه الشاشة
-                        </div>
-                    `;
+                if (!Array.isArray(data) || data.length === 0) {
+                    container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-lock-open" style="font-size:2rem;display:block;margin-bottom:8px;" aria-hidden="true"></i>لا توجد صلاحيات مرتبطة بوحدة هذه الشاشة</div>`;
                     return;
                 }
-
-                let html = `
-                    <div class="table-wrapper" style="margin:0;">
-                        <table>
-                            <thead><tr><th>الصلاحية</th><th>الوصف</th><th>المجموعة</th><th>تاريخ الإنشاء</th></tr></thead>
-                            <tbody>
-                `;
-                data.forEach(p => {
-                    html += `
-                        <tr>
-                            <td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td>
-                            <td>${escapeHtml(p.description || '---')}</td>
-                            <td>${escapeHtml(p.group_name || '---')}</td>
-                            <td>${p.created_at || '---'}</td>
-                        </tr>
-                    `;
-                });
-                html += `</tbody></table></div>`;
-                container.innerHTML = html;
+                container.innerHTML = `<div class="table-wrapper" style="margin:0;"><table><thead><tr><th>الصلاحية</th><th>الوحدة</th><th>الإجراء</th><th>المصدر</th><th>تاريخ الإنشاء</th></tr></thead><tbody>${data.map(p => `<tr><td>${escapeHtml(p.permission_name || p.permission_code || '---')}</td><td>${escapeHtml(p.module || '---')}</td><td>${escapeHtml(p.action || '---')}</td><td>${escapeHtml(p.source || 'module')}</td><td>${p.created_at || '---'}</td></tr>`).join('')}</tbody></table></div>`;
             }
 
-            /* ============================================================
-               13. CRUD: Screens (Add, Edit, Delete, View) – حقيقي
-               ============================================================ */
+            function setScreenField(id, value) {
+                const element = document.getElementById(id);
+                if (element) element.value = value === null || value === undefined ? '' : String(value);
+            }
+
             function openAddScreenModal() {
                 if (!requirePermission('create')) return;
                 editingScreenId = 0;
-                document.getElementById('screenModalTitle').textContent = '➕ إضافة شاشة جديدة';
+                document.getElementById('screenModalTitle').innerHTML = '<i class="fas fa-desktop" aria-hidden="true"></i> إضافة شاشة جديدة';
                 document.getElementById('editScreenId').value = '0';
                 document.getElementById('screenForm').reset();
+                setScreenField('modalScreenUuid', '');
+                setScreenField('modalScreenCreatedAt', '');
+                setScreenField('modalScreenArchived', 'غير مؤرشفة');
                 document.getElementById('modalScreenIsActive').checked = true;
                 document.getElementById('screenModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
@@ -2276,70 +2189,36 @@
                 if (!screen) { showToast('❌ الشاشة غير موجودة', 'error'); return; }
 
                 editingScreenId = id;
-                document.getElementById('screenModalTitle').textContent = '✏️ تعديل شاشة';
+                document.getElementById('screenModalTitle').innerHTML = '<i class="fas fa-edit" aria-hidden="true"></i> تعديل شاشة';
                 document.getElementById('editScreenId').value = id;
-                document.getElementById('modalScreenName').value = screen.screen_name || '';
-                document.getElementById('modalScreenModule').value = screen.module || '';
-                document.getElementById('modalScreenDescription').value = screen.description || '';
-                document.getElementById('modalScreenIsActive').checked = screen.is_active !== undefined ? screen.is_active :
-                    true;
-
+                setScreenField('modalScreenName', screen.screen_name || '');
+                setScreenField('modalScreenModule', screen.module || '');
+                setScreenField('modalScreenDescription', screen.description || '');
+                setScreenField('modalScreenUuid', screen.uuid || '');
+                setScreenField('modalScreenCreatedAt', screen.created_at || '');
+                setScreenField('modalScreenArchived', Number(screen.archived) === 1 ? 'مؤرشفة' : 'غير مؤرشفة');
+                document.getElementById('modalScreenIsActive').checked = Number(screen.is_active) === 1 || screen.is_active === true;
                 document.getElementById('screenModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
 
             async function saveScreen() {
-                const id = parseInt(document.getElementById('editScreenId').value);
-                const name = document.getElementById('modalScreenName').value.trim();
-                const module = document.getElementById('modalScreenModule').value;
-                const description = document.getElementById('modalScreenDescription').value.trim();
-                const isActive = document.getElementById('modalScreenIsActive').checked ? 1 : 0;
-
-                if (!name) { showToast('❌ اسم الشاشة مطلوب', 'error');
-                    document.getElementById('modalScreenName').focus(); return; }
-                if (!module) { showToast('❌ الوحدة مطلوبة', 'error');
-                    document.getElementById('modalScreenModule').focus(); return; }
-
+                const id = Number(document.getElementById('editScreenId').value || 0);
+                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
                 const data = {
-                    id: id || 0,
-                    screen_name: name,
-                    module: module,
-                    description: description,
-                    is_active: isActive
+                    screen_name: document.getElementById('modalScreenName').value.trim(),
+                    module: document.getElementById('modalScreenModule').value,
+                    description: document.getElementById('modalScreenDescription').value.trim(),
+                    is_active: document.getElementById('modalScreenIsActive').checked ? 1 : 0
                 };
-
+                if (!data.screen_name || !data.module) { showToast('اسم الشاشة والوحدة مطلوبان', 'error'); return; }
                 showLoading(true);
                 try {
-                    const action = id > 0 ? 'updateScreen' : 'addScreen';
-                    const result = await apiCall(action, data);
-                    if (result.success) {
-                        showToast(result.message || '✅ تم حفظ الشاشة بنجاح', 'success');
-                        closeScreenModal();
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحفظ');
-                    }
-                } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: id > 0 ? 'updateScreen' :
-                                'addScreen', data }]);
-                        if (id > 0) {
-                            const idx = allScreens.findIndex(s => (s.id || s.screen_id) == id);
-                            if (idx >= 0) allScreens[idx] = { ...allScreens[idx], ...data };
-                        } else {
-                            allScreens.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
-                        }
-                        LocalDB.set('screens', allScreens);
-                        showToast('✅ تم الحفظ محلياً – سيتم المزامنة لاحقاً', 'success');
-                        closeScreenModal();
-                        renderScreensTable();
-                        populateScreenSelectForPermissions();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    const result = await apiCall(id > 0 ? 'updateScreen' : 'addScreen', id > 0 ? { ...data, id } : data);
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل حفظ الشاشة');
+                    showToast(result.message || 'تم حفظ الشاشة', 'success'); closeScreenModal(); await loadAllData();
+                } catch (e) { showToast(e.error || e.message || 'فشل حفظ الشاشة في قاعدة البيانات', 'error'); }
+                finally { showLoading(false); }
             }
 
             function addNewScreen() {
@@ -2355,44 +2234,15 @@
 
             async function deleteScreen(id) {
                 if (!requirePermission('delete')) return;
-                const screen = allScreens.find(s => (s.id || s.screen_id) == id);
-                const name = screen ? (screen.screen_name || 'هذه الشاشة') : 'هذه الشاشة';
-
-                const confirmed = await Swal.fire({
-                    title: '⚠️ هل أنت متأكد؟',
-                    text: 'سيتم حذف الشاشة "' + name + '" نهائياً!',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#b31b3a',
-                    cancelButtonColor: '#5a5a7a',
-                    confirmButtonText: 'نعم، احذف',
-                    cancelButtonText: 'إلغاء'
-                });
+                const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: 'سيتم أرشفة الشاشة المحددة', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
-
                 showLoading(true);
                 try {
-                    const result = await apiCall('deleteScreen', { id });
-                    if (result.success) {
-                        showToast('✅ تم حذف الشاشة بنجاح', 'success');
-                        await loadAllData();
-                    } else {
-                        throw new Error(result.message || 'فشل في الحذف');
-                    }
-                } catch (e) {
-                    if (!isOnline) {
-                        LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'deleteScreen', data: { id } }]);
-                        allScreens = allScreens.filter(s => (s.id || s.screen_id) != id);
-                        LocalDB.set('screens', allScreens);
-                        showToast('✅ تم الحذف محلياً – سيتم المزامنة لاحقاً', 'success');
-                        renderScreensTable();
-                        populateScreenSelectForPermissions();
-                    } else {
-                        showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                    }
-                } finally {
-                    showLoading(false);
-                }
+                    const result = await apiCall('deleteScreen', { id: Number(id) });
+                    if (!result.success) throw new Error(result.error || result.message || 'فشل أرشفة الشاشة');
+                    showToast(result.message || 'تمت أرشفة الشاشة', 'success'); await loadAllData();
+                } catch (e) { showToast(e.error || e.message || 'فشل أرشفة الشاشة في قاعدة البيانات', 'error'); }
+                finally { showLoading(false); }
             }
 
             function viewScreen(id) {
@@ -2421,7 +2271,48 @@
             }
 
             /* ============================================================
-               14. Navigation & Tab Switching
+               14. تقارير عمليات الشاشات
+               ============================================================ */
+            function screensReportTable(headers, rows) {
+                if (!rows.length) return '<div style="padding:28px;text-align:center;color:var(--text-muted);">لا توجد بيانات لهذا التقرير</div>';
+                return `<div style="overflow:auto;max-height:55vh;"><table style="width:100%;border-collapse:collapse;text-align:right;direction:rtl;"><thead><tr>${headers.map(header => `<th style="padding:9px;border-bottom:1px solid var(--border-color);">${escapeHtml(header)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td style="padding:9px;border-bottom:1px solid var(--border-color);">${escapeHtml(cell === null || cell === undefined ? '' : String(cell))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+            }
+
+            async function openReport(type) {
+                if (!requirePermission('read')) return;
+                let title = 'تقرير عمليات الشاشات';
+                let html = '';
+                try {
+                    if (type === 'screen_operations') {
+                        title = 'تقرير عمليات الشاشات';
+                        html = screensReportTable(['الشاشة', 'الوحدة', 'الحالة', 'UUID', 'تاريخ الإنشاء'], allScreens.map(screen => [screen.screen_name || '', screen.module || '', Number(screen.is_active) === 1 ? 'مفعلة' : 'غير مفعلة', screen.uuid || '', screen.created_at || '']));
+                    } else if (type === 'modules') {
+                        title = 'تقرير وحدات الشاشات';
+                        const result = await apiCall('getModules', {});
+                        if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل تقرير الوحدات');
+                        html = screensReportTable(['الوحدة', 'عدد الشاشات', 'الحالة'], (Array.isArray(result.data) ? result.data : []).map(item => [item.module_name || '', item.screen_count || 0, Number(item.is_active) === 1 ? 'نشطة' : 'غير نشطة']));
+                    } else if (type === 'screen_permissions') {
+                        title = 'تقرير صلاحيات الشاشات';
+                        const rows = [];
+                        for (const screen of allScreens) {
+                            const result = await apiCall('getScreenPermissions', { screenId: Number(screen.id || screen.screen_id) });
+                            if (result.success && Array.isArray(result.data)) result.data.forEach(permission => rows.push([screen.screen_name || '', permission.permission_name || permission.permission_code || '', permission.module || '', permission.action || '', permission.created_at || '']));
+                        }
+                        html = screensReportTable(['الشاشة', 'الصلاحية', 'الوحدة', 'الإجراء', 'التاريخ'], rows);
+                    } else if (type === 'activity') {
+                        title = 'تقرير نشاط الشاشات';
+                        const active = allScreens.filter(screen => Number(screen.is_active) === 1).length;
+                        const archived = allScreens.filter(screen => Number(screen.archived) === 1).length;
+                        const modules = new Set(allScreens.map(screen => screen.module).filter(Boolean)).size;
+                        html = screensReportTable(['المؤشر', 'القيمة'], [['إجمالي الشاشات', allScreens.length], ['الشاشات المفعلة', active], ['الشاشات المؤرشفة', archived], ['عدد الوحدات', modules]]);
+                    }
+                    document.querySelectorAll('.reports-bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
+                    if (typeof Swal !== 'undefined') Swal.fire({ title: `<i class="fas fa-chart-bar"></i> ${title}`, html, width: 'min(1100px, 96vw)', confirmButtonText: 'إغلاق', confirmButtonColor: '#9b1d3a' });
+                } catch (e) { showToast(e.error || e.message || 'فشل تحميل التقرير من قاعدة البيانات', 'error'); }
+            }
+
+            /* ============================================================
+               15. Navigation & Tab Switching
                ============================================================ */
             function navigateTo(section) {
                 const tabs = ['screens', 'add', 'permissions', 'modules'];
@@ -2550,7 +2441,7 @@
                16. AI Advisor (بسيط)
                ============================================================ */
             function openAIAdvisor() {
-                const insights = LocalDB.get('ai_screen_insights', []);
+                const insights = [];
                 if (insights.length === 0) {
                     showToast('🤖 لا توجد توصيات حالياً', 'info');
                     return;
@@ -2572,7 +2463,7 @@
                17. Notifications (بسيطة)
                ============================================================ */
             function showNotifications() {
-                const alerts = LocalDB.get('screen_notifications', []);
+                const alerts = [];
                 if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
                 let msg = 'الإشعارات:\n';
                 alerts.forEach(a => {
@@ -2667,6 +2558,7 @@
             window.addNewScreen = addNewScreen;
             window.deleteScreen = deleteScreen;
             window.viewScreen = viewScreen;
+            window.openReport = openReport;
             window.loadScreenPermissions = loadScreenPermissions;
             window.refreshScreenPermissions = refreshScreenPermissions;
             window.loadModulesData = loadModulesData;

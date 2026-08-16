@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 15
+        const val VERSION = 16
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -175,6 +175,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     12 -> migrateV12ToV13(db)
                     13 -> migrateV13ToV14(db)
                     14 -> migrateV14ToV15(db)
+                    15 -> migrateV15ToV16(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -586,6 +587,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun migrateV14ToV15(db: SQLiteDatabase) {
         ensureContractSchema(db)
         ensureContractPermissions(db)
+    }
+
+    private fun migrateV15ToV16(db: SQLiteDatabase) {
+        createSecurityTables(db)
+        ensureColumn(db, "permissions", "requires_station", "INTEGER DEFAULT 0")
+        ensureColumn(db, "permissions", "requires_branch", "INTEGER DEFAULT 0")
+        ensureColumn(db, "permissions", "remarks", "TEXT")
+        ensureColumn(db, "permissions", "extra_data", "TEXT")
+        ensureColumn(db, "permissions", "updated_at", "DATETIME")
+        Log.d(TAG, "Migrated IAM schema to V16 successfully")
+    }
+
+    private fun tableHasColumn(db: SQLiteDatabase, tableName: String, columnName: String): Boolean {
+        return db.rawQuery("PRAGMA table_info($tableName)", null).use { cursor ->
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            while (cursor.moveToNext()) if (cursor.getString(nameIndex) == columnName) return@use true
+            false
+        }
+    }
+
+    private fun ensureColumn(db: SQLiteDatabase, tableName: String, columnName: String, definition: String) {
+        if (!tableHasColumn(db, tableName, columnName)) db.execSQL("ALTER TABLE $tableName ADD COLUMN $columnName $definition")
     }
 
     private fun ensureActivityPermissions(db: SQLiteDatabase) {
@@ -1162,6 +1185,40 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
                 FOREIGN KEY (set_by) REFERENCES users(id)
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS delegated_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                delegator_id INTEGER NOT NULL,
+                delegate_id INTEGER NOT NULL,
+                permission_id INTEGER NOT NULL,
+                screen_id INTEGER,
+                reason TEXT,
+                expires_at DATETIME,
+                is_active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (delegator_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (delegate_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+                FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE SET NULL
+            )
+        """)
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS group_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                permission_id INTEGER NOT NULL,
+                screen_id INTEGER,
+                is_granted INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (group_id) REFERENCES groups_table(id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+                FOREIGN KEY (screen_id) REFERENCES screens(id) ON DELETE SET NULL,
+                UNIQUE(group_id, permission_id, screen_id)
             )
         """)
 
@@ -7071,25 +7128,57 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val password = data.optString("password", "123456")
+            val username = data.optString("username").trim()
+            val fullName = data.optString("full_name").trim()
+            val password = data.optString("password")
+            require(username.isNotBlank()) { "اسم المستخدم مطلوب" }
+            require(fullName.isNotBlank()) { "الاسم الكامل مطلوب" }
+            require(password.length >= 6) { "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }
             val (hash, salt) = hashPassword(password)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("username", data.optString("username", ""))
+                put("username", username)
                 put("password_hash", hash)
                 put("password_salt", salt)
-                put("full_name", data.optString("full_name", ""))
-                put("full_name_ar", data.optString("full_name_ar", ""))
-                put("email", data.optString("email", ""))
-                put("phone", data.optString("phone", ""))
+                put("full_name", fullName)
+                listOf("full_name_ar", "display_name", "avatar_path", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data").forEach { key ->
+                    val value = data.optString(key).trim()
+                    if (value.isNotEmpty()) put(key, value) else putNull(key)
+                }
+                if (data.optLong("employee_id", 0L) > 0) put("employee_id", data.optLong("employee_id")) else putNull("employee_id")
                 put("role_id", data.optInt("role_id", 4))
-                put("station_id", data.optInt("station_id", 1))
-                put("company_id", data.optInt("company_id", 1))
+                if (data.optInt("station_id", 0) > 0) put("station_id", data.optInt("station_id")) else putNull("station_id")
+                if (data.optInt("branch_id", 0) > 0) put("branch_id", data.optInt("branch_id")) else putNull("branch_id")
+                if (data.optInt("company_id", 0) > 0) put("company_id", data.optInt("company_id")) else putNull("company_id")
+                listOf("email", "phone", "national_id", "passport_number").forEach { key ->
+                    val value = data.optString(key).trim()
+                    if (value.isNotEmpty()) put(key, value) else putNull(key)
+                }
                 put("preferred_language", data.optString("preferred_language", "ar"))
+                put("theme", data.optString("theme", "light"))
+                put("timezone", data.optString("timezone", "UTC"))
+                put("date_format", data.optString("date_format", "YYYY-MM-DD"))
                 put("status", data.optString("status", "active"))
-                put("job_title", data.optString("job_title", ""))
+                put("two_factor_enabled", data.optInt("two_factor_enabled", 0))
+                put("two_factor_method", data.optString("two_factor_method", "none"))
+                put("biometric_enabled", data.optInt("biometric_enabled", 0))
+                put("biometric_type", data.optString("biometric_type", "none"))
+                put("has_biometrics", data.optInt("has_biometrics", 0))
+                put("email_verified", data.optInt("email_verified", 0))
+                put("phone_verified", data.optInt("phone_verified", 0))
+                put("password_expiry_days", data.optInt("password_expiry_days", 90))
+                if (data.isNull("password_expiry_date") || data.optString("password_expiry_date").isBlank()) putNull("password_expiry_date") else put("password_expiry_date", data.optString("password_expiry_date"))
+                put("must_change_password", data.optInt("must_change_password", 1))
+                put("session_timeout", data.optInt("session_timeout", 30))
+                put("device_limit", data.optInt("device_limit", 3))
+                if (data.isNull("locked_until") || data.optString("locked_until").isBlank()) putNull("locked_until") else put("locked_until", data.optString("locked_until"))
+                put("account_locked", if (data.optString("status", "active") == "locked") 1 else 0)
+                put("is_deleted", 0)
+                put("sync_status", "synced")
+                put("sync_version", 1)
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
+                if (data.optLong("created_by", 0L) > 0) put("created_by", data.optLong("created_by"))
             }
             val id = db.insert("users", null, cv)
             if (id > 0) logActivity("system", "add_user", "إضافة مستخدم: ${data.optString("username")}")
@@ -7104,7 +7193,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT u.*, r.role_name, r.role_name_ar
+                """SELECT u.id, u.uuid, u.username, u.email, u.phone, u.full_name, u.full_name_ar,
+                          u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,
+                          u.birth_date, u.gender, u.employee_id, u.job_title, u.department, u.hire_date,
+                          u.role_id, u.station_id, u.branch_id, u.company_id, u.preferred_language, u.theme,
+                          u.timezone, u.date_format, u.two_factor_enabled, u.two_factor_method,
+                          u.biometric_enabled, u.biometric_type, u.last_password_change,
+                          u.password_expiry_days, u.password_expiry_date, u.must_change_password,
+                          u.failed_login_attempts, u.account_locked, u.locked_until, u.last_login_at,
+                          u.last_login_ip, u.last_login_device, u.session_timeout, u.device_limit,
+                          u.has_biometrics, u.status, u.status_reason, u.email_verified, u.phone_verified,
+                          u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
+                          u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
+                          u.device_id, u.remarks, u.extra_data,
+                          r.role_name, r.role_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
                    WHERE u.is_deleted = 0
@@ -7121,7 +7223,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                """SELECT u.*, r.role_name, r.role_name_ar
+                """SELECT u.id, u.uuid, u.username, u.email, u.phone, u.full_name, u.full_name_ar,
+                          u.display_name, u.avatar_path, u.national_id, u.passport_number, u.nationality,
+                          u.birth_date, u.gender, u.employee_id, u.job_title, u.department, u.hire_date,
+                          u.role_id, u.station_id, u.branch_id, u.company_id, u.preferred_language, u.theme,
+                          u.timezone, u.date_format, u.two_factor_enabled, u.two_factor_method,
+                          u.biometric_enabled, u.biometric_type, u.last_password_change,
+                          u.password_expiry_days, u.password_expiry_date, u.must_change_password,
+                          u.failed_login_attempts, u.account_locked, u.locked_until, u.last_login_at,
+                          u.last_login_ip, u.last_login_device, u.session_timeout, u.device_limit,
+                          u.has_biometrics, u.status, u.status_reason, u.email_verified, u.phone_verified,
+                          u.deleted_at, u.created_at, u.updated_at, u.created_by, u.updated_by,
+                          u.deleted_by, u.is_deleted, u.sync_status, u.sync_version, u.sync_at,
+                          u.device_id, u.remarks, u.extra_data,
+                          r.role_name, r.role_name_ar
                    FROM users u
                    LEFT JOIN roles r ON u.role_id = r.id
                    WHERE r.role_code = ? AND u.is_deleted = 0 AND u.status = 'active'
@@ -7138,14 +7253,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = writableDatabase
             val cv = ContentValues().apply {
-                data.optString("full_name")?.let { put("full_name", it) }
-                data.optString("email")?.let { put("email", it) }
-                data.optString("phone")?.let { put("phone", it) }
-                data.optInt("role_id")?.let { put("role_id", it) }
-                data.optString("status")?.let { put("status", it) }
+                val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
+                textFields.forEach { key ->
+                    if (data.has(key)) {
+                        val value = data.optString(key).trim()
+                        if (value.isNotEmpty()) put(key, value) else putNull(key)
+                    }
+                }
+                if (data.has("employee_id")) { if (data.isNull("employee_id")) putNull("employee_id") else put("employee_id", data.optLong("employee_id")) }
+                if (data.has("role_id")) put("role_id", data.optInt("role_id"))
+                if (data.has("station_id")) { if (data.isNull("station_id")) putNull("station_id") else put("station_id", data.optInt("station_id")) }
+                if (data.has("branch_id")) { if (data.isNull("branch_id")) putNull("branch_id") else put("branch_id", data.optInt("branch_id")) }
+                if (data.has("company_id")) { if (data.isNull("company_id")) putNull("company_id") else put("company_id", data.optInt("company_id")) }
+                if (data.has("preferred_language")) put("preferred_language", data.optString("preferred_language"))
+                if (data.has("theme")) put("theme", data.optString("theme"))
+                if (data.has("status")) {
+                    val status = data.optString("status")
+                    require(status in setOf("active", "inactive", "locked", "suspended")) { "حالة المستخدم غير صالحة" }
+                    put("status", status)
+                    put("account_locked", if (status == "locked") 1 else 0)
+                }
+                if (data.has("must_change_password")) put("must_change_password", data.optInt("must_change_password"))
+                if (data.has("two_factor_enabled")) put("two_factor_enabled", data.optInt("two_factor_enabled"))
+                if (data.has("biometric_enabled")) put("biometric_enabled", data.optInt("biometric_enabled"))
+                if (data.has("has_biometrics")) put("has_biometrics", data.optInt("has_biometrics"))
+                if (data.has("email_verified")) put("email_verified", data.optInt("email_verified"))
+                if (data.has("phone_verified")) put("phone_verified", data.optInt("phone_verified"))
+                if (data.has("password_expiry_days")) put("password_expiry_days", data.optInt("password_expiry_days"))
+                if (data.has("password_expiry_date")) { if (data.isNull("password_expiry_date")) putNull("password_expiry_date") else put("password_expiry_date", data.optString("password_expiry_date")) }
+                if (data.has("session_timeout")) put("session_timeout", data.optInt("session_timeout"))
+                if (data.has("device_limit")) put("device_limit", data.optInt("device_limit"))
+                if (data.has("locked_until")) { if (data.isNull("locked_until")) putNull("locked_until") else put("locked_until", data.optString("locked_until")) }
+                if (data.has("updated_by") && data.optLong("updated_by", 0L) > 0L) put("updated_by", data.optLong("updated_by"))
+                if (data.has("password")) {
+                    val (hash, salt) = hashPassword(data.optString("password"))
+                    put("password_hash", hash)
+                    put("password_salt", salt)
+                    put("last_password_change", getCurrentDateTime())
+                }
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("users", cv, "id=?", arrayOf(id.toString()))
+            require(id > 0) { "معرف المستخدم غير صالح" }
+            val rows = db.update("users", cv, "id=? AND is_deleted = 0", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "update_user", "تحديث مستخدم $id")
             rows
         } finally {
@@ -7169,44 +7318,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getUserPermissions(userId: Long): JSONArray {
         dbLock.lock()
         return try {
-            val arr = JSONArray()
             val db = readableDatabase
             db.rawQuery(
-                """SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
+                """SELECT p.id AS permission_id, p.permission_code, p.permission_name, p.permission_name_ar,
+                          p.module, p.action, 'role' AS source, NULL AS user_permission_id,
                           rp.can_create, rp.can_read, rp.can_update, rp.can_delete, rp.can_export, rp.can_print, rp.can_approve
                    FROM permissions p
                    JOIN role_permissions rp ON p.id = rp.permission_id
                    JOIN users u ON u.role_id = rp.role_id
-                   WHERE u.id = ? AND p.is_deleted = 0
-                   UNION
-                   SELECT p.permission_code, p.permission_name, p.permission_name_ar, p.module, p.action,
+                   WHERE u.id = ? AND p.is_deleted = 0 AND rp.is_deleted = 0
+                   UNION ALL
+                   SELECT p.id AS permission_id, p.permission_code, p.permission_name, p.permission_name_ar,
+                          p.module, p.action, 'direct' AS source, up.id AS user_permission_id,
                           1, up.is_granted, 1, 1, 1, 1, 1
                    FROM permissions p
                    JOIN user_permissions up ON p.id = up.permission_id
-                   WHERE up.user_id = ? AND up.is_granted = 1""",
+                   WHERE up.user_id = ? AND up.is_granted = 1 AND p.is_deleted = 0
+                   ORDER BY module, action, permission_name""",
                 arrayOf(userId.toString(), userId.toString())
-            ).use { cursor ->
-                while (cursor.moveToNext()) {
-                    arr.put(JSONObject().apply {
-                        put("permission_code", cursor.getString(0))
-                        put("permission_name", cursor.getString(1))
-                        put("permission_name_ar", cursor.getString(2))
-                        put("module", cursor.getString(3))
-                        put("action", cursor.getString(4))
-                        put("can_create", cursor.getInt(5) == 1)
-                        put("can_read", cursor.getInt(6) == 1)
-                        put("can_update", cursor.getInt(7) == 1)
-                        put("can_delete", cursor.getInt(8) == 1)
-                        put("can_export", cursor.getInt(9) == 1)
-                        put("can_print", cursor.getInt(10) == 1)
-                        put("can_approve", cursor.getInt(11) == 1)
-                    })
-                }
-            }
-            arr
-        } finally {
-            dbLock.unlock()
-        }
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
     }
 
     fun getUserScreens(userId: Long): JSONArray {
@@ -7368,7 +7499,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                "SELECT * FROM notifications WHERE user_id = ? AND is_deleted = 0 ORDER BY created_at DESC LIMIT 50",
+                "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
                 arrayOf(userId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
@@ -7572,6 +7703,475 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
+
+
+
+    // ========================================================================
+    // دوال إدارة الهوية والصلاحيات والشاشات — مبنية على schema الحالي
+    // ========================================================================
+
+    fun getStations(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, station_code, station_name, station_name_ar FROM stations WHERE is_deleted = 0 ORDER BY station_name",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getGroups(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, group_name, description, is_active, archived, created_at, 0 AS user_count FROM groups_table WHERE archived = 0 ORDER BY group_name",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addGroup(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("group_name", data.optString("group_name").trim())
+                put("description", data.optString("description").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("archived", 0)
+            }
+            require(values.getAsString("group_name").isNotBlank()) { "اسم المجموعة مطلوب" }
+            val id = writableDatabase.insert("groups_table", null, values)
+            require(id > 0) { "تعذر إنشاء المجموعة" }
+            logActivity("system", "add_group", "إضافة مجموعة: ${data.optString("group_name")}")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateGroup(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف المجموعة غير صالح" }
+            val values = ContentValues().apply {
+                if (data.has("group_name")) put("group_name", data.optString("group_name").trim())
+                if (data.has("description")) put("description", data.optString("description").trim())
+                if (data.has("is_active")) put("is_active", if (data.optInt("is_active") == 1) 1 else 0)
+            }
+            val rows = writableDatabase.update("groups_table", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_group", "تحديث مجموعة $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteGroup(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply { put("archived", 1) }
+            val rows = writableDatabase.update("groups_table", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "archive_group", "أرشفة مجموعة $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getScreens(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, screen_name, module, description, is_active, archived, created_at FROM screens WHERE archived = 0 ORDER BY id",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getModules(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT module AS module_name, COUNT(*) AS screen_count, 1 AS is_active FROM screens WHERE archived = 0 GROUP BY module ORDER BY module",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addScreen(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("screen_name", data.optString("screen_name").trim())
+                put("module", data.optString("module").trim())
+                put("description", data.optString("description").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("archived", 0)
+            }
+            require(values.getAsString("screen_name").isNotBlank()) { "اسم الشاشة مطلوب" }
+            require(values.getAsString("module").isNotBlank()) { "وحدة الشاشة مطلوبة" }
+            val id = writableDatabase.insert("screens", null, values)
+            require(id > 0) { "تعذر إنشاء الشاشة" }
+            logActivity("system", "add_screen", "إضافة شاشة: ${data.optString("screen_name")}")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateScreen(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف الشاشة غير صالح" }
+            val values = ContentValues().apply {
+                if (data.has("screen_name")) put("screen_name", data.optString("screen_name").trim())
+                if (data.has("module")) put("module", data.optString("module").trim())
+                if (data.has("description")) put("description", data.optString("description").trim())
+                if (data.has("is_active")) put("is_active", if (data.optInt("is_active") == 1) 1 else 0)
+            }
+            val rows = writableDatabase.update("screens", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_screen", "تحديث شاشة $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteScreen(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply { put("archived", 1) }
+            val rows = writableDatabase.update("screens", values, "id = ? AND archived = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "archive_screen", "أرشفة شاشة $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getPermissions(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, permission_code, permission_name, permission_name_ar, description, module, module_name_ar, action, requires_station, requires_branch, is_active, created_at, updated_at, remarks, extra_data FROM permissions WHERE is_deleted = 0 ORDER BY module, action, permission_name",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addPermission(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("permission_code", data.optString("permission_code").trim())
+                put("permission_name", data.optString("permission_name").trim())
+                put("permission_name_ar", data.optString("permission_name_ar").trim())
+                put("description", data.optString("description").trim())
+                put("module", data.optString("module").trim())
+                put("module_name_ar", data.optString("module_name_ar").trim())
+                put("action", data.optString("action").trim())
+                put("requires_station", if (data.optInt("requires_station", 0) == 1) 1 else 0)
+                put("requires_branch", if (data.optInt("requires_branch", 0) == 1) 1 else 0)
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("remarks", data.optString("remarks").trim())
+                put("extra_data", data.optString("extra_data").trim())
+                put("is_deleted", 0)
+            }
+            require(values.getAsString("permission_code").isNotBlank()) { "كود الصلاحية مطلوب" }
+            require(values.getAsString("permission_name").isNotBlank()) { "اسم الصلاحية مطلوب" }
+            require(values.getAsString("module").isNotBlank()) { "وحدة الصلاحية مطلوبة" }
+            require(values.getAsString("action").isNotBlank()) { "إجراء الصلاحية مطلوب" }
+            val id = writableDatabase.insert("permissions", null, values)
+            require(id > 0) { "تعذر إنشاء الصلاحية" }
+            logActivity("system", "add_permission", "إضافة صلاحية: ${data.optString("permission_code")}")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun updatePermission(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            require(id > 0) { "معرف الصلاحية غير صالح" }
+            val values = ContentValues().apply {
+                if (data.has("permission_name")) put("permission_name", data.optString("permission_name").trim())
+                if (data.has("permission_name_ar")) put("permission_name_ar", data.optString("permission_name_ar").trim())
+                if (data.has("description")) put("description", data.optString("description").trim())
+                if (data.has("module")) put("module", data.optString("module").trim())
+                if (data.has("module_name_ar")) put("module_name_ar", data.optString("module_name_ar").trim())
+                if (data.has("action")) put("action", data.optString("action").trim())
+                if (data.has("requires_station")) put("requires_station", if (data.optInt("requires_station") == 1) 1 else 0)
+                if (data.has("requires_branch")) put("requires_branch", if (data.optInt("requires_branch") == 1) 1 else 0)
+                if (data.has("is_active")) put("is_active", if (data.optInt("is_active") == 1) 1 else 0)
+                if (data.has("remarks")) put("remarks", data.optString("remarks").trim())
+                if (data.has("extra_data")) put("extra_data", data.optString("extra_data").trim())
+                put("updated_at", getCurrentDateTime())
+            }
+            val rows = writableDatabase.update("permissions", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_permission", "تحديث صلاحية $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun deletePermission(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply { put("is_deleted", 1) }
+            val rows = writableDatabase.update("permissions", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_permission", "حذف صلاحية $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getScreenPermissions(screenId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT p.id, p.permission_code, p.permission_name, p.permission_name_ar, p.description,
+                          p.module, p.action, p.created_at, 'module' AS source
+                   FROM permissions p JOIN screens s ON s.module = p.module
+                   WHERE s.id = ? AND s.archived = 0 AND p.is_deleted = 0
+                   ORDER BY p.action, p.permission_name""",
+                arrayOf(screenId.toString())
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun grantUserPermission(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val userId = data.optLong("user_id", 0L)
+            val permissionId = data.optLong("permission_id", 0L)
+            require(userId > 0 && permissionId > 0) { "المستخدم والصلاحية مطلوبان" }
+            val db = writableDatabase
+            val existing = db.rawQuery("SELECT id FROM user_permissions WHERE user_id = ? AND permission_id = ?", arrayOf(userId.toString(), permissionId.toString())).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val values = ContentValues().apply {
+                put("user_id", userId)
+                put("permission_id", permissionId)
+                put("is_granted", 1)
+                put("reason", data.optString("reason").trim())
+                if (data.optLong("granted_by", 0L) > 0) put("set_by", data.optLong("granted_by"))
+                put("set_at", getCurrentDateTime())
+            }
+            val id = if (existing > 0) {
+                db.update("user_permissions", values, "id = ?", arrayOf(existing.toString()))
+                existing
+            } else db.insert("user_permissions", null, values)
+            require(id > 0) { "تعذر منح الصلاحية" }
+            val actorId = data.optLong("granted_by", 0L)
+            db.insert("notifications", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("user_id", userId)
+                put("notification_type", "permission")
+                put("title", "Permission granted")
+                put("title_ar", "تم منح صلاحية")
+                put("message", "A direct permission was granted to your account")
+                put("message_ar", "تم منح صلاحية مباشرة لحسابك")
+                put("priority", "normal")
+                put("channel", "in_app")
+                put("status", "pending")
+                put("is_read", 0)
+                put("reference_type", "user_permission")
+                put("reference_id", id)
+                if (actorId > 0) put("created_by", actorId)
+                put("created_at", getCurrentDateTime())
+            })
+            logActivity("system", "grant_user_permission", "منح صلاحية $permissionId للمستخدم $userId")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun getGrantedPermissions(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT up.id AS ups_id, up.id AS user_permission_id, up.user_id, up.permission_id,
+                          up.set_at AS granted_at, up.reason, up.is_granted AS is_active,
+                          u.username, u.full_name AS user_name, p.permission_code, p.permission_name,
+                          p.permission_name_ar, p.module, p.action
+                   FROM user_permissions up
+                   JOIN users u ON u.id = up.user_id
+                   JOIN permissions p ON p.id = up.permission_id
+                   WHERE up.is_granted = 1 AND p.is_deleted = 0
+                   ORDER BY up.set_at DESC""",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun revokeUserPermission(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val targetUserId = db.rawQuery("SELECT user_id FROM user_permissions WHERE id = ? AND is_granted = 1", arrayOf(id.toString())).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val rows = db.update("user_permissions", ContentValues().apply { put("is_granted", 0) }, "id = ? AND is_granted = 1", arrayOf(id.toString()))
+            if (rows > 0 && targetUserId > 0) {
+                db.insert("notifications", null, ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("user_id", targetUserId)
+                    put("notification_type", "permission")
+                    put("title", "Permission revoked")
+                    put("title_ar", "تم سحب صلاحية")
+                    put("message", "A direct permission was revoked from your account")
+                    put("message_ar", "تم سحب صلاحية مباشرة من حسابك")
+                    put("priority", "normal")
+                    put("channel", "in_app")
+                    put("status", "pending")
+                    put("is_read", 0)
+                    put("reference_type", "user_permission")
+                    put("reference_id", id)
+                    put("created_at", getCurrentDateTime())
+                })
+                logActivity("system", "revoke_user_permission", "سحب صلاحية مباشرة رقم $id")
+            }
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getDelegatedPermissions(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT dp.id, dp.uuid, dp.delegator_id, dp.delegate_id, dp.permission_id, dp.screen_id,
+                          dp.reason, dp.expires_at, dp.is_active, dp.created_at,
+                          u1.full_name AS delegator_name, u2.full_name AS delegate_name,
+                          p.permission_name, p.permission_name_ar, p.permission_code, s.screen_name
+                   FROM delegated_permissions dp
+                   JOIN users u1 ON u1.id = dp.delegator_id
+                   JOIN users u2 ON u2.id = dp.delegate_id
+                   JOIN permissions p ON p.id = dp.permission_id
+                   LEFT JOIN screens s ON s.id = dp.screen_id
+                   WHERE dp.is_active = 1
+                   ORDER BY dp.created_at DESC""",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun grantDelegatedPermission(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val delegatorId = data.optLong("delegator_id", 0L)
+            val delegateId = data.optLong("delegate_id", 0L)
+            val permissionId = data.optLong("permission_id", 0L)
+            val screenId = data.optLong("screen_id", 0L)
+            val expiresAt = data.optString("expires_at").trim()
+            require(delegatorId > 0L && delegateId > 0L && permissionId > 0L) { "المفوض والمفوض إليه والصلاحية مطلوبة" }
+            require(delegatorId != delegateId) { "لا يمكن تفويض الصلاحية إلى نفس المستخدم" }
+            require(expiresAt.isNotBlank()) { "تاريخ انتهاء التفويض مطلوب" }
+            require(!db.rawQuery("SELECT id FROM users WHERE id IN (?, ?) AND is_deleted = 0", arrayOf(delegatorId.toString(), delegateId.toString())).use { cursor -> var count = 0; while (cursor.moveToNext()) count++; count == 2 }) { "المستخدم المفوض أو المفوض إليه غير صالح" }
+            val duplicate = db.rawQuery("SELECT id FROM delegated_permissions WHERE delegator_id = ? AND delegate_id = ? AND permission_id = ? AND (screen_id = ? OR (? = 0 AND screen_id IS NULL)) AND is_active = 1", arrayOf(delegatorId.toString(), delegateId.toString(), permissionId.toString(), screenId.toString(), screenId.toString())).use { cursor -> cursor.moveToFirst() }
+            require(!duplicate) { "يوجد تفويض نشط مماثل بالفعل" }
+            val cv = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("delegator_id", delegatorId)
+                put("delegate_id", delegateId)
+                put("permission_id", permissionId)
+                if (screenId > 0) put("screen_id", screenId) else putNull("screen_id")
+                put("reason", data.optString("reason").trim())
+                put("expires_at", expiresAt)
+                put("is_active", 1)
+                put("created_at", getCurrentDateTime())
+            }
+            val id = db.insert("delegated_permissions", null, cv)
+            require(id > 0L) { "تعذر حفظ التفويض المؤقت" }
+            logActivity("system", "grant_delegated_permission", "منح تفويض مؤقت رقم $id")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun revokeDelegatedPermission(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val rows = writableDatabase.update("delegated_permissions", ContentValues().apply { put("is_active", 0) }, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "revoke_delegated_permission", "إلغاء تفويض مؤقت رقم $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getGroupPermissions(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """SELECT gp.id, gp.group_id, gp.permission_id, gp.screen_id, gp.is_granted, gp.created_at,
+                          g.group_name, p.permission_name, p.permission_name_ar, p.permission_code, p.module, s.screen_name
+                   FROM group_permissions gp
+                   JOIN groups_table g ON g.id = gp.group_id
+                   JOIN permissions p ON p.id = gp.permission_id
+                   LEFT JOIN screens s ON s.id = gp.screen_id
+                   WHERE gp.is_granted = 1
+                   ORDER BY g.group_name""",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun grantGroupPermission(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val groupId = data.optLong("group_id", 0L)
+            val permId = data.optLong("permission_id", 0L)
+            val screenId = data.optLong("screen_id", 0L)
+            require(groupId > 0 && permId > 0) { "المجموعة والصلاحية مطلوبتان" }
+            val existing = db.rawQuery("SELECT id FROM group_permissions WHERE group_id = ? AND permission_id = ? AND (screen_id = ? OR (? = 0 AND screen_id IS NULL))", arrayOf(groupId.toString(), permId.toString(), screenId.toString(), screenId.toString())).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+            val cv = ContentValues().apply {
+                put("group_id", groupId)
+                put("permission_id", permId)
+                if (screenId > 0) put("screen_id", screenId) else putNull("screen_id")
+                put("is_granted", 1)
+            }
+            val id = if (existing > 0) {
+                db.update("group_permissions", cv, "id = ?", arrayOf(existing.toString()))
+                existing
+            } else {
+                db.insert("group_permissions", null, cv)
+            }
+            if (id > 0) logActivity("system", "grant_group_permission", "ربط مجموعة $groupId بصلاحية $permId")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun revokeGroupPermission(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val rows = writableDatabase.update("group_permissions", ContentValues().apply { put("is_granted", 0) }, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "revoke_group_permission", "إلغاء ربط صلاحية مجموعة رقم $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getUserSessions(userId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, user_id, device_id, device_type, device_name, device_os, ip_address, login_at, last_activity_at, expires_at, is_active FROM user_sessions WHERE user_id = ? AND is_active = 1 AND logout_at IS NULL ORDER BY last_activity_at DESC",
+                arrayOf(userId.toString())
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun terminateSession(sessionId: Long): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("is_active", 0)
+                put("logout_at", getCurrentDateTime())
+                put("logout_reason", "manual")
+            }
+            val rows = writableDatabase.update("user_sessions", values, "id = ? AND is_active = 1", arrayOf(sessionId.toString()))
+            if (rows > 0) logActivity("system", "terminate_session", "إنهاء جلسة $sessionId")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun getUserActivityLog(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val conditions = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            data.optLong("user_id", 0L).takeIf { it > 0 }?.let { conditions += "ual.user_id = ?"; args += it.toString() }
+            data.optString("from_date").takeIf { it.isNotBlank() }?.let { conditions += "date(ual.created_at) >= date(?)"; args += it }
+            data.optString("to_date").takeIf { it.isNotBlank() }?.let { conditions += "date(ual.created_at) <= date(?)"; args += it }
+            val where = if (conditions.isEmpty()) "" else " WHERE " + conditions.joinToString(" AND ")
+            val limit = data.optInt("limit", 100).coerceIn(1, 500)
+            readableDatabase.rawQuery(
+                "SELECT ual.*, u.username, u.full_name FROM user_activity_log ual LEFT JOIN users u ON u.id = ual.user_id$where ORDER BY datetime(ual.created_at) DESC LIMIT $limit",
+                args.toTypedArray()
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
     }
 
     // ========================================================================
@@ -8681,7 +9281,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                "SELECT * FROM notifications WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT 100",
+                "SELECT * FROM notifications ORDER BY created_at DESC LIMIT 100",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
@@ -9488,7 +10088,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-            db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0 AND is_deleted = 0", null)
+            db.rawQuery("SELECT COUNT(*) FROM notifications WHERE is_read = 0", null)
                 .use { cursor ->
                     if (cursor.moveToFirst()) cursor.getInt(0) else 0
                 }

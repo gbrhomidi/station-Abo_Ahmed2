@@ -2488,6 +2488,220 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+
+
+        // ============================================================
+        // Typed IAM contracts — backed by the existing SQLite schema
+        // ============================================================
+        @JavascriptInterface
+        fun getStations(): String {
+            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getStations()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getRoles(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getRoles()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getGroups(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getGroups()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun addGroup(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { successResponse(db.addGroup(JSONObject(jsonData)), "تم إنشاء المجموعة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun updateGroup(id: Long, jsonData: String): String {
+            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.updateGroup(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث المجموعة" else "لم يتم العثور على المجموعة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun deleteGroup(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.deleteGroup(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة المجموعة" else "لم يتم العثور على المجموعة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getPermissions(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getPermissions()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun addPermission(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { successResponse(db.addPermission(JSONObject(jsonData)), "تم إنشاء الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun updatePermission(id: Long, jsonData: String): String {
+            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.updatePermission(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun deletePermission(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.deletePermission(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getScreens(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getScreens()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getModules(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getModules()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun addScreen(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { successResponse(db.addScreen(JSONObject(jsonData)), "تم إنشاء الشاشة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun updateScreen(id: Long, jsonData: String): String {
+            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.updateScreen(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث الشاشة" else "لم يتم العثور على الشاشة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun deleteScreen(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.deleteScreen(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة الشاشة" else "لم يتم العثور على الشاشة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getScreenPermissions(screenId: Long): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getScreenPermissions(screenId)) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun grantUserPermission(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية المنح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData)
+                if (data.optLong("granted_by", 0L) <= 0L) data.put("granted_by", getActivity()?.currentUserId ?: 0L)
+                successResponse(db.grantUserPermission(data), "تم منح الصلاحية")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getGrantedPermissions(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getGrantedPermissions()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun revokeUserPermission(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية السحب")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.revokeUserPermission(id); successResponse(rows > 0, if (rows > 0) "تم سحب الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getUserSessions(userId: Long): String {
+            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getUserSessions(userId)) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun terminateSession(sessionId: Long): String {
+            if (!checkPermission("users", "update")) return errorResponse("لا تملك صلاحية إنهاء الجلسة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.terminateSession(sessionId); successResponse(rows > 0, if (rows > 0) "تم إنهاء الجلسة" else "لم يتم العثور على الجلسة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getUserActivityLog(jsonData: String): String {
+            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getUserActivityLog(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getDelegatedPermissions(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getDelegatedPermissions()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun grantDelegatedPermission(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية التفويض")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData)
+                val actorId = getActivity()?.currentUserId ?: 0L
+                if (actorId <= 0L) return errorResponse("جلسة المستخدم غير متاحة")
+                data.put("delegator_id", actorId)
+                successResponse(db.grantDelegatedPermission(data), "تم منح التفويض المؤقت بنجاح")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun revokeDelegatedPermission(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية إلغاء التفويض")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.revokeDelegatedPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء التفويض" else "لم يتم العثور على التفويض") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getGroupPermissions(): String {
+            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getGroupPermissions()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun grantGroupPermission(jsonData: String): String {
+            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية ربط المجموعة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(jsonData)
+                successResponse(db.grantGroupPermission(data), "تم ربط الصلاحية بالمجموعة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun revokeGroupPermission(id: Long): String {
+            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية إلغاء الربط")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.revokeGroupPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء الربط" else "لم يتم العثور على الربط") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
         // ============================================================
         // 11. الأصول
         // ============================================================
@@ -2533,6 +2747,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
+                val actorId = getActivity()?.currentUserId ?: 0L
+                if (actorId > 0L) data.put("created_by", actorId)
                 val id = db.addUser(data)
                 DebugLogger.info("User", "Added user id=$id")
                 successResponse(id, "تم إضافة المستخدم بنجاح")
@@ -2577,6 +2793,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
+                val actorId = getActivity()?.currentUserId ?: 0L
+                if (actorId > 0L) data.put("updated_by", actorId)
                 val rows = db.updateUser(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
