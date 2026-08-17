@@ -2155,7 +2155,68 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
-        // 4. الطلبات
+        // 4. المهام المعلقة — SQLite typed bridge
+        // ============================================================
+
+        @JavascriptInterface
+        fun getPendingTasks(jsonData: String): String {
+            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getPendingTasks(JSONObject(jsonData))) } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun addTask(jsonData: String): String {
+            if (!checkPermission("tasks", "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val d = JSONObject(jsonData); d.put("created_by", getActivity()?.currentUserId ?: 0L); successResponse(db.addTask(d), "تمت إضافة المهمة") } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun updateTask(id: Long, jsonData: String): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية التعديل")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.updateTask(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تعديل المهمة" else "المهمة غير موجودة") } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun archiveTask(id: Long): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الأرشفة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.archiveTask(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun restoreTask(id: Long): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الاستعادة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.restoreTask(id); successResponse(rows > 0, if (rows > 0) "تمت استعادة المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun resolveTask(id: Long): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الحل")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.resolveTask(id); successResponse(rows > 0, if (rows > 0) "تم حل المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun deleteTask(id: Long): String {
+            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.deleteTask(id); successResponse(rows > 0, if (rows > 0) "تم حذف المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun generateTaskReport(jsonData: String): String {
+            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية قراءة التقرير")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateTaskReport(JSONObject(jsonData))) } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
+        }
+
+        // ============================================================
+        // 5. الطلبات
+
         // ============================================================
 
         @JavascriptInterface
@@ -2241,6 +2302,29 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         // ============================================================
         // 6. المبيعات
+        // ============================================================
+
+        @JavascriptInterface
+        fun getSalesTransactions(jsonData: String = "{}"): String {
+            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة سجل المبيعات")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val d = JSONObject(jsonData.ifBlank { "{}" }); dataResponse(db.getSalesTransactions(d.optInt("station_id", 1), d.optInt("limit", 500), d.optInt("offset", 0))) }
+            catch (e: Exception) { DebugLogger.logException("SalesLog", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun saveSaleTransaction(jsonData: String): String = completeSale(jsonData)
+
+        @JavascriptInterface
+        fun deleteSaleTransaction(id: Long): String = deleteSale(id)
+
+        @JavascriptInterface
+        fun getInvoiceDetails(invoiceNumber: String): String = retrieveInvoice(invoiceNumber)
+
+        @JavascriptInterface
+        fun generateSalesReport(jsonData: String = "{}"): String = searchSales(jsonData)
+
+
         // ============================================================
 
         @JavascriptInterface
@@ -2647,6 +2731,62 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 errorResponse(e.message)
             }
         }
+
+        @JavascriptInterface
+        fun getInventorySummary(jsonData: String = "{}"): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة المخزون")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" })); dataResponse(report.optJSONObject("stats") ?: JSONObject()) }
+            catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getLowStockProducts(): String = getLowStockItems()
+
+        @JavascriptInterface
+        fun getInventoryAlerts(jsonData: String = "{}"): String {
+            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية قراءة التنبيهات")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))
+                val stats = report.optJSONObject("stats") ?: JSONObject()
+                dataResponse(JSONObject().apply { put("critical_count", stats.optInt("critical_stock", 0)); put("low_stock", stats.optInt("low_stock", 0)); put("expiring_count", 0); put("expiring_value", 0.0); put("audit_items", 0); put("audit_variance", 0.0); put("expiry_supported", false) })
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getInventoryCharts(jsonData: String = "{}"): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة رسوم المخزون")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))
+                dataResponse(JSONObject().apply {
+                    put("movement_chart", report.optJSONArray("movement_series") ?: JSONArray())
+                    put("distribution_chart", report.optJSONArray("categories") ?: JSONArray())
+                    put("trend_chart", report.optJSONArray("movement_series") ?: JSONArray())
+                    put("expiry_chart", JSONObject().put("active", 0).put("expiring", 0).put("expired", 0).put("supported", false))
+                })
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getMovements(jsonData: String = "{}"): String = getStockMovements(jsonData)
+
+        @JavascriptInterface
+        fun getStockValues(jsonData: String = "{}"): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة قيم المخزون")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" })); dataResponse(report.optJSONArray("rows") ?: JSONArray()) } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getAlerts(jsonData: String = "{}"): String = getLowStockItems()
+
+        @JavascriptInterface
+        fun filterInventory(jsonData: String): String = getInventoryReport(jsonData)
+
+        @JavascriptInterface
+        fun advancedFilter(jsonData: String): String = getInventoryReport(jsonData)
 
         // ============================================================
         // 10. المنتجات التالفة والمستودعات

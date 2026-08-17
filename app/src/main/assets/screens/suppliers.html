@@ -1964,28 +1964,35 @@
         // 1. دالة apiCall الموحدة
         // ============================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getSuppliers': raw = AndroidInterface.getSuppliers(); break;
+                    case 'getPartyById': raw = AndroidInterface.getPartyById(Number(p.id)); break;
+                    case 'addSupplier': raw = AndroidInterface.addParty(JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
+                    case 'updateSupplier': raw = AndroidInterface.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
+                    case 'deleteSupplier': raw = AndroidInterface.deleteParty(Number(p.id)); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
-        // ============================================================
-        // 2. دالة مساعدة للوصول إلى الحقول بأسماء متعددة (توحيد)
+        let isOnline = navigator.onLine;
+        let supplierInsights = [];
+        let supplierNotifications = [];
+        function updateOnlineStatus() {
+            isOnline = navigator.onLine;
+            const banner = document.getElementById('offlineBanner');
+            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — عمليات الموردين متاحة عند اتصال SQLite فقط', 'warning'); }
+            else banner.classList.remove('show');
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // 2. دالة مساعدة للوصول إلى الحقول بأسماء متعددة (توحيد)        // 2. دالة مساعدة للوصول إلى الحقول بأسماء متعددة (توحيد)
         // ============================================================
         function getField(obj, ...keys) {
             for (const key of keys) {
@@ -2017,93 +2024,7 @@
         }
 
         // ============================================================
-        // 5. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getSuppliers: function() { return this.get('suppliers', []); },
-            setSuppliers: function(suppliers) { this.set('suppliers', suppliers); },
-            getInvoices: function() { return this.get('invoices', []); },
-            setInvoices: function(invoices) { this.set('invoices', invoices); },
-            getPayments: function() { return this.get('payments', []); },
-            setPayments: function(payments) { this.set('payments', payments); },
-            getNotes: function() { return this.get('notes', []); },
-            setNotes: function(notes) { this.set('notes', notes); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            getStats: function() { return this.get('stats', {}); },
-            setStats: function(stats) { this.set('stats', stats); },
-            getNotifications: function() { return this.get('notifications', []); },
-            setNotifications: function(notifications) { this.set('notifications', notifications); },
-            getAIInsights: function() { return this.get('ai_insights', []); },
-            setAIInsights: function(insights) { this.set('ai_insights', insights); }
-        };
-
-        // ============================================================
-        // 6. حالة الاتصال
-        // ============================================================
-        let isOnline = navigator.onLine;
-
-        function updateOnlineStatus() {
-            isOnline = navigator.onLine;
-            const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
-            }
-        }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        // ============================================================
-        // 7. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadSuppliers();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
-        // ============================================================
-        // 8. Haptic Feedback (اهتزاز)
+        // 8. Haptic Feedback (اهتزاز)        // 8. Haptic Feedback (اهتزاز)
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -2264,16 +2185,18 @@
             const balance = parseFloat(getField(supplier, 'current_balance', 'currentBalance', 'balance') || 0);
             const creditLimit = parseFloat(getField(supplier, 'credit_limit', 'creditLimit') || 0);
 
-            // حساب متوسط دورة الطلب من الفواتير الفعلية
-            const avgCycle = calculateAvgCycle(invoices || []);
-            const nextOrderDate = new Date();
-            nextOrderDate.setDate(nextOrderDate.getDate() + avgCycle);
-            const optimalQuantity = Math.max(Math.round((purchases / 12) * 1.2), 10);
+            const hasInvoiceHistory = Array.isArray(invoices) && invoices.length >= 2;
+            const avgCycle = hasInvoiceHistory ? calculateAvgCycle(invoices) : null;
+            const nextOrderDate = avgCycle !== null ? new Date(Date.now() + avgCycle * 86400000) : null;
+            const optimalQuantity = hasInvoiceHistory ? Math.max(Math.round((purchases / 12) * 1.2), 10) : 0;
             const usagePercent = creditLimit > 0 ? (balance / creditLimit) * 100 : 0;
 
             let suggestion = '',
                 reason = '';
-            if (usagePercent > 80) {
+            if (!hasInvoiceHistory) {
+                suggestion = 'لا توجد فواتير شراء مرتبطة بالمورد في SQLite؛ لا يمكن تحديد موعد أو كمية الطلب';
+                reason = 'تحليل المشتريات يحتاج سجلاً فعلياً للفواتير';
+            } else if (usagePercent > 80) {
                 suggestion = '⚠️ تجاوز الحد الائتماني - يفضل تخفيض الطلب أو تسوية المدفوعات';
                 reason = 'نسبة استهلاك الائتمان مرتفعة (' + usagePercent.toFixed(0) + '%)';
             } else if (purchases < 1000) {
@@ -2290,7 +2213,7 @@
             return {
                 supplierId: supplierId,
                 supplierName: getField(supplier, 'commercial_name', 'commercialName', 'name') || 'مورد',
-                nextOrderDate: nextOrderDate.toISOString().split('T')[0],
+                nextOrderDate: nextOrderDate ? nextOrderDate.toISOString().split('T')[0] : null,
                 optimalQuantity: optimalQuantity,
                 suggestion: suggestion,
                 reason: reason,
@@ -2302,22 +2225,15 @@
         function generateAIInsights() {
             const insights = [];
             allSuppliers.forEach(s => {
-                // محاولة جلب فواتير حقيقية للمورد (محاكاة، يمكن استبدالها بـ apiCall)
-                const mockInvoices = [];
-                for (let i = 0; i < 6; i++) {
-                    const d = new Date();
-                    d.setDate(d.getDate() - i * 10);
-                    mockInvoices.push({ date: d.toISOString().split('T')[0] });
-                }
-                const analysis = analyzePurchasePattern(s.id, mockInvoices);
+                const analysis = analyzePurchasePattern(s.id, []);
                 if (analysis) insights.push(analysis);
             });
-            LocalDB.setAIInsights(insights);
+            supplierInsights = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = supplierInsights;
             if (insights.length === 0) return null;
             return insights.reduce((a, b) => (a.usagePercent > b.usagePercent ? a : b));
         }
@@ -2353,7 +2269,7 @@
                     <div style="font-size:0.95rem;font-weight:600;color:var(--primary-color);">${top ? escapeHtml(top.suggestion) : ''}</div>
                     <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${top ? 'للمورد: ' + escapeHtml(top.supplierName) : ''}</div>
                     <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">${top ? 'السبب: ' + escapeHtml(top.reason) : ''}</div>
-                    ${top ? '<div style="display:flex;gap:12px;margin-top:8px;font-size:0.75rem;color:var(--text-muted);"><span>📅 التاريخ المقترح: ' + escapeHtml(top.nextOrderDate) + '</span><span>📦 الكمية المثلى: ' + escapeHtml(top.optimalQuantity) + '</span></div>' : ''}
+                    ${top && top.nextOrderDate ? '<div style="display:flex;gap:12px;margin-top:8px;font-size:0.75rem;color:var(--text-muted);"><span>📅 التاريخ المقترح: ' + escapeHtml(top.nextOrderDate) + '</span><span>📦 الكمية المثلى: ' + escapeHtml(top.optimalQuantity) + '</span></div>' : ''}
                 </div>
                 <div style="font-weight:700;font-size:0.9rem;margin-bottom:12px;">📋 توصيات أخرى</div>
             `;
@@ -2468,44 +2384,16 @@
             const from = document.getElementById('reportFrom').value;
             const to = document.getElementById('reportTo').value;
             const supplier = document.getElementById('reportSupplier').value;
-            const extra = document.getElementById('reportExtra').value;
-
-            if (!from || !to) {
-                showToast('❌ الرجاء اختيار نطاق التاريخ', 'error');
+            if (!from || !to) { showToast('❌ الرجاء اختيار نطاق التاريخ', 'error'); return; }
+            if (currentReportType !== 'suppliers' && currentReportType !== 'balance') {
+                showToast('⚠️ تقارير الفواتير والمشتريات والمدفوعات تحتاج جداول مشتريات غير متاحة بهذا العقد', 'warning');
+                reportData = [];
+                renderReportResults([]);
                 return;
             }
-
-            showLoading(true);
-            try {
-                const params = {
-                    report_type: currentReportType,
-                    start_date: from,
-                    end_date: to,
-                    supplier_id: supplier || null,
-                    extra: extra || null
-                };
-
-                const result = await apiCall('generateSupplierReport', params);
-                if (result.success && result.data) {
-                    reportData = result.data;
-                    renderReportResults(result.data);
-                    showToast('✅ تم توليد التقرير بنجاح', 'success');
-                    hapticFeedback('success');
-                } else {
-                    showToast(result.message || '❌ لا توجد بيانات للتقرير', 'error');
-                    document.getElementById('reportResults').innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:8px;"></i>
-                            <p>${escapeHtml(result.message || 'لا توجد بيانات للتقرير')}</p>
-                        </div>
-                    `;
-                }
-            } catch (e) {
-                showToast('❌ فشل توليد التقرير', 'error');
-                console.error(e);
-            } finally {
-                showLoading(false);
-            }
+            reportData = allSuppliers.filter(s => !supplier || Number(s.id) === Number(supplier));
+            renderReportResults(reportData);
+            showToast(reportData.length ? '✅ تم توليد تقرير الموردين من SQLite' : '⚠️ لا توجد بيانات مطابقة', reportData.length ? 'success' : 'warning');
         }
 
         function renderReportResults(data) {
@@ -2647,62 +2535,34 @@
 
         async function loadSuppliers() {
             if (isInitialLoad) renderSkeleton();
-
             showLoading(true);
             try {
                 const result = await apiCall('getSuppliers', {});
-                if (result.success && result.data && result.data.length > 0) {
-                    allSuppliers = result.data;
-                    LocalDB.setSuppliers(allSuppliers);
-                } else {
-                    allSuppliers = LocalDB.getSuppliers();
-                    if (allSuppliers.length === 0) {
-                        showToast('⚠️ لا توجد بيانات متاحة', 'warning');
-                    }
-                }
+                if (!result.success) throw new Error(result.message || 'فشل جلب الموردين');
+                allSuppliers = Array.isArray(result.data) ? result.data : [];
+                if (allSuppliers.length === 0) showToast('لا توجد بيانات موردين', 'info');
             } catch (e) {
-                allSuppliers = LocalDB.getSuppliers();
-                if (allSuppliers.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allSuppliers = [];
+                showToast(e.message || 'فشل تحميل الموردين من SQLite', 'error');
             }
-            renderCards();
-            updateStats();
-            generateAlerts();
-            generateAIInsights();
-            loadStats();
-            isInitialLoad = false;
-            showLoading(false);
+            renderCards(); updateStats(); generateAlerts(); generateAIInsights(); loadStats();
+            isInitialLoad = false; showLoading(false);
         }
 
         async function loadStats() {
-            try {
-                const result = await apiCall('getSupplierStats', {});
-                if (result.success && result.data) {
-                    const s = result.data;
-                    document.getElementById('statTotal').textContent = s.total || allSuppliers.length;
-                    document.getElementById('statActive').textContent = s.active || allSuppliers.filter(s => s.is_active == 1 ||
-                        s.isActive == 1).length;
-                    document.getElementById('statPurchases').textContent = formatNumber(s.purchases || 0);
-                    document.getElementById('statDue').textContent = formatNumber(s.due || 0);
-                    document.getElementById('trendTotal').textContent = (s.trendTotal || 0) + '%';
-                    document.getElementById('trendActive').textContent = (s.trendActive || 0) + '%';
-                    document.getElementById('trendPurchases').textContent = (s.trendPurchases || 0) + '%';
-                    document.getElementById('trendDue').textContent = (s.trendDue || 0) + '%';
-                    LocalDB.setStats(s);
-                }
-            } catch (e) {
-                const localStats = LocalDB.getStats();
-                if (localStats.total !== undefined) {
-                    document.getElementById('statTotal').textContent = localStats.total;
-                    document.getElementById('statActive').textContent = localStats.active;
-                    document.getElementById('statPurchases').textContent = formatNumber(localStats.purchases || 0);
-                    document.getElementById('statDue').textContent = formatNumber(localStats.due || 0);
-                }
-            }
+            const total = allSuppliers.length;
+            const active = allSuppliers.filter(s => Number(getField(s, 'is_active', 'isActive') ?? 0) === 1).length;
+            const purchases = allSuppliers.reduce((sum, s) => sum + Number(getField(s, 'total_purchases', 'totalPurchases', 'purchases', 'total_order_amount') || 0), 0);
+            const due = allSuppliers.reduce((sum, s) => sum + Number(getField(s, 'current_balance', 'currentBalance', 'balance', 'total_due') || 0), 0);
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statActive').textContent = active;
+            document.getElementById('statPurchases').textContent = formatNumber(purchases);
+            document.getElementById('statDue').textContent = formatNumber(due);
+            ['trendTotal','trendActive','trendPurchases','trendDue'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
         }
 
         // ============================================================
+        // 16. عرض البطاقات        // ============================================================
         // 16. عرض البطاقات (مع Swipe Actions و AI Insights)
         // ============================================================
         function renderCards() {
@@ -2729,7 +2589,7 @@
                     return lastDate && new Date(lastDate) >= weekAgo;
                 });
             } else if (currentFilter === 'ai_suggest') {
-                const insights = LocalDB.getAIInsights();
+                const insights = supplierInsights;
                 const suggestedIds = insights.map(i => i.supplierId);
                 filtered = filtered.filter(s => suggestedIds.includes(s.id));
             }
@@ -2758,7 +2618,7 @@
                 return;
             }
 
-            const insights = LocalDB.getAIInsights();
+            const insights = supplierInsights;
 
             container.innerHTML = filtered.map((s, idx) => {
                 const id = s.id;
@@ -2939,7 +2799,6 @@
             document.getElementById('statPurchases').textContent = formatNumber(totalPurchases);
             document.getElementById('statDue').textContent = formatNumber(totalDue);
 
-            LocalDB.setStats({ total, active, purchases: totalPurchases, due: totalDue });
         }
 
         function showStatDetail(type) {
@@ -2951,7 +2810,7 @@
         // ============================================================
         function generateAlerts() {
             const alerts = [];
-            const insights = LocalDB.getAIInsights();
+            const insights = supplierInsights;
 
             allSuppliers.forEach(s => {
                 const creditLimit = parseFloat(getField(s, 'credit_limit', 'creditLimit') || 0);
@@ -3011,7 +2870,7 @@
                 }
             }
 
-            LocalDB.setNotifications(alerts);
+            supplierNotifications = alerts;
             renderAlerts(alerts);
         }
 
@@ -3035,7 +2894,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = supplierNotifications;
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -3093,9 +2952,9 @@
                 tax_number: document.getElementById('taxNumber').value.trim(),
                 commercial_register: document.getElementById('commercialRegister').value.trim(),
                 credit_limit: parseFloat(document.getElementById('creditLimit').value) || 0,
-                address_line1: document.getElementById('addressLine1').value.trim(),
+                address: document.getElementById('addressLine1').value.trim(),
                 city: document.getElementById('city').value.trim(),
-                state: document.getElementById('state').value.trim(),
+                region: document.getElementById('state').value.trim(),
                 is_active: parseInt(document.getElementById('isActive').value),
                 notes: document.getElementById('notes').value.trim(),
                 party_type_id: 6
@@ -3104,7 +2963,7 @@
             showLoading(true);
 
             try {
-                const result = await apiCall('saveSupplier', data);
+                const result = await apiCall(currentEditId ? 'updateSupplier' : 'addSupplier', data);
                 if (result.success) {
                     showToast(result.message || '✅ تم حفظ المورد بنجاح', 'success');
                     closeModal();
@@ -3113,27 +2972,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({
-                        action: currentEditId ? 'updateSupplier' : 'saveSupplier',
-                        data: data
-                    });
-                    if (currentEditId) {
-                        const idx = allSuppliers.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) { allSuppliers[idx] = { ...allSuppliers[idx], ...data }; }
-                    } else {
-                        const newId = Date.now();
-                        allSuppliers.unshift({ ...data, id: newId, total_purchases: 0, current_balance: 0,
-                            last_purchase: null });
-                    }
-                    LocalDB.setSuppliers(allSuppliers);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3205,7 +3044,6 @@
                 if (result.success) {
                     showToast('✅ تم الحذف بنجاح', 'success');
                     allSuppliers = allSuppliers.filter(s => s.id != id);
-                    LocalDB.setSuppliers(allSuppliers);
                     renderCards();
                     updateStats();
                     hapticFeedback('success');
@@ -3213,17 +3051,7 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteSupplier', data: { id: id } });
-                    allSuppliers = allSuppliers.filter(s => s.id != id);
-                    LocalDB.setSuppliers(allSuppliers);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -3233,154 +3061,40 @@
         // 26. عرض تفاصيل المورد الكاملة
         // ============================================================
         async function viewDetails(id) {
-            const supplier = allSuppliers.find(s => s.id == id);
-            if (!supplier) {
-                showToast('❌ المورد غير موجود', 'error');
-                return;
-            }
-
-            selectedSupplierId = id;
-
-            let invoices = [],
-                payments = [],
-                notes = [];
-
+            let supplier = allSuppliers.find(s => Number(s.id) === Number(id));
+            if (!supplier) { showToast('❌ المورد غير موجود', 'error'); return; }
             try {
-                const invResult = await apiCall('getSupplierInvoices', { supplier_id: id });
-                if (invResult.success) invoices = invResult.data || [];
-            } catch (e) {
-                invoices = LocalDB.getInvoices().filter(i => i.supplier_id == id);
-            }
-
-            try {
-                const payResult = await apiCall('getSupplierPayments', { supplier_id: id });
-                if (payResult.success) payments = payResult.data || [];
-            } catch (e) {
-                payments = LocalDB.getPayments().filter(p => p.supplier_id == id);
-            }
-
-            try {
-                const noteResult = await apiCall('getSupplierNotes', { supplier_id: id });
-                if (noteResult.success && noteResult.data) {
-                    notes = noteResult.data;
-                } else {
-                    const noteText = getField(supplier, 'notes') || '';
-                    if (noteText) {
-                        notes = [{ content: noteText, created_at: new Date().toISOString(), created_by: 'النظام' }];
-                    }
-                }
-            } catch (e) {
-                const noteText = getField(supplier, 'notes') || '';
-                if (noteText) {
-                    notes = [{ content: noteText, created_at: new Date().toISOString(), created_by: 'النظام' }];
-                }
-            }
-
+                const response = await apiCall('getPartyById', { id });
+                if (response.success && response.data) supplier = response.data;
+            } catch (e) { /* use already loaded party data */ }
             const name = getField(supplier, 'commercial_name', 'commercialName', 'name') || '---';
             const legalName = getField(supplier, 'legal_name', 'legalName') || '---';
             const phone = getField(supplier, 'phone') || '---';
-            const phone2 = getField(supplier, 'phone2') || '---';
             const email = getField(supplier, 'email') || '---';
             const taxNumber = getField(supplier, 'tax_number', 'taxNumber') || '---';
-            const commercialRegister = getField(supplier, 'commercial_register', 'commercialRegister') || '---';
-            const creditLimit = parseFloat(getField(supplier, 'credit_limit', 'creditLimit') || 0);
-            const purchases = parseFloat(getField(supplier, 'total_purchases', 'totalPurchases', 'purchases') || 0);
-            const balance = parseFloat(getField(supplier, 'current_balance', 'currentBalance', 'balance') || 0);
-            const address = getField(supplier, 'address_line1', 'addressLine1') || '---';
+            const creditLimit = Number(getField(supplier, 'credit_limit', 'creditLimit') || 0);
+            const balance = Number(getField(supplier, 'current_balance', 'currentBalance', 'balance') || 0);
+            const address = getField(supplier, 'address', 'address_line1', 'addressLine1') || '---';
             const city = getField(supplier, 'city') || '---';
-            const state = getField(supplier, 'state') || '---';
-            const isActive = getField(supplier, 'is_active', 'isActive') == 1;
-            const notesText = getField(supplier, 'notes') || 'لا توجد ملاحظات';
-            const avatar = name.substring(0, 2);
-
-            const content = document.getElementById('detailsContent');
-            content.innerHTML = `
-                <div class="details-header">
-                    <h3 class="details-title">📋 تفاصيل المورد</h3>
-                    <button class="details-close" onclick="closeDetails()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div class="details-profile">
-                    <div class="details-avatar">${escapeHtml(avatar)}</div>
-                    <div class="details-name">${escapeHtml(name)}</div>
-                    <span class="details-status ${isActive ? 'active' : 'inactive'}">${isActive ? 'نشط' : 'غير نشط'}</span>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-info-circle"></i> المعلومات الأساسية</div>
+            const region = getField(supplier, 'region', 'state') || '---';
+            const active = Number(getField(supplier, 'is_active', 'isActive') || 0) === 1;
+            document.getElementById('detailsContent').innerHTML = `
+                <div class="details-header"><h3 class="details-title">📋 تفاصيل المورد</h3><button class="details-close" onclick="closeDetails()"><i class="fas fa-times"></i></button></div>
+                <div class="details-profile"><div class="details-avatar">${escapeHtml(name.substring(0,2))}</div><div class="details-name">${escapeHtml(name)}</div><span class="details-status ${active ? 'active' : 'inactive'}">${active ? 'نشط' : 'غير نشط'}</span></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-info-circle"></i> بيانات الطرف</div>
                     <div class="details-row"><span class="details-label">الاسم القانوني</span><span class="details-value">${escapeHtml(legalName)}</span></div>
-                    <div class="details-row"><span class="details-label">رقم الهاتف</span><span class="details-value">${escapeHtml(phone)}</span></div>
-                    <div class="details-row"><span class="details-label">الهاتف البديل</span><span class="details-value">${escapeHtml(phone2)}</span></div>
-                    <div class="details-row"><span class="details-label">البريد الإلكتروني</span><span class="details-value">${escapeHtml(email)}</span></div>
+                    <div class="details-row"><span class="details-label">الهاتف</span><span class="details-value">${escapeHtml(phone)}</span></div>
+                    <div class="details-row"><span class="details-label">البريد</span><span class="details-value">${escapeHtml(email)}</span></div>
                     <div class="details-row"><span class="details-label">الرقم الضريبي</span><span class="details-value">${escapeHtml(taxNumber)}</span></div>
-                    <div class="details-row"><span class="details-label">السجل التجاري</span><span class="details-value">${escapeHtml(commercialRegister)}</span></div>
+                    <div class="details-row"><span class="details-label">العنوان</span><span class="details-value">${escapeHtml(address)} - ${escapeHtml(city)} - ${escapeHtml(region)}</span></div>
                 </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-map-marker-alt"></i> العنوان</div>
-                    <div class="details-row"><span class="details-label">العنوان التفصيلي</span><span class="details-value">${escapeHtml(address)}</span></div>
-                    <div class="details-row"><span class="details-label">المدينة</span><span class="details-value">${escapeHtml(city)}</span></div>
-                    <div class="details-row"><span class="details-label">المنطقة</span><span class="details-value">${escapeHtml(state)}</span></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-money-bill-wave"></i> الأرصدة</div>
+                    <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value">${formatCurrency(creditLimit)}</span></div>
+                    <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value">${formatCurrency(balance)}</span></div>
                 </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-money-bill-wave"></i> المعلومات المالية</div>
-                    <div class="details-row"><span class="details-label">الحد الائتماني</span><span class="details-value" style="color:var(--primary-color)">${formatCurrency(creditLimit)}</span></div>
-                    <div class="details-row"><span class="details-label">إجمالي المشتريات</span><span class="details-value" style="color:var(--success)">${formatCurrency(purchases)}</span></div>
-                    <div class="details-row"><span class="details-label">الرصيد الحالي</span><span class="details-value" style="color:${balance > creditLimit * 0.9 ? 'var(--error)' : 'var(--primary-color)'}">${formatCurrency(balance)}</span></div>
-                </div>
-
-                <div class="details-section">
-                    <div class="details-section-title"><i class="fas fa-sticky-note"></i> الملاحظات</div>
-                    <p style="font-size:0.85rem; color:var(--text-muted); line-height:1.6;">${escapeHtml(notesText)}</p>
-                </div>
-
-                <div class="details-tabs">
-                    <button class="details-tab active" onclick="switchTab(this, 'invoices')">📄 الفواتير (${invoices.length})</button>
-                    <button class="details-tab" onclick="switchTab(this, 'payments')">💳 المدفوعات (${payments.length})</button>
-                    <button class="details-tab" onclick="switchTab(this, 'notes')">📝 الملاحظات (${notes.length})</button>
-                </div>
-
-                <div class="details-tab-content active" id="tab-invoices">
-                    ${invoices.length === 0 ? '<p style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد فواتير</p>' : 
-                        invoices.map(inv => `
-                        <div class="invoice-item">
-                            <div class="invoice-header"><span class="invoice-number">فاتورة #${escapeHtml(String(getField(inv, 'invoice_number', 'id')))}</span><span class="invoice-date">${escapeHtml(getField(inv, 'date', 'created_at') || '---')}</span></div>
-                            <div class="invoice-amount" style="color:var(--primary-color)">${formatCurrency(getField(inv, 'amount', 'total') || 0)}</div>
-                            <span class="invoice-status ${getField(inv, 'status', 'unpaid')}">${getField(inv, 'status') === 'paid' ? 'مدفوعة' : getField(inv, 'status') === 'partial' ? 'جزئية' : 'غير مدفوعة'}</span>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="details-tab-content" id="tab-payments">
-                    ${payments.length === 0 ? '<p style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد مدفوعات</p>' : 
-                        payments.map(pay => `
-                        <div class="payment-item">
-                            <div class="payment-header"><span class="payment-ref">دفعة #${escapeHtml(String(getField(pay, 'reference', 'id')))}</span><span class="payment-date">${escapeHtml(getField(pay, 'date', 'created_at') || '---')}</span></div>
-                            <div class="payment-amount" style="color:var(--success)">${formatCurrency(getField(pay, 'amount') || 0)}</div>
-                            <span style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(getField(pay, 'method') || 'نقدي')} - ${escapeHtml(getField(pay, 'notes') || '')}</span>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div class="details-tab-content" id="tab-notes">
-                    ${notes.length === 0 ? '<p style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد ملاحظات</p>' : 
-                        notes.map(note => `
-                        <div class="note-item" style="border-right:3px solid var(--primary-color); padding-right:12px;">
-                            <div style="font-size:0.85rem; margin-bottom:6px;">${escapeHtml(getField(note, 'content', 'note') || '')}</div>
-                            <div style="font-size:0.7rem; color:var(--text-muted);">${escapeHtml(getField(note, 'created_by') || '---')} - ${escapeHtml(getField(note, 'created_at') || '---')}</div>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div style="height:40px;"></div>
+                <div class="details-section"><div class="details-section-title"><i class="fas fa-database"></i> حدود البيانات</div><p style="font-size:0.8rem;color:var(--text-muted);">تفاصيل الفواتير والمدفوعات والملاحظات المنفصلة غير متاحة في Schema الحالي؛ المعروض هو سجل الطرف الفعلي.</p></div>
             `;
-
-            document.getElementById('detailsOverlay').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            hapticFeedback('light');
+            document.getElementById('detailsOverlay').classList.add('show'); document.body.style.overflow = 'hidden'; hapticFeedback('light');
         }
 
         function closeDetails() {
@@ -3678,100 +3392,15 @@
 
         function drawChart() {
             const canvas = document.getElementById('chartCanvas');
-            canvas.innerHTML = '';
-            const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو'];
-            const data = [45, 52, 38, 65, 48, 72, 58];
-            const max = Math.max(...data);
-            const svgNS = 'http://www.w3.org/2000/svg';
-            const svg = document.createElementNS(svgNS, 'svg');
-            svg.setAttribute('width', '100%');
-            svg.setAttribute('height', '100%');
-            svg.setAttribute('viewBox', '0 0 700 160');
-            svg.style.padding = '20px';
-            svg.style.boxSizing = 'border-box';
-
-            for (let i = 0; i <= 4; i++) {
-                const y = 140 - (i * 35);
-                const line = document.createElementNS(svgNS, 'line');
-                line.setAttribute('x1', '50');
-                line.setAttribute('y1', y);
-                line.setAttribute('x2', '680');
-                line.setAttribute('y2', y);
-                line.setAttribute('stroke', 'var(--border-color)');
-                line.setAttribute('stroke-width', '1');
-                svg.appendChild(line);
-                const text = document.createElementNS(svgNS, 'text');
-                text.setAttribute('x', '40');
-                text.setAttribute('y', y + 4);
-                text.setAttribute('fill', 'var(--text-muted)');
-                text.setAttribute('font-size', '10');
-                text.setAttribute('text-anchor', 'end');
-                text.setAttribute('font-family', 'Cairo');
-                text.textContent = Math.round((max / 4) * i) + 'K';
-                svg.appendChild(text);
-            }
-
-            const barWidth = 60,
-                gap = 30;
-            data.forEach((val, i) => {
-                const x = 70 + i * (barWidth + gap);
-                const height = (val / max) * 130;
-                const y = 140 - height;
-                const gradId = 'grad' + i;
-                const grad = document.createElementNS(svgNS, 'linearGradient');
-                grad.setAttribute('id', gradId);
-                grad.setAttribute('x1', '0');
-                grad.setAttribute('y1', '0');
-                grad.setAttribute('x2', '0');
-                grad.setAttribute('y2', '1');
-                const stop1 = document.createElementNS(svgNS, 'stop');
-                stop1.setAttribute('offset', '0%');
-                stop1.setAttribute('stop-color', '#00d4ff');
-                const stop2 = document.createElementNS(svgNS, 'stop');
-                stop2.setAttribute('offset', '100%');
-                stop2.setAttribute('stop-color', 'rgba(0,212,255,0.1)');
-                grad.appendChild(stop1);
-                grad.appendChild(stop2);
-                svg.appendChild(grad);
-                const rect = document.createElementNS(svgNS, 'rect');
-                rect.setAttribute('x', x);
-                rect.setAttribute('y', '140');
-                rect.setAttribute('width', barWidth);
-                rect.setAttribute('height', '0');
-                rect.setAttribute('rx', '6');
-                rect.setAttribute('fill', 'url(#' + gradId + ')');
-                svg.appendChild(rect);
-                setTimeout(() => { rect.setAttribute('y', y);
-                    rect.setAttribute('height', height); }, 100 + i * 100);
-                const valText = document.createElementNS(svgNS, 'text');
-                valText.setAttribute('x', x + barWidth / 2);
-                valText.setAttribute('y', y - 8);
-                valText.setAttribute('fill', '#00d4ff');
-                valText.setAttribute('font-size', '11');
-                valText.setAttribute('text-anchor', 'middle');
-                valText.setAttribute('font-weight', '700');
-                valText.setAttribute('font-family', 'Cairo');
-                valText.textContent = val + 'K';
-                valText.style.opacity = '0';
-                valText.style.transition = 'opacity 0.5s';
-                svg.appendChild(valText);
-                setTimeout(() => { valText.style.opacity = '1'; }, 600 + i * 100);
-                const monthText = document.createElementNS(svgNS, 'text');
-                monthText.setAttribute('x', x + barWidth / 2);
-                monthText.setAttribute('y', '158');
-                monthText.setAttribute('fill', 'var(--text-muted)');
-                monthText.setAttribute('font-size', '10');
-                monthText.setAttribute('text-anchor', 'middle');
-                monthText.setAttribute('font-family', 'Cairo');
-                monthText.textContent = months[i];
-                svg.appendChild(monthText);
-            });
-            canvas.appendChild(svg);
+            const active = allSuppliers.filter(s => Number(getField(s, 'is_active', 'isActive') || 0) === 1).length;
+            const inactive = Math.max(0, allSuppliers.length - active);
+            const creditUsed = allSuppliers.reduce((sum, s) => sum + Number(getField(s, 'current_balance', 'currentBalance', 'balance') || 0), 0);
+            const creditLimit = allSuppliers.reduce((sum, s) => sum + Number(getField(s, 'credit_limit', 'creditLimit') || 0), 0);
+            const rows = [['نشط', active, 'var(--success)'], ['غير نشط', inactive, 'var(--text-muted)'], ['الرصيد الحالي', creditUsed.toFixed(2), 'var(--warning)'], ['الحد الائتماني', creditLimit.toFixed(2), 'var(--primary-color)']];
+            const max = Math.max(1, ...rows.map(r => Number(r[1])));
+            canvas.innerHTML = '<div style="display:grid;gap:10px;padding:16px;">' + rows.map(r => `<div><div style="display:flex;justify-content:space-between;font-size:0.8rem;"><span>${r[0]}</span><strong>${r[1]}</strong></div><div style="height:10px;background:var(--surface-elevated);border-radius:8px;overflow:hidden;"><div style="height:100%;width:${Math.min(100, Number(r[1]) / max * 100)}%;background:${r[2]};border-radius:8px;"></div></div></div>`).join('') + '</div>';
         }
 
-        // ============================================================
-        // 30. معالج أزرار القائمة الجانبية
-        // ============================================================
         function handleSidebarAction(action) {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.remove('open');
@@ -3851,13 +3480,9 @@
                 if (e.target === this) closeAIModal();
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
-
             setTimeout(() => {
                 if (allSuppliers.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = supplierInsights;
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }

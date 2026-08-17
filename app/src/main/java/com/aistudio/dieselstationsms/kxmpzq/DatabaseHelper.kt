@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 20
+        const val VERSION = 21
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -182,6 +182,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     17 -> migrateV17ToV18(db)
                     18 -> ensureReportCacheTable(db)
                     19 -> migrateV19ToV20(db)
+                    20 -> ensurePendingTasksTable(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -198,6 +199,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureMessagingIndexes(db)
         ensureContractSchema(db)
         ensureReportCacheTable(db)
+        ensurePendingTasksTable(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)
@@ -1054,6 +1056,166 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun clearReportCacheForUser(userId: Long): Int {
         dbLock.lock()
         return try { writableDatabase.delete("report_cache", "user_id = ?", arrayOf(userId.toString())) } finally { dbLock.unlock() }
+    }
+
+    private fun ensurePendingTasksTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pending_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                task_type TEXT NOT NULL,
+                reference TEXT,
+                task_date TEXT NOT NULL,
+                amount REAL NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'قيد التنفيذ',
+                priority TEXT NOT NULL DEFAULT 'متوسطة',
+                notes TEXT,
+                created_by INTEGER,
+                assigned_to INTEGER,
+                resolved_at TEXT,
+                archived_at TEXT,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                is_resolved INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER NOT NULL DEFAULT 0,
+                station_id INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY(created_by) REFERENCES users(id),
+                FOREIGN KEY(assigned_to) REFERENCES users(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_status ON pending_tasks(status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_type ON pending_tasks(task_type)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_priority ON pending_tasks(priority)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_date ON pending_tasks(task_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_station ON pending_tasks(station_id, is_deleted, is_archived)")
+    }
+
+    fun getPendingTasks(params: JSONObject = JSONObject()): JSONArray {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            val where = StringBuilder("is_deleted = 0 AND station_id = ?")
+            val args = mutableListOf(params.optInt("station_id", 1).toString())
+            if (!params.optBoolean("include_archived", false)) where.append(" AND is_archived = 0")
+            params.optString("status", "").takeIf { it.isNotBlank() }?.let { where.append(" AND status = ?"); args.add(it) }
+            params.optString("task_type", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_type = ?"); args.add(it) }
+            params.optString("priority", "").takeIf { it.isNotBlank() }?.let { where.append(" AND priority = ?"); args.add(it) }
+            params.optString("start_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_date >= ?"); args.add(it) }
+            params.optString("end_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_date <= ?"); args.add(it) }
+            params.optString("search", "").takeIf { it.isNotBlank() }?.let {
+                where.append(" AND (CAST(id AS TEXT) LIKE ? OR reference LIKE ? OR task_type LIKE ? OR status LIKE ?)")
+                val q = "%$it%"; repeat(4) { args.add(q) }
+            }
+            val limit = params.optInt("limit", 500).coerceIn(1, 1000)
+            val offset = params.optInt("offset", 0).coerceAtLeast(0)
+            val result = JSONArray()
+            db.query("pending_tasks", null, where.toString(), args.toTypedArray(), null, null, "task_date DESC, id DESC", "$limit OFFSET $offset").use { c ->
+                while (c.moveToNext()) result.put(taskCursorToJson(c))
+            }
+            return result
+        } finally { dbLock.unlock() }
+    }
+
+    fun addTask(data: JSONObject): Long {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply {
+                put("uuid", data.optString("uuid").ifBlank { UUID.randomUUID().toString() })
+                put("task_type", data.optString("task_type", data.optString("type", "مهمة عامة")))
+                put("reference", data.optString("reference"))
+                put("task_date", data.optString("task_date", getCurrentDate()))
+                put("amount", data.optDouble("amount", 0.0))
+                put("status", data.optString("status", "قيد التنفيذ"))
+                put("priority", data.optString("priority", "متوسطة"))
+                put("notes", data.optString("notes"))
+                put("created_by", data.optLong("created_by", 0L).takeIf { it > 0 })
+                put("assigned_to", data.optLong("assigned_to", 0L).takeIf { it > 0 })
+                put("station_id", data.optInt("station_id", 1))
+            }
+            return writableDatabase.insertOrThrow("pending_tasks", null, values)
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateTask(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply {
+                if (data.has("task_type") || data.has("type")) put("task_type", data.optString("task_type", data.optString("type")))
+                if (data.has("reference")) put("reference", data.optString("reference"))
+                if (data.has("task_date")) put("task_date", data.optString("task_date"))
+                if (data.has("amount")) put("amount", data.optDouble("amount", 0.0))
+                if (data.has("status")) put("status", data.optString("status"))
+                if (data.has("priority")) put("priority", data.optString("priority"))
+                if (data.has("notes")) put("notes", data.optString("notes"))
+                if (data.has("assigned_to")) put("assigned_to", data.optLong("assigned_to", 0L).takeIf { it > 0 })
+                put("updated_at", getCurrentDateTime())
+            }
+            if (values.size() == 1) return 0
+            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun archiveTask(id: Long): Int {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply {
+                put("is_archived", 1); put("archived_at", getCurrentDateTime()); put("status", "مؤرشفة"); put("updated_at", getCurrentDateTime())
+            }
+            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun restoreTask(id: Long): Int {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply {
+                put("is_archived", 0); putNull("archived_at"); put("status", "قيد التنفيذ"); put("updated_at", getCurrentDateTime())
+            }
+            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun resolveTask(id: Long): Int {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply {
+                put("is_resolved", 1); put("resolved_at", getCurrentDateTime()); put("status", "مكتملة"); put("updated_at", getCurrentDateTime())
+            }
+            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteTask(id: Long): Int {
+        dbLock.lock()
+        try {
+            val values = ContentValues().apply { put("is_deleted", 1); put("updated_at", getCurrentDateTime()) }
+            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun generateTaskReport(params: JSONObject): JSONArray = getPendingTasks(params.put("include_archived", true))
+
+    private fun taskCursorToJson(c: Cursor): JSONObject = JSONObject().apply {
+        put("id", c.getLong(c.getColumnIndexOrThrow("id")))
+        put("uuid", c.getString(c.getColumnIndexOrThrow("uuid")))
+        put("type", c.getString(c.getColumnIndexOrThrow("task_type")))
+        put("task_type", c.getString(c.getColumnIndexOrThrow("task_type")))
+        put("reference", c.getString(c.getColumnIndexOrThrow("reference")) ?: "")
+        put("date", c.getString(c.getColumnIndexOrThrow("task_date")) ?: "")
+        put("task_date", c.getString(c.getColumnIndexOrThrow("task_date")) ?: "")
+        put("amount", c.getDouble(c.getColumnIndexOrThrow("amount")))
+        put("status", c.getString(c.getColumnIndexOrThrow("status")))
+        put("priority", c.getString(c.getColumnIndexOrThrow("priority")))
+        put("notes", c.getString(c.getColumnIndexOrThrow("notes")) ?: "")
+        put("created_by", c.getLong(c.getColumnIndexOrThrow("created_by")))
+        put("assigned_to", c.getLong(c.getColumnIndexOrThrow("assigned_to")))
+        put("is_archived", c.getInt(c.getColumnIndexOrThrow("is_archived")))
+        put("is_resolved", c.getInt(c.getColumnIndexOrThrow("is_resolved")))
+        put("created_at", c.getString(c.getColumnIndexOrThrow("created_at")) ?: "")
+        put("updated_at", c.getString(c.getColumnIndexOrThrow("updated_at")) ?: "")
+        put("resolved_at", c.getString(c.getColumnIndexOrThrow("resolved_at")) ?: "")
+        put("archived_at", c.getString(c.getColumnIndexOrThrow("archived_at")) ?: "")
     }
 
     private fun createAllTables(db: SQLiteDatabase) {

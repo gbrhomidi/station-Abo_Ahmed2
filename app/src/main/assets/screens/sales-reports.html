@@ -1344,78 +1344,33 @@
         // 1. دالة apiCall الموحدة
         // ============================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'generateSalesReport': raw = AndroidInterface.generateSalesReport(JSON.stringify(p)); break;
+                    case 'getInvoiceDetails': raw = AndroidInterface.getInvoiceDetails(String(p.invoice_number || '')); break;
+                    case 'getProducts': raw = AndroidInterface.getProducts(); break;
+                    case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+                    case 'getShifts': return Promise.resolve({ success: false, data: [], message: 'فلتر الورديات غير متاح في عقد SQLite الحالي' });
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
-        // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getSales: function() { return this.get('sales_data', []); },
-            setSales: function(data) { this.set('sales_data', data); },
-            getStats: function() { return this.get('sales_stats', {}); },
-            setStats: function(stats) { this.set('sales_stats', stats); },
-            getNotifications: function() { return this.get('sales_notifications', []); },
-            setNotifications: function(notifications) { this.set('sales_notifications', notifications); },
-            getAIInsights: function() { return this.get('sales_ai_insights', []); },
-            setAIInsights: function(insights) { this.set('sales_ai_insights', insights); }
-        };
-
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
         let isOnline = navigator.onLine;
-
         function updateOnlineStatus() {
             isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
-            }
+            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — التقارير تحتاج اتصال SQLite', 'warning'); }
+            else banner.classList.remove('show');
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة (لا توجد عمليات كتابة)
-        // ============================================================
-        async function syncPendingOperations() {}
-
-        // ============================================================
-        // 5. Haptic Feedback
+        // 5. Haptic Feedback        // 5. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1649,12 +1604,12 @@
                 });
             }
 
-            LocalDB.setAIInsights(insights);
+            window.__salesInsights = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
+            const insights = window.__salesInsights || [];
             if (insights.length === 0) return null;
             const priority = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
@@ -1779,7 +1734,7 @@
                 const result = await apiCall('generateSalesReport', params);
                 if (result.success && result.data) {
                     const sales = result.data;
-                    LocalDB.setSales(sales);
+                    window.__salesReportData = sales;
                     renderSalesTable(sales);
                     updateStats(sales);
                     updateCharts(sales);
@@ -2010,7 +1965,7 @@
                 });
             }
 
-            LocalDB.setNotifications(alerts);
+            window.__salesNotifications = alerts;
             renderAlerts(alerts);
         }
 
@@ -2031,7 +1986,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = window.__salesNotifications || [];
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2289,7 +2244,7 @@
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             // إعادة تطبيق التصفية على البيانات الحالية
-            const sales = LocalDB.getSales() || [];
+            const sales = window.__salesReportData || [];
             if (sales.length > 0) {
                 let filtered = [...sales];
                 if (filter !== 'all') {
@@ -2370,6 +2325,9 @@
                         opt.textContent = s.shift_code || 'وردية ' + (s.shift_date || '');
                         shiftSelect.appendChild(opt);
                     });
+                } else {
+                    shiftSelect.innerHTML = '<option value="">الورديات غير متاحة</option>';
+                    shiftSelect.disabled = true;
                 }
             } catch (e) {
                 console.error('Error loading dropdown data:', e);
@@ -2455,14 +2413,10 @@
                 if (e.target === this) closeAIModal();
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
-
             setTimeout(() => {
-                const sales = LocalDB.getSales();
+                const sales = window.__salesReportData || [];
                 if (sales && sales.length > 0) {
-                    const insights = LocalDB.getAIInsights();
+                    const insights = window.__salesInsights || [];
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');
                     }

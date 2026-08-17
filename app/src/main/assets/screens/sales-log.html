@@ -1328,111 +1328,35 @@
         // 1. دالة apiCall الموحدة
         // ============================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getSalesTransactions': raw = AndroidInterface.getSalesTransactions(JSON.stringify(p)); break;
+                    case 'getParties': raw = AndroidInterface.getParties(p.type || 'customer'); break;
+                    case 'getFuelTypes': raw = AndroidInterface.getFuelTypes(); break;
+                    case 'getPumps': raw = AndroidInterface.getPumps(); break;
+                    case 'saveSaleTransaction': raw = AndroidInterface.saveSaleTransaction(JSON.stringify(p)); break;
+                    case 'deleteSaleTransaction': raw = AndroidInterface.deleteSaleTransaction(Number(p.id)); break;
+                    case 'getInvoiceDetails': raw = AndroidInterface.getInvoiceDetails(String(p.invoice_number || '')); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
-        // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            getSales: function() { return this.get('sales_log', []); },
-            setSales: function(data) { this.set('sales_log', data); },
-            getCustomers: function() { return this.get('sales_customers', []); },
-            setCustomers: function(data) { this.set('sales_customers', data); },
-            getFuelTypes: function() { return this.get('sales_fuel_types', []); },
-            setFuelTypes: function(data) { this.set('sales_fuel_types', data); },
-            getPumps: function() { return this.get('sales_pumps', []); },
-            setPumps: function(data) { this.set('sales_pumps', data); },
-            getPendingOps: function() { return this.get('sales_pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('sales_pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('sales_pending_ops'); },
-            getStats: function() { return this.get('sales_stats', {}); },
-            setStats: function(stats) { this.set('sales_stats', stats); },
-            getNotifications: function() { return this.get('sales_notifications', []); },
-            setNotifications: function(notifications) { this.set('sales_notifications', notifications); }
-        };
-
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
         let isOnline = navigator.onLine;
-
         function updateOnlineStatus() {
             isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
-            } else {
-                banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
-            }
+            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — عمليات البيع متاحة فقط عند اتصال SQLite', 'warning'); }
+            else banner.classList.remove('show');
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadSales();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
-        // ============================================================
-        // 5. Haptic Feedback
+        // 5. Haptic Feedback        // 5. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1612,47 +1536,17 @@
                     apiCall('getFuelTypes', {}),
                     apiCall('getPumps', { station_id: 1 })
                 ]);
-
-                if (salesRes.success && salesRes.data) {
-                    allSales = salesRes.data;
-                    LocalDB.setSales(allSales);
-                } else {
-                    allSales = LocalDB.getSales();
-                }
-                if (customersRes.success && customersRes.data) {
-                    allCustomers = customersRes.data;
-                    LocalDB.setCustomers(allCustomers);
-                } else {
-                    allCustomers = LocalDB.getCustomers();
-                }
-                if (fuelRes.success && fuelRes.data) {
-                    allFuelTypes = fuelRes.data;
-                    LocalDB.setFuelTypes(allFuelTypes);
-                } else {
-                    allFuelTypes = LocalDB.getFuelTypes();
-                }
-                if (pumpsRes.success && pumpsRes.data) {
-                    allPumps = pumpsRes.data;
-                    LocalDB.setPumps(allPumps);
-                } else {
-                    allPumps = LocalDB.getPumps();
-                }
+                if (!salesRes.success) throw new Error(salesRes.message || 'فشل جلب سجل المبيعات');
+                allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
+                allCustomers = customersRes.success && Array.isArray(customersRes.data) ? customersRes.data : [];
+                allFuelTypes = fuelRes.success && Array.isArray(fuelRes.data) ? fuelRes.data : [];
+                allPumps = pumpsRes.success && Array.isArray(pumpsRes.data) ? pumpsRes.data : [];
             } catch (e) {
-                allSales = LocalDB.getSales();
-                allCustomers = LocalDB.getCustomers();
-                allFuelTypes = LocalDB.getFuelTypes();
-                allPumps = LocalDB.getPumps();
-                if (allSales.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allSales = []; allCustomers = []; allFuelTypes = []; allPumps = [];
+                showToast(e.message || 'فشل تحميل سجل المبيعات من SQLite', 'error');
             }
-
-            populateDropdowns();
-            renderSalesCards();
-            updateStats();
-            generateAlerts();
-            isInitialLoad = false;
-            showLoading(false);
+            populateDropdowns(); renderSalesCards(); updateStats(); generateAlerts();
+            isInitialLoad = false; showLoading(false);
         }
 
         function populateDropdowns() {
@@ -1743,7 +1637,7 @@
             }
 
             container.innerHTML = filtered.map((s, idx) => {
-                const id = s.id;
+                const id = s.id || s.sale_id;
                 const code = s.sale_code || '---';
                 const customerName = s.customer_name || 'عميل عام';
                 const liters = parseFloat(s.liters || 0);
@@ -1815,11 +1709,7 @@
             document.getElementById('statAvg').textContent = formatCurrency(avg);
             document.getElementById('statCount').textContent = allSales.length;
 
-            // محاكاة الاتجاهات
-            document.getElementById('trendTotal').textContent = (Math.random() * 8 + 1).toFixed(1) + '%';
-            document.getElementById('trendLiters').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
-            document.getElementById('trendAvg').textContent = (Math.random() * 5 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendCount').textContent = (Math.random() * 7 + 1).toFixed(1) + '%';
+            ['trendTotal', 'trendLiters', 'trendAvg', 'trendCount'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
         }
 
         function showStatDetail(type) {
@@ -1860,6 +1750,8 @@
         // ============================================================
         // 13. نظام التنبيهات
         // ============================================================
+        let currentAlerts = [];
+
         function generateAlerts() {
             const alerts = [];
             const pending = allSales.filter(s => s.payment_status === 'pending' || s.payment_status === 'partial');
@@ -1882,7 +1774,7 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.setNotifications(alerts);
+            currentAlerts = alerts;
             renderAlerts(alerts);
         }
 
@@ -1900,7 +1792,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = currentAlerts;
             if (notifications.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + notifications.length + ' إشعارات', 'success');
             hapticFeedback('light');
@@ -2085,22 +1977,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'saveSaleTransaction', data: data });
-                    if (currentEditId) {
-                        const idx = allSales.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) allSales[idx] = { ...allSales[idx], ...data };
-                    } else {
-                        allSales.push({ ...data, id: Date.now(), sale_code: 'SALE-' + Date.now() });
-                    }
-                    LocalDB.setSales(allSales);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
-                    renderSalesCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2110,7 +1987,7 @@
         // 18. تعديل بيع
         // ============================================================
         async function editSale(id) {
-            const sale = allSales.find(s => s.id == id);
+            const sale = allSales.find(s => Number(s.id || s.sale_id) === Number(id));
             if (!sale) { showToast('❌ البيع غير موجود', 'error'); return; }
 
             currentEditId = id;
@@ -2140,7 +2017,7 @@
         // 19. حذف بيع
         // ============================================================
         async function deleteSale(id) {
-            const sale = allSales.find(s => s.id == id);
+            const sale = allSales.find(s => Number(s.id || s.sale_id) === Number(id));
             const name = sale ? (sale.sale_code || 'هذه العملية') : 'هذه العملية';
 
             const confirmed = await Swal.fire({
@@ -2162,8 +2039,7 @@
                 const result = await apiCall('deleteSaleTransaction', { id: id });
                 if (result.success) {
                     showToast('✅ تم الحذف بنجاح', 'success');
-                    allSales = allSales.filter(s => s.id != id);
-                    LocalDB.setSales(allSales);
+                    allSales = allSales.filter(s => Number(s.id || s.sale_id) !== Number(id));
                     renderSalesCards();
                     updateStats();
                     hapticFeedback('success');
@@ -2171,16 +2047,7 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deleteSaleTransaction', data: { id: id } });
-                    allSales = allSales.filter(s => s.id != id);
-                    LocalDB.setSales(allSales);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderSalesCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2190,7 +2057,7 @@
         // 20. عرض تفاصيل البيع
         // ============================================================
         async function viewSale(id) {
-            const sale = allSales.find(s => s.id == id);
+            const sale = allSales.find(s => Number(s.id || s.sale_id) === Number(id));
             if (!sale) { showToast('❌ البيع غير موجود', 'error'); return; }
 
             const content = document.getElementById('detailsContent');
@@ -2287,10 +2154,10 @@
                     openAddModal();
                     break;
                 case 'export':
-                    showToast('📤 جاري تجهيز التصدير...', 'info');
+                    showToast('⚠️ تصدير سجل المبيعات غير متاح في هذه الشاشة', 'warning');
                     break;
                 case 'pdf':
-                    showToast('📄 جاري تجهيز PDF...', 'info');
+                    showToast('⚠️ PDF غير متاح في هذه الشاشة؛ استخدم الطباعة', 'warning');
                     break;
                 case 'print':
                     window.print();
@@ -2343,10 +2210,6 @@
             document.getElementById('detailsOverlay').addEventListener('click', function(e) {
                 if (e.target === this) closeDetails();
             });
-
-            if (isOnline) {
-                syncPendingOperations();
-            }
 
             setTimeout(() => {
                 if (allSales.length > 0) {

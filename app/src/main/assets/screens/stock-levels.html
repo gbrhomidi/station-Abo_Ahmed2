@@ -1686,42 +1686,36 @@
    // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
-function apiCall(action, params) {
-    return new Promise((resolve, reject) => {
-        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-            try {
-                const jsonParams = JSON.stringify(params || {});
-                const result = window.AndroidInterface.execute(action, jsonParams);
-                try {
-                    const parsed = JSON.parse(result);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ success: true, data: result });
-                }
-            } catch (e) {
-                reject({ success: false, error: e.message });
-            }
-        } else {
-            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
-            // محاكاة بيانات للاختبار
-            resolve(mockApiResponse(action, params));
-        }
-    });
-}
-
-function handleAndroidResult(action, data) {
-    try {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-        if (window._pendingResolve) {
-            window._pendingResolve(parsed);
-            window._pendingResolve = null;
-        }
-    } catch (e) {
-        console.error('Error in handleAndroidResult:', e);
-    }
-}
+	function apiCall(action, params) {
+	    const p = params || {};
+	    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+	    try {
+	        let raw;
+	        switch (action) {
+	            case 'getWarehouses': raw = AndroidInterface.getWarehouses(JSON.stringify(p)); break;
+	            case 'getCategories': raw = AndroidInterface.getCategories(); break;
+	            case 'getInventorySummary': raw = AndroidInterface.getInventorySummary(JSON.stringify(p)); break;
+	            case 'getLowStockProducts': raw = AndroidInterface.getLowStockProducts(); break;
+	            case 'getInventoryAlerts': raw = AndroidInterface.getInventoryAlerts(JSON.stringify(p)); break;
+	            case 'getInventoryCharts': raw = AndroidInterface.getInventoryCharts(JSON.stringify(p)); break;
+	            case 'getMovements': raw = AndroidInterface.getMovements(JSON.stringify(p)); break;
+	            case 'getStockValues': raw = AndroidInterface.getStockValues(JSON.stringify(p)); break;
+	            case 'getAlerts': raw = AndroidInterface.getAlerts(JSON.stringify(p)); break;
+	            case 'filterInventory': raw = AndroidInterface.filterInventory(JSON.stringify(p)); break;
+	            case 'advancedFilter': raw = AndroidInterface.advancedFilter(JSON.stringify(p)); break;
+	            case 'searchProducts': raw = AndroidInterface.getProducts(); break;
+	            case 'addProduct': raw = AndroidInterface.addProduct(JSON.stringify(p)); break;
+	            case 'getExpiringProducts': return Promise.reject({ success: false, message: 'بيانات الصلاحية غير موجودة في عقد SQLite الحالي' });
+	            case 'getAuditReport': return Promise.reject({ success: false, message: 'تقرير الجرد غير متاح في عقد SQLite الحالي' });
+	            case 'createPurchaseOrder': return Promise.reject({ success: false, message: 'أوامر الشراء غير متاحة في عقد SQLite الحالي' });
+	            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
+	        }
+	        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+	    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+	}
 
 // ============================================================
+// 2. دوال مساعدة// ============================================================
 // 2. دوال مساعدة (Toast, Loading)
 // ============================================================
 function showToast(message, type = 'success') {
@@ -1826,7 +1820,7 @@ async function loadWarehouses() {
     } catch (e) {
         console.error('Error loading warehouses:', e);
         // بيانات تجريبية
-        allWarehouses = [{ warehouse_id: 1, warehouse_name: 'المستودع الرئيسي' }];
+        allWarehouses = [];
         populateWarehouseDropdowns();
     }
 }
@@ -1857,7 +1851,7 @@ async function loadCategories() {
         }
     } catch (e) {
         console.error('Error loading categories:', e);
-        allCategories = [{ category_id: 1, category_name: 'منتجات' }];
+        allCategories = [];
         populateCategoryDropdowns();
     }
 }
@@ -1889,18 +1883,17 @@ async function loadInventorySummary() {
             const data = result.data || {};
             document.getElementById('totalInventoryValue').textContent = 
                 (data.total_value || 0).toLocaleString('en') + ' ريال';
-            document.getElementById('inventoryTrend').textContent = 
-                (data.inventory_trend || 0).toFixed(2) + '% عن الشهر الماضي';
+            document.getElementById('inventoryTrend').textContent = data.inventory_trend !== undefined ? ((data.inventory_trend || 0).toFixed(2) + '% عن الشهر الماضي') : '—';
             document.getElementById('lowStockCount').textContent = 
                 (data.low_stock || 0) + ' منتج';
             document.getElementById('criticalCount').textContent = 
                 'تحذير: ' + (data.critical_count || 0) + ' منتج حرج';
             document.getElementById('expiredValue').textContent = 
-                (data.expired_value || 0).toLocaleString('en') + ' ريال';
+                data.expiry_supported === false ? 'غير متاح' : ((data.expired_value || 0).toLocaleString('en') + ' ريال');
             document.getElementById('expiryTrend').textContent = 
-                'زيادة ' + (data.expiry_trend || 0).toFixed(2) + '%';
+                data.expiry_supported === false ? 'غير متاح' : ('زيادة ' + (data.expiry_trend || 0).toFixed(2) + '%');
             document.getElementById('turnoverRate').textContent = 
-                (data.turnover_rate || 0).toFixed(2) + ' مرة';
+                data.turnover_rate !== undefined ? ((data.turnover_rate || 0).toFixed(2) + ' مرة') : '—';
             document.getElementById('turnoverStatus').textContent = 
                 data.turnover_status || 'ممتاز (المعدل المثالي 3-5)';
         }
@@ -1942,7 +1935,7 @@ function populateLowStockTable(products) {
             <td>${p.product_code || '---'}</td>
             <td>${p.product_name || '---'}</td>
             <td class="numeric">${(p.quantity_on_hand || 0).toLocaleString('en')}</td>
-            <td class="numeric">${(p.min_stock_level || 0).toLocaleString('en')}</td>
+            <td class="numeric">${minimum.toLocaleString('en')}</td>
             <td class="numeric" style="color: var(--error); font-weight: bold;">${shortage.toLocaleString('en')}</td>
             <td>
                 <button class="action-btn action-btn-success" onclick="event.stopPropagation();createOrder(${p.product_id || p.id}, '${p.product_name || ''}')">
@@ -1996,44 +1989,12 @@ async function loadChartsData() {
         }
     } catch (e) {
         console.error('Error loading charts data:', e);
-        // بيانات تجريبية
-        updateMovementChart(generateMockData(30));
-        updateDistributionChart([
-            { category: 'وقود', value: 40 },
-            { category: 'زيوت', value: 25 },
-            { category: 'قطع غيار', value: 20 },
-            { category: 'خدمات', value: 15 }
-        ]);
-        updateTrendChart(generateTrendData(6));
-        updateExpiryChart({ active: 60, expiring: 25, expired: 15 });
+        updateMovementChart([]);
+        updateDistributionChart([]);
+        updateTrendChart([]);
+        updateExpiryChart({ active: 0, expiring: 0, expired: 0, supported: false });
+        showToast(e.message || 'بيانات الرسوم غير متاحة', 'warning');
     }
-}
-
-function generateMockData(days) {
-    const labels = [];
-    const values = [];
-    const today = new Date();
-    for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        labels.push(d.toLocaleDateString('ar-EG', { month: '2-digit', day: '2-digit' }));
-        values.push(Math.floor(Math.random() * 80) + 20);
-    }
-    return labels.map((label, idx) => ({ date: label, value: values[idx] }));
-}
-
-function generateTrendData(months) {
-    const data = [];
-    const today = new Date();
-    for (let i = months - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setMonth(d.getMonth() - i);
-        data.push({
-            month: d.toLocaleDateString('ar-EG', { month: 'short', year: 'numeric' }),
-            value: Math.floor(Math.random() * 50000) + 20000
-        });
-    }
-    return data;
 }
 
 // ============================================================
@@ -2045,10 +2006,10 @@ function updateMovementChart(data) {
     chartInstances.movement = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.map(d => d.date || ''),
+            labels: data.map(d => d.date || d.day || ''),
             datasets: [{
                 label: 'صافي الحركة اليومية',
-                data: data.map(d => d.value || 0),
+                data: data.map(d => d.value ?? d.total_value ?? 0),
                 borderColor: '#007ACC',
                 backgroundColor: 'rgba(0, 122, 204, 0.1)',
                 tension: 0.3,
@@ -2077,9 +2038,9 @@ function updateDistributionChart(data) {
     chartInstances.distribution = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: data.map(d => d.category || ''),
+            labels: data.map(d => d.category || d.category_name || ''),
             datasets: [{
-                data: data.map(d => d.value || 0),
+                data: data.map(d => d.value ?? d.total_value ?? 0),
                 backgroundColor: colors.slice(0, data.length),
                 borderWidth: 1
             }]
@@ -2103,10 +2064,10 @@ function updateTrendChart(data) {
     chartInstances.trend = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: data.map(d => d.month || ''),
+            labels: data.map(d => d.month || d.day || ''),
             datasets: [{
                 label: 'متوسط القيمة الشهري',
-                data: data.map(d => d.value || 0),
+                data: data.map(d => d.value ?? d.total_value ?? 0),
                 backgroundColor: 'rgba(0, 122, 204, 0.7)',
                 borderColor: 'rgba(0, 122, 204, 1)',
                 borderWidth: 1,
@@ -2235,10 +2196,10 @@ function populateValuesTable(values) {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${v.product_name || '---'}</td>
-            <td>${v.warehouse_name || '---'}</td>
-            <td class="numeric">${(v.quantity_on_hand || 0).toLocaleString('en')}</td>
-            <td class="numeric">${(v.average_cost || 0).toFixed(2)}</td>
-            <td class="numeric">${(v.total_value || 0).toLocaleString('en')}</td>
+            <td>${v.warehouse_name || 'جميع المستودعات'}</td>
+            <td class="numeric">${(v.quantity ?? v.quantity_on_hand ?? 0).toLocaleString('en')}</td>
+            <td class="numeric">${(v.purchase_price ?? v.average_cost ?? 0).toFixed(2)}</td>
+            <td class="numeric">${((v.total_value ?? ((v.quantity || 0) * (v.purchase_price || 0))) || 0).toLocaleString('en')}</td>
         `;
         tbody.appendChild(row);
     });
@@ -2248,16 +2209,12 @@ async function loadAlerts() {
     showLoading(true);
     try {
         const result = await apiCall('getAlerts', {});
-        if (result.success) {
-            allAlerts = result.data || [];
-            populateAlertsTable(allAlerts);
-        }
+        const items = result.success && Array.isArray(result.data) ? result.data : [];
+        allAlerts = items.map(item => ({ ...item, alert_type: 'مخزون منخفض', alert_level: Number(item.quantity_on_hand || 0) <= 0 ? 'critical' : 'warning', is_resolved: 0 }));
+        populateAlertsTable(allAlerts);
     } catch (e) {
-        console.error('Error loading alerts:', e);
-        populateAlertsTable([]);
-    } finally {
-        showLoading(false);
-    }
+        allAlerts = []; populateAlertsTable([]); showToast(e.message || 'فشل تحميل تنبيهات المخزون', 'error');
+    } finally { showLoading(false); }
 }
 
 function populateAlertsTable(alerts) {
@@ -2304,8 +2261,8 @@ async function applyFilters() {
             const data = result.data || {};
             document.getElementById('totalInventoryValue').textContent = 
                 (data.total_value || 0).toLocaleString('en') + ' ريال';
-            populateLowStockTable(data.products || []);
-            updateMovementChart(data.movement_chart || []);
+            populateLowStockTable(data.rows || []);
+            updateMovementChart(data.movement_series || []);
             showToast('تم تطبيق الفلاتر بنجاح', 'success');
         }
     } catch (e) {
@@ -2336,7 +2293,9 @@ async function applyAdvancedFilters() {
             add_date: addDate || null
         });
         if (result.success) {
-            populateLowStockTable(result.data || []);
+            const reportRows = result.data && result.data.rows ? result.data.rows : (result.data || []);
+            const filteredRows = reportRows.filter(row => (minValue === '' || Number(row.quantity || 0) * Number(row.purchase_price || 0) >= Number(minValue)) && (maxValue === '' || Number(row.quantity || 0) * Number(row.purchase_price || 0) <= Number(maxValue)) && (minQty === '' || Number(row.quantity || 0) >= Number(minQty)) && (maxQty === '' || Number(row.quantity || 0) <= Number(maxQty)));
+            populateLowStockTable(filteredRows);
             closeModal('advancedFilterModal');
             showToast('تم تطبيق التصفية المتقدمة', 'success');
         }
@@ -2348,37 +2307,11 @@ async function applyAdvancedFilters() {
 }
 
 async function createOrder(productId, productName) {
-    const { value: quantity } = await Swal.fire({
-        title: `طلب شراء: ${productName}`,
-        input: 'number',
-        inputLabel: 'الكمية المطلوبة',
-        inputPlaceholder: 'أدخل الكمية',
-        showCancelButton: true,
-        confirmButtonText: 'تأكيد الطلب',
-        cancelButtonText: 'إلغاء',
-        inputValidator: (v) => {
-            if (!v || v <= 0) return 'الرجاء إدخال كمية صحيحة';
-        }
-    });
-    if (!quantity) return;
-    showLoading(true);
-    try {
-        const result = await apiCall('createPurchaseOrder', {
-            product_id: productId,
-            quantity: parseInt(quantity)
-        });
-        if (result.success) {
-            showToast('تم إنشاء طلب الشراء بنجاح', 'success');
-            loadLowStockProducts();
-        }
-    } catch (e) {
-        showToast('خطأ في إنشاء طلب الشراء', 'error');
-    } finally {
-        showLoading(false);
-    }
+    showToast('⚠️ أوامر الشراء غير متاحة في طبقة Android الحالية', 'warning');
 }
 
 // ============================================================
+// 13. دوال النماذج المنبثقة// ============================================================
 // 13. دوال النماذج المنبثقة
 // ============================================================
 function showSearchModal() {
@@ -2459,28 +2392,15 @@ async function saveSettings() {
     const language = document.getElementById('languageSetting').value;
     const theme = document.getElementById('themeSetting').value;
     const autoRefresh = document.getElementById('autoRefreshSetting').value;
-    
-    showLoading(true);
-    try {
-        const result = await apiCall('saveSettings', {
-            language,
-            theme,
-            auto_refresh: parseInt(autoRefresh)
-        });
-        if (result.success) {
-            if (theme === 'dark') toggleTheme('dark');
-            else toggleTheme('light');
-            closeModal('settingsModal');
-            showToast('تم حفظ الإعدادات', 'success');
-        }
-    } catch (e) {
-        showToast('خطأ في حفظ الإعدادات', 'error');
-    } finally {
-        showLoading(false);
-    }
+    localStorage.setItem('inventory_language', language);
+    localStorage.setItem('inventory_auto_refresh', autoRefresh);
+    if (theme === 'dark') toggleTheme('dark'); else toggleTheme('light');
+    closeModal('settingsModal');
+    showToast('تم حفظ تفضيلات الواجهة محلياً', 'success');
 }
 
 // ============================================================
+// 14. دوال التصدير والتنبيهات// ============================================================
 // 14. دوال التصدير والتنبيهات
 // ============================================================
 function exportLowStockTable() {
@@ -2539,161 +2459,15 @@ function showCriticalProducts() {
 }
 
 async function showExpiringProducts() {
-    showLoading(true);
-    try {
-        const result = await apiCall('getExpiringProducts', {});
-        if (result.success) {
-            populateLowStockTable(result.data || []);
-            showToast(`تم عرض ${(result.data || []).length} منتج قارب على الانتهاء`, 'success');
-        }
-    } catch (e) {
-        showToast('خطأ في جلب المنتجات القاربة على الانتهاء', 'error');
-    } finally {
-        showLoading(false);
-    }
+    showToast('⚠️ بيانات الصلاحية غير متاحة في Schema الحالي', 'warning');
 }
 
 async function showAuditReport() {
-    showLoading(true);
-    try {
-        const result = await apiCall('getAuditReport', {});
-        if (result.success && result.data && result.data.url) {
-            window.open(result.data.url, '_blank');
-            showToast('تم فتح تقرير الجرد', 'success');
-        } else {
-            showToast('لا يوجد تقرير جرد متاح', 'info');
-        }
-    } catch (e) {
-        showToast('خطأ في تحميل تقرير الجرد', 'error');
-    } finally {
-        showLoading(false);
-    }
+    showToast('⚠️ تقرير الجرد غير متاح في طبقة Android الحالية', 'warning');
 }
 
 // ============================================================
-// 15. دوال mock للاختبار (للاستخدام بدون AndroidInterface)
-// ============================================================
-function mockApiResponse(action, params) {
-    // بيانات تجريبية للاختبار
-    const mockData = {
-        getWarehouses: { success: true, data: [{ warehouse_id: 1, warehouse_name: 'المستودع الرئيسي' }] },
-        getCategories: { success: true, data: [{ category_id: 1, category_name: 'منتجات' }] },
-        getInventorySummary: {
-            success: true,
-            data: {
-                total_value: 125000,
-                inventory_trend: 5.2,
-                low_stock: 8,
-                critical_count: 3,
-                expired_value: 4500,
-                expiry_trend: 2.1,
-                turnover_rate: 4.5,
-                turnover_status: 'ممتاز'
-            }
-        },
-        getLowStockProducts: {
-            success: true,
-            data: [
-                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 },
-                { product_id: 2, product_code: 'P002', product_name: 'بنزين 95', quantity_on_hand: 80, min_stock_level: 300 },
-                { product_id: 3, product_code: 'P003', product_name: 'زيت محرك', quantity_on_hand: 15, min_stock_level: 50 }
-            ]
-        },
-        getInventoryAlerts: {
-            success: true,
-            data: {
-                critical_count: 3,
-                expiring_count: 5,
-                expiring_value: 12000,
-                audit_items: 45,
-                audit_variance: 0.5
-            }
-        },
-        getInventoryCharts: {
-            success: true,
-            data: {
-                movement_chart: generateMockData(30),
-                distribution_chart: [
-                    { category: 'وقود', value: 40 },
-                    { category: 'زيوت', value: 25 },
-                    { category: 'قطع غيار', value: 20 },
-                    { category: 'خدمات', value: 15 }
-                ],
-                trend_chart: generateTrendData(6),
-                expiry_chart: { active: 60, expiring: 25, expired: 15 }
-            }
-        },
-        getMovements: {
-            success: true,
-            data: [
-                { movement_id: 1, movement_date: '2026-07-22 10:30', product_name: 'ديزل', movement_type: 'in', quantity_change: 500, total_cost: 900000, status: 'completed' },
-                { movement_id: 2, movement_date: '2026-07-21 14:20', product_name: 'بنزين 95', movement_type: 'out', quantity_change: 200, total_cost: 400000, status: 'completed' },
-                { movement_id: 3, movement_date: '2026-07-20 09:15', product_name: 'زيت محرك', movement_type: 'in', quantity_change: 50, total_cost: 25000, status: 'pending' }
-            ]
-        },
-        getStockValues: {
-            success: true,
-            data: [
-                { product_name: 'ديزل', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 2500, average_cost: 1800, total_value: 4500000 },
-                { product_name: 'بنزين 95', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 1800, average_cost: 2000, total_value: 3600000 },
-                { product_name: 'زيت محرك', warehouse_name: 'المستودع الرئيسي', quantity_on_hand: 120, average_cost: 500, total_value: 60000 }
-            ]
-        },
-        getAlerts: {
-            success: true,
-            data: [
-                { alert_id: 1, product_name: 'ديزل', alert_type: 'low_stock', alert_level: 'critical', created_at: '2026-07-22 08:00', is_resolved: 0 },
-                { alert_id: 2, product_name: 'بنزين 95', alert_type: 'low_stock', alert_level: 'warning', created_at: '2026-07-21 16:30', is_resolved: 0 },
-                { alert_id: 3, product_name: 'زيت محرك', alert_type: 'expiry', alert_level: 'warning', created_at: '2026-07-20 10:00', is_resolved: 1 }
-            ]
-        },
-        filterInventory: {
-            success: true,
-            data: {
-                total_value: 125000,
-                products: [
-                    { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
-                ],
-                movement_chart: generateMockData(30)
-            }
-        },
-        advancedFilter: {
-            success: true,
-            data: [
-                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
-            ]
-        },
-        createPurchaseOrder: { success: true, order_id: 1001 },
-        searchProducts: {
-            success: true,
-            data: [
-                { product_id: 1, product_code: 'P001', product_name: 'ديزل', quantity_on_hand: 120, min_stock_level: 500 }
-            ]
-        },
-        addProduct: { success: true, product_id: 100 },
-        saveSettings: { success: true },
-        getExpiringProducts: {
-            success: true,
-            data: [
-                { product_id: 5, product_code: 'P005', product_name: 'زيت فرامل', quantity_on_hand: 30, min_stock_level: 40 }
-            ]
-        },
-        getAuditReport: { success: true, data: { url: '#' } },
-        getDashboardStats: {
-            success: true,
-            data: {
-                total_products: 120,
-                low_stock: 8,
-                out_of_stock: 3,
-                total_value: 125000
-            }
-        }
-    };
-    return mockData[action] || { success: false, message: 'إجراء غير معروف' };
-}
-
-// ============================================================
-// 16. التهيئة الأولية
+// 15. التهيئة
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     loadSavedTheme();

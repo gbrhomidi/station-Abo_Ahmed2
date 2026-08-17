@@ -1456,6 +1456,9 @@
      <button aria-selected="false" class="filter-chip" onclick="setFilter('pending', this)" role="tab">
       معلقة
      </button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('completed', this)" role="tab">مكتملة</button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('archived', this)" role="tab">مؤرشفة</button>
+     <button aria-selected="false" class="filter-chip" onclick="setFilter('high', this)" role="tab">عالية الأولوية</button>
      <button aria-selected="false" class="filter-chip ai-chip" onclick="setFilter('ai_suggest', this)" role="tab">
       🤖 توصية AI
      </button>
@@ -1586,8 +1589,12 @@
      </i>
     </button>
    </div>
+   <!-- FAB – إضافة مهمة -->
+   <button aria-label="إضافة مهمة" class="fab" onclick="openAddTaskModal()" title="إضافة مهمة">
+    <i aria-hidden="true" class="fas fa-plus"></i><span class="sr-only">إضافة مهمة</span>
+   </button>
    <!-- FAB – تقرير -->
-   <button aria-label="تقرير المهام المعلقة" class="fab" onclick="openReport('summary')" title="تقرير المهام المعلقة">
+   <button aria-label="تقرير المهام المعلقة" class="fab" onclick="openReport('summary')" title="تقرير المهام المعلقة" style="bottom:158px;">
     <i aria-hidden="true" class="fas fa-file-alt">
     </i>
     <span class="sr-only">
@@ -1601,6 +1608,7 @@
    </div>
    <nav aria-label="القائمة الجانبية" class="sidebar" id="sidebar" role="navigation">
     <div class="sidebar-content">
+     <button aria-label="إضافة مهمة" class="sidebar-btn" onclick="handleSidebarAction('add_task')"><i aria-hidden="true" class="fas fa-plus"></i><span>إضافة</span></button>
      <button aria-label="تحديث" class="sidebar-btn" onclick="handleSidebarAction('refresh')">
       <i aria-hidden="true" class="fas fa-sync">
       </i>
@@ -1693,6 +1701,21 @@
    <span id="toastMessage">
     تمت العملية بنجاح
    </span>
+  </div>
+  <!-- MODAL: إضافة/تعديل مهمة -->
+  <div aria-labelledby="taskFormTitle" aria-modal="true" class="modal-overlay" id="taskFormModal" onclick="closeTaskModal(event)" role="dialog">
+   <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><h3 class="modal-title" id="taskFormTitle">إضافة مهمة</h3><button aria-label="إغلاق" class="modal-close" onclick="closeTaskModal()"><i class="fas fa-times"></i></button></div>
+    <form id="taskForm" onsubmit="event.preventDefault(); saveTask();">
+     <input id="taskEditId" type="hidden" value="0">
+     <div class="form-group"><label class="form-label" for="taskType">نوع المهمة *</label><input class="form-input" id="taskType" required maxlength="80" placeholder="مثال: متابعة فاتورة غير مدفوعة"></div>
+     <div class="form-row"><div class="form-group"><label class="form-label" for="taskReference">المرجع</label><input class="form-input" id="taskReference" maxlength="100"></div><div class="form-group"><label class="form-label" for="taskDate">التاريخ *</label><input class="form-input" id="taskDate" type="date" required></div></div>
+     <div class="form-row"><div class="form-group"><label class="form-label" for="taskAmount">القيمة</label><input class="form-input" id="taskAmount" type="number" step="0.01" min="0" value="0"></div><div class="form-group"><label class="form-label" for="taskPriority">الأولوية</label><select class="form-input" id="taskPriority"><option value="عالية">عالية</option><option value="متوسطة" selected>متوسطة</option><option value="منخفضة">منخفضة</option></select></div></div>
+     <div class="form-group"><label class="form-label" for="taskStatus">الحالة</label><select class="form-input" id="taskStatus"><option value="قيد التنفيذ" selected>قيد التنفيذ</option><option value="غير مدفوعة">غير مدفوعة</option><option value="متأخرة">متأخرة</option><option value="مكتملة">مكتملة</option></select></div>
+     <div class="form-group"><label class="form-label" for="taskNotes">ملاحظات</label><textarea class="form-input" id="taskNotes" rows="3" maxlength="1000"></textarea></div>
+     <button class="submit-btn" type="submit"><i class="fas fa-save"></i> حفظ المهمة</button>
+    </form>
+   </div>
   </div>
   <!-- MODAL: تفاصيل المهمة -->
   <div aria-labelledby="detailsTitle" aria-modal="true" class="details-overlay" id="detailsOverlay" onclick="closeDetails()" role="dialog">
@@ -1924,71 +1947,39 @@
            API Call – عبر AndroidInterface (بيانات حقيقية)
            ============================================================ */
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try { resolve(JSON.parse(result)); } catch (e) { resolve({ success: true, data: result }); }
-                    } catch (e) {
-                        reject({ success: false, error: e.message || 'فشل الاتصال بقاعدة البيانات' });
-                    }
-                } else {
-                    reject({ success: false, error: 'الرجاء تشغيل التطبيق في بيئة Android مع قاعدة البيانات الفعلية' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getPendingTasks': raw = AndroidInterface.getPendingTasks(JSON.stringify(p)); break;
+                    case 'addTask': raw = AndroidInterface.addTask(JSON.stringify(p)); break;
+                    case 'updateTask': raw = AndroidInterface.updateTask(Number(p.id), JSON.stringify(p)); break;
+                    case 'archiveTask': raw = AndroidInterface.archiveTask(Number(p.id)); break;
+                    case 'restoreTask': raw = AndroidInterface.restoreTask(Number(p.id)); break;
+                    case 'resolveTask': raw = AndroidInterface.resolveTask(Number(p.id)); break;
+                    case 'deleteTask': raw = AndroidInterface.deleteTask(Number(p.id)); break;
+                    case 'generateTaskReport': raw = AndroidInterface.generateTaskReport(JSON.stringify(p)); break;
+                    case 'backupData': raw = AndroidInterface.backupDatabase(); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
         /* ============================================================
-           Local Storage (للنسخ الاحتياطي المؤقت)
-           ============================================================ */
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; }
-                catch (e) { return false; } },
-            get: function(key, defaultValue) { try { const item = localStorage.getItem(this.prefix + key); return item ?
-                    JSON.parse(item) : defaultValue; } catch (e) { return defaultValue; } },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); }
-        };
-
-        /* ============================================================
-           Offline / Online
+           Offline / Online — لا توجد عمليات أعمال محلية
            ============================================================ */
         let isOnline = navigator.onLine;
-
         function updateOnlineStatus() {
             isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) { banner.classList.add('show');
-                showToast('⚠️ وضع عدم الاتصال – سيتم حفظ التغييرات محلياً', 'warning'); } else { banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال', 'success');
-                syncPendingOperations(); }
+            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — المهام للقراءة فقط حتى عودة SQLite', 'warning'); }
+            else { banner.classList.remove('show'); }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
-
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pending = LocalDB.get('pending_ops', []);
-            if (pending.length === 0) return;
-            showLoading(true);
-            let ok = 0,
-                fail = 0;
-            for (const op of pending) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) ok++;
-                    else fail++;
-                } catch (e) { fail++; }
-            }
-            if (ok > 0) {
-                const remaining = pending.slice(fail);
-                LocalDB.set('pending_ops', remaining);
-                showToast('✅ تمت مزامنة ' + ok + ' عملية', 'success');
-            }
-            if (fail > 0) showToast('⚠️ فشلت ' + fail + ' عملية – سيتم إعادة المحاولة', 'warning');
-            showLoading(false);
-        }
+        async function syncPendingOperations() { return; }
 
         /* ============================================================
            Toast, Loading, Helpers
@@ -2099,6 +2090,9 @@
             document.getElementById('sidebar').classList.remove('open');
             document.getElementById('sidebarToggle').classList.remove('hidden');
             switch (action) {
+                case 'add_task':
+                    openAddTaskModal();
+                    break;
                 case 'refresh':
                     loadData();
                     break;
@@ -2155,60 +2149,18 @@
         /* ============================================================
            Load Data – من قاعدة البيانات الفعلية
            ============================================================ */
-        async function loadData() {
+        async function loadData(includeArchived = currentFilter === 'archived') {
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
-                const response = await apiCall('getPendingTasks', {});
-                if (response.success && response.data) {
-                    allTasks = response.data;
-                    LocalDB.set('tasks', allTasks);
-                } else {
-                    throw new Error(response.message || 'فشل جلب البيانات');
-                }
-
-                try {
-                    const userRes = await apiCall('getCurrentUser', {});
-                    if (userRes.success && userRes.data) {
-                        const role = userRes.data.role || 'admin';
-                        if (role.toLowerCase().includes('admin')) currentUserRole = ROLES.ADMIN;
-                        else if (role.toLowerCase().includes('manager')) currentUserRole = ROLES.MANAGER;
-                        else if (role.toLowerCase().includes('audit')) currentUserRole = ROLES.AUDITOR;
-                        else currentUserRole = ROLES.VIEWER;
-                    }
-                } catch (e) { /* تجاهل */ }
-
-                initFuse();
-                generateAIInsights();
-                renderCards();
-                updateStats();
-                updateCharts();
-                updateAlerts();
-                isInitialLoad = false;
-                showLoading(false);
-                showToast('✅ تم تحميل البيانات من قاعدة البيانات', 'success');
+                const response = await apiCall('getPendingTasks', { include_archived: includeArchived, limit: 1000 });
+                if (!response.success) throw new Error(response.message || 'فشل جلب المهام');
+                allTasks = Array.isArray(response.data) ? response.data : [];
+                initFuse(); generateAIInsights(); renderCards(); updateStats(); updateCharts(); updateAlerts();
             } catch (e) {
-                console.error('Load error:', e);
-                const cached = LocalDB.get('tasks', []);
-                if (cached.length > 0) {
-                    allTasks = cached;
-                    initFuse();
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                    showToast('⚠️ تم تحميل البيانات من التخزين المحلي (غير محدثة)', 'warning');
-                } else {
-                    allTasks = [];
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                    showToast('❌ ' + (e.message || 'فشل تحميل البيانات. تأكد من اتصال قاعدة البيانات.'), 'error');
-                }
-                isInitialLoad = false;
-                showLoading(false);
-            }
+                allTasks = []; initFuse(); renderCards(); updateStats(); updateCharts(); updateAlerts();
+                showToast(e.message || 'فشل تحميل المهام من SQLite', 'error');
+            } finally { isInitialLoad = false; showLoading(false); }
         }
 
         function renderSkeleton() {
@@ -2260,8 +2212,10 @@
             else if (currentFilter === 'overdue') data = data.filter(t => t.status === 'متأخرة');
             else if (currentFilter === 'low_stock') data = data.filter(t => t.type === 'منتج منخفض المخزون');
             else if (currentFilter === 'pending') data = data.filter(t => t.status === 'قيد التنفيذ' || t.status === 'معلقة');
+            else if (currentFilter === 'completed') data = data.filter(t => t.status === 'مكتملة' || Number(t.is_resolved) === 1);
+            else if (currentFilter === 'high') data = data.filter(t => t.priority === 'عالية');
             else if (currentFilter === 'ai_suggest') {
-                const insights = LocalDB.get('ai_insights', []);
+                const insights = window.__taskInsights || [];
                 const ids = insights.map(i => i.taskId);
                 data = data.filter(t => ids.includes(t.id));
             }
@@ -2308,7 +2262,7 @@
                 return;
             }
 
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = window.__taskInsights || [];
 
             container.innerHTML = pageItems.map((task, idx) => {
                 const id = task.id;
@@ -2342,6 +2296,7 @@
                         </div>
                         <div class="card-actions">
                             <button class="card-btn" onclick="event.stopPropagation(); viewTask(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
+                            <button class="card-btn" onclick="event.stopPropagation(); openEditTaskModal(${id})" aria-label="تعديل"><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
                             <button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>
                             <button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-check" aria-hidden="true"></i> حل</button>
                         </div>
@@ -2407,12 +2362,8 @@
             document.getElementById('statHigh').textContent = high;
             document.getElementById('statOverdue').textContent = overdue;
 
-            document.getElementById('trendTotal').textContent = total > 0 ? '+8%' : '0%';
-            document.getElementById('trendPending').textContent = pending > 0 ? '+3%' : '0%';
-            document.getElementById('trendHigh').textContent = high > 0 ? '-2%' : '0%';
-            document.getElementById('trendOverdue').textContent = overdue > 0 ? '+5%' : '0%';
+            ['trendTotal','trendPending','trendHigh','trendOverdue'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
 
-            LocalDB.set('task_stats', { total, pending, high, overdue });
         }
 
         function showStatDetail(type) {
@@ -2518,12 +2469,12 @@
                 }
                 insights.push({ taskId: task.id, type: task.type, suggestion, priority, amount });
             });
-            LocalDB.set('ai_insights', insights);
+            window.__taskInsights = insights;
             return insights;
         }
 
         function getTopAIInsight() {
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = window.__taskInsights || [];
             if (insights.length === 0) return null;
             const pri = { 'high': 3, 'medium': 2, 'low': 1 };
             return insights.reduce((a, b) => (pri[a.priority] > pri[b.priority] ? a : b));
@@ -2535,7 +2486,7 @@
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
 
-            const insights = LocalDB.get('ai_insights', []);
+            const insights = window.__taskInsights || [];
             if (insights.length === 0) {
                 content.innerHTML = `
                     <div style="text-align:center;color:var(--text-muted);padding:30px;">
@@ -2611,6 +2562,63 @@
             document.getElementById('alertsContainer').scrollIntoView({ behavior: 'smooth' });
         }
 
+        function openAddTaskModal() {
+            document.getElementById('taskEditId').value = '0';
+            document.getElementById('taskFormTitle').textContent = 'إضافة مهمة';
+            document.getElementById('taskForm').reset();
+            document.getElementById('taskDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('taskPriority').value = 'متوسطة';
+            document.getElementById('taskStatus').value = 'قيد التنفيذ';
+            document.getElementById('taskFormModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function openEditTaskModal(id) {
+            if (!requirePermission('update')) return;
+            const task = allTasks.find(item => Number(item.id) === Number(id));
+            if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
+            document.getElementById('taskEditId').value = task.id;
+            document.getElementById('taskFormTitle').textContent = 'تعديل مهمة';
+            document.getElementById('taskType').value = task.task_type || task.type || '';
+            document.getElementById('taskReference').value = task.reference || '';
+            document.getElementById('taskDate').value = (task.task_date || task.date || '').slice(0, 10);
+            document.getElementById('taskAmount').value = task.amount || 0;
+            document.getElementById('taskPriority').value = task.priority || 'متوسطة';
+            document.getElementById('taskStatus').value = task.status || 'قيد التنفيذ';
+            document.getElementById('taskNotes').value = task.notes || '';
+            document.getElementById('taskFormModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeTaskModal(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            document.getElementById('taskFormModal').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        async function saveTask() {
+            if (!requirePermission(document.getElementById('taskEditId').value === '0' ? 'create' : 'update')) return;
+            const id = Number(document.getElementById('taskEditId').value || 0);
+            const data = {
+                id,
+                task_type: document.getElementById('taskType').value.trim(),
+                reference: document.getElementById('taskReference').value.trim(),
+                task_date: document.getElementById('taskDate').value,
+                amount: Number(document.getElementById('taskAmount').value || 0),
+                priority: document.getElementById('taskPriority').value,
+                status: document.getElementById('taskStatus').value,
+                notes: document.getElementById('taskNotes').value.trim()
+            };
+            if (!data.task_type || !data.task_date || data.amount < 0) { showToast('❌ راجع حقول المهمة المطلوبة', 'error'); return; }
+            showLoading(true);
+            try {
+                const result = await apiCall(id > 0 ? 'updateTask' : 'addTask', data);
+                if (!result.success) throw new Error(result.message || 'فشل حفظ المهمة');
+                closeTaskModal(); await loadData(currentFilter === 'archived'); showToast(id > 0 ? '✅ تم تعديل المهمة' : '✅ تمت إضافة المهمة', 'success');
+            } catch (e) { showToast('❌ ' + (e.message || 'فشل حفظ المهمة'), 'error'); }
+            finally { showLoading(false); }
+        }
+
         /* ============================================================
            CRUD: Archive, Resolve, View
            ============================================================ */
@@ -2641,19 +2649,7 @@
                     throw new Error(result.message || 'فشل في الأرشفة');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.set('pending_ops', [...LocalDB.get('pending_ops', []), { action: 'archiveTask', data: { id,
-                            type: task.type } }]);
-                    allTasks = allTasks.filter(t => t.id != id);
-                    LocalDB.set('tasks', allTasks);
-                    showToast('✅ تمت الأرشفة محلياً – سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    updateCharts();
-                    updateAlerts();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الأرشفة'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الأرشفة'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2952,66 +2948,20 @@
                     throw new Error(result.message || 'فشل في النسخ الاحتياطي');
                 }
             } catch (e) {
-                const data = { tasks: allTasks, timestamp: new Date().toISOString() };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'backup_tasks_' + new Date().toISOString().slice(0, 10) + '.json';
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('✅ تم إنشاء نسخة احتياطية محلية', 'success');
+                showToast(e.message || '❌ النسخ الاحتياطي غير متاح', 'error'); return;
+
             } finally {
                 showLoading(false);
             }
         }
 
         function restoreBackup() {
-            if (!requirePermission('audit')) return;
-            document.getElementById('restoreFileInput').click();
-            document.getElementById('restoreFileInput').onchange = function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        if (data.tasks) {
-                            allTasks = data.tasks;
-                            LocalDB.set('tasks', allTasks);
-                            renderCards();
-                            updateStats();
-                            updateCharts();
-                            updateAlerts();
-                            showToast('✅ تم استعادة البيانات بنجاح', 'success');
-                        } else {
-                            showToast('❌ ملف غير صالح', 'error');
-                        }
-                    } catch (err) {
-                        showToast('❌ فشل استعادة الملف: ' + err.message, 'error');
-                    }
-                };
-                reader.readAsText(file);
-                document.getElementById('restoreFileInput').value = '';
-            };
+            showToast('⚠️ الاستعادة تحتاج مسار قاعدة بيانات Android ولا تُنفذ من ملف محلي داخل WebView', 'warning');
         }
 
         function loadBackupList() {
             const container = document.getElementById('backupList');
-            container.innerHTML =
-                `<div style="color:var(--text-muted);text-align:center;padding:10px;"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> جاري التحميل...</div>`;
-            setTimeout(() => {
-                const backups = [
-                    { name: 'نسخة تلقائية', date: new Date().toLocaleString('ar'), size: '1.2 MB' },
-                    { name: 'نسخة يدوية', date: new Date(Date.now() - 86400000).toLocaleString('ar'), size: '1.1 MB' },
-                ];
-                container.innerHTML = backups.map(b =>
-                    `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;">
-                        <span>${b.name}</span>
-                        <span style="color:var(--text-muted);">${b.date} – ${b.size}</span>
-                    </div>`
-                ).join('');
-            }, 500);
+            container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">لا توجد قائمة نسخ احتياطية متاحة من طبقة Android الحالية</div>';
         }
 
         /* ============================================================
@@ -3046,19 +2996,7 @@
                         `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات</div>`;
                 }
             } catch (e) {
-                const localLogs = LocalDB.get('audit_logs', []);
-                if (localLogs.length === 0) {
-                    container.innerHTML =
-                        `<div style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد سجلات تغييرات محلية</div>`;
-                } else {
-                    container.innerHTML = localLogs.slice(-20).reverse().map(log =>
-                        `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-color);font-size:0.75rem;gap:8px;flex-wrap:wrap;">
-                            <span style="font-weight:600;">${escapeHtml(log.action || 'إجراء')}</span>
-                            <span style="color:var(--text-muted);">${escapeHtml(log.description || '')}</span>
-                            <span style="color:var(--text-muted);font-size:0.65rem;">${log.created_at || ''} – ${escapeHtml(log.username || 'نظام')}</span>
-                        </div>`
-                    ).join('');
-                }
+                container.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:20px;">${escapeHtml(e.message || 'سجل التغييرات غير متاح')}</div>`;
             }
         }
 
@@ -3080,7 +3018,7 @@
             if (btn) { btn.classList.add('active');
                 btn.setAttribute('aria-selected', 'true'); }
             currentPage = 1;
-            renderCards();
+            if (filter === 'archived') loadData(true); else renderCards();
         }
 
         /* ============================================================
@@ -3154,14 +3092,14 @@
 
             setInterval(() => { if (isOnline) loadData(); }, 60000);
 
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').catch(() => {});
-            }
-
             showToast('📋 مرحباً بك في نظام المهام المعلقة', 'info');
         });
 
         // تصدير الدوال
+        window.openAddTaskModal = openAddTaskModal;
+        window.openEditTaskModal = openEditTaskModal;
+        window.closeTaskModal = closeTaskModal;
+        window.saveTask = saveTask;
         window.loadData = loadData;
         window.renderCards = renderCards;
         window.updateStats = updateStats;
