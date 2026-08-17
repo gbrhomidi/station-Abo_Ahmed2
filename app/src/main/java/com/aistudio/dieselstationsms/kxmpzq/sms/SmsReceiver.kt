@@ -90,6 +90,15 @@ class SmsReceiver : BroadcastReceiver() {
             return
         }
 
+        val appContext = context.applicationContext
+        val receiveEnabled = runCatching {
+            DatabaseHelper.getInstance(appContext).getSetting("sms_receive_enabled")
+        }.getOrDefault("")
+        if (receiveEnabled == "0") {
+            Log.i(TAG, "SMS receiving disabled by system settings")
+            return
+        }
+
         /*
          * نستخدم goAsync() لأن معالجة الرسالة قد تتجاوز
          * المدة القصيرة المسموح بها لـ onReceive().
@@ -100,7 +109,6 @@ class SmsReceiver : BroadcastReceiver() {
          * نستخدم Application Context لتجنب الاحتفاظ بمراجع
          * غير ضرورية إلى Context قصير العمر.
          */
-        val appContext = context.applicationContext
 
         /*
          * إنشاء Scope خاص بهذه العملية.

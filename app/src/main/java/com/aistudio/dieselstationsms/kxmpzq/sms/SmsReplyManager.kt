@@ -165,6 +165,18 @@ class SmsReplyManager(
             return@withContext false
         }
 
+        val sendEnabled = runCatching { db.getSetting("sms_send_enabled") }
+            .getOrDefault("")
+        if (sendEnabled == "0") {
+            Log.w(TAG, "SMS sending disabled by system settings")
+            logSmsSafely(
+                phone = normalizedPhone,
+                message = normalizedMessage,
+                status = "failed: sending disabled"
+            )
+            return@withContext false
+        }
+
         return@withContext try {
 
             val smsManager = getSmsManager()

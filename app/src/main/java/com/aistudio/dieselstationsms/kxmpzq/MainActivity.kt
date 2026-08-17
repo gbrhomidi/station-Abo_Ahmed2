@@ -47,9 +47,14 @@ import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceLaunchResult
 import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
 import com.aistudio.dieselstationsms.kxmpzq.startup.StartupReason
 import com.aistudio.dieselstationsms.kxmpzq.sms.*
+import com.aistudio.dieselstationsms.kxmpzq.settings.backup.BackupEntry
+import com.aistudio.dieselstationsms.kxmpzq.settings.di.SettingsModule
+import com.aistudio.dieselstationsms.kxmpzq.settings.model.ApplicationSettings
 import com.aistudio.dieselstationsms.kxmpzq.ui.theme.MyApplicationTheme
 import com.aistudio.dieselstationsms.kxmpzq.utils.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -198,6 +203,9 @@ class MainActivity : AppCompatActivity() {
         get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     private lateinit var dbHelper: DatabaseHelper
+    private val settingsModule: SettingsModule by lazy {
+        SettingsModule(applicationContext)
+    }
     private lateinit var geminiHelper: GeminiAIHelper
     private lateinit var smsServiceLauncher: SmsServiceLauncher
     internal lateinit var sharedPrefs: SharedPreferences
@@ -1385,6 +1393,11 @@ class MainActivity : AppCompatActivity() {
         private val activityRef = WeakReference(activity)
         private val dbHelperRef = WeakReference(dbHelper)
         private val geminiHelperRef = WeakReference(geminiHelper)
+        private val settingsJson = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+            explicitNulls = false
+        }
 
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
@@ -1494,6 +1507,30 @@ class MainActivity : AppCompatActivity() {
                     put("success", true)
                     put("data", data)
                 }.toString()
+            }
+        }
+
+        private fun applicationSettingsJson(settings: ApplicationSettings): JSONObject {
+            val encoded = settingsJson.encodeToString(ApplicationSettings.serializer(), settings)
+            return JSONObject(encoded)
+        }
+
+        private fun monitoringStateJson(state: com.aistudio.dieselstationsms.kxmpzq.settings.monitoring.SettingsMonitoringState): JSONObject {
+            return JSONObject().apply {
+                put("service_running", state.serviceRunning)
+                put("service_healthy", state.serviceHealthy)
+                put("current_startup_state", state.currentStartupState)
+                put("active_phase", state.activePhase ?: JSONObject.NULL)
+                put("completed_phases", JSONArray(state.completedPhases))
+                put("failed_phases", JSONArray(state.failedPhases))
+                put("events_count", state.eventsCount)
+                put("metrics", JSONObject(state.metrics))
+                put("logs", JSONArray(state.logs))
+                put("last_error", state.lastError ?: JSONObject.NULL)
+                put("uptime", state.uptime)
+                put("memory_usage", state.memoryUsage)
+                put("cpu_usage", state.cpuUsage)
+                put("battery_level", state.batteryLevel)
             }
         }
 
@@ -3509,7 +3546,208 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
-        // 17. لوحة التحكم والتقارير
+        // 17. Settings module — عقد SQLite/Bridge الصريح
+        // ============================================================
+
+        @JavascriptInterface
+        fun getApplicationSettings(): String {
+            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة الإعدادات")
+            return try {
+                val settings = runBlocking(Dispatchers.IO) {
+                    settingsModule.settingsRepository.getSettings()
+                }
+                dataResponse(applicationSettingsJson(settings))
+            } catch (e: Exception) {
+                DebugLogger.logException("Settings", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun saveApplicationSettings(jsonData: String): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تحديث الإعدادات")
+            return try {
+                val payload = JSONObject(jsonData.ifBlank { "{}" })
+                val settingsObject = payload.optJSONObject("settings") ?: payload
+                val settings = settingsJson.decodeFromString<ApplicationSettings>(settingsObject.toString())
+                val saved = runBlocking(Dispatchers.IO) {
+                    settingsModule.settingsRepository.saveSettings(settings)
+                    settingsModule.settingsRepository.getSettings()
+                }
+                applyApplicationSettings(saved)
+                dataResponse(applicationSettingsJson(saved))
+            } catch (e: Exception) {
+                DebugLogger.logException("Settings", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun resetApplicationSettings(): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية إعادة ضبط الإعدادات")
+            return try {
+                val defaults = runBlocking(Dispatchers.IO) {
+                    settingsModule.settingsRepository.resetSettings()
+                    settingsModule.settingsRepository.getSettings()
+                }
+                applyApplicationSettings(defaults)
+                dataResponse(applicationSettingsJson(defaults))
+            } catch (e: Exception) {
+                DebugLogger.logException("Settings", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun createSettingsBackup(): String {
+            if (!checkPermission("settings", "create")) return errorResponse("لا تملك صلاحية إنشاء نسخة إعدادات")
+            return try {
+                val id = runBlocking(Dispatchers.IO) {
+                    settingsModule.backupManager.createBackup()
+                }
+                JSONObject().apply {
+                    put("success", true)
+                    put("id", id)
+                    put("message", "تم إنشاء نسخة الإعدادات")
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsBackup", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun listSettingsBackups(): String {
+            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة النسخ")
+            return try {
+                val entries = runBlocking(Dispatchers.IO) {
+                    settingsModule.backupManager.listBackups()
+                }
+                val result = JSONArray()
+                entries.forEach { entry: BackupEntry ->
+                    result.put(JSONObject().apply {
+                        put("id", entry.id)
+                        put("created_at", entry.createdAt)
+                        put("size", entry.size)
+                        put("is_encrypted", entry.isEncrypted)
+                    })
+                }
+                dataResponse(result)
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsBackup", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreSettingsBackup(id: String): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية استعادة النسخ")
+            return try {
+                val restored = runBlocking(Dispatchers.IO) {
+                    settingsModule.backupManager.restoreBackup(id)
+                }
+                applyApplicationSettings(restored)
+                dataResponse(applicationSettingsJson(restored))
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsBackup", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteSettingsBackup(id: String): String {
+            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية حذف النسخ")
+            return try {
+                val deleted = runBlocking(Dispatchers.IO) {
+                    settingsModule.backupManager.deleteBackup(id)
+                }
+                successResponse(deleted, if (deleted) "تم حذف النسخة" else "لم يتم العثور على النسخة")
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsBackup", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSettingsMonitoring(): String {
+            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة المراقبة")
+            return try {
+                val state = runBlocking(Dispatchers.IO) {
+                    settingsModule.monitoringRepository.refresh()
+                    settingsModule.monitoringRepository.observeMonitoring().first()
+                }
+                dataResponse(monitoringStateJson(state))
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsMonitoring", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun clearSettingsLogs(): String {
+            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية تنظيف السجلات")
+            return try {
+                runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearLogs() }
+                successResponse(true, "تم تنظيف السجلات القديمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsMonitoring", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun clearSettingsMetrics(): String {
+            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية تنظيف المقاييس")
+            return try {
+                runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearMetrics() }
+                successResponse(true, "تم تنظيف المقاييس القديمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsMonitoring", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun optimizeSettingsDatabase(): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تحسين قاعدة البيانات")
+            return try {
+                runBlocking(Dispatchers.IO) { settingsModule.maintenanceRepository.optimizeDatabase() }
+                successResponse(true, "تم فحص وتحسين قاعدة البيانات")
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsMaintenance", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSettingsDatabaseIntegrity(): String {
+            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية فحص قاعدة البيانات")
+            return try {
+                val valid = runBlocking(Dispatchers.IO) { dbHelper.checkIntegrity() }
+                JSONObject().apply {
+                    put("success", true)
+                    put("valid", valid)
+                    put("database_open", dbHelper.isOpen())
+                    put("size_bytes", dbHelper.getDatabaseSize())
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SettingsMaintenance", e)
+                errorResponse(e.message)
+            }
+        }
+
+        private fun applyApplicationSettings(settings: ApplicationSettings) {
+            val smsEnabled = settings.smsServiceEnabled && settings.smsReceiveEnabled
+            dbHelper.setSetting("sms_enabled", if (smsEnabled) "1" else "0")
+            dbHelper.setSetting("sms_receive_enabled", if (settings.smsReceiveEnabled) "1" else "0")
+            dbHelper.setSetting("sms_send_enabled", if (settings.smsSendEnabled) "1" else "0")
+            dbHelper.setSetting("sms_retry_enabled", if (settings.smsRetryEnabled) "1" else "0")
+            dbHelper.setSetting("auto_start_enabled", if (settings.autoStartEnabled) "1" else "0")
+            if (smsEnabled && settings.autoStartEnabled) startSMSService() else stopSMSService()
+        }
+
+        // ============================================================
+        // 18. لوحة التحكم والتقارير
         // ============================================================
 
         // لاحظ: تم إزالة الدالة المكررة getDashboardStats هنا، حيث توجد نسخة واحدة فقط في بداية WebAppInterface
