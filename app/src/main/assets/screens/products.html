@@ -950,25 +950,51 @@
         // 1. دوال apiCall و handleAndroidResult (الموحدة)
         // ============================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getCategories': raw = AndroidInterface.getCategories(); break;
+                    case 'getUnits': raw = AndroidInterface.getUnits(); break;
+                    case 'getProducts': raw = AndroidInterface.getProducts(); break;
+                    case 'getProduct': {
+                        const item = (window.__productsCache || []).find(x => Number(x.product_id || x.id) === Number(p.product_id));
+                        return Promise.resolve(item ? { success: true, data: item } : { success: false, message: 'المنتج غير موجود' });
                     }
-                } else {
-                    console.warn('AndroidInterface غير متاح، استخدام fetch احتياطي للاختبار.');
-                    reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+                    case 'saveProduct': {
+                        const payload = {
+                            product_code: String(p.product_code || '').trim(), product_name: String(p.product_name || '').trim(),
+                            product_name_ar: p.product_name_ar || p.product_name || '', category_id: Number(p.category_id || 0),
+                            unit_id: Number(p.unit_id || 0), purchase_price: Number(p.purchase_price || 0), sale_price: Number(p.sale_price || 0),
+                            quantity: Number(p.current_stock ?? p.quantity ?? 0), minimum_stock: Number(p.min_stock_level ?? p.minimum_stock ?? 10),
+                            description: p.description || '', is_service: Number(p.is_service || 0), is_batch_tracked: Number(p.is_batch_tracked || 0),
+                            is_serialized: Number(p.is_serialized || 0), has_expiry: Number(p.has_expiry || 0),
+                            expiry_date: p.expiry_date || null, status: Number(p.is_active ?? 1) === 1 ? 'active' : 'inactive'
+                        };
+                        raw = Number(p.product_id || 0) > 0 ? AndroidInterface.updateProduct(Number(p.product_id), JSON.stringify(payload)) : AndroidInterface.addProduct(JSON.stringify(payload));
+                        break;
+                    }
+                    case 'deleteProduct': raw = AndroidInterface.deleteProduct(Number(p.product_id)); break;
+                    case 'searchProducts': {
+                        const q = String(p.product_name || '').toLowerCase();
+                        const id = String(p.product_id || '').trim();
+                        const data = (window.__productsCache || []).filter(x => (!id || String(x.product_id || x.id) === id) && (!q || String(x.product_name || '').toLowerCase().includes(q) || String(x.product_code || '').toLowerCase().includes(q)));
+                        return Promise.resolve({ success: true, data });
+                    }
+                    case 'filterProducts': {
+                        const data = (window.__productsCache || []).filter(x =>
+                            (!p.product_code || String(x.product_code || '').toLowerCase().includes(String(p.product_code).toLowerCase())) &&
+                            (!p.category_id || Number(x.category_id) === Number(p.category_id)) &&
+                            (p.is_active === '' || p.is_active === undefined || (String(x.status) === 'active') === (String(p.is_active) === '1')) &&
+                            (p.has_expiry === '' || p.has_expiry === undefined || Number(x.has_expiry || 0) === Number(p.has_expiry))
+                        );
+                        return Promise.resolve({ success: true, data });
+                    }
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
         function handleAndroidResult(action, data) {
@@ -1052,33 +1078,21 @@
             showLoading(true);
             try {
                 const result = await apiCall('getProducts', {});
-                if (result.success) {
-                    populateProductsTable(result.data || []);
-                } else {
-                    showToast('خطأ في تحميل المنتجات', 'error');
-                }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            } finally {
-                showLoading(false);
-            }
+                if (!result.success) throw new Error(result.message || 'فشل تحميل المنتجات');
+                populateProductsTable(result.data || []);
+            } catch (e) { showToast(e.message || 'خطأ في تحميل المنتجات', 'error'); }
+            finally { showLoading(false); }
         }
 
         async function loadStats() {
-            try {
-                const result = await apiCall('getStats', {});
-                if (result.success) {
-                    const stats = result.data || {};
-                    document.getElementById('totalProducts').textContent = stats.total_products || 0;
-                    document.getElementById('activeProducts').textContent = stats.active_products || 0;
-                    document.getElementById('avgPrice').textContent = stats.average_price || 0;
-                    document.getElementById('lowStockProducts').textContent = stats.low_stock_products || 0;
-                } else {
-                    console.warn('Could not load stats');
-                }
-            } catch (e) {
-                console.warn('Error loading stats:', e);
-            }
+            const list = window.__productsCache || [];
+            const active = list.filter(p => String(p.status || 'active') === 'active');
+            const prices = active.map(p => Number(p.sale_price || 0));
+            const low = active.filter(p => Number(p.quantity || 0) <= Number(p.minimum_stock || 0));
+            document.getElementById('totalProducts').textContent = list.length;
+            document.getElementById('activeProducts').textContent = active.length;
+            document.getElementById('avgPrice').textContent = prices.length ? (prices.reduce((a,b) => a+b, 0) / prices.length).toFixed(2) : '0.00';
+            document.getElementById('lowStockProducts').textContent = low.length;
         }
 
         function populateCategoryDropdown() {
@@ -1118,6 +1132,7 @@
         // 5. تعبئة الجدول
         // ============================================================
         function populateProductsTable(products) {
+            window.__productsCache = Array.isArray(products) ? products : [];
             const tbody = document.getElementById('productsTableBody');
             tbody.innerHTML = '';
             

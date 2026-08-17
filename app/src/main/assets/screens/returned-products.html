@@ -2148,6 +2148,10 @@
                 <input type="hidden" id="editId" value="0" />
                 <div class="form-row">
                     <div class="form-group">
+                        <label>رقم الفاتورة *</label>
+                        <input id="fInvoiceNumber" type="text" placeholder="أدخل رقم الفاتورة الأصلية" required />
+                    </div>
+                    <div class="form-group">
                         <label>المنتج *</label>
                         <select id="fProductId">
                             <option value="">اختر المنتج</option>
@@ -2325,44 +2329,28 @@
         // 1. apiCall الموحدة
         // ===================================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getReturns': raw = AndroidInterface.getReturns(JSON.stringify(p)); break;
+                    case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                    case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                    case 'updateReturn': raw = AndroidInterface.updateReturn(Number(p.id), JSON.stringify(p)); break;
+                    case 'deleteReturn': raw = AndroidInterface.deleteReturn(Number(p.id)); break;
+                    case 'getDashboardStats': raw = AndroidInterface.getDashboardStats('{}'); break;
+                    case 'getLowStockItems': raw = AndroidInterface.getLowStockItems(); break;
+                    case 'getProducts': raw = AndroidInterface.getProducts(); break;
+                    case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+                    case 'getSetting': raw = AndroidInterface.getSetting(String(p.key)); break;
+                    case 'setSetting': raw = AndroidInterface.setSetting(String(p.key), String(p.value)); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
-        // ===================================================================
-        // 2. LocalDB
-        // ===================================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) { try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (
-                    e) { return false; } },
-            get: function(key, def) { try { const item = localStorage.getItem(this.prefix + key); return item ? JSON.parse(
-                        item) : def; } catch (e) { return def; } },
-            getReturnsData: function() { return this.get('returns_data', []); },
-            setReturnsData: function(data) { this.set('returns_data', data); },
-            getAIInsights: function() { return this.get('returns_ai_insights', []); },
-            setAIInsights: function(data) { this.set('returns_ai_insights', data); }
-        };
-
-        // ===================================================================
-        // 3. دوال مساعدة
-        // ===================================================================
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
             const msgEl = document.getElementById('toastMessage');
@@ -2479,7 +2467,6 @@
                 const result = await apiCall('getReturns', params);
                 if (result.success && result.data) {
                     returnsData = result.data;
-                    LocalDB.setReturnsData(returnsData);
                     renderTable(returnsData);
                     updateKPIs(returnsData);
                     updateCharts(returnsData);
@@ -2573,11 +2560,20 @@
             document.getElementById('kpiCancelled').textContent = cancelled;
             document.getElementById('kpiPending').textContent = pending;
 
-            document.getElementById('trendTotal').textContent = (Math.random() * 10 + 1).toFixed(1) + '%';
-            document.getElementById('trendValue').textContent = (Math.random() * 7 + 1).toFixed(1) + '%';
-            document.getElementById('trendCompleted').textContent = (Math.random() * 6 + 1).toFixed(1) + '%';
-            document.getElementById('trendCancelled').textContent = (Math.random() * 5 + 0.5).toFixed(1) + '%';
-            document.getElementById('trendPending').textContent = (Math.random() * 8 + 2).toFixed(1) + '%';
+            const previous = [
+                Number(document.getElementById('trendTotal').dataset.value || totalQty),
+                Number(document.getElementById('trendValue').dataset.value || totalValue),
+                Number(document.getElementById('trendCompleted').dataset.value || completed),
+                Number(document.getElementById('trendCancelled').dataset.value || cancelled),
+                Number(document.getElementById('trendPending').dataset.value || pending)
+            ];
+            const current = [totalQty, totalValue, completed, cancelled, pending];
+            const change = (now, before) => before === 0 ? 0 : ((now - before) / Math.abs(before)) * 100;
+            ['trendTotal','trendValue','trendCompleted','trendCancelled','trendPending'].forEach((id, index) => {
+                const el = document.getElementById(id);
+                el.dataset.value = String(current[index]);
+                el.textContent = change(current[index], previous[index]).toFixed(1) + '%';
+            });
         }
 
         function resetKPIs() {
@@ -2642,8 +2638,11 @@
                 }
             });
 
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const trendData = data.slice(0, 7).map(() => Math.floor(Math.random() * 15 + 3));
+            const grouped = {};
+            data.forEach(item => { const key = String(item.return_date || '').slice(0, 10) || 'غير محدد'; grouped[key] = (grouped[key] || 0) + Number(item.quantity || 0); });
+            const trendKeys = Object.keys(grouped).sort().slice(-7);
+            const days = trendKeys.length ? trendKeys : ['لا توجد بيانات'];
+            const trendData = trendKeys.length ? trendKeys.map(key => grouped[key]) : [0];
             const ctx2 = document.getElementById('trendChart').getContext('2d');
             if (trendChart) trendChart.destroy();
             trendChart = new Chart(ctx2, {
@@ -2709,7 +2708,6 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('returns_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -2730,7 +2728,8 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('returns_notifications', []);
+            const alerts = [];
+            if (returnsData.some(item => item.status === 'pending')) alerts.push({type: 'warning'});
             if (alerts.length === 0) { showToast('🔔 لا توجد إشعارات جديدة', 'info'); return; }
             showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
         }
@@ -2771,13 +2770,13 @@
                     desc: 'يوجد ' + pending + ' طلب مرتجع معلق، يُرجى مراجعتها واتخاذ القرار المناسب.'
                 });
             }
-            LocalDB.setAIInsights(insights);
+            window.__returnInsights = insights;
         }
 
         function openAIAdvisor() {
             document.getElementById('aiModal').classList.add('show');
             document.body.style.overflow = 'hidden';
-            const insights = LocalDB.getAIInsights();
+            const insights = window.__returnInsights || [];
             const container = document.getElementById('aiContent');
             if (!insights || insights.length === 0) {
                 container.innerHTML =
@@ -2802,6 +2801,7 @@
         // ===================================================================
         async function saveReturn() {
             const id = parseInt(document.getElementById('editId').value) || 0;
+            const invoiceNumber = document.getElementById('fInvoiceNumber').value.trim();
             const productId = document.getElementById('fProductId').value;
             const customerId = document.getElementById('fCustomerId').value || null;
             const quantity = parseFloat(document.getElementById('fQuantity').value);
@@ -2811,6 +2811,7 @@
             const status = document.getElementById('fStatus').value;
             const returnDate = document.getElementById('fReturnDate').value || new Date().toISOString().split('T')[0];
 
+            if (!invoiceNumber) { showToast('❌ رقم الفاتورة الأصلية مطلوب', 'error'); return; }
             if (!productId) { showToast('❌ الرجاء اختيار المنتج', 'error'); return; }
             if (!quantity || quantity <= 0) { showToast('❌ الرجاء إدخال كمية صحيحة', 'error'); return; }
             if (!value || value < 0) { showToast('❌ الرجاء إدخال قيمة صحيحة', 'error'); return; }
@@ -2820,6 +2821,7 @@
             try {
                 const params = {
                     id: id,
+                    invoice_number: invoiceNumber,
                     product_id: parseInt(productId),
                     customer_id: customerId ? parseInt(customerId) : null,
                     quantity: quantity,
@@ -2883,6 +2885,7 @@
         // ===================================================================
         function openAddModal() {
             document.getElementById('editId').value = '0';
+            document.getElementById('fInvoiceNumber').value = '';
             document.getElementById('formModalTitle').textContent = '➕ إضافة مرتجع';
             document.getElementById('fProductId').value = '';
             document.getElementById('fCustomerId').value = '';
@@ -2901,6 +2904,7 @@
             const item = returnsData.find(d => d.id === id);
             if (!item) { showToast('❌ المرتجع غير موجود', 'error'); return; }
             document.getElementById('editId').value = item.id;
+            document.getElementById('fInvoiceNumber').value = item.invoice_number || '';
             document.getElementById('formModalTitle').textContent = '✏️ تعديل مرتجع';
             document.getElementById('fProductId').value = item.product_id || '';
             document.getElementById('fCustomerId').value = item.customer_id || '';

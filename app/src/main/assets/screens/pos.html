@@ -2954,25 +2954,32 @@
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 function apiCall(action, params) {
-    return new Promise((resolve, reject) => {
-        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-            try {
-                const jsonParams = JSON.stringify(params || {});
-                const result = window.AndroidInterface.execute(action, jsonParams);
-                try {
-                    const parsed = JSON.parse(result);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ success: true, data: result });
-                }
-            } catch (e) {
-                reject({ success: false, error: e.message });
-            }
-        } else {
-            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
-            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+    const p = params || {};
+    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+    try {
+        let raw;
+        switch (action) {
+            case 'getProductByBarcode': raw = AndroidInterface.getProductByBarcode(String(p.barcode || '')); break;
+            case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
+            case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
+            case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+            case 'getEntityTypes': raw = AndroidInterface.getEntityTypes(); break;
+            case 'getEntitiesByType': raw = AndroidInterface.getEntitiesByType(Number(p.entity_type_id || 0)); break;
+            case 'getEntityDetails': raw = AndroidInterface.getEntityDetails(Number(p.entity_id || 0)); break;
+            case 'searchCustomers': raw = AndroidInterface.searchParties(String(p.query || '')); break;
+            case 'addCustomer': raw = AndroidInterface.addParty(JSON.stringify({ party_type_id: Number(p.entity_type_id || 1), commercial_name: p.name, commercial_name_ar: p.name, phone: p.phone, email: p.email || '', credit_limit: Number(p.credit_limit || 0), is_active: true })); break;
+            case 'searchSales': raw = AndroidInterface.searchSales(JSON.stringify(p)); break;
+            case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+            case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+            case 'searchInvoices': raw = AndroidInterface.searchInvoices(JSON.stringify(p)); break;
+            case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
+            case 'salesReport': raw = AndroidInterface.salesReport(); break;
+            case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
+            case 'sendWhatsApp': return Promise.resolve({ success: true, whatsapp_deeplink: `https://wa.me/${encodeURIComponent(p.phone || '')}`, message: 'سيتم فتح واتساب لإرسال الفاتورة المعروضة' });
+            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
-    });
+        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
 }
 
 function handleAndroidResult(action, data) {
@@ -3152,6 +3159,10 @@ function stopScanner() {
 // ============================================================
 // 6. دوال المنتجات والجدول
 // ============================================================
+let lastSaleId = null;
+let lastInvoiceNumber = '';
+let selectedReturnSale = null;
+
 function addProductByBarcode(barcode) {
     barcode = barcode.trim();
     showLoading(true);
@@ -3169,12 +3180,12 @@ function addProductByBarcode(barcode) {
         .then(data => {
             if (data.success) {
                 const product = {
-                    product_id: data.id || Math.random().toString(36).substr(2, 9),
-                    barcode: barcode,
-                    product_name: data.name,
-                    unit_price: data.price,
-                    expiry_date: data.expiry_date,
-                    min_stock_level: data.min_stock_level,
+                    product_id: (data.data || data).product_id,
+                    barcode: (data.data || data).barcode || barcode,
+                    product_name: (data.data || data).product_name,
+                    unit_price: Number((data.data || data).sale_price || 0),
+                    expiry_date: (data.data || data).expiry_date,
+                    min_stock_level: (data.data || data).minimum_stock || 0,
                     sale_type: data.sale_type,
                     invoice_type: data.invoice_type
                 };
@@ -3352,26 +3363,11 @@ function updateRemainingAmount() {
 function generateInvoiceNumber() {
     apiCall('getNextInvoiceNumber', {})
         .then(data => {
-            if (data.success && data.next_invoice_number) {
-                document.getElementById('invoiceNumber').value = data.next_invoice_number;
-            } else {
-                // توليد مؤقت
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = (now.getMonth() + 1).toString().padStart(2, '0');
-                const day = now.getDate().toString().padStart(2, '0');
-                const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-                document.getElementById('invoiceNumber').value = `INV-${year}${month}${day}-${random}`;
-            }
+            if (data.success) {
+                document.getElementById('invoiceNumber').value = data.data || data.next_invoice_number || '';
+            } else { showToast(data.message || 'تعذر الحصول على رقم الفاتورة', 'error'); }
         })
-        .catch(() => {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = (now.getMonth() + 1).toString().padStart(2, '0');
-            const day = now.getDate().toString().padStart(2, '0');
-            const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-            document.getElementById('invoiceNumber').value = `INV-${year}${month}${day}-${random}`;
-        });
+        .catch(e => showToast(e.message || 'تعذر الحصول على رقم الفاتورة', 'error'));
 }
 
 function resetForm() {
@@ -3432,14 +3428,14 @@ function completeSale() {
     showLoading(true);
     apiCall('completeSale', invoiceData)
         .then(data => {
-            if (data.success) {
+            const sale = data.data || data;
+            if (data.success && sale.success !== false && sale.sale_id) {
                 showSuccessCheckmark();
-                localStorage.setItem('lastSaleId', data.sale_id);
-                localStorage.setItem('lastInvoiceNumber', data.invoice_number);
+                lastSaleId = sale.sale_id;
+                lastInvoiceNumber = sale.invoice_number || document.getElementById('invoiceNumber').value;
+                showToast('تم ترحيل البيع وتحديث المخزون فعلياً', 'success');
                 resetForm();
-            } else {
-                showToast(data.message || 'حدث خطأ أثناء الترحيل', 'error');
-            }
+            } else { showToast(sale.message || data.message || 'حدث خطأ أثناء الترحيل', 'error'); }
         })
         .catch(error => {
             showToast('حدث خطأ أثناء الترحيل', 'error');
@@ -3448,26 +3444,20 @@ function completeSale() {
 }
 
 function printReceipt() {
-    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    const invoiceNumber = lastInvoiceNumber;
     if (!invoiceNumber) { showToast('لا توجد فاتورة للطباعة', 'error'); return; }
     showLoading(true);
     apiCall('printReceipt', { invoice_number: invoiceNumber })
         .then(data => {
-            if (data.success && data.html) {
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(data.html);
-                printWindow.document.close();
-                setTimeout(() => { printWindow.print(); }, 500);
-            } else {
-                showToast(data.message || 'فشل الطباعة', 'error');
-            }
+            if (data.success) showToast(data.message || 'تم فتح نافذة الطباعة', 'success');
+            else showToast(data.message || 'فشل الطباعة', 'error');
         })
         .catch(error => { showToast('حدث خطأ أثناء الطباعة', 'error'); })
         .finally(() => showLoading(false));
 }
 
 function sendWhatsAppReceipt() {
-    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    const invoiceNumber = lastInvoiceNumber;
     if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
     document.getElementById('whatsappModal').style.display = 'flex';
     document.getElementById('whatsappPhone').value = '';
@@ -3476,7 +3466,7 @@ function sendWhatsAppReceipt() {
 
 function confirmWhatsAppSend() {
     const phone = document.getElementById('whatsappPhone').value.trim();
-    const invoiceNumber = localStorage.getItem('lastInvoiceNumber');
+    const invoiceNumber = lastInvoiceNumber;
     if (!phone) { showToast('يرجى إدخال رقم الهاتف', 'error'); return; }
     if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
 
@@ -3506,11 +3496,12 @@ function loadCustomers() {
         .then(data => {
             const select = document.getElementById('customerId');
             select.innerHTML = '<option value="">اختر عميل</option>';
-            if (data.success && data.customers) {
-                data.customers.forEach(customer => {
+            const list = data.data || data.customers || [];
+            if (data.success && list) {
+                list.forEach(customer => {
                     const option = document.createElement('option');
-                    option.value = customer.id;
-                    option.textContent = customer.name;
+                    option.value = customer.id || customer.entity_id;
+                    option.textContent = customer.commercial_name || customer.commercial_name_ar || customer.name || customer.legal_name || '---';
                     select.appendChild(option);
                 });
             }
@@ -3523,8 +3514,9 @@ function loadEntityTypes() {
         .then(data => {
             const select = document.getElementById('entityTypeSelect');
             select.innerHTML = '<option value="">اختر نوع العميل</option>';
-            if (data.success && data.entity_types) {
-                data.entity_types.forEach(type => {
+            const list = data.data || data.entity_types || [];
+            if (data.success && list) {
+                list.forEach(type => {
                     const option = document.createElement('option');
                     option.value = type.type_id;
                     option.textContent = type.type_name;
@@ -3541,11 +3533,12 @@ function loadCustomersByEntityType(entityTypeId) {
         .then(data => {
             const select = document.getElementById('customerId');
             select.innerHTML = '<option value="">اختر عميل</option>';
-            if (data.success && data.entities) {
-                data.entities.forEach(entity => {
+            const list = data.data || data.entities || [];
+            if (data.success && list) {
+                list.forEach(entity => {
                     const option = document.createElement('option');
                     option.value = entity.entity_id;
-                    option.textContent = entity.commercial_name || entity.legal_name;
+                    option.textContent = entity.commercial_name || entity.commercial_name_ar || entity.legal_name || '---';
                     select.appendChild(option);
                 });
                 document.getElementById('customerNameField').style.display = 'block';
@@ -3560,7 +3553,7 @@ function loadCustomerDetails(customerId) {
     apiCall('getEntityDetails', { entity_id: customerId })
         .then(data => {
             if (data.success) {
-                displayCustomerDetails(data.entity);
+                displayCustomerDetails(data.data || data.entity || data);
             } else {
                 showToast(data.message || 'حدث خطأ في جلب بيانات العميل', 'error');
             }
@@ -3596,13 +3589,16 @@ function searchCustomers() {
         .then(data => {
             const resultsContainer = document.getElementById('customerSearchResults');
             resultsContainer.innerHTML = '';
-            if (data.success && data.customers) {
-                data.customers.forEach(customer => {
+            const list = data.data || data.customers || [];
+            if (data.success && list) {
+                list.forEach(customer => {
                     const row = document.createElement('tr');
+                    const customerId = customer.id || customer.entity_id;
+                    const customerName = customer.commercial_name || customer.commercial_name_ar || customer.name || customer.legal_name || '---';
                     row.innerHTML = `
-                        <td>${customer.id}</td>
-                        <td>${customer.name}</td>
-                        <td><button class="btn btn-sm btn-primary" onclick="selectCustomer('${customer.id}', '${customer.name}')">اختيار</button></td>
+                        <td>${customerId}</td>
+                        <td>${customerName}</td>
+                        <td><button class="btn btn-sm btn-primary" onclick="selectCustomer('${customerId}', '${String(customerName).replace(/'/g, "\\'")}')">اختيار</button></td>
                     `;
                     resultsContainer.appendChild(row);
                 });
@@ -3676,8 +3672,9 @@ function searchReturnSales() {
         .then(data => {
             const tbody = document.getElementById('returnSalesTableBody');
             tbody.innerHTML = '';
-            if (data.success && data.sales) {
-                data.sales.slice(0, 100).forEach(sale => {
+            const list = data.data || data.sales || [];
+            if (data.success && list) {
+                list.slice(0, 100).forEach(sale => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${sale.invoice_number}</td>
@@ -3707,6 +3704,7 @@ function searchReturnSales() {
 }
 
 function fillReturnForm(sale) {
+    selectedReturnSale = sale;
     document.getElementById('returnDetailInvoice').value = sale.invoice_number;
     document.getElementById('returnDetailProduct').value = sale.product_name;
     document.getElementById('returnDetailQuantity').value = sale.quantity;
@@ -3725,7 +3723,7 @@ function saveReturn() {
         return;
     }
     showLoading(true);
-    apiCall('saveReturn', { invoice_number: invoiceNumber, product_name: productName, quantity: quantity, reason: reason, notes: notes })
+    apiCall('saveReturn', { invoice_number: invoiceNumber, product_id: selectedReturnSale?.product_id || 0, barcode: selectedReturnSale?.barcode || '', quantity: Number(quantity), reason: reason, notes: notes })
         .then(data => {
             if (data.success) {
                 showToast('تم حفظ بيانات الإرجاع بنجاح', 'success');
@@ -3781,8 +3779,9 @@ function searchInvoices() {
         .then(data => {
             const tbody = document.getElementById('invoiceResultsBody');
             tbody.innerHTML = '';
-            if (data.success && data.invoices) {
-                data.invoices.slice(0, 7).forEach(invoice => {
+            const list = data.data || data.invoices || [];
+            if (data.success && list) {
+                list.slice(0, 7).forEach(invoice => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${invoice.invoice_number}</td>
@@ -3818,7 +3817,7 @@ function loadInvoice(invoiceNumber) {
     apiCall('retrieveInvoice', { invoice_number: invoiceNumber })
         .then(data => {
             if (data.success) {
-                loadInvoiceData(data);
+                loadInvoiceData(data.data || data);
                 closeModal('invoiceRetrieveModal');
                 showToast('تم تحميل الفاتورة بنجاح', 'success');
             } else {
@@ -3878,8 +3877,9 @@ function fetchSalesReport() {
         .then(data => {
             const tableBody = document.getElementById('salesReportTableBody');
             tableBody.innerHTML = '';
-            if (data.success && data.sales) {
-                data.sales.forEach(sale => {
+            const list = data.data || data.sales || [];
+            if (data.success && list) {
+                list.forEach(sale => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${sale.invoice_number}</td>
@@ -3958,8 +3958,9 @@ function loadDeferredEntityTypes() {
         .then(data => {
             const select = document.getElementById('deferredEntityTypeSelect');
             select.innerHTML = '<option value="">اختر نوع العميل</option>';
-            if (data.success && data.entity_types) {
-                data.entity_types.forEach(type => {
+            const list = data.data || data.entity_types || [];
+            if (data.success && list) {
+                list.forEach(type => {
                     const option = document.createElement('option');
                     option.value = type.type_id;
                     option.textContent = type.type_name;
@@ -3982,8 +3983,9 @@ function loadCustomersByEntityTypeDeferred(entityTypeId) {
         .then(data => {
             const select = document.getElementById('deferredCustomerId');
             select.innerHTML = '<option value="">اختر عميل</option>';
-            if (data.success && data.entities) {
-                data.entities.forEach(entity => {
+            const list = data.data || data.entities || [];
+            if (data.success && list) {
+                list.forEach(entity => {
                     const option = document.createElement('option');
                     option.value = entity.entity_id;
                     option.textContent = entity.commercial_name || entity.legal_name;

@@ -1456,56 +1456,24 @@
         // 1. دالة apiCall الموحدة
         // ============================================================
         function apiCall(action, params) {
-            return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
-                    }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+            const p = params || {};
+            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+            try {
+                let raw;
+                switch (action) {
+                    case 'getPartyTypes': raw = AndroidInterface.getPartyTypes(); break;
+                    case 'savePartyType': raw = Number(p.id || 0) > 0 ? AndroidInterface.updatePartyType(Number(p.id), JSON.stringify(p)) : AndroidInterface.addPartyType(JSON.stringify(p)); break;
+                    case 'deletePartyType': raw = AndroidInterface.deletePartyType(Number(p.id)); break;
+                    case 'generatePartyTypeReport': raw = AndroidInterface.generatePartyTypeReport(JSON.stringify(p)); break;
+                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
-            });
+                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
         }
 
         // ============================================================
-        // 2. نظام التخزين المحلي (Offline Mode)
+        // 2. حالة الاتصال — بيانات الأعمال لا تُخزّن محلياً
         // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getPartyTypes: function() { return this.get('party_types', []); },
-            setPartyTypes: function(data) { this.set('party_types', data); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            getStats: function() { return this.get('party_stats', {}); },
-            setStats: function(stats) { this.set('party_stats', stats); },
-            getNotifications: function() { return this.get('party_notifications', []); },
-            setNotifications: function(notifications) { this.set('party_notifications', notifications); }
-        };
-
         // ============================================================
         // 3. حالة الاتصال
         // ============================================================
@@ -1516,45 +1484,22 @@
             const banner = document.getElementById('offlineBanner');
             if (!isOnline) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ لا يوجد اتصال — بيانات أنواع الأطراف للقراءة من قاعدة التطبيق فقط', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
+
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
         // ============================================================
         // 4. مزامنة العمليات المعلقة
         // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadPartyTypes();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
+        async function syncPendingOperations() { return; }
 
         // ============================================================
+        // 5. Haptic Feedback        // ============================================================
         // 5. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
@@ -1923,18 +1868,13 @@
                 const result = await apiCall('getPartyTypes', {});
                 if (result.success && result.data && result.data.length > 0) {
                     allPartyTypes = result.data;
-                    LocalDB.setPartyTypes(allPartyTypes);
                 } else {
-                    allPartyTypes = LocalDB.getPartyTypes();
-                    if (allPartyTypes.length === 0) {
-                        showToast('⚠️ لا توجد بيانات متاحة', 'warning');
-                    }
+                    allPartyTypes = [];
+                    showToast('⚠️ لا توجد بيانات متاحة', 'warning');
                 }
             } catch (e) {
-                allPartyTypes = LocalDB.getPartyTypes();
-                if (allPartyTypes.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allPartyTypes = [];
+                showToast(e?.message || '❌ فشل قراءة أنواع الأطراف من SQLite', 'error');
             }
             renderCards();
             updateStats();
@@ -2050,7 +1990,6 @@
             document.getElementById('statInactive').textContent = inactive;
             document.getElementById('statAvgCredit').textContent = formatNumber(avgCredit);
 
-            LocalDB.setStats({ total, active, inactive, avg_credit: avgCredit });
         }
 
         function showStatDetail(type) {
@@ -2086,7 +2025,6 @@
                     });
                 }
             });
-            LocalDB.setNotifications(alerts);
             renderAlerts(alerts);
         }
 
@@ -2107,7 +2045,7 @@
         }
 
         function showNotifications() {
-            const notifications = LocalDB.getNotifications();
+            const notifications = allPartyTypes.filter(s => s.is_active == 0 || s.isActive == 0);
             if (notifications.length === 0) {
                 showToast('🔔 لا توجد إشعارات جديدة', 'info');
                 return;
@@ -2180,25 +2118,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({
-                        action: currentEditId ? 'updatePartyType' : 'savePartyType',
-                        data: data
-                    });
-                    if (currentEditId) {
-                        const idx = allPartyTypes.findIndex(s => s.id == currentEditId);
-                        if (idx >= 0) { allPartyTypes[idx] = { ...allPartyTypes[idx], ...data }; }
-                    } else {
-                        allPartyTypes.push({ ...data, id: Date.now() });
-                    }
-                    LocalDB.setPartyTypes(allPartyTypes);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة عند استعادة الاتصال', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2263,7 +2183,6 @@
                 if (result.success) {
                     showToast('✅ تم الحذف بنجاح', 'success');
                     allPartyTypes = allPartyTypes.filter(s => s.id != id);
-                    LocalDB.setPartyTypes(allPartyTypes);
                     renderCards();
                     updateStats();
                     hapticFeedback('success');
@@ -2271,20 +2190,18 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'deletePartyType', data: { id: id } });
-                    allPartyTypes = allPartyTypes.filter(s => s.id != id);
-                    LocalDB.setPartyTypes(allPartyTypes);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    hapticFeedback('success');
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
+        }
+
+        function exportPartyTypesCSV() {
+            const rows = [['الكود','الاسم العربي','الاسم الإنجليزي','الخصم','الحد الائتماني','أيام الدفع','الحالة']];
+            allPartyTypes.forEach(x => rows.push([x.type_code || '', x.type_name_ar || '', x.type_name || '', x.default_discount || 0, x.default_credit_limit || 0, x.payment_terms_days || 0, Number(x.is_active) === 1 ? 'نشط' : 'غير نشط']));
+            const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'});
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `party-types-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
         }
 
         // ============================================================
@@ -2318,8 +2235,7 @@
                     }
                     break;
                 case 'export':
-                    // فتح مودال التصدير
-                    showToast('📤 جاري تجهيز التصدير...', 'info');
+                    exportPartyTypesCSV();
                     break;
                 case 'home':
                     window.location.href = '../main.html';

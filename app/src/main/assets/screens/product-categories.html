@@ -652,27 +652,26 @@
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
 function apiCall(action, params) {
-    return new Promise((resolve, reject) => {
-        if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-            try {
-                const jsonParams = JSON.stringify(params || {});
-                const result = window.AndroidInterface.execute(action, jsonParams);
-                try {
-                    const parsed = JSON.parse(result);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ success: true, data: result });
-                }
-            } catch (e) {
-                reject({ success: false, error: e.message });
+    const p = params || {};
+    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
+    try {
+        let raw;
+        switch (action) {
+            case 'getCategories': raw = AndroidInterface.getCategories(); break;
+            case 'saveCategory': {
+                const payload = { category_code: p.category_code || `CAT-${Date.now()}`, category_name: p.category_name, category_name_ar: p.category_name_ar || p.category_name, category_type: p.category_type || 'product', parent_category_id: p.parent_category_id || null, tax_rate: Number(p.tax_rate || 0), description: p.description || '', is_active: Number(p.is_active ?? 1) };
+                raw = Number(p.category_id || 0) > 0 ? AndroidInterface.updateProductCategory(Number(p.category_id), JSON.stringify(payload)) : AndroidInterface.addProductCategory(JSON.stringify(payload)); break;
             }
-        } else {
-            console.warn('AndroidInterface غير متاح، سيتم استخدام محاكاة للاختبار.');
-            // محاكاة للاختبار فقط (في الإنتاج يجب أن يكون AndroidInterface متاحاً)
-            // نرفض الطلب مع رسالة توضيحية لأننا لا نسمح بـ fetch.
-            reject({ success: false, error: 'AndroidInterface غير متاح، ولا يُسمح باستخدام fetch مباشر.' });
+            case 'deleteCategory': raw = AndroidInterface.deleteProductCategory(Number(p.category_id)); break;
+            case 'searchCategories': raw = AndroidInterface.searchProductCategories(String(p.search || '')); break;
+            case 'getCategory': {
+                const item = (AppState.categories || []).find(x => Number(x.id || x.category_id) === Number(p.category_id));
+                return Promise.resolve(item ? { success: true, data: item } : { success: false, message: 'الفئة غير موجودة' });
+            }
+            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
-    });
+        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
 }
 
 function handleAndroidResult(action, data) {

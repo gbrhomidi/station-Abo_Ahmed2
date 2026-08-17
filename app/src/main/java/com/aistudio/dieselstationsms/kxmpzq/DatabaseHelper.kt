@@ -7260,9 +7260,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 return JSONObject().apply {
                     put("product_id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
                     put("product_code", cursor.getString(cursor.getColumnIndexOrThrow("product_code")))
+                    put("barcode", cursor.getString(cursor.getColumnIndexOrThrow("barcode")))
                     put("product_name", cursor.getString(cursor.getColumnIndexOrThrow("product_name")))
+                    put("product_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("product_name_ar")))
                     put("sale_price", cursor.getDouble(cursor.getColumnIndexOrThrow("sale_price")))
+                    put("purchase_price", cursor.getDouble(cursor.getColumnIndexOrThrow("purchase_price")))
                     put("quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")))
+                    put("minimum_stock", cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_stock")))
+                    put("has_expiry", cursor.getInt(cursor.getColumnIndexOrThrow("has_expiry")))
+                    put("expiry_date", cursor.getString(cursor.getColumnIndexOrThrow("expiry_date")))
+                    put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
                 }
             }
             return null
@@ -7297,8 +7304,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 taxAmount = 0.0,
                 grossAmount = total,
                 netAmount = total,
-                paymentMethod = data.optString("payment_type", "cash"),
-                isCredit = data.optString("payment_type") == "آجل",
+                paymentMethod = when (data.optString("payment_type", "cash")) {
+                    "آجل", "credit" -> "credit"
+                    "بطاقة", "credit_card" -> "credit_card"
+                    "تحويل", "bank_transfer" -> "bank_transfer"
+                    else -> "cash"
+                },
+                isCredit = data.optString("payment_type") in setOf("آجل", "credit"),
                 dueDate = null,
                 cashierId = 1,
                 orderType = "product"
@@ -7334,7 +7346,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             result.put("success", true)
             result.put("sale_id", saleId)
-            result.put("invoice_number", "INV-$saleId")
+            result.put("invoice_number", getSaleTransactionById(saleId.toInt())?.optString("invoice_number", "INV-$saleId") ?: "INV-$saleId")
         } catch (e: Exception) {
             result.put("success", false)
             result.put("error", e.message)
@@ -11836,14 +11848,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 while (cursor.moveToNext()) {
                     arr.put(JSONObject().apply {
                         put("product_id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
+                        put("id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
                         put("product_code", cursor.getString(cursor.getColumnIndexOrThrow("product_code")))
+                        put("barcode", cursor.getString(cursor.getColumnIndexOrThrow("barcode")))
                         put("product_name", cursor.getString(cursor.getColumnIndexOrThrow("product_name")))
                         put("product_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("product_name_ar")))
+                        put("description", cursor.getString(cursor.getColumnIndexOrThrow("description")))
+                        put("category_id", cursor.getInt(cursor.getColumnIndexOrThrow("category_id")))
                         put("category_name", cursor.getString(cursor.getColumnIndexOrThrow("category_name")))
+                        put("unit_id", cursor.getInt(cursor.getColumnIndexOrThrow("unit_id")))
                         put("sale_price", cursor.getDouble(cursor.getColumnIndexOrThrow("sale_price")))
                         put("purchase_price", cursor.getDouble(cursor.getColumnIndexOrThrow("purchase_price")))
                         put("quantity", cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")))
+                        put("current_stock", cursor.getDouble(cursor.getColumnIndexOrThrow("quantity")))
+                        put("minimum_stock", cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_stock")))
+                        put("min_stock_level", cursor.getDouble(cursor.getColumnIndexOrThrow("minimum_stock")))
+                        put("has_expiry", cursor.getInt(cursor.getColumnIndexOrThrow("has_expiry")))
+                        put("expiry_date", cursor.getString(cursor.getColumnIndexOrThrow("expiry_date")))
+                        put("is_service", cursor.getInt(cursor.getColumnIndexOrThrow("is_service")))
+                        put("is_batch_tracked", cursor.getInt(cursor.getColumnIndexOrThrow("is_batch_tracked")))
+                        put("is_serialized", cursor.getInt(cursor.getColumnIndexOrThrow("is_serialized")))
                         put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+                        put("is_active", cursor.getString(cursor.getColumnIndexOrThrow("status")) == "active")
                     })
                 }
             }
@@ -11899,7 +11925,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("category_id", data.optInt("category_id", 0))
                 put("fuel_type_id", data.optInt("fuel_type_id", 0))
                 put("station_id", data.optInt("station_id", 1))
-                put("unit_id", data.optString("unit_id", "لتر"))
+                put("unit_id", data.optInt("unit_id", 1))
                 put("sale_price", data.optDouble("sale_price", 0.0))
                 put("purchase_price", data.optDouble("purchase_price", 0.0))
                 put("quantity", data.optDouble("quantity", 0.0))
@@ -11928,7 +11954,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 data.optDouble("purchase_price")?.let { put("purchase_price", it) }
                 data.optDouble("quantity")?.let { put("quantity", it) }
                 data.optDouble("minimum_stock")?.let { put("minimum_stock", it) }
-                data.optString("unit_id")?.let { put("unit_id", it) }
+                if (data.has("unit_id")) put("unit_id", data.optInt("unit_id", 1))
+                if (data.has("barcode")) put("barcode", data.optString("barcode"))
+                if (data.has("description")) put("description", data.optString("description"))
+                if (data.has("has_expiry")) put("has_expiry", data.optInt("has_expiry", 0))
+                if (data.has("expiry_date")) {
+                    if (data.isNull("expiry_date")) putNull("expiry_date") else put("expiry_date", data.optString("expiry_date"))
+                }
+                if (data.has("is_service")) put("is_service", data.optInt("is_service", 0))
+                if (data.has("is_batch_tracked")) put("is_batch_tracked", data.optInt("is_batch_tracked", 0))
+                if (data.has("is_serialized")) put("is_serialized", data.optInt("is_serialized", 0))
+                if (data.has("status")) put("status", data.optString("status", "active"))
                 put("updated_at", getCurrentDateTime())
             }
             val rows = db.update("products", cv, "id=?", arrayOf(id.toString()))
@@ -11955,6 +11991,341 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
     // دوال أنواع الأطراف والعملات
     // ========================================================================
+
+
+    // ========================================================================
+    // عقود المنتجات والفئات وأنواع الأطراف وPOS والمرتجعات - V1
+    // جميع الدوال أدناه تعمل على الجداول الموجودة فعلياً في هذا المخطط.
+    // ========================================================================
+
+    fun getUnits(): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, uuid, unit_name, unit_symbol, is_decimal, category FROM units ORDER BY unit_name",
+                null
+            ).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun insertProductCategory(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val name = data.optString("category_name", data.optString("category_name_ar", "")).trim()
+            require(name.isNotEmpty()) { "اسم الفئة مطلوب" }
+            val db = writableDatabase
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("category_code", data.optString("category_code", "CAT-${UUID.randomUUID().toString().take(8)}"))
+                put("category_name", name)
+                put("category_name_ar", data.optString("category_name_ar", name))
+                put("description", data.optString("description", ""))
+                put("description_ar", data.optString("description_ar", data.optString("description", "")))
+                if (data.optInt("parent_category_id", 0) > 0) put("parent_category_id", data.optInt("parent_category_id"))
+                put("category_type", data.optString("category_type", "product"))
+                put("tax_rate", data.optDouble("tax_rate", 0.0))
+                put("is_active", data.optInt("is_active", 1))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            db.insertOrThrow("product_categories", null, values)
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateProductCategory(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                if (data.has("category_code")) put("category_code", data.optString("category_code"))
+                if (data.has("category_name")) put("category_name", data.optString("category_name"))
+                if (data.has("category_name_ar")) put("category_name_ar", data.optString("category_name_ar"))
+                if (data.has("description")) put("description", data.optString("description"))
+                if (data.has("description_ar")) put("description_ar", data.optString("description_ar"))
+                if (data.has("parent_category_id")) {
+                    if (data.isNull("parent_category_id")) putNull("parent_category_id") else put("parent_category_id", data.optInt("parent_category_id"))
+                }
+                if (data.has("category_type")) put("category_type", data.optString("category_type", "product"))
+                if (data.has("tax_rate")) put("tax_rate", data.optDouble("tax_rate", 0.0))
+                if (data.has("is_active")) put("is_active", data.optInt("is_active", 1))
+                put("updated_at", getCurrentDateTime())
+            }
+            writableDatabase.update("product_categories", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteProductCategory(id: Long): Int {
+        dbLock.lock()
+        return try {
+            writableDatabase.update("product_categories", ContentValues().apply {
+                put("is_deleted", 1); put("deleted_at", getCurrentDateTime())
+            }, "id=? AND is_deleted=0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun searchProductCategories(query: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val q = "%${query.trim()}%"
+            readableDatabase.rawQuery(
+                "SELECT * FROM product_categories WHERE is_deleted=0 AND (category_name LIKE ? OR category_name_ar LIKE ? OR category_code LIKE ?) ORDER BY category_name",
+                arrayOf(q, q, q)
+            ).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun insertPartyType(data: JSONObject): Long {
+        dbLock.lock()
+        return try {
+            val code = data.optString("type_code").trim()
+            val name = data.optString("type_name", data.optString("type_name_ar", "")).trim()
+            require(code.isNotEmpty()) { "كود النوع مطلوب" }
+            require(name.isNotEmpty()) { "اسم النوع مطلوب" }
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("type_code", code)
+                put("type_name", name)
+                put("type_name_ar", data.optString("type_name_ar", name))
+                put("description", data.optString("description", ""))
+                put("default_discount", data.optDouble("default_discount", 0.0))
+                put("default_credit_limit", data.optDouble("default_credit_limit", 0.0))
+                put("payment_terms_days", data.optInt("payment_terms_days", 0))
+                put("is_active", data.optInt("is_active", 1))
+                put("remarks", data.optString("remarks", ""))
+                put("extra_data", data.optString("extra_data", ""))
+                put("created_at", getCurrentDateTime())
+                put("updated_at", getCurrentDateTime())
+            }
+            writableDatabase.insertOrThrow("party_types", null, values)
+        } finally { dbLock.unlock() }
+    }
+
+    fun updatePartyType(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                if (data.has("type_code")) put("type_code", data.optString("type_code"))
+                if (data.has("type_name")) put("type_name", data.optString("type_name"))
+                if (data.has("type_name_ar")) put("type_name_ar", data.optString("type_name_ar"))
+                if (data.has("description")) put("description", data.optString("description"))
+                if (data.has("default_discount")) put("default_discount", data.optDouble("default_discount", 0.0))
+                if (data.has("default_credit_limit")) put("default_credit_limit", data.optDouble("default_credit_limit", 0.0))
+                if (data.has("payment_terms_days")) put("payment_terms_days", data.optInt("payment_terms_days", 0))
+                if (data.has("is_active")) put("is_active", data.optInt("is_active", 1))
+                if (data.has("remarks")) put("remarks", data.optString("remarks"))
+                if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
+                put("updated_at", getCurrentDateTime())
+            }
+            writableDatabase.update("party_types", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun deletePartyType(id: Long): Int {
+        dbLock.lock()
+        return try {
+            writableDatabase.update("party_types", ContentValues().apply {
+                put("is_deleted", 1); put("updated_at", getCurrentDateTime())
+            }, "id=? AND is_deleted=0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun getPartyTypeReport(reportType: String): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sql = when (reportType) {
+                "parties_by_type" -> """
+                    SELECT pt.id AS type_id, pt.type_code, pt.type_name, pt.type_name_ar,
+                           COUNT(p.id) AS total_parties,
+                           SUM(CASE WHEN p.is_active=1 THEN 1 ELSE 0 END) AS active_parties,
+                           SUM(CASE WHEN p.is_active=0 THEN 1 ELSE 0 END) AS inactive_parties,
+                           COALESCE(SUM(p.total_purchases),0) AS total_purchases,
+                           COALESCE(SUM(p.total_payments),0) AS total_payments
+                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
+                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                """.trimIndent()
+                "credit_analysis" -> """
+                    SELECT pt.id AS type_id, pt.type_name, COUNT(p.id) AS party_count,
+                           COALESCE(AVG(p.credit_limit),0) AS avg_credit,
+                           COALESCE(SUM(p.credit_limit),0) AS total_credit,
+                           COALESCE(SUM(p.current_balance),0) AS total_balance
+                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
+                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                """.trimIndent()
+                "activity" -> """
+                    SELECT pt.id AS type_id, pt.type_name, COUNT(DISTINCT s.id) AS invoice_count,
+                           COALESCE(SUM(s.net_amount),0) AS total_sales, 0 AS payment_count,
+                           MAX(s.created_at) AS last_activity
+                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
+                    LEFT JOIN sales_transactions s ON s.customer_party_id=p.id AND s.is_deleted=0
+                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                """.trimIndent()
+                else -> "SELECT id, uuid, type_code, type_name, type_name_ar, description, default_discount, default_credit_limit, payment_terms_days, is_active FROM party_types WHERE is_deleted=0 ORDER BY type_name"
+            }
+            db.rawQuery(sql, null).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getNextInvoiceNumber(): String {
+        dbLock.lock()
+        return try {
+            val next = readableDatabase.rawQuery("SELECT COALESCE(MAX(id),0)+1 FROM sales_transactions", null).use { if (it.moveToFirst()) it.getLong(0) else 1L }
+            "INV-$next"
+        } finally { dbLock.unlock() }
+    }
+
+    fun searchInvoices(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val where = mutableListOf("s.is_deleted=0")
+            val args = mutableListOf<String>()
+            data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
+            data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+            val limit = data.optInt("limit", 100).coerceIn(1, 500)
+            val sql = """SELECT s.id, s.invoice_number, s.payment_method AS payment_type,
+                    s.gross_amount AS total_amount, s.paid_amount AS amount_paid, s.remaining_amount,
+                    s.created_at AS sale_date, p.commercial_name AS customer_name
+                    FROM sales_transactions s LEFT JOIN parties p ON p.id=s.customer_party_id
+                    WHERE ${where.joinToString(" AND ")} ORDER BY s.id DESC LIMIT $limit"""
+            readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getInvoiceDetails(invoiceNumber: String): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val sale = db.rawQuery("SELECT s.*, p.commercial_name AS customer_name FROM sales_transactions s LEFT JOIN parties p ON p.id=s.customer_party_id WHERE s.invoice_number=? AND s.is_deleted=0 LIMIT 1", arrayOf(invoiceNumber)).use { cursor ->
+                if (!cursor.moveToFirst()) return null
+                JSONObject().apply {
+                    put("sale_id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+                    put("invoice_number", cursor.getString(cursor.getColumnIndexOrThrow("invoice_number")))
+                    put("payment_type", cursor.getString(cursor.getColumnIndexOrThrow("payment_method")))
+                    put("total_amount", cursor.getDouble(cursor.getColumnIndexOrThrow("gross_amount")))
+                    put("amount_paid", cursor.getDouble(cursor.getColumnIndexOrThrow("paid_amount")))
+                    put("entity_id", cursor.getLong(cursor.getColumnIndexOrThrow("customer_party_id")))
+                    put("customer_name", cursor.getString(cursor.getColumnIndexOrThrow("customer_name")))
+                    put("sale_date", cursor.getString(cursor.getColumnIndexOrThrow("created_at")))
+                }
+            }
+            val saleId = sale.getLong("sale_id")
+            val items = db.rawQuery("SELECT si.product_id, si.quantity, si.unit_price, si.line_total AS total_price, p.product_name AS name, p.barcode FROM sale_items si LEFT JOIN products p ON p.id=si.product_id WHERE si.sale_id=? ORDER BY si.line_number", arrayOf(saleId.toString())).use { cursorToJsonArray(it) }
+            sale.put("items", items)
+            sale
+        } finally { dbLock.unlock() }
+    }
+
+    fun searchSaleItems(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val where = mutableListOf("s.is_deleted=0", "si.item_type='product'")
+            val args = mutableListOf<String>()
+            data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
+            data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+            val sql = """SELECT s.id AS sale_id, s.invoice_number, s.created_at AS sale_date,
+                    si.product_id, p.product_name, p.barcode, si.quantity, si.unit_price, si.line_total AS total_price
+                    FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
+                    LEFT JOIN products p ON p.id=si.product_id WHERE ${where.joinToString(" AND ")}
+                    ORDER BY s.created_at DESC, si.line_number LIMIT 500"""
+            readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun processSaleReturn(data: JSONObject): JSONObject {
+        val invoiceNumber = data.optString("invoice_number").trim()
+        val barcode = data.optString("barcode").trim()
+        val productId = data.optLong("product_id", 0L)
+        val requestedQty = data.optDouble("quantity", 0.0)
+        require(invoiceNumber.isNotEmpty()) { "رقم الفاتورة مطلوب" }
+        require(requestedQty > 0) { "كمية الإرجاع يجب أن تكون أكبر من صفر" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val item = db.rawQuery("""SELECT si.id, si.sale_id, si.product_id, si.quantity, si.returned_quantity
+                    FROM sale_items si JOIN sales_transactions s ON s.id=si.sale_id
+                    LEFT JOIN products p ON p.id=si.product_id
+                    WHERE s.invoice_number=? AND (?=0 OR si.product_id=?) AND (?='' OR p.barcode=?) AND si.item_type='product' LIMIT 1""",
+                arrayOf(invoiceNumber, productId.toString(), productId.toString(), barcode, barcode)).use { cursor ->
+                if (!cursor.moveToFirst()) throw IllegalArgumentException("لم يتم العثور على بند مطابق في الفاتورة")
+                JSONObject().apply {
+                    put("item_id", cursor.getLong(0)); put("sale_id", cursor.getLong(1)); put("product_id", cursor.getLong(2));
+                    put("sold_quantity", cursor.getDouble(3)); put("returned_quantity", cursor.getDouble(4))
+                }
+            }
+            val available = item.getDouble("sold_quantity") - item.getDouble("returned_quantity")
+            require(requestedQty <= available) { "كمية الإرجاع تتجاوز الكمية المتاحة" }
+            val movementId = addStockMovement(JSONObject().apply {
+                put("product_id", item.getLong("product_id")); put("quantity", requestedQty); put("movement_type", "return")
+                put("reference_type", "sale_return"); put("reference_id", item.getLong("sale_id"))
+                put("notes", data.optString("reason", "مرتجع مبيعات") + " - " + data.optString("notes", ""))
+                put("performed_by", data.optInt("created_by", 1)); put("station_id", data.optInt("station_id", 1))
+            })
+            require(movementId > 0) { "فشل تسجيل حركة الإرجاع" }
+            db.execSQL("UPDATE sale_items SET is_returned=1, returned_quantity=returned_quantity+? WHERE id=?", arrayOf(requestedQty, item.getLong("item_id")))
+            JSONObject().apply { put("success", true); put("id", movementId); put("sale_id", item.getLong("sale_id")); put("product_id", item.getLong("product_id")) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getReturns(data: JSONObject): JSONArray {
+        dbLock.lock()
+        return try {
+            val where = mutableListOf("im.is_deleted=0", "im.movement_type='return'")
+            val args = mutableListOf<String>()
+            data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
+            data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
+            val sql = """SELECT im.id, im.product_id, p.product_name, p.product_name_ar, im.quantity_change AS quantity,
+                    im.total_cost AS value, im.reason, im.created_at AS return_date, im.status,
+                    im.reference_id, s.invoice_number, im.performed_by AS created_by
+                    FROM inventory_movements im LEFT JOIN products p ON p.id=im.product_id
+                    LEFT JOIN sales_transactions s ON s.id=im.reference_id WHERE ${where.joinToString(" AND ")}
+                    ORDER BY im.created_at DESC LIMIT 500"""
+            readableDatabase.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateReturn(id: Long, data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                if (data.has("reason")) put("reason", data.optString("reason"))
+                if (data.has("notes")) put("remarks", data.optString("notes"))
+                put("updated_at", getCurrentDateTime())
+            }
+            writableDatabase.update("inventory_movements", values, "id=? AND movement_type='return' AND is_deleted=0", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteReturn(id: Long): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val movement = db.rawQuery("SELECT product_id, quantity_change, reference_id FROM inventory_movements WHERE id=? AND movement_type='return' AND is_deleted=0", arrayOf(id.toString())).use { cursor ->
+                if (!cursor.moveToFirst()) return 0
+                longArrayOf(cursor.getLong(0), cursor.getDouble(1).toBits(), cursor.getLong(2))
+            }
+            val productId = movement[0]
+            val qty = Double.fromBits(movement[1])
+            val saleId = movement[2]
+            val reversal = addStockMovement(JSONObject().apply {
+                put("product_id", productId); put("quantity", qty); put("movement_type", "out")
+                put("reference_type", "sale_return_reversal"); put("reference_id", saleId)
+                put("notes", "عكس مرتجع $id"); put("performed_by", 1); put("station_id", 1)
+            })
+            require(reversal > 0) { "فشل عكس حركة المرتجع" }
+            db.update("inventory_movements", ContentValues().apply { put("is_deleted", 1); put("status", "cancelled"); put("updated_at", getCurrentDateTime()) }, "id=?", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+
+
+    fun getPartiesByType(typeId: Long): JSONArray {
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery("""SELECT id AS entity_id, id, party_code, legal_name, commercial_name, commercial_name_ar,
+                    credit_limit, current_balance, payment_terms, is_active, is_deleted
+                    FROM parties WHERE party_type_id=? AND is_deleted=0 ORDER BY commercial_name""", arrayOf(typeId.toString())).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
 
     fun getPartyTypes(): JSONArray {
         dbLock.lock()
