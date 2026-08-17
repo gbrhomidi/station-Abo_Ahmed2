@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 19
+        const val VERSION = 20
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -180,6 +180,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     16 -> migrateV16ToV17(db)
                     17 -> migrateV17ToV18(db)
                     18 -> ensureReportCacheTable(db)
+                    19 -> migrateV19ToV20(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -204,6 +205,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
         createSmsOutboundDedupeTable(db)
+        createSmsPlatformTables(db)
         ensureActivityPermissions(db)
         ensureSmsSettings(db)
     }
@@ -610,6 +612,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         Log.d(TAG, "Migrated SMS outbound dedupe schema to V17 successfully")
     }
 
+    private fun migrateV19ToV20(db: SQLiteDatabase) {
+        ensureSmsConversationColumns(db)
+        createSmsPlatformTables(db)
+        Log.d(TAG, "Migrated SMS durable platform schema to V20 successfully")
+    }
+
     private fun migrateV17ToV18(db: SQLiteDatabase) {
         ensureColumn(db, "inventory_movements", "warehouse_id", "INTEGER")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_warehouse_date ON inventory_movements(warehouse_id, created_at)")
@@ -996,6 +1004,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOtpVerificationsTable(db)
         createUserOtpVerificationsTable(db)
         createSmsOutboundDedupeTable(db)
+        createSmsPlatformTables(db)
         createIndexes(db)
     }
 
@@ -4940,6 +4949,175 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """)
     }
 
+    private fun ensureSmsConversationColumns(db: SQLiteDatabase) {
+        val columns = listOf(
+            "conversation_id TEXT",
+            "actor_id INTEGER",
+            "conversation_type TEXT DEFAULT 'sms'",
+            "current_state TEXT DEFAULT 'IDLE'",
+            "previous_state TEXT DEFAULT ''",
+            "order_id INTEGER",
+            "draft_id TEXT",
+            "version INTEGER DEFAULT 0",
+            "expires_at INTEGER DEFAULT 0",
+            "last_inbound_message_id TEXT",
+            "last_outbound_message_id TEXT",
+            "retry_count INTEGER DEFAULT 0",
+            "status TEXT DEFAULT 'ACTIVE'"
+        )
+        columns.forEach { definition ->
+            val name = definition.substringBefore(' ')
+            ensureColumn(db, "sms_conversation_context", name, definition.substringAfter(' '))
+        }
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_context_state ON sms_conversation_context(current_state, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_context_expiry ON sms_conversation_context(expires_at)")
+    }
+
+    private fun createSmsPlatformTables(db: SQLiteDatabase) {
+        ensureSmsConversationColumns(db)
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT NOT NULL UNIQUE,
+                event_id TEXT,
+                conversation_id TEXT,
+                business_entity_id TEXT,
+                recipient TEXT NOT NULL,
+                body TEXT NOT NULL,
+                parts_count INTEGER NOT NULL DEFAULT 1,
+                priority TEXT NOT NULL DEFAULT 'NORMAL',
+                status TEXT NOT NULL DEFAULT 'QUEUED',
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                queued_at INTEGER NOT NULL,
+                sent_at INTEGER,
+                delivered_at INTEGER,
+                failed_at INTEGER,
+                failure_code TEXT,
+                failure_reason TEXT,
+                subscription_id INTEGER,
+                dedupe_key TEXT NOT NULL UNIQUE,
+                next_attempt_at INTEGER NOT NULL DEFAULT 0,
+                last_part_index INTEGER NOT NULL DEFAULT 0,
+                CHECK(parts_count > 0),
+                CHECK(attempt_count >= 0),
+                CHECK(status IN ('DRAFT','QUEUED','SENDING','SENT','DELIVERY_PENDING','DELIVERED','FAILED','RETRY_PENDING','CANCELLED','EXPIRED'))
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_status_next ON sms_outbox(status, next_attempt_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_conversation ON sms_outbox(conversation_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_event ON sms_outbox(event_id)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_outbox_parts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id TEXT NOT NULL,
+                part_index INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                sent_at INTEGER,
+                delivered_at INTEGER,
+                failure_code TEXT,
+                failure_reason TEXT,
+                UNIQUE(message_id, part_index),
+                CHECK(status IN ('PENDING','SENT','DELIVERED','FAILED'))
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_parts_message ON sms_outbox_parts(message_id)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_payment_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                payment_event_id TEXT NOT NULL UNIQUE,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                phone TEXT NOT NULL,
+                party_id INTEGER,
+                institution TEXT,
+                amount REAL,
+                currency TEXT DEFAULT 'YER',
+                sender_name TEXT,
+                receiver_name TEXT,
+                reference TEXT,
+                event_timestamp INTEGER,
+                raw_message TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'RECEIVED',
+                matched_order_id INTEGER,
+                matched_payment_id INTEGER,
+                failure_code TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                CHECK(status IN ('RECEIVED','PARSED','MATCHED','VERIFIED','REJECTED','DUPLICATE','EXPIRED','SUSPICIOUS'))
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_payment_phone_status ON sms_payment_events(phone, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_payment_reference ON sms_payment_events(reference)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_delivery_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                delivery_id TEXT NOT NULL UNIQUE,
+                order_id INTEGER,
+                sale_id INTEGER,
+                party_id INTEGER,
+                driver_id INTEGER,
+                station_id INTEGER,
+                location TEXT NOT NULL,
+                scheduled_at INTEGER,
+                assigned_at INTEGER,
+                started_at INTEGER,
+                arrived_at INTEGER,
+                completed_at INTEGER,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                failure_reason TEXT,
+                notes TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                CHECK(status IN ('PENDING','ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY','ARRIVED','CUSTOMER_UNAVAILABLE','WAITING_CUSTOMER','REDELIVERY_REQUIRED','COMPLETED','RETURNED','CANCELLED'))
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_delivery_status_time ON sms_delivery_tasks(status, scheduled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_delivery_driver ON sms_delivery_tasks(driver_id, status)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_loyalty_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id TEXT NOT NULL UNIQUE,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                party_id INTEGER NOT NULL,
+                points INTEGER NOT NULL,
+                balance_before INTEGER NOT NULL,
+                balance_after INTEGER NOT NULL,
+                transaction_type TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                reference_type TEXT,
+                reference_id TEXT,
+                created_at INTEGER NOT NULL,
+                CHECK(transaction_type IN ('EARN','REDEEM','ADJUST','EXPIRE','REVERSE')),
+                CHECK(points > 0),
+                CHECK(balance_before >= 0),
+                CHECK(balance_after >= 0)
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_loyalty_party_time ON sms_loyalty_transactions(party_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_audit_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                actor_type TEXT NOT NULL,
+                actor_id TEXT,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT,
+                previous_state TEXT,
+                new_state TEXT,
+                source TEXT NOT NULL,
+                metadata_json TEXT,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_audit_entity ON sms_audit_events(entity_type, entity_id, created_at)")
+    }
+
     private fun createSmsProcessedTable(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_processed_messages (
@@ -8857,6 +9035,61 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             db.insert("sms_messages", null, cv)
         } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun retrySmsMessage(id: Long): Boolean {
+        if (id <= 0L) return false
+        dbLock.lock()
+        val database = writableDatabase
+        database.beginTransaction()
+        try {
+            val uuid = database.rawQuery("SELECT uuid FROM sms_messages WHERE id = ? LIMIT 1", arrayOf(id.toString())).use { if (it.moveToFirst()) it.getString(0) else null }
+            if (uuid == null) return false
+            val changed = database.update(
+                "sms_outbox",
+                ContentValues().apply { put("status", "RETRY_PENDING"); put("next_attempt_at", System.currentTimeMillis()); put("failure_code", "MANUAL_RETRY") },
+                "message_id = ? AND status IN ('FAILED','CANCELLED','RETRY_PENDING')",
+                arrayOf(uuid)
+            )
+            if (changed != 1) return false
+            database.update("sms_messages", ContentValues().apply { put("status", "queued"); put("updated_at", getCurrentDateTime()) }, "id = ?", arrayOf(id.toString()))
+            database.setTransactionSuccessful()
+            return true
+        } finally {
+            database.endTransaction()
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteSmsMessage(id: Long): Boolean {
+        if (id <= 0L) return false
+        dbLock.lock()
+        val database = writableDatabase
+        database.beginTransaction()
+        try {
+            val uuid = database.rawQuery(
+                "SELECT uuid FROM sms_messages WHERE id = ? LIMIT 1",
+                arrayOf(id.toString())
+            ).use { if (it.moveToFirst()) it.getString(0) else null }
+            if (uuid == null) return false
+            val outboxState = database.rawQuery(
+                "SELECT status FROM sms_outbox WHERE message_id = ? LIMIT 1",
+                arrayOf(uuid)
+            ).use { if (it.moveToFirst()) it.getString(0) else null }
+            if (outboxState in setOf("SENDING", "SENT", "DELIVERY_PENDING", "DELIVERED")) return false
+            val deleted = database.delete("sms_messages", "id = ?", arrayOf(id.toString())) == 1
+            if (deleted) database.update(
+                "sms_outbox",
+                ContentValues().apply { put("status", "CANCELLED"); put("failure_code", "DELETED_FROM_UI"); put("failed_at", System.currentTimeMillis()) },
+                "message_id = ? AND status IN ('DRAFT','QUEUED','RETRY_PENDING')",
+                arrayOf(uuid)
+            )
+            database.setTransactionSuccessful()
+            return deleted
+        } finally {
+            database.endTransaction()
             dbLock.unlock()
         }
     }

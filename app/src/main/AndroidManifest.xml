@@ -239,7 +239,7 @@
         <!-- 🛡️ SMSService - منسق النظام (Foreground Service)          -->
         <!--                                                        -->
         <!-- ✅ exported="false" - خدمة داخلية فقط                     -->
-        <!-- ✅ foregroundServiceType="dataSync"                       -->
+        <!-- ✅ foregroundServiceType="remoteMessaging"               -->
         <!-- ✅ stopWithTask="false" - تستمر بعد إغلاق التطبيق         -->
         <!--                                                        -->
         <!-- المسؤوليات:                                              -->
@@ -255,6 +255,11 @@
             android:exported="false"
             android:foregroundServiceType="remoteMessaging"
             android:stopWithTask="false" />
+
+        <receiver
+            android:name=".sms.SmsTransportCallbackReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- ════════════════════════════════════════════════════════ -->
         <!-- ⚠️ ملاحظات هندسية مهمة                                    -->

@@ -112,7 +112,8 @@ class SmsCustomerResolver(
         val email: String = "",
         val address: String = "",
         val vehicleType: String = "",
-        val fleetSize: Int = 0
+        val fleetSize: Int = 0,
+        val partyId: Int? = null
     )
 
     // ═══════════════════════════════════════════════════════════════
@@ -192,7 +193,8 @@ class SmsCustomerResolver(
                     fleetSize = getIntSafe(
                         it,
                         "fleet_size"
-                    )
+                    ),
+                    partyId = getIntSafe(it, "party_id").takeIf { id -> id > 0 }
                 )
             }
 

@@ -308,6 +308,9 @@ class SmsIntentDetector {
         scores["quantity_response"] =
             scoreQuantityResponse(normalized)
 
+        scores["quantity_ambiguous"] =
+            scoreAmbiguousQuantity(normalized)
+
         scores["confirm_order"] =
             scoreConfirmOrder(normalized)
 
@@ -620,9 +623,15 @@ class SmsIntentDetector {
     ): Int {
 
         if (
-            msg == "اريد ديزل" ||
             msg.contains("اريد ديزل") ||
-            msg.contains("طلب ديزل")
+            msg.contains("اريد لي ديزل") ||
+            msg.contains("طلب ديزل") ||
+            msg.contains("اشتي ديزل") ||
+            msg.contains("ابغى ديزل") ||
+            msg.contains("عايز ديزل") ||
+            msg.contains("نشتي ديزل") ||
+            msg.contains("صبو لي ديزل") ||
+            msg.contains("هاتو ديزل")
         ) {
             return 100
         }
@@ -672,9 +681,15 @@ class SmsIntentDetector {
     ): Int {
 
         if (
-            msg == "اريد بنزين" ||
             msg.contains("اريد بنزين") ||
-            msg.contains("طلب بنزين")
+            msg.contains("اريد لي بنزين") ||
+            msg.contains("طلب بنزين") ||
+            msg.contains("اشتي بنزين") ||
+            msg.contains("ابغى بنزين") ||
+            msg.contains("عايز بنزين") ||
+            msg.contains("نشتي بنزين") ||
+            msg.contains("صبو لي بنزين") ||
+            msg.contains("هاتو بنزين")
         ) {
             return 100
         }
@@ -713,6 +728,10 @@ class SmsIntentDetector {
     // Quantity
     // ═══════════════════════════════════════════════════════════════
 
+    private fun scoreAmbiguousQuantity(msg: String): Int {
+        return if (NUMBER_ONLY_REGEX.matches(msg)) 96 else 0
+    }
+
     private fun scoreQuantityResponse(
         msg: String
     ): Int {
@@ -720,7 +739,7 @@ class SmsIntentDetector {
         if (
             NUMBER_ONLY_REGEX.matches(msg)
         ) {
-            return 88
+            return 0
         }
 
         var score = 0

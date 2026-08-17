@@ -33,6 +33,7 @@ import com.aistudio.dieselstationsms.kxmpzq.sms.SmsCustomerResolver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsIntentDetector
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsMetrics
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsProcessor
+import com.aistudio.dieselstationsms.kxmpzq.sms.SmsOutboxWorker
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReplyManager
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurity
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsSecurityOTP
@@ -294,6 +295,9 @@ class SMSService : Service() {
             // 8. تشغيل محرك SMS
             startSmsEngine()
 
+            // outbox مصدر الحقيقة للرسائل الصادرة؛ لا ينتظر فتح الواجهة.
+            SmsOutboxWorker.schedule(applicationContext)
+
             // 9. بدء مراقبة الصحة
             startHealthMonitor()
 
@@ -339,6 +343,9 @@ class SMSService : Service() {
             if (!isDestroyed.get()) {
                 startForeground(NOTIFICATION_ID, buildForegroundNotification())
             }
+
+            // إعادة محاولة الرسائل العالقة بعد إعادة التشغيل أو wake-up.
+            SmsOutboxWorker.schedule(applicationContext)
 
             // معالجة أي أمر مرسل إلى الخدمة
             handleServiceCommand(intent)

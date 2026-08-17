@@ -82,6 +82,10 @@ class SmsProcessor(
     private val replyManager =
         SmsReplyManager(context, db)
 
+    private val paymentService = SmsPaymentService(db)
+
+    private val loyaltyService = SmsLoyaltyService(db)
+
     private val metrics =
         SmsMetrics(db)
 
@@ -744,6 +748,34 @@ class SmsProcessor(
         }
     }
 
+    private suspend fun handleTransferMessage(
+        customer: SmsCustomerResolver.CustomerInfo,
+        msgBody: String
+    ): Boolean {
+        val result = paymentService.recordIncoming(
+            phone = customer.phone,
+            partyId = customer.partyId,
+            rawMessage = msgBody
+        )
+        return when (result.status) {
+            SmsPaymentService.ResultStatus.PARSED -> {
+                replyManager.sendReplyOnce(
+                    customer.phone,
+                    "تم استلام بيانات التحويل للمراجعة. لا يعتبر الدفع مؤكداً حتى اكتمال المطابقة والقيد."
+                )
+                true
+            }
+            SmsPaymentService.ResultStatus.DUPLICATE -> {
+                replyManager.sendReplyOnce(
+                    customer.phone,
+                    "تم استلام بيانات التحويل نفسها سابقاً، ولن نكرر قيدها."
+                )
+                true
+            }
+            SmsPaymentService.ResultStatus.REJECTED -> handleBankTransfer(customer)
+        }
+    }
+
     private fun createPublicSmsCustomer(
         phone: String
     ): SmsCustomerResolver.CustomerInfo {
@@ -952,6 +984,9 @@ class SmsProcessor(
                         prefs
                     )
 
+                "quantity_ambiguous" ->
+                    handleAmbiguousQuantity(customer, ctx)
+
                 "location_response" ->
                     handleLocationResponse(
                         customer,
@@ -988,7 +1023,7 @@ class SmsProcessor(
                     )
 
                 "transfer_request" ->
-                    handleBankTransfer(customer)
+                    handleTransferMessage(customer, msgBody)
 
                 "offers_query" ->
                     handleOffersQuery(customer)
@@ -1215,6 +1250,22 @@ class SmsProcessor(
     /**
      * معالجة كمية الديزل.
      */
+    private suspend fun handleAmbiguousQuantity(
+        customer: SmsCustomerResolver.CustomerInfo,
+        ctx: SmsConversationManager.ConversationContext
+    ): Boolean {
+        ctx.lastTopic = "quantity"
+        ctx.lastIntent = "quantity_ambiguous"
+        ctx.pendingAction = "awaiting_quantity_unit"
+        ctx.awaitingResponse = true
+        conversationManager.saveContext(customer.phone, ctx)
+        replyManager.sendReplyOnce(
+            customer.phone,
+            "هل الرقم بالدباب أم باللتر؟ أرسل مثلاً: 5 دباب أو 100 لتر."
+        )
+        return true
+    }
+
     private suspend fun handleQuantityResponse(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
@@ -1522,6 +1573,14 @@ class SmsProcessor(
 
         val name =
             customerDisplayName(customer)
+
+        if (customer.partyId == null) {
+            replyManager.sendReplyOnce(
+                sender,
+                "لا يمكن تأكيد طلب ائتماني لهذا الرقم غير المسجل. تواصل مع المحطة لإكمال التسجيل أولاً."
+            )
+            return false
+        }
 
         val order =
             conversationManager
@@ -2165,30 +2224,23 @@ class SmsProcessor(
             return false
         }
 
-        val value =
-            when {
+        val result = loyaltyService.redeem(
+            partyId = customer.partyId,
+            points = points,
+            referenceId = "${customer.phone}:$points:${msgBody.hashCode()}"
+        )
 
-                points >= 5000 ->
-                    points * 0.1
-
-                points >= 2000 ->
-                    points * 0.075
-
-                points >= 1000 ->
-                    points * 0.06
-
-                points >= 500 ->
-                    points * 0.05
-
-                else ->
-                    0.0
-            }
+        if (!result.success) {
+            replyManager.sendReplyOnce(
+                customer.phone,
+                "تعذر تسجيل استبدال النقاط: ${result.message}"
+            )
+            return false
+        }
 
         replyManager.sendReplyOnce(
             customer.phone,
-            "🎉 تم احتساب استبدال $points نقطة!\n" +
-                "القيمة: ${value.toInt()} ريال\n" +
-                "تم الإضافة لرصيدك."
+            "تم تسجيل استبدال $points نقطة فعلياً. القيمة: ${result.value.toInt()} ريال. المتبقي: ${result.balanceAfter} نقطة."
         )
 
         return true

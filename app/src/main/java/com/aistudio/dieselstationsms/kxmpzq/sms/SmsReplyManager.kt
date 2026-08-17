@@ -117,7 +117,7 @@ class SmsReplyManager(
             return@withContext false
         }
 
-        val normalizedMessage = message.trim()
+        val normalizedMessage = SmsMessageNormalizer.normalizeForSms(message)
 
         if (normalizedMessage.isEmpty()) {
             Log.w(
@@ -178,121 +178,35 @@ class SmsReplyManager(
         }
 
         return@withContext try {
-
-            val smsManager = getSmsManager()
-
-            val parts = smsManager.divideMessage(
-                normalizedMessage
-            )
-
-            if (parts.isEmpty()) {
-                Log.w(
-                    TAG,
-                    "SmsManager produced no message parts"
-                )
-
-                logSmsSafely(
-                    phone = normalizedPhone,
-                    message = normalizedMessage,
-                    status = "$STATUS_FAILED: no message parts"
-                )
-
-                false
-
-            } else if (parts.size == 1) {
-
-                smsManager.sendTextMessage(
-                    normalizedPhone,
-                    null,
-                    parts[0],
-                    null,
-                    null
-                )
-
-                logSmsSafely(
-                    phone = normalizedPhone,
-                    message = normalizedMessage,
-                    status = STATUS_SENT
-                )
-
-                Log.d(
-                    TAG,
-                    "SMS sent to ${maskPhone(normalizedPhone)}"
-                )
-
-                true
-
-            } else {
-
-                smsManager.sendMultipartTextMessage(
-                    normalizedPhone,
-                    null,
-                    parts,
-                    null,
-                    null
-                )
-
-                logSmsSafely(
-                    phone = normalizedPhone,
-                    message = normalizedMessage,
-                    status = "$STATUS_SENT: ${parts.size} parts"
-                )
-
-                Log.d(
-                    TAG,
-                    "Multipart SMS sent to " +
-                        "${maskPhone(normalizedPhone)} " +
-                        "parts=${parts.size}"
-                )
-
-                true
+            val prepared = SmsBudgetManager.prepare(normalizedMessage)
+            val result = SmsOutboxRepository.enqueue(
+                db = db,
+                recipient = normalizedPhone,
+                body = prepared.body
+            ) ?: run {
+                logSmsSafely(normalizedPhone, prepared.body, "$STATUS_FAILED: outbox rejected")
+                return@withContext false
             }
 
-        } catch (securityException: SecurityException) {
-
-            Log.e(
-                TAG,
-                "SMS send failed: SecurityException"
-            )
-
+            SmsOutboxWorker.schedule(context)
             logSmsSafely(
                 phone = normalizedPhone,
-                message = normalizedMessage,
-                status = "$STATUS_FAILED: SecurityException"
+                message = prepared.body,
+                status = "queued: ${result.partsCount} parts"
             )
-
-            false
-
-        } catch (illegalArgumentException: IllegalArgumentException) {
-
-            Log.e(
+            Log.d(
                 TAG,
-                "SMS send failed: IllegalArgumentException"
+                "SMS queued for ${maskPhone(normalizedPhone)} " +
+                    "parts=${result.partsCount} messageId=${result.messageId.take(8)}"
             )
-
-            logSmsSafely(
-                phone = normalizedPhone,
-                message = normalizedMessage,
-                status = "$STATUS_FAILED: IllegalArgumentException"
-            )
-
-            false
-
+            true
         } catch (exception: Exception) {
-
-            Log.e(
-                TAG,
-                "SMS send failed: " +
-                    exception.javaClass.simpleName
-            )
-
+            Log.e(TAG, "SMS enqueue failed: ${exception.javaClass.simpleName}")
             logSmsSafely(
                 phone = normalizedPhone,
                 message = normalizedMessage,
-                status = "$STATUS_FAILED: " +
-                    exception.javaClass.simpleName
+                status = "$STATUS_FAILED: ${exception.javaClass.simpleName}"
             )
-
             false
         }
     }
@@ -360,6 +274,7 @@ class SmsReplyManager(
         }
 
         if (sent) {
+            // sent هنا تعني QUEUED في outbox؛ نتيجة المودم تسجلها callbacks لاحقاً.
             markOutboundReplySent(dedupeKey, now)
             recentReplies[dedupeKey] = now
             cleanupReplyCache(now)

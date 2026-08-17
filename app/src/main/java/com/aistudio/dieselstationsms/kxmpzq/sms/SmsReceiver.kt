@@ -13,7 +13,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /**
@@ -23,7 +22,8 @@ import java.util.UUID
  *
  * المسؤوليات:
  * 1. استقبال Broadcast الخاص بالرسائل النصية.
- * 2. قبول SMS_RECEIVED و SMS_DELIVER عند الحاجة.
+      * 2. استقبال SMS_RECEIVED للتطبيق غير الافتراضي للرسائل.
+
  * 3. إبقاء عملية Broadcast حية باستخدام goAsync().
  * 4. تمرير Intent إلى SmsProcessor فقط.
  * 5. توفير WakeLock قصير المدة أثناء المعالجة.
@@ -47,25 +47,14 @@ class SmsReceiver : BroadcastReceiver() {
          * يجب أن تنتهي معالجة Broadcast بسرعة؛ WakeLock ليس بديلاً
          * عن خدمة foreground أو جدولة عمل طويل.
          */
-        private const val PROCESSING_TIMEOUT_MS = 8_000L
-        private const val WAKE_LOCK_TIMEOUT_MS = PROCESSING_TIMEOUT_MS + 1_000L
+        private const val WAKE_LOCK_TIMEOUT_MS = 30_000L
 
         /**
-         * الإجراءات التي يمكن أن تصل إلى هذا المستقبل.
-         *
-         * SMS_RECEIVED:
-         * الإجراء القياسي لاستقبال الرسائل الواردة للتطبيقات
-         * التي تملك RECEIVE_SMS.
-         *
-         * SMS_DELIVER:
-         * يستخدم في سياق تطبيق الرسائل الافتراضي Default SMS App.
-         *
-         * لا نعتمد على أحدهما فقط حتى لا يتم تجاهل الرسائل
-         * عند اختلاف وضع التطبيق.
+         * التطبيق ليس معلناً كتطبيق SMS افتراضي؛ لذلك يجب أن
+         * يتطابق الكود مع Manifest ويعالج SMS_RECEIVED فقط.
          */
         private val SUPPORTED_ACTIONS = setOf(
-            Telephony.Sms.Intents.SMS_RECEIVED_ACTION,
-            Telephony.Sms.Intents.SMS_DELIVER_ACTION
+            Telephony.Sms.Intents.SMS_RECEIVED_ACTION
         )
     }
 
@@ -157,16 +146,9 @@ class SmsReceiver : BroadcastReceiver() {
                 /*
                  * تسليم الرسالة إلى طبقة المعالجة.
                  */
-                val processed =
-                    withTimeoutOrNull(PROCESSING_TIMEOUT_MS) {
-                        processor.process(intent)
-                    } ?: run {
-                        Log.w(
-                            TAG,
-                            "SMS processing timed out before Broadcast completion"
-                        )
-                        false
-                    }
+                // تتم معالجة الرسالة خارج onReceive مباشرة، بينما يقتصر
+                // الرد الصادر على إدراج outbox وتشغيل Worker دائم.
+                val processed = processor.process(intent)
 
                 if (processed) {
                     SMSService.getInstance()?.incrementProcessedCount()

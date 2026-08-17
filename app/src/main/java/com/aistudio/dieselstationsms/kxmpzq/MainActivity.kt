@@ -3276,9 +3276,26 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
-                val id = db.addSmsMessage(data)
-                DebugLogger.info("SMS", "Added SMS id=$id")
-                successResponse(id, "تم إضافة الرسالة بنجاح")
+                val recipient = data.optString("phone_number", data.optString("recipient")).trim()
+                val body = data.optString("message_body", data.optString("body"))
+                val result = SmsOutboxRepository.enqueue(
+                    db = db,
+                    recipient = recipient,
+                    body = body,
+                    eventId = data.optString("event_id").takeIf { it.isNotBlank() },
+                    conversationId = data.optString("conversation_id").takeIf { it.isNotBlank() },
+                    businessEntityId = data.optString("business_entity_id").takeIf { it.isNotBlank() },
+                    priority = runCatching { SmsBudgetManager.Priority.valueOf(data.optString("priority", "NORMAL").uppercase()) }
+                        .getOrDefault(SmsBudgetManager.Priority.NORMAL)
+                ) ?: return errorResponse("بيانات الرسالة غير صالحة")
+                SmsOutboxWorker.schedule(this@MainActivity)
+                JSONObject().apply {
+                    put("success", true)
+                    put("status", result.status)
+                    put("operation_id", result.messageId)
+                    put("parts_count", result.partsCount)
+                    put("message", "تم وضع الرسالة في طابور الإرسال")
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("SMS", e)
                 errorResponse(e.message)
@@ -3335,6 +3352,35 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val rows = db.updateSmsStatus(id, status)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الرسالة")
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun retrySmsMessage(id: Long): String {
+            DebugLogger.info("WebAppInterface", "retrySmsMessage called")
+            if (!checkPermission("sms", "update")) return errorResponse("لا تملك صلاحية إعادة المحاولة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val retried = db.retrySmsMessage(id)
+                if (retried) SmsOutboxWorker.schedule(this@MainActivity)
+                successResponse(retried, if (retried) "تمت إعادة الرسالة إلى طابور الإرسال" else "الرسالة غير قابلة لإعادة المحاولة")
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteSmsMessage(id: Long): String {
+            DebugLogger.info("WebAppInterface", "deleteSmsMessage called")
+            if (!checkPermission("sms", "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val deleted = db.deleteSmsMessage(id)
+                successResponse(deleted, if (deleted) "تم إلغاء الرسالة وحذفها" else "لا يمكن حذف رسالة قيد الإرسال أو غير موجودة")
             } catch (e: Exception) {
                 DebugLogger.logException("SMS", e)
                 errorResponse(e.message)

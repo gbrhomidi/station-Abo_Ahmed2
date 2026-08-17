@@ -1914,6 +1914,8 @@ body {
         getSmsMessagesByPhone(phone) { return this.call('getSmsMessagesByPhone', phone); },
         getSmsMessagesByStatus(status) { return this.call('getSmsMessagesByStatus', status); },
         addSmsMessage(data) { return this.call('addSmsMessage', JSON.stringify(data)); },
+        retrySmsMessage(id) { return this.call('retrySmsMessage', id); },
+        deleteSmsMessage(id) { return this.call('deleteSmsMessage', id); },
         updateSmsStatus(id, status) { return this.call('updateSmsStatus', id, status); },
         getSmsStats() { return this.call('getSmsStats'); },
 
@@ -2687,32 +2689,35 @@ body {
             status: 'pending'
         };
 
-        const result = Bridge.addSmsMessage(JSON.stringify(data));
-        if (result && result > 0) {
-            UI.showToast('تم إرسال الرسالة بنجاح', 'success');
+        const result = Utils.parseJSON(Bridge.addSmsMessage(data));
+        if (result && result.success && result.status === 'QUEUED') {
+            UI.showToast('تم وضع الرسالة في طابور الإرسال', 'success');
             UI.closeModal('composeModal');
             loadMessages();
         } else {
-            UI.showToast('فشل إرسال الرسالة', 'error');
+            UI.showToast(result?.message || 'فشل وضع الرسالة في طابور الإرسال', 'error');
         }
     }
 
     function retryMessage(id) {
-        const result = Bridge.updateSmsStatus(id, 'pending');
-        if (result > 0) {
-            UI.showToast('تمت إعادة الرسالة للمعالجة', 'success');
+        const result = Utils.parseJSON(Bridge.retrySmsMessage(id));
+        if (result && result.success) {
+            UI.showToast('تمت إعادة الرسالة إلى طابور الإرسال', 'success');
             loadMessages();
         } else {
-            UI.showToast('فشلت إعادة المحاولة', 'error');
+            UI.showToast(result?.message || 'فشلت إعادة المحاولة', 'error');
         }
     }
 
     function deleteMessage(id) {
         if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
-        // Note: No direct delete function in bridge, would need to be added
-        UI.showToast('تم حذف الرسالة', 'success');
-        state.messages = state.messages.filter(m => m.id != id);
-        applyFiltersAndRender();
+        const result = Utils.parseJSON(Bridge.deleteSmsMessage(id));
+        if (result && result.success) {
+            UI.showToast('تم حذف الرسالة فعلياً', 'success');
+            loadMessages();
+        } else {
+            UI.showToast(result?.message || 'تعذر حذف الرسالة', 'error');
+        }
     }
 
     function saveTemplate() {
