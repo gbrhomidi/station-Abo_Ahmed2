@@ -1346,8 +1346,8 @@
                         // MainActivity.kt:
                         // getSmsTemplates(): String
                         // ------------------------------------------------
-                        case 'getSmsTemplates':
-                            result = window.AndroidInterface.getSmsTemplates();
+                        case 'getNotificationTemplates':
+                            result = window.AndroidInterface.getNotificationTemplates();
                             break;
 
                         // ------------------------------------------------
@@ -1355,8 +1355,8 @@
                         // MainActivity.kt:
                         // addSmsTemplate(jsonData: String)
                         // ------------------------------------------------
-                        case 'addSmsTemplate':
-                            result = window.AndroidInterface.addSmsTemplate(
+                        case 'addNotificationTemplate':
+                            result = window.AndroidInterface.addNotificationTemplate(
                                 JSON.stringify(params || {})
                             );
                             break;
@@ -1366,7 +1366,7 @@
                         // MainActivity.kt:
                         // updateSmsTemplate(id: Long, jsonData: String)
                         // ------------------------------------------------
-                        case 'updateSmsTemplate': {
+                        case 'updateNotificationTemplate': {
                             const id = Number(params?.id || 0);
 
                             if (!Number.isInteger(id) || id <= 0) {
@@ -1380,7 +1380,7 @@
                             const data = { ...params };
                             delete data.id;
 
-                            result = window.AndroidInterface.updateSmsTemplate(
+                            result = window.AndroidInterface.updateNotificationTemplate(
                                 id,
                                 JSON.stringify(data)
                             );
@@ -1392,7 +1392,7 @@
                         // MainActivity.kt:
                         // deleteSmsTemplate(id: Long)
                         // ------------------------------------------------
-                        case 'deleteSmsTemplate': {
+                        case 'deleteNotificationTemplate': {
                             const id = Number(params?.id || 0);
 
                             if (!Number.isInteger(id) || id <= 0) {
@@ -1403,7 +1403,7 @@
                                 return;
                             }
 
-                            result = window.AndroidInterface.deleteSmsTemplate(id);
+                            result = window.AndroidInterface.deleteNotificationTemplate(id);
                             break;
                         }
 
@@ -1439,114 +1439,26 @@
         }
 
         // ============================================================
-        // 2. التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getTemplates: function() { return this.get('sms_templates', []); },
-            setTemplates: function(data) { this.set('sms_templates', data); },
-            getStats: function() { return this.get('template_stats', {}); },
-            setStats: function(stats) { this.set('template_stats', stats); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); },
-            set: function(key, value) { this.set(key, value); }
-        };
-
-        // ============================================================
         // 3. حالة الاتصال
         // ============================================================
-        let isOnline = navigator.onLine;
+        let isOnline = true;
 
         function updateOnlineStatus() {
-            isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
+            const bridgeAvailable = typeof window.AndroidInterface !== 'undefined' && !!window.AndroidInterface;
+            isOnline = bridgeAvailable;
+            if (!bridgeAvailable) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ قاعدة بيانات التطبيق غير متاحة داخل WebView', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
         // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-
-            const pendingOps = LocalDB.getPendingOps();
-
-            if (!Array.isArray(pendingOps) || pendingOps.length === 0) {
-                return;
-            }
-
-            showLoading(true);
-
-            const remainingOps = [];
-            let successCount = 0;
-            let failCount = 0;
-
-            try {
-                for (const op of pendingOps) {
-                    try {
-                        const result = await apiCall(op.action, op.data);
-
-                        if (result && result.success === true) {
-                            successCount++;
-                        } else {
-                            failCount++;
-                            remainingOps.push(op);
-                        }
-
-                    } catch (error) {
-                        failCount++;
-                        remainingOps.push(op);
-                    }
-                }
-
-                LocalDB.set('pending_ops', remainingOps);
-
-                if (successCount > 0) {
-                    showToast(
-                        `✅ تمت مزامنة ${successCount} عملية بنجاح`,
-                        'success'
-                    );
-                    await loadTemplates();
-                }
-
-                if (failCount > 0) {
-                    showToast(
-                        `⚠️ تعذر مزامنة ${failCount} عملية`,
-                        'warning'
-                    );
-                }
-
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // ============================================================
-        // 5. Haptic Feedback
+        // 4. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1694,17 +1606,10 @@
             showLoading(true);
 
             try {
-                const result = await apiCall('getSmsTemplates');
+                const result = await apiCall('getNotificationTemplates');
 
-                if (result && result.success && result.data) {
-                    allTemplates = Array.isArray(result.data)
-                        ? result.data
-                        : [];
-
-                    LocalDB.setTemplates(allTemplates);
-                } else {
-                    allTemplates = LocalDB.getTemplates();
-                }
+                if (!result || result.success !== true) throw new Error(result?.error || result?.message || 'تعذر تحميل القوالب');
+                allTemplates = Array.isArray(result.data) ? result.data : [];
 
                 if (allTemplates.length === 0) {
                     showToast(
@@ -1714,16 +1619,8 @@
                 }
 
             } catch (error) {
-
-                allTemplates = LocalDB.getTemplates();
-
-                if (allTemplates.length === 0) {
-                    showToast(
-                        '⚠️ تعذر الوصول إلى بيانات القوالب',
-                        'warning'
-                    );
-                }
-
+                allTemplates = [];
+                showToast('❌ ' + (error?.message || 'تعذر الوصول إلى بيانات القوالب'), 'error');
             } finally {
                 renderCards();
                 updateStats();
@@ -1849,7 +1746,6 @@
             document.getElementById('statInactive').textContent = inactive;
             document.getElementById('statChannels').textContent = channels;
 
-            LocalDB.setStats({ total, active, inactive, channels });
         }
 
         function showStatDetail(type) {
@@ -1884,8 +1780,6 @@
                     time: 'الآن'
                 });
             }
-            // تخزين الإشعارات في LocalDB للاستخدام في showNotifications
-            LocalDB.set('template_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -1906,12 +1800,12 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('template_notifications', []);
+            const alerts = allTemplates.filter(t => t.is_active == 0 || t.is_active === false);
             if (alerts.length === 0) {
-                showToast('🔔 لا توجد إشعارات جديدة', 'info');
+                showToast('🔔 لا توجد تنبيهات جديدة', 'info');
                 return;
             }
-            showToast('🔔 لديك ' + alerts.length + ' إشعارات', 'success');
+            showToast('🔔 توجد ' + alerts.length + ' قوالب غير نشطة', 'warning');
             hapticFeedback('light');
         }
 
@@ -2021,8 +1915,8 @@
 
             const isUpdate = id > 0;
             const action = isUpdate ?
-                'updateSmsTemplate' :
-                'addSmsTemplate';
+                'updateNotificationTemplate' :
+                'addNotificationTemplate';
 
             showLoading(true);
 
@@ -2054,67 +1948,7 @@
                 await loadTemplates();
 
             } catch (error) {
-
-                // التخزين المحلي فقط عند عدم توفر Android Bridge/
-                // فشل الاتصال الحقيقي، وليس عند رفض الصلاحيات.
-                if (
-                    !isOnline ||
-                    error?.message === 'AndroidInterface غير متاح'
-                ) {
-                    LocalDB.addPendingOp({
-                        action: action,
-                        data: isUpdate ?
-                            { ...data, id } :
-                            data
-                    });
-
-                    if (isUpdate) {
-                        const index =
-                            allTemplates.findIndex(
-                                t => Number(t.id) === id
-                            );
-
-                        if (index >= 0) {
-                            allTemplates[index] = {
-                                ...allTemplates[index],
-                                ...data,
-                                id
-                            };
-                        }
-
-                    } else {
-                        allTemplates.push({
-                            ...data,
-                            id: Date.now(),
-                            created_at:
-                                new Date().toISOString()
-                        });
-                    }
-
-                    LocalDB.setTemplates(allTemplates);
-
-                    showToast(
-                        '✅ تم الحفظ محلياً وسيتم إرسال العملية عند عودة الاتصال',
-                        'success'
-                    );
-
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                    generateAlerts();
-
-                } else {
-                    showToast(
-                        '❌ ' +
-                        (
-                            error?.message ||
-                            error?.error ||
-                            'حدث خطأ أثناء الحفظ'
-                        ),
-                        'error'
-                    );
-                }
-
+                showToast('❌ ' + (error?.message || 'حدث خطأ أثناء الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2251,8 +2085,15 @@
             try {
                 const result =
                     await apiCall(
-                        'updateSmsTemplate', {
+                        'updateNotificationTemplate', {
                             id: Number(id),
+                            template_name: template.template_name || '',
+                            template_name_ar: template.template_name_ar || '',
+                            channel: template.channel || 'in_app',
+                            subject: template.subject || '',
+                            body: template.body || '',
+                            body_ar: template.body_ar || '',
+                            variables: template.variables || '',
                             is_active: newStatus
                         }
                     );
@@ -2272,48 +2113,7 @@
                 await loadTemplates();
 
             } catch (error) {
-
-                if (!isOnline) {
-                    const index =
-                        allTemplates.findIndex(
-                            t => Number(t.id) === Number(id)
-                        );
-
-                    if (index >= 0) {
-                        allTemplates[index].is_active =
-                            newStatus;
-                    }
-
-                    LocalDB.setTemplates(allTemplates);
-
-                    LocalDB.addPendingOp({
-                        action: 'updateSmsTemplate',
-                        data: {
-                            id: Number(id),
-                            is_active: newStatus
-                        }
-                    });
-
-                    renderCards();
-                    updateStats();
-                    generateAlerts();
-
-                    showToast(
-                        '✅ تم تغيير الحالة محلياً',
-                        'success'
-                    );
-
-                } else {
-                    showToast(
-                        '❌ ' +
-                        (
-                            error?.message ||
-                            'حدث خطأ أثناء تحديث الحالة'
-                        ),
-                        'error'
-                    );
-                }
-
+                showToast('❌ ' + (error?.message || 'حدث خطأ أثناء تحديث الحالة'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2352,7 +2152,7 @@
             try {
                 const result =
                     await apiCall(
-                        'deleteSmsTemplate', { id }
+                        'deleteNotificationTemplate', { id }
                     );
 
                 if (!result || result.success !== true) {
@@ -2374,42 +2174,7 @@
                 await loadTemplates();
 
             } catch (error) {
-
-                if (!isOnline) {
-                    allTemplates =
-                        allTemplates.filter(
-                            t => Number(t.id) !== id
-                        );
-
-                    LocalDB.setTemplates(allTemplates);
-
-                    LocalDB.addPendingOp({
-                        action: 'deleteSmsTemplate',
-                        data: { id }
-                    });
-
-                    renderCards();
-                    updateStats();
-                    generateAlerts();
-
-                    closeModal();
-
-                    showToast(
-                        '✅ تم حذف القالب محلياً',
-                        'success'
-                    );
-
-                } else {
-                    showToast(
-                        '❌ ' +
-                        (
-                            error?.message ||
-                            'حدث خطأ أثناء الحذف'
-                        ),
-                        'error'
-                    );
-                }
-
+                showToast('❌ ' + (error?.message || 'حدث خطأ أثناء الحذف'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2604,20 +2369,8 @@
         }
 
         async function cleanupData() {
-            showLoading(true);
-            try {
-                // محاولة تنظيف العمليات المعلقة
-                LocalDB.clearPendingOps();
-                // إعادة تحميل القوالب
-                await loadTemplates();
-                showToast('🧹 تم تنظيف البيانات المحلية بنجاح', 'success');
-            } catch (error) {
-                showToast('⚠️ تم تنظيف البيانات المحلية', 'info');
-                LocalDB.clearPendingOps();
-                await loadTemplates();
-            } finally {
-                showLoading(false);
-            }
+            await loadTemplates();
+            showToast('🔄 تم تحديث بيانات القوالب من SQLite', 'success');
         }
 
         // ============================================================
@@ -2834,9 +2587,6 @@
                 generateAlerts();
             }, 1000);
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
         });
     </script>
 </body>

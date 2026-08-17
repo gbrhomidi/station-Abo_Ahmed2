@@ -1065,104 +1065,46 @@
         // ============================================================
         // 1. Android Bridge – من MainActivity.kt
         // ============================================================
-        function apiCall(action, params) {
+        function apiCall(action, params = {}) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
+                try {
+                    const bridge = window.AndroidInterface;
+                    if (!bridge) throw new Error('AndroidInterface غير متاح');
+                    let raw;
+                    switch (action) {
+                        case 'getNotifications': raw = bridge.getNotifications(); break;
+                        case 'getCurrentUser': raw = bridge.getCurrentUser(); break;
+                        case 'markNotificationRead': raw = bridge.markNotificationRead(Number(params?.id || 0)); break;
+                        default: throw new Error('إجراء غير مدعوم: ' + action);
                     }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                    resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+                } catch (error) {
+                    reject({ success: false, error: error?.message || 'تعذر تنفيذ العملية' });
                 }
             });
         }
 
         // ============================================================
-        // 2. التخزين المحلي (Offline Mode)
+        // 2. حالة WebView
         // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getNotifications: function() { return this.get('notifications_inbox', []); },
-            setNotifications: function(data) { this.set('notifications_inbox', data); },
-            getStats: function() { return this.get('notifications_stats', {}); },
-            setStats: function(stats) { this.set('notifications_stats', stats); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); }
-        };
-
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
-        let isOnline = navigator.onLine;
+        let isOnline = true;
 
         function updateOnlineStatus() {
-            isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
+            const bridgeAvailable = typeof window.AndroidInterface !== 'undefined' && !!window.AndroidInterface;
+            isOnline = bridgeAvailable;
+            if (!bridgeAvailable) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ قاعدة بيانات التطبيق غير متاحة داخل WebView', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
         // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0, failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadNotifications();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
-        // ============================================================
-        // 5. Haptic Feedback
+        // 3. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1378,9 +1320,8 @@
                 const result = await apiCall('getNotifications', {});
                 if (result.success && result.data) {
                     allNotifications = result.data;
-                    LocalDB.setNotifications(allNotifications);
                 } else {
-                    allNotifications = LocalDB.getNotifications();
+                    throw new Error(result?.error || result?.message || 'تعذر تحميل الإشعارات');
                 }
 
                 if (allNotifications.length === 0) {
@@ -1388,10 +1329,8 @@
                 }
 
             } catch (e) {
-                allNotifications = LocalDB.getNotifications();
-                if (allNotifications.length === 0) {
-                    showToast('⚠️ لا يمكن الاتصال بالخادم - استخدام البيانات المحلية', 'warning');
-                }
+                allNotifications = [];
+                showToast('❌ ' + (e?.message || 'تعذر تحميل الإشعارات من قاعدة بيانات التطبيق'), 'error');
             }
 
             renderCards();
@@ -1535,8 +1474,6 @@
             document.getElementById('statUnread').textContent = unread;
             document.getElementById('statRead').textContent = read;
             document.getElementById('statUrgent').textContent = urgent;
-
-            LocalDB.setStats({ total, unread, read, urgent });
         }
 
         function showStatDetail(type) {
@@ -1581,7 +1518,6 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('inbox_notifications', alerts);
             renderAlerts(alerts);
         }
 
@@ -1602,12 +1538,12 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('inbox_notifications', []);
-            if (alerts.length === 0) {
-                showToast('🔔 لا توجد إشعارات جديدة', 'info');
+            const unreadCount = allNotifications.filter(n => n.is_read == 0 || n.is_read === false).length;
+            if (unreadCount === 0) {
+                showToast('🔔 لا توجد إشعارات غير مقروءة', 'info');
                 return;
             }
-            showToast('🔔 لديك ' + alerts.length + ' تنبيهات', 'success');
+            showToast('🔔 لديك ' + unreadCount + ' إشعار غير مقروء', 'warning');
             hapticFeedback('light');
         }
 
@@ -1785,7 +1721,6 @@
                         allNotifications[idx].is_read = 1;
                         allNotifications[idx].read_at = new Date().toISOString();
                     }
-                    LocalDB.setNotifications(allNotifications);
                     renderCards();
                     updateStats();
                     generateAlerts();
@@ -1798,21 +1733,7 @@
                     throw new Error(result.message || 'فشل في التحديث');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'markNotificationRead', data: { id: id } });
-                    const idx = allNotifications.findIndex(n => n.id == id);
-                    if (idx >= 0) {
-                        allNotifications[idx].is_read = 1;
-                        allNotifications[idx].read_at = new Date().toISOString();
-                    }
-                    LocalDB.setNotifications(allNotifications);
-                    if (!silent) showToast('✅ تم التحديث محلياً - سيتم المزامنة لاحقاً', 'success');
-                    renderCards();
-                    updateStats();
-                    generateAlerts();
-                } else {
-                    if (!silent) showToast('❌ ' + (e.message || 'خطأ في التحديث'), 'error');
-                }
+                if (!silent) showToast('❌ ' + (e?.message || 'خطأ في التحديث'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -1864,26 +1785,11 @@
                 }
             }
 
-            if (!isOnline && successCount === 0 && failCount === 0) {
-                // محاكاة في وضع عدم الاتصال
-                unread.forEach(n => {
-                    const idx = allNotifications.findIndex(item => item.id == n.id);
-                    if (idx >= 0) {
-                        allNotifications[idx].is_read = 1;
-                        allNotifications[idx].read_at = new Date().toISOString();
-                    }
-                });
-                LocalDB.addPendingOp({ action: 'markNotificationRead', data: { ids: unread.map(n => n.id) } });
-                LocalDB.setNotifications(allNotifications);
-                showToast('✅ تم التحديث محلياً - سيتم المزامنة لاحقاً', 'success');
-                renderCards();
-                updateStats();
-                generateAlerts();
+            if (successCount === 0 && failCount === unread.length) {
+                showToast('❌ تعذر تعليم الإشعارات كمقروءة في قاعدة بيانات التطبيق', 'error');
                 showLoading(false);
                 return;
             }
-
-            LocalDB.setNotifications(allNotifications);
             renderCards();
             updateStats();
             generateAlerts();
@@ -1904,63 +1810,31 @@
                 showToast('⚠️ لا يوجد إجراء مرتبط', 'warning');
                 return;
             }
-
-            // التحقق من الروابط الآمنة
-            if (actionUrl.startsWith('http://') || actionUrl.startsWith('https://')) {
-                // فتح في متصفح خارجي أو WebView حسب آلية المشروع
-                try {
-                    // محاولة استخدام آلية Android لفتح الروابط
-                    apiCall('openUrl', { url: actionUrl }).then(result => {
-                        if (result.success) {
-                            showToast('✅ تم فتح الرابط', 'success');
-                        } else {
-                            showToast('⚠️ لا يمكن فتح الرابط', 'warning');
-                        }
-                    }).catch(() => {
-                        // محاولة فتح مباشر
-                        window.open(actionUrl, '_blank');
-                    });
-                } catch (e) {
-                    window.open(actionUrl, '_blank');
+            try {
+                const value = String(actionUrl).trim();
+                const parsed = new URL(value, window.location.href);
+                const protocol = parsed.protocol.toLowerCase();
+                if (protocol === 'http:' || protocol === 'https:') {
+                    window.open(parsed.href, '_blank', 'noopener,noreferrer');
+                    showToast('✅ تم فتح الرابط', 'success');
+                    return;
                 }
-            } else if (actionUrl.startsWith('tel:')) {
-                try {
-                    window.location.href = actionUrl;
-                } catch (e) {
-                    showToast('⚠️ لا يمكن إجراء المكالمة', 'warning');
+                if (['tel:', 'mailto:', 'whatsapp:', 'fb:'].includes(protocol)) {
+                    window.location.href = value;
+                    return;
                 }
-            } else if (actionUrl.startsWith('mailto:')) {
-                try {
-                    window.location.href = actionUrl;
-                } catch (e) {
-                    showToast('⚠️ لا يمكن فتح البريد', 'warning');
+                if (value.startsWith('../') || value.startsWith('./') || value.startsWith('#')) {
+                    window.location.href = value;
+                    return;
                 }
-            } else if (actionUrl.startsWith('whatsapp://') || actionUrl.startsWith('fb://')) {
-                try {
-                    window.location.href = actionUrl;
-                } catch (e) {
-                    showToast('⚠️ التطبيق غير مثبت', 'warning');
-                }
-            } else {
-                // محاولة تمرير إلى Android
-                try {
-                    apiCall('handleAction', { action: actionUrl }).then(result => {
-                        if (result.success) {
-                            showToast('✅ تم تنفيذ الإجراء', 'success');
-                        } else {
-                            showToast('⚠️ لا يمكن تنفيذ الإجراء', 'warning');
-                        }
-                    }).catch(() => {
-                        showToast('⚠️ إجراء غير معروف', 'warning');
-                    });
-                } catch (e) {
-                    showToast('⚠️ إجراء غير معروف', 'warning');
-                }
+                showToast('⚠️ إجراء غير معروف أو غير مسموح', 'warning');
+            } catch (error) {
+                showToast('⚠️ الرابط المرتبط غير صالح', 'warning');
             }
         }
 
         // ============================================================
-        // 18. مودالات القائمة السفلية
+        // 18. القائمة السفلية
         // ============================================================
         function openTableModal(type) {
             const modal = document.getElementById('tableModal');
@@ -2316,9 +2190,6 @@
                 generateAlerts();
             }, 1000);
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
         });
     </script>
 </body>

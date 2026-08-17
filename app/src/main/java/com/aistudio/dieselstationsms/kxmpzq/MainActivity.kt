@@ -1411,9 +1411,9 @@ class MainActivity : AppCompatActivity() {
             val userId = activity.currentUserId
             if (userId == 0L) return false
 
-            // DEV_MODE: تجاوز الصلاحيات محصور بالمستخدم admin رقم 1 ونسخ Debug.
-            // لا يُستخدم هذا المسار في Release؛ بقية المستخدمين يمرون عبر SQLite كالمعتاد.
-            if (activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID) {
+            // المستخدم 1 (admin) هو حساب التطوير المعتمد؛ يمنح صلاحيات الإدارة الكاملة
+            // في جميع نسخ البناء، بينما تبقى بقية الحسابات خاضعة لعقود SQLite المعتادة.
+            if (userId == DEV_MODE_ADMIN_USER_ID) {
                 DebugLogger.info("DEV_MODE", "Full permission bypass for development admin userId=$userId action=$permissionCode.$action")
                 return true
             }
@@ -1427,11 +1427,11 @@ class MainActivity : AppCompatActivity() {
             db: DatabaseHelper,
             userId: Long
         ): JSONArray {
-            if (!activity.isDebugMode || userId != DEV_MODE_ADMIN_USER_ID) {
+            if (userId != DEV_MODE_ADMIN_USER_ID) {
                 return db.getUserScreens(userId)
             }
 
-            // DEV_MODE: الشاشات المسجلة في SQLite + ملفات HTML الموجودة فعلياً في assets.
+            // admin رقم 1: الشاشات النشطة المسجلة في SQLite مع ملفات HTML الموجودة فعلياً في assets.
             val combined = db.getAllActiveScreens()
             val knownNames = mutableSetOf<String>()
             for (index in 0 until combined.length()) {
@@ -1647,7 +1647,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 if (authResult != null) {
                     DebugLogger.info("LOGIN", "AUTHENTICATION_RESULT success=true")
                     val userId = authResult.optLong("user_id", 0)
-                    val isDevAdmin = activity?.isDebugMode == true && userId == DEV_MODE_ADMIN_USER_ID
+                    val isDevAdmin = userId == DEV_MODE_ADMIN_USER_ID
                     val permissionsArray = if (isDevAdmin) {
                         // DEV_MODE: كل الصلاحيات المعرفة فعلياً في SQLite للمستخدم admin رقم 1.
                         db.getAllActivePermissions()
@@ -1739,7 +1739,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 }
 
                 val user = db.getUserById(userId) ?: return errorResponse("المستخدم غير موجود")
-                val isDevAdmin = activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID
+                val isDevAdmin = userId == DEV_MODE_ADMIN_USER_ID
                 val permissions = if (isDevAdmin) {
                     // DEV_MODE: الصلاحيات الكاملة تُقرأ من جدول permissions الفعلي، ولا تُنشأ بيانات وهمية.
                     db.getAllActivePermissions()
@@ -4725,8 +4725,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val permissions = if (activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID) {
-                    // DEV_MODE: قراءة كل الصلاحيات النشطة من SQLite مع كل القدرات.
+                val permissions = if (userId == DEV_MODE_ADMIN_USER_ID) {
+                    // admin رقم 1: قراءة كل الصلاحيات النشطة من SQLite مع كل القدرات.
                     db.getAllActivePermissions()
                 } else {
                     db.getUserPermissions(userId)

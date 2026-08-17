@@ -153,6 +153,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             insertInitialData(db)
             ensureContractSchema(db)
             ensureActivityPermissions(db)
+            ensureMessagingPermissions(db)
             ensureSmsSettings(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
@@ -192,6 +193,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     override fun onOpen(db: SQLiteDatabase) {
         super.onOpen(db)
         ensureSmsMessagesTable(db)
+        ensureSmsMessagesColumns(db)
+        createNotificationTables(db)
+        ensureMessagingIndexes(db)
         ensureContractSchema(db)
         ensureReportCacheTable(db)
         createSmsProcessedTable(db)
@@ -207,6 +211,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsOutboundDedupeTable(db)
         createSmsPlatformTables(db)
         ensureActivityPermissions(db)
+        ensureMessagingPermissions(db)
         ensureSmsSettings(db)
     }
 
@@ -221,6 +226,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 status TEXT DEFAULT 'pending',
                 party_id INTEGER REFERENCES parties(id),
                 sent_at TEXT,
+                is_read INTEGER DEFAULT 0,
+                read_at TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
@@ -369,6 +376,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 status TEXT DEFAULT 'pending',
                 party_id INTEGER REFERENCES parties(id),
                 sent_at TEXT,
+                is_read INTEGER DEFAULT 0,
+                read_at TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
@@ -635,6 +644,85 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun ensureColumn(db: SQLiteDatabase, tableName: String, columnName: String, definition: String) {
         if (!tableHasColumn(db, tableName, columnName)) db.execSQL("ALTER TABLE $tableName ADD COLUMN $columnName $definition")
+    }
+
+    /** Compatibility additions for databases created before the messaging read-state contract. */
+    private fun ensureSmsMessagesColumns(db: SQLiteDatabase) {
+        ensureColumn(db, "sms_messages", "is_read", "INTEGER DEFAULT 0")
+        ensureColumn(db, "sms_messages", "read_at", "TEXT")
+    }
+
+    /** Idempotent indexes for the high-volume local messaging and notification queries. */
+    private fun ensureMessagingIndexes(db: SQLiteDatabase) {
+        fun indexIfTableExists(indexName: String, tableName: String, columnName: String) {
+            val exists = db.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+                arrayOf(tableName)
+            ).use { it.moveToFirst() }
+            if (exists) db.execSQL("CREATE INDEX IF NOT EXISTS $indexName ON $tableName($columnName)")
+        }
+        indexIfTableExists("idx_sms_messages_phone_number", "sms_messages", "phone_number")
+        indexIfTableExists("idx_sms_messages_status", "sms_messages", "status")
+        indexIfTableExists("idx_sms_messages_created_at", "sms_messages", "created_at")
+        indexIfTableExists("idx_sms_messages_is_read", "sms_messages", "is_read")
+        indexIfTableExists("idx_sms_logs_phone_number", "sms_logs", "phone_number")
+        indexIfTableExists("idx_sms_logs_status", "sms_logs", "status")
+        indexIfTableExists("idx_sms_logs_created_at", "sms_logs", "created_at")
+        indexIfTableExists("idx_notifications_user_id", "notifications", "user_id")
+        indexIfTableExists("idx_notifications_status", "notifications", "status")
+        indexIfTableExists("idx_notifications_channel", "notifications", "channel")
+        indexIfTableExists("idx_notifications_created_at", "notifications", "created_at")
+        indexIfTableExists("idx_sms_whitelist_phone", "sms_whitelist", "phone")
+        indexIfTableExists("idx_sms_whitelist_enabled", "sms_whitelist", "enabled")
+        indexIfTableExists("idx_notification_templates_channel", "notification_templates", "channel")
+        indexIfTableExists("idx_notification_templates_active", "notification_templates", "is_active")
+    }
+
+    /** Seeds only the typed contracts required by the messaging screens; grants are scoped to admin role 1. */
+    private fun ensureMessagingPermissions(db: SQLiteDatabase) {
+        val rows = listOf(
+            arrayOf("PER-SMS-READ-V21", "sms.read", "Read SMS", "قراءة الرسائل", "sms", "الرسائل", "read"),
+            arrayOf("PER-SMS-CREATE-V21", "sms.create", "Create SMS", "إنشاء الرسائل", "sms", "الرسائل", "create"),
+            arrayOf("PER-SMS-UPDATE-V21", "sms.update", "Update SMS", "تحديث الرسائل", "sms", "الرسائل", "update"),
+            arrayOf("PER-SMS-DELETE-V21", "sms.delete", "Delete SMS", "حذف الرسائل", "sms", "الرسائل", "delete"),
+            arrayOf("PER-NOTIFICATIONS-READ-V21", "notifications.read", "Read Notifications", "قراءة الإشعارات", "notifications", "الإشعارات", "read"),
+            arrayOf("PER-NOTIFICATIONS-CREATE-V21", "notifications.create", "Create Notification Templates", "إنشاء قوالب الإشعارات", "notifications", "الإشعارات", "create"),
+            arrayOf("PER-NOTIFICATIONS-UPDATE-V21", "notifications.update", "Update Notification Templates", "تحديث قوالب الإشعارات", "notifications", "الإشعارات", "update"),
+            arrayOf("PER-NOTIFICATIONS-DELETE-V21", "notifications.delete", "Delete Notification Templates", "حذف قوالب الإشعارات", "notifications", "الإشعارات", "delete"),
+            arrayOf("PER-WHITELIST-READ-V21", "whitelist.read", "Read SMS Whitelist", "قراءة القائمة البيضاء", "whitelist", "القائمة البيضاء", "read"),
+            arrayOf("PER-WHITELIST-CREATE-V21", "whitelist.create", "Create SMS Whitelist", "إضافة القائمة البيضاء", "whitelist", "القائمة البيضاء", "create"),
+            arrayOf("PER-WHITELIST-UPDATE-V21", "whitelist.update", "Update SMS Whitelist", "تحديث القائمة البيضاء", "whitelist", "القائمة البيضاء", "update"),
+            arrayOf("PER-WHITELIST-DELETE-V21", "whitelist.delete", "Delete SMS Whitelist", "حذف القائمة البيضاء", "whitelist", "القائمة البيضاء", "delete")
+        )
+        rows.forEach { row ->
+            db.execSQL(
+                """INSERT OR IGNORE INTO permissions
+                   (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                row.map { it as Any }.toTypedArray()
+            )
+            val permissionCode = row[1] as String
+            val permissionId = db.rawQuery(
+                "SELECT id FROM permissions WHERE permission_code = ? LIMIT 1",
+                arrayOf(permissionCode)
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else 0L }
+            if (permissionId > 0L) {
+                val values = ContentValues().apply {
+                    put("uuid", "RP-${permissionCode.uppercase().replace('.', '-')}-V21-1")
+                    put("role_id", 1L)
+                    put("permission_id", permissionId)
+                    put("can_create", if (permissionCode.endsWith(".create")) 1 else 0)
+                    put("can_read", if (permissionCode.endsWith(".read")) 1 else 0)
+                    put("can_update", if (permissionCode.endsWith(".update")) 1 else 0)
+                    put("can_delete", if (permissionCode.endsWith(".delete")) 1 else 0)
+                    put("can_export", 0)
+                    put("can_print", 0)
+                    put("can_approve", 0)
+                    put("created_by", 1L)
+                }
+                db.insertWithOnConflict("role_permissions", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+            }
+        }
     }
 
     private fun ensureActivityPermissions(db: SQLiteDatabase) {
@@ -8979,6 +9067,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun updateSmsWhitelist(phone: String, name: String, enabled: Boolean): Int {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val rows = db.update(
+                "sms_whitelist",
+                ContentValues().apply {
+                    put("name", name)
+                    put("enabled", if (enabled) 1 else 0)
+                },
+                "phone = ?",
+                arrayOf(phone)
+            )
+            if (rows > 0) logActivity("system", "update_whitelist", "تحديث رقم $phone في القائمة البيضاء")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     // ========================================================================
     // دوال SMS Logs
     // ========================================================================
@@ -10860,9 +10968,97 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                "SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT 500",
+                "SELECT * FROM sms_messages ORDER BY created_at DESC, id DESC LIMIT 500",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    /**
+     * Serverless pagination/filter contract for WebView screens.
+     * All values are bound parameters; no SQL identifiers or user input are interpolated.
+     */
+    fun getSmsMessagesPage(params: JSONObject = JSONObject()): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val limit = params.optInt("limit", 50).coerceIn(1, 200)
+            val offset = params.optInt("offset", 0).coerceAtLeast(0)
+            val where = mutableListOf<String>()
+            val args = mutableListOf<String>()
+
+            val status = params.optString("status", "").trim().lowercase(Locale.ROOT)
+            val messageType = params.optString("message_type", "").trim().lowercase(Locale.ROOT)
+            val dateFrom = params.optString("date_from", "").trim()
+            val dateTo = params.optString("date_to", "").trim()
+            val search = params.optString("search", "").trim()
+            if (search.isNotBlank()) {
+                where += "(phone_number LIKE ? OR message_body LIKE ?)"
+                val like = "%$search%"
+                args += like
+                args += like
+            }
+            if (status == "read") {
+                where += "is_read = 1"
+            } else if (status == "unread") {
+                where += "is_read = 0"
+            } else if (status.isNotBlank()) {
+                where += "status = ?"
+                args += status
+            }
+            if (messageType.isNotBlank()) {
+                where += "message_type = ?"
+                args += messageType
+            }
+            if (dateFrom.isNotBlank()) {
+                where += "date(created_at) >= date(?)"
+                args += dateFrom
+            }
+            if (dateTo.isNotBlank()) {
+                where += "date(created_at) <= date(?)"
+                args += dateTo
+            }
+
+            val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+            val count = db.rawQuery("SELECT COUNT(*) FROM sms_messages$whereSql", args.toTypedArray()).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+            val pageArgs = args.toMutableList().apply {
+                add(limit.toString())
+                add(offset.toString())
+            }
+            val items = db.rawQuery(
+                "SELECT * FROM sms_messages$whereSql ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                pageArgs.toTypedArray()
+            ).use { cursor -> cursorToJsonArray(cursor) }
+            JSONObject().apply {
+                put("items", items)
+                put("total", count)
+                put("limit", limit)
+                put("offset", offset)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun markSmsMessageRead(id: Long): Int {
+        if (id <= 0L) return 0
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.update(
+                "sms_messages",
+                ContentValues().apply {
+                    put("is_read", 1)
+                    put("read_at", getCurrentDateTime())
+                    put("updated_at", getCurrentDateTime())
+                },
+                "id = ? AND is_read = 0",
+                arrayOf(id.toString())
+            )
         } finally {
             dbLock.unlock()
         }
@@ -10926,6 +11122,97 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 stats.put("failed", if (cursor.moveToFirst()) cursor.getInt(0) else 0)
             }
             stats
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    // ========================================================================
+    // دوال Notification Templates (schema notification_templates)
+    // ========================================================================
+
+    fun getNotificationTemplates(): JSONArray {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            db.rawQuery(
+                "SELECT id, uuid, template_code, template_name, template_name_ar, channel, subject, body, body_ar, variables, is_active, created_at, updated_at, created_by FROM notification_templates ORDER BY created_at DESC, id DESC",
+                null
+            ).use { cursor -> cursorToJsonArray(cursor) }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun addNotificationTemplate(data: JSONObject): Long {
+        val code = data.optString("template_code", "").trim()
+        val name = data.optString("template_name", "").trim()
+        val channel = data.optString("channel", "").trim().lowercase(Locale.ROOT)
+        val body = data.optString("body", "").trim()
+        require(code.isNotBlank()) { "كود القالب مطلوب" }
+        require(name.isNotBlank()) { "اسم القالب مطلوب" }
+        require(body.isNotBlank()) { "محتوى القالب مطلوب" }
+        require(channel in setOf("sms", "email", "push", "whatsapp", "telegram", "in_app")) { "قناة القالب غير صالحة" }
+        dbLock.lock()
+        return try {
+            val now = getCurrentDateTime()
+            val id = writableDatabase.insertOrThrow("notification_templates", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("template_code", code)
+                put("template_name", name)
+                put("template_name_ar", data.optString("template_name_ar", "").trim())
+                put("channel", channel)
+                put("subject", data.optString("subject", "").trim())
+                put("body", body)
+                put("body_ar", data.optString("body_ar", "").trim())
+                put("variables", data.optString("variables", "").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("created_at", now)
+                put("updated_at", now)
+                put("created_by", data.optLong("created_by", 0L).takeIf { it > 0L })
+            })
+            if (id > 0) logActivity("system", "add_notification_template", "إضافة قالب إشعار: $name")
+            id
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun updateNotificationTemplate(id: Long, data: JSONObject): Int {
+        require(id > 0L) { "معرف القالب غير صالح" }
+        val name = data.optString("template_name", "").trim()
+        val channel = data.optString("channel", "").trim().lowercase(Locale.ROOT)
+        val body = data.optString("body", "").trim()
+        require(name.isNotBlank()) { "اسم القالب مطلوب" }
+        require(body.isNotBlank()) { "محتوى القالب مطلوب" }
+        require(channel in setOf("sms", "email", "push", "whatsapp", "telegram", "in_app")) { "قناة القالب غير صالحة" }
+        dbLock.lock()
+        return try {
+            val rows = writableDatabase.update("notification_templates", ContentValues().apply {
+                put("template_name", name)
+                put("template_name_ar", data.optString("template_name_ar", "").trim())
+                put("channel", channel)
+                put("subject", data.optString("subject", "").trim())
+                put("body", body)
+                put("body_ar", data.optString("body_ar", "").trim())
+                put("variables", data.optString("variables", "").trim())
+                put("is_active", if (data.optInt("is_active", 1) == 1) 1 else 0)
+                put("updated_at", getCurrentDateTime())
+            }, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_notification_template", "تحديث قالب إشعار: $id")
+            rows
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun deleteNotificationTemplate(id: Long): Int {
+        require(id > 0L) { "معرف القالب غير صالح" }
+        dbLock.lock()
+        return try {
+            val rows = writableDatabase.delete("notification_templates", "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_notification_template", "حذف قالب إشعار: $id")
+            rows
         } finally {
             dbLock.unlock()
         }

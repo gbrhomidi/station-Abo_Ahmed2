@@ -1280,7 +1280,6 @@
                         <label class="form-label">نوع الرسالة</label>
                         <select class="form-input" id="sendSmsType">
                             <option value="outgoing">صادرة</option>
-                            <option value="incoming">واردة (محاكاة)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1363,23 +1362,34 @@
         // ============================================================
         // 1. Android Bridge – من MainActivity.kt
         // ============================================================
-        function apiCall(action, params) {
+        function apiCall(action, params = {}) {
             return new Promise((resolve, reject) => {
-                if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface) {
-                    try {
-                        const jsonParams = JSON.stringify(params || {});
-                        const result = window.AndroidInterface.execute(action, jsonParams);
-                        try {
-                            const parsed = JSON.parse(result);
-                            resolve(parsed);
-                        } catch (e) {
-                            resolve({ success: true, data: result });
-                        }
-                    } catch (e) {
-                        reject({ success: false, error: e.message });
+                try {
+                    const bridge = window.AndroidInterface;
+                    if (!bridge) throw new Error('AndroidInterface غير متاح');
+                    let raw;
+                    switch (action) {
+                        case 'getWhitelist':
+                            raw = bridge.getWhitelist();
+                            break;
+                        case 'addWhitelist':
+                            raw = bridge.addWhitelist(JSON.stringify(params || {}));
+                            break;
+                        case 'addSmsMessage':
+                            raw = bridge.addSmsMessage(JSON.stringify(params || {}));
+                            break;
+                        case 'updateWhitelist':
+                            raw = bridge.updateWhitelist(JSON.stringify(params || {}));
+                            break;
+                        case 'removeWhitelist':
+                            raw = bridge.removeWhitelist(JSON.stringify(params || {}));
+                            break;
+                        default:
+                            throw new Error('إجراء غير مدعوم: ' + action);
                     }
-                } else {
-                    reject({ success: false, error: 'AndroidInterface غير متاح' });
+                    resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+                } catch (error) {
+                    reject({ success: false, error: error?.message || 'تعذر تنفيذ العملية' });
                 }
             });
         }
@@ -1453,83 +1463,26 @@
         };
 
         // ============================================================
-        // 3. التخزين المحلي (Offline Mode)
-        // ============================================================
-        const LocalDB = {
-            prefix: 'fuel_station_',
-            set: function(key, value) {
-                try { localStorage.setItem(this.prefix + key, JSON.stringify(value)); return true; } catch (e) { return false; }
-            },
-            get: function(key, defaultValue) {
-                try {
-                    const item = localStorage.getItem(this.prefix + key);
-                    return item ? JSON.parse(item) : defaultValue;
-                } catch (e) { return defaultValue; }
-            },
-            remove: function(key) { localStorage.removeItem(this.prefix + key); },
-            getWhitelist: function() { return this.get('whitelist_data', []); },
-            setWhitelist: function(data) { this.set('whitelist_data', data); },
-            getStats: function() { return this.get('whitelist_stats', {}); },
-            setStats: function(stats) { this.set('whitelist_stats', stats); },
-            getPendingOps: function() { return this.get('pending_ops', []); },
-            addPendingOp: function(op) {
-                const ops = this.getPendingOps();
-                ops.push({ ...op, timestamp: new Date().toISOString(), id: Date.now() + Math.random() });
-                this.set('pending_ops', ops);
-            },
-            clearPendingOps: function() { this.remove('pending_ops'); }
-        };
-
-        // ============================================================
         // 4. حالة الاتصال
         // ============================================================
-        let isOnline = navigator.onLine;
+        let isOnline = true;
 
         function updateOnlineStatus() {
-            isOnline = navigator.onLine;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
+            const bridgeAvailable = typeof window.AndroidInterface !== 'undefined' && !!window.AndroidInterface;
+            isOnline = bridgeAvailable;
+            if (!bridgeAvailable) {
                 banner.classList.add('show');
-                showToast('⚠️ أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً', 'warning');
+                showToast('⚠️ قاعدة بيانات التطبيق غير متاحة داخل WebView', 'warning');
             } else {
                 banner.classList.remove('show');
-                showToast('✅ تم استعادة الاتصال - جاري مزامنة البيانات', 'success');
-                syncPendingOperations();
             }
         }
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
 
         // ============================================================
-        // 5. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() {
-            if (!isOnline) return;
-            const pendingOps = LocalDB.getPendingOps();
-            if (pendingOps.length === 0) return;
-            showLoading(true);
-            let successCount = 0,
-                failCount = 0;
-            for (const op of pendingOps) {
-                try {
-                    const result = await apiCall(op.action, op.data);
-                    if (result.success) successCount++;
-                    else failCount++;
-                } catch (e) { failCount++; }
-            }
-            if (successCount > 0) {
-                LocalDB.clearPendingOps();
-                showToast('✅ تمت مزامنة ' + successCount + ' عملية بنجاح', 'success');
-                await loadWhitelist();
-            }
-            if (failCount > 0) {
-                showToast('❌ فشلت ' + failCount + ' عملية - سيتم إعادة المحاولة', 'error');
-            }
-            showLoading(false);
-        }
-
-        // ============================================================
-        // 6. Haptic Feedback
+        // 5. Haptic Feedback
         // ============================================================
         function hapticFeedback(type) {
             try {
@@ -1655,9 +1608,8 @@
                 const result = await apiCall('getWhitelist', {});
                 if (result.success && result.data) {
                     allWhitelist = result.data;
-                    LocalDB.setWhitelist(allWhitelist);
                 } else {
-                    allWhitelist = LocalDB.getWhitelist();
+                    throw new Error(result?.error || result?.message || 'تعذر تحميل القائمة البيضاء');
                 }
 
                 if (allWhitelist.length === 0) {
@@ -1665,10 +1617,8 @@
                 }
 
             } catch (e) {
-                allWhitelist = LocalDB.getWhitelist();
-                if (allWhitelist.length === 0) {
-                    showToast('⚠️ تعذر الاتصال بواجهة Android داخل التطبيق.', 'warning');
-                }
+                allWhitelist = [];
+                showToast('❌ ' + (e?.message || 'تعذر تحميل القائمة البيضاء من SQLite'), 'error');
             }
 
             renderCards();
@@ -1809,8 +1759,6 @@
             document.getElementById('statEnabled').textContent = enabled;
             document.getElementById('statDisabled').textContent = disabled;
             document.getElementById('statWithName').textContent = withName;
-
-            LocalDB.setStats({ total, enabled, disabled, withName });
         }
 
         function showStatDetail(type) {
@@ -1845,7 +1793,6 @@
                     time: 'الآن'
                 });
             }
-            LocalDB.set('whitelist_alerts', alerts);
             renderAlerts(alerts);
         }
 
@@ -1866,12 +1813,12 @@
         }
 
         function showNotifications() {
-            const alerts = LocalDB.get('whitelist_alerts', []);
-            if (alerts.length === 0) {
+            const disabledCount = allWhitelist.filter(item => item.enabled == 0 || item.enabled === false).length;
+            if (disabledCount === 0) {
                 showToast('🔔 لا توجد تنبيهات جديدة', 'info');
                 return;
             }
-            showToast('🔔 لديك ' + alerts.length + ' تنبيه', 'success');
+            showToast('🔔 لديك ' + disabledCount + ' رقم غير مفعل', 'warning');
             hapticFeedback('light');
         }
 
@@ -1976,7 +1923,7 @@
 
             showLoading(true);
             try {
-                const result = await apiCall('addWhitelist', data);
+                const result = await apiCall(id > 0 ? 'updateWhitelist' : 'addWhitelist', data);
                 if (result.success) {
                     showToast(id > 0 ? '✅ تم التعديل بنجاح' : '✅ تم الإضافة بنجاح', 'success');
                     closeModal();
@@ -1986,22 +1933,7 @@
                     throw new Error(result.message || 'فشل في الحفظ');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'addWhitelist', data: data });
-                    if (id > 0) {
-                        const idx = allWhitelist.findIndex(w => w.id == id);
-                        if (idx >= 0) allWhitelist[idx] = { ...allWhitelist[idx], ...data };
-                    } else {
-                        allWhitelist.push({ ...data, id: Date.now(), created_at: new Date().toISOString() });
-                    }
-                    LocalDB.setWhitelist(allWhitelist);
-                    showToast('✅ تم الحفظ محلياً - سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحفظ'), 'error');
-                }
+                showToast('❌ ' + (e?.error || e?.message || 'خطأ في الحفظ'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2108,7 +2040,7 @@
             showLoading(true);
             try {
                 const data = { id: id, phone: item.phone, name: item.name || '', enabled: newStatus };
-                const result = await apiCall('addWhitelist', data);
+                const result = await apiCall(id > 0 ? 'updateWhitelist' : 'addWhitelist', data);
                 if (result.success) {
                     showToast(`✅ تم ${actionText} الرقم بنجاح`, 'success');
                     await loadWhitelist();
@@ -2117,17 +2049,7 @@
                     throw new Error(result.message || 'فشل في التحديث');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'addWhitelist', data: { id: id, enabled: newStatus } });
-                    const idx = allWhitelist.findIndex(w => w.id == id);
-                    if (idx >= 0) allWhitelist[idx].enabled = newStatus;
-                    LocalDB.setWhitelist(allWhitelist);
-                    showToast(`✅ تم ${actionText} محلياً - سيتم المزامنة لاحقاً`, 'success');
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في التحديث'), 'error');
-                }
+                showToast('❌ ' + (e?.error || e?.message || 'خطأ في التحديث'), 'error');
             } finally {
                 showLoading(false);
             }
@@ -2158,7 +2080,7 @@
         async function executeDelete(id) {
             showLoading(true);
             try {
-                const result = await apiCall('removeWhitelist', { id: id });
+                const result = await apiCall('removeWhitelist', { phone: item?.phone || '' });
                 if (result.success) {
                     showToast('✅ تم الحذف بنجاح', 'success');
                     closeModal();
@@ -2168,17 +2090,7 @@
                     throw new Error(result.message || 'فشل في الحذف');
                 }
             } catch (e) {
-                if (!isOnline) {
-                    LocalDB.addPendingOp({ action: 'removeWhitelist', data: { id: id } });
-                    allWhitelist = allWhitelist.filter(w => w.id != id);
-                    LocalDB.setWhitelist(allWhitelist);
-                    showToast('✅ تم الحذف محلياً - سيتم المزامنة لاحقاً', 'success');
-                    closeModal();
-                    renderCards();
-                    updateStats();
-                } else {
-                    showToast('❌ ' + (e.message || 'خطأ في الحذف'), 'error');
-                }
+                showToast('❌ ' + (e?.error || e?.message || 'خطأ في الحذف'), 'error');
             } finally {
                 showLoading(false);
                 deleteTargetId = null;
@@ -2370,7 +2282,7 @@
                         name: item.name || '',
                         enabled: enabled ? 1 : 0
                     };
-                    const result = await apiCall('addWhitelist', data);
+                    const result = await apiCall('updateWhitelist', data);
                     if (result.success) {
                         successCount++;
                     } else {
@@ -2421,7 +2333,7 @@
 
             for (const item of selected) {
                 try {
-                    const result = await apiCall('removeWhitelist', { id: item.id });
+                    const result = await apiCall('removeWhitelist', { phone: item.phone });
                     if (result.success) {
                         successCount++;
                     } else {
@@ -2806,10 +2718,6 @@
             setTimeout(() => {
                 generateAlerts();
             }, 1000);
-
-            if (isOnline) {
-                syncPendingOperations();
-            }
         });
     </script>
 </body>

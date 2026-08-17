@@ -1911,6 +1911,8 @@ body {
 
         // SMS Messages
         getSmsMessages() { return this.call('getSmsMessages'); },
+        getSmsMessagesPage(params) { return this.call('getSmsMessagesPage', JSON.stringify(params || {})); },
+        markSmsMessageRead(id) { return this.call('markSmsMessageRead', id); },
         getSmsMessagesByPhone(phone) { return this.call('getSmsMessagesByPhone', phone); },
         getSmsMessagesByStatus(status) { return this.call('getSmsMessagesByStatus', status); },
         addSmsMessage(data) { return this.call('addSmsMessage', JSON.stringify(data)); },
@@ -1950,7 +1952,20 @@ body {
     // ============================================
     const Utils = {
         parseJSON(str) {
-            try { return JSON.parse(str); } catch { return null; }
+            try { return typeof str === 'string' ? JSON.parse(str) : str; } catch { return null; }
+        },
+
+        dataArray(value) {
+            const parsed = this.parseJSON(value);
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && parsed.success === true && Array.isArray(parsed.data)) return parsed.data;
+            return [];
+        },
+
+        dataObject(value) {
+            const parsed = this.parseJSON(value);
+            if (parsed && parsed.success === true && parsed.data && typeof parsed.data === 'object') return parsed.data;
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
         },
 
         formatDate(dateStr) {
@@ -2096,27 +2111,57 @@ body {
     // DATA LOADERS
     // ============================================
     async function loadMessages() {
-        const result = Bridge.getSmsMessages();
-        const data = Utils.parseJSON(result) || [];
-        state.messages = Array.isArray(data) ? data : [];
-        applyFiltersAndRender();
+        const payload = {
+            limit: CONFIG.PAGE_SIZE,
+            offset: Math.max(0, (state.pagination.page - 1) * CONFIG.PAGE_SIZE),
+            search: state.filters.search || '',
+            status: state.filters.status || '',
+            message_type: state.filters.type || '',
+            date_from: state.filters.dateFrom || '',
+            date_to: state.filters.dateTo || ''
+        };
+        const pagedRaw = typeof Bridge.getSmsMessagesPage === 'function'
+            ? Bridge.getSmsMessagesPage(payload)
+            : null;
+        const paged = Utils.parseJSON(pagedRaw);
+        if (paged && paged.success === true && paged.data && Array.isArray(paged.data.items)) {
+            state.serverPagination = true;
+            state.messages = paged.data.items;
+            state.pagination.totalItems = Number(paged.data.total) || 0;
+            state.pagination.totalPages = Math.max(1, Math.ceil(state.pagination.totalItems / CONFIG.PAGE_SIZE));
+            if (state.pagination.page > state.pagination.totalPages) {
+                state.pagination.page = state.pagination.totalPages;
+                return loadMessages();
+            }
+            renderMessageList(state.messages, 'messageList');
+            renderPagination();
+        } else {
+            state.serverPagination = false;
+            const result = Bridge.getSmsMessages();
+            const response = Utils.parseJSON(result);
+            const data = response && response.success === true && Array.isArray(response.data)
+                ? response.data
+                : (Array.isArray(response) ? response : []);
+            state.messages = data;
+            applyFiltersAndRender();
+        }
         updateStats();
     }
 
     async function loadFilteredMessages(field, value) {
         let data = [];
         if (field === 'message_type') {
-            const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+            const all = Utils.dataArray(Bridge.getSmsMessages());
             data = all.filter(m => m.message_type === value);
         } else if (field === 'status') {
             const result = Bridge.getSmsMessagesByStatus(value);
-            data = Utils.parseJSON(result) || [];
+            data = Utils.dataArray(result);
         }
         renderMessageList(data, `${field === 'message_type' ? (value === 'incoming' ? 'incomingList' : 'outgoingList') : value + 'List'}`);
     }
 
     async function loadConversations() {
-        const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+        const all = Utils.dataArray(Bridge.getSmsMessages());
         const grouped = {};
         all.forEach(msg => {
             const phone = msg.phone_number || 'unknown';
@@ -2142,78 +2187,83 @@ body {
 
     async function loadProcessedMessages() {
         // Processed messages are those with status 'processed' or in sms_processed_messages table
-        const all = Utils.parseJSON(Bridge.getSmsMessages()) || [];
+        const all = Utils.dataArray(Bridge.getSmsMessages());
         const data = all.filter(m => m.status === 'processed');
         renderMessageList(data, 'processedList');
     }
 
     async function loadTemplates() {
         const result = Bridge.getSmsTemplates();
-        const data = Utils.parseJSON(result) || [];
-        state.templates = Array.isArray(data) ? data : [];
+        const data = Utils.dataArray(result);
+        state.templates = Utils.dataArray(result);
         renderTemplates();
     }
 
     async function loadWhitelist() {
         const result = Bridge.getWhitelist();
-        const data = Utils.parseJSON(result) || [];
-        state.whitelist = Array.isArray(data) ? data : [];
+        const data = Utils.dataArray(result);
+        state.whitelist = Utils.dataArray(result);
         renderWhitelist();
     }
 
     async function loadLogs() {
         const result = Bridge.getSmsLogs();
-        const data = Utils.parseJSON(result) || [];
-        state.logs = Array.isArray(data) ? data : [];
+        const data = Utils.dataArray(result);
+        state.logs = Utils.dataArray(result);
         renderLogs();
     }
 
     async function loadStats() {
-        const stats = Utils.parseJSON(Bridge.getSmsStats()) || {};
+        const stats = Utils.dataObject(Bridge.getSmsStats());
         state.stats = stats;
         renderStats();
     }
 
+    function renderUnavailable(containerId, title, details) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = `
+            <div class="empty-state unavailable-state">
+                <div class="empty-icon">ℹ️</div>
+                <p>${Utils.escapeHtml(title)}</p>
+                <small>${Utils.escapeHtml(details)}</small>
+            </div>
+        `;
+    }
+
     async function loadRecurring() {
-        // Placeholder - would call getSmsRecurringOrder if available
-        state.recurring = [];
-        renderRecurring();
+        renderUnavailable('recurringList', 'الطلبات المتكررة غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
     }
 
     async function loadPreferences() {
-        // Placeholder - would call getSmsCustomerPreferences if available
-        state.preferences = [];
-        renderPreferences();
+        renderUnavailable('preferencesList', 'تفضيلات الرسائل غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
     }
 
     async function loadOtp() {
-        // Placeholder - would call getSmsOtpVerifications if available
-        state.otp = [];
-        renderOtp();
+        renderUnavailable('otpList', 'سجل OTP غير موصول', 'لا يوجد عقد قراءة موحد لهذا التبويب في المشروع الحالي.');
     }
 
     async function loadReminders() {
-        // Placeholder - would call getSmsReminders if available
-        state.reminders = [];
-        renderReminders();
+        renderUnavailable('remindersList', 'تذكيرات الرسائل غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
     }
 
     async function loadContext() {
-        // Placeholder - would call getSmsConversationContext if available
-        state.context = [];
-        renderContext();
+        renderUnavailable('contextList', 'سياق المحادثة غير موصول', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
     }
 
     async function loadRateLimits() {
-        // Placeholder - would call getSmsRateLimit if available
-        state.ratelimits = [];
-        renderRateLimits();
+        renderUnavailable('ratelimitsList', 'حدود الإرسال غير موصولة', 'لا يوجد عقد Bridge مخصص لعرض هذا التبويب في المشروع الحالي.');
     }
 
     // ============================================
     // RENDERERS
     // ============================================
     function applyFiltersAndRender() {
+        if (state.serverPagination) {
+            renderMessageList(state.messages, 'messageList');
+            renderPagination();
+            return;
+        }
         let filtered = [...state.messages];
 
         // Search filter
@@ -2615,6 +2665,11 @@ body {
         if (!msg) return;
         state.selectedMessage = msg;
 
+        if (msg.is_read !== 1 && msg.is_read !== true && typeof Bridge.markSmsMessageRead === 'function') {
+            const readResult = Utils.parseJSON(Bridge.markSmsMessageRead(Number(msg.id)));
+            if (readResult && readResult.success === true) msg.is_read = 1;
+        }
+
         const modal = document.getElementById('messageModal');
         const body = document.getElementById('modalBody');
         const footer = document.getElementById('modalFooter');
@@ -2736,7 +2791,8 @@ body {
             result = Bridge.addSmsTemplate(JSON.stringify(data));
         }
 
-        if (result > 0) {
+        const parsed = Utils.parseJSON(result);
+        if (parsed && parsed.success === true) {
             UI.showToast(id ? 'تم تحديث القالب' : 'تم إضافة القالب', 'success');
             UI.closeModal('templateModal');
             loadTemplates();
@@ -2748,7 +2804,8 @@ body {
     function deleteTemplate(id) {
         if (!confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
         const result = Bridge.deleteSmsTemplate(id);
-        if (result > 0) {
+        const parsed = Utils.parseJSON(result);
+        if (parsed && parsed.success === true) {
             UI.showToast('تم حذف القالب', 'success');
             loadTemplates();
         } else {
@@ -2785,7 +2842,8 @@ body {
 
         const data = { phone: phone, name: name };
         const result = Bridge.addWhitelist(JSON.stringify(data));
-        if (result) {
+        const parsed = Utils.parseJSON(result);
+        if (parsed && parsed.success === true) {
             UI.showToast('تمت الإضافة للقائمة البيضاء', 'success');
             UI.closeModal('whitelistModal');
             loadWhitelist();
@@ -2798,7 +2856,8 @@ body {
         if (!confirm('هل أنت متأكد من إزالة هذا الرقم؟')) return;
         const data = { phone: phone };
         const result = Bridge.removeWhitelist(JSON.stringify(data));
-        if (result) {
+        const parsed = Utils.parseJSON(result);
+        if (parsed && parsed.success === true) {
             UI.showToast('تمت الإزالة', 'success');
             loadWhitelist();
         } else {
@@ -2807,7 +2866,7 @@ body {
     }
 
     function updateStats() {
-        const stats = Utils.parseJSON(Bridge.getSmsStats()) || {};
+        const stats = Utils.dataObject(Bridge.getSmsStats());
         document.getElementById('statTotal').textContent = stats.total || 0;
         document.getElementById('statIncoming').textContent = stats.incoming || stats.received || 0;
         document.getElementById('statOutgoing').textContent = stats.outgoing || stats.sent || 0;
@@ -2816,8 +2875,10 @@ body {
     }
 
     function changePage(page) {
-        state.pagination.page = page;
-        applyFiltersAndRender();
+        const target = Number(page);
+        if (!Number.isInteger(target) || target < 1 || target > state.pagination.totalPages) return;
+        state.pagination.page = target;
+        loadMessages();
     }
 
     // ============================================
@@ -2834,7 +2895,7 @@ body {
         const debouncedSearch = Utils.debounce((value) => {
             state.filters.search = value;
             state.pagination.page = 1;
-            applyFiltersAndRender();
+            loadMessages();
         }, CONFIG.DEBOUNCE_MS);
 
         searchInput.addEventListener('input', (e) => {
@@ -2847,7 +2908,7 @@ body {
             searchInput.value = '';
             state.filters.search = '';
             state.pagination.page = 1;
-            applyFiltersAndRender();
+            loadMessages();
             document.getElementById('clearSearch').style.display = 'none';
         });
 
@@ -2867,7 +2928,7 @@ body {
             state.filters.dateFrom = document.getElementById('filterDateFrom').value;
             state.filters.dateTo = document.getElementById('filterDateTo').value;
             state.pagination.page = 1;
-            applyFiltersAndRender();
+            loadMessages();
             document.getElementById('filtersPanel').style.display = 'none';
             document.getElementById('filterToggle').classList.remove('active');
         });
@@ -2879,7 +2940,7 @@ body {
             document.getElementById('filterDateTo').value = '';
             state.filters = { search: state.filters.search, status: '', type: '', dateFrom: '', dateTo: '' };
             state.pagination.page = 1;
-            applyFiltersAndRender();
+            loadMessages();
         });
 
         // Refresh

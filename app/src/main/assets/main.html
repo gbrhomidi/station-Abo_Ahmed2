@@ -1297,7 +1297,7 @@
 
         // قائمة احتياطية (fallback) في حال فشل تحميل JSON
         const fallbackSidebarData = [
-            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين', 'الأدوار والصلاحيات', 'سجل النشاطات'] },
+            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين', 'الأدوار والصلاحيات', 'إدارة الشاشات', 'سجل النشاطات'] },
             { id: 'admin', label: 'الإدارة الأساسية', icon: 'fa-building', children: ['إعدادات الشركة', 'إدارة المحطات', 'إعدادات النظام', 'أسعار الصرف'] },
             { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users', children: ['إدارة العملاء', 'إدارة الموردين', 'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'] },
             { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck', children: ['إدارة المركبات', 'إدارة السائقين', 'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'] },
@@ -1319,6 +1319,7 @@
         const fallbackRouteMap = {
             'إدارة المستخدمين': 'screens/users.html',
             'الأدوار والصلاحيات': 'screens/roles.html',
+            'إدارة الشاشات': 'screens/screens.html',
             'سجل النشاطات': 'screens/activity-log.html',
             'إعدادات الشركة': 'screens/company-settings.html',
             'إدارة المحطات': 'screens/stations.html',
@@ -1713,6 +1714,9 @@
                 .replace(/^\//, '')
                 .replace(/^screens\//, '')
                 .replace(/\.html$/, '');
+            const currentUserId = Number(currentUser.user_id ?? currentUser.id ?? 0);
+            const adminManagedScreens = new Set(['screens/users.html', 'screens/roles.html', 'screens/screens.html']);
+            if (currentUserId === 1 && adminManagedScreens.has(route)) return true;
             const screens = Array.isArray(currentUser.screens) ? currentUser.screens : [];
             return screens.some((screen) => screen && (
                 screen.screen_name === screenName ||
