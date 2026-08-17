@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 18
+        const val VERSION = 19
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -149,6 +149,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             createAllTables(db)
+            ensureReportCacheTable(db)
             insertInitialData(db)
             ensureContractSchema(db)
             ensureActivityPermissions(db)
@@ -178,6 +179,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     15 -> migrateV15ToV16(db)
                     16 -> migrateV16ToV17(db)
                     17 -> migrateV17ToV18(db)
+                    18 -> ensureReportCacheTable(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -190,6 +192,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         super.onOpen(db)
         ensureSmsMessagesTable(db)
         ensureContractSchema(db)
+        ensureReportCacheTable(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)
@@ -851,6 +854,111 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+
+
+    // ========================================================================
+    // REPORT_CACHE_V1: تخزين مؤقت للقراءة فقط لتقارير المحاسبة وKPI.
+    // لا يُستخدم لحفظ أو مزامنة أو تنفيذ أي عملية تجارية.
+    // ========================================================================
+    private fun ensureReportCacheTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS report_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cache_key TEXT NOT NULL,
+                params_hash TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                station_id INTEGER NOT NULL DEFAULT 0,
+                payload_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                last_accessed_at INTEGER NOT NULL,
+                schema_version INTEGER NOT NULL,
+                UNIQUE(cache_key, params_hash, user_id, station_id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_report_cache_scope ON report_cache(user_id, station_id, cache_key)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_report_cache_expiry ON report_cache(expires_at)")
+    }
+
+    private fun reportCacheParamsHash(paramsJson: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(paramsJson.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    }
+
+    private fun reportCacheTimeLabel(timestamp: Long): String = getDateFormat().format(Date(timestamp))
+
+    fun putReportCache(cacheKey: String, paramsJson: String, userId: Long, stationId: Int, payloadJson: String, ttlSeconds: Long): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val now = System.currentTimeMillis()
+            val expiresAt = now + (ttlSeconds.coerceAtLeast(60L) * 1000L)
+            val paramsHash = reportCacheParamsHash(paramsJson.ifBlank { "{}" })
+            val values = ContentValues().apply {
+                put("cache_key", cacheKey)
+                put("params_hash", paramsHash)
+                put("user_id", userId)
+                put("station_id", stationId)
+                put("payload_json", payloadJson)
+                put("created_at", now)
+                put("expires_at", expiresAt)
+                put("last_accessed_at", now)
+                put("schema_version", VERSION)
+            }
+            db.insertWithOnConflict("report_cache", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            JSONObject().apply {
+                put("source", "sqlite")
+                put("read_only", false)
+                put("stale", false)
+                put("cached_at", reportCacheTimeLabel(now))
+                put("expires_at", reportCacheTimeLabel(expiresAt))
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getReportCache(cacheKey: String, paramsJson: String, userId: Long, stationId: Int): JSONObject? {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val paramsHash = reportCacheParamsHash(paramsJson.ifBlank { "{}" })
+            db.rawQuery(
+                "SELECT payload_json, created_at, expires_at, schema_version FROM report_cache WHERE cache_key = ? AND params_hash = ? AND user_id = ? AND station_id = ? LIMIT 1",
+                arrayOf(cacheKey, paramsHash, userId.toString(), stationId.toString())
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) return null
+                val payloadJson = cursor.getString(0)
+                val createdAt = cursor.getLong(1)
+                val expiresAt = cursor.getLong(2)
+                val schemaVersion = cursor.getInt(3)
+                val now = System.currentTimeMillis()
+                if (schemaVersion != VERSION || now - createdAt > 7L * 24L * 60L * 60L * 1000L) {
+                    db.delete("report_cache", "cache_key = ? AND params_hash = ? AND user_id = ? AND station_id = ?", arrayOf(cacheKey, paramsHash, userId.toString(), stationId.toString()))
+                    return null
+                }
+                val updated = ContentValues().apply { put("last_accessed_at", now) }
+                db.update("report_cache", updated, "cache_key = ? AND params_hash = ? AND user_id = ? AND station_id = ?", arrayOf(cacheKey, paramsHash, userId.toString(), stationId.toString()))
+                val meta = JSONObject().apply {
+                    put("source", "cache")
+                    put("read_only", true)
+                    put("stale", now > expiresAt)
+                    put("cached_at", reportCacheTimeLabel(createdAt))
+                    put("expires_at", reportCacheTimeLabel(expiresAt))
+                    put("message", "نسخة مؤقتة للقراءة فقط؛ لم تُنفّذ أي عملية محاسبية")
+                }
+                JSONObject().apply { put("payload_json", payloadJson); put("meta", meta) }
+            }
+        } finally { dbLock.unlock() }
+    }
+
+    fun invalidateReportCache(userId: Long, stationId: Int): Int {
+        dbLock.lock()
+        return try { writableDatabase.delete("report_cache", "user_id = ? AND station_id = ?", arrayOf(userId.toString(), stationId.toString())) } finally { dbLock.unlock() }
+    }
+
+    fun clearReportCacheForUser(userId: Long): Int {
+        dbLock.lock()
+        return try { writableDatabase.delete("report_cache", "user_id = ?", arrayOf(userId.toString())) } finally { dbLock.unlock() }
+    }
 
     private fun createAllTables(db: SQLiteDatabase) {
         createCoreTables(db)

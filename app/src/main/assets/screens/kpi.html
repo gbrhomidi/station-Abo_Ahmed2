@@ -1138,8 +1138,212 @@
             .sidebar-btn { min-height: 60px; font-size: 0.7rem; }
             .sidebar-btn i { font-size: 1.2rem; }
         }
-  </style>
- </head>
+  
+/* ============================================================
+   ACCOUNTING UI/UX ENHANCEMENT V2
+   طبقة تصميم محلية لا تضيف أي اعتماد خارجي ولا تغيّر عقود البيانات.
+   ============================================================ */
+:root {
+    --ui-radius-sm: 10px;
+    --ui-radius-md: 16px;
+    --ui-radius-lg: 22px;
+    --ui-shadow-sm: 0 5px 18px rgba(15, 23, 42, .08);
+    --ui-shadow-md: 0 14px 34px rgba(15, 23, 42, .13);
+    --ui-focus: 0 0 0 4px var(--primary-dim);
+    --ui-gradient: linear-gradient(135deg, var(--primary-color), #7c3aed 82%);
+}
+
+html { scroll-behavior: smooth; }
+body {
+    background-image:
+        radial-gradient(circle at 5% 0%, var(--primary-dim), transparent 25rem),
+        radial-gradient(circle at 100% 18%, var(--accent-dim), transparent 24rem);
+    background-attachment: fixed;
+}
+button, input, select, textarea { min-height: 42px; }
+button, .icon-btn, .filter-chip, .stat-card, .journal-card, .kpi-card, .sidebar-btn, .card-btn { -webkit-user-select: none; user-select: none; }
+button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opacity: .55; transform: none !important; box-shadow: none !important; }
+:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 3px; box-shadow: var(--ui-focus); }
+
+.top-bar {
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .10);
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+}
+.top-title h2 { letter-spacing: -.02em; line-height: 1.5; }
+.header-actions { align-items: center; }
+.icon-btn { box-shadow: var(--ui-shadow-sm); border-style: solid; border-width: 1px; }
+.icon-btn:hover { box-shadow: var(--ui-shadow-md); }
+.search-input, .form-input, select, textarea {
+    border-style: solid;
+    border-width: 1px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+.search-input::placeholder, .form-input::placeholder, textarea::placeholder { color: var(--text-muted); opacity: .8; }
+.search-input:focus, .form-input:focus, select:focus, textarea:focus { transform: translateY(-1px); }
+.filter-chips { padding: 5px 2px 8px; }
+.filter-chip { border-style: solid; border-width: 1px; box-shadow: 0 2px 8px rgba(15,23,42,.05); }
+.filter-chip.active { box-shadow: 0 5px 14px var(--primary-dim); font-weight: 700; }
+
+.stats-grid { gap: 14px; }
+.stat-card, .kpi-card {
+    border-style: solid;
+    border-width: 1px;
+    box-shadow: var(--ui-shadow-sm);
+    background-image: linear-gradient(145deg, var(--surface-elevated), rgba(255,255,255,.015));
+}
+.stat-card::after, .kpi-card::after, .journal-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 25%, rgba(255,255,255,.10) 48%, transparent 65%);
+    transform: translateX(-120%);
+    transition: transform .65s ease;
+    pointer-events: none;
+}
+.stat-card:hover::after, .kpi-card:hover::after, .journal-card:hover::after { transform: translateX(120%); }
+.stat-value { letter-spacing: -.03em; }
+.stat-trend { border-radius: 999px; padding: 3px 8px; width: fit-content; background: var(--primary-dim); }
+
+.section-title {
+    position: relative;
+    padding-bottom: 10px !important;
+}
+.section-title::after {
+    content: '';
+    position: absolute;
+    right: 16px;
+    left: 16px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--primary-color), transparent);
+    opacity: .55;
+}
+.section-title h3 { font-size: 1rem; letter-spacing: -.01em; }
+
+.journal-card {
+    border-style: solid;
+    border-width: 1px;
+    box-shadow: var(--ui-shadow-sm);
+    background-image: linear-gradient(145deg, var(--surface-elevated), rgba(255,255,255,.02));
+}
+.card-header, .details-header, .modal-header, .chart-header {
+    border-bottom: 1px solid rgba(148,163,184,.18);
+}
+.card-status, .status-badge, .details-status, .card-type-badge {
+    border: 1px solid currentColor;
+    box-shadow: 0 3px 10px rgba(15,23,42,.08);
+}
+.card-btn, .btn, .btn-primary, .btn-secondary, .submit-btn, .btn-filter, .btn-view, .btn-view-entry, .sidebar-btn {
+    border-style: solid;
+    border-width: 1px;
+    border-color: transparent;
+    border-radius: var(--ui-radius-sm);
+    transition: transform .2s ease, box-shadow .2s ease, filter .2s ease;
+}
+.card-btn:hover, .btn:hover, .btn-primary:hover, .btn-secondary:hover, .submit-btn:hover, .btn-filter:hover, .sidebar-btn:hover { box-shadow: var(--ui-shadow-sm); filter: brightness(1.04); }
+.card-btn:active, .btn:active, .btn-primary:active, .btn-secondary:active, .submit-btn:active, .sidebar-btn:active { transform: translateY(1px) scale(.98); }
+
+.table-section, .table-wrapper, .ledger-container, .ledger-table-wrapper, .chart-card, .report-results {
+    border-radius: var(--ui-radius-md);
+    box-shadow: var(--ui-shadow-sm);
+}
+.table-scroll, .table-wrapper, .ledger-table-wrapper { scrollbar-width: thin; }
+.data-table, .ledger-table, .details-items-table, .entry-items-table { border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.data-table thead th, .ledger-table thead th, .details-items-table thead th, .entry-items-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface-elevated);
+    border-bottom: 2px solid var(--primary-dim);
+    font-weight: 800;
+    white-space: nowrap;
+}
+.data-table tbody tr, .ledger-table tbody tr, .details-items-table tbody tr, .entry-items-table tbody tr { transition: background .18s ease, transform .18s ease; }
+.data-table tbody tr:nth-child(even), .ledger-table tbody tr:nth-child(even), .details-items-table tbody tr:nth-child(even), .entry-items-table tbody tr:nth-child(even) { background: rgba(148,163,184,.035); }
+.data-table tbody tr:hover, .ledger-table tbody tr:hover, .details-items-table tbody tr:hover, .entry-items-table tbody tr:hover { background: var(--primary-dim); }
+
+.modal-overlay, .details-overlay, .report-modal-overlay, .ai-modal {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.modal, .details-content, .report-modal, .ai-modal > div {
+    box-shadow: 0 24px 70px rgba(2, 6, 23, .28);
+    border-style: solid;
+    border-width: 1px;
+}
+.modal-header, .details-header, .modal-title, .details-title { letter-spacing: -.01em; }
+.form-group { transition: transform .2s ease; }
+.form-group:focus-within { transform: translateY(-1px); }
+.form-label { font-weight: 700; }
+.empty-state {
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-muted);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--ui-radius-md);
+    background: linear-gradient(145deg, var(--surface-color), transparent);
+}
+.empty-state i { color: var(--primary-color); opacity: .8; }
+.alerts-container:empty { display: none; }
+.toast { box-shadow: var(--ui-shadow-md); border: 1px solid rgba(255,255,255,.12); }
+.offline-banner { box-shadow: 0 5px 18px rgba(245,158,11,.28); }
+
+/* KPI-specific visual hierarchy */
+.kpi-card { position: relative; overflow: hidden; }
+.chart-card { border: 1px solid rgba(148,163,184,.22); background: linear-gradient(145deg, var(--surface-elevated), var(--surface-color)); }
+.chart-header { padding-bottom: 10px; margin-bottom: 10px; }
+.chart-title { font-weight: 800; }
+.chart-badge { border-radius: 999px; padding: 4px 9px; background: var(--primary-dim); color: var(--primary-color); }
+.ai-insight-card { border: 1px solid rgba(124,58,237,.25) !important; border-right: 4px solid #8b5cf6 !important; box-shadow: 0 8px 18px rgba(124,58,237,.10); }
+
+/* Responsive layout for narrow Android WebView screens */
+@media (min-width: 720px) {
+    .stats-grid { grid-template-columns: repeat(4, 1fr); }
+    .top-bar { padding-inline: 24px; }
+    .cards-container, .skeleton-grid, .alerts-container { max-width: 1180px; margin-inline: auto; }
+    .charts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+    body { padding-bottom: 68px; }
+    .top-bar { padding: 12px; }
+    .top-title h2 { font-size: 1.05rem; }
+    .header-actions { gap: 5px; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 10px; }
+    .stats-grid { padding: 12px; gap: 9px; }
+    .stat-card, .kpi-card { padding: 12px; border-radius: 14px; }
+    .stat-value { font-size: 1.15rem; }
+    .stat-label { font-size: .72rem; }
+    .form-row, .report-filter-row { grid-template-columns: 1fr !important; }
+    .modal, .report-modal, .details-content { width: calc(100vw - 20px) !important; max-height: 88vh; }
+    .table-scroll, .table-wrapper, .ledger-table-wrapper { margin-inline: -4px; }
+    .data-table, .ledger-table { min-width: 680px; }
+    .sidebar { width: min(88vw, 340px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+@media print {
+    body { background: #fff !important; color: #111 !important; padding: 0 !important; }
+    .top-bar, .sidebar, .sidebar-toggle, .fab, .loading-indicator, .offline-banner, .toast, .modal-overlay, .details-overlay, .report-modal-overlay { display: none !important; }
+    .stat-card, .kpi-card, .journal-card, .table-section, .chart-card, .ledger-container { box-shadow: none !important; break-inside: avoid; }
+}
+
+
+/* KPI screen refinements */
+.filter-bar { border: 1px solid rgba(148,163,184,.20); box-shadow: var(--ui-shadow-sm); }
+.filter-actions { gap: 8px; }
+.table-footer { border-top: 1px solid rgba(148,163,184,.20); background: var(--surface-color); }
+#performanceChart, #statusChart, #trendChart, #achievementChart { filter: drop-shadow(0 8px 12px rgba(15,23,42,.08)); }
+
+    </style>
+     <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
+</head>
  <body>
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
@@ -1153,7 +1357,7 @@
   <div class="offline-banner" id="offlineBanner">
    <i class="fas fa-wifi-slash">
    </i>
-   أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+   أنت في وضع عدم الاتصال - سيتم عرض آخر نسخة مؤقتة للقراءة فقط عند توفرها
   </div>
   <!-- Loading -->
   <div class="loading-indicator" id="loadingIndicator">
@@ -1260,9 +1464,11 @@
       <i class="fas fa-undo">
       </i>
      </button>
-     <button class="btn-filter" onclick="exportCSV()">
-      <i class="fas fa-file-csv">
-      </i>
+     <button class="btn-filter" onclick="exportExcel()" title="تصدير Excel">
+      <i class="fas fa-file-excel"></i>
+     </button>
+     <button class="btn-filter" onclick="exportPDF()" title="تصدير PDF">
+      <i class="fas fa-file-pdf"></i>
      </button>
     </div>
    </div>
@@ -1389,6 +1595,20 @@
      </canvas>
     </div>
    </div>
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title"><i class="fas fa-chart-line"></i> الاتجاه الزمني</span>
+     <span class="chart-badge">القيمة مقابل المستهدف</span>
+    </div>
+    <div class="chart-container"><canvas id="trendChart"></canvas></div>
+   </div>
+   <div class="chart-card">
+    <div class="chart-header">
+     <span class="chart-title"><i class="fas fa-ranking-star"></i> ترتيب الإنجاز</span>
+     <span class="chart-badge">أعلى المؤشرات</span>
+    </div>
+    <div class="chart-container"><canvas id="achievementChart"></canvas></div>
+   </div>
   </div>
   <!-- ===================================================================
     جدول مؤشرات الأداء
@@ -1495,12 +1715,13 @@
       تحديث
      </span>
     </button>
+    <button class="sidebar-btn" onclick="handleAction('excel')">
+     <i class="fas fa-file-excel"></i>
+     <span>Excel</span>
+    </button>
     <button class="sidebar-btn" onclick="handleAction('csv')">
-     <i class="fas fa-file-csv">
-     </i>
-     <span>
-      CSV
-     </span>
+     <i class="fas fa-file-csv"></i>
+     <span>CSV</span>
     </button>
     <button class="sidebar-btn" onclick="handleAction('pdf')">
      <i class="fas fa-file-pdf">
@@ -1627,9 +1848,47 @@
         // 1. apiCall الموحدة
         // ===================================================================
                 // 1. Typed Bridge contracts: WebView -> MainActivity -> SQLite
+
+        function setReportCacheReadOnly(readOnly) {
+            const selectors = 'button[onclick], .fab';
+            document.querySelectorAll(selectors).forEach(button => {
+                const action = button.getAttribute('onclick') || '';
+                const writeAction = /openAddModal|saveEntry|deleteEntry|postEntry|reverseEntry|handleSidebarAction\('(add|save|delete|post|reverse)'\)/.test(action);
+                if (!writeAction) return;
+                button.disabled = !!readOnly;
+                button.setAttribute('aria-disabled', readOnly ? 'true' : 'false');
+                button.title = readOnly ? 'النسخة المؤقتة للقراءة فقط؛ اتصل بقاعدة SQLite لتنفيذ التغيير' : '';
+            });
+            if (readOnly) {
+                document.querySelectorAll('.modal-overlay.show').forEach(modal => modal.classList.remove('show'));
+                document.body.setAttribute('data-report-cache-mode', 'readonly');
+            } else {
+                document.body.removeAttribute('data-report-cache-mode');
+            }
+        }
+
+        let reportCacheReadOnly = document.body.getAttribute('data-report-cache-mode') === 'readonly';
+
+        function applyReportCacheMeta(meta) {
+            const banner = document.getElementById('offlineBanner');
+            const cached = !!(meta && meta.source === 'cache');
+            if (cached) reportCacheReadOnly = true;
+            setReportCacheReadOnly(reportCacheReadOnly);
+            if (!banner) return;
+            document.body.classList.toggle('report-cache-mode', reportCacheReadOnly);
+            if (cached) {
+                banner.classList.add('show');
+                banner.innerHTML = '<i class="fas fa-database"></i> بيانات مؤقتة للقراءة فقط — آخر تحديث: ' + escapeHtml(meta.cached_at || 'غير معروف');
+                banner.title = meta.stale ? 'انتهت مدة الصلاحية؛ تعرض الشاشة آخر نسخة متاحة للقراءة فقط' : 'نسخة مؤقتة للقراءة فقط';
+            } else if (!reportCacheReadOnly && navigator.onLine) {
+                banner.classList.remove('show');
+                banner.innerHTML = '<i class="fas fa-wifi"></i> متصل — مصدر البيانات SQLite';
+            }
+        }
+
         function parseBridgeResult(raw) {
-            if (raw && typeof raw === 'object') return raw;
-            try { return JSON.parse(raw); } catch (e) { return { success: true, data: raw }; }
+            if (raw && typeof raw === 'object') { if (raw.cache) applyReportCacheMeta(raw.cache); return raw; }
+            try { const parsed = JSON.parse(raw); if (parsed && parsed.cache) applyReportCacheMeta(parsed.cache); return parsed; } catch (e) { return { success: true, data: raw }; }
         }
 
         function invokeTypedBridge(action, params) {
@@ -1738,7 +1997,9 @@
         // ===================================================================
         let kpiData = [];
         let performanceChart = null,
-            statusChart = null;
+            statusChart = null,
+            trendChart = null,
+            achievementChart = null;
 
         async function generateReport() {
             const from = document.getElementById('filterDateFrom').value;
@@ -1884,74 +2145,92 @@
         // 9. الرسوم البيانية
         // ===================================================================
         function updateCharts(data) {
-            // أداء المؤشرات حسب الفئة
-            const catMap = {};
-            data.forEach(item => {
-                const cat = item.category || 'أخرى';
-                if (!catMap[cat]) catMap[cat] = { total: 0, achieved: 0 };
-                catMap[cat].total++;
-                if (item.target_value > 0) {
-                    const pct = (item.actual_value / item.target_value) * 100;
-                    if (pct >= 80) catMap[cat].achieved++;
-                }
-            });
-            const labels = Object.keys(catMap);
-            const achieved = labels.map(l => catMap[l].achieved);
-            const total = labels.map(l => catMap[l].total);
+            const rows = Array.isArray(data) ? data.filter(Boolean) : [];
+            const chartFont = { family: 'Cairo' };
+            const gridColor = 'rgba(148,163,184,.16)';
+            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8aa4e8';
+            const destroyChart = chart => { if (chart && typeof chart.destroy === 'function') chart.destroy(); };
+            destroyChart(performanceChart); destroyChart(statusChart); destroyChart(trendChart); destroyChart(achievementChart);
+            performanceChart = statusChart = trendChart = achievementChart = null;
+            if (!window.Chart) return;
 
-            const ctx1 = document.getElementById('performanceChart').getContext('2d');
-            if (performanceChart) performanceChart.destroy();
-            performanceChart = new Chart(ctx1, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'محقق', data: achieved, backgroundColor: '#10b981', borderRadius: 6 },
-                        { label: 'إجمالي', data: total, backgroundColor: 'rgba(52,102,255,0.3)', borderRadius: 6 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { font: { family: 'Cairo' }, color: '#8aa4e8' } }
-                    },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
+            const categoryMap = {};
+            rows.forEach(item => {
+                const category = item.category || 'أخرى';
+                const actual = Number(item.actual_value || 0);
+                const target = Number(item.target_value || 0);
+                if (!categoryMap[category]) categoryMap[category] = { actual: 0, target: 0, count: 0 };
+                categoryMap[category].actual += actual;
+                categoryMap[category].target += target;
+                categoryMap[category].count += 1;
             });
+            const labels = Object.keys(categoryMap);
+            const categoryActual = labels.map(label => Number(categoryMap[label].actual.toFixed(2)));
+            const categoryTarget = labels.map(label => Number(categoryMap[label].target.toFixed(2)));
+            const clickToKpi = (codes) => (event, elements) => {
+                if (elements && elements.length && codes[elements[0].index]) viewKPI(codes[elements[0].index]);
+            };
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { labels: { font: chartFont, color: textColor } }, tooltip: { enabled: true } },
+                scales: { x: { grid: { display: false }, ticks: { color: textColor, font: chartFont } }, y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, font: chartFont } } }
+            };
 
-            // توزيع الحالة
+            const performanceCanvas = document.getElementById('performanceChart');
+            if (performanceCanvas && labels.length) {
+                performanceChart = new Chart(performanceCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels, datasets: [
+                        { label: 'القيمة الحالية', data: categoryActual, backgroundColor: 'rgba(14,165,233,.78)', borderRadius: 8, borderSkipped: false },
+                        { label: 'المستهدف', data: categoryTarget, backgroundColor: 'rgba(124,58,237,.42)', borderRadius: 8, borderSkipped: false }
+                    ] },
+                    options: { ...commonOptions, onClick: clickToKpi(rows.map(item => item.kpi_code || '')) }
+                });
+            }
+
             const statusMap = {};
-            data.forEach(item => {
-                const st = item.status || 'on_track';
-                statusMap[st] = (statusMap[st] || 0) + 1;
-            });
+            rows.forEach(item => { const status = item.status || 'on_track'; statusMap[status] = (statusMap[status] || 0) + 1; });
             const statusLabels = Object.keys(statusMap);
             const statusValues = Object.values(statusMap);
-            const colors = ['#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+            const statusCanvas = document.getElementById('statusChart');
+            if (statusCanvas && statusLabels.length) {
+                statusChart = new Chart(statusCanvas.getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: statusLabels.map(getStatusLabel), datasets: [{ data: statusValues, backgroundColor: ['#10b981','#f59e0b','#ef4444','#64748b'], borderColor: 'transparent', borderWidth: 2, hoverOffset: 10 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'left', labels: { font: chartFont, color: textColor, padding: 12 } }, tooltip: { enabled: true } } }
+                });
+            }
 
-            const ctx2 = document.getElementById('statusChart').getContext('2d');
-            if (statusChart) statusChart.destroy();
-            statusChart = new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: statusLabels.map(s => getStatusLabel(s)),
-                    datasets: [{ data: statusValues, backgroundColor: colors.slice(0, statusValues.length),
-                        borderColor: 'transparent', borderWidth: 0 }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'left', labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10,
-                                color: '#8aa4e8' } }
-                    },
-                    cutout: '65%'
-                }
-            });
+            const datedRows = rows.map(item => ({
+                code: item.kpi_code || '', label: item.calculated_at || item.period_end || item.kpi_code || '',
+                actual: Number(item.actual_value || 0), target: Number(item.target_value || 0)
+            })).sort((a, b) => String(a.label).localeCompare(String(b.label))).slice(-12);
+            const trendCanvas = document.getElementById('trendChart');
+            if (trendCanvas && datedRows.length) {
+                trendChart = new Chart(trendCanvas.getContext('2d'), {
+                    type: 'line',
+                    data: { labels: datedRows.map(row => row.label), datasets: [
+                        { label: 'القيمة الحالية', data: datedRows.map(row => row.actual), borderColor: '#0ea5e9', backgroundColor: 'rgba(14,165,233,.14)', fill: true, tension: .35, pointRadius: 4, pointHoverRadius: 7 },
+                        { label: 'المستهدف', data: datedRows.map(row => row.target), borderColor: '#8b5cf6', backgroundColor: 'transparent', borderDash: [6, 4], tension: .25, pointRadius: 3 }
+                    ] },
+                    options: { ...commonOptions, onClick: clickToKpi(datedRows.map(row => row.code)) }
+                });
+            }
+
+            const rankedRows = rows.map(item => {
+                const actual = Number(item.actual_value || 0); const target = Number(item.target_value || 0);
+                return { code: item.kpi_code || '', name: item.kpi_name || item.kpi_name_ar || item.kpi_code || 'مؤشر', achievement: target > 0 ? (actual / target) * 100 : 0 };
+            }).sort((a, b) => b.achievement - a.achievement).slice(0, 8);
+            const achievementCanvas = document.getElementById('achievementChart');
+            if (achievementCanvas && rankedRows.length) {
+                achievementChart = new Chart(achievementCanvas.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: rankedRows.map(row => row.name), datasets: [{ label: 'نسبة الإنجاز %', data: rankedRows.map(row => Number(row.achievement.toFixed(2))), backgroundColor: rankedRows.map((row, index) => index === 0 ? '#f59e0b' : 'rgba(16,185,129,.72)'), borderRadius: 8, borderSkipped: false }] },
+                    options: { ...commonOptions, indexAxis: 'y', plugins: { ...commonOptions.plugins, legend: { display: false }, tooltip: { callbacks: { label: context => `${Number(context.raw || 0).toFixed(2)}%` } } }, onClick: clickToKpi(rankedRows.map(row => row.code)) }
+                });
+            }
         }
 
         // ===================================================================
@@ -2109,87 +2388,74 @@
         }
 
         // ===================================================================
-        // 13. تصدير CSV و PDF
+        // 13. تصدير KPI إلى CSV وExcel وPDF
         // ===================================================================
-        function exportCSV() {
-            const rows = document.querySelectorAll('#kpiTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات للتصدير', 'error');
-                return;
-            }
-            let csv = 'كود المؤشر,اسم المؤشر,الفئة,القيمة الحالية,القيمة المستهدفة,نسبة الإنجاز,الحالة,آخر تحديث\n';
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 9 && !row.classList.contains('empty-state')) {
-                    csv += [
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || ''
-                    ].join(',') + '\n';
-                }
+        function getKpiExportRows() {
+            return (Array.isArray(kpiData) ? kpiData : []).map(item => {
+                const target = Number(item.target_value || 0);
+                const actual = Number(item.actual_value || 0);
+                return {
+                    code: item.kpi_code || '', name: item.kpi_name || item.kpi_name_ar || '', category: item.category || '',
+                    actual, target, achievement: target > 0 ? ((actual / target) * 100) : 0,
+                    status: getStatusLabel(item.status || 'on_track'), updated: item.calculated_at || ''
+                };
             });
-            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const from = document.getElementById('filterDateFrom').value || 'start';
-            const to = document.getElementById('filterDateTo').value || 'end';
-            link.download = `تقرير_KPI_${from}_${to}.csv`;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            showToast('✅ تم تصدير CSV', 'success');
+        }
+
+        function exportExcel() {
+            const rows = getKpiExportRows();
+            if (!rows.length) { showToast('لا توجد بيانات KPI حقيقية للتصدير', 'warning'); return; }
+            if (!window.XLSX || !XLSX.utils || !XLSX.writeFile) { showToast('مكتبة Excel المحلية غير متاحة', 'error'); return; }
+            const headers = ['كود المؤشر','اسم المؤشر','الفئة','القيمة الحالية','القيمة المستهدفة','نسبة الإنجاز','الحالة','آخر تحديث'];
+            const data = [headers, ...rows.map(row => [row.code,row.name,row.category,row.actual,row.target,Number(row.achievement.toFixed(2)),row.status,row.updated])];
+            const sheet = XLSX.utils.aoa_to_sheet(data);
+            sheet['!cols'] = [{wch:18},{wch:28},{wch:18},{wch:18},{wch:18},{wch:16},{wch:16},{wch:22}];
+            sheet['!autofilter'] = { ref: `A1:H${data.length}` };
+            const book = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(book, sheet, 'مؤشرات KPI');
+            XLSX.writeFile(book, `kpi-report-${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('تم تصدير تقرير KPI إلى Excel من بيانات SQLite', 'success');
+        }
+
+        function exportCSV() {
+            const rows = getKpiExportRows();
+            if (!rows.length) { showToast('لا توجد بيانات KPI حقيقية للتصدير', 'warning'); return; }
+            const header = ['كود المؤشر','اسم المؤشر','الفئة','القيمة الحالية','القيمة المستهدفة','نسبة الإنجاز','الحالة','آخر تحديث'];
+            const csv = '\ufeff' + [header, ...rows.map(row => [row.code,row.name,row.category,row.actual,row.target,row.achievement.toFixed(2) + '%',row.status,row.updated])]
+                .map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\n');
+            const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+            const link = document.createElement('a'); link.href = url; link.download = `kpi-report-${new Date().toISOString().slice(0,10)}.csv`; link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast('تم تصدير KPI إلى CSV', 'success');
         }
 
         function exportPDF() {
-            const rows = document.querySelectorAll('#kpiTableBody tr');
-            if (rows.length === 0 || rows[0].classList.contains('empty-state')) {
-                showToast('❌ لا توجد بيانات', 'error');
-                return;
-            }
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('p', 'pt', 'a4');
-            doc.setFontSize(18);
-            doc.setTextColor(52, 102, 255);
-            doc.text('📊 مؤشرات الأداء', 40, 50);
-            doc.setFontSize(10);
-            doc.setTextColor(138, 164, 232);
-            const from = document.getElementById('filterDateFrom').value || 'البداية';
-            const to = document.getElementById('filterDateTo').value || 'النهاية';
-            doc.text('الفترة: ' + from + ' إلى ' + to, 40, 75);
-
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 9 && !row.classList.contains('empty-state')) {
-                    tableData.push([
-                        cells[1]?.textContent?.trim() || '',
-                        cells[2]?.textContent?.trim() || '',
-                        cells[3]?.textContent?.trim() || '',
-                        cells[4]?.textContent?.trim() || '',
-                        cells[5]?.textContent?.trim() || '',
-                        cells[6]?.textContent?.trim() || '',
-                        cells[7]?.textContent?.trim() || '',
-                        cells[8]?.textContent?.trim() || ''
-                    ]);
-                }
+            const rows = getKpiExportRows();
+            if (!rows.length) { showToast('لا توجد بيانات KPI حقيقية للتصدير', 'warning'); return; }
+            if (!window.jspdf || !window.jspdf.jsPDF) { showToast('مكتبة PDF المحلية غير متاحة', 'error'); return; }
+            const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+            const from = document.getElementById('filterDateFrom').value || 'all';
+            const to = document.getElementById('filterDateTo').value || 'all';
+            doc.setFontSize(16); doc.setTextColor(25, 71, 115); doc.text('KPI Performance Report', 40, 38);
+            doc.setFontSize(9); doc.setTextColor(90, 100, 115); doc.text(`Period: ${from} - ${to}`, 40, 55);
+            const headers = ['#','Code','KPI','Category','Actual','Target','Achievement','Status'];
+            const widths = [25,85,170,95,75,75,85,90];
+            let y = 78;
+            const drawRow = (values, header = false) => {
+                let x = 25;
+                doc.setFillColor(header ? 25 : 245, header ? 71 : 248, header ? 115 : 250);
+                doc.setTextColor(header ? 255 : 35, header ? 255 : 45, header ? 255 : 60);
+                doc.rect(25, y - 13, widths.reduce((a,b) => a+b, 0), 18, header ? 'F' : 'S');
+                values.forEach((value, index) => { doc.text(String(value ?? '').substring(0, 28), x + 3, y, { maxWidth: widths[index] - 6 }); x += widths[index]; });
+                y += 20;
+            };
+            drawRow(headers, true);
+            rows.forEach((row, index) => {
+                if (y > 555) { doc.addPage(); y = 40; drawRow(headers, true); }
+                drawRow([index + 1,row.code,row.name,row.category,row.actual.toFixed(2),row.target.toFixed(2),row.achievement.toFixed(2) + '%',row.status]);
             });
-            if (tableData.length === 0) { showToast('❌ لا توجد بيانات', 'error'); return; }
-            const headers = ['كود', 'المؤشر', 'الفئة', 'الحالية', 'المستهدف', 'الإنجاز', 'الحالة', 'آخر تحديث'];
-            doc.autoTable({
-                head: [headers],
-                body: tableData,
-                startY: 100,
-                styles: { fontSize: 7, font: 'helvetica', textColor: [200, 200, 200] },
-                headStyles: { fillColor: [52, 102, 255], textColor: [10, 14, 26], fontSize: 8 },
-                alternateRowStyles: { fillColor: [17, 24, 51] },
-                margin: { left: 25, right: 25 },
-                tableWidth: 'auto'
-            });
-            doc.save(`تقرير_KPI_${from}_${to}.pdf`);
-            showToast('✅ تم تصدير PDF', 'success');
+            doc.save(`kpi-report-${new Date().toISOString().slice(0,10)}.pdf`);
+            showToast('تم تصدير KPI إلى PDF من بيانات SQLite', 'success');
         }
 
         // ===================================================================
@@ -2232,11 +2498,19 @@
                 case 'csv':
                     exportCSV();
                     break;
+                case 'excel':
+                    exportExcel();
+                    break;
                 case 'pdf':
                     exportPDF();
                     break;
                 case 'print':
-                    window.print();
+                    if (window.AndroidInterface && typeof window.AndroidInterface.printCurrentPage === 'function') {
+                const response = parseBridgeResult(window.AndroidInterface.printCurrentPage());
+                if (response && response.success === false) showToast(response.message || response.error || 'تعذر فتح الطباعة', 'error');
+            } else {
+                window.print();
+            }
                     break;
                 case 'ai':
                     openAIAdvisor();

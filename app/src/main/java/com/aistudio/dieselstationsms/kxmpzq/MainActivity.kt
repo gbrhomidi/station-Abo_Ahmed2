@@ -16,6 +16,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.print.PrintAttributes
+import android.print.PrintManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -1471,6 +1473,14 @@ class MainActivity : AppCompatActivity() {
                 put("success", false)
                 put("error", error ?: "خطأ غير معروف")
             }.toString()
+        }
+
+        private fun dataResponseObject(data: Any): JSONObject {
+            return when (data) {
+                is JSONObject -> data.put("success", true)
+                is JSONArray -> JSONObject().apply { put("success", true); put("data", data) }
+                else -> JSONObject().apply { put("success", true); put("data", data) }
+            }
         }
 
         private fun dataResponse(data: Any): String {
@@ -4975,7 +4985,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getChartAccounts(): String {
             if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة شجرة الحسابات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getChartAccounts()) } catch (e: Exception) {
+            return try { reportCacheResponse(db, "chart_accounts", JSONObject(), 3600L) { dataResponseObject(db.getChartAccounts()) } } catch (e: Exception) {
                 DebugLogger.logException("ChartAccounts", e)
                 errorResponse(e.message)
             }
@@ -5111,8 +5121,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getCurrencies(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val currencies = db.getCurrencies()
-                dataResponse(currencies)
+                reportCacheResponse(db, "currencies", JSONObject(), 3600L) { dataResponseObject(db.getCurrencies()) }
             } catch (e: Exception) {
                 DebugLogger.logException("Currencies", e)
                 errorResponse(e.message)
@@ -5542,6 +5551,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                     apply()
                 }
                 activity.currentAuthToken = null
+                if (activity.currentUserId > 0) { try { getDbHelper()?.clearReportCacheForUser(activity.currentUserId) } catch (e: Exception) { DebugLogger.warn("ReportCache", "Logout cache clear failed: ${e.message}") } }
                 activity.currentUserId = 0
                 activity.currentUserRole = ""
                 activity.currentUserName = ""
@@ -5633,6 +5643,44 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
 
+
+        private fun reportCacheResponse(
+            db: DatabaseHelper,
+            cacheKey: String,
+            params: JSONObject,
+            ttlSeconds: Long,
+            loader: () -> JSONObject
+        ): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val userId = activity.currentUserId
+            val stationId = getCurrentStationId(db, userId)
+            return try {
+                val payload = loader()
+                val cacheMeta = try {
+                    db.putReportCache(cacheKey, params.toString(), userId, stationId, payload.toString(), ttlSeconds)
+                } catch (cacheError: Exception) {
+                    DebugLogger.warn("ReportCache", "Cache write skipped for $cacheKey: ${cacheError.message}")
+                    JSONObject().apply { put("source", "sqlite"); put("read_only", false); put("stale", false) }
+                }
+                payload.put("cache", cacheMeta)
+                payload.toString()
+            } catch (liveError: Exception) {
+                val cached = try { db.getReportCache(cacheKey, params.toString(), userId, stationId) } catch (cacheReadError: Exception) { null }
+                if (cached != null) {
+                    val payload = JSONObject(cached.optString("payload_json", "{}"))
+                    payload.put("cache", cached.optJSONObject("meta") ?: JSONObject().apply { put("source", "cache"); put("read_only", true); put("stale", true) })
+                    payload.put("message", "تم عرض آخر نسخة مؤقتة للقراءة فقط؛ لم تُنفّذ أي عملية محاسبية")
+                    payload.toString()
+                } else {
+                    throw liveError
+                }
+            }
+        }
+
+        private fun invalidateCurrentReportCache(db: DatabaseHelper, userId: Long) {
+            try { db.invalidateReportCache(userId, getCurrentStationId(db, userId)) } catch (e: Exception) { DebugLogger.warn("ReportCache", "Invalidation failed: ${e.message}") }
+        }
+
         // ========================================================================
         // ACCOUNTING_REPORTS_V1_BRIDGE: typed contracts for accounting screens.
         // ========================================================================
@@ -5640,9 +5688,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getJournalEntries(jsonData: String): String {
             if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try {
-                val page = db.getJournalEntries(JSONObject(jsonData.ifBlank { "{}" }))
-                JSONObject().apply { put("success", true); put("data", page.optJSONArray("entries") ?: JSONArray()); put("total", page.optInt("total", 0)); put("stats", page.optJSONObject("stats") ?: JSONObject()) }.toString()
+                reportCacheResponse(db, "journal_entries", params, 900L) {
+                    val page = db.getJournalEntries(params)
+                    JSONObject().apply { put("success", true); put("data", page.optJSONArray("entries") ?: JSONArray()); put("total", page.optInt("total", 0)); put("stats", page.optJSONObject("stats") ?: JSONObject()) }
+                }
             } catch (e: Exception) { DebugLogger.logException("JournalEntries", e); errorResponse(e.message) }
         }
 
@@ -5650,7 +5701,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getJournalItems(jsonData: String): String {
             if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة بنود القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getJournalItems()) } catch (e: Exception) { DebugLogger.logException("JournalItems", e); errorResponse(e.message) }
+            val params = JSONObject()
+            return try { reportCacheResponse(db, "journal_items", params, 900L) { JSONObject().apply { put("success", true); put("data", db.getJournalItems()) } } }
+            catch (e: Exception) { DebugLogger.logException("JournalItems", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -5667,7 +5720,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية حفظ القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { successResponse(db.saveJournalEntry(payload, activity.currentUserId), "تم حفظ القيد فعلياً في SQLite") } catch (e: Exception) { DebugLogger.logException("JournalSave", e); errorResponse(e.message) }
+            return try { val saved = db.saveJournalEntry(payload, activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(saved, "تم حفظ القيد فعلياً في SQLite") } catch (e: Exception) { DebugLogger.logException("JournalSave", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -5678,7 +5731,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { val rows = db.deleteJournalEntry(id, activity.currentUserId); if (rows > 0) successResponse(true, "تم حذف القيد من SQLite") else errorResponse("لم يتم حذف القيد") } catch (e: Exception) { DebugLogger.logException("JournalDelete", e); errorResponse(e.message) }
+            return try { val rows = db.deleteJournalEntry(id, activity.currentUserId); if (rows > 0) invalidateCurrentReportCache(db, activity.currentUserId); if (rows > 0) successResponse(true, "تم حذف القيد من SQLite") else errorResponse("لم يتم حذف القيد") } catch (e: Exception) { DebugLogger.logException("JournalDelete", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -5686,7 +5739,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية ترحيل القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { val rows = db.postJournalEntry(id, activity.currentUserId); if (rows > 0) successResponse(true, "تم ترحيل القيد في SQLite") else errorResponse("لم يتم ترحيل القيد") } catch (e: Exception) { DebugLogger.logException("JournalPost", e); errorResponse(e.message) }
+            return try { val rows = db.postJournalEntry(id, activity.currentUserId); if (rows > 0) invalidateCurrentReportCache(db, activity.currentUserId); if (rows > 0) successResponse(true, "تم ترحيل القيد في SQLite") else errorResponse("لم يتم ترحيل القيد") } catch (e: Exception) { DebugLogger.logException("JournalPost", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -5694,56 +5747,98 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إلغاء القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-            return try { successResponse(db.reverseJournalEntry(id, reason, activity.currentUserId), "تم إنشاء القيد العكسي وتحديث القيد الأصلي") } catch (e: Exception) { DebugLogger.logException("JournalReverse", e); errorResponse(e.message) }
+            return try { val reversed = db.reverseJournalEntry(id, reason, activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(reversed, "تم إنشاء القيد العكسي وتحديث القيد الأصلي") } catch (e: Exception) { DebugLogger.logException("JournalReverse", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getJournalEntryDetails(id: Long): String {
             if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل القيد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { db.getJournalEntryDetails(id)?.let { dataResponse(it) } ?: errorResponse("القيد غير موجود") } catch (e: Exception) { DebugLogger.logException("JournalDetails", e); errorResponse(e.message) }
+            val params = JSONObject().put("id", id)
+            return try { reportCacheResponse(db, "journal_entry_details", params, 900L) { db.getJournalEntryDetails(id)?.let { dataResponseObject(it) } ?: throw IllegalArgumentException("القيد غير موجود") } }
+            catch (e: Exception) { DebugLogger.logException("JournalDetails", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun generateJournalReport(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateJournalReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("JournalReport", e); errorResponse(e.message) }
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
+            return try { reportCacheResponse(db, "journal_report", params, 3600L) { dataResponseObject(db.generateJournalReport(params)) } }
+            catch (e: Exception) { DebugLogger.logException("JournalReport", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getKPIDashboard(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة مؤشرات الأداء")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getKPIDashboard(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("KPIDashboard", e); errorResponse(e.message) }
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
+            return try { reportCacheResponse(db, "kpi_dashboard", params, 900L) { dataResponseObject(db.getKPIDashboard(params)) } }
+            catch (e: Exception) { DebugLogger.logException("KPIDashboard", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getKPIDetails(code: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل المؤشر")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { db.getKPIDetails(code)?.let { dataResponse(it) } ?: errorResponse("المؤشر غير موجود") } catch (e: Exception) { DebugLogger.logException("KPIDetails", e); errorResponse(e.message) }
+            val params = JSONObject().put("kpi_code", code)
+            return try { reportCacheResponse(db, "kpi_details", params, 900L) { db.getKPIDetails(code)?.let { dataResponseObject(it) } ?: throw IllegalArgumentException("المؤشر غير موجود") } }
+            catch (e: Exception) { DebugLogger.logException("KPIDetails", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getLedgerStats(): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة إحصائيات الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getLedgerStats()) } catch (e: Exception) { DebugLogger.logException("LedgerStats", e); errorResponse(e.message) }
+            return try { reportCacheResponse(db, "ledger_stats", JSONObject(), 900L) { dataResponseObject(db.getLedgerStats()) } }
+            catch (e: Exception) { DebugLogger.logException("LedgerStats", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getLedgerEntries(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة دفتر الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getLedgerEntries(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("LedgerEntries", e); errorResponse(e.message) }
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
+            return try { reportCacheResponse(db, "ledger_entries", params, 3600L) { dataResponseObject(db.getLedgerEntries(params)) } }
+            catch (e: Exception) { DebugLogger.logException("LedgerEntries", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun generateLedgerReport(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateLedgerReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { DebugLogger.logException("LedgerReport", e); errorResponse(e.message) }
+            val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
+            return try { reportCacheResponse(db, "ledger_report", params, 3600L) { dataResponseObject(db.generateLedgerReport(params)) } }
+            catch (e: Exception) { DebugLogger.logException("LedgerReport", e); errorResponse(e.message) }
+        }
+
+
+        @JavascriptInterface
+        fun printCurrentPage(): String {
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية طباعة التقارير")
+            return try {
+                runOnUiThread {
+                    val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
+                    val currentWebView = webView
+                    if (manager == null || currentWebView == null) {
+                        Toast.makeText(this@MainActivity, "خدمة الطباعة غير متاحة حالياً", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val adapter = currentWebView.createPrintDocumentAdapter("accounting-report")
+                        manager.print(
+                            "تقرير المحاسبة",
+                            adapter,
+                            PrintAttributes.Builder()
+                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                                .build()
+                        )
+                    }
+                }
+                successResponse(true, "تم فتح نافذة الطباعة")
+            } catch (e: Exception) {
+                DebugLogger.logException("NativePrint", e)
+                errorResponse(e.message)
+            }
         }
 
         // ============================================================
