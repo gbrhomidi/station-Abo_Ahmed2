@@ -42,6 +42,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.aistudio.dieselstationsms.kxmpzq.receiver.*
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
+import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceStatusRepository
 import com.aistudio.dieselstationsms.kxmpzq.startup.ServiceLaunchResult
 import com.aistudio.dieselstationsms.kxmpzq.startup.SmsServiceLauncher
@@ -312,6 +313,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         scheduleBackgroundTasks()
+        TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
 
         DebugLogger.info("MainActivity", "onCreate finished")
     }
@@ -6456,6 +6458,116 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.resolveOperationalRecord(key, id, note); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
+        }
+
+        // ============================================================
+        // Tasks Bridge - explicit allow-list for tasks.html
+        // ============================================================
+
+        @JavascriptInterface
+        fun getPendingTasks(jsonData: String = "{}"): String {
+            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية قراءة المهام")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getPendingTasks(operationalJson(jsonData))) }
+            catch (e: Exception) { DebugLogger.logException("TasksList", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun addTask(jsonData: String): String {
+            if (!checkPermission("tasks", "create")) return errorResponse("لا تملك صلاحية إضافة المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val id = db.addTask(operationalJson(jsonData), activity.currentUserId)
+                TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
+                successResponse(id, "تمت إضافة المهمة فعلياً")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskAdd", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun updateTask(id: Long, jsonData: String): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية تحديث المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.updateTask(id, operationalJson(jsonData), activity.currentUserId)
+                if (rows > 0) TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
+                successResponse(rows > 0, if (rows > 0) "تم تحديث المهمة فعلياً" else "لم يتم العثور على المهمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskUpdate", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun archiveTask(id: Long): String {
+            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية أرشفة المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.archiveTask(id, activity.currentUserId)
+                if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
+                successResponse(rows > 0, if (rows > 0) "تمت أرشفة المهمة فعلياً" else "لم يتم العثور على المهمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskArchive", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun restoreTask(id: Long): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية استعادة المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.restoreTask(id, activity.currentUserId)
+                if (rows > 0) TaskNotificationManager.synchronizeTask(activity.applicationContext, id)
+                successResponse(rows > 0, if (rows > 0) "تمت استعادة المهمة فعلياً" else "لم يتم العثور على المهمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskRestore", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun resolveTask(id: Long): String {
+            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية حل المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.resolveTask(id, activity.currentUserId)
+                if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
+                successResponse(rows > 0, if (rows > 0) "تم حل المهمة فعلياً" else "لم يتم العثور على المهمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskResolve", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun deleteTask(id: Long): String {
+            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية حذف المهام")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val rows = db.deleteTask(id, activity.currentUserId)
+                if (rows > 0) TaskNotificationManager.cancelTaskNotification(activity.applicationContext, id)
+                successResponse(rows > 0, if (rows > 0) "تم حذف المهمة فعلياً" else "لم يتم العثور على المهمة")
+            } catch (e: Exception) {
+                DebugLogger.logException("TaskDelete", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun generateTaskReport(jsonData: String = "{}"): String {
+            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية تقرير المهام")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.generateTaskReport(operationalJson(jsonData))) }
+            catch (e: Exception) { DebugLogger.logException("TaskReport", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface

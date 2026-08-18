@@ -26,6 +26,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.MainActivity
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsReceiver
 import com.aistudio.dieselstationsms.kxmpzq.sms.SmsConversationManager
@@ -310,6 +311,7 @@ class SMSService : Service() {
             scheduleDatabaseCleanup()
             scheduleMetricsFlush()
             scheduleSecurityChecks()
+            serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
 
             // 12. تسجيل بدء الخدمة
             logServiceStarted()
@@ -388,6 +390,7 @@ class SMSService : Service() {
                     scheduleHealthChecks()
                     scheduleMetricsFlush()
                     scheduleSecurityChecks()
+                    serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
 
                     Log.i(TAG, "Scheduled tasks refreshed successfully")
                 }
@@ -418,6 +421,7 @@ class SMSService : Service() {
                     scheduleDatabaseCleanup()
                     scheduleMetricsFlush()
                     scheduleSecurityChecks()
+                    serviceScope.launch { TaskNotificationManager.reschedulePendingTasks(applicationContext) }
                 }
 
                 else -> {

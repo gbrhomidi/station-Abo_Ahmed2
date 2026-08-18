@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
 /**
@@ -20,6 +21,7 @@ class BootReceiver : BroadcastReceiver() {
         private const val TAG = "BootReceiver"
         private val SUPPORTED_ACTIONS = setOf(
             Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
             "android.intent.action.QUICKBOOT_POWERON"
         )
     }
@@ -28,6 +30,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent?.action !in SUPPORTED_ACTIONS) return
 
         val appContext = context.applicationContext
+        TaskNotificationManager.reschedulePendingTasksAsync(appContext)
         val serviceIntent = Intent(appContext, SMSService::class.java).apply {
             putExtra("startup_reason", "BOOT")
             putExtra("launch_time", System.currentTimeMillis())

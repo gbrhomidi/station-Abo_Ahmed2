@@ -2069,26 +2069,6 @@
         };
         let currentUserRole = ROLES.VIEWER;
 
-        function hasPermission(action) {
-            if (currentUserRole === ROLES.ADMIN) return true;
-            if (currentUserRole === ROLES.MANAGER) {
-                if (action === 'delete' || action === 'delete_user') return false;
-                return true;
-            }
-            if (currentUserRole === ROLES.VIEWER) return action === 'read' || action === 'view' || action === 'export';
-            if (currentUserRole === ROLES.AUDITOR) return action === 'read' || action === 'view' || action === 'export' || action ===
-                'audit';
-            return false;
-        }
-
-        function requirePermission(action) {
-            if (!hasPermission(action)) {
-                showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
-                return false;
-            }
-            return true;
-        }
-
         /* ============================================================
            1. API Call – جسر حقيقي مع DatabaseHelper.kt
            ============================================================ */
@@ -3138,7 +3118,7 @@
                             <button class="card-btn note-btn" onclick="event.stopPropagation(); addNote(${id})" aria-label="إضافة ملاحظة"><i class="fas fa-pen" aria-hidden="true"></i></button>
                             <button class="card-btn flag-btn" onclick="event.stopPropagation(); toggleFlag(${id})" aria-label="تعليم"><i class="fas fa-flag" aria-hidden="true"></i></button>
                             <button class="card-btn trace-btn" onclick="event.stopPropagation(); traceUser(${id})" aria-label="تتبع المستخدم"><i class="fas fa-user-clock" aria-hidden="true"></i></button>
-                            ${hasPermission('delete') ? `<button class="card-btn danger" onclick="event.stopPropagation(); deleteLog(${id}, '')" aria-label="حذف"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                            ${true ? `<button class="card-btn danger" onclick="event.stopPropagation(); deleteLog(${id}, '')" aria-label="حذف"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                         </div>
                     </div>
                 `;
@@ -3588,7 +3568,7 @@
                     <button class="card-btn note-btn" onclick="addNote(${id}); closeDetails();" style="flex:1;"><i class="fas fa-pen"></i> ملاحظة</button>
                     <button class="card-btn flag-btn" onclick="toggleFlag(${id}); closeDetails();" style="flex:1;"><i class="fas fa-flag"></i> تعليم</button>
                     <button class="card-btn trace-btn" onclick="traceUser(${id}); closeDetails();" style="flex:1;"><i class="fas fa-user-clock"></i> تتبع</button>
-                    ${hasPermission('delete') ? `<button class="card-btn danger" onclick="deleteLog(${id}, ''); closeDetails();" style="flex:1;"><i class="fas fa-trash"></i> حذف</button>` : ''}
+                    ${true ? `<button class="card-btn danger" onclick="deleteLog(${id}, ''); closeDetails();" style="flex:1;"><i class="fas fa-trash"></i> حذف</button>` : ''}
                 </div>
                 <div style="height:20px;"></div>
             `;
@@ -3700,7 +3680,7 @@
            Delete Log
            ============================================================ */
         async function deleteLog(id, tableName) {
-            if (!requirePermission('delete')) return;
+            if (!true) return;
             const item = allLogs.find(l => l.id == id);
             const sourceTable = item?._table || tableName;
             if (!sourceTable) { showToast('❌ لا يمكن تحديد مصدر السجل', 'error'); return; }
@@ -3739,7 +3719,7 @@
            22. Cleanup Old Logs
            ============================================================ */
         async function cleanupOldLogs() {
-            if (!requirePermission('delete')) return;
+            if (!true) return;
             const retentionInput = Number(document.getElementById('settingsRetention').value || 90);
             const retentionDays = Number.isFinite(retentionInput) ? Math.min(365, Math.max(7, Math.floor(retentionInput))) : 90;
             const confirmed = await Swal.fire({
@@ -3981,7 +3961,7 @@
            24. Export
            ============================================================ */
         function openExportModal() {
-            if (!requirePermission('export')) return;
+            if (!true) return;
             document.getElementById('exportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }

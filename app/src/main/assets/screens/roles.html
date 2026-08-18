@@ -1845,19 +1845,7 @@
 
             let currentUserRole = null;
 
-            function hasPermission(_action) {
-                return true; // التفويض النهائي يتم داخل Typed Bridge وcheckPermission في Android
-            }
-
-            function requirePermission(action) {
-                if (!hasPermission(action)) {
-                    showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
-                    return false;
-                }
-                return true;
-            }
-
-                        /* ============================================================
+            /* ============================================================
                1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
                ============================================================ */
             function parseBridgeResponse(raw) {
@@ -2176,8 +2164,8 @@
                                 <td>${createdAt}</td>
                                 <td class="table-actions">
                                     <button class="action-btn" onclick="viewPermission(${id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
-                                    ${hasPermission('update') ? `<button class="action-btn" onclick="editPermission(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
-                                    ${hasPermission('delete') ? `<button class="action-btn danger" onclick="deletePermission(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn" onclick="editPermission(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn danger" onclick="deletePermission(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                                 </td>
                             </tr>
                         `;
@@ -2252,7 +2240,7 @@
             }
 
             function openAddPermissionModal() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 editingPermId = 0;
                 document.getElementById('permModalTitle').innerHTML = '<i class="fas fa-shield-alt" aria-hidden="true"></i> إضافة صلاحية جديدة';
                 document.getElementById('editPermId').value = '0';
@@ -2273,7 +2261,7 @@
             }
 
             function editPermission(id) {
-                if (!requirePermission('update')) return;
+                if (!true) return;
                 const perm = allPermissions.find(p => (p.id || p.permission_id) == id);
                 if (!perm) { showToast('❌ الصلاحية غير موجودة', 'error'); return; }
 
@@ -2302,7 +2290,7 @@
 
             async function savePermission() {
                 const id = Number(document.getElementById('editPermId').value || 0);
-                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
+                if (!true) return;
                 const module = document.getElementById('permModule').value;
                 const action = document.getElementById('permAction').value;
                 const name = document.getElementById('permName').value.trim();
@@ -2321,7 +2309,7 @@
             }
 
             async function deletePermission(id) {
-                if (!requirePermission('delete')) return;
+                if (!true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: 'سيتم أرشفة الصلاحية المحددة', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -2459,7 +2447,7 @@
                             <td>${escapeHtml(g.reason || '---')}</td>
                             <td><span class="status-badge ${statusClass}">${status}</span></td>
                             <td class="table-actions">
-                                ${hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeGrantedPermission(${g.ups_id || g.user_permission_id})"><i class="fas fa-trash" aria-hidden="true"></i> سحب</button>` : ''}
+                                ${true ? `<button class="action-btn danger" onclick="revokeGrantedPermission(${g.ups_id || g.user_permission_id})"><i class="fas fa-trash" aria-hidden="true"></i> سحب</button>` : ''}
                             </td>
                         </tr>
                     `;
@@ -2467,7 +2455,7 @@
             }
 
             async function revokeGrantedPermission(upsId) {
-                if (!upsId || !requirePermission('delete')) return;
+                if (!upsId || !true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد السحب', text: 'هل تريد سحب الصلاحية المباشرة؟', icon: 'warning', showCancelButton: true, confirmButtonText: 'سحب', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -2523,7 +2511,7 @@
             }
 
             async function grantGroupPermission() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 const groupId = Number(document.getElementById('groupSelectForPerms').value || 0);
                 const permissionId = Number(document.getElementById('groupPermissionSelect').value || 0);
                 const screenId = Number(document.getElementById('groupScreenSelect').value || 0);
@@ -2570,7 +2558,7 @@
                             <td>${p.granted_at || '---'}</td>
                             <td><span class="status-badge ${statusClass}">${status}</span></td>
                             <td class="table-actions">
-                                ${hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeGroupPermission(${p.id || p.group_permission_id})"><i class="fas fa-trash" aria-hidden="true"></i> إزالة</button>` : ''}
+                                ${true ? `<button class="action-btn danger" onclick="revokeGroupPermission(${p.id || p.group_permission_id})"><i class="fas fa-trash" aria-hidden="true"></i> إزالة</button>` : ''}
                             </td>
                         </tr>
                     `;
@@ -2579,7 +2567,7 @@
                 container.innerHTML = html;
             }
             async function revokeGroupPermission(groupPermId) {
-                if (!groupPermId || !requirePermission('delete')) return;
+                if (!groupPermId || !true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد الإزالة', text: 'هل تريد إزالة ربط الصلاحية بالمجموعة؟', icon: 'warning', showCancelButton: true, confirmButtonText: 'إزالة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -2638,7 +2626,7 @@
                 });
             }
             async function delegatePermission() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 const delegatorId = Number(document.getElementById('delegator').value || 0);
                 const delegateId = Number(document.getElementById('delegatee').value || 0);
                 const permissionId = Number(document.getElementById('delegatePermission').value || 0);
@@ -2682,7 +2670,7 @@
                     const active = Number(item.is_active) === 1 && !expired;
                     const status = active ? 'نشط' : (expired ? 'منتهي' : 'ملغى');
                     const statusClass = active ? 'active' : 'inactive';
-                    return `<tr><td>${escapeHtml(item.delegator_name || '---')}</td><td>${escapeHtml(item.delegate_name || '---')}</td><td>${escapeHtml(item.permission_name_ar || item.permission_name || item.permission_code || '---')}</td><td>${escapeHtml(item.screen_name || 'نطاق الوحدة')}</td><td>${escapeHtml(item.created_at || '---')}</td><td>${escapeHtml(item.expires_at || '---')}</td><td><span class="status-badge ${statusClass}">${status}</span></td><td class="table-actions">${active && hasPermission('delete') ? `<button class="action-btn danger" onclick="revokeDelegation(${item.id})"><i class="fas fa-ban" aria-hidden="true"></i> إلغاء</button>` : ''}</td></tr>`;
+                    return `<tr><td>${escapeHtml(item.delegator_name || '---')}</td><td>${escapeHtml(item.delegate_name || '---')}</td><td>${escapeHtml(item.permission_name_ar || item.permission_name || item.permission_code || '---')}</td><td>${escapeHtml(item.screen_name || 'نطاق الوحدة')}</td><td>${escapeHtml(item.created_at || '---')}</td><td>${escapeHtml(item.expires_at || '---')}</td><td><span class="status-badge ${statusClass}">${status}</span></td><td class="table-actions">${active && true ? `<button class="action-btn danger" onclick="revokeDelegation(${item.id})"><i class="fas fa-ban" aria-hidden="true"></i> إلغاء</button>` : ''}</td></tr>`;
                 }).join('');
             }
 
@@ -2691,7 +2679,7 @@
             }
 
             async function revokeDelegation(id) {
-                if (!id || !requirePermission('delete')) return;
+                if (!id || !true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد إلغاء التفويض', text: 'هل تريد إلغاء هذا التفويض المؤقت؟', icon: 'warning', showCancelButton: true, confirmButtonText: 'إلغاء التفويض', cancelButtonText: 'تراجع' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -2713,7 +2701,7 @@
             }
 
             async function openReport(type) {
-                if (!requirePermission('read')) return;
+                if (!true) return;
                 let title = 'تقرير عمليات الصلاحيات';
                 let html = '';
                 try {
@@ -2787,7 +2775,7 @@
                16. Export (حقيقي)
                ============================================================ */
             function openExportModal() {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 document.getElementById('exportModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
@@ -2799,7 +2787,7 @@
             }
 
             function exportData(format) {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 const data = allPermissions.map(p => ({
                     'كود الصلاحية': p.permission_code || '',
                     'اسم الصلاحية': p.permission_name || '',

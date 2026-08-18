@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq
 
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.notifications.TaskNotificationManager
 import com.aistudio.dieselstationsms.kxmpzq.service.SMSService
 
 import android.app.Application
@@ -142,7 +143,8 @@ class MyApplication : Application() {
                 }
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 manager.createNotificationChannel(channel)
-                Log.d(TAG, "Notification channel created")
+                TaskNotificationManager.ensureChannel(this)
+                Log.d(TAG, "Notification channels created")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create notification channel", e)
             }

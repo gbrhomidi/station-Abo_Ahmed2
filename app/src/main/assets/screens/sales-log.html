@@ -1333,13 +1333,13 @@
             try {
                 let raw;
                 switch (action) {
-                    case 'getSalesTransactions': raw = AndroidInterface.getSalesTransactions(JSON.stringify(p)); break;
+                    case 'getSalesTransactions': raw = AndroidInterface.getSalesTransactionRecords(JSON.stringify(p)); break;
                     case 'getParties': raw = AndroidInterface.getParties(p.type || 'customer'); break;
                     case 'getFuelTypes': raw = AndroidInterface.getFuelTypes(); break;
                     case 'getPumps': raw = AndroidInterface.getPumps(); break;
-                    case 'saveSaleTransaction': raw = AndroidInterface.saveSaleTransaction(JSON.stringify(p)); break;
-                    case 'deleteSaleTransaction': raw = AndroidInterface.deleteSaleTransaction(Number(p.id)); break;
-                    case 'getInvoiceDetails': raw = AndroidInterface.getInvoiceDetails(String(p.invoice_number || '')); break;
+                    case 'saveSaleTransaction': raw = AndroidInterface.saveSalesTransactionRecord(JSON.stringify(p)); break;
+                    case 'deleteSaleTransaction': raw = AndroidInterface.deleteSalesTransactionRecord(Number(p.id)); break;
+                    case 'getInvoiceDetails': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
                     default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
                 return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);

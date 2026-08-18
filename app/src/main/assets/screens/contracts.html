@@ -2420,33 +2420,6 @@
 
         let currentUserRole = ROLES.VIEWER; // تُرفع الصلاحية بعد قراءة جلسة Android الفعلية
 
-        function hasPermission(action) {
-            // Admin: كل الصلاحيات
-            if (currentUserRole === ROLES.ADMIN) return true;
-            // Manager: كل شيء ما عدا الحذف وحذف المستخدمين
-            if (currentUserRole === ROLES.MANAGER) {
-                if (action === 'delete' || action === 'delete_user') return false;
-                return true;
-            }
-            // Viewer: قراءة فقط
-            if (currentUserRole === ROLES.VIEWER) {
-                return action === 'read' || action === 'view' || action === 'export';
-            }
-            // Auditor: قراءة + تصدير + سجل
-            if (currentUserRole === ROLES.AUDITOR) {
-                return action === 'read' || action === 'view' || action === 'export' || action === 'audit';
-            }
-            return false;
-        }
-
-        function requirePermission(action) {
-            if (!hasPermission(action)) {
-                showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
-                return false;
-            }
-            return true;
-        }
-
         /* ============================================================
            1. Typed Android Bridge – WebView -> MainActivity -> SQLite
            ============================================================ */
@@ -2904,13 +2877,13 @@
                         </div>
                         <div class="card-actions">
                             <button class="card-btn" onclick="event.stopPropagation(); viewContract(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
-                            <button class="card-btn" onclick="event.stopPropagation(); editContract(${id})" aria-label="تعديل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
+                            <button class="card-btn" onclick="event.stopPropagation(); editContract(${id})" aria-label="تعديل" ${!true ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
                             <button class="card-btn" onclick="event.stopPropagation(); cloneContractUI(${id})" aria-label="نسخ العقد"><i class="fas fa-copy" aria-hidden="true"></i> نسخ</button>
                             <select class="form-input" aria-label="تغيير الحالة سريعاً" style="flex:1;min-width:110px;padding:6px;" onclick="event.stopPropagation()" onchange="changeContractStatusUI(${id}, this.value)">
                              <option value="">الحالة</option><option value="draft">مسودة</option><option value="active">نشط</option><option value="terminated">ملغى</option><option value="expired">منتهي</option>
                             </select>
                             <button class="card-btn" onclick="event.stopPropagation(); toggleArchiveContract(${id})" aria-label="${Number(s.is_archived) === 1 ? 'استعادة' : 'أرشفة'}"><i class="fas ${Number(s.is_archived) === 1 ? 'fa-box-open' : 'fa-archive'}" aria-hidden="true"></i></button>
-                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteContract(${id})" aria-label="حذف" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-trash" aria-hidden="true"></i></button>
+                            <button class="card-btn danger" onclick="event.stopPropagation(); deleteContract(${id})" aria-label="حذف" ${!true ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-trash" aria-hidden="true"></i></button>
                         </div>
                     </div>
                 `;
@@ -3211,7 +3184,7 @@
            16. CRUD: Add / Edit / Delete / View
            ============================================================ */
         function openAddModal() {
-            if (!requirePermission('create')) return;
+            if (!true) return;
             currentEditId = 0;
             document.getElementById('modalTitle').textContent = '➕ إضافة عقد جديد';
             document.getElementById('editId').value = '0';
@@ -3236,8 +3209,8 @@
         }
 
         async function saveContract() {
-            if (!requirePermission('create') && currentEditId === 0) return;
-            if (!requirePermission('update') && currentEditId > 0) return;
+            if (!true && currentEditId === 0) return;
+            if (!true && currentEditId > 0) return;
             const name = document.getElementById('contractName').value.trim();
             const partyId = document.getElementById('partyId').value;
             const startDate = document.getElementById('startDate').value;
@@ -3283,7 +3256,7 @@
         }
 
         async function editContract(id) {
-            if (!requirePermission('update')) return;
+            if (!true) return;
             const item = allContracts.find(s => s.id == id);
             if (!item) { showToast('❌ العقد غير موجود', 'error'); return; }
             showLoading(true);
@@ -3320,7 +3293,7 @@
         }
 
         async function deleteContract(id) {
-            if (!requirePermission('delete')) return;
+            if (!true) return;
             const item = allContracts.find(s => s.id == id);
             const name = item ? (item.contract_name || 'هذا العقد') : 'هذا العقد';
             const confirmed = await Swal.fire({ title: '⚠️ هل أنت متأكد؟', text: 'سيتم حذف العقد "' + name + '" حذفاً منطقياً وتسجيل العملية.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#b31b3a', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء' });
@@ -3424,7 +3397,7 @@
 
 
         async function cloneContractUI(id) {
-            if (!requirePermission('create')) return;
+            if (!true) return;
             const source = allContracts.find(c => Number(c.id) === Number(id));
             if (!source) return showToast('العقد غير موجود', 'error');
             const result = await Swal.fire({
@@ -3447,7 +3420,7 @@
 
         async function changeContractStatusUI(id, status) {
             if (!status) return;
-            if (!requirePermission('update')) return;
+            if (!true) return;
             const result = await Swal.fire({ title: 'تغيير حالة العقد', input: 'text', inputLabel: 'سبب التغيير (اختياري)', showCancelButton: true, confirmButtonText: 'تأكيد', cancelButtonText: 'إلغاء' });
             if (!result.isConfirmed) { renderCards(); return; }
             showLoading(true);
@@ -3457,7 +3430,7 @@
         }
 
         async function toggleArchiveContract(id) {
-            if (!requirePermission('update')) return;
+            if (!true) return;
             const item = allContracts.find(c => Number(c.id) === Number(id));
             if (!item) return;
             const archived = Number(item.is_archived) === 1;
@@ -3735,7 +3708,7 @@
            19. Export (Excel, PDF, JSON, CSV)
            ============================================================ */
         function openExportModal() {
-            if (!requirePermission('export')) return;
+            if (!true) return;
             document.getElementById('exportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
@@ -3747,7 +3720,7 @@
         }
 
         function exportData(format) {
-            if (!requirePermission('export')) return;
+            if (!true) return;
             const data = allContracts.map(c => ({
                 'كود العقد': c.contract_code || '',
                 'اسم العقد': c.contract_name || '',
@@ -3829,7 +3802,7 @@
            20. Backup & Restore
            ============================================================ */
         function openBackupModal() {
-            if (!requirePermission('audit')) return;
+            if (!true) return;
             document.getElementById('backupModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadBackupList();
@@ -3842,7 +3815,7 @@
         }
 
         async function createBackup() {
-            if (!requirePermission('audit')) return;
+            if (!true) return;
             showLoading(true);
             window.onBackupResult = function(result) {
                 showLoading(false);
@@ -3860,7 +3833,7 @@
         }
 
         function restoreBackup() {
-            if (!requirePermission('audit')) return;
+            if (!true) return;
             showToast('استعادة ملف قاعدة البيانات تتم من مسار Android الآمن، ولا يمكن تنفيذها من File input داخل WebView دون URI Native.', 'warning');
         }
 
@@ -3873,7 +3846,7 @@
            21. Audit Trail
            ============================================================ */
         async function openAuditModal() {
-            if (!requirePermission('audit')) return;
+            if (!true) return;
             document.getElementById('auditModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             const container = document.getElementById('auditContent');

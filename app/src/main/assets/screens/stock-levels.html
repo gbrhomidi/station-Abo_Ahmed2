@@ -1694,15 +1694,15 @@
 	        switch (action) {
 	            case 'getWarehouses': raw = AndroidInterface.getWarehouses(JSON.stringify(p)); break;
 	            case 'getCategories': raw = AndroidInterface.getCategories(); break;
-	            case 'getInventorySummary': raw = AndroidInterface.getInventorySummary(JSON.stringify(p)); break;
-	            case 'getLowStockProducts': raw = AndroidInterface.getLowStockProducts(); break;
-	            case 'getInventoryAlerts': raw = AndroidInterface.getInventoryAlerts(JSON.stringify(p)); break;
-	            case 'getInventoryCharts': raw = AndroidInterface.getInventoryCharts(JSON.stringify(p)); break;
-	            case 'getMovements': raw = AndroidInterface.getMovements(JSON.stringify(p)); break;
-	            case 'getStockValues': raw = AndroidInterface.getStockValues(JSON.stringify(p)); break;
-	            case 'getAlerts': raw = AndroidInterface.getAlerts(JSON.stringify(p)); break;
-	            case 'filterInventory': raw = AndroidInterface.filterInventory(JSON.stringify(p)); break;
-	            case 'advancedFilter': raw = AndroidInterface.advancedFilter(JSON.stringify(p)); break;
+	            case 'getInventorySummary': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
+	            case 'getLowStockProducts': raw = AndroidInterface.getLowStockItems(); break;
+	            case 'getInventoryAlerts': raw = AndroidInterface.getStockAlertRecords(JSON.stringify(p)); break;
+	            case 'getInventoryCharts': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
+	            case 'getMovements': raw = AndroidInterface.getInventoryMovementRecords(JSON.stringify(p)); break;
+	            case 'getStockValues': raw = AndroidInterface.getProducts(JSON.stringify(p)); break;
+	            case 'getAlerts': raw = AndroidInterface.getLowStockItems(JSON.stringify(p)); break;
+	            case 'filterInventory': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
+	            case 'advancedFilter': raw = AndroidInterface.getInventoryReport(JSON.stringify(p)); break;
 	            case 'searchProducts': raw = AndroidInterface.getProducts(); break;
 	            case 'addProduct': raw = AndroidInterface.addProduct(JSON.stringify(p)); break;
 	            case 'getExpiringProducts': return Promise.reject({ success: false, message: 'بيانات الصلاحية غير موجودة في عقد SQLite الحالي' });
@@ -1982,10 +1982,10 @@ async function loadChartsData() {
         const result = await apiCall('getInventoryCharts', {});
         if (result.success) {
             const data = result.data || {};
-            updateMovementChart(data.movement_chart || []);
-            updateDistributionChart(data.distribution_chart || []);
+            updateMovementChart(data.movement_chart || data.movement_series || []);
+            updateDistributionChart(data.distribution_chart || data.categories || []);
             updateTrendChart(data.trend_chart || []);
-            updateExpiryChart(data.expiry_chart || { active: 60, expiring: 25, expired: 15 });
+            updateExpiryChart(data.expiry_chart || { active: 0, expiring: 0, expired: 0 });
         }
     } catch (e) {
         console.error('Error loading charts data:', e);
@@ -2174,7 +2174,10 @@ async function loadStockValues() {
     try {
         const result = await apiCall('getStockValues', {});
         if (result.success) {
-            allStockValues = result.data || [];
+            const productRows = Array.isArray(result.data)
+                ? result.data
+                : (Array.isArray(result.data?.rows) ? result.data.rows : []);
+            allStockValues = productRows;
             populateValuesTable(allStockValues);
         }
     } catch (e) {
@@ -2341,9 +2344,20 @@ async function performSearch() {
     try {
         const result = await apiCall('searchProducts', { code, name });
         if (result.success) {
-            populateLowStockTable(result.data || []);
+            const products = Array.isArray(result.data)
+                ? result.data
+                : (Array.isArray(result.data?.rows) ? result.data.rows : []);
+            const codeNeedle = code.toLowerCase();
+            const nameNeedle = name.toLowerCase();
+            const filtered = products.filter(product => {
+                const productCode = String(product.product_code || product.code || '').toLowerCase();
+                const productName = String(product.product_name || product.product_name_ar || product.name || '').toLowerCase();
+                return (!codeNeedle || productCode.includes(codeNeedle))
+                    && (!nameNeedle || productName.includes(nameNeedle));
+            });
+            populateLowStockTable(filtered);
             closeModal('searchModal');
-            showToast(`تم العثور على ${(result.data || []).length} منتج`, 'success');
+            showToast(`تم العثور على ${filtered.length} منتج`, 'success');
         }
     } catch (e) {
         showToast('خطأ في البحث', 'error');

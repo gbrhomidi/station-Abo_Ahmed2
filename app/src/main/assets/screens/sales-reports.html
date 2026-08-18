@@ -1349,8 +1349,8 @@
             try {
                 let raw;
                 switch (action) {
-                    case 'generateSalesReport': raw = AndroidInterface.generateSalesReport(JSON.stringify(p)); break;
-                    case 'getInvoiceDetails': raw = AndroidInterface.getInvoiceDetails(String(p.invoice_number || '')); break;
+                    case 'generateSalesReport': raw = AndroidInterface.generateSalesTransactionReport(JSON.stringify(p)); break;
+                    case 'getInvoiceDetails': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
                     case 'getProducts': raw = AndroidInterface.getProducts(); break;
                     case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
                     case 'getShifts': return Promise.resolve({ success: false, data: [], message: 'فلتر الورديات غير متاح في عقد SQLite الحالي' });

@@ -1863,19 +1863,7 @@
 
             let currentUserRole = null;
 
-            function hasPermission(_action) {
-                return true; // التفويض النهائي يتم داخل Typed Bridge وcheckPermission في Android
-            }
-
-            function requirePermission(action) {
-                if (!hasPermission(action)) {
-                    showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
-                    return false;
-                }
-                return true;
-            }
-
-                        /* ============================================================
+            /* ============================================================
                1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
                ============================================================ */
             function parseBridgeResponse(raw) {
@@ -2221,8 +2209,8 @@
                                 <td>${lastLogin !== '---' ? new Date(lastLogin).toLocaleString('ar') : '---'}</td>
                                 <td class="table-actions">
                                     <button class="action-btn" onclick="viewUser(${id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
-                                    ${hasPermission('update') ? `<button class="action-btn" onclick="editUser(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
-                                    ${hasPermission('delete') ? `<button class="action-btn danger" onclick="deleteUser(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn" onclick="editUser(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn danger" onclick="deleteUser(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                                 </td>
                             </tr>
                         `;
@@ -2296,8 +2284,8 @@
                                 <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                                 <td class="table-actions">
                                     <button class="action-btn" onclick="viewGroup(${id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
-                                    ${hasPermission('update') ? `<button class="action-btn" onclick="editGroup(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
-                                    ${hasPermission('delete') ? `<button class="action-btn danger" onclick="deleteGroup(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn" onclick="editGroup(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn danger" onclick="deleteGroup(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                                 </td>
                             </tr>
                         `;
@@ -2471,7 +2459,7 @@
             }
 
             function openAddUserModal() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 document.getElementById('userModalTitle').innerHTML = '<i class="fas fa-user-plus" aria-hidden="true"></i> إضافة مستخدم جديد';
                 document.getElementById('editUserId').value = '0';
                 document.getElementById('userForm').reset();
@@ -2500,7 +2488,7 @@
             }
 
             function editUser(id) {
-                if (!requirePermission('update')) return;
+                if (!true) return;
                 const user = allUsers.find(u => (u.id || u.user_id) == id);
                 if (!user) { showToast('❌ المستخدم غير موجود', 'error'); return; }
 
@@ -2567,7 +2555,7 @@
 
             async function saveUser() {
                 const id = Number(document.getElementById('editUserId').value || 0);
-                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
+                if (!true) return;
                 const username = document.getElementById('username').value.trim();
                 const fullName = document.getElementById('fullName').value.trim();
                 const roleId = Number(document.getElementById('roleId').value || 0);
@@ -2633,7 +2621,7 @@
             }
 
             async function deleteUser(id) {
-                if (!requirePermission('delete')) return;
+                if (!true) return;
                 const user = allUsers.find(u => Number(u.id || u.user_id) === Number(id));
                 const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: `سيتم أرشفة المستخدم ${user ? (user.full_name || user.username) : ''}`, icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
@@ -2698,7 +2686,7 @@
             }
 
             async function terminateUserSession(sessionId, userId) {
-                if (!requirePermission('update')) return;
+                if (!true) return;
                 const confirmed = await Swal.fire({ title: 'إنهاء الجلسة؟', icon: 'warning', showCancelButton: true, confirmButtonText: 'إنهاء', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 try {
@@ -2745,7 +2733,7 @@
                14. CRUD: Groups (Add, Edit, Delete, View) – حقيقي
                ============================================================ */
             function openAddGroupModal() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 document.getElementById('groupModalTitle').textContent = '➕ إضافة مجموعة جديدة';
                 document.getElementById('editGroupId').value = '0';
                 document.getElementById('groupForm').reset();
@@ -2761,7 +2749,7 @@
             }
 
             function editGroup(id) {
-                if (!requirePermission('update')) return;
+                if (!true) return;
                 const group = allGroups.find(g => (g.id || g.group_id) == id);
                 if (!group) { showToast('❌ المجموعة غير موجودة', 'error'); return; }
 
@@ -2776,7 +2764,7 @@
 
             async function saveGroup() {
                 const id = Number(document.getElementById('editGroupId').value || 0);
-                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
+                if (!true) return;
                 const name = document.getElementById('groupName').value.trim();
                 if (!name) { showToast('اسم المجموعة مطلوب', 'error'); return; }
                 const data = { group_name: name, description: document.getElementById('groupDescription').value.trim(), is_active: document.getElementById('groupIsActive').checked ? 1 : 0 };
@@ -2790,7 +2778,7 @@
             }
 
             async function deleteGroup(id) {
-                if (!requirePermission('delete')) return;
+                if (!true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: 'سيتم أرشفة المجموعة المحددة', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -3040,7 +3028,7 @@
                17. Export (حقيقي)
                ============================================================ */
             function openExportModal() {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 document.getElementById('exportModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
@@ -3052,7 +3040,7 @@
             }
 
             function exportData(format) {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 const data = allUsers.map(u => ({
                     'اسم المستخدم': u.username || '',
                     'الاسم الكامل': u.full_name || u.full_name_ar || '',

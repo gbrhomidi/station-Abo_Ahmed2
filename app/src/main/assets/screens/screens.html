@@ -1718,19 +1718,7 @@
 
             let currentUserRole = null;
 
-            function hasPermission(_action) {
-                return true; // التفويض النهائي يتم داخل Typed Bridge وcheckPermission في Android
-            }
-
-            function requirePermission(action) {
-                if (!hasPermission(action)) {
-                    showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error');
-                    return false;
-                }
-                return true;
-            }
-
-                        /* ============================================================
+            /* ============================================================
                1. Typed Android Bridge — لا يوجد execute عام أو fallback تجاري
                ============================================================ */
             function parseBridgeResponse(raw) {
@@ -1999,8 +1987,8 @@
                                 <td>${createdAt}</td>
                                 <td class="table-actions">
                                     <button class="action-btn" onclick="viewScreen(${id})"><i class="fas fa-eye" aria-hidden="true"></i></button>
-                                    ${hasPermission('update') ? `<button class="action-btn" onclick="editScreen(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
-                                    ${hasPermission('delete') ? `<button class="action-btn danger" onclick="deleteScreen(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn" onclick="editScreen(${id})"><i class="fas fa-edit" aria-hidden="true"></i></button>` : ''}
+                                    ${true ? `<button class="action-btn danger" onclick="deleteScreen(${id})"><i class="fas fa-trash" aria-hidden="true"></i></button>` : ''}
                                 </td>
                             </tr>
                         `;
@@ -2164,7 +2152,7 @@
             }
 
             function openAddScreenModal() {
-                if (!requirePermission('create')) return;
+                if (!true) return;
                 editingScreenId = 0;
                 document.getElementById('screenModalTitle').innerHTML = '<i class="fas fa-desktop" aria-hidden="true"></i> إضافة شاشة جديدة';
                 document.getElementById('editScreenId').value = '0';
@@ -2184,7 +2172,7 @@
             }
 
             function editScreen(id) {
-                if (!requirePermission('update')) return;
+                if (!true) return;
                 const screen = allScreens.find(s => (s.id || s.screen_id) == id);
                 if (!screen) { showToast('❌ الشاشة غير موجودة', 'error'); return; }
 
@@ -2204,7 +2192,7 @@
 
             async function saveScreen() {
                 const id = Number(document.getElementById('editScreenId').value || 0);
-                if (!requirePermission(id > 0 ? 'update' : 'create')) return;
+                if (!true) return;
                 const data = {
                     screen_name: document.getElementById('modalScreenName').value.trim(),
                     module: document.getElementById('modalScreenModule').value,
@@ -2233,7 +2221,7 @@
             }
 
             async function deleteScreen(id) {
-                if (!requirePermission('delete')) return;
+                if (!true) return;
                 const confirmed = await Swal.fire({ title: 'تأكيد الأرشفة', text: 'سيتم أرشفة الشاشة المحددة', icon: 'warning', showCancelButton: true, confirmButtonText: 'أرشفة', cancelButtonText: 'إلغاء' });
                 if (!confirmed.isConfirmed) return;
                 showLoading(true);
@@ -2279,7 +2267,7 @@
             }
 
             async function openReport(type) {
-                if (!requirePermission('read')) return;
+                if (!true) return;
                 let title = 'تقرير عمليات الشاشات';
                 let html = '';
                 try {
@@ -2352,7 +2340,7 @@
                15. Export (حقيقي)
                ============================================================ */
             function openExportModal() {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 document.getElementById('exportModal').classList.add('show');
                 document.body.style.overflow = 'hidden';
             }
@@ -2364,7 +2352,7 @@
             }
 
             function exportData(format) {
-                if (!requirePermission('export')) return;
+                if (!true) return;
                 const data = allScreens.map(s => ({
                     'اسم الشاشة': s.screen_name || '',
                     'الوحدة': s.module || '',

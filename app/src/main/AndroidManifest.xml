@@ -235,6 +235,12 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- إشعارات المهام المحلية المجدولة عبر AlarmManager -->
+        <receiver
+            android:name=".receiver.TaskNotificationReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- ════════════════════════════════════════════════════════ -->
         <!-- 🛡️ SMSService - منسق النظام (Foreground Service)          -->
         <!--                                                        -->

@@ -1961,6 +1961,7 @@
                     case 'deleteTask': raw = AndroidInterface.deleteTask(Number(p.id)); break;
                     case 'generateTaskReport': raw = AndroidInterface.generateTaskReport(JSON.stringify(p)); break;
                     case 'backupData': raw = AndroidInterface.backupDatabase(); break;
+                    case 'getAuditLogs': raw = AndroidInterface.getActivityLogs(Number(p.limit || 50)); break;
                     default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
                 return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
@@ -2153,7 +2154,12 @@
             if (isInitialLoad) renderSkeleton();
             showLoading(true);
             try {
-                const response = await apiCall('getPendingTasks', { include_archived: includeArchived, limit: 1000 });
+                const includeResolved = currentFilter === 'completed' || currentFilter === 'archived';
+                const response = await apiCall('getPendingTasks', {
+                    include_archived: includeArchived,
+                    include_resolved: includeResolved,
+                    limit: 1000
+                });
                 if (!response.success) throw new Error(response.message || 'فشل جلب المهام');
                 allTasks = Array.isArray(response.data) ? response.data : [];
                 initFuse(); generateAIInsights(); renderCards(); updateStats(); updateCharts(); updateAlerts();
@@ -2279,6 +2285,10 @@
                     `<div class="ai-insight-badge"><i class="fas fa-robot" aria-hidden="true"></i> ${insight.suggestion.substring(0, 45)}${insight.suggestion.length > 45 ? '...' : ''}</div>` :
                     '';
 
+                const archiveButton = currentFilter === 'archived'
+                    ? `<button class="card-btn" onclick="event.stopPropagation(); restoreTask(${id})" aria-label="استعادة"><i class="fas fa-rotate-left" aria-hidden="true"></i> استعادة</button>`
+                    : `<button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>`;
+
                 return `
                     <div class="task-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" role="listitem">
                         <div class="card-header">
@@ -2297,8 +2307,8 @@
                         <div class="card-actions">
                             <button class="card-btn" onclick="event.stopPropagation(); viewTask(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
                             <button class="card-btn" onclick="event.stopPropagation(); openEditTaskModal(${id})" aria-label="تعديل"><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
-                            <button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>
-                            <button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-check" aria-hidden="true"></i> حل</button>
+                            ${archiveButton}
+                            ${currentFilter === 'completed' ? '' : `<button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-check" aria-hidden="true"></i> حل</button>`}
                         </div>
                     </div>
                 `;
@@ -3018,7 +3028,8 @@
             if (btn) { btn.classList.add('active');
                 btn.setAttribute('aria-selected', 'true'); }
             currentPage = 1;
-            if (filter === 'archived') loadData(true); else renderCards();
+            if (filter === 'archived' || filter === 'completed') loadData(filter === 'archived');
+            else renderCards();
         }
 
         /* ============================================================
