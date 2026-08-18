@@ -2155,68 +2155,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         // ============================================================
-        // 4. المهام المعلقة — SQLite typed bridge
-        // ============================================================
-
-        @JavascriptInterface
-        fun getPendingTasks(jsonData: String): String {
-            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية القراءة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getPendingTasks(JSONObject(jsonData))) } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun addTask(jsonData: String): String {
-            if (!checkPermission("tasks", "create")) return errorResponse("لا تملك صلاحية الإضافة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val d = JSONObject(jsonData); d.put("created_by", getActivity()?.currentUserId ?: 0L); successResponse(db.addTask(d), "تمت إضافة المهمة") } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun updateTask(id: Long, jsonData: String): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية التعديل")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.updateTask(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تعديل المهمة" else "المهمة غير موجودة") } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun archiveTask(id: Long): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الأرشفة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.archiveTask(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun restoreTask(id: Long): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الاستعادة")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.restoreTask(id); successResponse(rows > 0, if (rows > 0) "تمت استعادة المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun resolveTask(id: Long): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية الحل")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.resolveTask(id); successResponse(rows > 0, if (rows > 0) "تم حل المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun deleteTask(id: Long): String {
-            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية الحذف")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.deleteTask(id); successResponse(rows > 0, if (rows > 0) "تم حذف المهمة" else "المهمة غير موجودة") } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun generateTaskReport(jsonData: String): String {
-            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية قراءة التقرير")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateTaskReport(JSONObject(jsonData))) } catch (e: Exception) { DebugLogger.logException("Tasks", e); errorResponse(e.message) }
-        }
-
-        // ============================================================
-        // 5. الطلبات
-
+        // 4. الطلبات
         // ============================================================
 
         @JavascriptInterface
@@ -2302,29 +2241,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         // ============================================================
         // 6. المبيعات
-        // ============================================================
-
-        @JavascriptInterface
-        fun getSalesTransactions(jsonData: String = "{}"): String {
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة سجل المبيعات")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val d = JSONObject(jsonData.ifBlank { "{}" }); dataResponse(db.getSalesTransactions(d.optInt("station_id", 1), d.optInt("limit", 500), d.optInt("offset", 0))) }
-            catch (e: Exception) { DebugLogger.logException("SalesLog", e); errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun saveSaleTransaction(jsonData: String): String = completeSale(jsonData)
-
-        @JavascriptInterface
-        fun deleteSaleTransaction(id: Long): String = deleteSale(id)
-
-        @JavascriptInterface
-        fun getInvoiceDetails(invoiceNumber: String): String = retrieveInvoice(invoiceNumber)
-
-        @JavascriptInterface
-        fun generateSalesReport(jsonData: String = "{}"): String = searchSales(jsonData)
-
-
         // ============================================================
 
         @JavascriptInterface
@@ -2731,62 +2647,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 errorResponse(e.message)
             }
         }
-
-        @JavascriptInterface
-        fun getInventorySummary(jsonData: String = "{}"): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة المخزون")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" })); dataResponse(report.optJSONObject("stats") ?: JSONObject()) }
-            catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun getLowStockProducts(): String = getLowStockItems()
-
-        @JavascriptInterface
-        fun getInventoryAlerts(jsonData: String = "{}"): String {
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية قراءة التنبيهات")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))
-                val stats = report.optJSONObject("stats") ?: JSONObject()
-                dataResponse(JSONObject().apply { put("critical_count", stats.optInt("critical_stock", 0)); put("low_stock", stats.optInt("low_stock", 0)); put("expiring_count", 0); put("expiring_value", 0.0); put("audit_items", 0); put("audit_variance", 0.0); put("expiry_supported", false) })
-            } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun getInventoryCharts(jsonData: String = "{}"): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة رسوم المخزون")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))
-                dataResponse(JSONObject().apply {
-                    put("movement_chart", report.optJSONArray("movement_series") ?: JSONArray())
-                    put("distribution_chart", report.optJSONArray("categories") ?: JSONArray())
-                    put("trend_chart", report.optJSONArray("movement_series") ?: JSONArray())
-                    put("expiry_chart", JSONObject().put("active", 0).put("expiring", 0).put("expired", 0).put("supported", false))
-                })
-            } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun getMovements(jsonData: String = "{}"): String = getStockMovements(jsonData)
-
-        @JavascriptInterface
-        fun getStockValues(jsonData: String = "{}"): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة قيم المخزون")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val report = db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" })); dataResponse(report.optJSONArray("rows") ?: JSONArray()) } catch (e: Exception) { errorResponse(e.message) }
-        }
-
-        @JavascriptInterface
-        fun getAlerts(jsonData: String = "{}"): String = getLowStockItems()
-
-        @JavascriptInterface
-        fun filterInventory(jsonData: String): String = getInventoryReport(jsonData)
-
-        @JavascriptInterface
-        fun advancedFilter(jsonData: String): String = getInventoryReport(jsonData)
 
         // ============================================================
         // 10. المنتجات التالفة والمستودعات
@@ -6548,6 +6408,731 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 errorResponse(e.message)
             }
         }
+
+
+        private fun operationalJson(jsonData: String): JSONObject = try {
+            JSONObject(jsonData.ifBlank { "{}" })
+        } catch (e: Exception) { throw IllegalArgumentException("بيانات الشاشة غير صالحة") }
+
+        private fun operationalList(permission: String, key: String, jsonData: String): String {
+            if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية قراءة هذه الشاشة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponse(db.getOperationalRows(key, operationalJson(jsonData))) }
+            catch (e: Exception) { DebugLogger.logException("OperationalList-$key", e); errorResponse(e.message) }
+        }
+
+        private fun operationalReport(permission: String, key: String, jsonData: String): String {
+            if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية التقرير")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponseObject(db.getOperationalReport(key, operationalJson(jsonData))) .toString() }
+            catch (e: Exception) { DebugLogger.logException("OperationalReport-$key", e); errorResponse(e.message) }
+        }
+
+        private fun operationalSave(permission: String, key: String, jsonData: String): String {
+            if (!checkPermission(permission, "create")) return errorResponse("لا تملك صلاحية الإضافة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { successResponse(db.saveOperationalRecord(key, operationalJson(jsonData), activity.currentUserId), "تم الحفظ فعلياً") }
+            catch (e: Exception) { DebugLogger.logException("OperationalSave-$key", e); errorResponse(e.message) }
+        }
+
+        private fun operationalUpdate(permission: String, key: String, id: Long, jsonData: String): String {
+            if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية التعديل")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.updateOperationalRecord(key, id, operationalJson(jsonData), activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم التعديل فعلياً" else "لم يتم العثور على السجل") }
+            catch (e: Exception) { DebugLogger.logException("OperationalUpdate-$key", e); errorResponse(e.message) }
+        }
+
+        private fun operationalDelete(permission: String, key: String, id: Long): String {
+            if (!checkPermission(permission, "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.deleteOperationalRecord(key, id); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
+            catch (e: Exception) { DebugLogger.logException("OperationalDelete-$key", e); errorResponse(e.message) }
+        }
+
+        private fun operationalResolve(permission: String, key: String, id: Long, note: String): String {
+            if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية الاعتماد")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val rows = db.resolveOperationalRecord(key, id, note); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
+            catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getStationRecords(jsonData: String = "{}") = operationalList("stations", "stations", jsonData)
+        @JavascriptInterface
+        fun generateStationReport(jsonData: String = "{}") = operationalReport("stations", "stations", jsonData)
+        @JavascriptInterface
+        fun saveStationRecord(jsonData: String) = operationalSave("stations", "stations", jsonData)
+        @JavascriptInterface
+        fun updateStationRecord(id: Long, jsonData: String) = operationalUpdate("stations", "stations", id, jsonData)
+        @JavascriptInterface
+        fun deleteStationRecord(id: Long) = operationalDelete("stations", "stations", id)
+        @JavascriptInterface
+        fun resolveStationRecord(id: Long, note: String = "") = operationalResolve("stations", "stations", id, note)
+
+        @JavascriptInterface
+        fun getExchangeRateRecords(jsonData: String = "{}") = operationalList("finance", "exchange_rates", jsonData)
+        @JavascriptInterface
+        fun generateExchangeRateReport(jsonData: String = "{}") = operationalReport("finance", "exchange_rates", jsonData)
+        @JavascriptInterface
+        fun saveExchangeRateRecord(jsonData: String) = operationalSave("finance", "exchange_rates", jsonData)
+        @JavascriptInterface
+        fun updateExchangeRateRecord(id: Long, jsonData: String) = operationalUpdate("finance", "exchange_rates", id, jsonData)
+        @JavascriptInterface
+        fun deleteExchangeRateRecord(id: Long) = operationalDelete("finance", "exchange_rates", id)
+        @JavascriptInterface
+        fun resolveExchangeRateRecord(id: Long, note: String = "") = operationalResolve("finance", "exchange_rates", id, note)
+
+        @JavascriptInterface
+        fun getBadDebtRecords(jsonData: String = "{}") = operationalList("finance", "bad_debts", jsonData)
+        @JavascriptInterface
+        fun generateBadDebtReport(jsonData: String = "{}") = operationalReport("finance", "bad_debts", jsonData)
+        @JavascriptInterface
+        fun saveBadDebtRecord(jsonData: String) = operationalSave("finance", "bad_debts", jsonData)
+        @JavascriptInterface
+        fun updateBadDebtRecord(id: Long, jsonData: String) = operationalUpdate("finance", "bad_debts", id, jsonData)
+        @JavascriptInterface
+        fun deleteBadDebtRecord(id: Long) = operationalDelete("finance", "bad_debts", id)
+        @JavascriptInterface
+        fun resolveBadDebtRecord(id: Long, note: String = "") = operationalResolve("finance", "bad_debts", id, note)
+
+        @JavascriptInterface
+        fun getVehicleRecords(jsonData: String = "{}") = operationalList("vehicles", "vehicles", jsonData)
+        @JavascriptInterface
+        fun generateVehicleReport(jsonData: String = "{}") = operationalReport("vehicles", "vehicles", jsonData)
+        @JavascriptInterface
+        fun saveVehicleRecord(jsonData: String) = operationalSave("vehicles", "vehicles", jsonData)
+        @JavascriptInterface
+        fun updateVehicleRecord(id: Long, jsonData: String) = operationalUpdate("vehicles", "vehicles", id, jsonData)
+        @JavascriptInterface
+        fun deleteVehicleRecord(id: Long) = operationalDelete("vehicles", "vehicles", id)
+        @JavascriptInterface
+        fun resolveVehicleRecord(id: Long, note: String = "") = operationalResolve("vehicles", "vehicles", id, note)
+
+        @JavascriptInterface
+        fun getDriverRecords(jsonData: String = "{}") = operationalList("vehicles", "drivers", jsonData)
+        @JavascriptInterface
+        fun generateDriverReport(jsonData: String = "{}") = operationalReport("vehicles", "drivers", jsonData)
+        @JavascriptInterface
+        fun saveDriverRecord(jsonData: String) = operationalSave("vehicles", "drivers", jsonData)
+        @JavascriptInterface
+        fun updateDriverRecord(id: Long, jsonData: String) = operationalUpdate("vehicles", "drivers", id, jsonData)
+        @JavascriptInterface
+        fun deleteDriverRecord(id: Long) = operationalDelete("vehicles", "drivers", id)
+        @JavascriptInterface
+        fun resolveDriverRecord(id: Long, note: String = "") = operationalResolve("vehicles", "drivers", id, note)
+
+        @JavascriptInterface
+        fun getVehicleLocationRecords(jsonData: String = "{}") = operationalList("vehicles", "vehicle_locations", jsonData)
+        @JavascriptInterface
+        fun generateVehicleLocationReport(jsonData: String = "{}") = operationalReport("vehicles", "vehicle_locations", jsonData)
+        @JavascriptInterface
+        fun saveVehicleLocationRecord(jsonData: String) = operationalSave("vehicles", "vehicle_locations", jsonData)
+        @JavascriptInterface
+        fun updateVehicleLocationRecord(id: Long, jsonData: String) = operationalUpdate("vehicles", "vehicle_locations", id, jsonData)
+        @JavascriptInterface
+        fun deleteVehicleLocationRecord(id: Long) = operationalDelete("vehicles", "vehicle_locations", id)
+        @JavascriptInterface
+        fun resolveVehicleLocationRecord(id: Long, note: String = "") = operationalResolve("vehicles", "vehicle_locations", id, note)
+
+        @JavascriptInterface
+        fun getVehicleTripRecords(jsonData: String = "{}") = operationalList("vehicles", "vehicle_trips", jsonData)
+        @JavascriptInterface
+        fun generateVehicleTripReport(jsonData: String = "{}") = operationalReport("vehicles", "vehicle_trips", jsonData)
+        @JavascriptInterface
+        fun saveVehicleTripRecord(jsonData: String) = operationalSave("vehicles", "vehicle_trips", jsonData)
+        @JavascriptInterface
+        fun updateVehicleTripRecord(id: Long, jsonData: String) = operationalUpdate("vehicles", "vehicle_trips", id, jsonData)
+        @JavascriptInterface
+        fun deleteVehicleTripRecord(id: Long) = operationalDelete("vehicles", "vehicle_trips", id)
+        @JavascriptInterface
+        fun resolveVehicleTripRecord(id: Long, note: String = "") = operationalResolve("vehicles", "vehicle_trips", id, note)
+
+        @JavascriptInterface
+        fun getVehicleExpenseRecords(jsonData: String = "{}") = operationalList("vehicles", "vehicle_expenses", jsonData)
+        @JavascriptInterface
+        fun generateVehicleExpenseReport(jsonData: String = "{}") = operationalReport("vehicles", "vehicle_expenses", jsonData)
+        @JavascriptInterface
+        fun saveVehicleExpenseRecord(jsonData: String) = operationalSave("vehicles", "vehicle_expenses", jsonData)
+        @JavascriptInterface
+        fun updateVehicleExpenseRecord(id: Long, jsonData: String) = operationalUpdate("vehicles", "vehicle_expenses", id, jsonData)
+        @JavascriptInterface
+        fun deleteVehicleExpenseRecord(id: Long) = operationalDelete("vehicles", "vehicle_expenses", id)
+        @JavascriptInterface
+        fun resolveVehicleExpenseRecord(id: Long, note: String = "") = operationalResolve("vehicles", "vehicle_expenses", id, note)
+
+        @JavascriptInterface
+        fun getFuelTypeRecords(jsonData: String = "{}") = operationalList("products", "fuel_types", jsonData)
+        @JavascriptInterface
+        fun generateFuelTypeReport(jsonData: String = "{}") = operationalReport("products", "fuel_types", jsonData)
+        @JavascriptInterface
+        fun saveFuelTypeRecord(jsonData: String) = operationalSave("products", "fuel_types", jsonData)
+        @JavascriptInterface
+        fun updateFuelTypeRecord(id: Long, jsonData: String) = operationalUpdate("products", "fuel_types", id, jsonData)
+        @JavascriptInterface
+        fun deleteFuelTypeRecord(id: Long) = operationalDelete("products", "fuel_types", id)
+        @JavascriptInterface
+        fun resolveFuelTypeRecord(id: Long, note: String = "") = operationalResolve("products", "fuel_types", id, note)
+
+        @JavascriptInterface
+        fun getPriceListRecords(jsonData: String = "{}") = operationalList("products", "price_lists", jsonData)
+        @JavascriptInterface
+        fun generatePriceListReport(jsonData: String = "{}") = operationalReport("products", "price_lists", jsonData)
+        @JavascriptInterface
+        fun savePriceListRecord(jsonData: String) = operationalSave("products", "price_lists", jsonData)
+        @JavascriptInterface
+        fun updatePriceListRecord(id: Long, jsonData: String) = operationalUpdate("products", "price_lists", id, jsonData)
+        @JavascriptInterface
+        fun deletePriceListRecord(id: Long) = operationalDelete("products", "price_lists", id)
+        @JavascriptInterface
+        fun resolvePriceListRecord(id: Long, note: String = "") = operationalResolve("products", "price_lists", id, note)
+
+        @JavascriptInterface
+        fun getPriceListItemRecords(jsonData: String = "{}") = operationalList("products", "price_list_items", jsonData)
+        @JavascriptInterface
+        fun generatePriceListItemReport(jsonData: String = "{}") = operationalReport("products", "price_list_items", jsonData)
+        @JavascriptInterface
+        fun savePriceListItemRecord(jsonData: String) = operationalSave("products", "price_list_items", jsonData)
+        @JavascriptInterface
+        fun updatePriceListItemRecord(id: Long, jsonData: String) = operationalUpdate("products", "price_list_items", id, jsonData)
+        @JavascriptInterface
+        fun deletePriceListItemRecord(id: Long) = operationalDelete("products", "price_list_items", id)
+        @JavascriptInterface
+        fun resolvePriceListItemRecord(id: Long, note: String = "") = operationalResolve("products", "price_list_items", id, note)
+
+        @JavascriptInterface
+        fun getPriceHistoryRecords(jsonData: String = "{}") = operationalList("products", "price_history", jsonData)
+        @JavascriptInterface
+        fun generatePriceHistoryReport(jsonData: String = "{}") = operationalReport("products", "price_history", jsonData)
+        @JavascriptInterface
+        fun savePriceHistoryRecord(jsonData: String) = operationalSave("products", "price_history", jsonData)
+        @JavascriptInterface
+        fun updatePriceHistoryRecord(id: Long, jsonData: String) = operationalUpdate("products", "price_history", id, jsonData)
+        @JavascriptInterface
+        fun deletePriceHistoryRecord(id: Long) = operationalDelete("products", "price_history", id)
+        @JavascriptInterface
+        fun resolvePriceHistoryRecord(id: Long, note: String = "") = operationalResolve("products", "price_history", id, note)
+
+        @JavascriptInterface
+        fun getTankRecords(jsonData: String = "{}") = operationalList("tanks", "tanks", jsonData)
+        @JavascriptInterface
+        fun generateTankReport(jsonData: String = "{}") = operationalReport("tanks", "tanks", jsonData)
+        @JavascriptInterface
+        fun saveTankRecord(jsonData: String) = operationalSave("tanks", "tanks", jsonData)
+        @JavascriptInterface
+        fun updateTankRecord(id: Long, jsonData: String) = operationalUpdate("tanks", "tanks", id, jsonData)
+        @JavascriptInterface
+        fun deleteTankRecord(id: Long) = operationalDelete("tanks", "tanks", id)
+        @JavascriptInterface
+        fun resolveTankRecord(id: Long, note: String = "") = operationalResolve("tanks", "tanks", id, note)
+
+        @JavascriptInterface
+        fun getPumpRecords(jsonData: String = "{}") = operationalList("pumps", "pumps", jsonData)
+        @JavascriptInterface
+        fun generatePumpReport(jsonData: String = "{}") = operationalReport("pumps", "pumps", jsonData)
+        @JavascriptInterface
+        fun savePumpRecord(jsonData: String) = operationalSave("pumps", "pumps", jsonData)
+        @JavascriptInterface
+        fun updatePumpRecord(id: Long, jsonData: String) = operationalUpdate("pumps", "pumps", id, jsonData)
+        @JavascriptInterface
+        fun deletePumpRecord(id: Long) = operationalDelete("pumps", "pumps", id)
+        @JavascriptInterface
+        fun resolvePumpRecord(id: Long, note: String = "") = operationalResolve("pumps", "pumps", id, note)
+
+        @JavascriptInterface
+        fun getMeterReadingRecords(jsonData: String = "{}") = operationalList("tanks", "meter_readings", jsonData)
+        @JavascriptInterface
+        fun generateMeterReadingReport(jsonData: String = "{}") = operationalReport("tanks", "meter_readings", jsonData)
+        @JavascriptInterface
+        fun saveMeterReadingRecord(jsonData: String) = operationalSave("tanks", "meter_readings", jsonData)
+        @JavascriptInterface
+        fun updateMeterReadingRecord(id: Long, jsonData: String) = operationalUpdate("tanks", "meter_readings", id, jsonData)
+        @JavascriptInterface
+        fun deleteMeterReadingRecord(id: Long) = operationalDelete("tanks", "meter_readings", id)
+        @JavascriptInterface
+        fun resolveMeterReadingRecord(id: Long, note: String = "") = operationalResolve("tanks", "meter_readings", id, note)
+
+        @JavascriptInterface
+        fun getTankLevelRecords(jsonData: String = "{}") = operationalList("tanks", "tank_level_log", jsonData)
+        @JavascriptInterface
+        fun generateTankLevelReport(jsonData: String = "{}") = operationalReport("tanks", "tank_level_log", jsonData)
+        @JavascriptInterface
+        fun saveTankLevelRecord(jsonData: String) = operationalSave("tanks", "tank_level_log", jsonData)
+        @JavascriptInterface
+        fun updateTankLevelRecord(id: Long, jsonData: String) = operationalUpdate("tanks", "tank_level_log", id, jsonData)
+        @JavascriptInterface
+        fun deleteTankLevelRecord(id: Long) = operationalDelete("tanks", "tank_level_log", id)
+        @JavascriptInterface
+        fun resolveTankLevelRecord(id: Long, note: String = "") = operationalResolve("tanks", "tank_level_log", id, note)
+
+        @JavascriptInterface
+        fun getFuelQualityRecords(jsonData: String = "{}") = operationalList("tanks", "fuel_quality_tests", jsonData)
+        @JavascriptInterface
+        fun generateFuelQualityReport(jsonData: String = "{}") = operationalReport("tanks", "fuel_quality_tests", jsonData)
+        @JavascriptInterface
+        fun saveFuelQualityRecord(jsonData: String) = operationalSave("tanks", "fuel_quality_tests", jsonData)
+        @JavascriptInterface
+        fun updateFuelQualityRecord(id: Long, jsonData: String) = operationalUpdate("tanks", "fuel_quality_tests", id, jsonData)
+        @JavascriptInterface
+        fun deleteFuelQualityRecord(id: Long) = operationalDelete("tanks", "fuel_quality_tests", id)
+        @JavascriptInterface
+        fun resolveFuelQualityRecord(id: Long, note: String = "") = operationalResolve("tanks", "fuel_quality_tests", id, note)
+
+        @JavascriptInterface
+        fun getCalibrationRecords(jsonData: String = "{}") = operationalList("tanks", "calibration_records", jsonData)
+        @JavascriptInterface
+        fun generateCalibrationReport(jsonData: String = "{}") = operationalReport("tanks", "calibration_records", jsonData)
+        @JavascriptInterface
+        fun saveCalibrationRecord(jsonData: String) = operationalSave("tanks", "calibration_records", jsonData)
+        @JavascriptInterface
+        fun updateCalibrationRecord(id: Long, jsonData: String) = operationalUpdate("tanks", "calibration_records", id, jsonData)
+        @JavascriptInterface
+        fun deleteCalibrationRecord(id: Long) = operationalDelete("tanks", "calibration_records", id)
+        @JavascriptInterface
+        fun resolveCalibrationRecord(id: Long, note: String = "") = operationalResolve("tanks", "calibration_records", id, note)
+
+        @JavascriptInterface
+        fun getWarehouseRecords(jsonData: String = "{}") = operationalList("inventory", "warehouses", jsonData)
+        @JavascriptInterface
+        fun generateWarehouseReport(jsonData: String = "{}") = operationalReport("inventory", "warehouses", jsonData)
+        @JavascriptInterface
+        fun saveWarehouseRecord(jsonData: String) = operationalSave("inventory", "warehouses", jsonData)
+        @JavascriptInterface
+        fun updateWarehouseRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "warehouses", id, jsonData)
+        @JavascriptInterface
+        fun deleteWarehouseRecord(id: Long) = operationalDelete("inventory", "warehouses", id)
+        @JavascriptInterface
+        fun resolveWarehouseRecord(id: Long, note: String = "") = operationalResolve("inventory", "warehouses", id, note)
+
+        @JavascriptInterface
+        fun getInventoryMovementRecords(jsonData: String = "{}") = operationalList("inventory", "inventory_movements", jsonData)
+        @JavascriptInterface
+        fun generateInventoryMovementReport(jsonData: String = "{}") = operationalReport("inventory", "inventory_movements", jsonData)
+        @JavascriptInterface
+        fun saveInventoryMovementRecord(jsonData: String) = operationalSave("inventory", "inventory_movements", jsonData)
+        @JavascriptInterface
+        fun updateInventoryMovementRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "inventory_movements", id, jsonData)
+        @JavascriptInterface
+        fun deleteInventoryMovementRecord(id: Long) = operationalDelete("inventory", "inventory_movements", id)
+        @JavascriptInterface
+        fun resolveInventoryMovementRecord(id: Long, note: String = "") = operationalResolve("inventory", "inventory_movements", id, note)
+
+        @JavascriptInterface
+        fun getStockAlertRecords(jsonData: String = "{}") = operationalList("inventory", "stock_alerts", jsonData)
+        @JavascriptInterface
+        fun generateStockAlertReport(jsonData: String = "{}") = operationalReport("inventory", "stock_alerts", jsonData)
+        @JavascriptInterface
+        fun saveStockAlertRecord(jsonData: String) = operationalSave("inventory", "stock_alerts", jsonData)
+        @JavascriptInterface
+        fun updateStockAlertRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "stock_alerts", id, jsonData)
+        @JavascriptInterface
+        fun deleteStockAlertRecord(id: Long) = operationalDelete("inventory", "stock_alerts", id)
+        @JavascriptInterface
+        fun resolveStockAlertRecord(id: Long, note: String = "") = operationalResolve("inventory", "stock_alerts", id, note)
+
+        @JavascriptInterface
+        fun getStocktakeRecords(jsonData: String = "{}") = operationalList("inventory", "stocktakes", jsonData)
+        @JavascriptInterface
+        fun generateStocktakeReport(jsonData: String = "{}") = operationalReport("inventory", "stocktakes", jsonData)
+        @JavascriptInterface
+        fun saveStocktakeRecord(jsonData: String) = operationalSave("inventory", "stocktakes", jsonData)
+        @JavascriptInterface
+        fun updateStocktakeRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "stocktakes", id, jsonData)
+        @JavascriptInterface
+        fun deleteStocktakeRecord(id: Long) = operationalDelete("inventory", "stocktakes", id)
+        @JavascriptInterface
+        fun resolveStocktakeRecord(id: Long, note: String = "") = operationalResolve("inventory", "stocktakes", id, note)
+
+        @JavascriptInterface
+        fun getStocktakeDetailRecords(jsonData: String = "{}") = operationalList("inventory", "stocktake_details", jsonData)
+        @JavascriptInterface
+        fun generateStocktakeDetailReport(jsonData: String = "{}") = operationalReport("inventory", "stocktake_details", jsonData)
+        @JavascriptInterface
+        fun saveStocktakeDetailRecord(jsonData: String) = operationalSave("inventory", "stocktake_details", jsonData)
+        @JavascriptInterface
+        fun updateStocktakeDetailRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "stocktake_details", id, jsonData)
+        @JavascriptInterface
+        fun deleteStocktakeDetailRecord(id: Long) = operationalDelete("inventory", "stocktake_details", id)
+        @JavascriptInterface
+        fun resolveStocktakeDetailRecord(id: Long, note: String = "") = operationalResolve("inventory", "stocktake_details", id, note)
+
+        @JavascriptInterface
+        fun getShiftRecords(jsonData: String = "{}") = operationalList("sales", "shifts", jsonData)
+        @JavascriptInterface
+        fun generateShiftReport(jsonData: String = "{}") = operationalReport("sales", "shifts", jsonData)
+        @JavascriptInterface
+        fun saveShiftRecord(jsonData: String) = operationalSave("sales", "shifts", jsonData)
+        @JavascriptInterface
+        fun updateShiftRecord(id: Long, jsonData: String) = operationalUpdate("sales", "shifts", id, jsonData)
+        @JavascriptInterface
+        fun deleteShiftRecord(id: Long) = operationalDelete("sales", "shifts", id)
+        @JavascriptInterface
+        fun resolveShiftRecord(id: Long, note: String = "") = operationalResolve("sales", "shifts", id, note)
+
+        @JavascriptInterface
+        fun getSalesTransactionRecords(jsonData: String = "{}") = operationalList("sales", "sales_transactions", jsonData)
+        @JavascriptInterface
+        fun generateSalesTransactionReport(jsonData: String = "{}") = operationalReport("sales", "sales_transactions", jsonData)
+        @JavascriptInterface
+        fun saveSalesTransactionRecord(jsonData: String) = operationalSave("sales", "sales_transactions", jsonData)
+        @JavascriptInterface
+        fun updateSalesTransactionRecord(id: Long, jsonData: String) = operationalUpdate("sales", "sales_transactions", id, jsonData)
+        @JavascriptInterface
+        fun deleteSalesTransactionRecord(id: Long) = operationalDelete("sales", "sales_transactions", id)
+        @JavascriptInterface
+        fun resolveSalesTransactionRecord(id: Long, note: String = "") = operationalResolve("sales", "sales_transactions", id, note)
+
+        @JavascriptInterface
+        fun getDeliveryRecords(jsonData: String = "{}") = operationalList("sales", "deliveries", jsonData)
+        @JavascriptInterface
+        fun generateDeliveryReport(jsonData: String = "{}") = operationalReport("sales", "deliveries", jsonData)
+        @JavascriptInterface
+        fun saveDeliveryRecord(jsonData: String) = operationalSave("sales", "deliveries", jsonData)
+        @JavascriptInterface
+        fun updateDeliveryRecord(id: Long, jsonData: String) = operationalUpdate("sales", "deliveries", id, jsonData)
+        @JavascriptInterface
+        fun deleteDeliveryRecord(id: Long) = operationalDelete("sales", "deliveries", id)
+        @JavascriptInterface
+        fun resolveDeliveryRecord(id: Long, note: String = "") = operationalResolve("sales", "deliveries", id, note)
+
+        @JavascriptInterface
+        fun getFuelSaleRecords(jsonData: String = "{}") = operationalList("sales", "fuel_sales", jsonData)
+        @JavascriptInterface
+        fun generateFuelSaleReport(jsonData: String = "{}") = operationalReport("sales", "fuel_sales", jsonData)
+        @JavascriptInterface
+        fun saveFuelSaleRecord(jsonData: String) = operationalSave("sales", "fuel_sales", jsonData)
+        @JavascriptInterface
+        fun updateFuelSaleRecord(id: Long, jsonData: String) = operationalUpdate("sales", "fuel_sales", id, jsonData)
+        @JavascriptInterface
+        fun deleteFuelSaleRecord(id: Long) = operationalDelete("sales", "fuel_sales", id)
+        @JavascriptInterface
+        fun resolveFuelSaleRecord(id: Long, note: String = "") = operationalResolve("sales", "fuel_sales", id, note)
+
+        @JavascriptInterface
+        fun getPaymentRecords(jsonData: String = "{}") = operationalList("finance", "payments", jsonData)
+        @JavascriptInterface
+        fun generatePaymentReport(jsonData: String = "{}") = operationalReport("finance", "payments", jsonData)
+        @JavascriptInterface
+        fun savePaymentRecord(jsonData: String) = operationalSave("finance", "payments", jsonData)
+        @JavascriptInterface
+        fun updatePaymentRecord(id: Long, jsonData: String) = operationalUpdate("finance", "payments", id, jsonData)
+        @JavascriptInterface
+        fun deletePaymentRecord(id: Long) = operationalDelete("finance", "payments", id)
+        @JavascriptInterface
+        fun resolvePaymentRecord(id: Long, note: String = "") = operationalResolve("finance", "payments", id, note)
+
+        @JavascriptInterface
+        fun getReceiptRecords(jsonData: String = "{}") = operationalList("finance", "receipts", jsonData)
+        @JavascriptInterface
+        fun generateReceiptReport(jsonData: String = "{}") = operationalReport("finance", "receipts", jsonData)
+        @JavascriptInterface
+        fun saveReceiptRecord(jsonData: String) = operationalSave("finance", "receipts", jsonData)
+        @JavascriptInterface
+        fun updateReceiptRecord(id: Long, jsonData: String) = operationalUpdate("finance", "receipts", id, jsonData)
+        @JavascriptInterface
+        fun deleteReceiptRecord(id: Long) = operationalDelete("finance", "receipts", id)
+        @JavascriptInterface
+        fun resolveReceiptRecord(id: Long, note: String = "") = operationalResolve("finance", "receipts", id, note)
+
+        @JavascriptInterface
+        fun getCashBoxRecords(jsonData: String = "{}") = operationalList("finance", "cash_boxes", jsonData)
+        @JavascriptInterface
+        fun generateCashBoxReport(jsonData: String = "{}") = operationalReport("finance", "cash_boxes", jsonData)
+        @JavascriptInterface
+        fun saveCashBoxRecord(jsonData: String) = operationalSave("finance", "cash_boxes", jsonData)
+        @JavascriptInterface
+        fun updateCashBoxRecord(id: Long, jsonData: String) = operationalUpdate("finance", "cash_boxes", id, jsonData)
+        @JavascriptInterface
+        fun deleteCashBoxRecord(id: Long) = operationalDelete("finance", "cash_boxes", id)
+        @JavascriptInterface
+        fun resolveCashBoxRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_boxes", id, note)
+
+        @JavascriptInterface
+        fun getCashMovementRecords(jsonData: String = "{}") = operationalList("finance", "cash_movements", jsonData)
+        @JavascriptInterface
+        fun generateCashMovementReport(jsonData: String = "{}") = operationalReport("finance", "cash_movements", jsonData)
+        @JavascriptInterface
+        fun saveCashMovementRecord(jsonData: String) = operationalSave("finance", "cash_movements", jsonData)
+        @JavascriptInterface
+        fun updateCashMovementRecord(id: Long, jsonData: String) = operationalUpdate("finance", "cash_movements", id, jsonData)
+        @JavascriptInterface
+        fun deleteCashMovementRecord(id: Long) = operationalDelete("finance", "cash_movements", id)
+        @JavascriptInterface
+        fun resolveCashMovementRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_movements", id, note)
+
+        @JavascriptInterface
+        fun getExpenseCategoryRecords(jsonData: String = "{}") = operationalList("finance", "expense_categories", jsonData)
+        @JavascriptInterface
+        fun generateExpenseCategoryReport(jsonData: String = "{}") = operationalReport("finance", "expense_categories", jsonData)
+        @JavascriptInterface
+        fun saveExpenseCategoryRecord(jsonData: String) = operationalSave("finance", "expense_categories", jsonData)
+        @JavascriptInterface
+        fun updateExpenseCategoryRecord(id: Long, jsonData: String) = operationalUpdate("finance", "expense_categories", id, jsonData)
+        @JavascriptInterface
+        fun deleteExpenseCategoryRecord(id: Long) = operationalDelete("finance", "expense_categories", id)
+        @JavascriptInterface
+        fun resolveExpenseCategoryRecord(id: Long, note: String = "") = operationalResolve("finance", "expense_categories", id, note)
+
+        @JavascriptInterface
+        fun getExpenseRecords(jsonData: String = "{}") = operationalList("finance", "expenses", jsonData)
+        @JavascriptInterface
+        fun generateExpenseReport(jsonData: String = "{}") = operationalReport("finance", "expenses", jsonData)
+        @JavascriptInterface
+        fun saveExpenseRecord(jsonData: String) = operationalSave("finance", "expenses", jsonData)
+        @JavascriptInterface
+        fun updateExpenseRecord(id: Long, jsonData: String) = operationalUpdate("finance", "expenses", id, jsonData)
+        @JavascriptInterface
+        fun deleteExpenseRecord(id: Long) = operationalDelete("finance", "expenses", id)
+        @JavascriptInterface
+        fun resolveExpenseRecord(id: Long, note: String = "") = operationalResolve("finance", "expenses", id, note)
+
+        @JavascriptInterface
+        fun getBudgetRecords(jsonData: String = "{}") = operationalList("finance", "budgets", jsonData)
+        @JavascriptInterface
+        fun generateBudgetReport(jsonData: String = "{}") = operationalReport("finance", "budgets", jsonData)
+        @JavascriptInterface
+        fun saveBudgetRecord(jsonData: String) = operationalSave("finance", "budgets", jsonData)
+        @JavascriptInterface
+        fun updateBudgetRecord(id: Long, jsonData: String) = operationalUpdate("finance", "budgets", id, jsonData)
+        @JavascriptInterface
+        fun deleteBudgetRecord(id: Long) = operationalDelete("finance", "budgets", id)
+        @JavascriptInterface
+        fun resolveBudgetRecord(id: Long, note: String = "") = operationalResolve("finance", "budgets", id, note)
+
+        @JavascriptInterface
+        fun getCashDepositRecords(jsonData: String = "{}") = operationalList("finance", "cash_deposits", jsonData)
+        @JavascriptInterface
+        fun generateCashDepositReport(jsonData: String = "{}") = operationalReport("finance", "cash_deposits", jsonData)
+        @JavascriptInterface
+        fun saveCashDepositRecord(jsonData: String) = operationalSave("finance", "cash_deposits", jsonData)
+        @JavascriptInterface
+        fun updateCashDepositRecord(id: Long, jsonData: String) = operationalUpdate("finance", "cash_deposits", id, jsonData)
+        @JavascriptInterface
+        fun deleteCashDepositRecord(id: Long) = operationalDelete("finance", "cash_deposits", id)
+        @JavascriptInterface
+        fun resolveCashDepositRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_deposits", id, note)
+
+        @JavascriptInterface
+        fun getEmployeeRecords(jsonData: String = "{}") = operationalList("hr", "employees", jsonData)
+        @JavascriptInterface
+        fun generateEmployeeReport(jsonData: String = "{}") = operationalReport("hr", "employees", jsonData)
+        @JavascriptInterface
+        fun saveEmployeeRecord(jsonData: String) = operationalSave("hr", "employees", jsonData)
+        @JavascriptInterface
+        fun updateEmployeeRecord(id: Long, jsonData: String) = operationalUpdate("hr", "employees", id, jsonData)
+        @JavascriptInterface
+        fun deleteEmployeeRecord(id: Long) = operationalDelete("hr", "employees", id)
+        @JavascriptInterface
+        fun resolveEmployeeRecord(id: Long, note: String = "") = operationalResolve("hr", "employees", id, note)
+
+        @JavascriptInterface
+        fun getAttendanceRecords(jsonData: String = "{}") = operationalList("hr", "attendance", jsonData)
+        @JavascriptInterface
+        fun generateAttendanceReport(jsonData: String = "{}") = operationalReport("hr", "attendance", jsonData)
+        @JavascriptInterface
+        fun saveAttendanceRecord(jsonData: String) = operationalSave("hr", "attendance", jsonData)
+        @JavascriptInterface
+        fun updateAttendanceRecord(id: Long, jsonData: String) = operationalUpdate("hr", "attendance", id, jsonData)
+        @JavascriptInterface
+        fun deleteAttendanceRecord(id: Long) = operationalDelete("hr", "attendance", id)
+        @JavascriptInterface
+        fun resolveAttendanceRecord(id: Long, note: String = "") = operationalResolve("hr", "attendance", id, note)
+
+        @JavascriptInterface
+        fun getPayrollRecords(jsonData: String = "{}") = operationalList("hr", "payroll", jsonData)
+        @JavascriptInterface
+        fun generatePayrollReport(jsonData: String = "{}") = operationalReport("hr", "payroll", jsonData)
+        @JavascriptInterface
+        fun savePayrollRecord(jsonData: String) = operationalSave("hr", "payroll", jsonData)
+        @JavascriptInterface
+        fun updatePayrollRecord(id: Long, jsonData: String) = operationalUpdate("hr", "payroll", id, jsonData)
+        @JavascriptInterface
+        fun deletePayrollRecord(id: Long) = operationalDelete("hr", "payroll", id)
+        @JavascriptInterface
+        fun resolvePayrollRecord(id: Long, note: String = "") = operationalResolve("hr", "payroll", id, note)
+
+        @JavascriptInterface
+        fun getEmployeePaymentRecords(jsonData: String = "{}") = operationalList("hr", "employee_payments", jsonData)
+        @JavascriptInterface
+        fun generateEmployeePaymentReport(jsonData: String = "{}") = operationalReport("hr", "employee_payments", jsonData)
+        @JavascriptInterface
+        fun saveEmployeePaymentRecord(jsonData: String) = operationalSave("hr", "employee_payments", jsonData)
+        @JavascriptInterface
+        fun updateEmployeePaymentRecord(id: Long, jsonData: String) = operationalUpdate("hr", "employee_payments", id, jsonData)
+        @JavascriptInterface
+        fun deleteEmployeePaymentRecord(id: Long) = operationalDelete("hr", "employee_payments", id)
+        @JavascriptInterface
+        fun resolveEmployeePaymentRecord(id: Long, note: String = "") = operationalResolve("hr", "employee_payments", id, note)
+
+        @JavascriptInterface
+        fun getFixedAssetRecords(jsonData: String = "{}") = operationalList("assets", "fixed_assets", jsonData)
+        @JavascriptInterface
+        fun generateFixedAssetReport(jsonData: String = "{}") = operationalReport("assets", "fixed_assets", jsonData)
+        @JavascriptInterface
+        fun saveFixedAssetRecord(jsonData: String) = operationalSave("assets", "fixed_assets", jsonData)
+        @JavascriptInterface
+        fun updateFixedAssetRecord(id: Long, jsonData: String) = operationalUpdate("assets", "fixed_assets", id, jsonData)
+        @JavascriptInterface
+        fun deleteFixedAssetRecord(id: Long) = operationalDelete("assets", "fixed_assets", id)
+        @JavascriptInterface
+        fun resolveFixedAssetRecord(id: Long, note: String = "") = operationalResolve("assets", "fixed_assets", id, note)
+
+        @JavascriptInterface
+        fun getDepreciationRecords(jsonData: String = "{}") = operationalList("assets", "depreciation", jsonData)
+        @JavascriptInterface
+        fun generateDepreciationReport(jsonData: String = "{}") = operationalReport("assets", "depreciation", jsonData)
+        @JavascriptInterface
+        fun saveDepreciationRecord(jsonData: String) = operationalSave("assets", "depreciation", jsonData)
+        @JavascriptInterface
+        fun updateDepreciationRecord(id: Long, jsonData: String) = operationalUpdate("assets", "depreciation", id, jsonData)
+        @JavascriptInterface
+        fun deleteDepreciationRecord(id: Long) = operationalDelete("assets", "depreciation", id)
+        @JavascriptInterface
+        fun resolveDepreciationRecord(id: Long, note: String = "") = operationalResolve("assets", "depreciation", id, note)
+
+        @JavascriptInterface
+        fun getMaintenanceRequestRecords(jsonData: String = "{}") = operationalList("maintenance", "maintenance_requests", jsonData)
+        @JavascriptInterface
+        fun generateMaintenanceRequestReport(jsonData: String = "{}") = operationalReport("maintenance", "maintenance_requests", jsonData)
+        @JavascriptInterface
+        fun saveMaintenanceRequestRecord(jsonData: String) = operationalSave("maintenance", "maintenance_requests", jsonData)
+        @JavascriptInterface
+        fun updateMaintenanceRequestRecord(id: Long, jsonData: String) = operationalUpdate("maintenance", "maintenance_requests", id, jsonData)
+        @JavascriptInterface
+        fun deleteMaintenanceRequestRecord(id: Long) = operationalDelete("maintenance", "maintenance_requests", id)
+        @JavascriptInterface
+        fun resolveMaintenanceRequestRecord(id: Long, note: String = "") = operationalResolve("maintenance", "maintenance_requests", id, note)
+
+        @JavascriptInterface
+        fun getMaintenanceScheduleRecords(jsonData: String = "{}") = operationalList("maintenance", "maintenance_schedule", jsonData)
+        @JavascriptInterface
+        fun generateMaintenanceScheduleReport(jsonData: String = "{}") = operationalReport("maintenance", "maintenance_schedule", jsonData)
+        @JavascriptInterface
+        fun saveMaintenanceScheduleRecord(jsonData: String) = operationalSave("maintenance", "maintenance_schedule", jsonData)
+        @JavascriptInterface
+        fun updateMaintenanceScheduleRecord(id: Long, jsonData: String) = operationalUpdate("maintenance", "maintenance_schedule", id, jsonData)
+        @JavascriptInterface
+        fun deleteMaintenanceScheduleRecord(id: Long) = operationalDelete("maintenance", "maintenance_schedule", id)
+        @JavascriptInterface
+        fun resolveMaintenanceScheduleRecord(id: Long, note: String = "") = operationalResolve("maintenance", "maintenance_schedule", id, note)
+
+        @JavascriptInterface
+        fun getMaintenanceHistoryRecords(jsonData: String = "{}") = operationalList("maintenance", "maintenance_history", jsonData)
+        @JavascriptInterface
+        fun generateMaintenanceHistoryReport(jsonData: String = "{}") = operationalReport("maintenance", "maintenance_history", jsonData)
+        @JavascriptInterface
+        fun saveMaintenanceHistoryRecord(jsonData: String) = operationalSave("maintenance", "maintenance_history", jsonData)
+        @JavascriptInterface
+        fun updateMaintenanceHistoryRecord(id: Long, jsonData: String) = operationalUpdate("maintenance", "maintenance_history", id, jsonData)
+        @JavascriptInterface
+        fun deleteMaintenanceHistoryRecord(id: Long) = operationalDelete("maintenance", "maintenance_history", id)
+        @JavascriptInterface
+        fun resolveMaintenanceHistoryRecord(id: Long, note: String = "") = operationalResolve("maintenance", "maintenance_history", id, note)
+
+        @JavascriptInterface
+        fun getPredictionRecords(jsonData: String = "{}") = operationalList("reports", "predictions", jsonData)
+        @JavascriptInterface
+        fun generatePredictionReport(jsonData: String = "{}") = operationalReport("reports", "predictions", jsonData)
+        @JavascriptInterface
+        fun savePredictionRecord(jsonData: String) = operationalSave("reports", "predictions", jsonData)
+        @JavascriptInterface
+        fun updatePredictionRecord(id: Long, jsonData: String) = operationalUpdate("reports", "predictions", id, jsonData)
+        @JavascriptInterface
+        fun deletePredictionRecord(id: Long) = operationalDelete("reports", "predictions", id)
+        @JavascriptInterface
+        fun resolvePredictionRecord(id: Long, note: String = "") = operationalResolve("reports", "predictions", id, note)
+
+        @JavascriptInterface
+        fun getDocumentRecords(jsonData: String = "{}") = operationalList("system", "documents", jsonData)
+        @JavascriptInterface
+        fun generateDocumentReport(jsonData: String = "{}") = operationalReport("system", "documents", jsonData)
+        @JavascriptInterface
+        fun saveDocumentRecord(jsonData: String) = operationalSave("system", "documents", jsonData)
+        @JavascriptInterface
+        fun updateDocumentRecord(id: Long, jsonData: String) = operationalUpdate("system", "documents", id, jsonData)
+        @JavascriptInterface
+        fun deleteDocumentRecord(id: Long) = operationalDelete("system", "documents", id)
+        @JavascriptInterface
+        fun resolveDocumentRecord(id: Long, note: String = "") = operationalResolve("system", "documents", id, note)
+
+        @JavascriptInterface
+        fun getSyncDeviceRecords(jsonData: String = "{}") = operationalList("sync", "sync_devices", jsonData)
+        @JavascriptInterface
+        fun generateSyncDeviceReport(jsonData: String = "{}") = operationalReport("sync", "sync_devices", jsonData)
+        @JavascriptInterface
+        fun saveSyncDeviceRecord(jsonData: String) = operationalSave("sync", "sync_devices", jsonData)
+        @JavascriptInterface
+        fun updateSyncDeviceRecord(id: Long, jsonData: String) = operationalUpdate("sync", "sync_devices", id, jsonData)
+        @JavascriptInterface
+        fun deleteSyncDeviceRecord(id: Long) = operationalDelete("sync", "sync_devices", id)
+        @JavascriptInterface
+        fun resolveSyncDeviceRecord(id: Long, note: String = "") = operationalResolve("sync", "sync_devices", id, note)
+
+        @JavascriptInterface
+        fun getSyncLogRecords(jsonData: String = "{}") = operationalList("sync", "sync_logs", jsonData)
+        @JavascriptInterface
+        fun generateSyncLogReport(jsonData: String = "{}") = operationalReport("sync", "sync_logs", jsonData)
+        @JavascriptInterface
+        fun saveSyncLogRecord(jsonData: String) = operationalSave("sync", "sync_logs", jsonData)
+        @JavascriptInterface
+        fun updateSyncLogRecord(id: Long, jsonData: String) = operationalUpdate("sync", "sync_logs", id, jsonData)
+        @JavascriptInterface
+        fun deleteSyncLogRecord(id: Long) = operationalDelete("sync", "sync_logs", id)
+        @JavascriptInterface
+        fun resolveSyncLogRecord(id: Long, note: String = "") = operationalResolve("sync", "sync_logs", id, note)
+
+        @JavascriptInterface
+        fun getBackupHistoryRecords(jsonData: String = "{}") = operationalList("sync", "backup_history", jsonData)
+        @JavascriptInterface
+        fun generateBackupHistoryReport(jsonData: String = "{}") = operationalReport("sync", "backup_history", jsonData)
+        @JavascriptInterface
+        fun saveBackupHistoryRecord(jsonData: String) = operationalSave("sync", "backup_history", jsonData)
+        @JavascriptInterface
+        fun updateBackupHistoryRecord(id: Long, jsonData: String) = operationalUpdate("sync", "backup_history", id, jsonData)
+        @JavascriptInterface
+        fun deleteBackupHistoryRecord(id: Long) = operationalDelete("sync", "backup_history", id)
+        @JavascriptInterface
+        fun resolveBackupHistoryRecord(id: Long, note: String = "") = operationalResolve("sync", "backup_history", id, note)
+
+        @JavascriptInterface
+        fun getPrinterProfileRecords(jsonData: String = "{}") = operationalList("printing", "printer_profiles", jsonData)
+        @JavascriptInterface
+        fun generatePrinterProfileReport(jsonData: String = "{}") = operationalReport("printing", "printer_profiles", jsonData)
+        @JavascriptInterface
+        fun savePrinterProfileRecord(jsonData: String) = operationalSave("printing", "printer_profiles", jsonData)
+        @JavascriptInterface
+        fun updatePrinterProfileRecord(id: Long, jsonData: String) = operationalUpdate("printing", "printer_profiles", id, jsonData)
+        @JavascriptInterface
+        fun deletePrinterProfileRecord(id: Long) = operationalDelete("printing", "printer_profiles", id)
+        @JavascriptInterface
+        fun resolvePrinterProfileRecord(id: Long, note: String = "") = operationalResolve("printing", "printer_profiles", id, note)
+
+        @JavascriptInterface
+        fun getReceiptTemplateRecords(jsonData: String = "{}") = operationalList("printing", "receipt_templates", jsonData)
+        @JavascriptInterface
+        fun generateReceiptTemplateReport(jsonData: String = "{}") = operationalReport("printing", "receipt_templates", jsonData)
+        @JavascriptInterface
+        fun saveReceiptTemplateRecord(jsonData: String) = operationalSave("printing", "receipt_templates", jsonData)
+        @JavascriptInterface
+        fun updateReceiptTemplateRecord(id: Long, jsonData: String) = operationalUpdate("printing", "receipt_templates", id, jsonData)
+        @JavascriptInterface
+        fun deleteReceiptTemplateRecord(id: Long) = operationalDelete("printing", "receipt_templates", id)
+        @JavascriptInterface
+        fun resolveReceiptTemplateRecord(id: Long, note: String = "") = operationalResolve("printing", "receipt_templates", id, note)
+
+        @JavascriptInterface
+        fun getInvoiceTemplateRecords(jsonData: String = "{}") = operationalList("printing", "invoice_templates", jsonData)
+        @JavascriptInterface
+        fun generateInvoiceTemplateReport(jsonData: String = "{}") = operationalReport("printing", "invoice_templates", jsonData)
+        @JavascriptInterface
+        fun saveInvoiceTemplateRecord(jsonData: String) = operationalSave("printing", "invoice_templates", jsonData)
+        @JavascriptInterface
+        fun updateInvoiceTemplateRecord(id: Long, jsonData: String) = operationalUpdate("printing", "invoice_templates", id, jsonData)
+        @JavascriptInterface
+        fun deleteInvoiceTemplateRecord(id: Long) = operationalDelete("printing", "invoice_templates", id)
+        @JavascriptInterface
+        fun resolveInvoiceTemplateRecord(id: Long, note: String = "") = operationalResolve("printing", "invoice_templates", id, note)
 
         // ============================================================
         // دالة ping للتشخيص (اختبار Bridge)

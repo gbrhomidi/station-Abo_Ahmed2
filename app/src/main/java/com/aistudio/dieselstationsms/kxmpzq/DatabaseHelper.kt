@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 21
+        const val VERSION = 20
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -182,7 +182,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     17 -> migrateV17ToV18(db)
                     18 -> ensureReportCacheTable(db)
                     19 -> migrateV19ToV20(db)
-                    20 -> ensurePendingTasksTable(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -199,7 +198,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureMessagingIndexes(db)
         ensureContractSchema(db)
         ensureReportCacheTable(db)
-        ensurePendingTasksTable(db)
         createSmsProcessedTable(db)
         createSmsProcessedHashesTable(db)
         createSmsRateLimitsTable(db)
@@ -1056,166 +1054,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun clearReportCacheForUser(userId: Long): Int {
         dbLock.lock()
         return try { writableDatabase.delete("report_cache", "user_id = ?", arrayOf(userId.toString())) } finally { dbLock.unlock() }
-    }
-
-    private fun ensurePendingTasksTable(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS pending_tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                uuid TEXT UNIQUE NOT NULL,
-                task_type TEXT NOT NULL,
-                reference TEXT,
-                task_date TEXT NOT NULL,
-                amount REAL NOT NULL DEFAULT 0,
-                status TEXT NOT NULL DEFAULT 'قيد التنفيذ',
-                priority TEXT NOT NULL DEFAULT 'متوسطة',
-                notes TEXT,
-                created_by INTEGER,
-                assigned_to INTEGER,
-                resolved_at TEXT,
-                archived_at TEXT,
-                is_archived INTEGER NOT NULL DEFAULT 0,
-                is_resolved INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                is_deleted INTEGER NOT NULL DEFAULT 0,
-                station_id INTEGER NOT NULL DEFAULT 1,
-                FOREIGN KEY(created_by) REFERENCES users(id),
-                FOREIGN KEY(assigned_to) REFERENCES users(id)
-            )
-        """.trimIndent())
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_status ON pending_tasks(status)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_type ON pending_tasks(task_type)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_priority ON pending_tasks(priority)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_date ON pending_tasks(task_date)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pending_tasks_station ON pending_tasks(station_id, is_deleted, is_archived)")
-    }
-
-    fun getPendingTasks(params: JSONObject = JSONObject()): JSONArray {
-        dbLock.lock()
-        try {
-            val db = writableDatabase
-            val where = StringBuilder("is_deleted = 0 AND station_id = ?")
-            val args = mutableListOf(params.optInt("station_id", 1).toString())
-            if (!params.optBoolean("include_archived", false)) where.append(" AND is_archived = 0")
-            params.optString("status", "").takeIf { it.isNotBlank() }?.let { where.append(" AND status = ?"); args.add(it) }
-            params.optString("task_type", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_type = ?"); args.add(it) }
-            params.optString("priority", "").takeIf { it.isNotBlank() }?.let { where.append(" AND priority = ?"); args.add(it) }
-            params.optString("start_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_date >= ?"); args.add(it) }
-            params.optString("end_date", "").takeIf { it.isNotBlank() }?.let { where.append(" AND task_date <= ?"); args.add(it) }
-            params.optString("search", "").takeIf { it.isNotBlank() }?.let {
-                where.append(" AND (CAST(id AS TEXT) LIKE ? OR reference LIKE ? OR task_type LIKE ? OR status LIKE ?)")
-                val q = "%$it%"; repeat(4) { args.add(q) }
-            }
-            val limit = params.optInt("limit", 500).coerceIn(1, 1000)
-            val offset = params.optInt("offset", 0).coerceAtLeast(0)
-            val result = JSONArray()
-            db.query("pending_tasks", null, where.toString(), args.toTypedArray(), null, null, "task_date DESC, id DESC", "$limit OFFSET $offset").use { c ->
-                while (c.moveToNext()) result.put(taskCursorToJson(c))
-            }
-            return result
-        } finally { dbLock.unlock() }
-    }
-
-    fun addTask(data: JSONObject): Long {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply {
-                put("uuid", data.optString("uuid").ifBlank { UUID.randomUUID().toString() })
-                put("task_type", data.optString("task_type", data.optString("type", "مهمة عامة")))
-                put("reference", data.optString("reference"))
-                put("task_date", data.optString("task_date", getCurrentDate()))
-                put("amount", data.optDouble("amount", 0.0))
-                put("status", data.optString("status", "قيد التنفيذ"))
-                put("priority", data.optString("priority", "متوسطة"))
-                put("notes", data.optString("notes"))
-                put("created_by", data.optLong("created_by", 0L).takeIf { it > 0 })
-                put("assigned_to", data.optLong("assigned_to", 0L).takeIf { it > 0 })
-                put("station_id", data.optInt("station_id", 1))
-            }
-            return writableDatabase.insertOrThrow("pending_tasks", null, values)
-        } finally { dbLock.unlock() }
-    }
-
-    fun updateTask(id: Long, data: JSONObject): Int {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply {
-                if (data.has("task_type") || data.has("type")) put("task_type", data.optString("task_type", data.optString("type")))
-                if (data.has("reference")) put("reference", data.optString("reference"))
-                if (data.has("task_date")) put("task_date", data.optString("task_date"))
-                if (data.has("amount")) put("amount", data.optDouble("amount", 0.0))
-                if (data.has("status")) put("status", data.optString("status"))
-                if (data.has("priority")) put("priority", data.optString("priority"))
-                if (data.has("notes")) put("notes", data.optString("notes"))
-                if (data.has("assigned_to")) put("assigned_to", data.optLong("assigned_to", 0L).takeIf { it > 0 })
-                put("updated_at", getCurrentDateTime())
-            }
-            if (values.size() == 1) return 0
-            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
-    }
-
-    fun archiveTask(id: Long): Int {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply {
-                put("is_archived", 1); put("archived_at", getCurrentDateTime()); put("status", "مؤرشفة"); put("updated_at", getCurrentDateTime())
-            }
-            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
-    }
-
-    fun restoreTask(id: Long): Int {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply {
-                put("is_archived", 0); putNull("archived_at"); put("status", "قيد التنفيذ"); put("updated_at", getCurrentDateTime())
-            }
-            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
-    }
-
-    fun resolveTask(id: Long): Int {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply {
-                put("is_resolved", 1); put("resolved_at", getCurrentDateTime()); put("status", "مكتملة"); put("updated_at", getCurrentDateTime())
-            }
-            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
-    }
-
-    fun deleteTask(id: Long): Int {
-        dbLock.lock()
-        try {
-            val values = ContentValues().apply { put("is_deleted", 1); put("updated_at", getCurrentDateTime()) }
-            return writableDatabase.update("pending_tasks", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-        } finally { dbLock.unlock() }
-    }
-
-    fun generateTaskReport(params: JSONObject): JSONArray = getPendingTasks(params.put("include_archived", true))
-
-    private fun taskCursorToJson(c: Cursor): JSONObject = JSONObject().apply {
-        put("id", c.getLong(c.getColumnIndexOrThrow("id")))
-        put("uuid", c.getString(c.getColumnIndexOrThrow("uuid")))
-        put("type", c.getString(c.getColumnIndexOrThrow("task_type")))
-        put("task_type", c.getString(c.getColumnIndexOrThrow("task_type")))
-        put("reference", c.getString(c.getColumnIndexOrThrow("reference")) ?: "")
-        put("date", c.getString(c.getColumnIndexOrThrow("task_date")) ?: "")
-        put("task_date", c.getString(c.getColumnIndexOrThrow("task_date")) ?: "")
-        put("amount", c.getDouble(c.getColumnIndexOrThrow("amount")))
-        put("status", c.getString(c.getColumnIndexOrThrow("status")))
-        put("priority", c.getString(c.getColumnIndexOrThrow("priority")))
-        put("notes", c.getString(c.getColumnIndexOrThrow("notes")) ?: "")
-        put("created_by", c.getLong(c.getColumnIndexOrThrow("created_by")))
-        put("assigned_to", c.getLong(c.getColumnIndexOrThrow("assigned_to")))
-        put("is_archived", c.getInt(c.getColumnIndexOrThrow("is_archived")))
-        put("is_resolved", c.getInt(c.getColumnIndexOrThrow("is_resolved")))
-        put("created_at", c.getString(c.getColumnIndexOrThrow("created_at")) ?: "")
-        put("updated_at", c.getString(c.getColumnIndexOrThrow("updated_at")) ?: "")
-        put("resolved_at", c.getString(c.getColumnIndexOrThrow("resolved_at")) ?: "")
-        put("archived_at", c.getString(c.getColumnIndexOrThrow("archived_at")) ?: "")
     }
 
     private fun createAllTables(db: SQLiteDatabase) {
@@ -10651,6 +10489,730 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun isClosed(): Boolean {
         return !isOpen()
+    }
+
+
+    // ========================================================================
+    // Typed operational screen contracts: whitelist-backed SQLite operations
+    // ========================================================================
+
+    private data class OperationalTableSpec(
+        val table: String,
+        val columns: List<String>,
+        val required: List<String>,
+        val searchColumns: List<String>,
+        val softDeleted: Boolean,
+        val hasUpdatedAt: Boolean,
+        val hasStatus: Boolean,
+        val numericColumns: List<String>
+    )
+
+    private fun operationalSpec(screenKey: String): OperationalTableSpec? = when (screenKey) {
+            "stations" -> OperationalTableSpec(
+                table = "stations",
+                columns = listOf("station_code", "station_name", "station_name_ar", "company_id", "branch_id", "country", "city", "district", "street", "building", "postal_code", "latitude", "longitude", "gps_location", "phone", "phone2", "email", "emergency_phone", "license_number", "license_issue_date", "license_expiry_date", "tax_number", "commercial_register", "environmental_permit", "fire_safety_cert", "operating_hours", "opening_time", "closing_time", "is_24_hours", "station_type", "total_tanks", "total_pumps", "total_nozzles", "storage_capacity", "default_currency_id", "status", "status_reason", "station_photo", "layout_plan", "remarks", "extra_data"),
+                required = listOf("station_name"),
+                searchColumns = listOf("station_code", "station_name", "station_name_ar", "city", "phone"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("total_tanks", "total_pumps", "total_nozzles", "storage_capacity")
+            )
+            "exchange_rates" -> OperationalTableSpec(
+                table = "exchange_rates",
+                columns = listOf("from_currency_id", "to_currency_id", "rate", "inverse_rate", "effective_date", "expiry_date", "source", "is_active", "remarks", "extra_data"),
+                required = listOf("from_currency_id", "to_currency_id", "rate", "effective_date"),
+                searchColumns = listOf("source", "effective_date"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = false,
+                numericColumns = listOf("rate", "inverse_rate")
+            )
+            "bad_debts" -> OperationalTableSpec(
+                table = "bad_debts",
+                columns = listOf("customer_id", "amount", "type", "description", "date", "resolved", "resolved_date"),
+                required = listOf("amount", "type"),
+                searchColumns = listOf("description", "type", "date"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("amount")
+            )
+            "vehicles" -> OperationalTableSpec(
+                table = "vehicles",
+                columns = listOf("vehicle_code", "party_id", "plate_number", "plate_number_ar", "plate_country", "plate_city", "vehicle_type", "brand", "model", "year", "color", "engine_type", "engine_capacity", "fuel_type_id", "tank_capacity", "chassis_number", "engine_number", "registration_number", "registration_expiry", "insurance_number", "insurance_expiry", "rfid_tag", "nfc_tag", "current_odometer", "last_odometer", "odometer_updated_at", "avg_consumption", "status", "vehicle_photo", "registration_doc", "remarks", "extra_data"),
+                required = listOf("vehicle_code", "party_id", "plate_number"),
+                searchColumns = listOf("vehicle_code", "plate_number", "brand", "model", "chassis_number"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("year", "engine_capacity", "tank_capacity", "current_odometer", "last_odometer", "avg_consumption")
+            )
+            "drivers" -> OperationalTableSpec(
+                table = "drivers",
+                columns = listOf("driver_code", "party_id", "vehicle_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "phone", "phone2", "email", "whatsapp", "address", "license_number", "license_type", "license_issue_date", "license_expiry_date", "license_issuing_authority", "license_doc_path", "hire_date", "job_title", "salary", "emergency_name", "emergency_phone", "emergency_relation", "status", "termination_date", "termination_reason", "remarks", "extra_data"),
+                required = listOf("driver_code", "full_name"),
+                searchColumns = listOf("driver_code", "full_name", "full_name_ar", "phone", "license_number"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("salary")
+            )
+            "vehicle_locations" -> OperationalTableSpec(
+                table = "vehicle_locations",
+                columns = listOf("vehicle_id", "latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy", "location_time"),
+                required = listOf("vehicle_id", "latitude", "longitude"),
+                searchColumns = listOf("vehicle_id", "location_time"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("latitude", "longitude", "speed", "heading", "fuel_level", "odometer", "altitude", "accuracy")
+            )
+            "vehicle_trips" -> OperationalTableSpec(
+                table = "vehicle_trips",
+                columns = listOf("vehicle_id", "driver_id", "trip_date", "start_location", "end_location", "distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer", "trip_purpose", "notes"),
+                required = listOf("vehicle_id", "trip_date"),
+                searchColumns = listOf("start_location", "end_location", "trip_purpose", "notes"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer")
+            )
+            "vehicle_expenses" -> OperationalTableSpec(
+                table = "vehicle_expenses",
+                columns = listOf("vehicle_id", "expense_type", "expense_date", "amount", "currency_id", "odometer_reading", "description", "invoice_path"),
+                required = listOf("vehicle_id", "expense_type", "expense_date", "amount"),
+                searchColumns = listOf("expense_type", "expense_date", "description"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("amount", "odometer_reading")
+            )
+            "fuel_types" -> OperationalTableSpec(
+                table = "fuel_types",
+                columns = listOf("fuel_code", "fuel_name", "fuel_name_ar", "description", "density_standard", "temperature_standard", "flash_point", "default_sale_price", "default_purchase_price", "tax_rate", "vat_rate", "color_code", "icon_path", "is_active", "remarks", "extra_data"),
+                required = listOf("fuel_code", "fuel_name"),
+                searchColumns = listOf("fuel_code", "fuel_name", "fuel_name_ar", "description"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("density_standard", "temperature_standard", "flash_point", "default_sale_price", "default_purchase_price", "tax_rate", "vat_rate")
+            )
+            "price_lists" -> OperationalTableSpec(
+                table = "price_lists",
+                columns = listOf("list_code", "list_name", "list_name_ar", "description", "party_id", "party_type_id", "station_id", "valid_from", "valid_to", "is_active", "is_default"),
+                required = listOf("list_code", "list_name"),
+                searchColumns = listOf("list_code", "list_name", "list_name_ar", "description"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("party_id", "party_type_id", "station_id")
+            )
+            "price_list_items" -> OperationalTableSpec(
+                table = "price_list_items",
+                columns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent", "valid_from", "valid_to", "is_active"),
+                required = listOf("price_list_id", "product_id", "unit_price"),
+                searchColumns = listOf("price_list_id", "product_id"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("price_list_id", "product_id", "unit_price", "min_quantity", "max_quantity", "discount_percent")
+            )
+            "price_history" -> OperationalTableSpec(
+                table = "price_history",
+                columns = listOf("product_id", "old_price", "new_price", "change_date", "change_reason", "created_by", "archived"),
+                required = listOf("product_id", "new_price"),
+                searchColumns = listOf("product_id", "change_reason", "change_date"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("product_id", "old_price", "new_price")
+            )
+            "tanks" -> OperationalTableSpec(
+                table = "tanks",
+                columns = listOf("tank_code", "tank_name", "tank_name_ar", "station_id", "fuel_type_id", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "usable_capacity", "dead_volume", "tank_shape", "length_meters", "diameter_meters", "height_meters", "location", "installation_date", "manufacturer", "serial_number", "model", "sensor_serial", "sensor_type", "sensor_calibration_date", "sensor_accuracy", "leak_detection", "overfill_protection", "emergency_valve", "last_inspection_date", "next_inspection_date", "inspection_certificate", "status", "status_reason"),
+                required = listOf("tank_code", "tank_name", "station_id", "fuel_type_id", "capacity_liters"),
+                searchColumns = listOf("tank_code", "tank_name", "tank_name_ar", "location", "serial_number"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("station_id", "fuel_type_id", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "usable_capacity", "dead_volume")
+            )
+            "pumps" -> OperationalTableSpec(
+                table = "pumps",
+                columns = listOf("pump_code", "pump_number", "pump_name", "pump_name_ar", "station_id", "tank_id", "serial_number", "manufacturer", "model", "installation_date", "max_flow_rate", "meter_start", "meter_current", "meter_last_reset", "status", "status_reason", "last_maintenance", "next_maintenance", "maintenance_interval", "remarks", "extra_data"),
+                required = listOf("pump_code", "pump_number", "station_id", "tank_id"),
+                searchColumns = listOf("pump_code", "pump_number", "pump_name", "pump_name_ar", "serial_number"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "tank_id", "max_flow_rate", "meter_start", "meter_current", "maintenance_interval")
+            )
+            "meter_readings" -> OperationalTableSpec(
+                table = "meter_readings",
+                columns = listOf("reading_code", "pump_id", "nozzle_id", "station_id", "shift_id", "reading_date", "period", "opening_reading", "closing_reading", "sold_liters", "system_sold_liters", "difference", "difference_percent", "is_balanced", "tolerance_limit", "adjustment_amount", "adjustment_reason", "adjusted_by", "read_by", "verified_by", "approved_by", "status", "rejection_reason", "remarks", "extra_data"),
+                required = listOf("reading_code", "pump_id", "nozzle_id", "station_id", "reading_date", "opening_reading", "closing_reading", "sold_liters", "read_by"),
+                searchColumns = listOf("reading_code", "reading_date", "period", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("pump_id", "nozzle_id", "station_id", "shift_id", "opening_reading", "closing_reading", "sold_liters", "system_sold_liters", "difference", "difference_percent", "adjustment_amount")
+            )
+            "tank_level_log" -> OperationalTableSpec(
+                table = "tank_level_log",
+                columns = listOf("tank_id", "reading_date", "reading_type", "opening_level", "closing_level", "measured_level", "calculated_level", "difference", "fuel_temperature", "fuel_density", "volume_at_15c", "refills_total", "sales_total", "evaporation_loss", "is_below_minimum", "is_near_maximum", "alert_triggered", "created_by", "remarks", "extra_data"),
+                required = listOf("tank_id", "reading_date"),
+                searchColumns = listOf("tank_id", "reading_date", "reading_type"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("tank_id", "opening_level", "closing_level", "measured_level", "calculated_level", "difference", "fuel_temperature", "fuel_density", "volume_at_15c", "refills_total", "sales_total", "evaporation_loss")
+            )
+            "fuel_quality_tests" -> OperationalTableSpec(
+                table = "fuel_quality_tests",
+                columns = listOf("refill_id", "test_date", "density", "temperature", "water_content", "sulfur_content", "viscosity", "flash_point", "cetane_number", "result", "certificate_url", "tested_by", "notes"),
+                required = listOf("refill_id"),
+                searchColumns = listOf("refill_id", "test_date", "result", "notes"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("refill_id", "density", "temperature", "water_content", "sulfur_content", "viscosity", "flash_point", "cetane_number")
+            )
+            "calibration_records" -> OperationalTableSpec(
+                table = "calibration_records",
+                columns = listOf("calibration_code", "entity_type", "entity_id", "calibration_date", "technician", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor", "certificate_number", "certificate_path", "next_calibration_date", "notes", "status"),
+                required = listOf("calibration_code", "entity_type", "entity_id", "calibration_date"),
+                searchColumns = listOf("calibration_code", "entity_type", "technician", "certificate_number", "status"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("entity_id", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor")
+            )
+            "warehouses" -> OperationalTableSpec(
+                table = "warehouses",
+                columns = listOf("station_id", "warehouse_name", "location_details", "is_default", "is_active"),
+                required = listOf("station_id", "warehouse_name"),
+                searchColumns = listOf("warehouse_name", "location_details"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("station_id")
+            )
+            "inventory_movements" -> OperationalTableSpec(
+                table = "inventory_movements",
+                columns = listOf("movement_code", "product_id", "station_id", "warehouse_id", "movement_type", "movement_subtype", "quantity_before", "quantity_change", "quantity_after", "unit_cost", "total_cost", "reference_type", "reference_id", "reference_code", "from_location", "to_location", "reason", "reason_code", "performed_by", "approved_by", "status", "remarks", "extra_data"),
+                required = listOf("movement_code", "product_id", "station_id", "movement_type", "quantity_before", "quantity_change", "quantity_after", "performed_by"),
+                searchColumns = listOf("movement_code", "movement_type", "reference_code", "from_location", "to_location", "reason", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("product_id", "station_id", "warehouse_id", "quantity_before", "quantity_change", "quantity_after", "unit_cost", "total_cost", "reference_id", "performed_by", "approved_by")
+            )
+            "stock_alerts" -> OperationalTableSpec(
+                table = "stock_alerts",
+                columns = listOf("product_id", "station_id", "alert_type", "alert_level", "current_quantity", "threshold_quantity", "shortage_quantity", "is_resolved", "resolved_at", "resolved_by", "resolution_notes", "notification_sent", "notification_method", "remarks", "extra_data"),
+                required = listOf("product_id", "station_id", "alert_type", "current_quantity", "threshold_quantity"),
+                searchColumns = listOf("alert_type", "alert_level", "resolution_notes"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("product_id", "station_id", "current_quantity", "threshold_quantity", "shortage_quantity")
+            )
+            "stocktakes" -> OperationalTableSpec(
+                table = "stocktakes",
+                columns = listOf("warehouse_id", "start_date", "end_date", "status", "total_variance", "notes", "created_by", "archived"),
+                required = listOf("warehouse_id", "status", "created_by"),
+                searchColumns = listOf("warehouse_id", "status", "notes"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("warehouse_id", "total_variance", "created_by")
+            )
+            "stocktake_details" -> OperationalTableSpec(
+                table = "stocktake_details",
+                columns = listOf("stocktake_id", "product_id", "system_quantity", "counted_quantity", "variance_value", "notes", "archived"),
+                required = listOf("stocktake_id", "product_id"),
+                searchColumns = listOf("stocktake_id", "product_id", "notes"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("stocktake_id", "product_id", "system_quantity", "counted_quantity", "variance_value")
+            )
+            "shifts" -> OperationalTableSpec(
+                table = "shifts",
+                columns = listOf("shift_code", "station_id", "shift_date", "shift_type", "start_time", "end_time", "duration_minutes", "manager_id", "cashier_id", "attendant_ids", "opening_cash", "opening_bank", "opening_credit", "closing_cash", "closing_bank", "closing_credit", "total_sales", "total_fuel_sales", "total_product_sales", "total_service_sales", "total_discounts", "total_tax", "total_vat", "total_cash", "total_credit_card", "total_bank_transfer", "total_credit_sales", "total_cheque", "total_other", "total_fuel_liters", "cash_variance", "variance_reason"),
+                required = listOf("station_id", "shift_date", "shift_type", "start_time"),
+                searchColumns = listOf("shift_code", "shift_type", "shift_date", "status"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "cashier_id", "opening_cash", "opening_bank", "closing_cash", "closing_bank", "total_sales", "total_fuel_sales", "total_product_sales", "total_cash")
+            )
+            "sales_transactions" -> OperationalTableSpec(
+                table = "sales_transactions",
+                columns = listOf("sale_code", "station_id", "shift_id", "customer_party_id", "vehicle_id", "driver_id", "invoice_number", "invoice_series", "invoice_type", "receipt_number", "sale_type", "fuel_type_id", "pump_id", "nozzle_id", "liters", "price_per_liter", "fuel_subtotal", "product_id", "quantity", "unit_price", "product_subtotal", "subtotal", "discount_amount", "discount_percent", "tax_rate", "tax_amount", "vat_rate", "vat_amount", "service_fee", "commission", "gross_amount", "net_amount", "currency_id", "exchange_rate", "amount_in_default", "payment_method", "payment_status", "paid_amount", "remaining_amount", "is_credit", "credit_days", "due_date", "delivery_location", "delivery_time", "order_type", "status", "cancellation_reason", "cashier_id", "remarks", "extra_data"),
+                required = listOf("station_id", "shift_id", "subtotal", "gross_amount", "net_amount", "payment_method", "cashier_id"),
+                searchColumns = listOf("sale_code", "invoice_number", "receipt_number", "delivery_location", "status", "payment_status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "shift_id", "customer_party_id", "vehicle_id", "driver_id", "fuel_type_id", "pump_id", "nozzle_id", "liters", "price_per_liter", "subtotal", "gross_amount", "net_amount", "paid_amount", "remaining_amount")
+            )
+            "deliveries" -> OperationalTableSpec(
+                table = "deliveries",
+                columns = listOf("sale_id", "party_id", "delivery_date", "quantity", "fuel_type", "price_per_liter", "total_amount", "status", "location", "notes", "driver_id", "vehicle_id", "shift_id"),
+                required = listOf("delivery_date", "quantity", "total_amount"),
+                searchColumns = listOf("delivery_date", "location", "status", "notes"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("sale_id", "party_id", "quantity", "price_per_liter", "total_amount", "driver_id", "vehicle_id", "shift_id")
+            )
+            "fuel_sales" -> OperationalTableSpec(
+                table = "fuel_sales",
+                columns = listOf("sale_id", "shift_id", "pump_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount", "payment_method", "customer_id", "vehicle_plate", "sale_date", "sale_time", "notes"),
+                required = listOf("shift_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount"),
+                searchColumns = listOf("sale_date", "payment_method", "vehicle_plate", "notes"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("shift_id", "pump_id", "fuel_type_id", "quantity", "price_per_liter", "total_amount", "customer_id")
+            )
+            "payments" -> OperationalTableSpec(
+                table = "payments",
+                columns = listOf("payment_code", "sale_id", "customer_party_id", "supplier_party_id", "payment_type", "payment_method", "amount", "currency_id", "exchange_rate", "amount_in_default", "is_partial", "total_invoice_amount", "remaining_after", "cheque_number", "cheque_date", "cheque_bank", "cheque_branch", "cheque_status", "bank_account_id", "transfer_reference", "transfer_date", "card_last_four", "card_type", "auth_code", "terminal_id", "mobile_provider", "mobile_number", "transaction_id", "cash_box_id", "status", "is_refund", "original_payment_id", "refund_reason", "operator", "notes"),
+                required = listOf("payment_type", "payment_method", "amount"),
+                searchColumns = listOf("payment_code", "payment_method", "status", "operator", "notes"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("sale_id", "customer_party_id", "supplier_party_id", "amount", "currency_id", "bank_account_id", "cash_box_id")
+            )
+            "receipts" -> OperationalTableSpec(
+                table = "receipts",
+                columns = listOf("receipt_number", "customer_party_id", "payment_id", "receipt_type", "received_from", "received_from_ar", "received_by", "accountant_id", "amount", "currency_id", "amount_in_words", "amount_in_words_ar", "purpose", "purpose_ar", "reference_document", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id", "status", "void_reason", "voided_by", "voided_at", "print_count", "remarks", "extra_data"),
+                required = listOf("receipt_number", "receipt_type", "received_from", "received_by", "amount"),
+                searchColumns = listOf("receipt_number", "received_from", "purpose", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("customer_party_id", "payment_id", "received_by", "accountant_id", "amount", "cash_amount", "cheque_amount", "bank_amount", "other_amount", "cash_box_id")
+            )
+            "cash_boxes" -> OperationalTableSpec(
+                table = "cash_boxes",
+                columns = listOf("box_code", "box_name", "box_name_ar", "station_id", "box_type", "opening_balance", "current_balance", "maximum_balance", "currency_id", "responsible_user_id", "status", "remarks", "extra_data"),
+                required = listOf("box_code", "box_name", "station_id"),
+                searchColumns = listOf("box_code", "box_name", "box_name_ar", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "opening_balance", "current_balance", "maximum_balance", "currency_id", "responsible_user_id")
+            )
+            "cash_movements" -> OperationalTableSpec(
+                table = "cash_movements",
+                columns = listOf("cash_box_id", "movement_type", "amount", "balance_before", "balance_after", "description", "reference_type", "reference_id", "created_by"),
+                required = listOf("movement_type", "amount"),
+                searchColumns = listOf("movement_type", "description", "reference_type"),
+                softDeleted = true,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("cash_box_id", "amount", "balance_before", "balance_after", "reference_id")
+            )
+            "expense_categories" -> OperationalTableSpec(
+                table = "expense_categories",
+                columns = listOf("category_code", "category_name", "category_name_ar", "description", "default_account_id", "monthly_budget", "yearly_budget", "is_active", "remarks", "extra_data"),
+                required = listOf("category_code", "category_name"),
+                searchColumns = listOf("category_code", "category_name", "category_name_ar", "description"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("default_account_id", "monthly_budget", "yearly_budget")
+            )
+            "expenses" -> OperationalTableSpec(
+                table = "expenses",
+                columns = listOf("expense_code", "expense_category_id", "station_id", "payee_name", "payee_name_ar", "payee_type", "payee_id", "amount", "currency_id", "exchange_rate", "amount_in_default", "tax_rate", "tax_amount", "vat_rate", "vat_amount", "total_amount", "payment_method", "payment_status", "paid_amount", "is_recurring", "recurrence_type", "next_due_date", "description", "description_ar", "invoice_number", "invoice_path", "receipt_path", "journal_entry_id", "status", "approved_by", "approved_at", "remarks", "extra_data"),
+                required = listOf("expense_code", "expense_category_id", "payee_name", "amount", "total_amount", "description"),
+                searchColumns = listOf("expense_code", "payee_name", "payee_name_ar", "description", "payment_status", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("expense_category_id", "station_id", "payee_id", "amount", "total_amount", "paid_amount")
+            )
+            "budgets" -> OperationalTableSpec(
+                table = "budgets",
+                columns = listOf("station_id", "budget_name", "budget_period", "start_date", "end_date", "total_amount", "currency_id", "status", "created_by"),
+                required = listOf("station_id", "budget_name", "budget_period", "start_date", "end_date", "currency_id", "created_by"),
+                searchColumns = listOf("budget_name", "budget_period", "status"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "total_amount", "currency_id", "created_by")
+            )
+            "cash_deposits" -> OperationalTableSpec(
+                table = "cash_deposits",
+                columns = listOf("customer_id", "amount", "balance_after", "date", "notes", "operator", "is_deleted"),
+                required = listOf("amount"),
+                searchColumns = listOf("customer_id", "notes", "operator"),
+                softDeleted = true,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("customer_id", "amount", "balance_after")
+            )
+            "employees" -> OperationalTableSpec(
+                table = "employees",
+                columns = listOf("employee_code", "party_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "marital_status", "phone", "phone2", "email", "address", "emergency_contact", "emergency_phone", "department", "job_title", "job_title_ar", "employment_type", "hire_date", "termination_date", "termination_reason", "station_id", "branch_id", "basic_salary", "housing_allowance", "transport_allowance", "food_allowance", "other_allowances", "total_salary", "insurance_deduction", "tax_deduction", "other_deductions", "bank_name", "bank_account", "status", "remarks", "extra_data"),
+                required = listOf("employee_code", "full_name", "job_title", "hire_date"),
+                searchColumns = listOf("employee_code", "full_name", "full_name_ar", "phone", "department", "job_title"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "basic_salary", "housing_allowance", "transport_allowance", "total_salary")
+            )
+            "attendance" -> OperationalTableSpec(
+                table = "attendance",
+                columns = listOf("employee_id", "station_id", "shift_id", "attendance_date", "check_in", "check_in_method", "check_in_location", "check_in_latitude", "check_in_longitude", "check_in_device", "check_out", "check_out_method", "check_out_location", "check_out_latitude", "check_out_longitude", "check_out_device", "check_in_photo", "check_out_photo", "work_hours", "overtime_hours", "late_minutes", "early_leave_minutes", "status", "absence_reason", "approved_by", "approved_at", "notes"),
+                required = listOf("employee_id", "attendance_date"),
+                searchColumns = listOf("attendance_date", "status", "absence_reason", "notes"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("employee_id", "station_id", "shift_id", "work_hours", "overtime_hours", "late_minutes", "early_leave_minutes")
+            )
+            "payroll" -> OperationalTableSpec(
+                table = "payroll",
+                columns = listOf("payroll_code", "payroll_year", "payroll_month", "period_start", "period_end", "total_employees", "total_basic_salary", "total_allowances", "total_deductions", "total_net_salary", "status", "calculated_at", "calculated_by", "approved_by", "approved_at", "paid_at", "paid_by", "created_by"),
+                required = listOf("payroll_code", "payroll_year", "payroll_month", "period_start", "period_end", "created_by"),
+                searchColumns = listOf("payroll_code", "period_start", "period_end", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("payroll_year", "payroll_month", "total_employees", "total_basic_salary", "total_allowances", "total_deductions", "total_net_salary")
+            )
+            "employee_payments" -> OperationalTableSpec(
+                table = "employee_payments",
+                columns = listOf("employee_id", "amount", "type", "description", "date", "operator"),
+                required = listOf("employee_id", "amount", "type"),
+                searchColumns = listOf("employee_id", "type", "description", "operator"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("employee_id", "amount")
+            )
+            "fixed_assets" -> OperationalTableSpec(
+                table = "fixed_assets",
+                columns = listOf("station_id", "asset_code", "asset_name", "category_id", "purchase_date", "purchase_cost", "current_value", "useful_life", "salvage_value", "depreciation_method", "asset_type", "serial_number", "model", "manufacturer", "warranty_expiry", "status", "location", "notes", "documents", "maintenance_history", "transfer_history", "disposal_data", "disposed_at", "disposed_by"),
+                required = listOf("station_id", "asset_code", "asset_name"),
+                searchColumns = listOf("asset_code", "asset_name", "asset_type", "serial_number", "location", "status"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "category_id", "purchase_cost", "current_value", "useful_life", "salvage_value")
+            )
+            "depreciation" -> OperationalTableSpec(
+                table = "depreciation",
+                columns = listOf("asset_id", "depreciation_date", "depreciation_amount", "accumulated_depreciation", "remaining_value", "journal_entry_id", "created_by", "archived"),
+                required = listOf("asset_id", "depreciation_amount"),
+                searchColumns = listOf("asset_id", "depreciation_date"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("asset_id", "depreciation_amount", "accumulated_depreciation", "remaining_value")
+            )
+            "maintenance_requests" -> OperationalTableSpec(
+                table = "maintenance_requests",
+                columns = listOf("request_code", "asset_type", "asset_id", "request_type", "priority", "title", "description", "description_ar", "symptoms", "error_codes", "reported_by", "reported_at", "assigned_to", "assigned_at", "scheduled_date", "scheduled_time", "estimated_duration", "started_at", "completed_at", "actual_duration", "resolution", "resolution_ar", "parts_used", "labor_cost", "parts_cost", "total_cost", "status", "approved_by", "approved_at", "before_photos", "after_photos", "station_id", "remarks", "extra_data"),
+                required = listOf("request_code", "asset_type", "asset_id", "request_type", "title", "description", "reported_by", "station_id"),
+                searchColumns = listOf("request_code", "asset_type", "title", "description", "priority", "status"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("asset_id", "reported_by", "assigned_to", "estimated_duration", "labor_cost", "parts_cost", "total_cost", "station_id")
+            )
+            "maintenance_schedule" -> OperationalTableSpec(
+                table = "maintenance_schedule",
+                columns = listOf("schedule_code", "schedule_name", "asset_type", "frequency_type", "frequency_value", "day_of_week", "day_of_month", "month", "meter_trigger", "description", "is_active", "created_by"),
+                required = listOf("schedule_code", "schedule_name", "asset_type", "frequency_type"),
+                searchColumns = listOf("schedule_code", "schedule_name", "asset_type", "frequency_type", "description"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("frequency_value", "day_of_week", "day_of_month", "month", "meter_trigger", "created_by")
+            )
+            "maintenance_history" -> OperationalTableSpec(
+                table = "maintenance_history",
+                columns = listOf("maintenance_request_id", "event_type", "event_description", "old_value", "new_value", "performed_by", "performed_at"),
+                required = listOf("maintenance_request_id", "event_type", "event_description", "performed_by"),
+                searchColumns = listOf("event_type", "event_description", "old_value", "new_value"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("maintenance_request_id", "performed_by")
+            )
+            "predictions" -> OperationalTableSpec(
+                table = "predictions",
+                columns = listOf("prediction_type", "entity_type", "entity_id", "prediction_date", "predicted_value", "confidence_interval_low", "confidence_interval_high", "actual_value", "model_version", "created_by"),
+                required = listOf("prediction_type", "prediction_date"),
+                searchColumns = listOf("prediction_type", "entity_type", "prediction_date", "model_version"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = false,
+                numericColumns = listOf("entity_id", "predicted_value", "confidence_interval_low", "confidence_interval_high", "actual_value")
+            )
+            "documents" -> OperationalTableSpec(
+                table = "documents",
+                columns = listOf("document_code", "document_name", "document_name_ar", "document_type", "entity_type", "entity_id", "file_name", "file_path", "file_url", "file_size", "mime_type", "file_hash", "version", "description", "description_ar", "expiry_date", "is_confidential", "uploaded_by", "uploaded_at"),
+                required = listOf("document_code", "document_name", "document_type", "entity_type", "entity_id", "file_name", "file_path", "uploaded_by"),
+                searchColumns = listOf("document_code", "document_name", "document_name_ar", "document_type", "entity_type", "file_name", "description"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = false,
+                numericColumns = listOf("entity_id", "file_size", "version", "uploaded_by")
+            )
+            "sync_devices" -> OperationalTableSpec(
+                table = "sync_devices",
+                columns = listOf("device_id", "device_name", "device_type", "os_version", "app_version", "station_id", "last_sync_at", "is_active"),
+                required = listOf("device_id"),
+                searchColumns = listOf("device_id", "device_name", "device_type", "os_version", "app_version"),
+                softDeleted = false,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id")
+            )
+            "sync_logs" -> OperationalTableSpec(
+                table = "sync_logs",
+                columns = listOf("sync_type", "sync_direction", "device_id", "device_type", "device_name", "app_version", "entity_type", "records_synced", "records_failed", "records_total", "started_at", "completed_at", "duration_seconds", "status", "error_message", "error_details", "network_type", "data_transferred_kb"),
+                required = listOf("sync_type", "sync_direction", "device_id", "entity_type", "started_at"),
+                searchColumns = listOf("sync_type", "sync_direction", "device_id", "entity_type", "status", "error_message"),
+                softDeleted = false,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("records_synced", "records_failed", "records_total", "duration_seconds", "data_transferred_kb")
+            )
+            "backup_history" -> OperationalTableSpec(
+                table = "backup_history",
+                columns = listOf("backup_type", "backup_method", "database_type", "database_name", "file_name", "file_path", "file_size_mb", "checksum", "tables_included", "tables_excluded", "started_at", "completed_at", "duration_seconds", "status", "error_message", "storage_location", "storage_path", "is_encrypted", "encryption_method", "expiry_date", "is_deleted"),
+                required = listOf("backup_type", "started_at"),
+                searchColumns = listOf("backup_type", "file_name", "status", "storage_location"),
+                softDeleted = true,
+                hasUpdatedAt = false,
+                hasStatus = true,
+                numericColumns = listOf("file_size_mb", "duration_seconds")
+            )
+            "printer_profiles" -> OperationalTableSpec(
+                table = "printer_profiles",
+                columns = listOf("profile_code", "profile_name", "printer_name", "printer_type", "connection_type", "ip_address", "port", "mac_address", "paper_width", "paper_height", "dpi", "driver_settings", "is_default", "is_active", "created_by"),
+                required = listOf("profile_code", "profile_name"),
+                searchColumns = listOf("profile_code", "profile_name", "printer_name", "printer_type", "connection_type"),
+                softDeleted = false,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("port", "paper_width", "paper_height", "dpi")
+            )
+            "receipt_templates" -> OperationalTableSpec(
+                table = "receipt_templates",
+                columns = listOf("template_code", "template_name", "description", "station_id", "header", "body", "footer", "variables", "paper_width", "font_size", "is_default", "is_active", "created_by"),
+                required = listOf("template_code", "template_name"),
+                searchColumns = listOf("template_code", "template_name", "description"),
+                softDeleted = false,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id", "paper_width", "font_size")
+            )
+            "invoice_templates" -> OperationalTableSpec(
+                table = "invoice_templates",
+                columns = listOf("template_code", "template_name", "description", "station_id", "template_html", "template_css", "variables", "is_default", "is_active", "created_by"),
+                required = listOf("template_code", "template_name"),
+                searchColumns = listOf("template_code", "template_name", "description"),
+                softDeleted = false,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("station_id")
+            )
+            else -> null
+        }
+
+    private fun putOperationalValue(values: ContentValues, key: String, value: Any?) {
+        if (value == null || value == JSONObject.NULL) return
+        when (value) {
+            is Boolean -> values.put(key, if (value) 1 else 0)
+            is Int -> values.put(key, value)
+            is Long -> values.put(key, value)
+            is Double -> values.put(key, value)
+            is Float -> values.put(key, value)
+            is Number -> values.put(key, value.toDouble())
+            else -> values.put(key, value.toString())
+        }
+    }
+
+    private fun operationalHasUuid(table: String): Boolean = table !in setOf("bad_debts", "price_history", "stocktakes", "stocktake_details", "cash_deposits", "employee_payments", "depreciation")
+
+    private fun operationalHasCreatedAt(table: String): Boolean = table !in setOf("bad_debts", "price_history", "price_list_items", "stocktakes", "stocktake_details", "cash_deposits", "employee_payments", "depreciation")
+
+    private fun operationalPreparedData(screenKey: String, input: JSONObject, actorId: Long): JSONObject {
+        val data = JSONObject(input.toString())
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        fun defaultString(key: String, prefix: String) {
+            if (!data.has(key) || data.optString(key).isBlank()) data.put(key, "$prefix-${System.currentTimeMillis()}")
+        }
+        when (screenKey) {
+            "stations" -> defaultString("station_code", "ST")
+            "vehicles" -> defaultString("vehicle_code", "VEH")
+            "drivers" -> defaultString("driver_code", "DRV")
+            "fuel_types" -> defaultString("fuel_code", "FUEL")
+            "price_lists" -> defaultString("list_code", "PL")
+            "tanks" -> defaultString("tank_code", "TANK")
+            "pumps" -> defaultString("pump_code", "PUMP")
+            "meter_readings" -> defaultString("reading_code", "MR")
+            "calibration_records" -> defaultString("calibration_code", "CAL")
+            "maintenance_requests" -> defaultString("request_code", "MRQ")
+            "maintenance_schedule" -> defaultString("schedule_code", "MS")
+            "documents" -> defaultString("document_code", "DOC")
+            "printer_profiles" -> defaultString("profile_code", "PRN")
+            "receipt_templates", "invoice_templates" -> defaultString("template_code", "TPL")
+            "payroll" -> defaultString("payroll_code", "PAY")
+            "cash_boxes" -> defaultString("box_code", "BOX")
+            "shifts" -> defaultString("shift_code", "SHIFT")
+            "sales_transactions" -> defaultString("sale_code", "SALE")
+            "payments" -> defaultString("payment_code", "PAY")
+            "expenses" -> defaultString("expense_code", "EXP")
+            "price_history" -> if (!data.has("created_by") && actorId > 0) data.put("created_by", actorId)
+        }
+        if (actorId > 0) {
+            if (spec.columns.contains("created_by") && (!data.has("created_by") || data.optLong("created_by", 0) <= 0)) data.put("created_by", actorId)
+            if (spec.columns.contains("reported_by") && (!data.has("reported_by") || data.optLong("reported_by", 0) <= 0)) data.put("reported_by", actorId)
+            if (spec.columns.contains("read_by") && (!data.has("read_by") || data.optLong("read_by", 0) <= 0)) data.put("read_by", actorId)
+            if (spec.columns.contains("performed_by") && (!data.has("performed_by") || data.optLong("performed_by", 0) <= 0)) data.put("performed_by", actorId)
+            if (spec.columns.contains("uploaded_by") && (!data.has("uploaded_by") || data.optLong("uploaded_by", 0) <= 0)) data.put("uploaded_by", actorId)
+        }
+        if (operationalHasUuid(spec.table) && !data.has("uuid")) data.put("uuid", UUID.randomUUID().toString())
+        return data
+    }
+
+    private fun requireOperationalData(spec: OperationalTableSpec, data: JSONObject) {
+        spec.required.forEach { key ->
+            val value = if (data.has(key) && !data.isNull(key)) data.optString(key).trim() else ""
+            require(value.isNotBlank() && value != "0") { "الحقل مطلوب: $key" }
+        }
+    }
+
+    fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val where = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            if (spec.softDeleted) where += "is_deleted = 0"
+            val includeArchived = params.optBoolean("include_archived", false)
+            if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
+            val search = params.optString("search", "").trim()
+            if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
+                where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
+                repeat(spec.searchColumns.size) { args += "%$search%" }
+            }
+            if (spec.hasStatus && spec.columns.contains("status")) {
+                val status = params.optString("status", "").trim()
+                if (status.isNotBlank()) { where += "status = ?"; args += status }
+            }
+            val dateColumn = when (screenKey) {
+                "bad_debts" -> "date"
+                "price_history" -> "change_date"
+                "fuel_sales" -> "sale_date"
+                "deliveries" -> "delivery_date"
+                "cash_deposits", "employee_payments" -> "date"
+                else -> "created_at"
+            }
+            val from = params.optString("from_date", "").trim()
+            val to = params.optString("to_date", "").trim()
+            if (from.isNotBlank()) { where += "date($dateColumn) >= date(?)"; args += from }
+            if (to.isNotBlank()) { where += "date($dateColumn) <= date(?)"; args += to }
+            val limit = params.optInt("limit", 200).coerceIn(1, 1000)
+            val offset = params.optInt("offset", 0).coerceAtLeast(0)
+            val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+            val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
+            db.rawQuery("SELECT * FROM ${spec.table}$whereSql ORDER BY id DESC LIMIT ? OFFSET ?", pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        val rows = getOperationalRows(screenKey, params)
+        val totals = JSONObject()
+        spec.numericColumns.forEach { key ->
+            var total = 0.0
+            for (i in 0 until rows.length()) total += rows.optJSONObject(i)?.optDouble(key, 0.0) ?: 0.0
+            totals.put(key, total)
+        }
+        return JSONObject().apply { put("rows", rows); put("count", rows.length()); put("totals", totals); put("source", spec.table) }
+    }
+
+    fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        val data = operationalPreparedData(screenKey, input, actorId)
+        requireOperationalData(spec, data)
+        dbLock.lock()
+        return try {
+            val values = ContentValues()
+            for (key in spec.columns) {
+                if (data.has(key)) putOperationalValue(values, key, data.opt(key))
+            }
+            if (operationalHasUuid(spec.table)) putOperationalValue(values, "uuid", data.optString("uuid", UUID.randomUUID().toString()))
+            if (operationalHasCreatedAt(spec.table) && !data.has("created_at")) values.put("created_at", getCurrentDateTime())
+            if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
+            val id = writableDatabase.insertOrThrow(spec.table, null, values)
+            if (id > 0) logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id")
+            id
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateOperationalRecord(screenKey: String, id: Long, input: JSONObject, actorId: Long = 0L): Int {
+        require(id > 0L) { "معرف السجل غير صالح" }
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        val data = operationalPreparedData(screenKey, input, actorId)
+        dbLock.lock()
+        return try {
+            val values = ContentValues()
+            for (key in spec.columns) {
+                if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
+            }
+            if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
+            val where = if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?"
+            val rows = writableDatabase.update(spec.table, values, where, arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteOperationalRecord(screenKey: String, id: Long): Int {
+        require(id > 0L) { "معرف السجل غير صالح" }
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val rows = if (spec.softDeleted) db.update(spec.table, ContentValues().apply { put("is_deleted", 1); if (spec.hasUpdatedAt) put("updated_at", getCurrentDateTime()) }, "id = ?", arrayOf(id.toString())) else db.delete(spec.table, "id = ?", arrayOf(id.toString()))
+            if (rows > 0) logActivity("system", "delete_${spec.table}", "حذف سجل ${spec.table}: $id")
+            rows
+        } finally { dbLock.unlock() }
+    }
+
+    fun resolveOperationalRecord(screenKey: String, id: Long, note: String = ""): Int {
+        require(id > 0L) { "معرف السجل غير صالح" }
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val values = ContentValues()
+            val where = "id = ?"
+            when (screenKey) {
+                "bad_debts" -> { values.put("resolved", 1); values.put("resolved_date", getCurrentDateTime()) }
+                "stock_alerts" -> { values.put("is_resolved", 1); values.put("resolved_at", getCurrentDateTime()); values.put("resolution_notes", note) }
+                "maintenance_requests" -> { values.put("status", "completed"); values.put("completed_at", getCurrentDateTime()); values.put("resolution", note) }
+                "sync_logs" -> { values.put("status", "success"); values.put("completed_at", getCurrentDateTime()) }
+                else -> error("لا توجد عملية اعتماد/حل مدعومة لهذه الشاشة")
+            }
+            if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
+            db.update(spec.table, values, where, arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
     }
 
     // ========================================================================
