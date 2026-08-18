@@ -6404,6 +6404,61 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
     }
 
+    fun getUserRecoveryContact(username: String): JSONObject? {
+        if (username.isBlank()) return null
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, username, phone, status FROM users WHERE username = ? AND is_deleted = 0 LIMIT 1",
+                arrayOf(username.trim())
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) null else JSONObject().apply {
+                    put("user_id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+                    put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")))
+                    put("phone", cursor.getString(cursor.getColumnIndexOrThrow("phone")))
+                    put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getUserRecoveryContactByPhone(phone: String): JSONObject? {
+        val digits = phone.filter { it.isDigit() }
+        if (digits.isBlank()) return null
+        val national = when {
+            digits.startsWith("00967") -> digits.removePrefix("00967")
+            digits.startsWith("967") -> digits.removePrefix("967")
+            digits.startsWith("0") && digits.length == 10 -> digits.removePrefix("0")
+            else -> digits
+        }
+        val variants = linkedSetOf(
+            phone.trim(),
+            digits,
+            "967$national",
+            "0$national",
+            national
+        ).filter { it.isNotBlank() }
+        val placeholders = variants.joinToString(",") { "?" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                "SELECT id, username, phone, status FROM users WHERE is_deleted = 0 AND phone IN ($placeholders) LIMIT 1",
+                variants.toTypedArray()
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) null else JSONObject().apply {
+                    put("user_id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
+                    put("username", cursor.getString(cursor.getColumnIndexOrThrow("username")))
+                    put("phone", cursor.getString(cursor.getColumnIndexOrThrow("phone")))
+                    put("status", cursor.getString(cursor.getColumnIndexOrThrow("status")))
+                }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun updateBiometricStatus(username: String, enabled: Boolean): Boolean {
         val cv = ContentValues().apply {
             put("biometric_enabled", if (enabled) 1 else 0)
@@ -14520,10 +14575,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = writableDatabase
             val now = System.currentTimeMillis()
-            val expiresAt = now + (expirySeconds * 1000L)
+            val active = db.rawQuery(
+                "SELECT timestamp, expires_at FROM user_otp_verifications WHERE user_id = ? LIMIT 1",
+                arrayOf(userId.toString())
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) false
+                else {
+                    val issuedAt = cursor.getLong(0)
+                    val expiresAt = cursor.getLong(1)
+                    expiresAt > now && now - issuedAt < 60_000L
+                }
+            }
+            if (active) return false
+            if (userId <= 0L || !otpCode.matches(Regex("\\d{6}"))) return false
+            val expiresAt = now + 300_000L
             val cv = ContentValues().apply {
                 put("user_id", userId)
-                put("otp_code", otpCode)
+                put("otp_code", hashUserOtp(otpCode))
                 put("timestamp", now)
                 put("attempts", 0)
                 put("max_attempts", 3)
@@ -14539,6 +14607,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    private fun hashUserOtp(otpCode: String): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(otpCode.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+    }
+
     /**
      * التحقق من رمز OTP للمستخدم
      * @param userId معرف المستخدم
@@ -14551,8 +14625,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val now = System.currentTimeMillis()
             db.rawQuery(
-                "SELECT * FROM user_otp_verifications WHERE user_id = ? AND otp_code = ? AND expires_at > ?",
-                arrayOf(userId.toString(), otpCode, now.toString())
+                """
+                    SELECT * FROM user_otp_verifications
+                    WHERE user_id = ?
+                      AND otp_code = ?
+                      AND expires_at > ?
+                      AND attempts < max_attempts
+                    LIMIT 1
+                """.trimIndent(),
+                arrayOf(userId.toString(), hashUserOtp(otpCode), now.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     // نجاح: حذف الرمز بعد الاستخدام
@@ -14560,8 +14641,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     logActivity("system", "otp_verified", "تم التحقق من OTP للمستخدم $userId")
                     true
                 } else {
-                    // فشل: زيادة عدد المحاولات
-                    db.execSQL("UPDATE user_otp_verifications SET attempts = attempts + 1 WHERE user_id = ?", arrayOf(userId.toString()))
+                    // فشل: زيادة عدد المحاولات، وحذف الرمز بعد بلوغ الحد الأقصى.
+                    db.execSQL(
+                        "UPDATE user_otp_verifications SET attempts = attempts + 1 WHERE user_id = ? AND attempts < max_attempts",
+                        arrayOf(userId.toString())
+                    )
+                    db.delete(
+                        "user_otp_verifications",
+                        "user_id = ? AND attempts >= max_attempts",
+                        arrayOf(userId.toString())
+                    )
                     false
                 }
             }

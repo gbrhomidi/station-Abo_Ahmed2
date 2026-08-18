@@ -61,6 +61,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.lang.ref.WeakReference
+import java.security.SecureRandom
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -523,7 +524,6 @@ class MainActivity : AppCompatActivity() {
         }
         val runtimePermissions = listOf(
             Manifest.permission.CAMERA,
-            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
             Manifest.permission.READ_CONTACTS,
@@ -538,32 +538,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 &&
-            !isPermissionGranted(Manifest.permission.READ_EXTERNAL_STORAGE)
-        ) {
-            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
-            !isPermissionGranted(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        ) {
-            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            listOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO
-            ).forEach { permission ->
-                if (!isPermissionGranted(permission)) {
-                    permissions.add(permission)
-                }
-            }
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            !isPermissionGranted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        ) {
-            permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS)
         ) {
@@ -1799,46 +1773,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
 
         @JavascriptInterface
-        fun forgotPassword(username: String): String {
-            val startTime = System.currentTimeMillis()
-            DebugLogger.info("ForgotPassword", "Request for $username")
-            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try {
-                val user = db.getUserByUsername(username)
-                if (user == null) {
-                    DebugLogger.warn("ForgotPassword", "User not found: $username")
-                    return errorResponse("المستخدم غير موجود")
-                }
-
-                val userId = user.optLong("user_id", 0L)
-                if (userId == 0L) {
-                    return errorResponse("معرف المستخدم غير صالح")
-                }
-
-                val token = UUID.randomUUID().toString()
-                val stored = db.storeResetToken(userId, token)
-                if (!stored) {
-                    return errorResponse("فشل تخزين التوكن")
-                }
-
-                val resetUrl = "file:///android_asset/login.html?token=$token"
-                DebugLogger.info("ForgotPassword", "Reset token created for $username, duration=${System.currentTimeMillis()-startTime}ms")
-
-                JSONObject().apply {
-                    put("success", true)
-                    put("token", token)
-                    put("reset_url", resetUrl)
-                }.toString()
-            } catch (e: Exception) {
-                DebugLogger.logException("ForgotPassword", e)
-                errorResponse(e.message)
-            }
-        }
-
-        @JavascriptInterface
         fun resetPassword(token: String, newPassword: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("ResetPassword", "Attempt with token")
+            if (newPassword.length < 8 ||
+                !newPassword.any { it.isUpperCase() } ||
+                !newPassword.any { it.isLowerCase() } ||
+                !newPassword.any { it.isDigit() }
+            ) {
+                return errorResponse("كلمة المرور يجب أن تحتوي على 8 أحرف، حرف كبير، حرف صغير، ورقم")
+            }
+            DebugLogger.info("ResetPassword", "Attempt with one-time token")
             return try {
                 val userData = db.validateResetToken(token)
                 if (userData == null) {
@@ -1866,34 +1810,88 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun requestPasswordResetSms(username: String, phone: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                return errorResponse("إذن إرسال SMS غير مفعل")
+            }
+            val cleanUsername = username.trim()
+            val normalizedPhone = PhoneUtils.normalize(phone)
+                ?: return errorResponse("رقم الهاتف غير صالح")
+            if (cleanUsername.isBlank()) return errorResponse("اسم المستخدم مطلوب")
+
+            return try {
+                val user = db.getUserRecoveryContact(cleanUsername)
+                    ?: return errorResponse("بيانات الاستعادة غير صحيحة")
+                val savedPhone = user.optString("phone")
+                if (!PhoneUtils.isSameNumber(savedPhone, normalizedPhone)) {
+                    return errorResponse("بيانات الاستعادة غير صحيحة")
+                }
+                val userId = user.optLong("user_id", 0L)
+                if (userId <= 0L) return errorResponse("معرف المستخدم غير صالح")
+
+                val otp = String.format(Locale.US, "%06d", SecureRandom().nextInt(1_000_000))
+                if (!db.storeUserOtp(userId, otp, 300)) {
+                    return errorResponse("تم إرسال رمز حديث مؤخراً؛ يرجى الانتظار دقيقة قبل إعادة الطلب")
+                }
+                val smsBody = "محطة أبو أحمد: رمز استعادة كلمة المرور هو $otp. صالح لمدة 5 دقائق. لا تشاركه مع أي شخص."
+                val enqueue = SmsOutboxRepository.enqueue(
+                    db = db,
+                    recipient = normalizedPhone,
+                    body = smsBody,
+                    eventId = "password-reset-sms",
+                    businessEntityId = userId.toString(),
+                    priority = SmsBudgetManager.Priority.HIGH,
+                    dedupeKey = "password-reset-sms:$userId:${System.currentTimeMillis() / 60_000L}"
+                )
+                if (enqueue == null) {
+                    db.clearOtpCode(userId)
+                    return errorResponse("تعذر وضع رسالة الاستعادة في قائمة الإرسال")
+                }
+                SmsOutboxWorker.schedule(activity.applicationContext)
+                JSONObject().apply {
+                    put("success", true)
+                    put("status", enqueue.status)
+                    put("message_id", enqueue.messageId)
+                    put("expires_in_seconds", 300)
+                    put("phone_masked", normalizedPhone.take(3) + "****" + normalizedPhone.takeLast(2))
+                    put("message", "تم وضع رمز التحقق في قائمة إرسال SMS؛ صالح لمدة 5 دقائق")
+                }.toString()
+            } catch (e: SecurityException) {
+                DebugLogger.logException("PasswordResetSmsPermission", e)
+                errorResponse("إذن إرسال SMS غير مفعل")
+            } catch (e: Exception) {
+                DebugLogger.logException("PasswordResetSms", e)
+                errorResponse("تعذر إنشاء طلب استعادة كلمة المرور")
+            }
+        }
+
+        @JavascriptInterface
         fun verifyResetCode(phone: String, code: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            DebugLogger.info("VerifyCode", "Phone: $phone")
+            if (!code.matches(Regex("\\d{6}"))) return errorResponse("رمز التحقق يجب أن يتكون من 6 أرقام")
             return try {
-                val cursor = db.readableDatabase.rawQuery(
-                    "SELECT id FROM users WHERE phone = ? AND is_deleted = 0 LIMIT 1",
-                    arrayOf(phone)
-                )
-                val userId = cursor.use {
-                    if (it.moveToFirst()) it.getLong(0) else null
+                val user = db.getUserRecoveryContactByPhone(phone)
+                    ?: return errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
+                val userId = user.optLong("user_id", 0L)
+                if (userId <= 0L || !db.validateOtpCode(userId, code)) {
+                    return errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
                 }
-                if (userId == null) {
-                    DebugLogger.warn("VerifyCode", "User not found for phone $phone")
-                    return errorResponse("المستخدم غير موجود")
+                val resetToken = UUID.randomUUID().toString()
+                if (!db.storeResetToken(userId, resetToken, 10)) {
+                    return errorResponse("تعذر إنشاء جلسة تغيير كلمة المرور")
                 }
-
-                val isValid = db.validateOtpCode(userId, code)
-                if (isValid) {
-                    db.clearOtpCode(userId)
-                    DebugLogger.info("VerifyCode", "Code verified for user $userId")
-                    successResponse(true, "تم التحقق بنجاح")
-                } else {
-                    DebugLogger.warn("VerifyCode", "Invalid or expired code")
-                    errorResponse("الرمز غير صحيح أو منتهي الصلاحية")
-                }
+                JSONObject().apply {
+                    put("success", true)
+                    put("reset_token", resetToken)
+                    put("expires_in_seconds", 600)
+                    put("username", user.optString("username"))
+                    put("message", "تم التحقق بنجاح؛ يمكنك الآن اختيار كلمة مرور جديدة")
+                }.toString()
             } catch (e: Exception) {
                 DebugLogger.logException("VerifyCode", e)
-                errorResponse(e.message)
+                errorResponse("تعذر التحقق من رمز الاستعادة")
             }
         }
 

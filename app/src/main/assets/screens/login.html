@@ -1575,30 +1575,36 @@
         </div>
     </div>
 
-    <!-- Forgot Password Modal 1 -->
+    <!-- SMS Password Recovery Request Modal -->
     <div class="modal" id="forgotPasswordModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-key"></i> استعادة كلمة المرور</h2>
+                <h2><i class="fas fa-mobile-screen-button"></i> استعادة كلمة المرور عبر SMS</h2>
                 <button class="close-modal" id="closeForgotModal">&times;</button>
             </div>
             <div class="modal-body">
-                <p>أدخل اسم المستخدم الخاص بك وسنرسل لك رابط إعادة تعيين كلمة المرور.</p>
+                <p>أدخل اسم المستخدم ورقم الهاتف المحفوظين في بيانات الحساب لإرسال رمز تحقق SMS.</p>
 
                 <div class="input-group">
                     <label for="resetUsername">اسم المستخدم</label>
                     <i class="fas fa-user field-icon"></i>
-                    <input type="text" id="resetUsername" placeholder="أدخل اسم المستخدم" value="">
+                    <input type="text" id="resetUsername" placeholder="أدخل اسم المستخدم" value="" autocomplete="username">
+                </div>
+
+                <div class="input-group">
+                    <label for="resetPhone">رقم الهاتف المحفوظ</label>
+                    <i class="fas fa-phone field-icon"></i>
+                    <input type="tel" id="resetPhone" placeholder="مثال: 777123456 أو +967777123456" value="" autocomplete="tel" inputmode="tel">
                 </div>
 
                 <div class="phone-hint">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>ملاحظة:</strong> سيتم عرض رابط الاستعادة داخل التطبيق (لأن النظام يعمل محلياً بدون خادم بريد/SMS).
+                    <i class="fas fa-shield-halved"></i>
+                    <strong>تنبيه أمني:</strong> سيُرسل رمز من 6 أرقام إلى الرقم المطابق في قاعدة البيانات، وصلاحيته 5 دقائق فقط.
                 </div>
 
                 <button class="login-btn" id="sendResetLinkBtn" type="button">
                     <i class="fas fa-paper-plane me-2"></i>
-                    إرسال رابط الاستعادة
+                    إرسال رمز التحقق عبر SMS
                     <span id="resetLinkLoading" style="display:none;margin-left:8px;">
                         <i class="fas fa-spinner fa-spin"></i>
                     </span>
@@ -1609,36 +1615,33 @@
         </div>
     </div>
 
-    <!-- Recovery Link Modal -->
-    <div class="modal" id="viewRecoveryLinkModal">
+    <!-- SMS OTP Verification Modal -->
+    <div class="modal" id="smsVerificationModal">
         <div class="modal-content modal-small">
             <div class="modal-header">
-                <h2><i class="fas fa-link"></i> رابط استعادة كلمة المرور</h2>
-                <button class="close-modal" id="closeRecoveryLinkModal">&times;</button>
+                <h2><i class="fas fa-message"></i> تأكيد رمز التحقق</h2>
+                <button class="close-modal" id="closeSmsVerificationModal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="reset-icon" style="text-align:center;margin-bottom:15px;">
-                    <i class="fas fa-link" style="color:var(--secondary-color);"></i>
+                    <i class="fas fa-mobile-screen-button" style="color:var(--secondary-color);"></i>
                 </div>
-                <p style="text-align:center;color:var(--text-secondary);">انسخ الرابط أدناه والصقه في المتصفح، أو انقر على الزر "الانتقال إلى الرابط".</p>
-
-                <div class="recovery-link-box" id="recoveryLinkBox">
-                    <code id="recoveryLinkText" style="font-size:14px;word-break:break-all;"></code>
+                <p id="smsVerificationHint" style="text-align:center;color:var(--text-secondary);margin-bottom:20px;">
+                    تم إرسال رمز التحقق إلى هاتفك. الرمز صالح لمدة 5 دقائق.
+                </p>
+                <div class="input-group">
+                    <label for="smsVerificationCode">رمز التحقق</label>
+                    <i class="fas fa-key field-icon"></i>
+                    <input type="tel" id="smsVerificationCode" placeholder="أدخل رمز التحقق المكون من 6 أرقام" maxlength="6" minlength="6" inputmode="numeric" autocomplete="one-time-code">
                 </div>
-
-                <div style="display:flex;flex-direction:column;gap:10px;margin-top:15px;">
-                    <button class="login-btn copy-btn" onclick="copyRecoveryLink()" style="background:var(--secondary-color);">
-                        <i class="fas fa-copy me-2"></i> نسخ الرابط
-                    </button>
-                    <button class="login-btn" id="goToResetLinkBtn" style="background:var(--success-color);">
-                        <i class="fas fa-external-link-alt me-2"></i> الانتقال إلى الرابط
-                    </button>
-                </div>
-
-                <div class="alert-warning" style="margin-top:15px;">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>ملاحظة:</strong> هذا الرابط صالح لمدة 30 دقيقة فقط لأسباب أمنية.
-                </div>
+                <div id="smsVerificationStatus" style="margin-top: 15px; padding: 12px; border-radius: 8px; display: none;"></div>
+                <button class="login-btn" id="verifySmsCodeBtn" type="button">
+                    <i class="fas fa-check me-2"></i>
+                    تأكيد الرمز
+                    <span id="verifySmsLoading" style="display:none;margin-left:8px;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </span>
+                </button>
             </div>
         </div>
     </div>
@@ -2014,7 +2017,7 @@
                 // Map actions to method names
                 const actionMap = {
                     'login': 'login',
-                    'forgot_password': 'forgotPassword',
+                    'request_password_reset_sms': 'requestPasswordResetSms',
                     'verify_reset_code': 'verifyResetCode',
                     'reset_password': 'resetPassword',
                     'get_user_data': 'getUserData',
@@ -2041,8 +2044,8 @@
                     case 'login':
                         args = [params.username || '', params.password || ''];
                         break;
-                    case 'forgot_password':
-                        args = [params.username || ''];
+                    case 'request_password_reset_sms':
+                        args = [params.username || '', params.phone || ''];
                         break;
                     case 'verify_reset_code':
                         args = [params.phone || '', params.code || ''];
@@ -2399,20 +2402,25 @@
 
             const forgotPasswordModal = document.getElementById('forgotPasswordModal');
             const closeForgotModal = document.getElementById('closeForgotModal');
-            const viewRecoveryLinkModal = document.getElementById('viewRecoveryLinkModal');
-            const closeRecoveryLinkModal = document.getElementById('closeRecoveryLinkModal');
+            const smsVerificationModal = document.getElementById('smsVerificationModal');
+            const closeSmsVerificationModal = document.getElementById('closeSmsVerificationModal');
             const resetPasswordModal = document.getElementById('resetPasswordModal');
             const closeResetPasswordModal = document.getElementById('closeResetPasswordModal');
 
             const sendResetLinkBtn = document.getElementById('sendResetLinkBtn');
             const resetUsernameInput = document.getElementById('resetUsername');
-            const goToResetLinkBtn = document.getElementById('goToResetLinkBtn');
+            const verifySmsCodeBtn = document.getElementById('verifySmsCodeBtn');
+            const smsVerificationCodeInput = document.getElementById('smsVerificationCode');
+            const resetPhoneInput = document.getElementById('resetPhone');
+            const smsVerificationStatus = document.getElementById('smsVerificationStatus');
             const resetPasswordForm = document.getElementById('resetPasswordForm');
             const resetTokenInput = document.getElementById('resetToken');
             const newPasswordInput = document.getElementById('newPassword');
             const confirmPasswordInput = document.getElementById('confirmPassword');
 
             let currentResetToken = '';
+            let currentResetPhone = '';
+            let currentResetUsername = '';
 
             // التاريخ
             document.getElementById('currentYear').textContent = new Date().getFullYear();
@@ -2519,62 +2527,80 @@
                 closeModal(forgotPasswordModal);
             });
 
-            // 2. إرسال طلب استعادة كلمة المرور
+            // 2. طلب رمز الاستعادة عبر SMS الحقيقي
             sendResetLinkBtn.addEventListener('click', async function() {
                 const username = resetUsernameInput.value.trim();
-                if (!username) {
-                    showStatusMessage('يرجى إدخال اسم المستخدم', 'error', 'resetRequestStatus');
+                const phone = resetPhoneInput.value.trim();
+                if (!username || !phone) {
+                    showStatusMessage('يرجى إدخال اسم المستخدم ورقم الهاتف المحفوظ', 'error', 'resetRequestStatus');
                     return;
                 }
 
                 try {
                     sendResetLinkBtn.disabled = true;
                     document.getElementById('resetLinkLoading').style.display = 'inline-block';
-
-                    const result = await apiCall('forgot_password', { username: username });
-
+                    const result = await apiCall('request_password_reset_sms', { username: username, phone: phone });
                     if (result.success) {
-                        const resetUrl = result.reset_url || (result.token ? `reset-password://${result.token}` : '');
-                        document.getElementById('recoveryLinkText').textContent = resetUrl;
-                        currentResetToken = result.token || '';
-
+                        currentResetUsername = username;
+                        currentResetPhone = phone;
+                        document.getElementById('smsVerificationHint').textContent =
+                            (result.message || 'تم إرسال رمز التحقق عبر SMS.') +
+                            ' الرمز صالح لمدة 5 دقائق فقط.';
+                        smsVerificationCodeInput.value = '';
+                        smsVerificationStatus.style.display = 'none';
                         closeModal(forgotPasswordModal);
-                        openModal(viewRecoveryLinkModal);
-
-                        logToAndroid('PASSWORD_RESET_LINK_CREATED', `مستخدم: ${username}`);
+                        openModal(smsVerificationModal);
+                        setTimeout(() => smsVerificationCodeInput.focus(), 350);
+                        logToAndroid('PASSWORD_RESET_SMS_QUEUED', `مستخدم: ${username}`);
                     } else {
-                        showStatusMessage(result.error || 'فشل إنشاء رابط الاستعادة', 'error', 'resetRequestStatus');
+                        showStatusMessage(result.error || 'تعذر إرسال رمز التحقق عبر SMS', 'error', 'resetRequestStatus');
                     }
                 } catch (e) {
-                    debugError("FORGOT_PASSWORD_ERROR", { error: e.message });
-                    showStatusMessage('حدث خطأ في الاتصال', 'error', 'resetRequestStatus');
+                    debugError('PASSWORD_RESET_SMS_ERROR', { error: e.message });
+                    showStatusMessage('حدث خطأ أثناء إنشاء طلب SMS', 'error', 'resetRequestStatus');
                 } finally {
                     sendResetLinkBtn.disabled = false;
                     document.getElementById('resetLinkLoading').style.display = 'none';
                 }
             });
 
-            // 3. الانتقال إلى رابط الاستعادة
-            goToResetLinkBtn.addEventListener('click', function() {
-                const link = document.getElementById('recoveryLinkText').textContent;
-                const tokenMatch = link.match(/reset-password:\/\/(.+)/) || link.match(/token=([^&]+)/);
-                if (tokenMatch && tokenMatch[1]) {
-                    currentResetToken = tokenMatch[1];
-                    resetTokenInput.value = currentResetToken;
-                    document.getElementById('newPassword').value = '';
-                    document.getElementById('confirmPassword').value = '';
-                    document.getElementById('passwordStrengthBar').className = 'password-strength';
-                    document.getElementById('passwordStrengthText').textContent = '';
-                    document.getElementById('passwordMatchError').style.display = 'none';
-                    document.getElementById('confirmPassword').classList.remove('is-invalid', 'is-valid');
-                    closeModal(viewRecoveryLinkModal);
-                    openModal(resetPasswordModal);
-                } else {
-                    showNotification('رابط غير صالح', 'error');
+            // 3. التحقق من رمز SMS ثم فتح تغيير كلمة المرور
+            verifySmsCodeBtn.addEventListener('click', async function() {
+                const code = smsVerificationCodeInput.value.trim();
+                if (!/^\d{6}$/.test(code)) {
+                    showStatusMessage('أدخل رمز التحقق المكون من 6 أرقام', 'error', 'smsVerificationStatus');
+                    return;
+                }
+                try {
+                    verifySmsCodeBtn.disabled = true;
+                    document.getElementById('verifySmsLoading').style.display = 'inline-block';
+                    const result = await apiCall('verify_reset_code', { phone: currentResetPhone, code: code });
+                    if (result.success && result.reset_token) {
+                        currentResetToken = result.reset_token;
+                        resetTokenInput.value = currentResetToken;
+                        newPasswordInput.value = '';
+                        confirmPasswordInput.value = '';
+                        document.getElementById('passwordStrengthBar').className = 'password-strength';
+                        document.getElementById('passwordStrengthText').textContent = '';
+                        document.getElementById('passwordMatchError').style.display = 'none';
+                        closeModal(smsVerificationModal);
+                        openModal(resetPasswordModal);
+                        setTimeout(() => newPasswordInput.focus(), 350);
+                        logToAndroid('PASSWORD_RESET_SMS_VERIFIED', `مستخدم: ${currentResetUsername}`);
+                    } else {
+                        showStatusMessage(result.error || 'رمز التحقق غير صحيح أو منتهي الصلاحية', 'error', 'smsVerificationStatus');
+                    }
+                } catch (e) {
+                    debugError('PASSWORD_RESET_VERIFY_ERROR', { error: e.message });
+                    showStatusMessage('حدث خطأ أثناء التحقق من الرمز', 'error', 'smsVerificationStatus');
+                } finally {
+                    verifySmsCodeBtn.disabled = false;
+                    document.getElementById('verifySmsLoading').style.display = 'none';
                 }
             });
-            closeRecoveryLinkModal.addEventListener('click', function() {
-                closeModal(viewRecoveryLinkModal);
+
+            closeSmsVerificationModal.addEventListener('click', function() {
+                closeModal(smsVerificationModal);
             });
 
             // 4. إعادة تعيين كلمة المرور
@@ -2718,7 +2744,7 @@
             window.addEventListener('click', function(e) {
                 if (e.target === termsModal) closeModal(termsModal);
                 if (e.target === forgotPasswordModal) closeModal(forgotPasswordModal);
-                if (e.target === viewRecoveryLinkModal) closeModal(viewRecoveryLinkModal);
+                if (e.target === smsVerificationModal) closeModal(smsVerificationModal);
                 if (e.target === resetPasswordModal) closeModal(resetPasswordModal);
             });
 
