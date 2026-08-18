@@ -31,6 +31,13 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
                 resultCode = code,
                 reason = reason
             )
+            if (!success) {
+                SmsFailureNotificationPublisher.publishForMessage(
+                    context.applicationContext,
+                    db,
+                    messageId
+                )
+            }
         }.onFailure {
             Log.e("SmsTransportCallback", "Failed to persist SMS callback", it)
         }

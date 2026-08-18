@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
 import java.security.MessageDigest
 import java.util.UUID
+import org.json.JSONObject
 
 /**
  * مصدر الحقيقة للرسائل الصادرة. الإدراج يعني QUEUED فقط، وليس SENT.
@@ -290,6 +291,41 @@ object SmsOutboxRepository {
         )
     }
 
+    /** يحول انتظار التسليم الذي تجاوز المهلة إلى فشل قابل للتنبيه والاسترداد. */
+    fun failDeliveryTimeouts(db: DatabaseHelper, timeoutMs: Long = 15 * 60 * 1000L): List<String> {
+        val now = System.currentTimeMillis()
+        val cutoff = now - timeoutMs
+        val database = db.writableDatabase
+        val ids = mutableListOf<String>()
+        database.beginTransaction()
+        try {
+            database.rawQuery(
+                "SELECT message_id FROM sms_outbox WHERE status = 'DELIVERY_PENDING' AND sent_at IS NOT NULL AND sent_at < ?",
+                arrayOf(cutoff.toString())
+            ).use { cursor ->
+                while (cursor.moveToNext()) ids += cursor.getString(0)
+            }
+            ids.forEach { messageId ->
+                database.update(
+                    "sms_outbox",
+                    ContentValues().apply {
+                        put("status", "FAILED")
+                        put("failed_at", now)
+                        put("failure_code", "DELIVERY_TIMEOUT")
+                        put("failure_reason", "No delivery callback within ${timeoutMs / 60000L} minutes")
+                    },
+                    "message_id = ? AND status = 'DELIVERY_PENDING'",
+                    arrayOf(messageId)
+                )
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+        ids.forEach { syncLegacyStatus(database, it, "failed", now) }
+        return ids
+    }
+
     fun hasPending(db: DatabaseHelper): Boolean = db.readableDatabase.rawQuery(
         "SELECT 1 FROM sms_outbox WHERE status IN ('QUEUED','RETRY_PENDING','SENDING','DELIVERY_PENDING') LIMIT 1",
         null
@@ -313,6 +349,44 @@ object SmsOutboxRepository {
             ContentValues().apply { put("status", status); put("updated_at", now.toString()); if (status == "sent" || status == "delivered") put("sent_at", now.toString()) },
             "uuid = ?",
             arrayOf(messageId)
+        )
+        val trace = database.rawQuery(
+            "SELECT event_id, conversation_id, recipient, failure_code, failure_reason FROM sms_outbox WHERE message_id = ? LIMIT 1",
+            arrayOf(messageId)
+        ).use { cursor ->
+            if (!cursor.moveToFirst()) null else arrayOf(
+                if (cursor.isNull(0)) messageId else cursor.getString(0),
+                if (cursor.isNull(1)) "" else cursor.getString(1),
+                cursor.getString(2),
+                if (cursor.isNull(3)) "" else cursor.getString(3),
+                if (cursor.isNull(4)) "" else cursor.getString(4)
+            )
+        } ?: return
+        if (trace[1].isBlank()) return
+        val stage = when (status) {
+            "queued" -> "MESSAGE_QUEUED"
+            "sending" -> "MESSAGE_SENDING"
+            "sent" -> "SMS_SENT"
+            "delivered" -> "DELIVERY_RESULT"
+            "failed" -> "DELIVERY_FAILED"
+            "cancelled" -> "MESSAGE_CANCELLED"
+            else -> "MESSAGE_STATUS"
+        }
+        database.insert(
+            "sms_conversation_trace", null, ContentValues().apply {
+                put("trace_id", UUID.randomUUID().toString())
+                put("conversation_id", trace[1])
+                put("event_id", trace[0])
+                put("stage", stage)
+                put("payload_json", JSONObject().apply {
+                    put("message_id", messageId)
+                    put("recipient", trace[2])
+                    put("status", status)
+                    put("failure_code", trace[3])
+                    put("failure_reason", trace[4])
+                }.toString())
+                put("created_at", now)
+            }
         )
     }
 

@@ -89,6 +89,11 @@ class SmsProcessor(
     private val metrics =
         SmsMetrics(db)
 
+    private val cognitiveRepository = SmsCognitiveRepository(db)
+    private val cognitiveEngine = SmsCognitiveConversationEngine(intentDetector)
+    private val decisionEngine = SmsDecisionEngine()
+    private val commandBus = SmsSemanticCommandBus(cognitiveRepository)
+
     private val handler =
         Handler(Looper.getMainLooper())
 
@@ -492,6 +497,21 @@ class SmsProcessor(
                 conversationManager
                     .getOrCreateContext(normalizedSender)
 
+            val inboundEventId = UUID.randomUUID().toString()
+            runCatching {
+                cognitiveRepository.recordInboundTrace(
+                    conversationId = ctx.conversationId,
+                    eventId = inboundEventId,
+                    stage = "NORMALIZED",
+                    payload = JSONObject().apply {
+                        put("phone", normalizedSender)
+                        put("raw_length", rawBody.length)
+                        put("normalized_text", SmsMessageNormalizer.normalizeForMatch(rawBody).take(1000))
+                    }
+                )
+                cognitiveRepository.applyMemoryDecay(normalizedSender)
+            }.onFailure { Log.w(TAG, "Unable to persist inbound cognitive trace", it) }
+
             val now =
                 System.currentTimeMillis()
 
@@ -616,7 +636,8 @@ class SmsProcessor(
                 handleSmartMessage(
                     customer,
                     msgBody,
-                    rawBody
+                    rawBody,
+                    inboundEventId
                 )
 
             /*
@@ -902,7 +923,8 @@ class SmsProcessor(
     private suspend fun handleSmartMessage(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
-        rawBody: String
+        rawBody: String,
+        inboundEventId: String
     ): Boolean {
 
         val sender =
@@ -920,30 +942,70 @@ class SmsProcessor(
             conversationManager
                 .getOrCreatePreferences(normalizedPhone)
 
-        val intentResult =
-            intentDetector.detectIntent(
-                msgBody,
-                SmsIntentDetector.ConversationState(
-                    awaitingResponse =
-                        ctx.awaitingResponse,
-
-                    pendingAction =
-                        ctx.pendingAction,
-
-                    lastTopic =
-                        ctx.lastTopic,
-
-                    timestamp =
-                        ctx.timestamp
-                ),
-                sender
-            )
+        val draft = conversationManager.getOrderDraft(normalizedPhone)
+        val cognitivePlan = cognitiveEngine.plan(
+            message = rawBody,
+            context = ctx,
+            preferences = prefs,
+            draft = draft
+        )
+        val command = commandBus.route(
+            phone = normalizedPhone,
+            context = ctx,
+            plan = cognitivePlan,
+            eventId = inboundEventId
+        )
+        runCatching {
+            cognitiveRepository.recordPlan(normalizedPhone, ctx.conversationId, inboundEventId, cognitivePlan)
+        }.onFailure { Log.w(TAG, "Unable to persist cognitive plan", it) }
+        val intentResult = cognitivePlan.intentResult
 
         Log.d(
             TAG,
             "Detected intent: ${intentResult.intent} " +
-                "(confidence: ${intentResult.confidence}%)"
+                "(confidence: ${intentResult.confidence}%) command=${command.commandType}"
         )
+
+        if (intentResult.intent == "confirm_order") {
+            val orderForDecision = draft
+            val decision = if (orderForDecision == null) {
+                SmsDecisionResult(
+                    allowed = false,
+                    outcome = "ORDER_NOT_FOUND",
+                    policyVersion = "ORDER_CONFIRMATION_V3",
+                    reasons = listOf("active order draft required"),
+                    riskLevel = "HIGH",
+                    proof = JSONObject().apply { put("confirmation_event_id", inboundEventId) }
+                )
+            } else {
+                decisionEngine.evaluateOrderConfirmation(customer, orderForDecision, inboundEventId)
+            }
+            cognitiveRepository.recordDecision(
+                decisionId = UUID.randomUUID().toString(),
+                eventId = inboundEventId,
+                conversationId = ctx.conversationId,
+                commandType = command.commandType,
+                result = decision
+            )
+            if (!decision.allowed) {
+                cognitiveRepository.markCommandApplied(command.commandId, decision.outcome)
+                cognitiveRepository.recordInboundTrace(
+                    conversationId = ctx.conversationId,
+                    eventId = inboundEventId,
+                    stage = "AUTHORIZATION_DENIED",
+                    payload = JSONObject().apply {
+                        put("outcome", decision.outcome)
+                        put("reasons", decision.reasons)
+                        put("proof", decision.proof)
+                    }
+                )
+                replyManager.sendReplyOnce(
+                    sender,
+                    "⚠️ لا يمكن تأكيد الطلب حالياً. ${decision.reasons.joinToString("؛ ")}. أرسل البيانات الناقصة ثم أعد التأكيد."
+                )
+                return true
+            }
+        }
 
         conversationManager.recordInteraction(
             normalizedPhone,
@@ -964,7 +1026,7 @@ class SmsProcessor(
 
         return try {
 
-            when (intentResult.intent) {
+            val outcome = when (intentResult.intent) {
 
                 /*
                  * الديزل - الصنف المدعوم حاليًا.
@@ -1125,6 +1187,20 @@ class SmsProcessor(
                         ctx
                     )
             }
+            runCatching {
+                cognitiveRepository.markCommandApplied(command.commandId, outcome.toString())
+                cognitiveRepository.recordInboundTrace(
+                    conversationId = ctx.conversationId,
+                    eventId = inboundEventId,
+                    stage = if (outcome) "BUSINESS_EFFECT" else "BUSINESS_EFFECT_FAILED",
+                    payload = JSONObject().apply {
+                        put("command_id", command.commandId)
+                        put("command_type", command.commandType)
+                        put("outcome", outcome)
+                    }
+                )
+            }.onFailure { Log.w(TAG, "Unable to persist command outcome", it) }
+            outcome
 
         } catch (e: Exception) {
 

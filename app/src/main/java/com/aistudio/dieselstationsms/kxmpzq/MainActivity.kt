@@ -3522,6 +3522,75 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getSmsOperationalHealth(): String {
+            DebugLogger.info("WebAppInterface", "getSmsOperationalHealth called")
+            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة صحة SMS")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val snapshot = SmsOperationalNervousSystem(db).snapshot()
+                dataResponse(JSONObject().apply {
+                    put("score", snapshot.score)
+                    put("queued", snapshot.queued)
+                    put("failed", snapshot.failed)
+                    put("open_sla", snapshot.openSla)
+                    put("database_healthy", snapshot.databaseHealthy)
+                    put("timestamp", System.currentTimeMillis())
+                })
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS_HEALTH", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsConversationTrace(phone: String): String {
+            DebugLogger.info("WebAppInterface", "getSmsConversationTrace called")
+            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة مسار SMS")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val trace = JSONArray()
+                val conversationId = db.readableDatabase.rawQuery(
+                    "SELECT conversation_id FROM sms_conversation_context WHERE phone = ? LIMIT 1",
+                    arrayOf(phone.trim())
+                ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else "" }
+                if (conversationId.isNotBlank()) {
+                    db.readableDatabase.rawQuery(
+                        "SELECT stage, payload_json, created_at FROM sms_conversation_trace WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 200",
+                        arrayOf(conversationId)
+                    ).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            trace.put(JSONObject().apply {
+                                put("stage", cursor.getString(0))
+                                put("payload", runCatching { JSONObject(cursor.getString(1)) }.getOrDefault(JSONObject()))
+                                put("created_at", cursor.getLong(2))
+                            })
+                        }
+                    }
+                }
+                dataResponse(JSONObject().apply {
+                    put("conversation_id", conversationId)
+                    put("trace", trace)
+                })
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS_TRACE", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
+        fun getSmsWeeklyAnalytics(days: Int = 7): String {
+            DebugLogger.info("WebAppInterface", "getSmsWeeklyAnalytics called")
+            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة تحليلات SMS")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                SmsWeeklyAnalytics(db).build(days).toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SMS_WEEKLY_ANALYTICS", e)
+                errorResponse(e.message)
+            }
+        }
+
+        @JavascriptInterface
         fun getSmsTemplates(): String {
             DebugLogger.info("WebAppInterface", "getSmsTemplates called")
             if (!checkPermission("sms_templates", "read")) return errorResponse("لا تملك صلاحية القراءة")

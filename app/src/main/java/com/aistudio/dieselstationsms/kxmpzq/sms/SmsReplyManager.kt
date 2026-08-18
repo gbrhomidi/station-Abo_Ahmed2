@@ -15,6 +15,8 @@ import kotlinx.coroutines.withContext
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
+import org.json.JSONObject
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -97,7 +99,11 @@ class SmsReplyManager(
      */
     suspend fun sendReply(
         phone: String,
-        message: String
+        message: String,
+        eventId: String? = null,
+        conversationId: String? = null,
+        businessEntityId: String? = null,
+        dedupeKey: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
 
         val normalizedPhone = normalizePhone(phone)
@@ -179,15 +185,35 @@ class SmsReplyManager(
 
         return@withContext try {
             val prepared = SmsBudgetManager.prepare(normalizedMessage)
+            val effectiveConversationId = conversationId ?: resolveConversationId(normalizedPhone)
+            val effectiveEventId = eventId ?: UUID.randomUUID().toString()
             val result = SmsOutboxRepository.enqueue(
                 db = db,
                 recipient = normalizedPhone,
-                body = prepared.body
+                body = prepared.body,
+                eventId = effectiveEventId,
+                conversationId = effectiveConversationId,
+                businessEntityId = businessEntityId,
+                dedupeKey = dedupeKey
             ) ?: run {
                 logSmsSafely(normalizedPhone, prepared.body, "$STATUS_FAILED: outbox rejected")
                 return@withContext false
             }
 
+            if (!effectiveConversationId.isNullOrBlank()) {
+                runCatching {
+                    SmsCognitiveRepository(db).recordInboundTrace(
+                        conversationId = effectiveConversationId,
+                        eventId = effectiveEventId,
+                        stage = "MESSAGE_QUEUED",
+                        payload = JSONObject().apply {
+                            put("message_id", result.messageId)
+                            put("recipient", normalizedPhone)
+                            put("parts_count", result.partsCount)
+                        }
+                    )
+                }.onFailure { Log.w(TAG, "Unable to persist outbound trace", it) }
+            }
             SmsOutboxWorker.schedule(context)
             logSmsSafely(
                 phone = normalizedPhone,
@@ -222,7 +248,11 @@ class SmsReplyManager(
      */
     suspend fun sendReplyOnce(
         phone: String,
-        message: String
+        message: String,
+        eventId: String? = null,
+        conversationId: String? = null,
+        businessEntityId: String? = null,
+        dedupeKey: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
 
         val normalizedPhone = normalizePhone(phone)
@@ -236,10 +266,10 @@ class SmsReplyManager(
         }
 
         val now = System.currentTimeMillis()
-        val dedupeKey = buildDedupeKey(normalizedPhone, message.trim())
+        val effectiveDedupeKey = dedupeKey ?: buildDedupeKey(normalizedPhone, message.trim())
 
         val lastSent =
-            recentReplies[dedupeKey] ?: 0L
+            recentReplies[effectiveDedupeKey] ?: 0L
 
         if (lastSent > 0L &&
             now - lastSent < RATE_LIMIT_MS
@@ -258,7 +288,7 @@ class SmsReplyManager(
          * الحجز ذري ودائم قبل استدعاء SmsManager؛ لذلك لا يستطيع
          * BroadcastReceiver ثانٍ إرسال النص نفسه بالتوازي.
          */
-        if (!reserveOutboundReply(normalizedPhone, message.trim(), dedupeKey, now)) {
+        if (!reserveOutboundReply(normalizedPhone, message.trim(), effectiveDedupeKey, now)) {
             Log.d(TAG, "Persistent duplicate reply suppressed for ${maskPhone(normalizedPhone)}")
             return@withContext false
         }
@@ -266,7 +296,11 @@ class SmsReplyManager(
         val sent = try {
             sendReply(
                 phone = normalizedPhone,
-                message = message
+                message = message,
+                eventId = eventId,
+                conversationId = conversationId,
+                businessEntityId = businessEntityId,
+                dedupeKey = effectiveDedupeKey
             )
         } catch (exception: Exception) {
             Log.e(TAG, "Reply send threw after reservation", exception)
@@ -275,11 +309,11 @@ class SmsReplyManager(
 
         if (sent) {
             // sent هنا تعني QUEUED في outbox؛ نتيجة المودم تسجلها callbacks لاحقاً.
-            markOutboundReplySent(dedupeKey, now)
-            recentReplies[dedupeKey] = now
+            markOutboundReplySent(effectiveDedupeKey, now)
+            recentReplies[effectiveDedupeKey] = now
             cleanupReplyCache(now)
         } else {
-            releaseOutboundReply(dedupeKey)
+            releaseOutboundReply(effectiveDedupeKey)
         }
 
         sent
@@ -539,6 +573,17 @@ class SmsReplyManager(
 
             null
         }
+    }
+
+    private fun resolveConversationId(phone: String): String? {
+        return runCatching {
+            db.readableDatabase.rawQuery(
+                "SELECT conversation_id FROM sms_conversation_context WHERE phone = ? LIMIT 1",
+                arrayOf(phone)
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) null else cursor.getString(0)?.takeIf { it.isNotBlank() }
+            }
+        }.getOrNull()
     }
 
     private fun buildDedupeKey(phone: String, message: String): String {

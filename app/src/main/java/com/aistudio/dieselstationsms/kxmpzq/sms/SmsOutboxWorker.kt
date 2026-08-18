@@ -19,6 +19,9 @@ class SmsOutboxWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val db = DatabaseHelper.getInstance(applicationContext)
         SmsOutboxRepository.recoverStuck(db)
+        SmsOutboxRepository.failDeliveryTimeouts(db).forEach { messageId ->
+            SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, messageId)
+        }
         var processed = 0
 
         while (processed < MAX_BATCH) {
@@ -28,6 +31,7 @@ class SmsOutboxWorker(
                 SmsTransport(applicationContext).send(job)
             } catch (securityException: SecurityException) {
                 SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)
+                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
             } catch (exception: Exception) {
                 SmsOutboxRepository.markFailed(
                     db,
@@ -36,6 +40,7 @@ class SmsOutboxWorker(
                     exception.message.orEmpty(),
                     retry = job.attemptCount < MAX_ATTEMPTS
                 )
+                SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)
             }
             processed++
         }

@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 21
+        const val VERSION = 22
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -184,6 +184,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     18 -> ensureReportCacheTable(db)
                     19 -> migrateV19ToV20(db)
                     20 -> migrateV20ToV21(db)
+                    21 -> migrateV21ToV22(db)
                 }
             }
             db.setTransactionSuccessful()
@@ -212,6 +213,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createUserOtpVerificationsTable(db)
         createSmsOutboundDedupeTable(db)
         createSmsPlatformTables(db)
+        createSmsCognitiveTables(db)
         ensureActivityPermissions(db)
         createTasksTable(db)
         ensureTaskPermissions(db)
@@ -635,6 +637,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createTasksTable(db)
         ensureTaskPermissions(db)
         Log.d(TAG, "Migrated tasks schema to V21 successfully")
+    }
+
+    private fun migrateV21ToV22(db: SQLiteDatabase) {
+        createSmsCognitiveTables(db)
+        Log.d(TAG, "Migrated SMS cognitive, trace and notification schema to V22 successfully")
     }
 
     private fun migrateV17ToV18(db: SQLiteDatabase) {
@@ -5291,6 +5298,152 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_audit_entity ON sms_audit_events(entity_type, entity_id, created_at)")
+    }
+
+    private fun createSmsCognitiveTables(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_customer_memory (
+                memory_id TEXT PRIMARY KEY,
+                phone TEXT NOT NULL,
+                memory_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                confidence REAL NOT NULL DEFAULT 0.5,
+                source TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_confirmed INTEGER NOT NULL,
+                expires_at INTEGER,
+                customer_visible INTEGER NOT NULL DEFAULT 1,
+                sensitive INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(phone, memory_type)
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_memory_phone_confidence ON sms_customer_memory(phone, confidence)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_cognitive_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id TEXT NOT NULL UNIQUE,
+                event_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                intent TEXT NOT NULL,
+                confidence INTEGER NOT NULL,
+                plan_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_cognitive_plan_conversation ON sms_cognitive_plans(conversation_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_conversation_trace (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trace_id TEXT NOT NULL UNIQUE,
+                conversation_id TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_trace_conversation_time ON sms_conversation_trace(conversation_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_business_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                conversation_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                aggregate_type TEXT NOT NULL,
+                aggregate_id TEXT,
+                payload_json TEXT NOT NULL,
+                proof_json TEXT,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_events_aggregate_time ON sms_business_events(aggregate_type, aggregate_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_decision_trail (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                decision_id TEXT NOT NULL UNIQUE,
+                event_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                command_type TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                policy_version TEXT NOT NULL,
+                risk_level TEXT NOT NULL,
+                reasons_json TEXT NOT NULL,
+                proof_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_decision_conversation_time ON sms_decision_trail(conversation_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_semantic_commands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command_id TEXT NOT NULL UNIQUE,
+                event_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                command_type TEXT NOT NULL,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ROUTED',
+                outcome TEXT,
+                created_at INTEGER NOT NULL,
+                applied_at INTEGER
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_commands_status_time ON sms_semantic_commands(status, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_sla_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL UNIQUE,
+                conversation_id TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                task_type TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'NORMAL',
+                due_at INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'OPEN',
+                metadata_json TEXT,
+                created_at INTEGER NOT NULL,
+                resolved_at INTEGER
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_sla_due_status ON sms_sla_tasks(status, due_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_recovery_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recovery_id TEXT NOT NULL UNIQUE,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                policy_version TEXT NOT NULL,
+                action TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PLANNED',
+                reason TEXT,
+                created_at INTEGER NOT NULL,
+                completed_at INTEGER
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_recovery_target ON sms_recovery_actions(target_type, target_id, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_failure_notifications (
+                notification_id TEXT PRIMARY KEY,
+                dedupe_key TEXT NOT NULL UNIQUE,
+                message_id TEXT NOT NULL,
+                recipient TEXT NOT NULL,
+                delivery_status TEXT NOT NULL,
+                failure_code TEXT NOT NULL,
+                failure_reason TEXT,
+                notification_title TEXT NOT NULL,
+                notification_body TEXT NOT NULL,
+                notified_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_failure_notifications_message ON sms_failure_notifications(message_id, notified_at)")
     }
 
     private fun createSmsProcessedTable(db: SQLiteDatabase) {
