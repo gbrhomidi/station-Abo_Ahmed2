@@ -140,6 +140,56 @@ body {
     gap: 8px;
 }
 
+.btn-back-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 66px;
+    height: 38px;
+    padding: 0 11px;
+    border: 1px solid rgba(255,255,255,.28);
+    border-radius: 12px;
+    background: rgba(255,255,255,.12);
+    color: #fff;
+    font: inherit;
+    font-size: .75rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.btn-back-home strong { font-size: 1.25rem; line-height: 1; font-weight: 400; }
+.btn-back-home:hover, .btn-back-home:focus-visible { background: rgba(255,255,255,.24); transform: translateY(-1px); outline: none; }
+.header-tool-tip { position: relative; }
+.header-tool-tip::after { content: attr(aria-label); position: absolute; top: calc(100% + 8px); right: 0; opacity: 0; pointer-events: none; background: var(--text); color: var(--surface); padding: 4px 8px; border-radius: 6px; font-size: .65rem; white-space: nowrap; transition: opacity .18s ease; }
+.header-tool-tip:hover::after, .header-tool-tip:focus-visible::after { opacity: 1; }
+
+.sms-menu-popover {
+    display: none;
+    position: fixed;
+    top: calc(var(--header-height) - 2px);
+    right: 12px;
+    width: min(300px, calc(100vw - 24px));
+    padding: 10px;
+    z-index: 1600;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+.sms-menu-popover.active { display: block; animation: slideUp .2s ease; }
+.sms-menu-title { padding: 6px 10px 9px; color: var(--text-secondary); font-size: .68rem; font-weight: 700; }
+.sms-menu-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 0; border-radius: 11px; background: transparent; color: var(--text); text-align: right; font: inherit; font-size: .78rem; cursor: pointer; }
+.sms-menu-item:hover, .sms-menu-item:focus-visible { background: var(--bg); outline: none; }
+.sms-menu-item-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; background: rgba(26,35,126,.1); }
+.sms-menu-backdrop { display: none; position: fixed; inset: 0; z-index: 1500; background: transparent; }
+.sms-menu-backdrop.active { display: block; }
+
+.settings-grid { display: grid; gap: 10px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.settings-row label { color: var(--text); font-size: .78rem; }
+.settings-row small { display: block; margin-top: 3px; color: var(--text-secondary); font-size: .65rem; }
+.settings-switch { width: 44px; height: 24px; accent-color: var(--primary); }
+@media (max-width: 480px) { .btn-back-home { min-width: 42px; padding: 0 8px; } .btn-back-home span { display: none; } .sms-menu-popover { right: 8px; } }
+
 /* ============================================
    STATS BAR
    ============================================ */
@@ -1584,13 +1634,24 @@ body {
 <body>
     <!-- Header -->
     <header class="app-header">
-        <button class="btn-icon" id="menuBtn" title="القائمة">☰</button>
+        <button class="btn-back-home" id="backHomeBtn" title="العودة إلى الشاشة الرئيسية" aria-label="العودة إلى الشاشة الرئيسية"><strong>‹</strong><span>رجوع</span></button>
         <h1 class="app-title">📨 إدارة الرسائل</h1>
         <div class="header-actions">
-            <button class="btn-icon" id="refreshBtn" title="تحديث">🔄</button>
-            <button class="btn-icon" id="settingsBtn" title="إعدادات">⚙️</button>
+            <button class="btn-icon header-tool-tip" id="refreshBtn" title="تحديث" aria-label="تحديث">🔄</button>
+            <button class="btn-icon header-tool-tip" id="settingsBtn" title="إعدادات" aria-label="إعدادات">⚙️</button>
+            <button class="btn-icon header-tool-tip" id="menuBtn" title="القائمة" aria-label="القائمة">☰</button>
         </div>
     </header>
+
+    <div class="sms-menu-backdrop" id="smsMenuBackdrop"></div>
+    <nav class="sms-menu-popover" id="smsMenuPopover" aria-label="قائمة الرسائل">
+        <div class="sms-menu-title">اختصارات مركز الرسائل</div>
+        <button class="sms-menu-item" data-menu-action="all"><span class="sms-menu-item-icon">📨</span><span>كل الرسائل</span></button>
+        <button class="sms-menu-item" data-menu-action="observability"><span class="sms-menu-item-icon">⌁</span><span>تتبع رحلة الرسالة</span></button>
+        <button class="sms-menu-item" data-menu-action="weekly"><span class="sms-menu-item-icon">▥</span><span>الأداء الأسبوعي</span></button>
+        <button class="sms-menu-item" data-menu-action="whitelist"><span class="sms-menu-item-icon">🛡️</span><span>القائمة البيضاء والأسماء</span></button>
+        <button class="sms-menu-item" data-menu-action="compose"><span class="sms-menu-item-icon">✏️</span><span>إنشاء رسالة جديدة</span></button>
+    </nav>
 
     <!-- Stats Bar -->
     <section class="stats-bar" id="statsBar">
@@ -1959,6 +2020,19 @@ body {
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>⚙️ إعدادات مركز الرسائل</h3><button class="modal-close" id="settingsModalClose">✕</button></div>
+            <div class="modal-body settings-grid">
+                <div class="settings-row"><div><label for="settingsAutoRefresh">تحديث المؤشرات تلقائياً</label><small>يعيد قراءة حالة الطابور والتحليل دون إعادة تحميل الصفحة.</small></div><input class="settings-switch" id="settingsAutoRefresh" type="checkbox" checked></div>
+                <div class="settings-row"><div><label for="settingsDarkMode">الوضع الداكن</label><small>يحفظ تفضيل العرض على الجهاز.</small></div><input class="settings-switch" id="settingsDarkMode" type="checkbox"></div>
+                <div class="settings-row"><div><label>حالة الربط</label><small id="settingsBridgeStatus">جسر Android متاح عند تشغيل التطبيق الأصلي.</small></div><span class="status-dot status-processed"></span></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary" id="settingsDone">حفظ وإغلاق</button></div>
+        </div>
+    </div>
+
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
@@ -1993,6 +2067,7 @@ body {
     // ============================================
     // STATE
     // ============================================
+    let autoRefreshTimer = null;
     const state = {
         currentTab: 'all',
         messages: [],
@@ -2059,6 +2134,7 @@ body {
         getSmsOperationalHealth() { return this.call('getSmsOperationalHealth'); },
         getSmsConversationTrace(phone) { return this.call('getSmsConversationTrace', phone); },
         getSmsWeeklyAnalytics(days = 7) { return this.call('getSmsWeeklyAnalytics', days); },
+        goToHome() { return this.call('goToHome'); },
 
         // Templates
         getSmsTemplates() { return this.call('getSmsTemplates'); },
@@ -2590,9 +2666,9 @@ body {
             <div class="message-card ${isUnread ? 'unread' : ''}" data-id="${msg.id}">
                 <div class="message-header">
                     <div class="message-sender">
-                        <div class="sender-avatar">${Utils.getInitials(msg.sender_name || msg.phone_number)}</div>
+                        <div class="sender-avatar">${Utils.getInitials(msg.sender_name || msg.resolved_owner_name || msg.phone_number)}</div>
                         <div class="sender-info">
-                            <div class="sender-name">${Utils.escapeHtml(msg.sender_name || 'غير معروف')}</div>
+                            <div class="sender-name">${Utils.escapeHtml(msg.sender_name || msg.resolved_owner_name || 'غير معروف')}</div>
                             <div class="sender-phone">${Utils.formatPhone(msg.phone_number)}</div>
                         </div>
                     </div>
@@ -2630,10 +2706,10 @@ body {
 
         container.innerHTML = state.conversations.map(conv => `
             <div class="conversation-card" data-phone="${conv.phone}">
-                <div class="conversation-avatar">${Utils.getInitials(conv.lastMessage?.sender_name || conv.phone)}</div>
+                <div class="conversation-avatar">${Utils.getInitials(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone)}</div>
                 <div class="conversation-body">
                     <div class="conversation-header">
-                        <span class="conversation-name">${Utils.escapeHtml(conv.lastMessage?.sender_name || conv.phone)}</span>
+                        <span class="conversation-name">${Utils.escapeHtml(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone)}</span>
                         <span class="conversation-time">${Utils.formatDate(conv.lastMessage?.created_at)}</span>
                     </div>
                     <div class="conversation-preview">${Utils.truncate(conv.lastMessage?.message_body, 50)}</div>
@@ -2697,18 +2773,21 @@ body {
             return;
         }
 
-        container.innerHTML = state.whitelist.map(w => `
-            <div class="whitelist-item" data-phone="${w.phone}">
+        container.innerHTML = state.whitelist.map(w => {
+            const ownerName = (w.name || w.owner_name || '').trim();
+            const canonical = w.canonical_phone || w.phone || '';
+            return `
+            <div class="whitelist-item" data-phone="${Utils.escapeHtml(w.phone || '')}">
                 <div class="whitelist-info">
-                    <div class="whitelist-phone">${Utils.formatPhone(w.phone)}</div>
-                    <div class="whitelist-name">${Utils.escapeHtml(w.name || '')}</div>
+                    <div class="whitelist-phone">${Utils.formatPhone(canonical)}</div>
+                    <div class="whitelist-name">${Utils.escapeHtml(ownerName || 'لم يتم العثور على اسم مالك الرقم')}</div>
                 </div>
                 <div class="whitelist-status">
                     <span class="status-enabled"></span>
                     <button class="btn-action btn-action-delete" onclick="removeFromWhitelist('${w.phone}')">🗑️</button>
                 </div>
             </div>
-        `).join('');
+        `; }).join('');
     }
 
     function renderLogs() {
@@ -2893,7 +2972,7 @@ body {
         body.innerHTML = `
             <div style="margin-bottom: 16px;">
                 <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">المرسل</label>
-                <div style="font-weight: 600;">${Utils.escapeHtml(msg.sender_name || 'غير معروف')}</div>
+                <div style="font-weight: 600;">${Utils.escapeHtml(msg.sender_name || msg.resolved_owner_name || 'غير معروف')}</div>
                 <div style="direction: ltr; text-align: right; color: var(--text-secondary); font-size: 0.9rem;">${Utils.formatPhone(msg.phone_number)}</div>
             </div>
             <div style="margin-bottom: 16px;">
@@ -3159,13 +3238,65 @@ body {
             loadMessages();
         });
 
+        // Header navigation, menu and settings
+        document.getElementById('backHomeBtn').addEventListener('click', () => {
+            const result = Bridge.goToHome();
+            if (result === null) window.location.href = '../main.html';
+        });
+        const menu = document.getElementById('smsMenuPopover');
+        const menuBackdrop = document.getElementById('smsMenuBackdrop');
+        const closeMenu = () => { menu.classList.remove('active'); menuBackdrop.classList.remove('active'); };
+        document.getElementById('menuBtn').addEventListener('click', () => {
+            const opened = menu.classList.toggle('active');
+            menuBackdrop.classList.toggle('active', opened);
+        });
+        menuBackdrop.addEventListener('click', closeMenu);
+        document.querySelectorAll('[data-menu-action]').forEach(item => item.addEventListener('click', () => {
+            const action = item.dataset.menuAction;
+            closeMenu();
+            if (action === 'compose') document.getElementById('fabCompose').click();
+            else if (action) UI.switchTab(action);
+        }));
+        const settingsModal = document.getElementById('settingsModal');
+        const settingsDarkMode = document.getElementById('settingsDarkMode');
+        const settingsAutoRefresh = document.getElementById('settingsAutoRefresh');
+        settingsDarkMode.checked = localStorage.getItem('sms.darkMode') === '1';
+        settingsAutoRefresh.checked = localStorage.getItem('sms.autoRefresh') !== '0';
+        const applyDarkMode = enabled => {
+            document.documentElement.setAttribute('data-theme', enabled ? 'dark' : 'light');
+            state.darkMode = enabled;
+            localStorage.setItem('sms.darkMode', enabled ? '1' : '0');
+        };
+        const configureAutoRefresh = enabled => {
+            if (autoRefreshTimer) window.clearInterval(autoRefreshTimer);
+            autoRefreshTimer = null;
+            if (enabled) {
+                autoRefreshTimer = window.setInterval(() => {
+                    loadOperational();
+                    if (state.currentTab === 'weekly') loadWeeklyAnalytics();
+                }, 60000);
+            }
+        };
+        applyDarkMode(settingsDarkMode.checked);
+        configureAutoRefresh(settingsAutoRefresh.checked);
+        document.getElementById('settingsBtn').addEventListener('click', () => UI.openModal('settingsModal'));
+        document.getElementById('settingsModalClose').addEventListener('click', () => UI.closeModal('settingsModal'));
+        document.getElementById('settingsDone').addEventListener('click', () => {
+            applyDarkMode(settingsDarkMode.checked);
+            localStorage.setItem('sms.autoRefresh', settingsAutoRefresh.checked ? '1' : '0');
+            configureAutoRefresh(settingsAutoRefresh.checked);
+            UI.closeModal('settingsModal');
+            UI.showToast('تم حفظ إعدادات مركز الرسائل', 'success');
+        });
+
         // Refresh
         document.getElementById('refreshBtn').addEventListener('click', () => {
             UI.showLoading(true);
             setTimeout(() => {
                 UI.loadTabData(state.currentTab);
+                loadOperational();
                 UI.showToast('تم التحديث', 'success');
-            }, 500);
+            }, 150);
         });
 
         // FAB

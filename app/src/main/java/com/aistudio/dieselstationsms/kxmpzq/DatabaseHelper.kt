@@ -9330,32 +9330,157 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // ========================================================================
-    // دوال SMS Whitelist
+    // دوال SMS Phone Identity / Whitelist
     // ========================================================================
+
+    /**
+     * يحول كل صيغ الرقم اليمني المدعومة إلى الجزء الوطني الثابت ذي 9 أرقام.
+     * يدعم: +967، 00967، 967، 0XXXXXXXXX، وXXXXXXXXX، مع الأرقام العربية.
+     */
+    private fun smsNationalPhone(phone: String?): String? {
+        if (phone.isNullOrBlank()) return null
+        val latinDigits = phone.trim().map { char ->
+            when (char) {
+                '٠' -> '0'; '١' -> '1'; '٢' -> '2'; '٣' -> '3'; '٤' -> '4'
+                '٥' -> '5'; '٦' -> '6'; '٧' -> '7'; '٨' -> '8'; '٩' -> '9'
+                '۰' -> '0'; '۱' -> '1'; '۲' -> '2'; '۳' -> '3'; '۴' -> '4'
+                '۵' -> '5'; '۶' -> '6'; '۷' -> '7'; '۸' -> '8'; '۹' -> '9'
+                else -> char
+            }
+        }.filter { it.isDigit() }.joinToString("")
+        val withoutCountry = when {
+            latinDigits.startsWith("00967") -> latinDigits.removePrefix("00967")
+            latinDigits.startsWith("967") -> latinDigits.removePrefix("967")
+            else -> latinDigits
+        }
+        val national = if (withoutCountry.length == 10 && withoutCountry.startsWith("0")) {
+            withoutCountry.drop(1)
+        } else {
+            withoutCountry
+        }
+        return national.takeIf { it.length == 9 }
+    }
+
+    private fun smsCanonicalPhone(phone: String?): String? =
+        smsNationalPhone(phone)?.let { "967$it" }
+
+    private fun smsPhoneVariants(phone: String?): List<String> {
+        val national = smsNationalPhone(phone) ?: return phone?.trim()?.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: emptyList()
+        return linkedSetOf(
+            phone?.trim().orEmpty(),
+            phone?.filter { it.isDigit() }.orEmpty(),
+            "+967$national",
+            "00967$national",
+            "967$national",
+            "0$national",
+            national
+        ).filter { it.isNotBlank() }
+    }
+
+    private fun smsContactPhoneMatchSql(alias: String = "pc"): String {
+        fun expression(column: String) =
+            "substr(replace(replace(replace(replace(replace(COALESCE($alias.$column, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -9) = ?"
+        return listOf("phone", "phone2", "whatsapp").joinToString(" OR ") { expression(it) }
+    }
+
+    private fun smsContactPhoneArgs(national: String): Array<String> =
+        arrayOf(national, national, national)
+
+    private fun smsCleanPhoneSql(alias: String, column: String): String =
+        "substr(replace(replace(replace(replace(replace(COALESCE($alias.$column, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -9)"
+
+    /** استعلام فرعي محسن يعيد اسم مالك كل رسالة دون استعلام Bridge منفصل لكل بطاقة. */
+    private fun smsOwnerNameSelect(messageAlias: String = "sm"): String {
+        val messagePhone = smsCleanPhoneSql(messageAlias, "phone_number")
+        val contactPhone = smsCleanPhoneSql("pc", "phone")
+        val contactPhone2 = smsCleanPhoneSql("pc", "phone2")
+        val contactWhatsapp = smsCleanPhoneSql("pc", "whatsapp")
+        return """
+            (SELECT COALESCE(
+                NULLIF(TRIM(pc.contact_name_ar), ''),
+                NULLIF(TRIM(pc.contact_name), ''),
+                NULLIF(TRIM(p.commercial_name_ar), ''),
+                NULLIF(TRIM(p.commercial_name), ''),
+                NULLIF(TRIM(p.legal_name), '')
+             )
+             FROM party_contacts pc
+             INNER JOIN parties p ON p.id = pc.party_id
+             WHERE pc.is_deleted = 0 AND pc.is_active = 1 AND p.is_deleted = 0
+               AND (($contactPhone = $messagePhone) OR ($contactPhone2 = $messagePhone) OR ($contactWhatsapp = $messagePhone))
+             ORDER BY CASE WHEN pc.is_primary = 1 THEN 0 ELSE 1 END, pc.id ASC
+             LIMIT 1) AS resolved_owner_name
+        """.trimIndent()
+    }
+
+    /** يعيد الاسم العربي أولاً ثم الاسم العام/التجاري من سجل العميل الفعلي. */
+    fun resolveSmsOwnerName(phone: String): String? {
+        val national = smsNationalPhone(phone) ?: return null
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery(
+                """
+                SELECT COALESCE(
+                    NULLIF(TRIM(pc.contact_name_ar), ''),
+                    NULLIF(TRIM(pc.contact_name), ''),
+                    NULLIF(TRIM(p.commercial_name_ar), ''),
+                    NULLIF(TRIM(p.commercial_name), ''),
+                    NULLIF(TRIM(p.legal_name), '')
+                ) AS owner_name
+                FROM party_contacts pc
+                INNER JOIN parties p ON p.id = pc.party_id
+                WHERE pc.is_deleted = 0 AND pc.is_active = 1 AND p.is_deleted = 0
+                  AND (${smsContactPhoneMatchSql("pc")})
+                ORDER BY CASE WHEN pc.is_primary = 1 THEN 0 ELSE 1 END, pc.id ASC
+                LIMIT 1
+                """.trimIndent(),
+                smsContactPhoneArgs(national)
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0)?.trim()?.takeIf { it.isNotBlank() } else null
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
 
     fun getSmsWhitelist(): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            db.rawQuery("SELECT * FROM sms_whitelist ORDER BY name, phone", null)
+            val result = db.rawQuery("SELECT * FROM sms_whitelist ORDER BY name, phone", null)
                 .use { cursor -> cursorToJsonArray(cursor) }
+            for (index in 0 until result.length()) {
+                val item = result.optJSONObject(index) ?: continue
+                val storedName = item.optString("name", "").trim()
+                val ownerName = resolveSmsOwnerName(item.optString("phone", ""))
+                if (storedName.isBlank() && !ownerName.isNullOrBlank()) item.put("name", ownerName)
+                if (!ownerName.isNullOrBlank()) item.put("owner_name", ownerName)
+                item.put("canonical_phone", smsCanonicalPhone(item.optString("phone", "")) ?: item.optString("phone", ""))
+            }
+            result
         } finally {
             dbLock.unlock()
         }
     }
 
     fun addToSmsWhitelist(phone: String, name: String = ""): Boolean {
+        val canonical = smsCanonicalPhone(phone) ?: phone.trim()
+        val resolvedName = name.trim().ifBlank { resolveSmsOwnerName(phone).orEmpty() }
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val legacyVariants = smsPhoneVariants(phone).filter { it != canonical }
+            if (legacyVariants.isNotEmpty()) {
+                val legacyPlaceholders = legacyVariants.joinToString(",") { "?" }
+                db.delete("sms_whitelist", "phone IN ($legacyPlaceholders)", legacyVariants.toTypedArray())
+            }
             val cv = ContentValues().apply {
-                put("phone", phone)
-                put("name", name)
+                put("phone", canonical)
+                put("name", resolvedName)
                 put("enabled", 1)
                 put("created_at", getCurrentDateTime())
             }
             val result = db.insertWithOnConflict("sms_whitelist", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-            if (result > 0) logActivity("system", "add_whitelist", "إضافة رقم $phone إلى القائمة البيضاء")
+            if (result > 0) logActivity("system", "add_whitelist", "إضافة رقم $canonical إلى القائمة البيضاء")
             result > 0
         } finally {
             dbLock.unlock()
@@ -9363,11 +9488,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun removeFromSmsWhitelist(phone: String): Boolean {
+        val variants = smsPhoneVariants(phone)
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val rows = db.delete("sms_whitelist", "phone=?", arrayOf(phone))
-            if (rows > 0) logActivity("system", "remove_whitelist", "إزالة رقم $phone من القائمة البيضاء")
+            val placeholders = variants.joinToString(",") { "?" }
+            val rows = if (variants.isEmpty()) 0 else db.delete("sms_whitelist", "phone IN ($placeholders)", variants.toTypedArray())
+            if (rows > 0) logActivity("system", "remove_whitelist", "إزالة رقم ${smsCanonicalPhone(phone) ?: phone} من القائمة البيضاء")
             rows > 0
         } finally {
             dbLock.unlock()
@@ -9375,19 +9502,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun updateSmsWhitelist(phone: String, name: String, enabled: Boolean): Int {
+        val variants = smsPhoneVariants(phone)
+        val resolvedName = name.trim().ifBlank { resolveSmsOwnerName(phone).orEmpty() }
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val rows = db.update(
+            val placeholders = variants.joinToString(",") { "?" }
+            val rows = if (variants.isEmpty()) 0 else db.update(
                 "sms_whitelist",
                 ContentValues().apply {
-                    put("name", name)
+                    put("name", resolvedName)
                     put("enabled", if (enabled) 1 else 0)
                 },
-                "phone = ?",
-                arrayOf(phone)
+                "phone IN ($placeholders)",
+                variants.toTypedArray()
             )
-            if (rows > 0) logActivity("system", "update_whitelist", "تحديث رقم $phone في القائمة البيضاء")
+            if (rows > 0) logActivity("system", "update_whitelist", "تحديث رقم ${smsCanonicalPhone(phone) ?: phone} في القائمة البيضاء")
             rows
         } finally {
             dbLock.unlock()
@@ -11789,11 +11919,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getCustomerBalanceByPhone(phone: String): Double {
+        val national = smsNationalPhone(phone) ?: return 0.0
         val db = readableDatabase
-        val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
         db.rawQuery(
-            "SELECT current_balance FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
-            arrayOf(cleanPhone)
+            """
+            SELECT p.current_balance
+            FROM parties p
+            INNER JOIN party_contacts pc ON pc.party_id = p.id
+            WHERE p.is_deleted = 0 AND pc.is_deleted = 0 AND pc.is_active = 1
+              AND (${smsContactPhoneMatchSql("pc")})
+            ORDER BY CASE WHEN pc.is_primary = 1 THEN 0 ELSE 1 END, pc.id ASC
+            LIMIT 1
+            """.trimIndent(),
+            smsContactPhoneArgs(national)
         ).use { cursor ->
             if (cursor.moveToFirst()) return cursor.getDouble(0)
         }
@@ -11801,14 +11939,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getLastOrderByPhone(phone: String): JSONObject? {
+        val national = smsNationalPhone(phone) ?: return null
         val db = readableDatabase
-        val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
         db.rawQuery(
             """SELECT s.* FROM sales_transactions s
                JOIN parties p ON s.customer_party_id = p.id
-               WHERE p.phone = ? AND s.is_deleted = 0
+               JOIN party_contacts pc ON pc.party_id = p.id
+               WHERE s.is_deleted = 0 AND p.is_deleted = 0
+                 AND pc.is_deleted = 0 AND pc.is_active = 1
+                 AND (${smsContactPhoneMatchSql("pc")})
                ORDER BY s.id DESC LIMIT 1""",
-            arrayOf(cleanPhone)
+            smsContactPhoneArgs(national)
         ).use { cursor ->
             if (cursor.moveToFirst()) {
                 return JSONObject().apply {
@@ -11825,15 +11966,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getOrderHistoryByPhone(phone: String, limit: Int = 50): JSONArray {
         val arr = JSONArray()
+        val national = smsNationalPhone(phone) ?: return arr
         val db = readableDatabase
-        val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
         db.rawQuery(
-            """SELECT s.sale_code, s.liters, s.net_amount, s.created_at
+            """SELECT DISTINCT s.sale_code, s.liters, s.net_amount, s.created_at
                FROM sales_transactions s
                JOIN parties p ON s.customer_party_id = p.id
-               WHERE p.phone = ? AND s.is_deleted = 0
+               JOIN party_contacts pc ON pc.party_id = p.id
+               WHERE s.is_deleted = 0 AND p.is_deleted = 0
+                 AND pc.is_deleted = 0 AND pc.is_active = 1
+                 AND (${smsContactPhoneMatchSql("pc")})
                ORDER BY s.id DESC LIMIT ?""",
-            arrayOf(cleanPhone, limit.toString())
+            smsContactPhoneArgs(national) + limit.toString()
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(JSONObject().apply {
@@ -11850,11 +11994,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun getOrderHistoryByPhone(phone: String): JSONArray = getOrderHistoryByPhone(phone, 50)
 
     fun getPartyIdByPhone(phone: String): Int? {
+        val national = smsNationalPhone(phone) ?: return null
         val db = readableDatabase
-        val cleanPhone = phone.replace("[^0-9]".toRegex(), "").takeLast(9)
         db.rawQuery(
-            "SELECT id FROM parties WHERE phone = ? AND is_deleted = 0 LIMIT 1",
-            arrayOf(cleanPhone)
+            """SELECT p.id FROM parties p
+               INNER JOIN party_contacts pc ON pc.party_id = p.id
+               WHERE p.is_deleted = 0 AND pc.is_deleted = 0 AND pc.is_active = 1
+                 AND (${smsContactPhoneMatchSql("pc")})
+               ORDER BY CASE WHEN pc.is_primary = 1 THEN 0 ELSE 1 END, pc.id ASC
+               LIMIT 1""".trimIndent(),
+            smsContactPhoneArgs(national)
         ).use { cursor ->
             if (cursor.moveToFirst()) return cursor.getInt(0)
             return null
@@ -12246,7 +12395,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = readableDatabase
             db.rawQuery(
-                "SELECT * FROM sms_messages ORDER BY created_at DESC, id DESC LIMIT 500",
+                "SELECT sm.*, ${smsOwnerNameSelect("sm")} FROM sms_messages sm ORDER BY sm.created_at DESC, sm.id DESC LIMIT 500",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
@@ -12308,7 +12457,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 add(offset.toString())
             }
             val items = db.rawQuery(
-                "SELECT * FROM sms_messages$whereSql ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                "SELECT sm.*, ${smsOwnerNameSelect("sm")} FROM sms_messages sm$whereSql ORDER BY sm.created_at DESC, sm.id DESC LIMIT ? OFFSET ?",
                 pageArgs.toTypedArray()
             ).use { cursor -> cursorToJsonArray(cursor) }
             JSONObject().apply {
@@ -12343,12 +12492,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun getSmsMessagesByPhone(phone: String): JSONArray {
+        val national = smsNationalPhone(phone)
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (national == null) return JSONArray()
+            val phoneExpr = "substr(replace(replace(replace(replace(replace(COALESCE(phone_number, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -9)"
             db.rawQuery(
-                "SELECT * FROM sms_messages WHERE phone_number = ? ORDER BY created_at DESC",
-                arrayOf(phone)
+                "SELECT * FROM sms_messages WHERE $phoneExpr = ? ORDER BY created_at DESC",
+                arrayOf(national)
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()

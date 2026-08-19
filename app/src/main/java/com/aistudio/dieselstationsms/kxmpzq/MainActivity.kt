@@ -3358,10 +3358,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             }
         }
 
+                // ============================================================
+        // Navigation from the SMS screen
+        // ============================================================
+        @JavascriptInterface
+        fun goToHome(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            activity.runOnUiThread {
+                if (!activity.isFinishing && !activity.isDestroyed.get()) {
+                    activity.webView?.loadUrl("file:///android_asset/screens/main.html")
+                }
+            }
+            return successResponse(true, "تم الرجوع إلى الشاشة الرئيسية")
+        }
+
         // ============================================================
         // 14. الرسائل النصية (SMS) - جزء مختصر للقراءة
         // ============================================================
-
         @JavascriptInterface
         fun addSmsMessage(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addSmsMessage called")
