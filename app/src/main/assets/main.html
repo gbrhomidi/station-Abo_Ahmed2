@@ -825,7 +825,7 @@
             .user-info-card { flex-wrap: wrap; justify-content: center; text-align: center; }
         }
         @media (max-width: 480px) {
-            .sidebar { width: max-content; min-width: 120px; }
+            .sidebar { width: 60px; min-width: 60px; }
             .sidebar .nav-item { font-size: 13px; padding: 8px 10px; }
             .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
             .stat-card .stat-value { font-size: 17px; }
@@ -885,27 +885,16 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button class="icon-btn" onclick="toggleTheme()" title="تبديل الوضع" style="color: #f39c12;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/>
-                        <path d="M12 4a8 8 0 1 0 8 8 8 8 0 0 0-8-8zm0 14a6 6 0 1 1 6-6 6 6 0 0 1-6 6z"/>
-                        <circle cx="12" cy="12" r="2"/>
-                    </svg>
+                <button id="themeToggleButton" class="icon-btn" onclick="toggleTheme()" title="تفعيل الوضع المظلم" aria-label="تفعيل الوضع المظلم">
+                    <i id="themeToggleIcon" class="fas fa-moon" aria-hidden="true"></i>
                 </button>
-                <button class="icon-btn" onclick="logout()" title="تسجيل الخروج" style="color: #e67e22;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                    </svg>
-                </button>
-                <button class="icon-btn" onclick="showAboutModal()" title="عن التطبيق" style="color: #3498db;">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                    </svg>
+                <button id="logoutButton" class="icon-btn" onclick="logout()" title="الخروج من التطبيق" aria-label="الخروج من التطبيق">
+                    <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
                 </button>
             </div>
         </header>
 
-        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanels()"></div>
 
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -1079,27 +1068,6 @@
         </main>
     </div>
 
-    <!-- نافذة "عن التطبيق" -->
-    <div class="modal-overlay" id="aboutModal">
-        <div class="modal">
-            <div class="modal-header"><h3><i class="fas fa-info-circle"></i> عن التطبيق</h3><button class="modal-close" onclick="closeModal('aboutModal')">&times;</button></div>
-            <div class="modal-body" style="text-align:center;">
-                <div style="width:70px; height:70px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 12px; color:white;"><i class="fas fa-gas-pump"></i></div>
-                <h3 style="font-family:var(--font-heading); color:var(--text);">محطة أبو أحمد لمشتقات الديزل</h3>
-                <p class="text-muted">الإصدار 6.0 Pro</p>
-                <div style="background:var(--bg); border-radius:var(--radius-sm); padding:12px; margin:12px 0;">
-                    <div style="font-weight:700;">👨‍💻 المطور</div>
-                    <div style="color:var(--text-secondary);">المهندس / جبر الحميدي</div>
-                </div>
-                <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-                    <a href="whatsapp://send?phone=00967781038203" class="btn btn-secondary btn-small" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="fab fa-whatsapp"></i> واتساب</a>
-                    <a href="mailto:db7r01@gmail.com" class="btn btn-secondary btn-small" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;"><i class="fas fa-envelope"></i> Gmail</a>
-                </div>
-            </div>
-            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('aboutModal')">إغلاق</button></div>
-        </div>
-    </div>
-
     <script>
         // ============================================================
         // الإعدادات والحالة العامة
@@ -1187,6 +1155,7 @@
 
             const safeParams = (params && typeof params === 'object') ? params : {};
             const bridgeActions = {
+                exitApplication: () => androidInterface.exitApplication(),
                 getCurrentUser: () => androidInterface.getCurrentUser(),
                 getDashboardStats: () => androidInterface.getDashboardStats(JSON.stringify(safeParams)),
                 screenExists: () => androidInterface.screenExists(
@@ -1266,27 +1235,45 @@
         // ============================================================
         // تسجيل الخروج
         // ============================================================
-        function logout() {
-            if (confirm('تسجيل الخروج؟')) {
-                if (refreshInterval) clearInterval(refreshInterval);
-                localStorage.clear();
-                window.location.replace('screens/login.html');
+        async function logout() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            hideAllBubbles();
+            try {
+                const result = await apiCall('exitApplication');
+                if (result && result.success) return;
+                throw new Error((result && result.error) || 'تعذر إنهاء التطبيق');
+            } catch (e) {
+                console.error('Native exit failed:', e);
+                showToast('تعذر إنهاء التطبيق عبر Android', 'error');
             }
         }
 
         // ============================================================
         // تبديل المظهر
         // ============================================================
+        function updateThemeButton(isDark) {
+            const button = document.getElementById('themeToggleButton');
+            const icon = document.getElementById('themeToggleIcon');
+            if (!button || !icon) return;
+            icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+            const label = isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع المظلم';
+            button.title = label;
+            button.setAttribute('aria-label', label);
+        }
+
         function toggleTheme() {
             const html = document.documentElement;
-            const dark = html.getAttribute('data-theme') === 'dark';
-            html.setAttribute('data-theme', dark ? 'light' : 'dark');
-            localStorage.setItem('darkMode', !dark);
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            const nextDark = !isDark;
+            html.setAttribute('data-theme', nextDark ? 'dark' : 'light');
+            localStorage.setItem('darkMode', String(nextDark));
+            updateThemeButton(nextDark);
+            showToast(nextDark ? 'تم تفعيل الوضع المظلم' : 'تم تفعيل الوضع الفاتح', 'info');
         }
+
         (function initTheme() {
-            if (localStorage.getItem('darkMode') === 'true') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         })();
 
         // ============================================================
@@ -1593,16 +1580,6 @@
             submenuPanel.classList.add('show');
             overlay.classList.add('show');
 
-            document.removeEventListener('click', closeSubmenuOutside);
-            document.addEventListener('click', closeSubmenuOutside);
-        }
-
-        function closeSubmenuOutside(e) {
-            const panel = document.getElementById('submenuPanel');
-            const sidebar = document.getElementById('sidebar');
-            if (!panel.contains(e.target) && !sidebar.contains(e.target)) {
-                closeSubmenuPanel();
-            }
         }
 
         function closeSubmenuPanel() {
@@ -1615,6 +1592,21 @@
         function closePanels() {
             closeSubmenuPanel();
             closeSidebar();
+        }
+
+        function handlePanelOutsideClick(event) {
+            const target = event.target;
+            const sidebar = document.getElementById('sidebar');
+            const submenuPanel = document.getElementById('submenuPanel');
+            const menuToggle = document.querySelector('.menu-toggle');
+            const insideSidebar = sidebar && sidebar.contains(target);
+            const insideSubmenu = submenuPanel && submenuPanel.contains(target);
+            const insideToggle = menuToggle && menuToggle.contains(target);
+            if (insideSidebar || insideSubmenu || insideToggle) return;
+            if ((sidebar && sidebar.classList.contains('open')) ||
+                (submenuPanel && submenuPanel.classList.contains('show'))) {
+                closePanels();
+            }
         }
 
         function toggleSidebar() {
@@ -1936,8 +1928,6 @@
             notificationQueue = [];
         }
 
-        function showAboutModal() { openModal('aboutModal'); }
-
         function initCardDoubleClick() {
             const cardRoutes = {
                 "card-total-products": "screens/products.html",
@@ -2006,27 +1996,9 @@
                 loadDashboard(true);
             }, 300000);
 
-            // 6. إغلاق القوائم عند النقر خارجها
-            document.addEventListener('click', function(e) {
-                const sidebar = document.getElementById('sidebar');
-                const submenuPanel = document.getElementById('submenuPanel');
-                const menuToggle = document.querySelector('.menu-toggle');
-
-                if (window.innerWidth < 1024) {
-                    if (sidebar.classList.contains('open') &&
-                        !sidebar.contains(e.target) &&
-                        !menuToggle.contains(e.target) &&
-                        !submenuPanel.contains(e.target)) {
-                        closeSidebar();
-                    }
-                }
-
-                if (submenuPanel.classList.contains('show') &&
-                    !submenuPanel.contains(e.target) &&
-                    !sidebar.contains(e.target)) {
-                    closeSubmenuPanel();
-                }
-            });
+            // 6. إبقاء القائمتين مفتوحتين عند التفاعل داخلهما، وإغلاقهما خارج حدودهما فقط.
+            document.addEventListener('click', handlePanelOutsideClick);
+            updateThemeButton(document.documentElement.getAttribute('data-theme') === 'dark');
 
             let lastClick = 0;
             document.addEventListener('click', function(e) {

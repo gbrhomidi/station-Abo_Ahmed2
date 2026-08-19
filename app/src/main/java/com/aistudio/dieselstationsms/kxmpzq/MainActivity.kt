@@ -211,6 +211,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var geminiHelper: GeminiAIHelper
     private lateinit var smsServiceLauncher: SmsServiceLauncher
     internal lateinit var sharedPrefs: SharedPreferences
+    private var pendingNotificationTaskId: Long? = null
 
     // ====== متغيرات الجلسة ======
     private var currentAuthToken: String?
@@ -240,6 +241,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        captureNotificationIntent(intent)
 
         installGlobalExceptionHandler()
 
@@ -317,6 +319,25 @@ class MainActivity : AppCompatActivity() {
         TaskNotificationManager.reschedulePendingTasksAsync(applicationContext)
 
         DebugLogger.info("MainActivity", "onCreate finished")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureNotificationIntent(intent)
+    }
+
+    private fun captureNotificationIntent(intent: Intent?) {
+        if (intent?.getStringExtra("notification_action") == "open_tasks") {
+            val taskId = intent.getLongExtra(TaskNotificationManager.EXTRA_TASK_ID, 0L)
+            if (taskId <= 0L) return
+            val currentUrl = webView?.url.orEmpty()
+            if (currentUrl.endsWith("/main.html") || currentUrl.endsWith("main.html")) {
+                webView?.loadUrl("file:///android_asset/screens/tasks.html?task_id=$taskId")
+            } else {
+                pendingNotificationTaskId = taskId
+            }
+        }
     }
 
     override fun onStart() {
@@ -1101,6 +1122,17 @@ class MainActivity : AppCompatActivity() {
                 serverReady = true
                 isErrorPageShown = false
                 DebugLogger.info("WebView", "PAGE_FINISHED: $url")
+                if (url?.endsWith("/main.html") == true || url?.endsWith("main.html") == true) {
+                    val taskId = pendingNotificationTaskId
+                    if (taskId != null) {
+                        pendingNotificationTaskId = null
+                        view?.postDelayed({
+                            if (!isDestroyed.get()) {
+                                view.loadUrl("file:///android_asset/screens/tasks.html?task_id=$taskId")
+                            }
+                        }, 250)
+                    }
+                }
             }
 
             override fun shouldOverrideUrlLoading(
@@ -6188,6 +6220,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun exitApplication(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                activity.clearSessionState()
+                activity.runOnUiThread {
+                    if (!activity.isFinishing) {
+                        activity.finishAndRemoveTask()
+                    }
+                }
+                successResponse(0, "تم إنهاء التطبيق")
+            } catch (e: Exception) {
+                DebugLogger.logException("ExitApplication", e)
+                errorResponse("تعذر إنهاء التطبيق")
+            }
+        }
+
+        @JavascriptInterface
         fun clearCredentials(): String {
             DebugLogger.info("WebAppInterface", "clearCredentials called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -7345,6 +7394,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 else -> DebugLogger.info("JS", message)
             }
         }
+    }
+
+    private fun clearSessionState() {
+        currentAuthToken = null
+        currentUserId = 0L
+        currentUserRole = ""
+        currentUserName = ""
+        sharedPrefs.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_USER_ROLE)
+            .remove(KEY_USER_NAME)
+            .remove("remember_me")
+            .remove("saved_username")
+            .remove("saved_token")
+            .remove("saved_user_id")
+            .remove("saved_timestamp")
+            .apply()
     }
 
     // ✅ دوال مساعدة داخل النشاط (safeEvaluateJs)

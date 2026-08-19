@@ -1883,12 +1883,6 @@
       </i>
       إنشاء نسخة احتياطية يدوية
      </button>
-     <button class="submit-btn" onclick="restoreBackup()" style="background:var(--ruby);">
-      <i aria-hidden="true" class="fas fa-undo">
-      </i>
-      استعادة من نسخة احتياطية
-     </button>
-     <input accept=".json,.db" aria-label="اختر ملف النسخة الاحتياطية" id="restoreFileInput" style="display:none;" type="file">
      <div id="backupList" style="max-height:150px;overflow-y:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:8px;font-size:0.75rem;">
       <div style="color:var(--text-muted);text-align:center;">
        جاري تحميل قائمة النسخ...
@@ -1920,29 +1914,6 @@
     JAVASCRIPT – كامل ومتكامل
     ============================================================ -->
   <script>
-   /* ============================================================
-           RBAC – دور المستخدم
-           ============================================================ */
-        const ROLES = { ADMIN: 'admin', MANAGER: 'manager', VIEWER: 'viewer', AUDITOR: 'auditor' };
-        let currentUserRole = ROLES.ADMIN;
-
-        function hasPermission(action) {
-            if (currentUserRole === ROLES.ADMIN) return true;
-            if (currentUserRole === ROLES.MANAGER) {
-                if (action === 'delete' || action === 'delete_user') return false;
-                return true;
-            }
-            if (currentUserRole === ROLES.VIEWER) return action === 'read' || action === 'view' || action === 'export';
-            if (currentUserRole === ROLES.AUDITOR) return action === 'read' || action === 'view' || action === 'export' ||
-                action === 'audit';
-            return false;
-        }
-
-        function requirePermission(action) {
-            if (!hasPermission(action)) { showToast('⛔ لا تملك صلاحية لهذا الإجراء', 'error'); return false; }
-            return true;
-        }
-
         /* ============================================================
            API Call – عبر AndroidInterface (بيانات حقيقية)
            ============================================================ */
@@ -1971,16 +1942,13 @@
         /* ============================================================
            Offline / Online — لا توجد عمليات أعمال محلية
            ============================================================ */
-        let isOnline = navigator.onLine;
+        // SQLite وBridge محليان؛ حالة الشبكة لا تمنع قراءة أو تعديل المهام.
+        let isOnline = true;
         function updateOnlineStatus() {
-            isOnline = navigator.onLine;
+            isOnline = true;
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — المهام للقراءة فقط حتى عودة SQLite', 'warning'); }
-            else { banner.classList.remove('show'); }
+            if (banner) banner.classList.remove('show');
         }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-        async function syncPendingOperations() { return; }
 
         /* ============================================================
            Toast, Loading, Helpers
@@ -2146,6 +2114,7 @@
         let searchQuery = '';
         let fuseInstance = null;
         let isInitialLoad = true;
+        let notificationTaskHandled = false;
 
         /* ============================================================
            Load Data – من قاعدة البيانات الفعلية
@@ -2163,10 +2132,26 @@
                 if (!response.success) throw new Error(response.message || 'فشل جلب المهام');
                 allTasks = Array.isArray(response.data) ? response.data : [];
                 initFuse(); generateAIInsights(); renderCards(); updateStats(); updateCharts(); updateAlerts();
+                openTaskFromNotification();
             } catch (e) {
                 allTasks = []; initFuse(); renderCards(); updateStats(); updateCharts(); updateAlerts();
                 showToast(e.message || 'فشل تحميل المهام من SQLite', 'error');
             } finally { isInitialLoad = false; showLoading(false); }
+        }
+
+        function openTaskFromNotification() {
+            if (notificationTaskHandled) return;
+            const rawTaskId = new URLSearchParams(window.location.search).get('task_id');
+            const taskId = Number(rawTaskId);
+            if (!Number.isInteger(taskId) || taskId <= 0) return;
+            const task = allTasks.find(item => Number(item.id) === taskId);
+            if (!task) {
+                showToast('المهمة المحددة من الإشعار غير موجودة في SQLite أو لم تعد معلقة', 'warning');
+                notificationTaskHandled = true;
+                return;
+            }
+            notificationTaskHandled = true;
+            setTimeout(() => viewTask(taskId), 100);
         }
 
         function renderSkeleton() {
@@ -2287,7 +2272,7 @@
 
                 const archiveButton = currentFilter === 'archived'
                     ? `<button class="card-btn" onclick="event.stopPropagation(); restoreTask(${id})" aria-label="استعادة"><i class="fas fa-rotate-left" aria-hidden="true"></i> استعادة</button>`
-                    : `<button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ${!hasPermission('delete') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>`;
+                    : `<button class="card-btn danger" onclick="event.stopPropagation(); archiveTask(${id})" aria-label="أرشفة" ><i class="fas fa-archive" aria-hidden="true"></i> أرشفة</button>`;
 
                 return `
                     <div class="task-card animate-fade-up" style="animation-delay:${(idx % 5) * 0.04}s" data-id="${id}" onclick="selectCard(this, ${id})" role="listitem">
@@ -2308,7 +2293,7 @@
                             <button class="card-btn" onclick="event.stopPropagation(); viewTask(${id})" aria-label="عرض التفاصيل"><i class="fas fa-eye" aria-hidden="true"></i> تفاصيل</button>
                             <button class="card-btn" onclick="event.stopPropagation(); openEditTaskModal(${id})" aria-label="تعديل"><i class="fas fa-edit" aria-hidden="true"></i> تعديل</button>
                             ${archiveButton}
-                            ${currentFilter === 'completed' ? '' : `<button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ${!hasPermission('update') ? 'disabled style="opacity:0.4;"' : ''}><i class="fas fa-check" aria-hidden="true"></i> حل</button>`}
+                            ${currentFilter === 'completed' ? '' : `<button class="card-btn" onclick="event.stopPropagation(); resolveTask(${id})" aria-label="حل" ><i class="fas fa-check" aria-hidden="true"></i> حل</button>`}
                         </div>
                     </div>
                 `;
@@ -2584,7 +2569,6 @@
         }
 
         function openEditTaskModal(id) {
-            if (!requirePermission('update')) return;
             const task = allTasks.find(item => Number(item.id) === Number(id));
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
             document.getElementById('taskEditId').value = task.id;
@@ -2607,7 +2591,6 @@
         }
 
         async function saveTask() {
-            if (!requirePermission(document.getElementById('taskEditId').value === '0' ? 'create' : 'update')) return;
             const id = Number(document.getElementById('taskEditId').value || 0);
             const data = {
                 id,
@@ -2633,7 +2616,6 @@
            CRUD: Archive, Resolve, View
            ============================================================ */
         async function archiveTask(id) {
-            if (!requirePermission('delete')) return;
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
 
@@ -2674,7 +2656,6 @@
         }
 
         async function resolveTask(id) {
-            if (!requirePermission('update')) return;
             const task = allTasks.find(t => t.id == id);
             if (!task) { showToast('❌ المهمة غير موجودة', 'error'); return; }
 
@@ -2845,7 +2826,6 @@
            Export
            ============================================================ */
         function openExportModal() {
-            if (!requirePermission('export')) return;
             document.getElementById('exportModal').classList.add('show');
             document.body.style.overflow = 'hidden';
         }
@@ -2857,7 +2837,6 @@
         }
 
         function exportData(format) {
-            if (!requirePermission('export')) return;
             const data = allTasks.map(t => ({
                 'رقم المهمة': t.id,
                 'النوع': getTaskTypeLabel(t.type),
@@ -2934,7 +2913,6 @@
            Backup & Restore
            ============================================================ */
         function openBackupModal() {
-            if (!requirePermission('audit')) return;
             document.getElementById('backupModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadBackupList();
@@ -2947,7 +2925,6 @@
         }
 
         async function createBackup() {
-            if (!requirePermission('audit')) return;
             showLoading(true);
             try {
                 const result = await apiCall('backupData', {});
@@ -2965,10 +2942,6 @@
             }
         }
 
-        function restoreBackup() {
-            showToast('⚠️ الاستعادة تحتاج مسار قاعدة بيانات Android ولا تُنفذ من ملف محلي داخل WebView', 'warning');
-        }
-
         function loadBackupList() {
             const container = document.getElementById('backupList');
             container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">لا توجد قائمة نسخ احتياطية متاحة من طبقة Android الحالية</div>';
@@ -2978,7 +2951,6 @@
            Audit Trail
            ============================================================ */
         async function openAuditModal() {
-            if (!requirePermission('audit')) return;
             document.getElementById('auditModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             const container = document.getElementById('auditContent');
@@ -3134,7 +3106,6 @@
         window.openBackupModal = openBackupModal;
         window.closeBackupModal = closeBackupModal;
         window.createBackup = createBackup;
-        window.restoreBackup = restoreBackup;
         window.openAuditModal = openAuditModal;
         window.closeAuditModal = closeAuditModal;
         window.setFilter = setFilter;
@@ -3156,10 +3127,6 @@
         window.getStatusClass = getStatusClass;
         window.getStatusLabel = getStatusLabel;
         window.getTaskTypeLabel = getTaskTypeLabel;
-        window.hasPermission = hasPermission;
-        window.requirePermission = requirePermission;
-        window.ROLES = ROLES;
-        window.currentUserRole = currentUserRole;
   </script>
  </body>
 </html>
