@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
     <meta name="theme-color" content="#1a3a5a" />
     <title>محطة أبو أحمد – لوحة التحكم</title>
-    <!-- Font Awesome محلي عبر assets-local -->
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css" />
-    <!-- Google Fonts محلية -->
     <style>
         @font-face {
             font-family: 'Poppins';
@@ -39,9 +37,8 @@
             font-weight: 400;
             font-style: normal;
         }
-        /* ============================================================
-           المتغيرات وإعادة الضبط
-           ============================================================ */
+
+        /* ===== المتغيرات ===== */
         :root {
             --primary: #1e40af;
             --primary-light: #3b82f6;
@@ -52,51 +49,59 @@
             --success: #28a745;
             --info: #17a2b8;
             --warning: #ffc107;
-            --bg: #f0f4f8;
-            --card-bg: #ffffff;
-            --text: #1f2937;
-            --text-secondary: #6b7280;
-            --border: #e5e7eb;
-            --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            --bg: #faf0e6;
+            --card-bg: #f5e6d3;
+            --card-bg-hover: #e8d5c4;
+            --text: #3d2b1f;
+            --text-secondary: #6b4f3a;
+            --border: #d4c5b2;
+            --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
             --radius: 12px;
             --radius-sm: 6px;
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            --sidebar-width: 220px;
-            --header-height: 64px;
+            --header-height: 60px;
             --font-family: 'Inter', sans-serif;
             --font-heading: 'Poppins', sans-serif;
             --font-mono: 'IBM Plex Mono', monospace;
             --main-color: #1976d2;
             --main-color-dark: #004ba0;
             --gold-color: #FFD700;
-            --gold-dark: #D4AF37;
             --danger-color: #ff4d4d;
             --warning-color: #ff9900;
             --success-color: #28a745;
             --info-color: #17a2b8;
             --returned-color: #6f42c1;
             --damaged-color: #fd7e14;
+            --skeleton-base: #e0d6c8;
+            --skeleton-shine: #f0e8dc;
         }
+
         [data-theme="dark"] {
-            --bg: #0f1115;
-            --card-bg: #1a1d24;
-            --text: #e0e0e0;
-            --text-secondary: #a0a0a0;
-            --border: #2a2d35;
+            --bg: #1a2a3a;
+            --card-bg: #2d3a4a;
+            --card-bg-hover: #3a4a5a;
+            --text: #e8e0d8;
+            --text-secondary: #b0a898;
+            --border: #3a4a5a;
             --shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
             --primary: #4da3ff;
             --primary-light: #3a8eef;
             --primary-dark: #1e3a8a;
             --main-color: #42a5f5;
             --main-color-dark: #1565c0;
+            --skeleton-base: #3a4a5a;
+            --skeleton-shine: #4a5a6a;
         }
+
+        /* ===== Reset & Base ===== */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
             -webkit-tap-highlight-color: transparent;
         }
-        html, body {
+        html,
+        body {
             font-family: var(--font-family);
             background: var(--bg);
             color: var(--text);
@@ -107,13 +112,20 @@
         }
         body {
             padding-bottom: 20px;
-            cursor: default;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--main-color);
+            border-radius: 3px;
         }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
-        ::-webkit-scrollbar-thumb { background: var(--main-color); border-radius: 3px; }
-
+        /* ===== Animations ===== */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
@@ -129,57 +141,80 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        @keyframes ripple {
-            from { transform: scale(0); opacity: 0.5; }
-            to { transform: scale(4); opacity: 0; }
-        }
-        @keyframes wave {
-            0% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(2); opacity: 0; }
-            100% { transform: scale(1); opacity: 0; }
-        }
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: translateY(-50px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
         }
 
         .fade-in { animation: fadeIn 0.35s ease; }
         .slide-in { animation: slideInRight 0.3s ease; }
 
-        .app-container { display: block; }
+        /* ===== الهيكل العام ===== */
+        .app-container {
+            background: var(--bg);
+            min-height: 100vh;
+            transition: background 0.5s ease;
+        }
 
+        /* ===== Header ===== */
         .app-header {
-            min-width: 0;
             position: sticky;
             top: 0;
             z-index: 100;
             background: var(--card-bg);
             border-bottom: 1px solid var(--border);
-            padding: 0 16px;
+            padding: 0 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             height: var(--header-height);
             box-shadow: var(--shadow);
+            transition: background 0.3s, border-color 0.3s;
         }
-        .app-header .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
-        .app-header .header-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .app-header .header-brand > div:last-child { min-width: 0; }
+        .app-header .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .app-header .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
         .app-header .header-brand .brand-icon {
-            width: 36px; height: 36px;
+            width: 34px;
+            height: 34px;
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 18px;
+            font-size: 16px;
         }
-        .app-header .header-brand h1 { font-size: 17px; font-family: var(--font-heading); font-weight: 700; color: var(--text); margin: 0; }
-        .app-header .header-brand small { font-size: 11px; color: var(--text-secondary); display: block; margin-top: -2px; }
-        .app-header .header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+        .app-header .header-brand h1 {
+            font-size: 16px;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            color: var(--text);
+            margin: 0;
+        }
+        .app-header .header-brand small {
+            font-size: 10px;
+            color: var(--text-secondary);
+            display: block;
+            margin-top: -2px;
+        }
+        .app-header .header-actions {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
         .icon-btn {
-            width: 36px; height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: none;
             background: transparent;
@@ -191,26 +226,38 @@
             font-size: 17px;
             transition: var(--transition);
         }
-        .icon-btn:hover { background: var(--border); color: var(--text); }
-        .icon-btn svg {
-            width: 22px;
-            height: 22px;
-            fill: currentColor;
-            transition: fill 0.3s;
+        .icon-btn:hover {
+            background: var(--border);
+            color: var(--text);
         }
-        .icon-btn:hover svg { fill: var(--primary); }
+        .header-actions .gold-icon {
+            color: #FFD700 !important;
+            text-shadow: 0 0 8px #FFD700, 0 0 16px #FFD700, 0 0 32px #FFD700 !important;
+            transition: text-shadow 0.3s, transform 0.2s;
+        }
+        .header-actions .gold-icon:hover {
+            text-shadow: 0 0 12px #FFD700, 0 0 24px #FFD700, 0 0 48px #FFD700 !important;
+            transform: scale(1.05);
+            background: transparent !important;
+        }
+        [data-theme="dark"] .header-actions .gold-icon {
+            text-shadow: 0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 40px #FFD700 !important;
+        }
         .menu-toggle {
             background: transparent;
             border: none;
             color: var(--text);
-            font-size: 22px;
+            font-size: 20px;
             cursor: pointer;
             padding: 4px 8px;
             border-radius: var(--radius-sm);
             transition: var(--transition);
         }
-        .menu-toggle:hover { background: var(--border); }
+        .menu-toggle:hover {
+            background: var(--border);
+        }
 
+        /* ===== القائمة الجانبية ===== */
         .sidebar-overlay {
             position: fixed;
             inset: 0;
@@ -219,28 +266,27 @@
             z-index: 98;
             display: none;
         }
-        .sidebar-overlay.active { display: block; }
+        .sidebar-overlay.active {
+            display: block;
+        }
 
         .sidebar {
             position: fixed;
             top: 0;
             right: 0;
             bottom: 0;
-            width: max-content;
-            min-width: 160px;
-            max-width: 300px;
+            width: max-content;          /* عرض تلقائي حسب المحتوى */
+            min-width: 200px;            /* حد أدنى معقول */
+            max-width: 320px;            /* حد أقصى لتجنب التمدد الزائد */
             background: var(--card-bg);
             border-left: 1px solid var(--border);
             z-index: 99;
             transform: translateX(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease;
             display: flex;
             flex-direction: column;
             box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
             overflow: hidden;
-            will-change: transform;
-            backface-visibility: hidden;
-            contain: layout style paint;
         }
         .sidebar.open {
             transform: translateX(0);
@@ -249,30 +295,83 @@
             transform: translateX(0);
             box-shadow: -4px 0 25px rgba(0, 0, 0, 0.15);
         }
+
+        /* الوضع المضغوط (على الشاشات الكبيرة) */
         @media (min-width: 1024px) {
             .sidebar {
                 transform: translateX(0);
                 border-left: 1px solid var(--border);
+                width: max-content;
+                min-width: 200px;
+                max-width: 320px;
             }
-            .sidebar-overlay { display: none !important; }
-            .main-content { margin-right: var(--sidebar-width); }
-            .menu-toggle { display: none; }
-            .sidebar-close { display: none; }
+            .sidebar.compact {
+                width: 64px !important;
+                min-width: 64px !important;
+                max-width: 64px !important;
+            }
+            .sidebar.compact .nav-label,
+            .sidebar.compact .nav-arrow,
+            .sidebar.compact .sidebar-header .brand span,
+            .sidebar.compact .sidebar-search input,
+            .sidebar.compact .sidebar-search::before,
+            .sidebar.compact .nav-children,
+            .sidebar.compact .sidebar-section-title {
+                display: none !important;
+            }
+            .sidebar.compact .nav-item {
+                justify-content: center;
+                padding: 10px 0;
+            }
+            .sidebar.compact .nav-item .nav-icon {
+                font-size: 1.3rem;
+                width: auto;
+            }
+            .sidebar-overlay {
+                display: none !important;
+            }
+            .main-content {
+                margin-right: auto; /* سيتم ضبطه بواسطة JS حسب عرض القائمة */
+                transition: margin-right 0.3s;
+            }
+            .sidebar.compact ~ .main-content {
+                margin-right: 64px;
+            }
+            .menu-toggle {
+                display: none;
+            }
+            .sidebar-close {
+                display: none;
+            }
+        }
+
+        /* على الموبايل، نلغي الحد الأقصى للعرض ونعطي عرضاً مناسباً */
+        @media (max-width: 1023px) {
+            .sidebar {
+                width: min(85vw, 300px);
+                min-width: 240px;
+                max-width: 300px;
+            }
         }
 
         .sidebar-header {
-            padding: 12px 10px;
+            padding: 10px 12px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-shrink: 0;
             background: var(--card-bg);
-            position: relative;
         }
-        .sidebar-header .brand { display: flex; align-items: center; gap: 6px; }
+        .sidebar-header .brand {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow: hidden;
+        }
         .sidebar-header .brand .icon {
-            width: 28px; height: 28px;
+            width: 28px;
+            height: 28px;
             background: linear-gradient(135deg, var(--main-color), var(--main-color-dark));
             border-radius: 6px;
             display: flex;
@@ -280,17 +379,19 @@
             justify-content: center;
             color: white;
             font-size: 14px;
+            flex-shrink: 0;
         }
         .sidebar-header .brand span {
             font-family: var(--font-heading);
             font-weight: 700;
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text);
+            white-space: nowrap;
         }
         .sidebar-header .header-actions-side {
             display: flex;
-            gap: 2px;
-            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
         }
         .sidebar-header .header-actions-side button {
             background: none;
@@ -298,15 +399,25 @@
             color: var(--text-secondary);
             cursor: pointer;
             font-size: 14px;
-            padding: 4px;
+            padding: 4px 6px;
             border-radius: 4px;
             transition: var(--transition);
         }
-        .sidebar-header .header-actions-side button:hover { background: var(--border); color: var(--text); }
-        .sidebar-header .header-actions-side button.pinned { color: var(--gold-color); transform: rotate(-45deg); }
+        .sidebar-header .header-actions-side button:hover {
+            background: var(--border);
+            color: var(--text);
+        }
+        .sidebar-header .header-actions-side button.pinned {
+            color: var(--gold-color);
+            transform: rotate(-45deg);
+        }
+        .sidebar-header .header-actions-side button.active-mode {
+            color: var(--primary);
+            background: rgba(25, 118, 210, 0.1);
+        }
 
         .sidebar-search {
-            padding: 6px 8px;
+            padding: 6px 10px;
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
         }
@@ -317,7 +428,7 @@
             border-radius: 16px;
             background: var(--bg);
             color: var(--text);
-            font-size: 12px;
+            font-size: 13px;
             outline: none;
             transition: var(--transition);
             font-family: var(--font-family);
@@ -325,168 +436,277 @@
             background-repeat: no-repeat;
             background-position: left 8px center;
         }
-        .sidebar-search input:focus { border-color: var(--main-color); box-shadow: 0 0 0 2px rgba(25,118,210,0.1); }
-        .sidebar-search input::placeholder { color: var(--text-secondary); opacity: 0.6; font-size: 11px; }
+        .sidebar-search input:focus {
+            border-color: var(--main-color);
+            box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+        }
+        .sidebar-search input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+            font-size: 12px;
+        }
 
         .sidebar-nav {
             flex: 1;
             overflow-y: auto;
-            padding: 6px 4px 12px;
+            padding: 6px 6px 12px;
         }
-        .sidebar-nav::-webkit-scrollbar { width: 3px; }
-        .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sidebar-nav::-webkit-scrollbar {
+            width: 3px;
+        }
+        .sidebar-nav::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
 
-        .sidebar-nav .nav-item {
+        /* ===== Accordion في القائمة الجانبية ===== */
+        .nav-item-parent {
+            margin-bottom: 4px;
+            border-radius: 5px;
+            overflow: hidden;
+            width: 100%;
+        }
+        .nav-item {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
+            gap: 10px;
+            padding: 10px 14px;
             border-radius: 5px;
             background: linear-gradient(to left, var(--main-color), var(--main-color-dark));
             color: white;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            margin-bottom: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
             border: none;
             width: 100%;
             text-align: right;
             font-family: var(--font-family);
             will-change: transform;
+            white-space: nowrap;
         }
-        .sidebar-nav .nav-item:hover {
+        .nav-item:hover {
             background: var(--main-color-dark);
             transform: scale(1.02);
         }
-        .sidebar-nav .nav-item:active {
+        .nav-item:active {
             transform: scale(0.95);
             background: var(--gold-color);
             color: #333;
             font-weight: bold;
         }
-        .sidebar-nav .nav-item.active {
-            border-right: 3px solid var(--gold-color);
-            box-shadow: 0 0 15px rgba(25, 118, 210, 0.3);
+        .nav-item .nav-icon {
+            font-size: 1rem;
+            width: 24px;
+            text-align: center;
+            flex-shrink: 0;
         }
-        .sidebar-nav .nav-item .nav-icon { font-size: 1rem; width: 24px; text-align: center; flex-shrink: 0; }
-        .sidebar-nav .nav-item .nav-label { flex: 1; font-size: 14px; white-space: nowrap; }
-        .sidebar-nav .nav-item .nav-arrow { font-size: 10px; transition: transform 0.3s; margin-right: 4px; }
-        .sidebar-nav .nav-item .ripple {
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.4);
-            transform: scale(0);
-            animation: ripple 0.6s linear;
-            pointer-events: none;
+        .nav-item .nav-label {
+            flex: 1;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .nav-item .nav-arrow {
+            font-size: 12px;
+            transition: transform 0.3s;
+            margin-right: 4px;
+            flex-shrink: 0;
+        }
+        .nav-item .nav-arrow.open {
+            transform: rotate(180deg);
         }
 
-        .submenu-panel {
-            position: fixed;
-            background: var(--card-bg);
-            padding: 10px 8px;
-            z-index: 1004;
-            display: none;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.25);
-            border: 1px solid rgba(0,0,0,0.1);
-            max-height: 70vh;
-            overflow-y: auto;
-            width: max-content;
-            min-width: 160px;
-            max-width: 280px;
-            animation: slideInRight 0.3s ease;
+        .nav-children {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.35s ease, padding 0.3s ease;
+            background: rgba(0, 0, 0, 0.04);
+            border-radius: 0 0 5px 5px;
+            padding: 0 8px;
         }
-        .submenu-panel.show {
-            display: block;
+        .nav-children.open {
+            max-height: 600px;
+            padding: 4px 8px 8px;
         }
-        .submenu-panel h4 {
-            font-size: 14px;
-            margin: 0 0 8px 0;
-            color: var(--main-color);
-            text-align: center;
-            border-bottom: 2px solid var(--main-color);
-            padding-bottom: 6px;
-        }
-        .submenu-panel ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .submenu-panel ul li {
-            background: linear-gradient(to left, var(--main-color), var(--main-color-dark));
-            color: white;
-            margin: 4px 0;
+        .nav-child {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 13px;
+            margin-top: 4px;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--text);
             cursor: pointer;
+            font-size: 13px;
             transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            border: none;
+            width: 100%;
             text-align: right;
+            font-family: var(--font-family);
+            border-right: 2px solid transparent;
             white-space: nowrap;
         }
-        .submenu-panel ul li:hover:not(.disabled) {
-            transform: translateX(-5px);
-            background: var(--main-color-dark);
+        .nav-child:hover {
+            background: var(--border);
+            border-right-color: var(--main-color);
         }
-        .submenu-panel ul li:active:not(.disabled) {
-            transform: scale(0.98);
-            background: var(--gold-color);
-            color: #333;
+        .nav-child:active {
+            background: var(--main-color);
+            color: white;
         }
-        .submenu-panel ul li.disabled {
-            opacity: 0.5;
+        .nav-child .child-icon {
+            font-size: 12px;
+            width: 20px;
+            color: var(--text-secondary);
+        }
+
+        .sidebar-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            padding: 8px 12px 4px;
+            letter-spacing: 0.5px;
+            opacity: 0.7;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .sidebar-section-title i {
+            font-size: 12px;
+        }
+
+        /* ===== Skeleton ===== */
+        .skeleton {
+            background: var(--skeleton-base);
+            background-image: linear-gradient(90deg, var(--skeleton-base) 0px, var(--skeleton-shine) 40px, var(--skeleton-base) 80px);
+            background-size: 200px 100%;
+            background-repeat: no-repeat;
+            animation: shimmer 1.8s infinite linear;
+            border: none !important;
             pointer-events: none;
-            cursor: not-allowed;
-            background: linear-gradient(to left, #666, #888);
+        }
+        .skeleton .stat-value,
+        .skeleton .stat-label,
+        .skeleton .stat-trend,
+        .skeleton .card-header h3,
+        .skeleton .card-header i {
+            visibility: hidden;
+        }
+        .skeleton .card-header {
+            height: 24px;
+            width: 70%;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            margin: 0 auto 6px;
+        }
+        .skeleton .stat-value {
+            height: 28px;
+            width: 60%;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            margin: 4px auto;
+        }
+        .skeleton .stat-label {
+            height: 14px;
+            width: 80%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin: 0 auto;
+        }
+        .skeleton .progress-bar {
+            visibility: hidden;
         }
 
-        .overlay {
-            position: fixed;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            left: 0;
-            background: rgba(0,0,0,0.3);
-            display: none;
-            z-index: 998;
-            backdrop-filter: blur(3px);
-        }
-        .overlay.show {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
+        /* ===== باقي العناصر ===== */
         .main-content {
             min-width: 0;
             margin-right: 0;
             transition: margin-right 0.3s;
-            padding: 20px 24px 40px;
+            padding: 16px 16px 30px;
             min-height: calc(100vh - var(--header-height));
+            background: var(--bg);
         }
         @media (min-width: 1024px) {
-            .main-content { margin-right: var(--sidebar-width); }
+            .main-content {
+                margin-right: auto; /* سيتم تحديده بواسطة JS بعد رسم القائمة */
+            }
         }
 
-        .page { display: block; animation: fadeIn 0.3s ease; }
+        .page {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
 
+        .user-info-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 12px 18px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            background: linear-gradient(145deg, var(--card-bg), var(--card-bg-hover));
+        }
+        .user-info-card .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .user-info-card .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .user-info-card .user-details h4 {
+            font-family: var(--font-heading);
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0;
+        }
+        .user-info-card .user-details small {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .user-info-card .user-details .role-badge {
+            display: inline-block;
+            background: rgba(30, 64, 175, 0.12);
+            color: var(--primary);
+            padding: 2px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* ===== Stats Grid ===== */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 0;
+            gap: 10px;
             margin-bottom: 16px;
-            padding-top: 0;
         }
-        @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-        @media (min-width: 1024px) { .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+        @media (min-width: 640px) {
+            .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
 
         .stat-card {
             background: var(--card-bg);
             border-radius: var(--radius);
-            padding: 16px;
+            padding: 14px 12px;
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
             text-align: center;
@@ -498,10 +718,13 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            background: linear-gradient(145deg, var(--card-bg), var(--card-bg-hover));
+            cursor: pointer;
         }
         .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+            background: var(--card-bg-hover);
         }
         .stat-card .card-header {
             display: flex;
@@ -510,27 +733,29 @@
             gap: 6px;
             margin-bottom: 4px;
         }
-        .stat-card .card-header i { font-size: 1.2rem; }
+        .stat-card .card-header i {
+            font-size: 1.1rem;
+        }
         .stat-card .card-header h3 {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             margin: 0;
             font-weight: 700;
             color: var(--text);
         }
         .stat-card .stat-value {
             font-family: var(--font-heading);
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             color: var(--primary);
-            margin: 4px 0;
+            margin: 2px 0;
         }
         .stat-card .stat-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
             font-weight: 500;
         }
         .stat-card .stat-trend {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             margin-top: 4px;
             display: flex;
             align-items: center;
@@ -546,16 +771,30 @@
             right: -6px;
             background: var(--danger);
             color: white;
-            width: 25px;
-            height: 25px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 0.7rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 0.65rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             animation: pulse 2s infinite;
+        }
+        .stat-card .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 3px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+        .stat-card .progress-bar .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: var(--main-color);
+            transition: width 0.8s ease;
         }
         .stat-card.danger-card { border-left-color: var(--danger); }
         .stat-card.warning-card { border-left-color: var(--warning); }
@@ -564,91 +803,40 @@
         .stat-card.returned-card { border-left-color: var(--returned-color); }
         .stat-card.damaged-card { border-left-color: var(--damaged-color); }
 
-        .card {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            padding: 18px 20px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            transition: var(--transition);
-        }
-        .card:hover { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); }
-        .card-title {
-            font-family: var(--font-heading);
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .card-title .card-icon { color: var(--primary); }
-
-        .user-info-card {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            padding: 14px 20px;
-            margin-bottom: 0;
-            margin-top: 0;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-        }
-        .user-info-card .avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 2px solid var(--primary);
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-        .user-info-card .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .user-info-card .user-details h4 {
-            font-family: var(--font-heading);
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text);
-            margin: 0;
-        }
-        .user-info-card .user-details small {
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
-        .user-info-card .user-details .role-badge {
-            display: inline-block;
-            background: rgba(30,64,175,0.12);
-            color: var(--primary);
-            padding: 2px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-top: 2px;
-        }
-
         .data-update-info {
             max-width: 100%;
             flex-wrap: wrap;
             overflow-wrap: anywhere;
             text-align: left;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             margin-top: 10px;
             color: var(--text-secondary);
-            padding: 5px;
-            background: rgba(0,0,0,0.04);
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.04);
             border-radius: 5px;
             display: inline-flex;
             align-items: center;
             gap: 8px;
         }
+        .data-update-info .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+        .data-update-info .refresh-btn:hover {
+            background: var(--border);
+            transform: rotate(180deg);
+        }
+        .data-update-info .refresh-btn.spinning i {
+            animation: spin 0.8s linear infinite;
+        }
 
+        /* ===== Toast ===== */
         .toast-container {
             position: fixed;
             top: 16px;
@@ -665,7 +853,7 @@
         .toast {
             background: var(--card-bg);
             color: var(--text);
-            padding: 12px 18px;
+            padding: 10px 16px;
             border-radius: var(--radius-sm);
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             border: 1px solid var(--border);
@@ -677,21 +865,14 @@
             animation: fadeIn 0.3s ease;
             pointer-events: auto;
             border-right: 4px solid var(--primary);
+            transition: all 0.3s ease;
         }
         .toast.success { border-right-color: var(--success); }
         .toast.error { border-right-color: var(--danger); }
         .toast.warning { border-right-color: var(--warning); }
+        .toast.dismiss { opacity: 0; transform: translateX(20px); }
 
-        .spinner {
-            display: inline-block;
-            width: 24px; height: 24px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        .spinner-sm { width: 18px; height: 18px; border-width: 2px; }
-
+        /* ===== Loading Overlay ===== */
         .loading-overlay {
             position: fixed;
             inset: 0;
@@ -710,96 +891,43 @@
             text-align: center;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
         }
-        .loading-overlay .loading-box .spinner { width: 40px; height: 40px; border-width: 4px; }
-        .loading-overlay .loading-box p { margin-top: 12px; font-weight: 600; color: var(--text); }
-
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 2000;
-            background: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        .modal-overlay.active { display: flex; opacity: 1; }
-        .modal {
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            width: 100%;
-            max-width: 520px;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            transform: scale(0.95);
-            transition: transform 0.3s ease;
-            border: 1px solid var(--border);
-        }
-        .modal-overlay.active .modal { transform: scale(1); }
-        .modal-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            background: var(--card-bg);
-            z-index: 2;
-        }
-        .modal-header h3 { font-family: var(--font-heading); font-size: 18px; font-weight: 700; color: var(--text); margin: 0; }
-        .modal-close {
-            width: 32px; height: 32px;
+        .loading-overlay .loading-box .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
             border-radius: 50%;
-            border: none;
-            background: var(--border);
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
         }
-        .modal-close:hover { background: var(--danger); color: white; }
-        .modal-body { padding: 20px; }
-        .modal-footer {
-            padding: 12px 20px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            background: var(--card-bg);
-            position: sticky;
-            bottom: 0;
+        .loading-overlay .loading-box p {
+            margin-top: 12px;
+            font-weight: 600;
+            color: var(--text);
         }
 
+        /* ===== Bubbles ===== */
         .bubble-container {
             position: fixed;
             top: 90px;
-            left: 20px;
+            left: 16px;
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             z-index: 999;
-            max-width: 300px;
+            max-width: 280px;
         }
         .notification-bubble {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 16px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            font-size: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
             cursor: pointer;
             transition: transform 0.3s, opacity 0.3s;
             position: relative;
@@ -819,68 +947,160 @@
             animation: wave 15s infinite;
         }
 
+        /* ===== Command Palette ===== */
+        .command-palette-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(6px);
+            z-index: 9999;
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 10vh;
+            animation: fadeIn 0.25s ease;
+        }
+        .command-palette-overlay.show { display: flex; }
+        .command-palette-box {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 520px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            animation: slideInRight 0.3s ease;
+        }
+        .command-palette-box .palette-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .command-palette-box .palette-header i {
+            color: var(--text-secondary);
+            font-size: 18px;
+        }
+        .command-palette-box .palette-header input {
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 16px;
+            color: var(--text);
+            font-family: var(--font-family);
+        }
+        .command-palette-box .palette-header input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+        .command-palette-box .palette-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        .command-palette-box .palette-close:hover { background: var(--border); }
+        .command-palette-box .palette-results {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+        .command-palette-box .palette-results .result-item {
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: var(--transition);
+            margin-bottom: 2px;
+        }
+        .command-palette-box .palette-results .result-item:hover,
+        .command-palette-box .palette-results .result-item.active {
+            background: var(--border);
+        }
+        .command-palette-box .palette-results .result-item i {
+            width: 20px;
+            color: var(--text-secondary);
+        }
+        .command-palette-box .palette-results .result-item .result-label {
+            flex: 1;
+            font-size: 14px;
+        }
+        .command-palette-box .palette-results .result-item .result-path {
+            font-size: 11px;
+            color: var(--text-secondary);
+            opacity: 0.7;
+            direction: ltr;
+        }
+        .command-palette-box .palette-results .no-results {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        /* ===== استجابة ===== */
         @media (max-width: 767px) {
             .sidebar {
-                width: min(220px, calc(100vw - 24px));
-                min-width: 0;
-                max-width: 220px;
-                top: 0;
+                width: min(85vw, 280px);
+                min-width: 240px;
+                max-width: 280px;
                 transform: translateX(100%);
             }
             .sidebar.open { transform: translateX(0); }
-            .sidebar-nav .nav-item { min-width: 0; padding: 8px 10px; }
-            .sidebar-nav .nav-item .nav-label {
-                min-width: 0;
-                white-space: normal;
-                overflow-wrap: anywhere;
-                line-height: 1.25;
+            .sidebar.compact {
+                width: min(85vw, 280px) !important;
+                min-width: 240px !important;
+                max-width: 280px !important;
             }
-            .main-content { padding: 12px 14px 20px; }
+            .sidebar.compact .nav-label,
+            .sidebar.compact .nav-arrow,
+            .sidebar.compact .sidebar-header .brand span,
+            .sidebar.compact .sidebar-search input,
+            .sidebar.compact .sidebar-search::before,
+            .sidebar.compact .nav-children,
+            .sidebar.compact .sidebar-section-title {
+                display: flex !important;
+            }
+            .sidebar.compact .nav-item {
+                justify-content: flex-start;
+                padding: 10px 14px;
+            }
+            .sidebar.compact .nav-item .nav-icon {
+                font-size: 1rem;
+                width: 24px;
+            }
+            .main-content { padding: 10px 12px 20px; }
             .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-            .stat-card .stat-value { font-size: 20px; }
-            .stat-card { min-width: 0; min-height: 80px; padding: 12px; }
-            .stat-card .card-header h3 { min-width: 0; overflow-wrap: anywhere; font-size: 0.8rem; }
-            .submenu-panel {
-                width: min(220px, calc(100vw - 24px));
-                min-width: 0;
-                max-width: calc(100vw - 24px);
-                font-size: 0.85rem;
-            }
-            .submenu-panel ul li {
-                white-space: normal;
-                overflow-wrap: anywhere;
-            }
-            .user-info-card { min-width: 0; flex-wrap: wrap; justify-content: center; text-align: center; }
+            .stat-card .stat-value { font-size: 17px; }
+            .stat-card { min-height: 80px; padding: 10px; }
+            .stat-card .card-header h3 { font-size: 0.7rem; }
         }
         @media (max-width: 480px) {
-            .app-header { padding: 0 10px; }
-            .app-header .header-left { gap: 6px; }
-            .app-header .header-brand { gap: 6px; }
-            .app-header .header-brand h1 { font-size: 14px; }
+            .app-header { padding: 0 8px; }
+            .app-header .header-brand h1 { font-size: 13px; }
             .app-header .header-brand small {
-                max-width: 150px;
+                max-width: 120px;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                font-size: 10px;
+                font-size: 9px;
             }
-            .sidebar {
-                width: min(220px, calc(100vw - 20px));
-                min-width: 0;
-            }
-            .sidebar-nav .nav-item { font-size: 13px; padding: 8px 10px; }
-            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-            .stat-card .stat-value { font-size: 17px; }
-            .submenu-panel { width: min(220px, calc(100vw - 20px)); max-width: calc(100vw - 20px); padding: 0.5rem 0.3rem; }
-            .submenu-panel ul li { padding: 8px 10px; font-size: 12px; }
-        }
-        @media (max-width: 360px) {
-            .stats-grid { gap: 4px; }
-            .stat-card { padding: 8px; min-height: 70px; }
-            .stat-card .card-header h3 { font-size: 0.7rem; }
+            .icon-btn { width: 34px; height: 34px; font-size: 15px; }
+            .stats-grid { gap: 6px; }
             .stat-card .stat-value { font-size: 15px; }
+            .sidebar { width: min(85vw, 260px); min-width: 200px; max-width: 260px; }
         }
 
+        /* أدوات */
         .text-center { text-align: center; }
         .text-muted { color: var(--text-secondary); }
         .mt-1 { margin-top: 6px; }
@@ -895,47 +1115,61 @@
         .justify-between { justify-content: space-between; }
         .w-full { width: 100%; }
         .hidden { display: none !important; }
+        .sidebar-empty-state {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
     </style>
-<base target="_blank">
 </head>
 <body>
 
+    <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-box">
             <div class="spinner"></div>
-            <p>جاري المعالجة...</p>
+            <p>جاري التحميل...</p>
         </div>
     </div>
 
     <div class="app-container" id="appContainer">
 
+        <!-- ===== HEADER ===== -->
         <header class="app-header">
             <div class="header-left">
                 <button class="menu-toggle" onclick="toggleSidebar()" aria-label="فتح القائمة">
-                    <i class="fas fa-bars"></i> <!-- أيقونة ☰ -->
+                    <i class="fas fa-bars"></i>
                 </button>
                 <div class="header-brand">
                     <div class="brand-icon"><i class="fas fa-gas-pump"></i></div>
                     <div>
-                        <h1>أبو أحمد</h1>
+                        <h1>محطة أبو أحمد</h1>
                         <small>نظام إدارة الديزل المتكامل</small>
                     </div>
                 </div>
             </div>
             <div class="header-actions">
-                <button id="themeToggleButton" class="icon-btn" onclick="toggleTheme()" title="تفعيل الوضع المظلم" aria-label="تفعيل الوضع المظلم">
+                <button id="commandPaletteBtn" class="icon-btn gold-icon" onclick="openCommandPalette()" title="بحث سريع (Ctrl+K)" aria-label="بحث سريع">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                </button>
+                <button id="themeToggleButton" class="icon-btn gold-icon" onclick="toggleTheme()" title="تفعيل الوضع المظلم" aria-label="تفعيل الوضع المظلم">
                     <i id="themeToggleIcon" class="fas fa-moon" aria-hidden="true"></i>
                 </button>
-                <button id="logoutButton" class="icon-btn" onclick="logout()" title="الخروج من التطبيق" aria-label="الخروج من التطبيق">
+                <button id="refreshButton" class="icon-btn gold-icon" onclick="manualRefresh()" title="تحديث البيانات" aria-label="تحديث البيانات">
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                </button>
+                <button id="logoutButton" class="icon-btn gold-icon" onclick="logout()" title="الخروج من التطبيق" aria-label="الخروج من التطبيق">
                     <i class="fas fa-right-from-bracket" aria-hidden="true"></i>
                 </button>
             </div>
         </header>
 
+        <!-- ===== SIDEBAR ===== -->
         <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanels()"></div>
-
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -944,30 +1178,40 @@
                 </div>
                 <div class="header-actions-side">
                     <button onclick="togglePinSidebar()" id="pinBtn" title="تثبيت القائمة"><i class="fas fa-thumbtack"></i></button>
+                    <button onclick="toggleCompactSidebar()" id="compactBtn" title="وضع مضغوط"><i class="fas fa-compress-alt"></i></button>
                     <button onclick="closeSidebar()" class="sidebar-close" title="إغلاق"><i class="fas fa-times"></i></button>
                 </div>
             </div>
 
             <div class="sidebar-search">
-                <input type="text" id="sidebarSearch" placeholder="بحث..." oninput="filterSidebar(event)" />
+                <input type="text" id="sidebarSearch" placeholder="بحث في القائمة..." oninput="filterSidebar(event)" />
             </div>
 
             <nav class="sidebar-nav" id="sidebarNav">
-                <!-- سيتم إنشاؤها عبر JavaScript ديناميكياً -->
+                <!-- سيتم إنشاؤها عبر JavaScript -->
             </nav>
         </aside>
 
-        <div class="submenu-panel" id="submenuPanel">
-            <h4 id="submenuTitle"></h4>
-            <ul id="submenuItems"></ul>
-        </div>
-
+        <!-- ===== OVERLAY ===== -->
         <div class="overlay" id="overlay" onclick="closePanels()"></div>
 
-        <main class="main-content" id="mainContent">
+        <!-- ===== COMMAND PALETTE ===== -->
+        <div class="command-palette-overlay" id="commandPaletteOverlay" onclick="if(event.target===this) closeCommandPalette()">
+            <div class="command-palette-box" onclick="event.stopPropagation()">
+                <div class="palette-header">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="commandPaletteInput" placeholder="ابحث عن شاشة..." autofocus>
+                    <button class="palette-close" onclick="closeCommandPalette()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="palette-results" id="commandPaletteResults"></div>
+            </div>
+        </div>
 
+        <!-- ===== MAIN CONTENT ===== -->
+        <main class="main-content" id="mainContent">
             <div class="page" id="page-dashboard">
 
+                <!-- معلومات المستخدم -->
                 <div class="user-info-card" id="userInfoCard">
                     <div class="avatar">
                         <img id="userAvatar" src="file:///android_asset/assets-local/images/default_avatar.png" alt="صورة المستخدم">
@@ -979,160 +1223,73 @@
                     </div>
                 </div>
 
-                <!-- تم حذف قسم "شعار الشركة" بالكامل حسب الطلب -->
+                <!-- البطاقات الإحصائية مع Skeleton Loading -->
+                <div class="stats-grid" id="dashStats"></div>
 
-                <div class="stats-grid" id="dashStats">
-                    <div class="stat-card" id="card-total-products">
-                        <div class="card-header">
-                            <i class="fas fa-boxes"></i>
-                            <h3>إجمالي المنتجات</h3>
-                        </div>
-                        <div class="stat-value" id="total-products">0</div>
-                        <div class="stat-label">منتج في النظام</div>
-                        <div class="stat-trend trend-up" id="products-trend">
-                            <i class="fas fa-arrow-up"></i> <span id="products-trend-val">جاري...</span>
-                        </div>
-                    </div>
-
-                    <div class="stat-card success-card" id="card-daily-sales">
-                        <div class="card-header">
-                            <i class="fas fa-chart-line"></i>
-                            <h3>المبيعات اليومية</h3>
-                        </div>
-                        <div class="stat-value" id="daily-sales">0.00 ر.ي</div>
-                        <div class="stat-label">إجمالي المبيعات اليوم</div>
-                        <div class="stat-trend trend-up" id="sales-trend">
-                            <i class="fas fa-arrow-up"></i> <span id="sales-trend-val">جاري...</span>
-                        </div>
-                    </div>
-
-                    <div class="stat-card" id="card-active-customers">
-                        <div class="card-header">
-                            <i class="fas fa-users"></i>
-                            <h3>العملاء النشطين</h3>
-                        </div>
-                        <div class="stat-value" id="active-customers">0</div>
-                        <div class="stat-label">عميل نشط</div>
-                    </div>
-
-                    <div class="stat-card warning-card" id="card-expiry-soon">
-                        <div class="card-header">
-                            <i class="fas fa-hourglass-half"></i>
-                            <h3>المنتجات المنتهية قريبًا</h3>
-                        </div>
-                        <div class="stat-value" id="expiry-soon">0</div>
-                        <div class="stat-label">منتج خلال 30 يومًا</div>
-                        <div class="card-badge" id="expiry-badge">0</div>
-                    </div>
-
-                    <div class="stat-card danger-card" id="card-low-stock">
-                        <div class="card-header">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <h3>انخفاض المخزون</h3>
-                        </div>
-                        <div class="stat-value" id="low-stock">0</div>
-                        <div class="stat-label">منتج تحت الحد الأدنى</div>
-                        <div class="card-badge" id="low-stock-badge">0</div>
-                    </div>
-
-                    <div class="stat-card info-card" id="card-due-invoices">
-                        <div class="card-header">
-                            <i class="fas fa-file-invoice"></i>
-                            <h3>الفواتير المستحقة</h3>
-                        </div>
-                        <div class="stat-value" id="due-invoices">0</div>
-                        <div class="stat-label">فاتورة خلال أسبوع</div>
-                    </div>
-
-                    <div class="stat-card returned-card" id="card-returned-products">
-                        <div class="card-header">
-                            <i class="fas fa-undo"></i>
-                            <h3>المنتجات المرتجعة</h3>
-                        </div>
-                        <div class="stat-value" id="returned-products">0.00</div>
-                        <div class="stat-label">كمية اليوم (لتر)</div>
-                    </div>
-
-                    <div class="stat-card damaged-card" id="card-damaged-products">
-                        <div class="card-header">
-                            <i class="fas fa-ban"></i>
-                            <h3>المنتجات التالفة</h3>
-                        </div>
-                        <div class="stat-value" id="damaged-products">0.00</div>
-                        <div class="stat-label">كمية اليوم (لتر)</div>
-                    </div>
-
-                    <div class="stat-card warning-card" id="card-customer-debts">
-                        <div class="card-header">
-                            <i class="fas fa-hand-holding-usd"></i>
-                            <h3>مديونية العملاء</h3>
-                        </div>
-                        <div class="stat-value" id="customer-debts">0.00 ر.ي</div>
-                        <div class="stat-label">إجمالي الديون المستحقة</div>
-                    </div>
-
-                    <div class="stat-card" id="card-supplier-debts">
-                        <div class="card-header">
-                            <i class="fas fa-file-invoice-dollar"></i>
-                            <h3>مديونية الموردين</h3>
-                        </div>
-                        <div class="stat-value" id="supplier-debts">0.00 ر.ي</div>
-                        <div class="stat-label">إجمالي الدين للموردين</div>
-                    </div>
-
-                    <div class="stat-card success-card" id="card-inventory-value">
-                        <div class="card-header">
-                            <i class="fas fa-warehouse"></i>
-                            <h3>قيمة المخزون</h3>
-                        </div>
-                        <div class="stat-value" id="inventory-value">0.00 ر.ي</div>
-                        <div class="stat-label">القيمة الإجمالية للمخزون</div>
-                    </div>
-
-                    <div class="stat-card info-card" id="card-pending-tasks">
-                        <div class="card-header">
-                            <i class="fas fa-tasks"></i>
-                            <h3>المهام المعلقة</h3>
-                        </div>
-                        <div class="stat-value" id="pending-tasks">0</div>
-                        <div class="stat-label">مهمة تحتاج لمراجعتك</div>
-                        <div class="card-badge" id="tasks-badge">0</div>
-                    </div>
-                </div>
-
+                <!-- معلومات التحديث -->
                 <div class="data-update-info">
                     <i class="fas fa-sync-alt"></i> تم تحديث البيانات في: <span id="last-update">يتم التحميل...</span>
+                    <button class="refresh-btn" onclick="manualRefresh()" title="تحديث الآن"><i class="fas fa-rotate-right"></i></button>
                 </div>
-            </div>
 
+            </div>
         </main>
+
     </div>
 
     <script>
-        // ============================================================
-        // الإعدادات والحالة العامة
-        // ============================================================
+        // ================================================================
+        // الحالة العامة والمتغيرات
+        // ================================================================
         let currentUser = null;
-        // Permissions removed - all screens accessible
         let notificationQueue = [];
         let isProcessingQueue = false;
         let activeBubbles = [];
-        let notificationsEnabled = true;
         let refreshInterval = null;
-        let dashboardCache = null; // آخر نتيجة حية من SQLite، وليست بيانات افتراضية
-
-        let androidInterface = null; // سيتم تهيئته لاحقاً
+        let dashboardCache = null;
+        let androidInterface = null;
         let useAndroidInterface = false;
+        let isRefreshing = false;
 
-        // دالة تهيئة الجسر؛ لا يُسمح بتشغيل Dashboard دون AndroidInterface.
+        let sidebarNavData = [];
+        let subPageRouteMap = {};
+        let favorites = JSON.parse(localStorage.getItem('favorites') || '[]');
+        let recent = JSON.parse(localStorage.getItem('recent') || '[]');
+
+        // ================================================================
+        // أدوات مساعدة
+        // ================================================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            const text = document.createElement('span');
+            text.textContent = String(message || '');
+            toast.appendChild(text);
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.classList.add('dismiss');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 4000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        }
+
+        // ================================================================
+        // جسر Android
+        // ================================================================
         function initAndroidBridge() {
             if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
                 androidInterface = window.AndroidInterface;
                 useAndroidInterface = true;
-                console.log('AndroidInterface initialized successfully');
+                console.log('AndroidInterface initialized');
                 return true;
             }
-            console.warn('AndroidInterface not available yet. Will retry...');
+            console.warn('AndroidInterface not available, retrying...');
             setTimeout(() => {
                 if (typeof window.AndroidInterface !== 'undefined' && window.AndroidInterface !== null) {
                     androidInterface = window.AndroidInterface;
@@ -1146,53 +1303,16 @@
                     }
                 } else {
                     useAndroidInterface = false;
-                    console.error('AndroidInterface غير متاح؛ تم إيقاف تحميل Dashboard');
-                    showToast('جسر Android غير متاح؛ لم يتم تحميل بيانات لوحة التحكم', 'error');
+                    showToast('جسر Android غير متاح', 'error');
                 }
             }, 500);
             return false;
         }
 
-        // ============================================================
-        // أدوات مساعدة
-        // ============================================================
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            const text = document.createElement('span');
-            text.textContent = String(message || '');
-            toast.appendChild(text);
-            container.appendChild(toast);
-            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4000);
-        }
-
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('active', show);
-        }
-
-        function closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-        }
-
-        function openModal(id) {
-            document.getElementById(id).classList.add('active');
-        }
-
-        // وضع الصيانة معطل - الصلاحيات ملغاة
-        function showMaintenanceMode() {
-            // Permissions removed - no maintenance mode needed
-            console.log('Maintenance mode disabled - permissions are removed');
-        }
-
-        // ============================================================
-        // دالة الاتصال الأساسية عبر AndroidInterface (باستخدام JSON واحد)
-        // ============================================================
         async function apiCall(action, params = {}) {
             if (!useAndroidInterface || !androidInterface) {
                 throw new Error('AndroidInterface غير متاح');
             }
-
             const safeParams = (params && typeof params === 'object') ? params : {};
             const bridgeActions = {
                 exitApplication: () => androidInterface.exitApplication(),
@@ -1204,10 +1324,8 @@
             };
             const handler = bridgeActions[action];
             if (typeof handler !== 'function') {
-                console.warn(`الفعل ${action} غير مسموح به في الجسر`);
                 return { success: false, error: `Unsupported Bridge action: ${action}` };
             }
-
             try {
                 return handleAndroidResult(handler());
             } catch (e) {
@@ -1218,34 +1336,23 @@
 
         function handleAndroidResult(result) {
             if (typeof result === 'string') {
-                try {
-                    result = JSON.parse(result);
-                } catch (e) {
-                    return { success: false, error: result };
-                }
+                try { result = JSON.parse(result); } catch (e) { return { success: false, error: result }; }
             }
-            if (result && typeof result === 'object' && 'success' in result) {
-                return result;
-            }
-            if (Array.isArray(result)) {
-                return { success: true, data: result };
-            }
-            if (result && typeof result === 'object') {
-                return { success: true, data: result };
-            }
+            if (result && typeof result === 'object' && 'success' in result) return result;
+            if (Array.isArray(result)) return { success: true, data: result };
+            if (result && typeof result === 'object') return { success: true, data: result };
             return { success: true, data: result };
         }
 
-        // ============================================================
-        // جلب المستخدم من Kotlin (بدلاً من localStorage)
-        // ============================================================
+        // ================================================================
+        // المستخدم
+        // ================================================================
         async function loadUserFromKotlin() {
             try {
                 showLoading(true);
                 const result = await apiCall('getCurrentUser');
                 if (!result.success || !result.data) {
-                    const message = result.error || 'لم يتم العثور على جلسة مستخدم';
-                    throw new Error(message);
+                    throw new Error(result.error || 'لم يتم العثور على جلسة مستخدم');
                 }
                 currentUser = result.data;
                 localStorage.setItem('user', JSON.stringify(currentUser));
@@ -1254,13 +1361,11 @@
                 await loadDashboard();
                 return true;
             } catch (e) {
-                console.error('Error loading user from Kotlin:', e);
+                console.error('Error loading user:', e);
                 currentUser = null;
-                const message = e.message || 'تعذر تحميل المستخدم من Android';
-                showToast(message, 'error');
-                // لا نسمح ببقاء dashboard بلا session أو بعرض قائمة فارغة مضللة.
+                showToast(e.message || 'تعذر تحميل المستخدم', 'error');
                 setTimeout(() => {
-                    if (window.location.pathname.endsWith('/main.html') || window.location.pathname.endsWith('main.html')) {
+                    if (window.location.pathname.endsWith('/main.html')) {
                         window.location.replace('screens/login.html');
                     }
                 }, 700);
@@ -1270,11 +1375,16 @@
             }
         }
 
-        // Permissions removed - all screens accessible
+        function updateUserInfo(user) {
+            if (!user) return;
+            const nameEl = document.getElementById('userDisplayName');
+            const emailEl = document.getElementById('userDisplayEmail');
+            const roleEl = document.getElementById('userDisplayRole');
+            if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
+            if (emailEl) emailEl.textContent = user.email || '—';
+            if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
+        }
 
-        // ============================================================
-        // تسجيل الخروج
-        // ============================================================
         async function logout() {
             if (refreshInterval) clearInterval(refreshInterval);
             hideAllBubbles();
@@ -1283,22 +1393,19 @@
                 if (result && result.success) return;
                 throw new Error((result && result.error) || 'تعذر إنهاء التطبيق');
             } catch (e) {
-                console.error('Native exit failed:', e);
-                showToast('تعذر إنهاء التطبيق عبر Android', 'error');
+                console.error('Exit failed:', e);
+                showToast('تعذر إنهاء التطبيق', 'error');
             }
         }
 
-        // ============================================================
-        // تبديل المظهر
-        // ============================================================
+        // ================================================================
+        // المظهر
+        // ================================================================
         function updateThemeButton(isDark) {
-            const button = document.getElementById('themeToggleButton');
             const icon = document.getElementById('themeToggleIcon');
-            if (!button || !icon) return;
+            if (!icon) return;
             icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
-            const label = isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع المظلم';
-            button.title = label;
-            button.setAttribute('aria-label', label);
+            document.getElementById('themeToggleButton').title = isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع المظلم';
         }
 
         function toggleTheme() {
@@ -1310,36 +1417,66 @@
             updateThemeButton(nextDark);
             showToast(nextDark ? 'تم تفعيل الوضع المظلم' : 'تم تفعيل الوضع الفاتح', 'info');
         }
-
         (function initTheme() {
             const isDark = localStorage.getItem('darkMode') === 'true';
             document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
         })();
 
-        // ============================================================
-        // بيانات القائمة (سيتم تحميلها من JSON أو استخدام الاحتياطي)
-        // ============================================================
-        let sidebarNavData = [];
-        let subPageRouteMap = {};
-
-        // قائمة احتياطية (fallback) في حال فشل تحميل JSON
+        // ================================================================
+        // تحميل بيانات القائمة
+        // ================================================================
         const fallbackSidebarData = [
-            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين', 'الأدوار والصلاحيات', 'إدارة الشاشات', 'سجل النشاطات'] },
-            { id: 'admin', label: 'الإدارة الأساسية', icon: 'fa-building', children: ['إعدادات الشركة', 'إدارة المحطات', 'إعدادات النظام', 'أسعار الصرف'] },
-            { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users', children: ['إدارة العملاء', 'إدارة الموردين', 'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'] },
-            { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck', children: ['إدارة المركبات', 'إدارة السائقين', 'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'] },
-            { id: 'products', label: 'المنتجات والوقود', icon: 'fa-boxes', children: ['أنواع الوقود', 'إدارة المنتجات', 'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'] },
-            { id: 'tanks', label: 'الخزانات والمضخات', icon: 'fa-oil-can', children: ['إدارة الخزانات', 'إدارة المضخات', 'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'] },
-            { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse', children: ['إدارة المستودعات', 'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'] },
-            { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['نقطة البيع (POS)', 'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'] },
-            { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات', 'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات', 'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية', 'دفتر الأستاذ', 'الميزانية العمومية'] },
-            { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie', children: ['إدارة الموظفين', 'الحضور والانصراف', 'إدارة الرواتب', 'دفعات الموظفين'] },
-            { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools', children: ['الأصول الثابتة', 'إدارة الأصول V12', 'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'] },
-            { id: 'notifications', label: 'الإشعارات والرسائل', icon: 'fa-bell', children: ['قوالب الإشعارات', 'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء', 'فحص الرسائل'] },
-            { id: 'reports', label: 'التقارير والتحليلات', icon: 'fa-chart-bar', children: ['لوحة التحكم', 'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود', 'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'] },
-            { id: 'system', label: 'النظام والسجلات', icon: 'fa-server', children: ['سجلات النظام', 'سجلات التدقيق', 'إدارة الوثائق'] },
-            { id: 'sync', label: 'المزامنة والنسخ الاحتياطي', icon: 'fa-sync', children: ['إدارة الأجهزة', 'سجل المزامنة', 'النسخ الاحتياطي'] },
-            { id: 'printing', label: 'الطباعة والقوالب', icon: 'fa-print', children: ['إعدادات الطابعات', 'قوالب الإيصالات', 'قوالب الفواتير'] },
+            { id: 'security', label: 'الأمان والمصادقة', icon: 'fa-shield-alt', children: ['إدارة المستخدمين',
+                    'الأدوار والصلاحيات', 'إدارة الشاشات', 'سجل النشاطات'
+                ] },
+            { id: 'admin', label: 'الإدارة الأساسية', icon: 'fa-building', children: ['إعدادات الشركة', 'إدارة المحطات',
+                    'إعدادات النظام', 'أسعار الصرف'
+                ] },
+            { id: 'parties', label: 'الأطراف والعملاء', icon: 'fa-users', children: ['إدارة العملاء', 'إدارة الموردين',
+                    'أنواع الأطراف', 'إدارة العقود', 'الديون المعدومة', 'CRM - العلاقات'
+                ] },
+            { id: 'vehicles', label: 'المركبات والسائقين', icon: 'fa-truck', children: ['إدارة المركبات', 'إدارة السائقين',
+                    'تتبع المركبات', 'رحلات المركبات', 'مصروفات المركبات'
+                ] },
+            { id: 'products', label: 'المنتجات والوقود', icon: 'fa-boxes', children: ['أنواع الوقود', 'إدارة المنتجات',
+                    'فئات المنتجات', 'قوائم الأسعار', 'سجل تغيير الأسعار'
+                ] },
+            { id: 'tanks', label: 'الخزانات والمضخات', icon: 'fa-oil-can', children: ['إدارة الخزانات', 'إدارة المضخات',
+                    'قراءات العدادات', 'تعبئة الخزانات', 'فحوصات الجودة', 'معايرة المعدات'
+                ] },
+            { id: 'inventory', label: 'المخزون والمستودعات', icon: 'fa-warehouse', children: ['إدارة المستودعات',
+                    'مستويات المخزون', 'حركات المخزون', 'الجرد والتسوية', 'المنتجات التالفة', 'تنبيهات المخزون'
+                ] },
+            { id: 'sales', label: 'المبيعات والورديات', icon: 'fa-shopping-cart', children: ['نقطة البيع (POS)',
+                    'إدارة الورديات', 'سجل المبيعات', 'إدارة الطلبات', 'إدارة التوصيلات', 'مبيعات الوقود'
+                ] },
+            { id: 'finance', label: 'المالية والحسابات', icon: 'fa-money-bill-wave', children: ['إدارة المدفوعات',
+                    'إدارة الإيصالات', 'إدارة الصناديق', 'حركات النقدية', 'البنوك والحسابات', 'شجرة الحسابات',
+                    'القيود المحاسبية', 'فئات المصروفات', 'إدارة المصروفات', 'الميزانيات', 'الإيداعات النقدية',
+                    'دفتر الأستاذ', 'الميزانية العمومية'
+                ] },
+            { id: 'hr', label: 'الموارد البشرية', icon: 'fa-user-tie', children: ['إدارة الموظفين', 'الحضور والانصراف',
+                    'إدارة الرواتب', 'دفعات الموظفين'
+                ] },
+            { id: 'assets', label: 'الأصول والصيانة', icon: 'fa-tools', children: ['الأصول الثابتة', 'إدارة الأصول V12',
+                    'طلبات الصيانة', 'جدولة الصيانة', 'سجل الصيانة', 'الإهلاك'
+                ] },
+            { id: 'notifications', label: 'الإشعارات والرسائل', icon: 'fa-bell', children: ['قوالب الإشعارات',
+                    'صندوق الإشعارات', 'إدارة الرسائل', 'سجل الرسائل', 'تذكيرات الديون', 'القائمة البيضاء', 'فحص الرسائل'
+                ] },
+            { id: 'reports', label: 'التقارير والتحليلات', icon: 'fa-chart-bar', children: ['لوحة التحكم',
+                    'تقارير المبيعات', 'تقرير نهاية اليوم', 'تقارير المخزون', 'تقارير العملاء', 'تقارير الوقود',
+                    'مؤشرات الأداء KPI', 'التنبؤات والتحليلات', 'التقارير المحاسبية'
+                ] },
+            { id: 'system', label: 'النظام والسجلات', icon: 'fa-server', children: ['سجلات النظام', 'سجلات التدقيق',
+                    'إدارة الوثائق'
+                ] },
+            { id: 'sync', label: 'المزامنة والنسخ الاحتياطي', icon: 'fa-sync', children: ['إدارة الأجهزة', 'سجل المزامنة',
+                    'النسخ الاحتياطي'
+                ] },
+            { id: 'printing', label: 'الطباعة والقوالب', icon: 'fa-print', children: ['إعدادات الطابعات', 'قوالب الإيصالات',
+                    'قوالب الفواتير'
+                ] },
             { id: 'ai', label: 'المساعد الذكي', icon: 'fa-robot', children: ['المساعد الذكي'] }
         ];
 
@@ -1437,10 +1574,8 @@
             'المساعد الذكي': 'screens/ai-assistant.html'
         };
 
-        // تحميل البيانات من JSON
         async function loadMenuData() {
             try {
-                // محاولة تحميل الملف من assets (يُفضل استخدام assets-local)
                 const response = await fetch('file:///android_asset/assets-local/menu.json');
                 if (response.ok) {
                     const data = await response.json();
@@ -1451,32 +1586,45 @@
                     subPageRouteMap = fallbackRouteMap;
                 }
             } catch (e) {
-                console.warn('Failed to load menu.json, using fallback data', e);
+                console.warn('Failed to load menu.json, using fallback', e);
                 sidebarNavData = fallbackSidebarData;
                 subPageRouteMap = fallbackRouteMap;
             }
         }
 
-        // ============================================================
-        // بناء القائمة الجانبية ديناميكياً من بيانات المستخدم
-        // ============================================================
         function getSidebarData() {
             if (!currentUser) return [];
-            return sidebarNavData
-                .map((item) => {
-                    const originalChildren = Array.isArray(item.children) ? item.children : null;
-                    const children = originalChildren
-                        ? originalChildren.filter((label) => isScreenRouteAvailable(subPageRouteMap[label] || ''))
-                        : [];
-                    return {
-                        item: { ...item, children },
-                        visible: originalChildren ? children.length > 0 : isScreenRouteAvailable(subPageRouteMap[item.label] || '')
-                    };
-                })
-                .filter((entry) => entry.visible)
-                .map((entry) => entry.item);
+            return sidebarNavData.map(item => ({
+                ...item,
+                children: Array.isArray(item.children) ? item.children : []
+            }));
         }
 
+        // ================================================================
+        // المفضلة والمستخدمة مؤخراً
+        // ================================================================
+        function addToRecent(label) {
+            recent = recent.filter(item => item !== label);
+            recent.unshift(label);
+            if (recent.length > 10) recent.pop();
+            localStorage.setItem('recent', JSON.stringify(recent));
+        }
+
+        function toggleFavorite(label) {
+            if (favorites.includes(label)) {
+                favorites = favorites.filter(item => item !== label);
+            } else {
+                favorites.push(label);
+            }
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            renderSidebar();
+        }
+
+        function isFavorite(label) { return favorites.includes(label); }
+
+        // ================================================================
+        // بناء القائمة الجانبية (Accordion + مفضلة + مستخدمة مؤخراً)
+        // ================================================================
         function renderSidebar() {
             const nav = document.getElementById('sidebarNav');
             if (!nav) return;
@@ -1486,189 +1634,214 @@
             if (sidebarData.length === 0) {
                 const empty = document.createElement('div');
                 empty.className = 'sidebar-empty-state';
-                empty.setAttribute('role', 'status');
-                empty.textContent = currentUser
-                    ? 'لا توجد شاشات متاحة لهذا المستخدم'
-                    : 'تعذر تحميل جلسة المستخدم';
+                empty.textContent = currentUser ? 'لا توجد شاشات متاحة' : 'تعذر تحميل جلسة المستخدم';
                 nav.appendChild(empty);
                 return;
             }
 
-            sidebarData.forEach((item, index) => {
+            // === المفضلة ===
+            if (favorites.length > 0) {
+                const title = document.createElement('div');
+                title.className = 'sidebar-section-title';
+                title.innerHTML = '<i class="fas fa-star" style="color: var(--gold-color);"></i> المفضلة';
+                nav.appendChild(title);
+                favorites.forEach(label => {
+                    const item = sidebarData.find(p => p.label === label);
+                    if (item) {
+                        const btn = createNavItem(item, true);
+                        nav.appendChild(btn);
+                    }
+                });
+            }
+
+            // === المستخدمة مؤخراً ===
+            if (recent.length > 0) {
+                const title = document.createElement('div');
+                title.className = 'sidebar-section-title';
+                title.innerHTML = '<i class="fas fa-clock" style="color: var(--text-secondary);"></i> المستخدمة مؤخراً';
+                nav.appendChild(title);
+                recent.slice(0, 5).forEach(label => {
+                    const item = sidebarData.find(p => p.label === label);
+                    if (item) {
+                        const btn = createNavItem(item, false);
+                        nav.appendChild(btn);
+                    }
+                });
+            }
+
+            // === جميع العناصر ===
+            const allTitle = document.createElement('div');
+            allTitle.className = 'sidebar-section-title';
+            allTitle.innerHTML = '<i class="fas fa-list"></i> جميع الشاشات';
+            nav.appendChild(allTitle);
+
+            sidebarData.forEach(item => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'nav-item-parent';
+
                 const btn = document.createElement('button');
                 btn.className = 'nav-item';
-                btn.setAttribute('role', 'menuitem');
-                btn.setAttribute('data-index', index);
+                btn.dataset.label = item.label;
+                const hasChildren = item.children && item.children.length > 0;
                 btn.innerHTML = `
                     <span class="nav-icon"><i class="fas ${item.icon}"></i></span>
                     <span class="nav-label">${item.label}</span>
-                    ${item.children && item.children.length ? `<span class="nav-arrow"><i class="fas fa-chevron-left"></i></span>` : ''}
+                    ${hasChildren ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
+                    <span style="margin-right:auto;font-size:12px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${item.label}');" title="${isFavorite(item.label) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
+                        <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? 'var(--gold-color)' : 'var(--text-secondary)'};"></i>
+                    </span>
                 `;
-                btn.onclick = function(e) {
-                    e.stopPropagation();
-                    const panel = document.getElementById('submenuPanel');
-                    const isSubmenuOpen = panel.classList.contains('show') && panel.dataset.parent === item.id;
 
-                    if (item.children && item.children.length) {
-                        if (isSubmenuOpen) {
-                            // إغلاق القائمة الفرعية ونقل التركيز إلى الزر الرئيسي
-                            closeSubmenuPanel();
-                            this.focus();
-                            return;
+                if (hasChildren) {
+                    btn.onclick = function(e) {
+                        e.stopPropagation();
+                        const childContainer = this.parentElement.querySelector('.nav-children');
+                        const arrow = this.querySelector('.nav-arrow');
+                        if (childContainer) {
+                            childContainer.classList.toggle('open');
+                            if (arrow) arrow.classList.toggle('open');
                         }
-                        showSubmenu(e, item.label, item.children, item.id);
-                    } else {
+                    };
+                } else {
+                    btn.onclick = function(e) {
+                        e.stopPropagation();
                         const route = subPageRouteMap[item.label] || '/';
+                        addToRecent(item.label);
                         navigateTo(route);
-                    }
-                };
-                btn.addEventListener('click', function(e) {
-                    createRipple(e, this);
-                });
-                nav.appendChild(btn);
+                    };
+                }
+                wrapper.appendChild(btn);
+
+                if (hasChildren) {
+                    const childContainer = document.createElement('div');
+                    childContainer.className = 'nav-children';
+                    item.children.forEach(child => {
+                        const childBtn = document.createElement('button');
+                        childBtn.className = 'nav-child';
+                        childBtn.innerHTML = `
+                            <span class="child-icon"><i class="fas fa-chevron-left"></i></span>
+                            <span>${child}</span>
+                            <span style="margin-right:auto;font-size:11px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${child}');" title="${isFavorite(child) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
+                                <i class="fas ${isFavorite(child) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(child) ? 'var(--gold-color)' : 'var(--text-secondary)'};"></i>
+                            </span>
+                        `;
+                        childBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            const route = subPageRouteMap[child] || null;
+                            if (route) {
+                                addToRecent(child);
+                                navigateTo(route);
+                            } else {
+                                showToast('هذه الشاشة قيد التطوير', 'info');
+                            }
+                        };
+                        childContainer.appendChild(childBtn);
+                    });
+                    wrapper.appendChild(childContainer);
+                }
+                nav.appendChild(wrapper);
             });
 
+            // استعادة الحالة
             const pinned = localStorage.getItem('sidebar-pinned') === 'true';
             if (pinned) {
                 document.getElementById('sidebar').classList.add('pinned');
                 document.getElementById('pinBtn').classList.add('pinned');
             }
+            const compact = localStorage.getItem('sidebar-compact') === 'true';
+            if (compact) {
+                document.getElementById('sidebar').classList.add('compact');
+                document.getElementById('compactBtn').classList.add('active-mode');
+            }
+
+            // ضبط المسافة للمحتوى الرئيسي بناءً على عرض القائمة (للشاشات الكبيرة)
+            adjustMainContentMargin();
         }
 
-        function createRipple(e, element) {
-            const ripple = document.createElement('span');
-            ripple.className = 'ripple';
-            const rect = element.getBoundingClientRect();
-            const size = Math.max(rect.width, rect.height);
-            ripple.style.width = ripple.style.height = size + 'px';
-            ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
-            ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
-            element.appendChild(ripple);
-            setTimeout(() => { ripple.remove(); }, 600);
+        function createNavItem(item, isFav) {
+            const btn = document.createElement('button');
+            btn.className = 'nav-item';
+            btn.style.background = isFav ? 'linear-gradient(to left, #D4AF37, #B8960F)' : '';
+            btn.dataset.label = item.label;
+            const hasChildren = item.children && item.children.length > 0;
+            btn.innerHTML = `
+                <span class="nav-icon"><i class="fas ${item.icon}"></i></span>
+                <span class="nav-label">${item.label}</span>
+                ${hasChildren ? `<span class="nav-arrow"><i class="fas fa-chevron-down"></i></span>` : ''}
+                <span style="margin-right:auto;font-size:12px;cursor:pointer;" onclick="event.stopPropagation(); toggleFavorite('${item.label}');" title="${isFavorite(item.label) ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}">
+                    <i class="fas ${isFavorite(item.label) ? 'fa-star' : 'fa-star-o'}" style="color:${isFavorite(item.label) ? 'var(--gold-color)' : 'var(--text-secondary)'};"></i>
+                </span>
+            `;
+            btn.onclick = function(e) {
+                e.stopPropagation();
+                if (hasChildren) {
+                    const parent = this.parentElement;
+                    if (parent && parent.classList.contains('nav-item-parent')) {
+                        const childContainer = parent.querySelector('.nav-children');
+                        const arrow = this.querySelector('.nav-arrow');
+                        if (childContainer) {
+                            childContainer.classList.toggle('open');
+                            if (arrow) arrow.classList.toggle('open');
+                        }
+                    }
+                } else {
+                    const route = subPageRouteMap[item.label] || '/';
+                    addToRecent(item.label);
+                    navigateTo(route);
+                }
+            };
+            return btn;
         }
 
         function filterSidebar(event) {
             const query = event.target.value.toLowerCase().trim();
-            const items = document.querySelectorAll('.nav-item');
+            const items = document.querySelectorAll('.nav-item-parent');
+            let found = false;
             if (!query) {
-                items.forEach(item => { item.style.display = 'flex'; });
+                items.forEach(p => { p.style.display = ''; });
                 return;
             }
-            items.forEach(item => {
-                const label = item.querySelector('.nav-label');
+            items.forEach(parent => {
+                const label = parent.querySelector('.nav-label');
                 const text = label ? label.textContent.toLowerCase() : '';
                 const match = text.includes(query);
-                item.style.display = match ? 'flex' : 'none';
+                parent.style.display = match ? '' : 'none';
+                if (match) found = true;
+                if (match) {
+                    const children = parent.querySelector('.nav-children');
+                    const arrow = parent.querySelector('.nav-arrow');
+                    if (children) children.classList.add('open');
+                    if (arrow) arrow.classList.add('open');
+                }
             });
-        }
-
-        // ============================================================
-        // عرض القائمة الفرعية مع التبديل الذكي
-        // ============================================================
-        function showSubmenu(event, title, items, parentId) {
-            event.stopPropagation();
-
-            const submenuPanel = document.getElementById('submenuPanel');
-            const submenuTitle = document.getElementById('submenuTitle');
-            const submenuItems = document.getElementById('submenuItems');
-            const overlay = document.getElementById('overlay');
-
-            submenuTitle.textContent = title;
-            submenuItems.innerHTML = '';
-            submenuPanel.dataset.parent = parentId;
-
-            items.forEach(item => {
-                const li = document.createElement('li');
-                li.textContent = item;
-                const route = subPageRouteMap[item] || null;
-                // Permissions removed - all items enabled
-                li.onclick = function(e) {
-                    e.stopPropagation();
-                    if (this.classList.contains('disabled')) return;
-                    if (route) {
-                        navigateTo(route);
-                    } else {
-                        showToast('هذه الشاشة قيد التطوير', 'info');
-                    }
-                    closeSubmenuPanel();
-                };
-                submenuItems.appendChild(li);
-            });
-
-            const clickedElement = event.currentTarget;
-            const rect = clickedElement.getBoundingClientRect();
-            const sidebar = document.getElementById('sidebar');
-            const sidebarRect = sidebar.getBoundingClientRect();
-
-            let leftPos = sidebarRect.right + 6;
-            if (leftPos + 220 > window.innerWidth) {
-                leftPos = sidebarRect.left - 220 - 6;
-            }
-            if (leftPos < 10) leftPos = 10;
-
-            let topPos = rect.top;
-            const panelHeight = items.length * 40 + 60;
-            if (topPos + panelHeight > window.innerHeight) {
-                topPos = window.innerHeight - panelHeight - 20;
-            }
-            if (topPos < 10) topPos = 10;
-
-            submenuPanel.style.left = leftPos + 'px';
-            submenuPanel.style.top = topPos + 'px';
-            submenuPanel.style.right = 'auto';
-
-            submenuPanel.classList.add('show');
-            overlay.classList.add('show');
-
-        }
-
-        function closeSubmenuPanel() {
-            document.getElementById('submenuPanel').classList.remove('show');
-            document.getElementById('overlay').classList.remove('show');
-            document.removeEventListener('click', closeSubmenuOutside);
-            document.getElementById('submenuPanel').dataset.parent = '';
-        }
-
-        function closePanels() {
-            closeSubmenuPanel();
-            closeSidebar();
-        }
-
-        function handlePanelOutsideClick(event) {
-            const target = event.target;
-            const sidebar = document.getElementById('sidebar');
-            const submenuPanel = document.getElementById('submenuPanel');
-            const menuToggle = document.querySelector('.menu-toggle');
-            const insideSidebar = sidebar && sidebar.contains(target);
-            const insideSubmenu = submenuPanel && submenuPanel.contains(target);
-            const insideToggle = menuToggle && menuToggle.contains(target);
-            if (insideSidebar || insideSubmenu || insideToggle) return;
-            if ((sidebar && sidebar.classList.contains('open')) ||
-                (submenuPanel && submenuPanel.classList.contains('show'))) {
-                closePanels();
+            const emptyState = document.querySelector('.sidebar-empty-state');
+            if (!found && !emptyState) {
+                const msg = document.createElement('div');
+                msg.className = 'sidebar-empty-state';
+                msg.textContent = 'لم يتم العثور على نتائج';
+                document.getElementById('sidebarNav').appendChild(msg);
+            } else if (found && emptyState) {
+                emptyState.remove();
             }
         }
 
+        // ================================================================
+        // التحكم في القائمة الجانبية
+        // ================================================================
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            const isOpen = sidebar.classList.contains('open');
-            if (!isOpen) {
+            if (sidebar.classList.contains('open')) {
+                closeSidebar();
+            } else {
                 sidebar.classList.add('open');
                 overlay.classList.add('active');
-                closeSubmenuPanel();
-            } else {
-                closeSidebar();
             }
         }
 
         function closeSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            if (sidebar.classList.contains('open')) {
-                sidebar.classList.remove('open');
-                overlay.classList.remove('active');
-            }
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebarOverlay').classList.remove('active');
         }
 
         function togglePinSidebar() {
@@ -1685,9 +1858,39 @@
             }
         }
 
-        // ============================================================
-        // دالة التوجيه مع التحقق من وجود الملف (باستخدام Kotlin)
-        // ============================================================
+        function toggleCompactSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const btn = document.getElementById('compactBtn');
+            const isCompact = sidebar.classList.toggle('compact');
+            btn.classList.toggle('active-mode');
+            localStorage.setItem('sidebar-compact', isCompact ? 'true' : 'false');
+            if (!isCompact) {
+                sidebar.style.width = '';
+            }
+            showToast(isCompact ? 'تم تفعيل الوضع المضغوط' : 'تم إلغاء الوضع المضغوط', 'info');
+            // إعادة ضبط الهامش
+            adjustMainContentMargin();
+        }
+
+        function adjustMainContentMargin() {
+            const sidebar = document.getElementById('sidebar');
+            const main = document.getElementById('mainContent');
+            if (window.innerWidth >= 1024) {
+                const isCompact = sidebar.classList.contains('compact');
+                const width = isCompact ? 64 : sidebar.scrollWidth;
+                main.style.marginRight = width + 'px';
+            } else {
+                main.style.marginRight = '0';
+            }
+        }
+
+        function closePanels() {
+            closeSidebar();
+        }
+
+        // ================================================================
+        // التنقل بين الصفحات
+        // ================================================================
         async function navigateTo(url) {
             if (typeof url !== 'string' || !url.trim()) {
                 showToast('مسار الشاشة غير صالح', 'error');
@@ -1696,6 +1899,7 @@
             if (url === 'dashboard') {
                 if (!currentUser) { showToast('لا توجد جلسة مستخدم', 'error'); return; }
                 closePanels();
+                closeCommandPalette();
                 return;
             }
             if (url.startsWith('/')) url = url.substring(1);
@@ -1703,7 +1907,9 @@
             if (!url.endsWith('.html')) url = url + '.html';
             if (!currentUser) { showToast('لا توجد جلسة مستخدم', 'error'); return; }
 
-            // التحقق من وجود الملف عبر العقد Typed قبل تغيير الصفحة.
+            closePanels();
+            closeCommandPalette();
+
             try {
                 const result = await apiCall('screenExists', { path: url });
                 if (!result.success) {
@@ -1715,210 +1921,307 @@
                     return;
                 }
             } catch (e) {
-                // فشل الجسر ليس نجاحاً وهمياً؛ نمنع التنقل حتى لا تظهر صفحة بيضاء.
-                console.error('Screen existence check failed:', e);
+                console.error('Screen check failed:', e);
                 showToast('تعذر التحقق من جاهزية الشاشة', 'error');
                 return;
             }
-            closePanels();
+            showLoading(true);
             window.location.href = url;
         }
 
-        // ============================================================
-        // نظام الصلاحيات (يعتمد على البيانات من Kotlin)
-        // ============================================================
-        function isScreenRouteAvailable(route) {
-            return typeof route === 'string' && route.trim().length > 0;
+        // ================================================================
+        // Command Palette
+        // ================================================================
+        function openCommandPalette() {
+            const overlay = document.getElementById('commandPaletteOverlay');
+            overlay.classList.add('show');
+            const input = document.getElementById('commandPaletteInput');
+            input.value = '';
+            input.focus();
+            renderCommandPaletteResults('');
         }
 
-        // ============================================================
-        // تحميل لوحة التحكم من SQLite عبر Bridge مع fallback صريح لآخر بيانات حية
-        // ============================================================
+        function closeCommandPalette() {
+            document.getElementById('commandPaletteOverlay').classList.remove('show');
+            document.getElementById('commandPaletteInput').blur();
+        }
+
+        function renderCommandPaletteResults(query) {
+            const container = document.getElementById('commandPaletteResults');
+            container.innerHTML = '';
+            const sidebarData = getSidebarData();
+            const flatItems = [];
+            sidebarData.forEach(item => {
+                flatItems.push({ label: item.label, icon: item.icon, parent: null });
+                if (item.children && item.children.length) {
+                    item.children.forEach(child => {
+                        flatItems.push({ label: child, icon: 'fa-chevron-left', parent: item.label });
+                    });
+                }
+            });
+
+            const q = query.trim().toLowerCase();
+            const filtered = q === '' ? flatItems : flatItems.filter(item =>
+                item.label.includes(q) || (item.parent && item.parent.includes(q))
+            );
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="no-results">لا توجد نتائج مطابقة</div>';
+                return;
+            }
+
+            filtered.slice(0, 15).forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                const icon = item.icon || 'fa-circle';
+                div.innerHTML = `
+                    <i class="fas ${icon}"></i>
+                    <span class="result-label">${item.label}</span>
+                    ${item.parent ? `<span class="result-path">${item.parent}</span>` : ''}
+                `;
+                div.onclick = function() {
+                    let route = subPageRouteMap[item.label];
+                    if (route) {
+                        addToRecent(item.label);
+                        navigateTo(route);
+                    } else {
+                        const parentItem = sidebarData.find(p => p.label === item.label);
+                        if (parentItem && parentItem.children && parentItem.children.length) {
+                            const navItems = document.querySelectorAll('.nav-item');
+                            for (let btn of navItems) {
+                                if (btn.dataset.label === item.label) {
+                                    btn.click();
+                                    break;
+                                }
+                            }
+                            closeCommandPalette();
+                        } else {
+                            showToast('هذه الشاشة غير متاحة', 'info');
+                        }
+                    }
+                    closeCommandPalette();
+                };
+                container.appendChild(div);
+            });
+
+            const first = container.querySelector('.result-item');
+            if (first) first.classList.add('active');
+        }
+
+        // ================================================================
+        // لوحة التحكم (Dashboard)
+        // ================================================================
+        function renderSkeletons() {
+            const grid = document.getElementById('dashStats');
+            const skeletonCards = [
+                'total-products', 'daily-sales', 'active-customers', 'expiry-soon',
+                'low-stock', 'due-invoices', 'returned-products', 'damaged-products',
+                'customer-debts', 'supplier-debts', 'inventory-value', 'pending-tasks', 'occupancy'
+            ];
+            grid.innerHTML = '';
+            skeletonCards.forEach(id => {
+                const card = document.createElement('div');
+                card.className = 'stat-card skeleton';
+                card.id = `skeleton-${id}`;
+                card.innerHTML = `
+                    <div class="card-header"></div>
+                    <div class="stat-value"></div>
+                    <div class="stat-label"></div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function updateStatsCards(stats) {
+            stats = stats || {};
+            const grid = document.getElementById('dashStats');
+            grid.innerHTML = '';
+
+            const cardDefs = [
+                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products ||
+                        0, label: 'منتج في النظام', trend: stats.products_trend || '+0%', trendUp: true,
+                    progress: 70 },
+                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats
+                        .daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats
+                        .sales_trend || '+0%', trendUp: true, cls: 'success-card' },
+                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats
+                        .active_customers || 0, label: 'عميل نشط', cls: '' },
+                { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats
+                        .expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0,
+                    cls: 'warning-card' },
+                { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats
+                        .low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0,
+                    cls: 'danger-card' },
+                { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice', value: stats
+                        .due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
+                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo', value: (stats
+                        .returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)',
+                    cls: 'returned-card' },
+                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban', value: (stats
+                        .damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)',
+                    cls: 'damaged-card' },
+                { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd', value: (stats
+                        .customer_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الديون المستحقة',
+                    cls: 'warning-card' },
+                { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar',
+                    value: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الدين للموردين',
+                    cls: '' },
+                { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse', value: (stats
+                        .inventory_value || 0).toFixed(2) + ' ر.ي', label: 'القيمة الإجمالية للمخزون',
+                    cls: 'success-card' },
+                { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks', value: stats.pending_tasks ||
+                        0, label: 'مهمة تحتاج لمراجعتك', badge: stats.pending_tasks || 0, cls: 'info-card' },
+                { id: 'card-occupancy', header: 'نسبة الإشغال', icon: 'fa-tachometer-alt', value: (() => { const o =
+                            Math.min(100, Math.round((stats.total_products || 0) / 100 * 75 + 15)); return o +
+                        '%'; })(), label: 'معدل استخدام الخزانات', progress: Math.min(100, Math.round((stats
+                        .total_products || 0) / 100 * 75 + 15)), cls: 'info-card' }
+            ];
+
+            cardDefs.forEach(def => {
+                const card = document.createElement('div');
+                card.className = `stat-card ${def.cls || ''}`;
+                card.id = def.id;
+                let badgeHtml = '';
+                if (def.badge && def.badge > 0) {
+                    badgeHtml = `<div class="card-badge">${def.badge}</div>`;
+                }
+                let progressHtml = '';
+                if (def.progress !== undefined) {
+                    progressHtml =
+                        `<div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,def.progress)}%"></div></div>`;
+                }
+                let trendHtml = '';
+                if (def.trend) {
+                    const up = def.trendUp !== false;
+                    trendHtml =
+                        `<div class="stat-trend trend-${up ? 'up' : 'down'}"><i class="fas fa-arrow-${up ? 'up' : 'down'}"></i> ${def.trend}</div>`;
+                }
+                card.innerHTML = `
+                    <div class="card-header">
+                        <i class="fas ${def.icon}"></i>
+                        <h3>${def.header}</h3>
+                    </div>
+                    <div class="stat-value">${def.value}</div>
+                    <div class="stat-label">${def.label}</div>
+                    ${trendHtml}
+                    ${badgeHtml}
+                    ${progressHtml}
+                `;
+                grid.appendChild(card);
+            });
+
+            initCardDoubleClick();
+
+            document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric'
+            });
+        }
+
         function readDashboardCache() {
             try {
                 const cached = localStorage.getItem('dashboardCache');
                 if (!cached) return null;
                 const parsed = JSON.parse(cached);
                 return parsed && typeof parsed === 'object' ? parsed : null;
-            } catch (e) {
-                console.warn('تعذر قراءة cache المحلي:', e);
-                return null;
-            }
-        }
-
-        function renderDashboardCache(cause) {
-            const cached = dashboardCache || readDashboardCache();
-            if (!cached) return false;
-            dashboardCache = cached;
-            updateStatsCards(cached);
-            document.getElementById('last-update').textContent = 'بيانات SQLite سابقة: ' + new Date().toLocaleString('ar-EG');
-            showToast(`${cause || 'تعذر الاتصال بقاعدة البيانات'} — عُرضت آخر بيانات محفوظة`, 'warning');
-            return true;
+            } catch (e) { return null; }
         }
 
         async function loadDashboard(forceRefresh = false) {
+            if (isRefreshing) return;
+            isRefreshing = true;
+
+            renderSkeletons();
+
             if (!forceRefresh && dashboardCache) {
                 updateStatsCards(dashboardCache);
-                document.getElementById('last-update').textContent = 'آخر بيانات SQLite محملة: ' + new Date().toLocaleString('ar-EG');
-                showToast('تم عرض آخر بيانات محملة من قاعدة البيانات', 'info');
-                return true;
+                showToast('تم عرض آخر بيانات محملة', 'info');
+                isRefreshing = false;
+                return;
             }
 
-            showLoading(true);
+            const refreshBtn = document.getElementById('refreshButton').querySelector('i');
+            if (refreshBtn) refreshBtn.classList.add('spinning');
+
             try {
                 const result = await apiCall('getDashboardStats');
                 if (!result.success || !result.data) {
-                    throw new Error(result.error || 'فشل تحميل الإحصائيات من SQLite');
+                    throw new Error(result.error || 'فشل تحميل الإحصائيات');
                 }
                 const stats = result.data;
-                const requiredFields = [
-                    'total_products', 'daily_sales', 'active_customers', 'expiry_soon',
-                    'low_stock', 'due_invoices', 'returned_products_today',
-                    'damaged_products_today', 'customer_debts', 'supplier_debts',
-                    'inventory_value', 'pending_tasks', 'products_trend', 'sales_trend'
-                ];
-                const missingFields = requiredFields.filter((field) => !Object.prototype.hasOwnProperty.call(stats, field));
-                if (missingFields.length > 0) {
-                    throw new Error(`استجابة Dashboard ناقصة: ${missingFields.join(', ')}`);
-                }
                 dashboardCache = stats;
-                try {
-                    localStorage.setItem('dashboardCache', JSON.stringify(stats));
-                } catch (cacheError) {
-                    console.warn('تعذر حفظ cache المحلي:', cacheError);
-                }
+                try { localStorage.setItem('dashboardCache', JSON.stringify(stats)); } catch (e) {}
                 updateStatsCards(stats);
-                if (stats.notifications) {
-                    showRealNotifications(stats);
-                }
-                document.getElementById('last-update').textContent = new Date().toLocaleString('ar-EG', {
-                    year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric'
-                });
-                showToast('تم تحديث لوحة التحكم من قاعدة البيانات', 'success');
-                return true;
+                if (stats.notifications) showRealNotifications(stats);
+                showToast('تم تحديث لوحة التحكم', 'success');
             } catch (e) {
                 console.error('Dashboard error:', e);
-                renderDashboardCache(e.message || 'فشل الاتصال بقاعدة البيانات');
-                return false;
+                const cached = readDashboardCache();
+                if (cached) {
+                    updateStatsCards(cached);
+                    showToast('عُرضت آخر بيانات محفوظة', 'warning');
+                } else {
+                    showToast(e.message || 'تعذر تحميل البيانات', 'error');
+                }
             } finally {
-                showLoading(false);
+                if (refreshBtn) refreshBtn.classList.remove('spinning');
+                isRefreshing = false;
             }
         }
 
-        function updateStatsCards(stats) {
-            stats = stats || {};
-            const fields = [
-                { id: 'total-products', val: stats.total_products || 0 },
-                { id: 'daily-sales', val: (stats.daily_sales || 0).toFixed(2) + ' ر.ي' },
-                { id: 'active-customers', val: stats.active_customers || 0 },
-                { id: 'expiry-soon', val: stats.expiry_soon || 0 },
-                { id: 'low-stock', val: stats.low_stock || 0 },
-                { id: 'due-invoices', val: stats.due_invoices || 0 },
-                { id: 'returned-products', val: (stats.returned_products_today || 0).toFixed(2) },
-                { id: 'damaged-products', val: (stats.damaged_products_today || 0).toFixed(2) },
-                { id: 'customer-debts', val: (stats.customer_debts || 0).toFixed(2) + ' ر.ي' },
-                { id: 'supplier-debts', val: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي' },
-                { id: 'inventory-value', val: (stats.inventory_value || 0).toFixed(2) + ' ر.ي' },
-                { id: 'pending-tasks', val: stats.pending_tasks || 0 }
-            ];
-
-            fields.forEach(f => {
-                const el = document.getElementById(f.id);
-                if (el) el.textContent = f.val;
-            });
-
-            document.getElementById('expiry-badge').textContent = stats.expiry_soon || 0;
-            document.getElementById('low-stock-badge').textContent = stats.low_stock || 0;
-            document.getElementById('tasks-badge').textContent = stats.pending_tasks || 0;
-
-            updateTrend('products-trend-val', stats.products_trend || '+0%');
-            updateTrend('sales-trend-val', stats.sales_trend || '+0%');
+        function manualRefresh() {
+            showToast('جاري تحديث البيانات...', 'info');
+            loadDashboard(true);
         }
 
-        function updateTrend(elementId, value) {
-            const el = document.getElementById(elementId);
-            if (el) el.textContent = value;
-        }
-
-        function updateUserInfo(user) {
-            if (!user) return;
-            const nameEl = document.getElementById('userDisplayName');
-            const emailEl = document.getElementById('userDisplayEmail');
-            const roleEl = document.getElementById('userDisplayRole');
-            const avatarEl = document.getElementById('userAvatar');
-
-            if (nameEl) nameEl.textContent = user.full_name || user.full_name_ar || user.username || '—';
-            if (emailEl) emailEl.textContent = user.email || '—';
-            if (roleEl) roleEl.textContent = user.role_name || user.role || '—';
-        }
-
-        // ============================================================
-        // التنبيهات (فقاعات)
-        // ============================================================
+        // ================================================================
+        // الإشعارات
+        // ================================================================
         function showRealNotifications(stats) {
             if (stats.expiry_soon > 0) {
-                addNotificationToQueue({
-                    title: 'تنبيه انتهاء الصلاحية',
-                    message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
-                    icon: 'fas fa-hourglass-half',
-                    type: 'warning',
-                    targetCard: 'card-expiry-soon'
-                });
+                addNotificationToQueue({ title: 'تنبيه انتهاء الصلاحية', message: `هناك ${stats.expiry_soon} منتج ستنتهي صلاحيته خلال 30 يومًا`,
+                    icon: 'fa-hourglass-half', type: 'warning', targetCard: 'card-expiry-soon' });
             }
             if (stats.low_stock > 0) {
-                addNotificationToQueue({
-                    title: 'تنبيه انخفاض المخزون',
-                    message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى للمخزون`,
-                    icon: 'fas fa-exclamation-circle',
-                    type: 'danger',
-                    targetCard: 'card-low-stock'
-                });
+                addNotificationToQueue({ title: 'تنبيه انخفاض المخزون', message: `هناك ${stats.low_stock} منتج تحت الحد الأدنى`,
+                    icon: 'fa-exclamation-circle', type: 'danger', targetCard: 'card-low-stock' });
             }
             if (stats.pending_tasks > 0) {
-                addNotificationToQueue({
-                    title: 'مهام معلقة',
-                    message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
-                    icon: 'fas fa-tasks',
-                    type: 'info',
-                    targetCard: 'card-pending-tasks'
-                });
+                addNotificationToQueue({ title: 'مهام معلقة', message: `لديك ${stats.pending_tasks} مهمة تحتاج إلى مراجعتك`,
+                    icon: 'fa-tasks', type: 'info', targetCard: 'card-pending-tasks' });
             }
             processNotificationQueue();
         }
 
-        function addNotificationToQueue(notification) {
-            notificationQueue.push(notification);
-        }
+        function addNotificationToQueue(notification) { notificationQueue.push(notification); }
 
         function processNotificationQueue() {
             if (isProcessingQueue || notificationQueue.length === 0) return;
             isProcessingQueue = true;
             const notification = notificationQueue.shift();
             createNotificationBubble(notification);
-            setTimeout(() => {
-                isProcessingQueue = false;
-                processNotificationQueue();
-            }, 1500);
+            setTimeout(() => { isProcessingQueue = false;
+                processNotificationQueue(); }, 1500);
         }
 
         function createNotificationBubble(notification) {
-            const bubbleContainer = document.getElementById('bubbleContainer') || createBubbleContainer();
+            const container = document.getElementById('bubbleContainer') || createBubbleContainer();
             const bubble = document.createElement('div');
             bubble.className = `notification-bubble bubble-${notification.type}`;
-            bubble.innerHTML = `<i class="${notification.icon}"></i>`;
+            bubble.innerHTML = `<i class="fas ${notification.icon}"></i>`;
             bubble.dataset.target = notification.targetCard;
-
             const wave = document.createElement('div');
             wave.className = 'bubble-wave';
             bubble.appendChild(wave);
-
-            bubbleContainer.appendChild(bubble);
-
-            const waveInterval = setInterval(() => {
+            container.appendChild(bubble);
+            const interval = setInterval(() => {
                 wave.style.animation = 'none';
                 setTimeout(() => { wave.style.animation = 'wave 15s infinite'; }, 10);
             }, 60000);
-
             bubble.onclick = function() {
                 const card = document.getElementById(this.dataset.target);
                 if (card) {
@@ -1927,132 +2230,176 @@
                     setTimeout(() => { card.style.boxShadow = ''; }, 2000);
                     this.style.opacity = '0';
                     this.style.transform = 'scale(0)';
-                    setTimeout(() => {
-                        if (this.parentNode) {
-                            clearInterval(waveInterval);
-                            this.parentNode.removeChild(this);
-                        }
-                    }, 500);
+                    setTimeout(() => { if (this.parentNode) { clearInterval(interval);
+                            this.parentNode.removeChild(this); } }, 500);
                 }
             };
-
-            activeBubbles.push({
-                id: bubble.id,
-                element: bubble,
-                interval: waveInterval
-            });
+            activeBubbles.push({ element: bubble, interval: interval });
         }
 
         function createBubbleContainer() {
-            const container = document.createElement('div');
-            container.id = 'bubbleContainer';
-            container.className = 'bubble-container';
-            document.body.appendChild(container);
-            return container;
+            const c = document.createElement('div');
+            c.id = 'bubbleContainer';
+            c.className = 'bubble-container';
+            document.body.appendChild(c);
+            return c;
         }
 
         function hideAllBubbles() {
-            notificationsEnabled = false;
-            activeBubbles.forEach(bubble => {
-                clearInterval(bubble.interval);
-                bubble.element.style.transition = 'all 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55)';
-                bubble.element.style.transform = 'scale(0)';
-                bubble.element.style.opacity = '0';
-                setTimeout(() => {
-                    if (bubble.element.parentNode) {
-                        bubble.element.parentNode.removeChild(bubble.element);
-                    }
-                }, 800);
-            });
+            activeBubbles.forEach(b => { clearInterval(b.interval);
+                b.element.remove(); });
             activeBubbles = [];
             notificationQueue = [];
         }
 
+        // ================================================================
+        // النقر المزدوج على البطاقات
+        // ================================================================
         function initCardDoubleClick() {
-            const cardRoutes = {
-                "card-total-products": "screens/products.html",
-                "card-daily-sales": "screens/sales-reports.html",
-                "card-active-customers": "screens/customers.html",
-                "card-expiry-soon": "screens/expiry-soon.html",
-                "card-low-stock": "screens/stock-levels.html",
-                "card-due-invoices": "screens/customer-debts.html",
-                "card-returned-products": "screens/returned-products.html",
-                "card-damaged-products": "screens/damaged-products.html",
-                "card-customer-debts": "screens/customer-debts.html",
-                "card-supplier-debts": "screens/suppliers.html",
-                "card-inventory-value": "screens/inventory-reports.html",
-                "card-pending-tasks": "screens/tasks.html"
+            const routes = {
+                'card-total-products': 'screens/products.html',
+                'card-daily-sales': 'screens/sales-reports.html',
+                'card-active-customers': 'screens/customers.html',
+                'card-expiry-soon': 'screens/expiry-soon.html',
+                'card-low-stock': 'screens/stock-levels.html',
+                'card-due-invoices': 'screens/customer-debts.html',
+                'card-returned-products': 'screens/returned-products.html',
+                'card-damaged-products': 'screens/damaged-products.html',
+                'card-customer-debts': 'screens/customer-debts.html',
+                'card-supplier-debts': 'screens/suppliers.html',
+                'card-inventory-value': 'screens/inventory-reports.html',
+                'card-pending-tasks': 'screens/tasks.html',
+                'card-occupancy': 'screens/tanks.html'
             };
-
-            Object.entries(cardRoutes).forEach(([cardId, route]) => {
-                const card = document.getElementById(cardId);
-                if (!card || card.dataset.navigationBound === 'true') return;
-                card.dataset.navigationBound = 'true';
-                card.setAttribute('tabindex', '0');
-                card.setAttribute('role', 'link');
-                card.setAttribute('title', 'انقر مرتين لفتح الشاشة المرتبطة');
-                const openRoute = (event) => {
-                    if (event) event.stopPropagation();
+            Object.entries(routes).forEach(([id, route]) => {
+                const card = document.getElementById(id);
+                if (!card || card.dataset.bound) return;
+                card.dataset.bound = 'true';
+                card.addEventListener('dblclick', function(e) {
+                    e.stopPropagation();
                     navigateTo(route);
-                };
-                card.addEventListener('dblclick', openRoute);
-                card.addEventListener('keydown', (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openRoute(event);
-                    }
                 });
             });
         }
 
-        // ============================================================
-        // تهيئة التطبيق
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', async function() {
-            // 1. تهيئة AndroidInterface
-            const bridgeReady = initAndroidBridge();
+        // ================================================================
+        // Pull-to-Refresh
+        // ================================================================
+        function initPullToRefresh() {
+            let startY = 0,
+                moveY = 0,
+                pulling = false;
+            document.addEventListener('touchstart', function(e) {
+                if (document.querySelector('.command-palette-overlay.show')) return;
+                startY = e.touches[0].clientY;
+                pulling = false;
+            }, { passive: true });
+            document.addEventListener('touchmove', function(e) {
+                if (document.querySelector('.command-palette-overlay.show')) return;
+                moveY = e.touches[0].clientY - startY;
+                if (moveY > 0 && window.scrollY === 0) pulling = true;
+            }, { passive: true });
+            document.addEventListener('touchend', function() {
+                if (pulling && moveY > 70) manualRefresh();
+                moveY = 0;
+                pulling = false;
+            }, { passive: true });
+        }
 
-            // 2. تحميل بيانات القائمة (JSON) من المسار الجديد
+        // ================================================================
+        // تهيئة التطبيق
+        // ================================================================
+        document.addEventListener('DOMContentLoaded', async function() {
             await loadMenuData();
 
-            // ربط البطاقات مبكراً؛ الدالة idempotent وتُظهر رسالة واضحة عند غياب session.
-            initCardDoubleClick();
+            // Command Palette events
+            const cmdInput = document.getElementById('commandPaletteInput');
+            cmdInput.addEventListener('input', function(e) {
+                renderCommandPaletteResults(e.target.value.trim());
+            });
+            cmdInput.addEventListener('keydown', function(e) {
+                const results = document.querySelectorAll('.palette-results .result-item');
+                let active = -1;
+                results.forEach((el, i) => { if (el.classList.contains('active')) active = i; });
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    let next = active + 1;
+                    if (next >= results.length) next = 0;
+                    results.forEach(el => el.classList.remove('active'));
+                    if (results[next]) results[next].classList.add('active');
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    let prev = active - 1;
+                    if (prev < 0) prev = results.length - 1;
+                    results.forEach(el => el.classList.remove('active'));
+                    if (results[prev]) results[prev].classList.add('active');
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const activeEl = document.querySelector('.palette-results .result-item.active');
+                    if (activeEl) activeEl.click();
+                } else if (e.key === 'Escape') {
+                    closeCommandPalette();
+                }
+            });
 
-            // 3. تحميل المستخدم والبيانات من Android فقط؛ لا cache ولا مستخدم افتراضي.
+            document.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    const overlay = document.getElementById('commandPaletteOverlay');
+                    if (overlay.classList.contains('show')) closeCommandPalette();
+                    else openCommandPalette();
+                }
+            });
+
+            document.addEventListener('click', handlePanelOutsideClick);
+
+            const bridgeReady = initAndroidBridge();
+            initPullToRefresh();
+
             if (!bridgeReady) {
-                setTimeout(() => {
-                    if (!useAndroidInterface) initAndroidBridge();
-                }, 2000);
+                setTimeout(() => { if (!useAndroidInterface) initAndroidBridge(); }, 2000);
                 return;
             }
+
             const userLoaded = await loadUserFromKotlin();
             if (!userLoaded) return;
 
-            // 4. ربط النقر المزدوج
             initCardDoubleClick();
 
-            // 5. تحديث دوري كل 5 دقائق (إجبار تحديث)
-            refreshInterval = setInterval(() => {
-                loadDashboard(true);
-            }, 300000);
+            refreshInterval = setInterval(() => { loadDashboard(true); }, 180000);
 
-            // 6. إبقاء القائمتين مفتوحتين عند التفاعل داخلهما، وإغلاقهما خارج حدودهما فقط.
-            document.addEventListener('click', handlePanelOutsideClick);
             updateThemeButton(document.documentElement.getAttribute('data-theme') === 'dark');
 
             let lastClick = 0;
             document.addEventListener('click', function(e) {
-                const now = new Date().getTime();
-                if (now - lastClick < 300) {
-                    hideAllBubbles();
-                }
+                const now = Date.now();
+                if (now - lastClick < 300) hideAllBubbles();
                 lastClick = now;
             });
 
-            if (currentUser) {
-                updateUserInfo(currentUser);
-            }
+            if (currentUser) updateUserInfo(currentUser);
+
+            // ضبط الهامش بعد تحميل القائمة
+            setTimeout(adjustMainContentMargin, 300);
+            window.addEventListener('resize', adjustMainContentMargin);
         });
+
+        function handlePanelOutsideClick(event) {
+            const target = event.target;
+            const sidebar = document.getElementById('sidebar');
+            const menuToggle = document.querySelector('.menu-toggle');
+            const searchInput = document.getElementById('sidebarSearch');
+            const pinBtn = document.getElementById('pinBtn');
+            const closeBtn = document.querySelector('.sidebar-close');
+            const compactBtn = document.getElementById('compactBtn');
+            const cmdPalette = document.querySelector('.command-palette-box');
+
+            if (sidebar && !sidebar.contains(target) && !menuToggle.contains(target) &&
+                !searchInput.contains(target) && !pinBtn.contains(target) && !closeBtn.contains(target) &&
+                !compactBtn.contains(target) && !cmdPalette.contains(target)) {
+                if (sidebar.classList.contains('open')) closeSidebar();
+            }
+        }
     </script>
 </body>
 </html>

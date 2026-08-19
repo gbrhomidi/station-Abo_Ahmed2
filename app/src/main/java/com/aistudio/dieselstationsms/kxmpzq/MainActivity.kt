@@ -87,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_ROLE = "user_role"
         private const val KEY_USER_NAME = "user_name"
+        private const val KEY_SYSTEM_SETUP_COMPLETED = "system_setup_completed"
 
         // DEV_MODE: يمنح المستخدم رقم 1 صلاحيات التطوير الكاملة في نسخ Debug فقط.
         // يجب تعطيل/إزالة هذا الاستثناء قبل إنتاج نسخة Release.
@@ -920,14 +921,52 @@ class MainActivity : AppCompatActivity() {
     // دوال مساعدة (WebView، تحميل الأصول، إلخ)
     // ============================================================
 
+    private fun shouldOpenSystemSetupScreen(): Boolean {
+        if (!::sharedPrefs.isInitialized || sharedPrefs.getBoolean(KEY_SYSTEM_SETUP_COMPLETED, false)) {
+            return false
+        }
+        return try {
+            val realUserCount = dbHelper.readableDatabase.rawQuery(
+                """
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN id NOT IN (1, 2)
+                          OR username NOT IN ('admin', 'خليل أحمد')
+                        THEN 1 ELSE 0
+                    END
+                ), 0)
+                FROM users
+                WHERE is_deleted = 0
+                """.trimIndent(),
+                null
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+            }
+            realUserCount <= 0L
+        } catch (e: Exception) {
+            // Fail closed: إذا تعذر إثبات أن الإعداد اكتمل، لا نفتح login قبل التحقق.
+            DebugLogger.logException("SystemSetupGate", e)
+            true
+        }
+    }
+
+    private fun initialEntryAsset(): String {
+        return if (shouldOpenSystemSetupScreen()) {
+            "first-user-setup.html"
+        } else {
+            "login.html"
+        }
+    }
+
     private fun loadWebViewFromAssets() {
         if (isDestroyed.get()) return
         val wv = webView ?: return
 
         try {
             if (wv.isAttachedToWindow) {
-                DebugLogger.info("WebView", "Loading login.html")
-                wv.loadUrl("file:///android_asset/screens/login.html")
+                val entryAsset = initialEntryAsset()
+                DebugLogger.info("WebView", "Loading $entryAsset")
+                wv.loadUrl("file:///android_asset/screens/$entryAsset")
             } else {
                 handler.postDelayed({
                     if (!isDestroyed.get()) {
@@ -1058,6 +1097,8 @@ class MainActivity : AppCompatActivity() {
                                 displayZoomControls = false
                                 allowFileAccess = true
                                 allowContentAccess = true
+                                allowFileAccessFromFileURLs = false
+                                allowUniversalAccessFromFileURLs = false
                                 javaScriptCanOpenWindowsAutomatically = false
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                                 setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
@@ -1114,6 +1155,13 @@ class MainActivity : AppCompatActivity() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 DebugLogger.info("WebView", "PAGE_STARTED: $url")
+                if (url?.endsWith("/login.html") == true && shouldOpenSystemSetupScreen()) {
+                    view?.post {
+                        if (!isDestroyed.get()) {
+                            view.loadUrl("file:///android_asset/screens/first-user-setup.html")
+                        }
+                    }
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -1144,14 +1192,22 @@ class MainActivity : AppCompatActivity() {
                     DebugLogger.info("WebView", "URL_OVERRIDDEN: $url")
                     return true
                 }
+                if (!isTrustedAssetUrl(url)) {
+                    DebugLogger.warn("WebView", "BLOCKED_UNTRUSTED_URL: $url")
+                    return true
+                }
                 return false
             }
 
             @Deprecated("Deprecated in Java")
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                if (url == null) return false
+                if (url == null) return true
                 if (handleCustomUrl(url)) {
                     DebugLogger.info("WebView", "URL_OVERRIDDEN: $url")
+                    return true
+                }
+                if (!isTrustedAssetUrl(url)) {
+                    DebugLogger.warn("WebView", "BLOCKED_UNTRUSTED_URL: $url")
                     return true
                 }
                 return false
@@ -1224,8 +1280,9 @@ class MainActivity : AppCompatActivity() {
 
         val wv = webView
         if (wv != null && wv.isAttachedToWindow) {
-            wv.loadUrl("file:///android_asset/screens/login.html")
-            DebugLogger.info("WebView", "RELOADED via existing WebView")
+            val entryAsset = initialEntryAsset()
+            wv.loadUrl("file:///android_asset/screens/$entryAsset")
+            DebugLogger.info("WebView", "RELOADED via existing WebView: $entryAsset")
         } else {
             handler.postDelayed({
                 if (!isDestroyed.get()) {
@@ -1233,6 +1290,18 @@ class MainActivity : AppCompatActivity() {
                     loadWebViewFromAssets()
                 }
             }, 500)
+        }
+    }
+
+    private fun isTrustedAssetUrl(url: String): Boolean {
+        return try {
+            val uri = Uri.parse(url)
+            val path = uri.path.orEmpty()
+            uri.scheme.equals("file", ignoreCase = true) &&
+                path.startsWith("/android_asset/") &&
+                !path.contains("..")
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -1406,6 +1475,7 @@ class MainActivity : AppCompatActivity() {
             encodeDefaults = true
             explicitNulls = false
         }
+        private val systemSetupLock = Any()
 
         private fun getDbHelper(): DatabaseHelper? = dbHelperRef.get()
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
@@ -1629,6 +1699,149 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) {
                 DebugLogger.logException("ScreenExists", e)
                 errorResponse(e.message ?: "تعذر التحقق من الشاشة")
+            }
+        }
+
+        // ============================================================
+        // إعداد مستخدم النظام عند أول تشغيل
+        // ============================================================
+
+        /**
+         * يحدد ما إذا كان التطبيق ما زال في مرحلة إعداد مستخدم النظام.
+         * لا يعتمد هذا المسار على صلاحيات جلسة؛ فهو يعمل قبل تسجيل الدخول.
+         * المستخدمان المزروعان من DatabaseHelper (admin وخليل أحمد) لا يُعدّان
+         * إعداداً فعلياً، ولذلك لا يمنعان ظهور المودال في التثبيت الأول.
+         */
+        @JavascriptInterface
+        fun checkSystemSetup(): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val userState = db.readableDatabase.rawQuery(
+                    """
+                    SELECT
+                        COUNT(*) AS user_count,
+                        COALESCE(SUM(
+                            CASE
+                                WHEN id NOT IN (1, 2)
+                                  OR username NOT IN ('admin', 'خليل أحمد')
+                                THEN 1 ELSE 0
+                            END
+                        ), 0) AS real_user_count
+                    FROM users
+                    WHERE is_deleted = 0
+                    """.trimIndent(),
+                    null
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        Pair(cursor.getLong(0), cursor.getLong(1))
+                    } else {
+                        Pair(0L, 0L)
+                    }
+                }
+
+                val preferenceCompleted = activity.sharedPrefs.getBoolean(
+                    KEY_SYSTEM_SETUP_COMPLETED,
+                    false
+                )
+                val setupCompleted = preferenceCompleted || userState.second > 0L
+                val nextUserId = db.readableDatabase.rawQuery(
+                    """
+                    SELECT COALESCE(
+                        (SELECT seq + 1 FROM sqlite_sequence WHERE name = 'users'),
+                        COALESCE(MAX(id), 0) + 1
+                    )
+                    FROM users
+                    """.trimIndent(),
+                    null
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getLong(0).coerceAtLeast(1L) else 1L
+                }
+
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", JSONObject().apply {
+                        put("setup_completed", setupCompleted)
+                        put("setup_required", !setupCompleted)
+                        put("next_user_id", nextUserId)
+                        put("user_count", userState.first)
+                        put("real_user_count", userState.second)
+                    })
+                }.toString()
+            } catch (e: Exception) {
+                DebugLogger.logException("SystemSetupCheck", e)
+                errorResponse("تعذر التحقق من إعداد مستخدم النظام")
+            }
+        }
+
+        /**
+         * ينشئ مستخدم النظام الحقيقي مرة واحدة فقط، دون checkPermission، لأن
+         * العملية تسبق وجود جلسة مستخدم. رقم id لا يُستقبل من الواجهة ولا يُكتب
+         * في ContentValues؛ SQLite AUTOINCREMENT هو مصدره الوحيد.
+         */
+        @JavascriptInterface
+        fun setupSystemUser(jsonData: String): String {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return synchronized(systemSetupLock) {
+                try {
+                    val setupState = checkSystemSetup()
+                val setupJson = JSONObject(setupState)
+                if (!setupJson.optBoolean("success")) {
+                    return errorResponse(setupJson.optString("error", "تعذر التحقق من إعداد مستخدم النظام"))
+                }
+                val setupData = setupJson.optJSONObject("data")
+                    ?: return errorResponse("استجابة إعداد مستخدم النظام غير صالحة")
+                if (setupData.optBoolean("setup_completed")) {
+                    return errorResponse("تم إعداد مستخدم النظام مسبقاً")
+                }
+
+                    val input = JSONObject(jsonData.ifBlank { "{}" })
+                    val username = input.optString("username").trim()
+                    val fullName = input.optString("full_name").trim()
+                    val password = input.optString("password")
+                    val confirmation = input.optString("password_confirmation")
+
+                    if (username.isBlank()) return errorResponse("اسم المستخدم مطلوب")
+                    if (username.length > 50) return errorResponse("اسم المستخدم يتجاوز الحد المسموح")
+                    if (fullName.isBlank()) return errorResponse("الاسم الكامل مطلوب")
+                    if (fullName.length > 200) return errorResponse("الاسم الكامل يتجاوز الحد المسموح")
+                    if (password.length < 6) return errorResponse("كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+                    if (password != confirmation) return errorResponse("تأكيد كلمة المرور غير مطابق")
+
+                    // قائمة حقول صريحة: لا تُقبل id أو hashes أو role/station/company من JavaScript.
+                    val userData = JSONObject().apply {
+                        put("username", username)
+                        put("full_name", fullName)
+                        put("password", password)
+                        put("role_id", 1)
+                        put("station_id", 1)
+                        put("company_id", 1)
+                        put("preferred_language", "ar")
+                        put("status", "active")
+                        put("must_change_password", 0)
+                        put("email_verified", 0)
+                        put("phone_verified", 0)
+                    }
+                    listOf("full_name_ar", "email", "phone", "job_title", "department").forEach { key ->
+                        val value = input.optString(key).trim()
+                        if (value.isNotEmpty()) userData.put(key, value)
+                    }
+
+                    val id = db.addUser(userData)
+                if (id <= 0L) {
+                    return errorResponse("فشل إنشاء مستخدم النظام؛ تحقق من عدم تكرار اسم المستخدم أو البريد أو الهاتف")
+                }
+
+                activity.sharedPrefs.edit()
+                    .putBoolean(KEY_SYSTEM_SETUP_COMPLETED, true)
+                    .apply()
+                    DebugLogger.info("SystemSetup", "System user created with SQLite id=$id")
+                    successResponse(id, "تم إنشاء مستخدم النظام بنجاح")
+                } catch (e: Exception) {
+                    DebugLogger.logException("SystemSetupCreate", e)
+                    errorResponse("تعذر إنشاء مستخدم النظام")
+                }
             }
         }
 
