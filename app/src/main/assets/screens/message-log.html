@@ -467,8 +467,9 @@ body {
       <span>سجل الرسائل</span>
     </div>
     <div class="header-actions">
-      <button class="btn-icon" id="btnTheme" title="تبديل الوضع">&#9788;</button>
-      <button class="btn-icon" id="btnRefresh" title="تحديث">&#8635;</button>
+      <button class="btn-icon" id="btnBack" title="رجوع إلى الرئيسية" onclick="goToDashboard()">🏠</button>
+      <button class="btn-icon" id="btnTheme" title="تبديل الوضع">🌙</button>
+      <button class="btn-icon" id="btnRefresh" title="تحديث">🔄</button>
     </div>
   </div>
 </header>
@@ -1061,6 +1062,12 @@ function initTheme() {
         document.documentElement.setAttribute('data-theme', 'dark');
         STATE.darkMode = true;
     }
+    updateThemeIcon();
+}
+
+function updateThemeIcon() {
+    var btn = $('btnTheme');
+    btn.textContent = STATE.darkMode ? '☀️' : '🌙';
 }
 
 function toggleTheme() {
@@ -1068,6 +1075,7 @@ function toggleTheme() {
     var theme = STATE.darkMode ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('messageLogTheme', theme);
+    updateThemeIcon();
 }
 
 // ============================================
@@ -1185,6 +1193,13 @@ function init() {
     initTheme();
     setupEventListeners();
     loadData();
+}
+
+// ============================================
+// GO TO DASHBOARD
+// ============================================
+function goToDashboard() {
+    window.location.href = '../main.html';
 }
 
 if (document.readyState === 'loading') {

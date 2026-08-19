@@ -2031,12 +2031,8 @@
 
                 var methodName = actionMap[action];
                 if (!methodName) {
-                    if (typeof AndroidInterface[action] === 'function') {
-                        methodName = action;
-                    } else {
-                        debugError("API_CALL_FAILED", { action: action, reason: "Unknown action" });
-                        return { success: false, error: 'Unknown action: ' + action };
-                    }
+                    debugError("API_CALL_FAILED", { action: action, reason: "Unknown action" });
+                    return { success: false, error: 'Unknown action: ' + action };
                 }
 
                 var args = [];

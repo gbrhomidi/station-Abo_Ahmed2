@@ -3241,7 +3241,11 @@ body {
         // Header navigation, menu and settings
         document.getElementById('backHomeBtn').addEventListener('click', () => {
             const result = Bridge.goToHome();
-            if (result === null) window.location.href = '../main.html';
+            // Bridge يرجع JSON نصياً، لذلك لا نعتمد على null وحده؛
+            // الانتقال المباشر يضمن العودة حتى عند غياب الجسر أو تأخر UI thread.
+            if (result === null) {
+                window.location.replace('../main.html');
+            }
         });
         const menu = document.getElementById('smsMenuPopover');
         const menuBackdrop = document.getElementById('smsMenuBackdrop');

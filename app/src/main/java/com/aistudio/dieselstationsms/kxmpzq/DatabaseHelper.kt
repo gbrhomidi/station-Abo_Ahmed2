@@ -149,6 +149,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.beginTransaction()
         try {
             createAllTables(db)
+            ensureDeliveriesSchema(db)
             ensureReportCacheTable(db)
             insertInitialData(db)
             ensureContractSchema(db)
@@ -187,6 +188,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     21 -> migrateV21ToV22(db)
                 }
             }
+            ensureDeliveriesSchema(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -215,6 +217,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsPlatformTables(db)
         createSmsCognitiveTables(db)
         ensureActivityPermissions(db)
+        ensureDeliveriesSchema(db)
         createTasksTable(db)
         ensureTaskPermissions(db)
         ensureMessagingPermissions(db)
@@ -661,6 +664,56 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun ensureColumn(db: SQLiteDatabase, tableName: String, columnName: String, definition: String) {
         if (!tableHasColumn(db, tableName, columnName)) db.execSQL("ALTER TABLE $tableName ADD COLUMN $columnName $definition")
+    }
+
+    /**
+     * Ensures the delivery operational table exists for both fresh and upgraded databases.
+     * The original schema was only inside migrateV9ToV10, so a fresh database could reach
+     * the deliveries screen without ever executing that migration.
+     */
+    private fun ensureDeliveriesSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE NOT NULL,
+                sale_id INTEGER REFERENCES sales_transactions(id),
+                party_id INTEGER REFERENCES parties(id),
+                vehicle_id INTEGER REFERENCES vehicles(id),
+                driver_id INTEGER REFERENCES drivers(id),
+                delivery_date TEXT NOT NULL,
+                quantity REAL DEFAULT 0,
+                fuel_type TEXT DEFAULT 'diesel',
+                price_per_liter REAL DEFAULT 0,
+                total_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'delivered',
+                location TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0
+            )
+        """.trimIndent())
+
+        // Compatibility for a partially-created legacy table; do not alter existing data.
+        ensureColumn(db, "deliveries", "sale_id", "INTEGER")
+        ensureColumn(db, "deliveries", "party_id", "INTEGER")
+        ensureColumn(db, "deliveries", "vehicle_id", "INTEGER")
+        ensureColumn(db, "deliveries", "driver_id", "INTEGER")
+        ensureColumn(db, "deliveries", "delivery_date", "TEXT DEFAULT ''")
+        ensureColumn(db, "deliveries", "quantity", "REAL DEFAULT 0")
+        ensureColumn(db, "deliveries", "fuel_type", "TEXT DEFAULT 'diesel'")
+        ensureColumn(db, "deliveries", "price_per_liter", "REAL DEFAULT 0")
+        ensureColumn(db, "deliveries", "total_amount", "REAL DEFAULT 0")
+        ensureColumn(db, "deliveries", "status", "TEXT DEFAULT 'delivered'")
+        ensureColumn(db, "deliveries", "location", "TEXT")
+        ensureColumn(db, "deliveries", "notes", "TEXT")
+        ensureColumn(db, "deliveries", "created_at", "TEXT")
+        ensureColumn(db, "deliveries", "updated_at", "TEXT")
+        ensureColumn(db, "deliveries", "is_deleted", "INTEGER DEFAULT 0")
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_date ON deliveries(delivery_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_deliveries_sale ON deliveries(sale_id)")
     }
 
     /** Compatibility additions for databases created before the messaging read-state contract. */
@@ -10650,7 +10703,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         // 7. كمية المنتجات المرتجعة اليوم في المحطة
         db.rawQuery(
-            """SELECT COALESCE(SUM(quantity),0) FROM inventory_movements
+            """SELECT COALESCE(SUM(quantity_change),0) FROM inventory_movements
                WHERE station_id=? AND movement_type='return' AND date(created_at)=date('now') AND is_deleted=0""",
             arrayOf(stationId.toString())
         ).use { cursor ->

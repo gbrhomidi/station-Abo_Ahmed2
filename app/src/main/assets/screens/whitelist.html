@@ -1163,6 +1163,10 @@
             <button class="sidebar-btn" onclick="handleSidebarAction('selectAll')">
                 <i class="fas fa-check-double"></i> <span>تحديد الكل</span>
             </button>
+            <!-- زر الرجوع (جديد) -->
+            <button class="sidebar-btn" onclick="goToDashboard()" style="background:rgba(239,68,68,0.8);border-color:var(--error);">
+                <i class="fas fa-arrow-left"></i> <span>رجوع</span>
+            </button>
         </div>
     </div>
 
@@ -2719,6 +2723,13 @@
                 generateAlerts();
             }, 1000);
         });
+
+        // ============================================================
+        // 33. زر الرجوع إلى الرئيسية (جديد)
+        // ============================================================
+        function goToDashboard() {
+            window.location.href = '../main.html';
+        }
     </script>
 </body>
 </html>

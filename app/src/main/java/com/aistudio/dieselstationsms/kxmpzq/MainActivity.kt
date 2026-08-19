@@ -3611,7 +3611,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             activity.runOnUiThread {
                 if (!activity.isFinishing && !activity.isDestroyed.get()) {
-                    activity.webView?.loadUrl("file:///android_asset/screens/main.html")
+                    activity.webView?.loadUrl("file:///android_asset/main.html")
                 }
             }
             return successResponse(true, "تم الرجوع إلى الشاشة الرئيسية")

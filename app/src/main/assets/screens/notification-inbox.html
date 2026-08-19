@@ -977,6 +977,10 @@
             <button class="sidebar-btn" onclick="handleSidebarAction('export')">
                 <i class="fas fa-file-export"></i> <span>تصدير</span>
             </button>
+            <!-- زر الرجوع (جديد) -->
+            <button class="sidebar-btn" onclick="goToDashboard()" style="background:rgba(239,68,68,0.8);border-color:var(--error);">
+                <i class="fas fa-arrow-left"></i> <span>رجوع</span>
+            </button>
         </div>
     </div>
 
@@ -2191,6 +2195,13 @@
             }, 1000);
 
         });
+
+        // ============================================================
+        // 25. زر الرجوع إلى الرئيسية (جديد)
+        // ============================================================
+        function goToDashboard() {
+            window.location.href = '../main.html';
+        }
     </script>
 </body>
 </html>

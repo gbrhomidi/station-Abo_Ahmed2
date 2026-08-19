@@ -7,7 +7,7 @@
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     >
 
-    <title>SMS Core Diagnostics</title>
+    <title>تشخيصات جوهر الرسائل</title>
 
     <style>
         :root {
@@ -912,6 +912,17 @@
         </div>
 
         <div class="toolbar">
+
+            <!-- زر الرجوع (جديد) -->
+            <button
+                class="icon-btn"
+                type="button"
+                aria-label="رجوع إلى الرئيسية"
+                title="رجوع إلى الرئيسية"
+                onclick="goToDashboard()"
+            >
+                🏠
+            </button>
 
             <button
                 id="themeToggle"
@@ -3213,6 +3224,14 @@ window.SmsCoreDiagnostics = {
     toggleTheme: toggleTheme,
     copyRawData: copyRawData
 };
+
+/* ================================================================
+   زر الرجوع إلى الرئيسية (جديد)
+   ================================================================ */
+
+function goToDashboard() {
+    window.location.href = '../main.html';
+}
 
 </script>
 
