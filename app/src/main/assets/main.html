@@ -149,6 +149,7 @@
         .app-container { display: block; }
 
         .app-header {
+            min-width: 0;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -161,8 +162,9 @@
             height: var(--header-height);
             box-shadow: var(--shadow);
         }
-        .app-header .header-left { display: flex; align-items: center; gap: 12px; }
-        .app-header .header-brand { display: flex; align-items: center; gap: 8px; }
+        .app-header .header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .app-header .header-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .app-header .header-brand > div:last-child { min-width: 0; }
         .app-header .header-brand .brand-icon {
             width: 36px; height: 36px;
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
@@ -175,7 +177,7 @@
         }
         .app-header .header-brand h1 { font-size: 17px; font-family: var(--font-heading); font-weight: 700; color: var(--text); margin: 0; }
         .app-header .header-brand small { font-size: 11px; color: var(--text-secondary); display: block; margin-top: -2px; }
-        .app-header .header-actions { display: flex; gap: 6px; align-items: center; }
+        .app-header .header-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
         .icon-btn {
             width: 36px; height: 36px;
             border-radius: 50%;
@@ -458,6 +460,7 @@
         }
 
         .main-content {
+            min-width: 0;
             margin-right: 0;
             transition: margin-right 0.3s;
             padding: 20px 24px 40px;
@@ -471,14 +474,14 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
             margin-top: 0;
             margin-bottom: 16px;
             padding-top: 0;
         }
-        @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, 1fr); } }
-        @media (min-width: 1024px) { .stats-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (min-width: 640px) { .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 
         .stat-card {
             background: var(--card-bg);
@@ -631,6 +634,9 @@
         }
 
         .data-update-info {
+            max-width: 100%;
+            flex-wrap: wrap;
+            overflow-wrap: anywhere;
             text-align: left;
             font-size: 0.8rem;
             margin-top: 10px;
@@ -814,24 +820,58 @@
         }
 
         @media (max-width: 767px) {
-            .sidebar { width: max-content; min-width: 140px; max-width: 220px; top: 0; transform: translateX(100%); }
+            .sidebar {
+                width: min(220px, calc(100vw - 24px));
+                min-width: 0;
+                max-width: 220px;
+                top: 0;
+                transform: translateX(100%);
+            }
             .sidebar.open { transform: translateX(0); }
+            .sidebar-nav .nav-item { min-width: 0; padding: 8px 10px; }
+            .sidebar-nav .nav-item .nav-label {
+                min-width: 0;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                line-height: 1.25;
+            }
             .main-content { padding: 12px 14px 20px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
             .stat-card .stat-value { font-size: 20px; }
-            .stat-card { min-height: 80px; padding: 12px; }
-            .stat-card .card-header h3 { font-size: 0.8rem; }
-            .submenu-panel { min-width: 140px; max-width: 200px; font-size: 0.85rem; }
-            .user-info-card { flex-wrap: wrap; justify-content: center; text-align: center; }
+            .stat-card { min-width: 0; min-height: 80px; padding: 12px; }
+            .stat-card .card-header h3 { min-width: 0; overflow-wrap: anywhere; font-size: 0.8rem; }
+            .submenu-panel {
+                width: min(220px, calc(100vw - 24px));
+                min-width: 0;
+                max-width: calc(100vw - 24px);
+                font-size: 0.85rem;
+            }
+            .submenu-panel ul li {
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }
+            .user-info-card { min-width: 0; flex-wrap: wrap; justify-content: center; text-align: center; }
         }
         @media (max-width: 480px) {
-            .sidebar { width: 60px; min-width: 60px; }
-            .sidebar .nav-item { font-size: 13px; padding: 8px 10px; }
-            .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-            .stat-card .stat-value { font-size: 17px; }
+            .app-header { padding: 0 10px; }
+            .app-header .header-left { gap: 6px; }
+            .app-header .header-brand { gap: 6px; }
             .app-header .header-brand h1 { font-size: 14px; }
-            .app-header .header-brand small { font-size: 10px; }
-            .submenu-panel { min-width: 120px; max-width: 180px; padding: 0.5rem 0.3rem; }
+            .app-header .header-brand small {
+                max-width: 150px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 10px;
+            }
+            .sidebar {
+                width: min(220px, calc(100vw - 20px));
+                min-width: 0;
+            }
+            .sidebar-nav .nav-item { font-size: 13px; padding: 8px 10px; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+            .stat-card .stat-value { font-size: 17px; }
+            .submenu-panel { width: min(220px, calc(100vw - 20px)); max-width: calc(100vw - 20px); padding: 0.5rem 0.3rem; }
             .submenu-panel ul li { padding: 8px 10px; font-size: 12px; }
         }
         @media (max-width: 360px) {
