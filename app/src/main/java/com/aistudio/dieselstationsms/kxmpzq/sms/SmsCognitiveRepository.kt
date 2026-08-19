@@ -178,6 +178,58 @@ class SmsCognitiveRepository(private val db: DatabaseHelper) {
         })
     }
 
+    fun recordAiRun(
+        conversationId: String,
+        eventId: String,
+        provider: String,
+        model: String,
+        requestHash: String,
+        latencyMs: Long,
+        availability: String,
+        confidence: Double?,
+        usage: SmsAiUsage,
+        fallbackReason: String?,
+        errorType: String?
+    ) {
+        val safeEventId = eventId.ifBlank { UUID.randomUUID().toString() }
+        val payload = JSONObject().apply {
+            put("provider", provider.take(80))
+            put("model", model.take(160))
+            put("request_hash", requestHash.take(128))
+            put("latency_ms", latencyMs.coerceAtLeast(0L))
+            put("availability", availability.take(30))
+            confidence?.let { put("confidence", it.coerceIn(0.0, 1.0)) }
+            put("prompt_tokens", usage.promptTokens.coerceAtLeast(0))
+            put("completion_tokens", usage.completionTokens.coerceAtLeast(0))
+            put("total_tokens", usage.totalTokens.coerceAtLeast(0))
+            fallbackReason?.let { put("fallback_reason", it.take(180)) }
+            errorType?.let { put("error_type", it.take(100)) }
+        }
+        db.writableDatabase.insertWithOnConflict(
+            "sms_ai_runs", null, ContentValues().apply {
+                put("run_id", UUID.randomUUID().toString())
+                put("event_id", safeEventId)
+                put("conversation_id", conversationId)
+                put("provider", provider.take(80))
+                put("model", model.take(160))
+                put("request_hash", requestHash.take(128))
+                put("latency_ms", latencyMs.coerceAtLeast(0L))
+                put("availability", availability.take(30))
+                put("confidence", confidence)
+                put("prompt_tokens", usage.promptTokens.coerceAtLeast(0))
+                put("completion_tokens", usage.completionTokens.coerceAtLeast(0))
+                put("total_tokens", usage.totalTokens.coerceAtLeast(0))
+                put("fallback_reason", fallbackReason?.take(180))
+                put("error_type", errorType?.take(100))
+                put("created_at", System.currentTimeMillis())
+            },
+            android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
+        )
+        if (conversationId.isNotBlank()) {
+            recordInboundTrace(conversationId, safeEventId, "AI_INFERENCE", payload)
+        }
+    }
+
     fun enqueueCommand(command: SmsSemanticCommand): Boolean {
         val inserted = db.writableDatabase.insertWithOnConflict(
             "sms_semantic_commands", null, ContentValues().apply {

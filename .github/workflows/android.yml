@@ -61,9 +61,8 @@ jobs:
       # 🏗️ بناء Release APK مع التوقيع الحقيقي
       # ───────────────────────────────────────────────
       - name: Clean and Build Release APK
-        run: ./gradlew clean assembleRelease --no-daemon -PGEMINI_API_KEY=$GEMINI_API_KEY
+        run: ./gradlew clean assembleRelease --no-daemon
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RELEASE_KEYSTORE_PATH: ${{ github.workspace }}/diesel-station-release.keystore
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}

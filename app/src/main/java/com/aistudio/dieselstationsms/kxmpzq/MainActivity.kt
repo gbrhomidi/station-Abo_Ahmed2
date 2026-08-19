@@ -275,12 +275,16 @@ class MainActivity : AppCompatActivity() {
 
         try {
             geminiHelper = GeminiAIHelper(this)
-            geminiApiKey = loadEnvKey("GEMINI_API_KEY")
+            val aiConfig = SmsAiConfigStore(this).get()
+            geminiApiKey = aiConfig.apiKey.takeIf {
+                aiConfig.provider.equals("gemini", ignoreCase = true)
+            }.orEmpty()
             if (geminiApiKey.isNotEmpty()) {
                 geminiHelper.initialize(geminiApiKey)
             }
         } catch (e: Exception) {
-            DebugLogger.warn("Gemini", "Gemini initialization failed: ${e.message}")
+            geminiApiKey = ""
+            DebugLogger.warn("Gemini", "Secure AI configuration unavailable: ${e.javaClass.simpleName}")
         }
 
         createNotificationChannel()
@@ -1016,27 +1020,6 @@ class MainActivity : AppCompatActivity() {
             wv.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null)
         } catch (e: Exception) {
             DebugLogger.warn("WebView", "showErrorPage failed: ${e.message}")
-        }
-    }
-
-    private fun loadEnvKey(key: String): String {
-        return try {
-            assets.open(".env").use { stream ->
-                BufferedReader(InputStreamReader(stream)).useLines { lines ->
-                    lines.mapNotNull { line ->
-                        val trimmed = line.trim()
-                        if (trimmed.startsWith("$key=")) {
-                            val value = trimmed.substringAfter("=").trim()
-                            if (value.isNotEmpty() && value != "YOUR_GEMINI_API_KEY_HERE") {
-                                value
-                            } else null
-                        } else null
-                    }.firstOrNull() ?: ""
-                }
-            }
-        } catch (e: Exception) {
-            DebugLogger.warn("Env", "loadEnvKey($key) failed: ${e.message}")
-            ""
         }
     }
 
@@ -2164,6 +2147,57 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getGeminiApiKey(): String {
             return if (geminiApiKey.isNotEmpty()) "configured" else "not_configured"
+        }
+
+        @JavascriptInterface
+        fun getSmsAiConfig(): String {
+            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة إعداد AI")
+            return try {
+                dataResponse(SmsAiGateway(this@MainActivity, dbHelper).publicConfig())
+            } catch (e: Exception) {
+                errorResponse("إعداد AI غير متاح")
+            }
+        }
+
+        @JavascriptInterface
+        fun configureSmsAi(
+            enabled: Boolean,
+            provider: String,
+            endpoint: String,
+            model: String,
+            apiKey: String,
+            timeoutMs: Long
+        ): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تعديل إعداد AI")
+            return try {
+                val store = SmsAiConfigStore(this@MainActivity)
+                val previous = store.get()
+                val effectiveKey = apiKey.trim().ifBlank { previous.apiKey }
+                SmsAiGateway(this@MainActivity, dbHelper).saveConfig(
+                    SmsAiRuntimeConfig(
+                        enabled = enabled,
+                        provider = provider.trim().ifBlank { "openai_compatible" },
+                        endpoint = endpoint.trim(),
+                        model = model.trim(),
+                        apiKey = effectiveKey,
+                        timeoutMs = timeoutMs
+                    )
+                )
+                dataResponse(SmsAiGateway(this@MainActivity, dbHelper).publicConfig())
+            } catch (e: Exception) {
+                errorResponse("تعذر حفظ إعداد AI الآمن")
+            }
+        }
+
+        @JavascriptInterface
+        fun clearSmsAiConfig(): String {
+            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية حذف إعداد AI")
+            return try {
+                SmsAiConfigStore(this@MainActivity).clear()
+                dataResponse(JSONObject().put("cleared", true))
+            } catch (e: Exception) {
+                errorResponse("تعذر مسح إعداد AI")
+            }
         }
 
         @JavascriptInterface

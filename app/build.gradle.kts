@@ -23,28 +23,7 @@ android {
             localeFilters += listOf("ar", "en")
         }
 
-        // مفاتيح API من Secrets (متغيرات البيئة)
-        val geminiKey = project.properties["GEMINI_API_KEY"] as? String
-            ?: System.getenv("GEMINI_API_KEY")
-            ?: ""
-        val deepseekKey = project.properties["DEEPSEEK_API_KEY"] as? String
-            ?: System.getenv("DEEPSEEK_API_KEY")
-            ?: ""
-        val grokKey = project.properties["GROK_API_KEY"] as? String
-            ?: System.getenv("GROK_API_KEY")
-            ?: ""
-        val kimiKey = project.properties["KIMI_API_KEY"] as? String
-            ?: System.getenv("KIMI_API_KEY")
-            ?: ""
-        val chatgptKey = project.properties["CHATGPT_API_KEY"] as? String
-            ?: System.getenv("CHATGPT_API_KEY")
-            ?: ""
-
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
-        buildConfigField("String", "DEEPSEEK_API_KEY", "\"$deepseekKey\"")
-        buildConfigField("String", "GROK_API_KEY", "\"$grokKey\"")
-        buildConfigField("String", "KIMI_API_KEY", "\"$kimiKey\"")
-        buildConfigField("String", "CHATGPT_API_KEY", "\"$chatgptKey\"")
+        // مفاتيح AI لا تدخل BuildConfig أو APK. تُضبط وقت التشغيل في EncryptedSharedPreferences.
     }
 
     signingConfigs {
@@ -221,7 +200,9 @@ configurations.all {
 // ============================================================
 tasks.register<Exec>("securityCheck") {
     group = "verification"
-    description = "Check for sensitive data in APK"
-    commandLine("grep", "-r", "GEMINI_API_KEY", "src/")
-    isIgnoreExitValue = true
+    description = "Check source tree for embedded AI secrets"
+    commandLine(
+        "bash", "-lc",
+        "if grep -RInE '(sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,})' src; then exit 1; else exit 0; fi"
+    )
 }

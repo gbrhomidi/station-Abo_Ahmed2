@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 22
+        const val VERSION = 23
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -186,6 +186,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     19 -> migrateV19ToV20(db)
                     20 -> migrateV20ToV21(db)
                     21 -> migrateV21ToV22(db)
+                    22 -> createSmsCognitiveTables(db)
                 }
             }
             ensureDeliveriesSchema(db)
@@ -5497,6 +5498,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_failure_notifications_message ON sms_failure_notifications(message_id, notified_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_ai_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL UNIQUE,
+                event_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                latency_ms INTEGER NOT NULL DEFAULT 0,
+                availability TEXT NOT NULL,
+                confidence REAL,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
+                fallback_reason TEXT,
+                error_type TEXT,
+                created_at INTEGER NOT NULL
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_ai_runs_conversation_time ON sms_ai_runs(conversation_id, created_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_ai_runs_availability ON sms_ai_runs(availability, created_at)")
+
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_human_review_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT NOT NULL UNIQUE,
+                conversation_id TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'NORMAL',
+                summary TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'OPEN',
+                created_at INTEGER NOT NULL,
+                resolved_at INTEGER,
+                resolution TEXT
+            )
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_human_review_status_time ON sms_human_review_tasks(status, created_at)")
     }
 
     private fun createSmsProcessedTable(db: SQLiteDatabase) {

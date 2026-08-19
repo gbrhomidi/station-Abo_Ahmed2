@@ -93,6 +93,7 @@ class SmsProcessor(
     private val cognitiveEngine = SmsCognitiveConversationEngine(intentDetector)
     private val decisionEngine = SmsDecisionEngine()
     private val commandBus = SmsSemanticCommandBus(cognitiveRepository)
+    private val aiGateway = SmsAiGateway(context, db, cognitiveRepository)
 
     private val handler =
         Handler(Looper.getMainLooper())
@@ -943,12 +944,69 @@ class SmsProcessor(
                 .getOrCreatePreferences(normalizedPhone)
 
         val draft = conversationManager.getOrderDraft(normalizedPhone)
+        val aiRequest = SmsAiRequest(
+            message = rawBody,
+            phone = normalizedPhone,
+            customerName = customerDisplayName(customer),
+            conversationId = ctx.conversationId,
+            lastIntent = ctx.lastIntent,
+            pendingAction = ctx.pendingAction,
+            contextJson = JSONObject().apply {
+                put("event_id", inboundEventId)
+                put("conversation_id", ctx.conversationId)
+                put("last_topic", ctx.lastTopic)
+                put("last_intent", ctx.lastIntent)
+                put("pending_action", ctx.pendingAction)
+                put("awaiting_response", ctx.awaitingResponse)
+                put("current_state", ctx.currentState)
+                put("previous_state", ctx.previousState)
+                put("order_id", ctx.orderId ?: JSONObject.NULL)
+                put("draft_id", ctx.draftId)
+                put("version", ctx.version)
+            },
+            preferencesJson = JSONObject().apply {
+                put("preferred_quantity", prefs.preferredQuantity)
+                put("preferred_location", prefs.preferredLocation.take(200))
+                put("preferred_time", prefs.preferredTime.take(100))
+                put("last_order_date", prefs.lastOrderDate)
+                put("order_count", prefs.orderCount)
+                put("language", prefs.language)
+            },
+            draftJson = draft?.let {
+                JSONObject().apply {
+                    put("draft_id", it.draftId)
+                    put("product", it.product)
+                    put("quantity_liters", it.quantityLiters)
+                    put("quantity_dabbas", it.quantityDabbas)
+                    put("location", it.deliveryLocation.take(200))
+                    put("time", it.deliveryTime.take(100))
+                    put("step", it.step)
+                    put("status", it.status)
+                }
+            }
+        )
+        val aiAnalysis = aiGateway.understand(
+            request = aiRequest,
+            tools = SmsAiToolRegistry(db, customer, ctx, prefs, draft)
+        )
+        val aiUnderstanding = aiAnalysis.understanding?.takeIf {
+            it.status == "UNDERSTOOD" && it.confidence >= 0.65
+        }
         val cognitivePlan = cognitiveEngine.plan(
             message = rawBody,
             context = ctx,
             preferences = prefs,
-            draft = draft
+            draft = draft,
+            aiUnderstanding = aiUnderstanding
         )
+        runCatching {
+            cognitiveRepository.recordInboundTrace(
+                conversationId = ctx.conversationId,
+                eventId = inboundEventId,
+                stage = "AI_VALIDATED",
+                payload = aiAnalysis.toJson()
+            )
+        }.onFailure { Log.w(TAG, "Unable to persist AI validation trace", it) }
         val command = commandBus.route(
             phone = normalizedPhone,
             context = ctx,
@@ -1035,13 +1093,14 @@ class SmsProcessor(
                     handleDieselRequestFlow(
                         customer,
                         ctx,
-                        prefs
+                        prefs,
+                        aiEntities = aiUnderstanding?.entities.orEmpty()
                     )
 
                 "quantity_response" ->
                     handleQuantityResponse(
                         customer,
-                        msgBody,
+                        aiUnderstanding?.entities?.get("quantity_liters")?.let { "$it لتر" } ?: msgBody,
                         ctx,
                         prefs
                     )
@@ -1052,7 +1111,7 @@ class SmsProcessor(
                 "location_response" ->
                     handleLocationResponse(
                         customer,
-                        msgBody,
+                        aiUnderstanding?.entities?.get("location") ?: msgBody,
                         ctx,
                         prefs
                     )
@@ -1060,7 +1119,9 @@ class SmsProcessor(
                 "time_response" ->
                     handleTimeResponse(
                         customer,
-                        msgBody,
+                        aiUnderstanding?.entities?.get("time")
+                            ?: aiUnderstanding?.entities?.get("time_window")
+                            ?: msgBody,
                         ctx,
                         prefs
                     )
@@ -1184,7 +1245,10 @@ class SmsProcessor(
                     handleUnknown(
                         customer,
                         msgBody,
-                        ctx
+                        ctx,
+                        aiResponseDraft = aiAnalysis.understanding?.takeIf {
+                            it.status == "NEEDS_CLARIFICATION" && it.confidence >= 0.45
+                        }?.responseDraft
                     )
             }
             runCatching {
@@ -1264,7 +1328,8 @@ class SmsProcessor(
     private suspend fun handleDieselRequestFlow(
         customer: SmsCustomerResolver.CustomerInfo,
         ctx: SmsConversationManager.ConversationContext,
-        prefs: SmsConversationManager.CustomerPreferences
+        prefs: SmsConversationManager.CustomerPreferences,
+        aiEntities: Map<String, String> = emptyMap()
     ): Boolean {
 
         val sender =
@@ -1295,6 +1360,33 @@ class SmsProcessor(
             normalizedPhone,
             ctx
         )
+
+        val aiQuantity = aiEntities["quantity_liters"]?.replace(',', '.')?.toDoubleOrNull()
+        val aiLocation = aiEntities["location"]?.trim().orEmpty()
+        val aiTime = (aiEntities["time"] ?: aiEntities["time_window"]).orEmpty().trim()
+        if (aiQuantity != null && aiQuantity > 0.0 && aiQuantity <= MAX_ORDER_LITERS) {
+            val quantityAccepted = handleQuantityResponse(
+                customer,
+                "${aiQuantity} لتر",
+                ctx,
+                prefs,
+                emitPrompt = false
+            )
+            if (!quantityAccepted || aiLocation.length < 3) {
+                return quantityAccepted
+            }
+            val locationAccepted = handleLocationResponse(
+                customer,
+                aiLocation,
+                ctx,
+                prefs,
+                emitPrompt = false
+            )
+            if (!locationAccepted || aiTime.isBlank()) {
+                return locationAccepted
+            }
+            return handleTimeResponse(customer, aiTime, ctx, prefs)
+        }
 
         val suggestion =
             if (prefs.preferredQuantity > 0) {
@@ -1346,7 +1438,8 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
         ctx: SmsConversationManager.ConversationContext,
-        prefs: SmsConversationManager.CustomerPreferences
+        prefs: SmsConversationManager.CustomerPreferences,
+        emitPrompt: Boolean = true
     ): Boolean {
 
         val sender =
@@ -1443,6 +1536,7 @@ class SmsProcessor(
                     "${quantityInfo.dabbas.toInt()} دباب"
             }
 
+        if (!emitPrompt) return true
         return sendReplyRequired(
             sender,
             "$conversionText\n" +
@@ -1459,7 +1553,8 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
         ctx: SmsConversationManager.ConversationContext,
-        prefs: SmsConversationManager.CustomerPreferences
+        prefs: SmsConversationManager.CustomerPreferences,
+        emitPrompt: Boolean = true
     ): Boolean {
 
         val sender =
@@ -1523,6 +1618,7 @@ class SmsProcessor(
             prefs
         )
 
+        if (!emitPrompt) return true
         return sendReplyRequired(
             sender,
             "📍 $location\n" +
@@ -3690,7 +3786,8 @@ class SmsProcessor(
     private suspend fun handleUnknown(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
-        ctx: SmsConversationManager.ConversationContext
+        ctx: SmsConversationManager.ConversationContext,
+        aiResponseDraft: String? = null
     ): Boolean {
 
         val sender =
@@ -3809,6 +3906,14 @@ class SmsProcessor(
                     }
                 }
             }
+        }
+
+        val aiReply = aiResponseDraft
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it.length <= 480 }
+        if (aiReply != null) {
+            replyManager.sendReplyOnce(sender, aiReply)
+            return true
         }
 
         val managerPhone =

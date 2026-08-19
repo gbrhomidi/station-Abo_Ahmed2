@@ -2120,6 +2120,38 @@ class SmsIntentDetector {
             )
         }
 
+        val relativeDay = when {
+            normalized.contains("بعد بكره") || normalized.contains("بعد بكرة") || normalized.contains("بعد غد") -> 2
+            normalized.contains("بكره") || normalized.contains("بكرة") || normalized.contains("غدا") || normalized.contains("غداً") -> 1
+            else -> null
+        }
+        if (relativeDay != null) {
+            val hour = when {
+                normalized.contains("الصباح") || normalized.contains("صباح") -> 8
+                normalized.contains("العصر") || normalized.contains("بعد العصر") -> 15
+                normalized.contains("المساء") || normalized.contains("مساء") || normalized.contains("الليل") -> 18
+                else -> 12
+            }
+            val calendar = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, relativeDay)
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val timestamp = calendar.timeInMillis
+            val display = when (relativeDay) {
+                1 -> "غداً"
+                else -> "بعد غد"
+            } + " " + when (hour) {
+                8 -> "صباحاً"
+                15 -> "بعد العصر"
+                18 -> "مساءً"
+                else -> "ظهراً"
+            }
+            return TimeInfo(displayTime = display, timestamp = timestamp)
+        }
+
         val match =
             TIME_REGEX.find(
                 normalized

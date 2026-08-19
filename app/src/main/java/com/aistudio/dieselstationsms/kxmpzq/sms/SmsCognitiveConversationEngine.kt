@@ -14,10 +14,11 @@ class SmsCognitiveConversationEngine(
         message: String,
         context: SmsConversationManager.ConversationContext,
         preferences: SmsConversationManager.CustomerPreferences,
-        draft: SmsConversationManager.OrderDraft? = null
+        draft: SmsConversationManager.OrderDraft? = null,
+        aiUnderstanding: SmsAiUnderstanding? = null
     ): SmsCognitivePlan {
         val normalized = SmsMessageNormalizer.normalizeForMatch(message)
-        val intent = intentDetector.detectIntent(
+        val deterministicIntent = intentDetector.detectIntent(
             message,
             SmsIntentDetector.ConversationState(
                 awaitingResponse = context.awaitingResponse,
@@ -27,8 +28,23 @@ class SmsCognitiveConversationEngine(
             ),
             context.data[SmsConversationManager.DATA_PHONE].orEmpty()
         )
+        val aiAccepted = aiUnderstanding != null &&
+            aiUnderstanding.status == "UNDERSTOOD" &&
+            aiUnderstanding.confidence >= 0.65 &&
+            aiUnderstanding.intent != "unknown"
+        val intent = if (aiAccepted) {
+            SmsIntentDetector.IntentResult(
+                intent = aiUnderstanding!!.intent,
+                confidence = (aiUnderstanding.confidence * 100.0).toInt().coerceIn(0, 100),
+                allScores = mapOf(aiUnderstanding.intent to (aiUnderstanding.confidence * 100.0).toInt())
+            )
+        } else {
+            deterministicIntent
+        }
         val known = linkedMapOf<String, String>()
+        if (aiAccepted) known.putAll(aiUnderstanding!!.entities)
         val assumptions = mutableListOf<String>()
+        if (aiAccepted) assumptions += aiUnderstanding!!.assumptions
         val contradictions = mutableListOf<SmsContradiction>()
         var referenceResolved = false
 
@@ -71,6 +87,7 @@ class SmsCognitiveConversationEngine(
 
         val complaintCategory = if (intent.intent == "complaint") classifyComplaint(normalized) else null
         val missing = mutableListOf<String>()
+        if (aiAccepted) missing += aiUnderstanding!!.missingEntities
         if (intent.intent == "diesel_request" || context.pendingAction.startsWith("awaiting_")) {
             if (!known.containsKey("quantity_liters")) missing += "quantity"
             if (!known.containsKey("location")) missing += "location"
