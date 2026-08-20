@@ -10561,11 +10561,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val result = JSONObject()
+            val result = JSONObject().apply {
+                put("_metadata", JSONObject().apply {
+                    put("schema_version", VERSION)
+                    put("database_name", DB_NAME)
+                    put("exported_at", getDateFormat().format(Date()))
+                })
+            }
             val tables = listOf(
                 "parties", "sales_transactions", "tanks", "pumps", "users", "employees",
                 "shifts", "notifications", "sms_logs", "fuel_types", "products",
-                "payments", "deliveries", "maintenance_requests", "assets"
+                "payments", "deliveries", "maintenance_requests", "assets",
+                "backup_history", "restore_history", "system_settings", "user_activity_log",
+                "audit_logs", "sync_logs"
             )
             for (table in tables) {
                 db.query(table, null, null, null, null, null, null)
@@ -13094,35 +13102,228 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال النسخ الاحتياطي والتصدير
     // ========================================================================
 
+    private fun sha256File(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (input.read(buffer).also { read = it } > 0) digest.update(buffer, 0, read)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun isAllowedBackupFile(file: File): Boolean {
+        val canonical = file.canonicalFile
+        val roots = listOfNotNull(
+            File(contextRef.getExternalFilesDir(null), "backups").canonicalFile,
+            File(contextRef.filesDir, "backups").canonicalFile
+        )
+        return roots.any { root -> canonical.path == root.path || canonical.path.startsWith(root.path + File.separator) }
+    }
+
+    private fun backupRecordIdFor(file: File): Long? {
+        val name = file.name
+        readableDatabase.rawQuery(
+            "SELECT id FROM backup_history WHERE file_path = ? OR file_name = ? ORDER BY id DESC LIMIT 1",
+            arrayOf(file.absolutePath, name)
+        ).use { cursor -> return if (cursor.moveToFirst()) cursor.getLong(0) else null }
+    }
+
+    fun recordBackupHistory(
+        path: String,
+        backupType: String = "full",
+        backupMethod: String = "manual",
+        checksum: String? = null,
+        encrypted: Boolean = false,
+        encryptionMethod: String? = null,
+        status: String = "success",
+        errorMessage: String? = null,
+        startedAtMillis: Long = System.currentTimeMillis(),
+        completedAtMillis: Long = System.currentTimeMillis()
+    ): Long {
+        dbLock.lock()
+        return try {
+            val file = File(path)
+            val safeType = if (backupType in setOf("full", "incremental", "differential")) backupType else "full"
+            val safeStatus = if (status in setOf("in_progress", "success", "failed", "cancelled")) status else "failed"
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                put("backup_type", safeType)
+                put("backup_method", backupMethod)
+                put("database_type", "sqlite")
+                put("database_name", DB_NAME)
+                put("file_name", file.name)
+                put("file_path", file.absolutePath)
+                put("file_size_mb", file.length().toDouble() / (1024.0 * 1024.0))
+                if (checksum.isNullOrBlank()) putNull("checksum") else put("checksum", checksum)
+                put("started_at", getDateFormat().format(Date(startedAtMillis)))
+                put("completed_at", getDateFormat().format(Date(completedAtMillis)))
+                put("duration_seconds", ((completedAtMillis - startedAtMillis).coerceAtLeast(0L) / 1000L).toInt())
+                put("status", safeStatus)
+                if (errorMessage.isNullOrBlank()) putNull("error_message") else put("error_message", errorMessage)
+                put("storage_location", "local")
+                put("storage_path", file.parent ?: "")
+                put("is_encrypted", if (encrypted) 1 else 0)
+                if (encryptionMethod.isNullOrBlank()) putNull("encryption_method") else put("encryption_method", encryptionMethod)
+                put("is_deleted", 0)
+            }
+            writableDatabase.insertOrThrow("backup_history", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun recordRestoreHistory(backupId: Long?, status: String, notes: String? = null, errorMessage: String? = null): Long {
+        dbLock.lock()
+        return try {
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString())
+                if (backupId == null) putNull("backup_id") else put("backup_id", backupId)
+                put("restore_date", getDateFormat().format(Date()))
+                put("status", if (status in setOf("success", "failed", "partial")) status else "failed")
+                if (errorMessage.isNullOrBlank()) putNull("error_message") else put("error_message", errorMessage)
+                if (notes.isNullOrBlank()) putNull("notes") else put("notes", notes)
+            }
+            writableDatabase.insertOrThrow("restore_history", null, values)
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getBackupHealth(): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val result = JSONObject()
+            var total = 0
+            var successful = 0
+            db.rawQuery("SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END),0) FROM backup_history WHERE is_deleted = 0", null).use { cursor ->
+                if (cursor.moveToFirst()) { total = cursor.getInt(0); successful = cursor.getInt(1) }
+            }
+            val latest = db.rawQuery("SELECT * FROM backup_history WHERE is_deleted = 0 ORDER BY datetime(COALESCE(completed_at, started_at)) DESC, id DESC LIMIT 1", null).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
+            val latestPath = latest?.optString("file_path").orEmpty()
+            val latestFile = if (latestPath.isNotBlank()) File(latestPath) else null
+            var restoreSuccess = false
+            db.rawQuery("SELECT status FROM restore_history ORDER BY datetime(restore_date) DESC, id DESC LIMIT 1", null).use { cursor -> restoreSuccess = cursor.moveToFirst() && cursor.getString(0) == "success" }
+            val integrity = checkIntegrity()
+            val hasRecent = latest?.optString("status") == "success" && latestFile?.exists() == true
+            val successRate = if (total == 0) 0.0 else successful * 100.0 / total.toDouble()
+            var score = 0
+            if (hasRecent) score += 30
+            if (integrity) score += 20
+            if (successRate >= 95.0) score += 20 else if (successRate >= 80.0) score += 10
+            if (successful >= 2) score += 10 else if (successful == 1) score += 5
+            if (!latest?.optString("checksum").isNullOrBlank()) score += 5
+            if (restoreSuccess) score += 15
+            result.put("health_score", score)
+            result.put("total_backups", total)
+            result.put("successful_backups", successful)
+            result.put("success_rate", successRate)
+            result.put("integrity_ok", integrity)
+            result.put("last_restore_success", restoreSuccess)
+            result.put("database_size_bytes", getDatabaseSize())
+            result.put("latest_backup", latest ?: JSONObject.NULL)
+            result.put("latest_backup_exists", hasRecent)
+            result
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun getRestorePreview(path: String): JSONObject {
+        dbLock.lock()
+        return try {
+            val file = File(path).canonicalFile
+            if (!isAllowedBackupFile(file)) throw SecurityException("مسار النسخة خارج مجلد النسخ المسموح")
+            val result = JSONObject().apply {
+                put("path", file.absolutePath)
+                put("file_name", file.name)
+                put("exists", file.exists())
+                put("size_bytes", if (file.exists()) file.length() else 0L)
+                put("checksum", if (file.exists()) sha256File(file) else JSONObject.NULL)
+                put("backup_id", if (file.exists()) backupRecordIdFor(file) ?: JSONObject.NULL else JSONObject.NULL)
+            }
+            if (!file.exists()) {
+                result.put("can_restore", false).put("reason", "ملف النسخة غير موجود")
+                return result
+            }
+            if (file.extension.lowercase(Locale.getDefault()) != "db") {
+                result.put("can_restore", false).put("reason", "النسخة مشفرة أو غير مدعومة للاستعادة المباشرة من هذا العقد")
+                return result
+            }
+            var integrity = false
+            var schemaVersion = -1
+            SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { backupDb ->
+                backupDb.rawQuery("PRAGMA integrity_check", null).use { cursor -> integrity = cursor.moveToFirst() && cursor.getString(0).equals("ok", true) }
+                backupDb.rawQuery("PRAGMA user_version", null).use { cursor -> if (cursor.moveToFirst()) schemaVersion = cursor.getInt(0) }
+            }
+            result.put("integrity_ok", integrity)
+            result.put("schema_version", schemaVersion)
+            result.put("schema_compatible", schemaVersion == VERSION)
+            result.put("can_restore", integrity && schemaVersion == VERSION)
+            result.put("reason", if (integrity && schemaVersion == VERSION) "النسخة سليمة ومتوافقة" else "فشل تحقق السلامة أو عدم توافق إصدار Schema")
+            result
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
+    fun restoreDatabaseSafe(path: String): JSONObject {
+        dbLock.lock()
+        return try {
+            val file = File(path).canonicalFile
+            val preview = getRestorePreview(file.absolutePath)
+            if (!preview.optBoolean("can_restore", false)) return JSONObject().put("success", false).put("preview", preview).put("error", preview.optString("reason"))
+            val emergencyPath = backupDatabase()
+            val emergencyFile = File(emergencyPath)
+            val dbFile = contextRef.getDatabasePath(DB_NAME)
+            close()
+            val temp = File(dbFile.parentFile, ".restore_${System.currentTimeMillis()}.tmp")
+            file.copyTo(temp, overwrite = true)
+            if (!temp.renameTo(dbFile)) {
+                temp.copyTo(dbFile, overwrite = true)
+                temp.delete()
+            }
+            val integrity = checkIntegrity()
+            if (!integrity) {
+                close()
+                emergencyFile.copyTo(dbFile, overwrite = true)
+                recordRestoreHistory(preview.optLong("backup_id", 0L).takeIf { it > 0 }, "failed", "تم تنفيذ rollback إلى Emergency Snapshot", "فشل PRAGMA integrity_check بعد الاستعادة")
+                return JSONObject().put("success", false).put("rolled_back", true).put("emergency_snapshot", emergencyPath).put("error", "فشل تحقق السلامة؛ تمت استعادة Emergency Snapshot")
+            }
+            recordRestoreHistory(preview.optLong("backup_id", 0L).takeIf { it > 0 }, "success", "استعادة آمنة بعد إنشاء Emergency Snapshot")
+            JSONObject().put("success", true).put("integrity_verified", true).put("emergency_snapshot", emergencyPath).put("restored_checksum", preview.optString("checksum")).put("message", "تمت الاستعادة الآمنة والتحقق من سلامة قاعدة البيانات")
+        } catch (e: Exception) {
+            JSONObject().put("success", false).put("error", e.message ?: "فشلت الاستعادة الآمنة")
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun backupDatabase(): String {
         dbLock.lock()
         return try {
             val dbFile = contextRef.getDatabasePath(DB_NAME)
+            require(dbFile.exists()) { "ملف قاعدة البيانات غير موجود" }
             val backupDir = File(contextRef.getExternalFilesDir(null), "backups")
-            if (!backupDir.exists()) backupDir.mkdirs()
-            val backupFile = File(backupDir, "backup_${System.currentTimeMillis()}.db")
-            dbFile.copyTo(backupFile, overwrite = true)
+            require(backupDir.exists() || backupDir.mkdirs()) { "تعذر إنشاء مجلد النسخ" }
+            val stamp = System.currentTimeMillis()
+            val tempFile = File(backupDir, ".backup_${stamp}.tmp")
+            val backupFile = File(backupDir, "backup_${stamp}.db")
+            dbFile.copyTo(tempFile, overwrite = true)
+            if (!tempFile.renameTo(backupFile)) {
+                tempFile.copyTo(backupFile, overwrite = true)
+                tempFile.delete()
+            }
+            require(backupFile.exists() && backupFile.length() > 0L) { "فشل إنشاء ملف النسخة" }
+            recordBackupHistory(backupFile.absolutePath, checksum = sha256File(backupFile), startedAtMillis = stamp, completedAtMillis = System.currentTimeMillis())
             backupFile.absolutePath
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun restoreDatabase(path: String): Boolean {
-        dbLock.lock()
-        return try {
-            val dbFile = contextRef.getDatabasePath(DB_NAME)
-            val backupFile = File(path)
-            if (backupFile.exists()) {
-                backupFile.copyTo(dbFile, overwrite = true)
-                true
-            } else false
-        } catch (e: Exception) {
-            false
-        } finally {
-            dbLock.unlock()
-        }
-    }
+    fun restoreDatabase(path: String): Boolean = restoreDatabaseSafe(path).optBoolean("success", false)
 
     fun exportToCSV(tableName: String): String {
         dbLock.lock()

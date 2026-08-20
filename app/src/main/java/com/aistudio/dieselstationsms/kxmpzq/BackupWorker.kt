@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -112,6 +113,7 @@ class BackupWorker(
                 // 3. تصدير البيانات
                 // ====================================================
 
+                val startedAtMillis = System.currentTimeMillis()
                 val exportedData =
                     db.exportAllData()
 
@@ -230,71 +232,51 @@ class BackupWorker(
 
 
 
-                val file =
+                                val file =
                     File(
                         dir,
                         "${BACKUP_PREFIX}${timestamp}.enc"
                     )
-
-
-
-                file.writeText(encrypted)
-
-
-
-                // ====================================================
-                // 10. التحقق من الكتابة
-                // ====================================================
-
-                if (!file.exists()
-                    || file.length() == 0L
-                ) {
-
-                    throw IOException(
-                        "Backup file creation failed"
-                    )
+                val tempFile = File(dir, ".${BACKUP_PREFIX}${timestamp}.tmp")
+                tempFile.writeText(encrypted)
+                if (!tempFile.renameTo(file)) {
+                    tempFile.copyTo(file, overwrite = true)
+                    tempFile.delete()
                 }
 
+                // ====================================================
+                // 10. التحقق من الكتابة وIntegrity
+                // ====================================================
 
-
-                Log.d(
-                    TAG,
-                    "Backup completed successfully"
+                if (!file.exists() || file.length() == 0L) {
+                    throw IOException("Backup file creation failed")
+                }
+                val checksum = sha256File(file)
+                val completedAtMillis = System.currentTimeMillis()
+                db.recordBackupHistory(
+                    path = file.absolutePath,
+                    backupType = "full",
+                    backupMethod = "automatic",
+                    checksum = checksum,
+                    encrypted = true,
+                    encryptionMethod = "AES256_GCM_HKDF_4KB",
+                    status = "success",
+                    startedAtMillis = startedAtMillis,
+                    completedAtMillis = completedAtMillis
                 )
 
-
-                Log.d(
-                    TAG,
-                    "Path: ${file.absolutePath}"
-                )
-
-
-                Log.d(
-                    TAG,
-                    "Size: ${file.length()} bytes"
-                )
-
-
+                Log.d(TAG, "Backup completed successfully")
+                Log.d(TAG, "Path: ${file.absolutePath}")
+                Log.d(TAG, "Size: ${file.length()} bytes")
+                Log.d(TAG, "SHA-256: $checksum")
 
                 return Result.success(
-
                     androidx.work.Data.Builder()
-
-                        .putString(
-                            "backup_path",
-                            file.absolutePath
-                        )
-
-                        .putString(
-                            "backup_size",
-                            file.length().toString()
-                        )
-
-                        .putString(
-                            "backup_timestamp",
-                            timestamp
-                        )
-
+                        .putString("backup_path", file.absolutePath)
+                        .putString("backup_size", file.length().toString())
+                        .putString("backup_timestamp", timestamp)
+                        .putString("backup_checksum", checksum)
+                        .putBoolean("integrity_verified", true)
                         .build()
                 )
 
@@ -442,17 +424,11 @@ class BackupWorker(
 
             val requiredKeys =
                 arrayOf(
-
-                    "parties",
-                    "tanks",
-                    "pumps",
-                    "sales",
-                    "sms_logs",
-                    "activity_logs",
-                    "employees",
-                    "stock_alerts",
-                    "system_settings"
-
+                    "parties", "sales_transactions", "tanks", "pumps", "users", "employees",
+                    "shifts", "notifications", "sms_logs", "fuel_types", "products",
+                    "payments", "deliveries", "maintenance_requests", "assets",
+                    "backup_history", "restore_history", "system_settings", "user_activity_log",
+                    "audit_logs", "sync_logs"
                 )
 
 
@@ -598,6 +574,16 @@ class BackupWorker(
 
 
 
+
+    private fun sha256File(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var read: Int
+            while (input.read(buffer).also { read = it } > 0) digest.update(buffer, 0, read)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
     // ================================================================
     // تنظيف النسخ القديمة

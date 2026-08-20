@@ -5070,6 +5070,51 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getBackupHealth(): String {
+            DebugLogger.info("WebAppInterface", "getBackupHealth called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية قراءة حالة النسخ")
+            return try { dataResponse(db.getBackupHealth()) } catch (e: Exception) { DebugLogger.logException("BackupHealth", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getRestorePreview(path: String): String {
+            DebugLogger.info("WebAppInterface", "getRestorePreview called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية معاينة الاستعادة")
+            return try { dataResponse(db.getRestorePreview(path)) } catch (e: Exception) { DebugLogger.logException("RestorePreview", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun checkDatabaseIntegrity(): String {
+            DebugLogger.info("WebAppInterface", "checkDatabaseIntegrity called")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية فحص سلامة قاعدة البيانات")
+            return try { dataResponse(JSONObject().put("integrity_ok", db.checkIntegrity()).put("schema_version", DatabaseHelper.VERSION)) } catch (e: Exception) { DebugLogger.logException("DatabaseIntegrity", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun restoreDatabaseSafe(path: String): String {
+            DebugLogger.info("WebAppInterface", "restoreDatabaseSafe called")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية الاستعادة")
+            val job = activity.lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val result = db.restoreDatabaseSafe(path)
+                    withContext(Dispatchers.Main) { activity.safeEvaluateJs("window.onRestoreSafeResult && window.onRestoreSafeResult(${result})") }
+                } catch (e: Exception) {
+                    val failure = JSONObject().put("success", false).put("error", e.message ?: "فشلت الاستعادة الآمنة")
+                    withContext(Dispatchers.Main) { activity.safeEvaluateJs("window.onRestoreSafeResult && window.onRestoreSafeResult($failure)") }
+                    DebugLogger.logException("RestoreSafe", e)
+                }
+            }
+            activity.backgroundJob?.cancel()
+            activity.backgroundJob = job
+            return JSONObject().put("success", true).put("status", "processing").toString()
+        }
+
+        @JavascriptInterface
         fun restoreDatabase(path: String): String {
             DebugLogger.info("WebAppInterface", "restoreDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
