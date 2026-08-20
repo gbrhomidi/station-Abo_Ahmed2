@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ═══════════════════════════════════════════════════════════════
+   محطة أبو أحمد - إعدادات FileProvider (مُحسّنة وآمنة)
+  ═══════════════════════════════════════════════════════════════
+  
+  ⚠️ تحذير أمني:
+  - لا تستخدم path="." أو path="/" أبداً (تعرض جميع الملفات)
+  - استخدم مسارات محددة فقط
+  - تجنب root-path إلا في الحالات الضرورية جداً
+  
+  التحسينات:
+  1. إزالة المسارات العامة (path=".")
+  2. استخدام مسارات محددة ومقيدة
+  3. إضافة تعليقات توثيقية
+  4. تنظيم المسارات حسب الاستخدام
+  5. إضافة مسار مخصص للفواتير PDF
+  ═══════════════════════════════════════════════════════════════
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ═══ المسارات الداخلية (Internal Storage) ═══ -->
+    
+    <!-- 
+      files-path: /data/data/<package>/files/
+      استخدام: النسخ الاحتياطية، التقارير، البيانات الحساسة
+    -->
+    <files-path
+        name="app_backups"
+        path="backups/" />
+    
+    <files-path
+        name="app_reports"
+        path="reports/" />
+    
+    <files-path
+        name="app_invoices"
+        path="invoices/" />
+    
+    <files-path
+        name="app_exports"
+        path="exports/" />
+
+    <!-- ═══ ذاكرة التخزين المؤقت (Cache) ═══ -->
+    
+    <!-- 
+      cache-path: /data/data/<package>/cache/
+      استخدام: الملفات المؤقتة، الصور المؤقتة
+    -->
+    <cache-path
+        name="app_temp_files"
+        path="temp/" />
+    
+    <cache-path
+        name="app_crash_logs"
+        path="crashes/" />
+
+    <!-- ═══ التخزين الخارجي (External Storage) ═══ -->
+    
+    <!-- 
+      external-files-path: /storage/emulated/0/Android/data/<package>/files/
+      استخدام: ملفات كبيرة، صور، فيديوهات
+    -->
+    <external-files-path
+        name="app_external_docs"
+        path="documents/" />
+    
+    <external-files-path
+        name="app_external_images"
+        path="images/" />
+
+    <!-- 
+      external-cache-path: /storage/emulated/0/Android/data/<package>/cache/
+      استخدام: ملفات مؤقتة كبيرة
+    -->
+    <external-cache-path
+        name="app_external_temp"
+        path="temp/" />
+
+</paths>
