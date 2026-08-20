@@ -552,11 +552,13 @@ class SmsProcessor(
             val now =
                 System.currentTimeMillis()
 
+            val contextExpiry = ctx.expiresAt.takeIf { it > 0L }
+                ?: (ctx.timestamp + CONTEXT_TIMEOUT_MS)
             val isContextReply =
                 ctx.awaitingResponse &&
+                    ctx.pendingAction.isNotBlank() &&
                     ctx.timestamp > 0L &&
-                    now - ctx.timestamp in
-                    0..CONTEXT_TIMEOUT_MS
+                    now < contextExpiry
 
             /*
              * Rate limiting.
@@ -3908,12 +3910,8 @@ class SmsProcessor(
             when (ctx.pendingAction) {
 
                 "awaiting_quantity" -> {
-
-                    if (
-                        Regex(""".*\d+.*""")
-                            .matches(msgBody)
-                    ) {
-
+                    val quantityInfo = intentDetector.parseQuantity(msgBody)
+                    if (quantityInfo.liters > 0.0 || intentDetector.containsQuantityExpression(msgBody)) {
                         val prefs =
                             conversationManager
                                 .getOrCreatePreferences(

@@ -32,7 +32,11 @@ class SmsCognitiveConversationEngine(
             aiUnderstanding.status == "UNDERSTOOD" &&
             aiUnderstanding.confidence >= 0.65 &&
             aiUnderstanding.intent != "unknown"
-        val intent = if (aiAccepted) {
+        val deterministicIsContextual = context.awaitingResponse &&
+            context.pendingAction.isNotBlank() &&
+            deterministicIntent.intent in CONTEXTUAL_DETERMINISTIC_INTENTS
+        val aiMayOverrideIntent = aiAccepted && !deterministicIsContextual
+        val intent = if (aiMayOverrideIntent) {
             SmsIntentDetector.IntentResult(
                 intent = aiUnderstanding!!.intent,
                 confidence = (aiUnderstanding.confidence * 100.0).toInt().coerceIn(0, 100),
@@ -42,9 +46,9 @@ class SmsCognitiveConversationEngine(
             deterministicIntent
         }
         val known = linkedMapOf<String, String>()
-        if (aiAccepted) known.putAll(aiUnderstanding!!.entities)
+        if (aiMayOverrideIntent) known.putAll(aiUnderstanding!!.entities)
         val assumptions = mutableListOf<String>()
-        if (aiAccepted) assumptions += aiUnderstanding!!.assumptions
+        if (aiMayOverrideIntent) assumptions += aiUnderstanding!!.assumptions
         val contradictions = mutableListOf<SmsContradiction>()
         var referenceResolved = false
 
@@ -87,7 +91,7 @@ class SmsCognitiveConversationEngine(
 
         val complaintCategory = if (intent.intent == "complaint") classifyComplaint(normalized) else null
         val missing = mutableListOf<String>()
-        if (aiAccepted) missing += aiUnderstanding!!.missingEntities
+        if (aiMayOverrideIntent) missing += aiUnderstanding!!.missingEntities
         if (intent.intent == "diesel_request" || context.pendingAction.startsWith("awaiting_")) {
             if (!known.containsKey("quantity_liters")) missing += "quantity"
             if (!known.containsKey("location")) missing += "location"
@@ -148,5 +152,16 @@ class SmsCognitiveConversationEngine(
         val displayDay = when (dayOffset) { 0 -> "اليوم"; 1 -> "غداً"; else -> "بعد غد" }
         val displayWindow = when (startHour) { 8 -> "صباحاً"; 15 -> "بعد العصر"; 18 -> "مساءً"; else -> "الوقت المحدد" }
         return SmsTemporalWindow("$displayDay $displayWindow", start, end, 0.82)
+    }
+
+    companion object {
+        private val CONTEXTUAL_DETERMINISTIC_INTENTS = setOf(
+            "quantity_response",
+            "quantity_ambiguous",
+            "location_response",
+            "time_response",
+            "confirm_order",
+            "cancel_order"
+        )
     }
 }

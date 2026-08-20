@@ -49,6 +49,7 @@ class SmsConversationManager(private val db: DatabaseHelper) {
          * 10 دقائق.
          */
         private const val CONTEXT_TIMEOUT_MS = 600000L
+        private const val PENDING_CONTEXT_TIMEOUT_MS = 24L * 60L * 60L * 1000L
 
         /**
          * الحد الأقصى لسجل التفاعلات المحفوظ لكل عميل.
@@ -307,10 +308,7 @@ class SmsConversationManager(private val db: DatabaseHelper) {
 
         val cached = contextCache[cleanPhone]
 
-        if (
-            cached != null &&
-            now - cached.timestamp < CONTEXT_TIMEOUT_MS
-        ) {
+        if (cached != null && isContextUsable(cached, now)) {
             return@withContext cached
         }
 
@@ -343,13 +341,23 @@ class SmsConversationManager(private val db: DatabaseHelper) {
                         "timestamp",
                         now
                     )
+                val savedPendingAction = CursorGetString(it, "pending_action")
+                val savedAwaitingResponse = cursorGetInt(it, "awaiting_response") == 1
+                val savedExpiresAt = cursorGetLong(it, "expires_at", 0L)
+                val pendingExpiry = savedTimestamp + PENDING_CONTEXT_TIMEOUT_MS
+                val fallbackExpiry = savedTimestamp + CONTEXT_TIMEOUT_MS
+                val effectiveExpiresAt = if (savedAwaitingResponse && savedPendingAction.isNotBlank()) {
+                    maxOf(savedExpiresAt, pendingExpiry)
+                } else {
+                    savedExpiresAt.takeIf { expiry -> expiry > 0L } ?: fallbackExpiry
+                }
 
                 /**
-                 * السياق منتهي الصلاحية.
+                 * السياق منتهي الصلاحية، مع احترام expires_at للصفوف الجديدة.
                  */
                 if (
                     savedTimestamp <= 0L ||
-                    now - savedTimestamp >= CONTEXT_TIMEOUT_MS
+                    now >= effectiveExpiresAt
                 ) {
 
                     ConversationContext()
@@ -360,8 +368,8 @@ class SmsConversationManager(private val db: DatabaseHelper) {
                         lastTopic = CursorGetString(it, "last_topic"),
                         lastIntent = CursorGetString(it, "last_intent"),
                         timestamp = savedTimestamp,
-                        pendingAction = CursorGetString(it, "pending_action"),
-                        awaitingResponse = cursorGetInt(it, "awaiting_response") == 1,
+                        pendingAction = savedPendingAction,
+                        awaitingResponse = savedAwaitingResponse,
                         conversationId = CursorGetString(it, "conversation_id").ifBlank { UUID.randomUUID().toString() },
                         actorId = cursorGetLong(it, "actor_id").takeIf { id -> id > 0L },
                         conversationType = CursorGetString(it, "conversation_type", "sms"),
@@ -370,7 +378,7 @@ class SmsConversationManager(private val db: DatabaseHelper) {
                         orderId = cursorGetLong(it, "order_id").takeIf { id -> id > 0L },
                         draftId = CursorGetString(it, "draft_id"),
                         version = cursorGetLong(it, "version"),
-                        expiresAt = cursorGetLong(it, "expires_at", savedTimestamp + CONTEXT_TIMEOUT_MS),
+                        expiresAt = effectiveExpiresAt,
                         lastInboundMessageId = CursorGetString(it, "last_inbound_message_id"),
                         lastOutboundMessageId = CursorGetString(it, "last_outbound_message_id"),
                         retryCount = cursorGetInt(it, "retry_count"),
@@ -445,14 +453,20 @@ class SmsConversationManager(private val db: DatabaseHelper) {
          * ولكنه يحمل timestamp قديمًا.
          */
         ctx.timestamp = System.currentTimeMillis()
-        ctx.expiresAt = ctx.timestamp + CONTEXT_TIMEOUT_MS
+        ctx.expiresAt = ctx.timestamp + if (ctx.awaitingResponse && ctx.pendingAction.isNotBlank()) {
+            PENDING_CONTEXT_TIMEOUT_MS
+        } else {
+            CONTEXT_TIMEOUT_MS
+        }
         ctx.version = (ctx.version + 1L).coerceAtLeast(1L)
 
         val existingData = db.readableDatabase.rawQuery(
             "SELECT data_json FROM sms_conversation_context WHERE phone = ? LIMIT 1",
             arrayOf(cleanPhone)
         ).use { if (it.moveToFirst()) it.getString(0) else "{}" }
-        val mergedJson = runCatching { JSONObject(existingData) }.getOrElse { JSONObject() }
+        val mergedJson = runCatching { JSONObject(existingData) }
+            .onFailure { error -> Log.e(TAG, "Failed to decode context data for phone=$cleanPhone", error) }
+            .getOrElse { JSONObject() }
         ctx.data.forEach { (key, value) -> mergedJson.put(key, value.take(1000)) }
         val dataJson = mergedJson.toString()
 
@@ -508,12 +522,15 @@ class SmsConversationManager(private val db: DatabaseHelper) {
                 put("status", ctx.status)
             }
 
-        db.writableDatabase.insertWithOnConflict(
+        val rowId = db.writableDatabase.insertWithOnConflict(
             "sms_conversation_context",
             null,
             values,
             SQLiteDatabase.CONFLICT_REPLACE
         )
+        if (rowId == -1L) {
+            Log.e(TAG, "Conversation context persistence failed for phone=$cleanPhone")
+        }
 
         contextCache[cleanPhone] = ctx
     }
@@ -1056,7 +1073,9 @@ class SmsConversationManager(private val db: DatabaseHelper) {
             "SELECT data_json FROM sms_conversation_context WHERE phone = ? LIMIT 1",
             arrayOf(phone)
         ).use { if (it.moveToFirst()) it.getString(0) else null } ?: return null
-        val json = runCatching { JSONObject(jsonText) }.getOrNull() ?: return null
+        val json = runCatching { JSONObject(jsonText) }
+            .onFailure { error -> Log.e(TAG, "Failed to decode durable draft for phone=$phone", error) }
+            .getOrNull() ?: return null
         if (json.optString("draft_status").isBlank()) return null
         return OrderDraft(
             product = normalizeProduct(json.optString("draft_product", PRODUCT_DIESEL)),
@@ -1076,39 +1095,65 @@ class SmsConversationManager(private val db: DatabaseHelper) {
     }
 
     private fun persistDurableDraft(phone: String, draft: OrderDraft) {
-        sanitizeOrderDraft(draft)
-        val current = db.readableDatabase.rawQuery(
-            "SELECT data_json FROM sms_conversation_context WHERE phone = ? LIMIT 1",
-            arrayOf(phone)
-        ).use { if (it.moveToFirst()) it.getString(0) else "{}" }
-        val json = runCatching { JSONObject(current) }.getOrElse { JSONObject() }
-        draft.version += 1L
-        json.put("draft_id", draft.draftId)
-        json.put("draft_product", draft.product)
-        json.put("draft_quantity_liters", draft.quantityLiters)
-        json.put("draft_quantity_dabbas", draft.quantityDabbas)
-        json.put("draft_location", draft.deliveryLocation)
-        json.put("draft_time", draft.deliveryTime)
-        json.put("draft_timestamp", draft.deliveryTimestamp)
-        json.put("draft_unit_price", draft.unitPrice)
-        json.put("draft_total", draft.totalAmount)
-        json.put("draft_status", draft.status)
-        json.put("draft_step", draft.step)
-        json.put("draft_created_at", draft.createdAt)
-        json.put("draft_version", draft.version)
-        db.writableDatabase.update(
-            "sms_conversation_context",
-            ContentValues().apply {
+        try {
+            sanitizeOrderDraft(draft)
+            val current = db.readableDatabase.rawQuery(
+                "SELECT data_json FROM sms_conversation_context WHERE phone = ? LIMIT 1",
+                arrayOf(phone)
+            ).use { if (it.moveToFirst()) it.getString(0) else "{}" }
+            val json = runCatching { JSONObject(current) }
+                .onFailure { error -> Log.e(TAG, "Failed to decode existing draft JSON for phone=$phone", error) }
+                .getOrElse { JSONObject() }
+            draft.version += 1L
+            json.put("draft_id", draft.draftId)
+            json.put("draft_product", draft.product)
+            json.put("draft_quantity_liters", draft.quantityLiters)
+            json.put("draft_quantity_dabbas", draft.quantityDabbas)
+            json.put("draft_location", draft.deliveryLocation)
+            json.put("draft_time", draft.deliveryTime)
+            json.put("draft_timestamp", draft.deliveryTimestamp)
+            json.put("draft_unit_price", draft.unitPrice)
+            json.put("draft_total", draft.totalAmount)
+            json.put("draft_status", draft.status)
+            json.put("draft_step", draft.step)
+            json.put("draft_created_at", draft.createdAt)
+            json.put("draft_version", draft.version)
+            val values = ContentValues().apply {
                 put("data_json", json.toString())
                 put("draft_id", draft.draftId)
                 put("current_state", "ORDER_DRAFT")
                 put("status", "ACTIVE")
                 put("version", draft.version)
                 put("updated_at", DatabaseHelper.getDateOnlyFormat().format(java.util.Date()))
-            },
-            "phone = ?",
-            arrayOf(phone)
-        )
+            }
+            val database = db.writableDatabase
+            val updated = database.update(
+                "sms_conversation_context",
+                values,
+                "phone = ?",
+                arrayOf(phone)
+            )
+            if (updated == 0) {
+                val inserted = database.insertWithOnConflict(
+                    "sms_conversation_context",
+                    null,
+                    ContentValues(values).apply {
+                        put("phone", phone)
+                        put("last_topic", "order")
+                        put("last_intent", "diesel_request")
+                        put("timestamp", System.currentTimeMillis())
+                        put("pending_action", "")
+                        put("awaiting_response", 0)
+                    },
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+                if (inserted == -1L) {
+                    Log.e(TAG, "Durable draft UPSERT failed for phone=$phone")
+                }
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "Durable draft persistence failed for phone=$phone", error)
+        }
     }
 
     private fun clearDurableDraft(phone: String) {
@@ -1340,9 +1385,7 @@ class SmsConversationManager(private val db: DatabaseHelper) {
          * سياق المحادثة.
          */
         contextCache.entries.removeIf { entry ->
-
-            now - entry.value.timestamp >=
-                CONTEXT_TIMEOUT_MS
+            !isContextUsable(entry.value, now)
         }
 
         /**
@@ -1367,6 +1410,21 @@ class SmsConversationManager(private val db: DatabaseHelper) {
          * لمجرد مرور الوقت، لأنها بيانات تفضيلات/جدولة
          * وليست سياق محادثة مؤقتًا.
          */
+    }
+
+    private fun isContextUsable(ctx: ConversationContext, now: Long): Boolean {
+        if (ctx.timestamp <= 0L) return false
+        val fallbackExpiry = ctx.timestamp + if (ctx.awaitingResponse && ctx.pendingAction.isNotBlank()) {
+            PENDING_CONTEXT_TIMEOUT_MS
+        } else {
+            CONTEXT_TIMEOUT_MS
+        }
+        val expiry = if (ctx.awaitingResponse && ctx.pendingAction.isNotBlank()) {
+            maxOf(ctx.expiresAt, fallbackExpiry)
+        } else {
+            ctx.expiresAt.takeIf { it > 0L } ?: fallbackExpiry
+        }
+        return now < expiry
     }
 
     /**

@@ -2125,7 +2125,7 @@ class SmsIntentDetector {
             liters <= MAX_QUANTITY_LITERS
     }
 
-    private fun containsQuantityExpression(
+    internal fun containsQuantityExpression(
         msg: String
     ): Boolean {
 
