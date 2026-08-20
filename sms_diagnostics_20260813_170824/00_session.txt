@@ -1,7 +1,0 @@
-===== SMS DIAGNOSTIC SESSION =====
-Date: 2026-08-13 17:08:25 +0300
-Project: /storage/emulated/0/Download/station-Abo_Ahmed-akeer/Fuel2_stations2
-Diagnostic directory: sms_diagnostics_20260813_170824
-
-===== DIRECTORY CREATED =====
-OK
