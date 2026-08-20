@@ -48,8 +48,6 @@
             --channel-sms: #2196F3;
             --channel-email: #4CAF50;
             --channel-push: #FF9800;
-            --channel-whatsapp: #25D366;
-            --channel-telegram: #0088cc;
             --channel-inapp: #9C27B0;
         }
 
@@ -89,8 +87,6 @@
             --channel-sms: #2196F3;
             --channel-email: #4CAF50;
             --channel-push: #FF9800;
-            --channel-whatsapp: #25D366;
-            --channel-telegram: #0088cc;
             --channel-inapp: #9C27B0;
         }
 
@@ -1035,8 +1031,6 @@
             <button class="filter-chip" data-filter="sms" onclick="setFilter('sms', this)">💬 SMS</button>
             <button class="filter-chip" data-filter="email" onclick="setFilter('email', this)">📧 Email</button>
             <button class="filter-chip" data-filter="push" onclick="setFilter('push', this)">🔔 Push</button>
-            <button class="filter-chip" data-filter="whatsapp" onclick="setFilter('whatsapp', this)">💚 WhatsApp</button>
-            <button class="filter-chip" data-filter="telegram" onclick="setFilter('telegram', this)">✈️ Telegram</button>
             <button class="filter-chip" data-filter="in_app" onclick="setFilter('in_app', this)">📱 In-App</button>
         </div>
     </header>
@@ -1194,8 +1188,6 @@
                             <option value="sms">💬 SMS</option>
                             <option value="email">📧 Email</option>
                             <option value="push">🔔 Push</option>
-                            <option value="whatsapp">💚 WhatsApp</option>
-                            <option value="telegram">✈️ Telegram</option>
                             <option value="in_app">📱 In-App</option>
                         </select>
                     </div>
@@ -1503,8 +1495,6 @@
                 'sms': '💬 SMS',
                 'email': '📧 Email',
                 'push': '🔔 Push',
-                'whatsapp': '💚 WhatsApp',
-                'telegram': '✈️ Telegram',
                 'in_app': '📱 In-App'
             };
             return map[channel] || channel || 'غير محدد';
@@ -1515,8 +1505,6 @@
                 'sms': 'sms',
                 'email': 'email',
                 'push': 'push',
-                'whatsapp': 'whatsapp',
-                'telegram': 'telegram',
                 'in_app': 'inapp'
             };
             return map[channel] || 'default';
@@ -1643,7 +1631,7 @@
                 filtered = filtered.filter(t => t.is_active == 1 || t.is_active === true);
             } else if (currentFilter === 'inactive') {
                 filtered = filtered.filter(t => t.is_active == 0 || t.is_active === false);
-            } else if (['sms', 'email', 'push', 'whatsapp', 'telegram', 'in_app'].includes(currentFilter)) {
+            } else if (['sms', 'email', 'push', 'in_app'].includes(currentFilter)) {
                 filtered = filtered.filter(t => (t.channel || '').toLowerCase() === currentFilter);
             }
 
@@ -2238,7 +2226,6 @@
                                 <p>إعدادات نظام قوالب الإشعارات</p>
                                 <ul style="list-style:none;padding:0;text-align:center;">
                                     <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 عدد القوالب المحملة: ${allTemplates.length}</li>
-                                    <li style="padding:8px 0;border-bottom:var(--border-width) var(--border-style) var(--border-color);">🔹 القنوات المدعومة: SMS, Email, Push, WhatsApp, Telegram, In-App</li>
                                     <li style="padding:8px 0;">🔹 دعم المتغيرات: {variable}</li>
                                 </ul>
                                 <button class="submit-btn" onclick="showToast('تم حفظ الإعدادات', 'success')" style="margin-top:12px;">حفظ الإعدادات</button>

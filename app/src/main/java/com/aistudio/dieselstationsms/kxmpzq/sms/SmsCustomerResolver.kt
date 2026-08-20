@@ -130,7 +130,6 @@ class SmsCustomerResolver(
      *      ├── party_contacts
      *      │       ├── phone
      *      │       ├── phone2
-     *      │       └── whatsapp
      *      │
      *      ├── party_addresses
      *      │
@@ -232,7 +231,6 @@ class SmsCustomerResolver(
      * party_contacts:
      * - phone
      * - phone2
-     * - whatsapp
      *
      * party_addresses:
      * - address_line1
@@ -267,13 +265,12 @@ class SmsCustomerResolver(
             variants.joinToString(
                 separator = " OR "
             ) {
-                "(pc.phone = ? OR pc.phone2 = ? OR pc.whatsapp = ?)"
+                "(pc.phone = ? OR pc.phone2 = ?)"
             }
 
         val args = mutableListOf<String>()
 
         variants.forEach { variant ->
-            args.add(variant)
             args.add(variant)
             args.add(variant)
         }
@@ -299,7 +296,6 @@ class SmsCustomerResolver(
 
                 pc.phone AS contact_phone,
                 pc.phone2 AS contact_phone2,
-                pc.whatsapp AS contact_whatsapp,
                 pc.email AS email,
 
                 pa.address_line1 AS address_line1,
@@ -354,9 +350,6 @@ class SmsCustomerResolver(
                     WHEN pc.phone2 IN (
                         ${variants.joinToString(",") { "?" }}
                     ) THEN 1
-                    WHEN pc.whatsapp IN (
-                        ${variants.joinToString(",") { "?" }}
-                    ) THEN 2
                     ELSE 3
                 END,
 
@@ -390,13 +383,6 @@ class SmsCustomerResolver(
 
         /*
          * ORDER BY pc.phone2 IN (...)
-         */
-        variants.forEach {
-            finalArgs.add(it)
-        }
-
-        /*
-         * ORDER BY pc.whatsapp IN (...)
          */
         variants.forEach {
             finalArgs.add(it)
@@ -472,13 +458,12 @@ class SmsCustomerResolver(
             variants.joinToString(
                 separator = " OR "
             ) {
-                "(pc.phone = ? OR pc.phone2 = ? OR pc.whatsapp = ?)"
+                "(pc.phone = ? OR pc.phone2 = ?)"
             }
 
         val args = mutableListOf<String>()
 
         variants.forEach { variant ->
-            args.add(variant)
             args.add(variant)
             args.add(variant)
         }
@@ -503,9 +488,6 @@ class SmsCustomerResolver(
                     WHEN pc.phone2 IN (
                         ${variants.joinToString(",") { "?" }}
                     ) THEN 1
-                    WHEN pc.whatsapp IN (
-                        ${variants.joinToString(",") { "?" }}
-                    ) THEN 2
                     ELSE 3
                 END,
                 p.id ASC
@@ -1202,7 +1184,6 @@ class SmsCustomerResolver(
      *
      * - party_contacts.phone
      * - party_contacts.phone2
-     * - party_contacts.whatsapp
      *
      * ولا نعتمد على parties.phone لأنه غير موجود في المخطط الحالي.
      */
@@ -1228,7 +1209,7 @@ class SmsCustomerResolver(
                 variants.joinToString(
                     separator = " OR "
                 ) {
-                    "(pc.phone = ? OR pc.phone2 = ? OR pc.whatsapp = ?)"
+                    "(pc.phone = ? OR pc.phone2 = ?)"
                 }
 
             val args =
@@ -1259,9 +1240,6 @@ class SmsCustomerResolver(
                         WHEN pc.phone2 IN (
                             ${variants.joinToString(",") { "?" }}
                         ) THEN 1
-                        WHEN pc.whatsapp IN (
-                            ${variants.joinToString(",") { "?" }}
-                        ) THEN 2
                         ELSE 3
                     END,
                     CASE
@@ -2465,8 +2443,7 @@ class SmsCustomerResolver(
      *
      * 1. phone
      * 2. phone2
-     * 3. whatsapp
-     * 4. fallback المرسل إلى الدالة
+     * 3. fallback المرسل إلى الدالة
      */
     private fun getCustomerPhone(
         cursor: Cursor,
@@ -2485,17 +2462,10 @@ class SmsCustomerResolver(
                 "contact_phone2"
             )
 
-        val whatsapp =
-            getStringSafe(
-                cursor,
-                "contact_whatsapp"
-            )
-
         val candidates =
             listOf(
                 partyPhone,
                 phone2,
-                whatsapp,
                 fallback
             )
 

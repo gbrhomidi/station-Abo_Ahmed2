@@ -187,7 +187,6 @@ class SmsReplyManager(
             val prepared = SmsBudgetManager.prepare(normalizedMessage)
             val effectiveConversationId = conversationId ?: resolveConversationId(normalizedPhone)
             val effectiveEventId = eventId ?: UUID.randomUUID().toString()
-            val channel = resolveChannel(normalizedPhone)
             val result = SmsOutboxRepository.enqueue(
                 db = db,
                 recipient = normalizedPhone,
@@ -195,7 +194,6 @@ class SmsReplyManager(
                 eventId = effectiveEventId,
                 conversationId = effectiveConversationId,
                 businessEntityId = businessEntityId,
-                channel = channel,
                 dedupeKey = dedupeKey
             ) ?: run {
                 logSmsSafely(normalizedPhone, prepared.body, "$STATUS_FAILED: outbox rejected")
@@ -588,19 +586,6 @@ class SmsReplyManager(
         }.getOrNull()
     }
 
-    private fun resolveChannel(phone: String): String {
-        return runCatching {
-            db.readableDatabase.rawQuery(
-                "SELECT data_json FROM sms_conversation_context WHERE phone = ? LIMIT 1",
-                arrayOf(phone)
-            ).use { cursor ->
-                if (!cursor.moveToFirst()) return@use "sms"
-                val data = cursor.getString(0).orEmpty()
-                JSONObject(data).optString("channel", "sms").lowercase()
-                    .takeIf { it == "whatsapp" } ?: "sms"
-            }
-        }.getOrDefault("sms")
-    }
 
     private fun buildDedupeKey(phone: String, message: String): String {
         val normalizedMessage = message.trim().replace(Regex("\\s+"), " ")

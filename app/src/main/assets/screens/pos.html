@@ -1282,59 +1282,6 @@
       cursor: pointer;
       font-weight: bold;
     }
-    .whatsapp-modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 2000;
-      justify-content: center;
-      align-items: center;
-      backdrop-filter: blur(5px);
-    }
-    .whatsapp-modal-content {
-      background: var(--card-color);
-      border-radius: 16px;
-      padding: 20px;
-      width: 90%;
-      max-width: 400px;
-      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
-      text-align: center;
-      animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      border: 1px solid rgba(255,255,255,0.1);
-      position: relative;
-      overflow: hidden;
-    }
-    .whatsapp-modal-content::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 5px;
-      background: linear-gradient(to right, #25D366, #128C7E);
-      border-radius: 16px 16px 0 0;
-    }
-    .whatsapp-input {
-      width: 100%;
-      padding: 12px;
-      border-radius: 8px;
-      border: 2px solid var(--input-border-light);
-      font-size: 1rem;
-      margin-bottom: 15px;
-      background: var(--card-color);
-      color: var(--text-color);
-      box-sizing: border-box;
-      transition: all 0.3s;
-    }
-    .whatsapp-input:focus {
-      border-color: #25D366;
-      box-shadow: 0 0 8px rgba(37, 211, 102, 0.3);
-      outline: none;
-    }
     .daily-report-container {
       display: none;
       margin-top: 20px;
@@ -2667,7 +2614,6 @@
     <div class="action-buttons">
       <button class="btn btn-success" id="completeSaleBtn">ترحيل الفاتورة</button>
       <button class="btn btn-primary" id="printReceiptBtn">طباعة</button>
-      <button class="btn btn-info" id="sendWhatsAppBtn">واتساب</button>
     </div>
   </div>
   
@@ -2779,17 +2725,6 @@
     </div>
   </div>
 
-  <!-- نموذج واتساب -->
-  <div id="whatsappModal" class="whatsapp-modal">
-    <div class="whatsapp-modal-content">
-      <div class="modal-title">إرسال الفاتورة عبر واتساب</div>
-      <input type="text" id="whatsappPhone" class="whatsapp-input" placeholder="أدخل رقم الهاتف بدون الرمز الدولي" dir="ltr">
-      <div style="margin-top: 15px;">
-        <button class="modal-btn modal-btn-cancel" onclick="closeModal('whatsappModal')">إلغاء</button>
-        <button class="modal-btn modal-btn-primary" id="sendWhatsAppConfirmBtn">إرسال</button>
-      </div>
-    </div>
-  </div>
 
   <!-- نموذج استرجاع الفواتير -->
   <div id="invoiceRetrieveModal" class="modal">
@@ -2975,7 +2910,6 @@ function apiCall(action, params) {
             case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
             case 'salesReport': raw = AndroidInterface.salesReport(); break;
             case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
-            case 'sendWhatsApp': return Promise.resolve({ success: true, whatsapp_deeplink: `https://wa.me/${encodeURIComponent(p.phone || '')}`, message: 'سيتم فتح واتساب لإرسال الفاتورة المعروضة' });
             default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
         }
         return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
@@ -3456,37 +3390,6 @@ function printReceipt() {
         .finally(() => showLoading(false));
 }
 
-function sendWhatsAppReceipt() {
-    const invoiceNumber = lastInvoiceNumber;
-    if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
-    document.getElementById('whatsappModal').style.display = 'flex';
-    document.getElementById('whatsappPhone').value = '';
-    document.getElementById('whatsappPhone').focus();
-}
-
-function confirmWhatsAppSend() {
-    const phone = document.getElementById('whatsappPhone').value.trim();
-    const invoiceNumber = lastInvoiceNumber;
-    if (!phone) { showToast('يرجى إدخال رقم الهاتف', 'error'); return; }
-    if (!invoiceNumber) { showToast('لا توجد فاتورة للإرسال', 'error'); return; }
-
-    showLoading(true);
-    apiCall('sendWhatsApp', { phone: phone, invoice_number: invoiceNumber })
-        .then(data => {
-            if (data.success) {
-                window.location.href = data.whatsapp_deeplink;
-                setTimeout(() => {
-                    if (!document.hidden) window.open(data.fallback_url, '_blank');
-                }, 2000);
-                closeModal('whatsappModal');
-                showToast('جاري فتح واتساب لإرسال الفاتورة', 'success');
-            } else {
-                showToast(data.message || 'فشل الإرسال عبر واتساب', 'error');
-            }
-        })
-        .catch(error => { showToast('حدث خطأ أثناء الإرسال', 'error'); })
-        .finally(() => showLoading(false));
-}
 
 // ============================================================
 // 9. دوال العملاء
@@ -4085,8 +3988,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('toggleScanBtn').addEventListener('click', toggleScanner);
     document.getElementById('saveNewCustomerBtn').addEventListener('click', saveNewCustomer);
     document.getElementById('printReceiptBtn').addEventListener('click', printReceipt);
-    document.getElementById('sendWhatsAppBtn').addEventListener('click', sendWhatsAppReceipt);
-    document.getElementById('sendWhatsAppConfirmBtn').addEventListener('click', confirmWhatsAppSend);
     document.getElementById('addCustomerBtn').addEventListener('click', () => { /* يمكن إضافة منطق */ });
     document.getElementById('clearCustomerBtn').addEventListener('click', function() {
         document.getElementById('customerId').value = '';

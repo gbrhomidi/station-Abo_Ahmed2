@@ -1598,10 +1598,6 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">واتساب</label>
-                        <input type="tel" class="form-input" id="whatsapp" placeholder="رقم واتساب">
-                    </div>
-                    <div class="form-group">
                         <label class="form-label">جهة اتصال أساسية</label>
                         <select class="form-input" id="isPrimaryContact">
                             <option value="1">نعم</option>
@@ -2607,7 +2603,7 @@
             if (!partyType) { showToast('❌ الرجاء اختيار نوع الطرف', 'error'); document.getElementById('partyType').focus(); return; }
             if (!phone) { showToast('❌ الرجاء إدخال رقم الهاتف', 'error'); document.getElementById('phone').focus(); return; }
             const contacts = collectContacts();
-            if (contacts.length === 0) contacts.push({ contact_name: commercialName, phone, phone2: document.getElementById('phone2').value.trim(), email: document.getElementById('email').value.trim(), whatsapp: document.getElementById('whatsapp').value.trim(), is_primary: true });
+            if (contacts.length === 0) contacts.push({ contact_name: commercialName, phone, phone2: document.getElementById('phone2').value.trim(), email: document.getElementById('email').value.trim(), is_primary: true });
             const data = {
                 id: currentEditId || 0,
                 party_code: partyCode,
@@ -2672,7 +2668,7 @@
                 const meta = getPartyMeta(bundle);
                 document.getElementById('partyGroup').value = meta.group;
                 document.getElementById('partyTags').value = meta.tags.join(', ');
-                const contacts = Array.isArray(bundle.contacts) && bundle.contacts.length ? bundle.contacts : [{ contact_name: bundle.commercial_name || '', phone: bundle.phone || '', phone2: bundle.phone2 || '', email: bundle.email || '', whatsapp: bundle.whatsapp || '', is_primary: true }];
+                const contacts = Array.isArray(bundle.contacts) && bundle.contacts.length ? bundle.contacts : [{ contact_name: bundle.commercial_name || '', phone: bundle.phone || '', phone2: bundle.phone2 || '', email: bundle.email || '', is_primary: true }];
                 renderContacts(contacts);
                 const address = Array.isArray(bundle.addresses) && bundle.addresses.length ? bundle.addresses[0] : bundle;
                 document.getElementById('addressLine1').value = address.address_line1 || bundle.address || '';

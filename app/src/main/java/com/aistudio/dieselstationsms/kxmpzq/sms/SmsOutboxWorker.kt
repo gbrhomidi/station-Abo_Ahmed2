@@ -7,7 +7,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
-import com.aistudio.dieselstationsms.kxmpzq.whatsapp.WhatsAppCloudAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -28,13 +27,8 @@ class SmsOutboxWorker(
         while (processed < MAX_BATCH) {
             val job = SmsOutboxRepository.claimNext(db) ?: break
             try {
-                if (job.channel == "whatsapp") {
-                    val response = WhatsAppCloudAdapter(applicationContext).sendText(job.recipient, job.body)
-                    SmsOutboxRepository.markExternalSent(db, job.messageId, response.messageId)
-                } else {
-                    SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
-                    SmsTransport(applicationContext).send(job)
-                }
+                SmsOutboxRepository.prepareParts(db, job.messageId, job.partsCount)
+                SmsTransport(applicationContext).send(job)
             } catch (securityException: SecurityException) {
                 SmsOutboxRepository.markFailed(db, job.messageId, "SEND_SMS_PERMISSION", securityException.message.orEmpty(), retry = false)
                 SmsFailureNotificationPublisher.publishForMessage(applicationContext, db, job.messageId)

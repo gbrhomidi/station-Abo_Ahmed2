@@ -15,7 +15,7 @@ import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
  * المسؤولية:
  * - حل هوية العميل/الطرف المرتبط برقم SMS.
  * - استخدام party_contacts كمصدر الهاتف الأساسي.
- * - دعم phone / phone2 / whatsapp.
+ * - دعم phone / phone2.
  * - عدم افتراض وجود أعمدة قديمة في parties.
  * - توفير fallback آمن فقط عند وجود أعمدة الهاتف القديمة.
  *
@@ -280,7 +280,7 @@ class SmsPartyGateway(
         incomingPhone: String
     ): PartyMatch? {
 
-        val phoneColumns = listOf("phone", "phone2", "whatsapp")
+        val phoneColumns = listOf("phone", "phone2")
             .filter {
                 columnExists(
                     database,

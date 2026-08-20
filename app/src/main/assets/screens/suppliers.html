@@ -1916,10 +1916,6 @@
                     <i class="fas fa-file-pdf" style="color:var(--error)"></i>
                     <span>PDF</span>
                 </div>
-                <div class="export-option" onclick="exportTelegram()">
-                    <i class="fab fa-telegram" style="color:#0088cc"></i>
-                    <span>Telegram</span>
-                </div>
                 <div class="export-option" onclick="printSuppliers()">
                     <i class="fas fa-print" style="color:var(--primary-color)"></i>
                     <span>طباعة</span>
@@ -3308,25 +3304,6 @@
             hapticFeedback('success');
         }
 
-        function exportTelegram() {
-            let message = '🏭 *قائمة الموردين*\n\n';
-            message += 'إجمالي الموردين: ' + allSuppliers.length + '\n';
-            message += 'النشطين: ' + allSuppliers.filter(s => getField(s, 'is_active', 'isActive') == 1).length + '\n';
-            message += 'المبلغ المستحق: ' + formatCurrency(allSuppliers.reduce((sum, s) => sum + parseFloat(getField(s,
-                'current_balance', 'currentBalance', 'balance') || 0), 0)) + '\n\n';
-            allSuppliers.slice(0, 10).forEach((s, idx) => {
-                const name = getField(s, 'commercial_name', 'commercialName', 'name') || 'مورد';
-                const balance = parseFloat(getField(s, 'current_balance', 'currentBalance', 'balance') || 0);
-                message += (idx + 1) + '. ' + name + ' - ' + formatCurrency(balance) + '\n';
-            });
-            if (allSuppliers.length > 10) message += '\n... و ' + (allSuppliers.length - 10) + ' مورد آخر';
-            const telegramUrl = 'https://t.me/share/url?url=' + encodeURIComponent(window.location.href) + '&text=' +
-                encodeURIComponent(message);
-            window.open(telegramUrl, '_blank');
-            closeExport();
-            showToast('✅ تم فتح Telegram للمشاركة', 'success');
-            hapticFeedback('success');
-        }
 
         function printSuppliers() {
             const printWindow = window.open('', '_blank');

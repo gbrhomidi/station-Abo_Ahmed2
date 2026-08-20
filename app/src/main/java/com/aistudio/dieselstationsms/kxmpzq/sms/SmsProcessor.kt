@@ -259,55 +259,6 @@ class SmsProcessor(
             }
         }
 
-    /** يمرر WhatsApp إلى نفس محرك المحادثة والأعمال بعد تطبيع القناة. */
-    suspend fun processChannelMessage(
-        envelope: com.aistudio.dieselstationsms.kxmpzq.messaging.ChannelMessageEnvelope
-    ): Boolean = withContext(Dispatchers.IO) {
-        val rawBody = envelope.text.trim()
-        val sender = PhoneUtils.normalize(envelope.senderId).orEmpty()
-        if (sender.isBlank() || rawBody.isBlank()) return@withContext false
-        val dedupeBody = "${envelope.channel.name}:${envelope.externalMessageId}:$rawBody"
-        val hash = security.generateMessageHash(sender, dedupeBody)
-        val claim = when (val result = security.claimSms(hash, sender, rawBody)) {
-            is SmsSecurity.SmsClaimResult.Claimed -> result.claim
-            SmsSecurity.SmsClaimResult.AlreadyProcessed,
-            SmsSecurity.SmsClaimResult.InProgress,
-            SmsSecurity.SmsClaimResult.Unavailable -> return@withContext false
-        }
-        try {
-            val customer = customerResolver.findCustomer(sender)
-                ?: createPublicSmsCustomer(sender)
-            val ctx = conversationManager.getOrCreateContext(sender).apply {
-                data["channel"] = envelope.channel.name.lowercase(Locale.ROOT)
-                data["external_message_id"] = envelope.externalMessageId.take(240)
-                data["display_name"] = envelope.displayName.take(120)
-                data["reply_to_external_id"] = envelope.replyToExternalId.orEmpty().take(240)
-                lastInboundMessageId = envelope.externalMessageId.take(240)
-            }
-            conversationManager.saveContext(sender, ctx)
-            val rate = security.canProcessMessage(
-                sender,
-                customerDisplayName(customer),
-                ctx.awaitingResponse
-            )
-            if (rate is SmsSecurity.RateLimitResult.BLOCKED) {
-                security.completeSmsClaim(claim, sender, rawBody)
-                return@withContext false
-            }
-            val result = handleSmartMessage(
-                customer = customer,
-                msgBody = rawBody.lowercase(Locale.getDefault()),
-                rawBody = rawBody,
-                inboundEventId = envelope.externalMessageId.ifBlank { UUID.randomUUID().toString() }
-            )
-            security.completeSmsClaim(claim, sender, rawBody)
-            result
-        } catch (error: Exception) {
-            security.releaseSmsClaim(claim)
-            Log.e(TAG, "Channel message processing failed: ${error.javaClass.simpleName}", error)
-            false
-        }
-    }
 
     /**
      * معالجة رسالة SMS واحدة.

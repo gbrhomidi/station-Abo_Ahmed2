@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 25
+        const val VERSION = 26
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -189,6 +189,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     22 -> createSmsCognitiveTables(db)
                     23 -> migrateV23ToV24(db)
                     24 -> migrateV24ToV25(db)
+                    25 -> cleanupRetiredChannelArtifacts(db)
                 }
             }
             ensureDeliveriesSchema(db)
@@ -653,12 +654,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun migrateV23ToV24(db: SQLiteDatabase) {
         ensureColumn(db, "sms_outbox", "channel", "TEXT NOT NULL DEFAULT 'sms'")
         ensureColumn(db, "sms_outbox", "provider_message_id", "TEXT")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_channel_status ON sms_outbox(channel, status, next_attempt_at)")
         Log.d(TAG, "Migrated channel-aware outbox schema to V24 successfully")
     }
 
     private fun migrateV24ToV25(db: SQLiteDatabase) {
-        createSmsChannelDeliveryEventsTable(db)
         Log.d(TAG, "Migrated channel delivery events schema to V25 successfully")
     }
 
@@ -1877,7 +1876,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 phone VARCHAR(20),
                 phone2 VARCHAR(20),
                 email VARCHAR(100),
-                whatsapp VARCHAR(20),
                 is_primary INTEGER DEFAULT 0,
                 is_billing INTEGER DEFAULT 0,
                 is_technical INTEGER DEFAULT 0,
@@ -1981,7 +1979,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 phone VARCHAR(20),
                 phone2 VARCHAR(20),
                 email VARCHAR(100),
-                whatsapp VARCHAR(20),
                 address TEXT,
                 license_number VARCHAR(50),
                 license_type VARCHAR(20),
@@ -3772,7 +3769,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 template_code VARCHAR(30) UNIQUE NOT NULL,
                 template_name VARCHAR(100) NOT NULL,
                 template_name_ar VARCHAR(100),
-                channel VARCHAR(20) NOT NULL CHECK(channel IN ('sms', 'email', 'push', 'whatsapp', 'telegram', 'in_app')),
+                channel VARCHAR(20) NOT NULL CHECK(channel IN ('sms', 'email', 'push', 'in_app')),
                 subject TEXT,
                 body TEXT NOT NULL,
                 body_ar TEXT,
@@ -3799,7 +3796,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 message TEXT NOT NULL,
                 message_ar TEXT,
                 priority VARCHAR(10) DEFAULT 'normal' CHECK(priority IN ('low', 'normal', 'high', 'urgent')),
-                channel VARCHAR(20) DEFAULT 'in_app' CHECK(channel IN ('sms', 'email', 'push', 'whatsapp', 'telegram', 'in_app')),
+                channel VARCHAR(20) DEFAULT 'in_app' CHECK(channel IN ('sms', 'email', 'push', 'in_app')),
                 status VARCHAR(20) DEFAULT 'pending' CHECK(status IN ('pending', 'queued', 'sent', 'failed', 'read', 'cancelled')),
                 is_read INTEGER DEFAULT 0,
                 read_at DATETIME,
@@ -5259,8 +5256,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_status_next ON sms_outbox(status, next_attempt_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_conversation ON sms_outbox(conversation_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_event ON sms_outbox(event_id)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_outbox_channel_status ON sms_outbox(channel, status, next_attempt_at)")
-        createSmsChannelDeliveryEventsTable(db)
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_outbox_parts (
@@ -5558,22 +5553,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_human_review_status_time ON sms_human_review_tasks(status, created_at)")
     }
 
-    private fun createSmsChannelDeliveryEventsTable(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS sms_channel_delivery_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_key TEXT NOT NULL UNIQUE,
-                channel TEXT NOT NULL,
-                provider_message_id TEXT NOT NULL,
-                recipient TEXT,
-                status TEXT NOT NULL,
-                error_json TEXT,
-                occurred_at INTEGER NOT NULL,
-                created_at INTEGER NOT NULL
-            )
-        """)
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_channel_delivery_provider ON sms_channel_delivery_events(channel, provider_message_id)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_channel_delivery_status ON sms_channel_delivery_events(status, occurred_at)")
+
+    private fun cleanupRetiredChannelArtifacts(db: SQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS sms_channel_delivery_events")
+        db.execSQL("DROP INDEX IF EXISTS idx_sms_channel_delivery_provider")
+        db.execSQL("DROP INDEX IF EXISTS idx_sms_channel_delivery_status")
+        db.execSQL("UPDATE sms_outbox SET channel = 'sms', provider_message_id = NULL WHERE channel IS NULL OR channel <> 'sms'")
+        db.execSQL("UPDATE notification_templates SET channel = 'in_app' WHERE channel NOT IN ('sms', 'email', 'push', 'in_app')")
+        db.execSQL("UPDATE notifications SET channel = 'in_app' WHERE channel NOT IN ('sms', 'email', 'push', 'in_app')")
     }
 
     private fun createSmsProcessedTable(db: SQLiteDatabase) {
@@ -9510,11 +9497,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     private fun smsContactPhoneMatchSql(alias: String = "pc"): String {
         fun expression(column: String) =
             "substr(replace(replace(replace(replace(replace(COALESCE($alias.$column, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -9) = ?"
-        return listOf("phone", "phone2", "whatsapp").joinToString(" OR ") { expression(it) }
+        return listOf("phone", "phone2").joinToString(" OR ") { expression(it) }
     }
 
     private fun smsContactPhoneArgs(national: String): Array<String> =
-        arrayOf(national, national, national)
+        arrayOf(national, national)
 
     private fun smsCleanPhoneSql(alias: String, column: String): String =
         "substr(replace(replace(replace(replace(replace(COALESCE($alias.$column, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -9)"
@@ -9524,7 +9511,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val messagePhone = smsCleanPhoneSql(messageAlias, "phone_number")
         val contactPhone = smsCleanPhoneSql("pc", "phone")
         val contactPhone2 = smsCleanPhoneSql("pc", "phone2")
-        val contactWhatsapp = smsCleanPhoneSql("pc", "whatsapp")
         return """
             (SELECT COALESCE(
                 NULLIF(TRIM(pc.contact_name_ar), ''),
@@ -9536,7 +9522,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
              FROM party_contacts pc
              INNER JOIN parties p ON p.id = pc.party_id
              WHERE pc.is_deleted = 0 AND pc.is_active = 1 AND p.is_deleted = 0
-               AND (($contactPhone = $messagePhone) OR ($contactPhone2 = $messagePhone) OR ($contactWhatsapp = $messagePhone))
+               AND (($contactPhone = $messagePhone) OR ($contactPhone2 = $messagePhone))
              ORDER BY CASE WHEN pc.is_primary = 1 THEN 0 ELSE 1 END, pc.id ASC
              LIMIT 1) AS resolved_owner_name
         """.trimIndent()
@@ -11352,7 +11338,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "drivers" -> OperationalTableSpec(
                 table = "drivers",
-                columns = listOf("driver_code", "party_id", "vehicle_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "phone", "phone2", "email", "whatsapp", "address", "license_number", "license_type", "license_issue_date", "license_expiry_date", "license_issuing_authority", "license_doc_path", "hire_date", "job_title", "salary", "emergency_name", "emergency_phone", "emergency_relation", "status", "termination_date", "termination_reason", "remarks", "extra_data"),
+                columns = listOf("driver_code", "party_id", "vehicle_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "phone", "phone2", "email", "address", "license_number", "license_type", "license_issue_date", "license_expiry_date", "license_issuing_authority", "license_doc_path", "hire_date", "job_title", "salary", "emergency_name", "emergency_phone", "emergency_relation", "status", "termination_date", "termination_reason", "remarks", "extra_data"),
                 required = listOf("driver_code", "full_name"),
                 searchColumns = listOf("driver_code", "full_name", "full_name_ar", "phone", "license_number"),
                 softDeleted = true,
@@ -12712,7 +12698,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(code.isNotBlank()) { "كود القالب مطلوب" }
         require(name.isNotBlank()) { "اسم القالب مطلوب" }
         require(body.isNotBlank()) { "محتوى القالب مطلوب" }
-        require(channel in setOf("sms", "email", "push", "whatsapp", "telegram", "in_app")) { "قناة القالب غير صالحة" }
+        require(channel in setOf("sms", "email", "push", "in_app")) { "قناة القالب غير صالحة" }
         dbLock.lock()
         return try {
             val now = getCurrentDateTime()
@@ -12745,7 +12731,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val body = data.optString("body", "").trim()
         require(name.isNotBlank()) { "اسم القالب مطلوب" }
         require(body.isNotBlank()) { "محتوى القالب مطلوب" }
-        require(channel in setOf("sms", "email", "push", "whatsapp", "telegram", "in_app")) { "قناة القالب غير صالحة" }
+        require(channel in setOf("sms", "email", "push", "in_app")) { "قناة القالب غير صالحة" }
         dbLock.lock()
         return try {
             val rows = writableDatabase.update("notification_templates", ContentValues().apply {
@@ -13974,7 +13960,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             db.rawQuery(
                 """SELECT id, uuid, party_id, contact_name, contact_name_ar, job_title,
-                          department, phone, phone2, email, whatsapp,
+                          department, phone, phone2, email,
                           is_primary, is_billing, is_technical, is_active,
                           created_at, updated_at
                    FROM party_contacts
@@ -14003,7 +13989,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("phone", data.optString("phone", ""))
                 put("phone2", data.optString("phone2", ""))
                 put("email", data.optString("email", ""))
-                put("whatsapp", data.optString("whatsapp", ""))
                 put("is_primary", if (data.optBoolean("is_primary", false)) 1 else 0)
                 put("is_billing", if (data.optBoolean("is_billing", false)) 1 else 0)
                 put("is_technical", if (data.optBoolean("is_technical", false)) 1 else 0)
@@ -14031,7 +14016,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 data.optString("phone")?.let { if (it.isNotEmpty()) put("phone", it) }
                 data.optString("phone2")?.let { if (it.isNotEmpty()) put("phone2", it) }
                 data.optString("email")?.let { if (it.isNotEmpty()) put("email", it) }
-                data.optString("whatsapp")?.let { if (it.isNotEmpty()) put("whatsapp", it) }
                 if (data.has("is_primary")) put("is_primary", if (data.optBoolean("is_primary")) 1 else 0)
                 if (data.has("is_billing")) put("is_billing", if (data.optBoolean("is_billing")) 1 else 0)
                 if (data.has("is_technical")) put("is_technical", if (data.optBoolean("is_technical")) 1 else 0)
@@ -15186,7 +15170,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("phone", contact.optString("phone").trim())
                     put("phone2", contact.optString("phone2").trim())
                     put("email", contact.optString("email").trim())
-                    put("whatsapp", contact.optString("whatsapp").trim())
                     put("is_primary", if (contact.optBoolean("is_primary", i == 0)) 1 else 0)
                     put("is_billing", if (contact.optBoolean("is_billing", false)) 1 else 0)
                     put("is_technical", if (contact.optBoolean("is_technical", false)) 1 else 0)

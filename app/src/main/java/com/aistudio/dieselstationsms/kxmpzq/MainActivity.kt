@@ -1290,17 +1290,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleCustomUrl(url: String): Boolean {
         return when {
-            url.startsWith("whatsapp://") -> {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(intent)
-                    true
-                } catch (e: Exception) {
-                    Toast.makeText(this, "تطبيق واتساب غير مثبت", Toast.LENGTH_SHORT).show()
-                    DebugLogger.warn("CustomUrl", "WhatsApp not installed")
-                    false
-                }
-            }
             url.startsWith("fb://") || url.startsWith("facebook://") -> {
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -2274,53 +2263,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return JSONObject().put("status", "processing").toString()
         }
 
-        @JavascriptInterface
-        fun getWhatsAppCloudConfig(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة إعداد WhatsApp")
-            return dataResponse(com.aistudio.dieselstationsms.kxmpzq.whatsapp.WhatsAppCloudAdapter(this@MainActivity).publicConfig())
-        }
-
-        @JavascriptInterface
-        fun configureWhatsAppCloud(
-            enabled: Boolean,
-            graphVersion: String,
-            phoneNumberId: String,
-            accessToken: String,
-            verifyToken: String,
-            appSecret: String,
-            businessAccountId: String
-        ): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تعديل إعداد WhatsApp")
-            return try {
-                val store = com.aistudio.dieselstationsms.kxmpzq.whatsapp.WhatsAppCloudConfigStore(this@MainActivity)
-                val previous = store.get()
-                store.save(
-                    com.aistudio.dieselstationsms.kxmpzq.whatsapp.WhatsAppCloudConfig(
-                        enabled = enabled,
-                        graphVersion = graphVersion.trim().ifBlank { previous.graphVersion },
-                        phoneNumberId = phoneNumberId.trim().ifBlank { previous.phoneNumberId },
-                        accessToken = accessToken.trim().ifBlank { previous.accessToken },
-                        verifyToken = verifyToken.trim().ifBlank { previous.verifyToken },
-                        appSecret = appSecret.trim().ifBlank { previous.appSecret },
-                        businessAccountId = businessAccountId.trim().ifBlank { previous.businessAccountId }
-                    )
-                )
-                getWhatsAppCloudConfig()
-            } catch (e: Exception) {
-                errorResponse("تعذر حفظ إعداد WhatsApp الآمن")
-            }
-        }
-
-        @JavascriptInterface
-        fun clearWhatsAppCloudConfig(): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية حذف إعداد WhatsApp")
-            return try {
-                com.aistudio.dieselstationsms.kxmpzq.whatsapp.WhatsAppCloudConfigStore(this@MainActivity).clear()
-                dataResponse(JSONObject().put("cleared", true))
-            } catch (e: Exception) {
-                errorResponse("تعذر مسح إعداد WhatsApp")
-            }
-        }
 
         @JavascriptInterface
         fun sendToAI(message: String): String {

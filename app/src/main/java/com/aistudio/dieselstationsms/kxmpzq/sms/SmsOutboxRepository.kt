@@ -18,7 +18,6 @@ object SmsOutboxRepository {
         val partsCount: Int,
         val attemptCount: Int,
         val subscriptionId: Int?,
-        val channel: String = "sms"
     )
 
     data class EnqueueResult(
@@ -34,7 +33,6 @@ object SmsOutboxRepository {
         eventId: String? = null,
         conversationId: String? = null,
         businessEntityId: String? = null,
-        channel: String = "sms",
         priority: SmsBudgetManager.Priority = SmsBudgetManager.Priority.NORMAL,
         subscriptionId: Int? = null,
         dedupeKey: String? = null
@@ -45,9 +43,8 @@ object SmsOutboxRepository {
 
         val now = System.currentTimeMillis()
         val messageId = UUID.randomUUID().toString()
-        val safeChannel = channel.trim().lowercase().takeIf { it in setOf("sms", "whatsapp") } ?: "sms"
         val safeDedupe = dedupeKey ?: sha256(
-            listOf(safeChannel, cleanRecipient, prepared.body, eventId.orEmpty(), conversationId.orEmpty()).joinToString("|")
+            listOf("sms", cleanRecipient, prepared.body, eventId.orEmpty(), conversationId.orEmpty()).joinToString("|")
         )
         val database = db.writableDatabase
         database.beginTransaction()
@@ -57,10 +54,10 @@ object SmsOutboxRepository {
                 put("event_id", eventId)
                 put("conversation_id", conversationId)
                 put("business_entity_id", businessEntityId)
-                put("channel", safeChannel)
+                put("channel", "sms")
                 put("recipient", cleanRecipient)
                 put("body", prepared.body)
-                put("parts_count", if (safeChannel == "whatsapp") 1 else prepared.partsCount)
+                put("parts_count", prepared.partsCount)
                 put("priority", priority.name)
                 put("status", "QUEUED")
                 put("attempt_count", 0)
@@ -98,7 +95,7 @@ object SmsOutboxRepository {
             }
             database.insertWithOnConflict("sms_messages", null, logValues, SQLiteDatabase.CONFLICT_IGNORE)
             database.setTransactionSuccessful()
-            return EnqueueResult(messageId, "QUEUED", if (safeChannel == "whatsapp") 1 else prepared.partsCount)
+            return EnqueueResult(messageId, "QUEUED", prepared.partsCount)
         } finally {
             database.endTransaction()
         }
@@ -110,7 +107,7 @@ object SmsOutboxRepository {
         try {
             val job = database.rawQuery(
                 """
-                SELECT message_id, recipient, body, parts_count, attempt_count, subscription_id, channel
+                SELECT message_id, recipient, body, parts_count, attempt_count, subscription_id
                 FROM sms_outbox
                 WHERE status IN ('QUEUED','RETRY_PENDING') AND next_attempt_at <= ?
                 ORDER BY CASE priority WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, created_at ASC
@@ -124,8 +121,7 @@ object SmsOutboxRepository {
                     body = cursor.getString(2),
                     partsCount = cursor.getInt(3),
                     attemptCount = cursor.getInt(4),
-                    subscriptionId = if (cursor.isNull(5)) null else cursor.getInt(5),
-                    channel = cursor.getString(6).orEmpty().ifBlank { "sms" }
+                    subscriptionId = if (cursor.isNull(5)) null else cursor.getInt(5)
                 )
             }
             if (job != null) {
@@ -155,97 +151,11 @@ object SmsOutboxRepository {
         update(db, messageId, "SENDING", ContentValues().apply { put("sent_at", now); put("status", "DELIVERY_PENDING") }, now, "sent")
     }
 
-    fun markExternalSent(
-        db: DatabaseHelper,
-        messageId: String,
-        providerMessageId: String,
-        now: Long = System.currentTimeMillis()
-    ) {
-        update(
-            db,
-            messageId,
-            "SENDING",
-            ContentValues().apply {
-                put("sent_at", now)
-                put("status", "DELIVERY_PENDING")
-                put("provider_message_id", providerMessageId.take(240))
-            },
-            now,
-            "sent"
-        )
-    }
 
     fun markDelivered(db: DatabaseHelper, messageId: String, now: Long = System.currentTimeMillis()) {
         update(db, messageId, "DELIVERY_PENDING", ContentValues().apply { put("delivered_at", now); put("status", "DELIVERED") }, now, "delivered")
     }
 
-    fun recordExternalStatus(
-        db: DatabaseHelper,
-        providerMessageId: String,
-        recipient: String,
-        status: String,
-        errorJson: String = "",
-        occurredAt: Long = System.currentTimeMillis()
-    ): Boolean {
-        val normalizedStatus = status.trim().lowercase()
-        if (providerMessageId.isBlank() || normalizedStatus !in setOf("sent", "delivered", "read", "failed")) return false
-        val database = db.writableDatabase
-        database.beginTransaction()
-        try {
-            val eventKey = sha256("whatsapp|$providerMessageId|$normalizedStatus|$occurredAt")
-            val inserted = database.insertWithOnConflict(
-                "sms_channel_delivery_events",
-                null,
-                ContentValues().apply {
-                    put("event_key", eventKey)
-                    put("channel", "whatsapp")
-                    put("provider_message_id", providerMessageId.take(240))
-                    put("recipient", recipient.take(80))
-                    put("status", normalizedStatus)
-                    put("error_json", errorJson.take(1500))
-                    put("occurred_at", occurredAt)
-                    put("created_at", System.currentTimeMillis())
-                },
-                SQLiteDatabase.CONFLICT_IGNORE
-            )
-            val messageId = database.rawQuery(
-                "SELECT message_id FROM sms_outbox WHERE channel = 'whatsapp' AND provider_message_id = ? LIMIT 1",
-                arrayOf(providerMessageId)
-            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-            if (messageId != null) {
-                when (normalizedStatus) {
-                    "sent" -> database.update(
-                        "sms_outbox",
-                        ContentValues().apply { put("status", "DELIVERY_PENDING"); put("sent_at", occurredAt) },
-                        "message_id = ? AND status IN ('SENDING','DELIVERY_PENDING')",
-                        arrayOf(messageId)
-                    )
-                    "delivered", "read" -> database.update(
-                        "sms_outbox",
-                        ContentValues().apply { put("status", "DELIVERED"); put("delivered_at", occurredAt) },
-                        "message_id = ? AND status IN ('SENDING','DELIVERY_PENDING','DELIVERED')",
-                        arrayOf(messageId)
-                    )
-                    "failed" -> database.update(
-                        "sms_outbox",
-                        ContentValues().apply {
-                            put("status", "FAILED")
-                            put("failed_at", occurredAt)
-                            put("failure_code", "WHATSAPP_PROVIDER_FAILED")
-                            put("failure_reason", errorJson.take(500))
-                        },
-                        "message_id = ? AND status IN ('SENDING','DELIVERY_PENDING')",
-                        arrayOf(messageId)
-                    )
-                }
-                syncLegacyStatus(database, messageId, if (normalizedStatus == "failed") "failed" else if (normalizedStatus == "sent") "sent" else "delivered", occurredAt)
-            }
-            database.setTransactionSuccessful()
-            return inserted != -1L || messageId != null
-        } finally {
-            database.endTransaction()
-        }
-    }
 
     fun markFailed(db: DatabaseHelper, messageId: String, code: String, reason: String, retry: Boolean, now: Long = System.currentTimeMillis()) {
         val status = if (retry) "RETRY_PENDING" else "FAILED"

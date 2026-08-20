@@ -48,8 +48,6 @@
             --channel-sms: #2196F3;
             --channel-email: #4CAF50;
             --channel-push: #FF9800;
-            --channel-whatsapp: #25D366;
-            --channel-telegram: #0088cc;
             --channel-inapp: #9C27B0;
             --priority-low: #6a7f94;
             --priority-normal: #2196F3;
@@ -93,8 +91,6 @@
             --channel-sms: #2196F3;
             --channel-email: #4CAF50;
             --channel-push: #FF9800;
-            --channel-whatsapp: #25D366;
-            --channel-telegram: #0088cc;
             --channel-inapp: #9C27B0;
             --priority-low: #94a3b8;
             --priority-normal: #2196F3;
@@ -429,8 +425,6 @@
         .badge-channel-sms { background: rgba(33,150,243,0.15); color: var(--channel-sms); }
         .badge-channel-email { background: rgba(76,175,80,0.15); color: var(--channel-email); }
         .badge-channel-push { background: rgba(255,152,0,0.15); color: var(--channel-push); }
-        .badge-channel-whatsapp { background: rgba(37,211,102,0.15); color: var(--channel-whatsapp); }
-        .badge-channel-telegram { background: rgba(0,136,204,0.15); color: var(--channel-telegram); }
         .badge-channel-inapp { background: rgba(156,39,176,0.15); color: var(--channel-inapp); }
         .badge-status-pending { background: rgba(255,152,0,0.15); color: var(--warning); }
         .badge-status-queued { background: rgba(33,150,243,0.15); color: var(--primary-color); }
@@ -1152,8 +1146,6 @@
                 'sms': '💬 SMS',
                 'email': '📧 Email',
                 'push': '🔔 Push',
-                'whatsapp': '💚 WhatsApp',
-                'telegram': '✈️ Telegram',
                 'in_app': '📱 In-App'
             };
             return map[channel] || channel || 'غير محدد';
@@ -1164,8 +1156,6 @@
                 'sms': 'sms',
                 'email': 'email',
                 'push': 'push',
-                'whatsapp': 'whatsapp',
-                'telegram': 'telegram',
                 'in_app': 'inapp'
             };
             return map[channel] || 'default';
@@ -1359,7 +1349,7 @@
                 filtered = filtered.filter(n => (n.priority || '').toLowerCase() === 'urgent');
             } else if (currentFilter === 'high') {
                 filtered = filtered.filter(n => (n.priority || '').toLowerCase() === 'high');
-            } else if (['sms', 'email', 'push', 'whatsapp', 'telegram', 'in_app'].includes(currentFilter)) {
+            } else if (['sms', 'email', 'push', 'in_app'].includes(currentFilter)) {
                 filtered = filtered.filter(n => (n.channel || '').toLowerCase() === currentFilter);
             }
 
@@ -1823,7 +1813,7 @@
                     showToast('✅ تم فتح الرابط', 'success');
                     return;
                 }
-                if (['tel:', 'mailto:', 'whatsapp:', 'fb:'].includes(protocol)) {
+                if (['tel:', 'mailto:', 'fb:'].includes(protocol)) {
                     window.location.href = value;
                     return;
                 }
