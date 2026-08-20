@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>نظام إدارة محطة الوقود – سجل تغيير الأسعار</title>
+    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+    <style>
+        /* ============================================================
+           المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
+           ============================================================ */
+        :root {
+            /* === الوضع الفاتح (Light Mode - افتراضي) === */
+            --bg-color: #f5efe6;
+            --surface-color: #faf3e8;
+            --surface-elevated: #fdf8f0;
+            --primary-color: #007ACC;
+            --primary-dim: rgba(0,122,204,0.12);
+            --accent-color: #d4a017;
+            --accent-dim: rgba(212,160,23,0.12);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #1a2a3a;
+            --text-muted: #6a7f94;
+            --border-color: #003366;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,122,204,0.08);
+            --glass-bg: rgba(255,248,240,0.85);
+            --header-bg: linear-gradient(135deg, #e8e0d5 0%, #d5cdc0 100%);
+            --card-hover-bg: rgba(0,122,204,0.04);
+            --primary-hover: #005f99;
+            --fab-shadow: rgba(0,122,204,0.3);
+            --toast-bg: #fdf8f0;
+            --scrollbar-track: #f5efe6;
+            --scrollbar-thumb: rgba(0,51,102,0.2);
+            --skeleton-bg: #e8e0d5;
+            --skeleton-shine: #f5efe6;
+            --modal-border-color: #003366;
+            --modal-border-style: dashed;
+            --input-bg: #fdf8f0;
+            --input-border: #003366;
+            --input-border-style: dashed;
+            --data-text-color: #1a2a3a;
+            --data-text-muted: #4a5a6a;
+        }
+
+        [data-theme="dark"] {
+            /* === الوضع المظلم (Dark Mode) === */
+            --bg-color: #0a0e1a;
+            --surface-color: #111827;
+            --surface-elevated: #1a2236;
+            --primary-color: #00d4ff;
+            --primary-dim: rgba(0,212,255,0.15);
+            --accent-color: #f59e0b;
+            --accent-dim: rgba(245,158,11,0.15);
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #e8d48b;
+            --border-style: dashed;
+            --border-width: 2px;
+            --shadow-glow: 0 0 20px rgba(0,212,255,0.1);
+            --glass-bg: rgba(22,34,64,0.85);
+            --header-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            --card-hover-bg: rgba(0,212,255,0.05);
+            --primary-hover: #00a7cc;
+            --fab-shadow: rgba(0,212,255,0.3);
+            --toast-bg: #1a2236;
+            --scrollbar-track: transparent;
+            --scrollbar-thumb: rgba(255,255,255,0.1);
+            --skeleton-bg: #1e293b;
+            --skeleton-shine: #2d3a4f;
+            --modal-border-color: #e8d48b;
+            --modal-border-style: dashed;
+            --input-bg: #1e293b;
+            --input-border: #e8d48b;
+            --input-border-style: dashed;
+            --data-text-color: #f1f5f9;
+            --data-text-muted: #94a3b8;
+        }
+
+        /* ============================================================
+           الأنماط الأساسية
+           ============================================================ */
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            direction: rtl;
+            overflow-x: hidden;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 80px;
+            transition: background 0.4s ease, color 0.4s ease;
+            touch-action: pan-y;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+
+        /* ===== Pull-to-Refresh Indicator ===== */
+        .pull-indicator {
+            position: fixed;
+            top: -60px;
+            left: 0;
+            right: 0;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            transition: top 0.2s ease;
+            z-index: 50;
+            background: var(--surface-elevated);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            pointer-events: none;
+        }
+        .pull-indicator.active { top: 0; }
+        .pull-indicator i { margin-left: 8px; transition: transform 0.3s; }
+        .pull-indicator.loading i { animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* ===== Loading ===== */
+        .loading-indicator {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(0,212,255,0.2);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        /* ===== Skeleton Loading ===== */
+        .skeleton-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0 16px 16px;
+        }
+        .skeleton-card {
+            background: var(--surface-elevated);
+            border-radius: 18px;
+            padding: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        .skeleton-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg,
+                transparent 0%,
+                var(--skeleton-shine) 50%,
+                transparent 100%);
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .skeleton-row {
+            height: 12px;
+            background: var(--skeleton-bg);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .skeleton-row.short { width: 40%; }
+        .skeleton-row.medium { width: 60%; }
+        .skeleton-row.long { width: 80%; }
+
+        /* ===== Offline Banner ===== */
+        .offline-banner {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: linear-gradient(90deg, var(--warning), #f97316);
+            color: #000;
+            text-align: center;
+            padding: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 2000;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+        }
+        .offline-banner.show { transform: translateY(0); }
+
+        /* ============================================================
+           الشريط العلوي (Header)
+           ============================================================ */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            background: var(--header-bg);
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            z-index: 100;
+            backdrop-filter: blur(20px);
+            transition: background 0.4s ease;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .top-title h2 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--primary-color), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 1rem;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn.has-badge::after {
+            content: '';
+            position: absolute;
+            top: 6px; right: 6px;
+            width: 8px; height: 8px;
+            background: var(--error);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--error);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        .ai-badge {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        /* ============================================================
+           البحث والفلاتر
+           ============================================================ */
+        .search-wrap {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 44px 12px 16px;
+            border-radius: 14px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-elevated);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .search-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .search-wrap i {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-chips {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .filter-chips::-webkit-scrollbar { display: none; }
+        .filter-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .filter-chip:active { transform: scale(0.95); }
+        .filter-chip.active {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .filter-chip:hover:not(.active) {
+            border-color: var(--text-muted);
+            color: var(--text-color);
+        }
+
+        /* ============================================================
+           بطاقات الإحصائيات
+           ============================================================ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        .stat-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 16px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .stat-card:active { transform: scale(0.96); }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-glow);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-icon {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+        }
+        .stat-icon.blue { background: var(--primary-dim); color: var(--primary-color); }
+        .stat-icon.green { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-icon.orange { background: var(--accent-dim); color: var(--accent-color); }
+        .stat-icon.red { background: rgba(239,68,68,0.15); color: var(--error); }
+        .stat-icon.purple { background: rgba(155,89,182,0.15); color: #9b59b6; }
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: var(--data-text-color);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .stat-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            margin-top: 8px;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+        .stat-trend.up { background: rgba(16,185,129,0.15); color: var(--success); }
+        .stat-trend.down { background: rgba(239,68,68,0.15); color: var(--error); }
+
+        @media (min-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        /* ============================================================
+           بطاقات البنوك والحسابات
+           ============================================================ */
+        .cards-container {
+            padding: 0 16px 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            touch-action: pan-y;
+        }
+
+        /* === Bank Card === */
+        .bank-card {
+            background: var(--surface-elevated);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 18px;
+            padding: 16px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+            touch-action: pan-y;
+        }
+        .bank-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            background: var(--card-hover-bg);
+        }
+        .bank-card.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-dim), 0 4px 20px rgba(0,212,255,0.1);
+        }
+        .bank-card:active { transform: scale(0.98); transition-duration: 0.05s; }
+
+        .bank-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        .bank-card .card-header .card-avatar {
+            width: 48px; height: 48px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: white;
+            flex-shrink: 0;
+        }
+        .bank-card .card-header .card-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .card-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
+        .card-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+
+        .bank-card .card-name {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--data-text-color);
+            margin-bottom: 2px;
+        }
+        .bank-card .card-code {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Arial', sans-serif;
+            margin-bottom: 8px;
+        }
+        .bank-card .card-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 12px;
+            margin: 8px 0 10px;
+        }
+        .bank-card .card-details .detail-item {
+            font-size: 0.8rem;
+            color: var(--data-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .bank-card .card-details .detail-item i {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .bank-card .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .bank-card .card-actions .card-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .bank-card .card-actions .card-btn:active { transform: scale(0.95); }
+        .bank-card .card-actions .card-btn:hover {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .bank-card .card-actions .card-btn.danger:hover {
+            background: rgba(239,68,68,0.15);
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        /* === Account Card (nested inside Bank Card or separate) === */
+        .account-card {
+            background: var(--surface-color);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            transition: all 0.3s;
+        }
+        .account-card:hover {
+            border-color: var(--primary-color);
+            background: var(--card-hover-bg);
+        }
+        .account-card .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .account-card .account-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--data-text-color);
+        }
+        .account-card .account-number {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Arial', sans-serif;
+        }
+        .account-card .account-balance {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--primary-color);
+        }
+        .account-card .account-details {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .account-card .account-details .badge-type {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .badge-type.current { background: rgba(16,185,129,0.15); color: var(--success); }
+        .badge-type.savings { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .badge-type.deposit { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .badge-type.loan { background: rgba(239,68,68,0.15); color: var(--error); }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
+
+        /* ============================================================
+           الزر العائم (FAB)
+           ============================================================ */
+        .fab {
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px var(--fab-shadow);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .fab:active { transform: scale(0.9); }
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 30px var(--fab-shadow);
+        }
+
+        /* ============================================================
+           القائمة الجانبية (Sidebar)
+           ============================================================ */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background: linear-gradient(145deg, #4B0082, #5a1a9a);
+            color: white;
+            width: 35px; height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50% 0 0 50%;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: -3px 0 10px rgba(0,0,0,0.4);
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.2);
+            touch-action: manipulation;
+        }
+        .sidebar-toggle:active { transform: translateY(-50%) scale(0.9); }
+        .sidebar-toggle.hidden { opacity: 0; pointer-events: none; }
+        .sidebar {
+            position: fixed;
+            top: 50%;
+            right: -90px;
+            transform: translateY(-50%);
+            width: 70px;
+            background: var(--surface-elevated);
+            z-index: 999;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            padding: 8px;
+            border-radius: 15px 0 0 15px;
+            overflow-y: auto;
+            box-shadow: -5px 0 20px rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            opacity: 0;
+        }
+        .sidebar.open { right: 0; opacity: 1; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-btn {
+            position: relative;
+            background: rgba(75, 0, 130, 0.8);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            padding: 8px 4px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            min-height: 55px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-family: 'Cairo', sans-serif;
+            touch-action: manipulation;
+        }
+        .sidebar-btn:active { transform: scale(0.95); }
+        .sidebar-btn:hover {
+            transform: scale(1.05);
+            background: rgba(75,0,130,0.35);
+            box-shadow: 0 0 15px rgba(0,212,255,0.2);
+        }
+        .sidebar-btn i { font-size: 1.1rem; }
+        .sidebar-btn span { font-size: 0.65rem; }
+
+        /* ============================================================
+           القائمة السفلية (Bottom Navigation)
+           ============================================================ */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: var(--border-width) var(--border-style) var(--border-color);
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 0 env(safe-area-inset-bottom, 8px) 0;
+            z-index: 300;
+        }
+        .bottom-nav .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.55rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            padding: 4px 8px;
+            position: relative;
+            touch-action: manipulation;
+            flex: 1;
+        }
+        .bottom-nav .nav-item:active { transform: scale(0.9); }
+        .bottom-nav .nav-item i { font-size: 18px; transition: all 0.3s; }
+        .bottom-nav .nav-item span { font-weight: 600; margin-top: 2px; }
+        .bottom-nav .nav-item.active { color: var(--primary-color); }
+        .bottom-nav .nav-item.active i { transform: translateY(-3px); text-shadow: 0 0 20px var(--primary-dim); }
+        .bottom-nav .nav-item.active::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 10px;
+        }
+
+        /* ============================================================
+           مودال التقارير
+           ============================================================ */
+        .report-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 900;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .report-modal-overlay.show { display: flex; opacity: 1; }
+        .report-modal {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .report-modal-overlay.show .report-modal { transform: translateY(0); }
+        .report-modal .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .report-modal .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .report-modal .modal-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .report-modal .modal-close:active { transform: scale(0.9); }
+        .report-modal .modal-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+        .report-filter-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .report-filter-row .form-group { margin-bottom: 0; }
+        .report-filter-row .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .report-filter-row .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .report-filter-row .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .report-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .report-actions .btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 700;
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .report-actions .btn:active { transform: scale(0.97); }
+        .report-actions .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            color: white;
+        }
+        .report-actions .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px var(--primary-dim);
+        }
+        .report-actions .btn-secondary {
+            background: var(--surface-color);
+            color: var(--text-muted);
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .report-actions .btn-secondary:hover { background: var(--border-color); }
+        .report-results {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+        }
+        .report-results table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+        .report-results table th {
+            background: var(--primary-dim);
+            color: var(--primary-color);
+            padding: 10px 12px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 700;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .report-results table td {
+            padding: 8px 12px;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+            text-align: center;
+            color: var(--data-text-color);
+        }
+        .report-results table tr:hover { background: var(--card-hover-bg); }
+        .report-results .empty-state {
+            padding: 30px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        /* ============================================================
+           مودال الإضافة / التعديل (البنوك والحسابات)
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            z-index: 800;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show { display: flex; opacity: 1; }
+        .modal {
+            background: var(--surface-elevated);
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-height: 92vh;
+            overflow-y: auto;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-bottom: none;
+        }
+        .modal-overlay.show .modal { transform: translateY(0); }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .modal-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            touch-action: manipulation;
+        }
+        .modal-close:active { transform: scale(0.9); }
+        .modal-close:hover {
+            background: var(--error);
+            color: white;
+            border-color: var(--error);
+        }
+
+        /* ===== حقول النموذج ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-family: 'Cairo', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px var(--primary-dim);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            color: white;
+            font-family: 'Cairo', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 8px;
+            touch-action: manipulation;
+        }
+        .submit-btn:active { transform: scale(0.97); }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px var(--primary-dim);
+        }
+
+        /* ============================================================
+           مودال تفاصيل البنك/الحساب
+           ============================================================ */
+        .details-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(12px);
+            z-index: 850;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            overflow-y: auto;
+        }
+        .details-overlay.show { display: block; opacity: 1; }
+        .details-content {
+            background: var(--surface-elevated);
+            min-height: 100vh;
+            padding: 20px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-top: none;
+        }
+        .details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 0;
+            background: var(--surface-elevated);
+            padding: 10px 0;
+            z-index: 10;
+        }
+        .details-title { font-size: 1.1rem; font-weight: 800; color: var(--data-text-color); }
+        .details-close {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .details-close:active { transform: scale(0.9); }
+        .details-close:hover { background: var(--error); color: white; border-color: var(--error); }
+        .details-profile { text-align: center; margin-bottom: 24px; }
+        .details-avatar {
+            width: 72px; height: 72px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: white;
+            margin: 0 auto 12px;
+        }
+        .details-name { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; color: var(--data-text-color); }
+        .details-status {
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-status.active { background: rgba(16,185,129,0.15); color: var(--success); }
+        .details-status.inactive { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+        .details-section {
+            background: var(--surface-color);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-section-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: var(--border-width) var(--border-style) var(--border-color);
+        }
+        .details-row:last-child { border-bottom: none; }
+        .details-label { font-size: 0.8rem; color: var(--text-muted); }
+        .details-value { font-size: 0.85rem; font-weight: 600; color: var(--data-text-color); }
+
+        /* ============================================================
+           Toast إشعارات
+           ============================================================ */
+        .toast {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: var(--toast-bg);
+            border: var(--border-width) var(--border-style) var(--border-color);
+            border-radius: 14px;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 600;
+            opacity: 0;
+            transition: all 0.4s;
+            pointer-events: none;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--error); }
+        .toast.warning { border-color: var(--warning); }
+        .toast-icon {
+            width: 28px; height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
+        .toast.success .toast-icon { background: rgba(16,185,129,0.15); color: var(--success); }
+        .toast.error .toast-icon { background: rgba(239,68,68,0.15); color: var(--error); }
+        .toast.warning .toast-icon { background: var(--accent-dim); color: var(--warning); }
+        .toast.info { border-color: var(--primary-color); }
+        .toast.info .toast-icon { background: var(--primary-dim); color: var(--primary-color); }
+
+        /* ============================================================
+           الرسوم المتحركة
+           ============================================================ */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+            animation: fadeUp 0.5s ease forwards;
+        }
+
+        /* ============================================================
+           تحسينات للهواتف
+           ============================================================ */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px; }
+            .stat-card { padding: 12px; }
+            .stat-value { font-size: 1.1rem; }
+            .bank-card .card-details { grid-template-columns: 1fr; }
+            .report-filter-row { grid-template-columns: 1fr; }
+            .cards-container { padding: 0 12px 16px; }
+            .bottom-nav .nav-item i { font-size: 15px; }
+            .bottom-nav .nav-item span { font-size: 0.5rem; }
+            .sidebar { width: 60px; }
+            .sidebar-btn { min-height: 45px; font-size: 0.65rem; }
+            .sidebar-btn i { font-size: 0.9rem; }
+            .fab { width: 48px; height: 48px; font-size: 1.2rem; bottom: 80px; left: 16px; }
+            .filter-chip { font-size: 0.65rem; padding: 4px 10px; }
+            .top-title h2 { font-size: 1rem; }
+            .icon-btn { width: 34px; height: 34px; font-size: 0.85rem; }
+            .report-modal { padding: 16px; }
+            .report-results { max-height: 200px; }
+            .report-results table th,
+            .report-results table td { padding: 6px 8px; font-size: 0.7rem; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { gap: 6px; padding: 10px; }
+            .stat-card { padding: 10px; }
+            .stat-value { font-size: 0.95rem; }
+            .stat-icon { width: 32px; height: 32px; font-size: 0.85rem; }
+            .bank-card .card-details { grid-template-columns: 1fr; }
+            .card-actions { flex-wrap: wrap; }
+            .card-btn { font-size: 0.7rem; padding: 8px; }
+            .bottom-nav .nav-item { padding: 4px 4px; }
+            .bottom-nav .nav-item i { font-size: 13px; }
+            .bottom-nav .nav-item span { font-size: 0.45rem; }
+            .modal { padding: 16px; }
+            .account-card .account-details { flex-direction: column; gap: 4px; }
+        }
+    
+        .page-container { max-width: 1280px; margin: 0 auto; padding: 16px 0 90px; }
+        .notice-card { margin: 0 16px 16px; padding: 14px 16px; border-radius: 16px; background: var(--surface-elevated); border: var(--border-width) var(--border-style) var(--border-color); color: var(--text-muted); line-height: 1.8; font-size: .8rem; }
+        .notice-card i { color: var(--primary-color); margin-left: 6px; }
+        .support-note { color: var(--warning); }
+        .data-panel { margin: 0 16px; padding: 16px; border-radius: 18px; background: var(--surface-elevated); border: var(--border-width) var(--border-style) var(--border-color); box-shadow: var(--shadow-glow); }
+        .section-title { display:flex; gap:8px; justify-content:space-between; align-items:center; margin-bottom:12px; }
+        .section-title h3 { font-size: 1rem; }
+        .section-title .count-badge { background: var(--primary-dim); color: var(--primary-color); border-radius: 12px; padding: 3px 10px; font-size: .75rem; }
+        .cards-container { padding: 0; }
+        .data-card { background: var(--surface-color); border: var(--border-width) var(--border-style) var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 10px; transition: .25s; }
+        .data-card:hover { border-color: var(--primary-color); box-shadow: var(--shadow-glow); }
+        .data-card-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+        .data-card-title { font-weight:800; color:var(--data-text-color); }
+        .data-card-subtitle { color:var(--text-muted); font-size:.76rem; margin-top:4px; line-height:1.7; }
+        .data-card-value { color:var(--accent-color); font-weight:800; white-space:nowrap; }
+        .data-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:12px; }
+        .data-field { padding:8px 10px; border-radius:10px; background:var(--primary-dim); min-width:0; }
+        .data-field span { display:block; font-size:.68rem; color:var(--text-muted); }
+        .data-field strong { display:block; margin-top:2px; overflow-wrap:anywhere; color:var(--data-text-color); font-size:.8rem; }
+        .action-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+        .btn { border:var(--border-width) var(--border-style) var(--border-color); border-radius:10px; padding:9px 13px; background:var(--surface-elevated); color:var(--text-color); font-family:'Cairo',sans-serif; cursor:pointer; font-size:.78rem; transition:.2s; }
+        .btn:hover { border-color:var(--primary-color); color:var(--primary-color); transform:translateY(-1px); }
+        .btn.primary { background:var(--primary-color); color:#fff; border-color:var(--primary-color); }
+        .btn.danger { color:var(--error); }
+        .btn.warning { color:var(--warning); }
+        .btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+        .empty-state { text-align:center; color:var(--text-muted); padding:35px 16px; line-height:1.9; }
+        .empty-state i { font-size:2.3rem; display:block; color:var(--primary-color); margin-bottom:10px; }
+        .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+        .form-group { display:flex; flex-direction:column; gap:6px; }
+        .form-group.full { grid-column:1/-1; }
+        .form-label { color:var(--text-muted); font-size:.78rem; }
+        .form-input { width:100%; padding:11px 12px; border-radius:10px; border:var(--border-width) var(--border-style) var(--input-border); background:var(--input-bg); color:var(--text-color); font-family:'Cairo',sans-serif; outline:none; }
+        .form-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 3px var(--primary-dim); }
+        .modal-body { padding:16px; }
+        .modal-footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:var(--border-width) var(--border-style) var(--border-color); }
+        .detail-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+        .detail-item { padding:10px; border-radius:10px; background:var(--primary-dim); }
+        .detail-item span { display:block; color:var(--text-muted); font-size:.7rem; }
+        .detail-item strong { display:block; margin-top:3px; overflow-wrap:anywhere; }
+        .raw-json { direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-word; background:#0b1220; color:#dbeafe; padding:12px; border-radius:10px; font: .72rem/1.5 monospace; max-height:300px; overflow:auto; }
+        .settings-wrap { padding:0 16px; }
+        .settings-card { background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; padding:16px; }
+        .settings-line { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px dashed var(--border-color); align-items:center; }
+        .settings-line:last-child { border-bottom:0; }
+        .settings-line label { font-size:.82rem; color:var(--text-muted); }
+        .settings-line input { max-width:230px; }
+        .ai-output { min-height:100px; white-space:pre-wrap; line-height:1.9; color:var(--data-text-color); }
+        .utility-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; padding:0 16px; }
+        .utility-card { background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; padding:16px; }
+        .utility-card h3 { font-size:.9rem; margin-bottom:8px; }
+        .utility-card p { color:var(--text-muted); font-size:.75rem; line-height:1.8; margin-bottom:12px; }
+        .hidden { display:none !important; }
+        @media(max-width:640px){ .form-grid { grid-template-columns:1fr; } .form-group.full { grid-column:auto; } .data-card-head { flex-direction:column; } .data-card-value { align-self:flex-start; } }
+        @media print { .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,.offline-banner,.action-row,.icon-btn,.notice-card { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
+</style>
+</head>
+<body>
+    <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
+    <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
+    <header class="top-bar">
+        <div class="header-top">
+            <div class="top-title"><h2><i class="fas fa-history"></i> سجل تغيير الأسعار</h2><p id="subtitle">products · مصدر البيانات: طبقة Android/SQLite</p></div>
+            <div class="header-actions">
+                <button type="button" class="icon-btn" id="themeToggle" title="تبديل الوضع"><i class="fas fa-moon" id="themeIcon"></i></button>
+                <button type="button" class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-arrow-right"></i></button>
+                <button type="button" class="icon-btn" onclick="openReport()" title="التقرير"><i class="fas fa-chart-bar"></i></button>
+            </div>
+        </div>
+        <div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="searchInput" type="search" placeholder="ابحث في البيانات..." autocomplete="off"></div>
+        <div class="filter-chips" id="filterChips" aria-label="الفلاتر"></div>
+    </header>
+    <main class="page-container">
+        <div class="notice-card"><i class="fas fa-database"></i><span>تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول price_history وعقود Typed Bridge الفعلية.</span></div>
+        <section class="stats-grid" id="statsGrid">
+            <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-history"></i></div><div class="stat-value" id="statCount">—</div><div class="stat-label">عدد السجلات المعروضة</div></article>
+            <article class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="statActive">—</div><div class="stat-label">نشط / مكتمل</div></article>
+            <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-calculator"></i></div><div class="stat-value" id="statTotal">—</div><div class="stat-label">المجموع الرقمي المتاح</div></article>
+            <article class="stat-card"><div class="stat-icon purple"><i class="fas fa-clock"></i></div><div class="stat-value" id="statUpdated">—</div><div class="stat-label">آخر تحديث</div></article>
+        </section>
+        <section class="data-panel">
+            <div class="section-title"><h3><i class="fas fa-history"></i> سجل تغيير الأسعار</h3><span class="count-badge" id="itemCount">0</span></div>
+            <div class="cards-container" id="cardsContainer"></div>
+        </section>
+    </main>
+    <button type="button" class="fab" id="fab" title="إضافة"><i class="fas fa-plus"></i></button>
+    <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-label="فتح القائمة"><i class="fas fa-bars"></i></button>
+    <aside class="sidebar" id="sidebar"><div class="sidebar-content">
+        <button type="button" class="sidebar-btn" onclick="reloadData()"><i class="fas fa-sync-alt"></i><span>تحديث</span></button>
+        <button type="button" class="sidebar-btn" onclick="openReport()"><i class="fas fa-file-alt"></i><span>تقارير</span></button>
+        <button type="button" class="sidebar-btn" onclick="exportData()"><i class="fas fa-file-export"></i><span>تصدير</span></button>
+        <button type="button" class="sidebar-btn" onclick="window.print()"><i class="fas fa-print"></i><span>طباعة</span></button>
+        <button type="button" class="sidebar-btn" onclick="goHome()"><i class="fas fa-home"></i><span>رجوع</span></button>
+    </div></aside>
+    <nav class="bottom-nav" id="bottomNav" aria-label="التقارير والعمليات"></nav>
+    <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة سجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
+        <div class="modal-body"><form id="recordForm" class="form-grid"></form></div>
+        <div class="modal-footer"><button type="button" class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ فعلي</button><button type="button" class="btn" onclick="closeModal(null,'formModal')">إلغاء</button></div>
+    </div></div>
+    <div class="modal-overlay" id="detailsModal" onclick="closeModal(event,'detailsModal')"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header"><h3 class="modal-title">تفاصيل السجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'detailsModal')"><i class="fas fa-times"></i></button></div>
+        <div class="modal-body" id="detailsBody"></div>
+    </div></div>
+    <div class="modal-overlay" id="reportModal" onclick="closeModal(event,'reportModal')"><div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header"><h3 class="modal-title">تقرير سجل تغيير الأسعار</h3><button type="button" class="modal-close" onclick="closeModal(null,'reportModal')"><i class="fas fa-times"></i></button></div>
+        <div class="modal-body"><div class="form-grid"><div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" type="date" id="reportFrom"></div><div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" type="date" id="reportTo"></div></div><div class="action-row"><button type="button" class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد من المصدر</button><button type="button" class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> Excel/CSV</button><button type="button" class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة/PDF</button></div><div id="reportResults" style="margin-top:14px"></div></div>
+    </div></div>
+    <div class="modal-overlay" id="aiModal" onclick="closeModal(event,'aiModal')"><div class="modal" onclick="event.stopPropagation()"><div class="modal-header"><h3 class="modal-title">المساعد الذكي</h3><button type="button" class="modal-close" onclick="closeModal(null,'aiModal')"><i class="fas fa-times"></i></button></div><div class="modal-body"><textarea class="form-input" id="aiPrompt" rows="4" placeholder="اكتب سؤالك..."></textarea><div class="action-row"><button class="btn primary" type="button" onclick="askAI()">إرسال</button></div><div class="ai-output" id="aiOutput"></div></div></div></div>
+    <div class="toast" id="toast"></div>
+    <script>
+    (() => {
+        'use strict';
+        const CFG = {"title":"سجل تغيير الأسعار","icon":"fa-history","module":"products","listMethod":"getPriceHistoryRecords","listArgs":["{}"],"fields":[{"label":"المنتج","key":"product_id","type":"number","required":true,"placeholder":""},{"label":"old price","key":"old_price","type":"number","required":false,"placeholder":""},{"label":"new price","key":"new_price","type":"number","required":true,"placeholder":""},{"label":"change date","key":"change_date","type":"date","required":false,"placeholder":""},{"label":"change reason","key":"change_reason","type":"text","required":false,"placeholder":""},{"label":"مؤرشف؟","key":"archived","type":"select","required":false,"placeholder":""}],"valueFields":["old_price","new_price"],"titleFields":["product_id","old_price","new_price"],"subtitleFields":["product_id","old_price","new_price","change_date","change_reason","archived"],"createMethod":"savePriceHistoryRecord","updateMethod":"updatePriceHistoryRecord","deleteMethod":"deletePriceHistoryRecord","note":"تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول price_history وعقود Typed Bridge الفعلية.","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:PriceHistory","aiMethod":null,"reports":["الكل","ملخص","تفصيلي","تحليل","حركات"],"resolveMethod":null,"operationKey":"price_history"};
+        const bridge = window.AndroidInterface;
+        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
+        const $ = (id) => document.getElementById(id);
+        const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const today = () => new Date().toISOString().slice(0,10);
+        function toast(message, bad=false) { const node=$('toast'); node.textContent=message; node.className='toast show'; node.style.background=bad?'var(--error)':'#111827'; clearTimeout(node._timer); node._timer=setTimeout(()=>node.classList.remove('show'),3500); }
+        function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
+        function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
+        function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
+        function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
+        function argsForLoad() {
+            if (CFG.operationKey) return [JSON.stringify({limit: 200, search: $('searchInput').value || ''})];
+            if (CFG.reportKind === 'balanceSheet') return [today(), 0];
+            if (CFG.reportKind === 'eod') return [];
+            return CFG.listArgs || [];
+        }
+        function rowsFrom(value) {
+            const raw=dataOf(value);
+            if (Array.isArray(raw)) return raw;
+            if (raw && Array.isArray(raw.rows)) return raw.rows;
+            if (raw && Array.isArray(raw.data)) return raw.data;
+            if (CFG.objectMode && raw && typeof raw === 'object') return Object.entries(raw).map(([key,val])=>({key,value:val}));
+            if (raw && typeof raw === 'object') return [raw];
+            return [];
+        }
+        function field(row, names) { for (const name of (names||[])) { if (row && row[name] !== undefined && row[name] !== null && row[name] !== '') return row[name]; } return ''; }
+        function titleOf(row) { return field(row, CFG.titleFields) || field(row,['name','title','label','id','key']) || 'سجل بلا اسم'; }
+        function subtitleOf(row) { return (CFG.subtitleFields||[]).map(k => { const v=row&&row[k]; return v===undefined||v===null||v===''?null:k+': '+v; }).filter(Boolean).join(' · '); }
+        function idOf(row) { return field(row,['id','_id','vehicle_id','pump_id','tank_id','payment_id','shift_id','sale_id','request_id','asset_id','employee_id']); }
+        function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
+        function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
+        function renderFilters() {
+            const labels=CFG.reports||['الكل','ملخص','تفصيلي','تحليل','حركات'];
+            $('filterChips').innerHTML=labels.map((label,i)=>`<button type="button" class="filter-chip ${i===0?'active':''}" data-filter="${i}">${esc(label)}</button>`).join('');
+            document.querySelectorAll('#filterChips [data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.filter; applyFilter(); }));
+            $('bottomNav').innerHTML=labels.slice(0,5).map((label,i)=>`<button type="button" class="nav-item ${i===0?'active':''}" data-bottom-filter="${i}"><i class="fas ${i===0?'fa-list':i===1?'fa-file-alt':i===2?'fa-table':i===3?'fa-chart-bar':'fa-exchange-alt'}"></i><span>${esc(label)}</span></button>`).join('');
+            document.querySelectorAll('#bottomNav [data-bottom-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#bottomNav .nav-item').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.bottomFilter; applyFilter(); }));
+        }
+        function applyFilter() {
+            const q=($('searchInput').value||'').trim().toLowerCase();
+            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return !q || text.includes(q); });
+            renderCards();
+        }
+        function renderStats() {
+            const rows=state.filtered; $('statCount').textContent=rows.length.toLocaleString('ar'); $('itemCount').textContent=rows.length.toLocaleString('ar');
+            const active=rows.filter(row=>['active','open','pending','completed','مفتوحة','نشط','قيد التنفيذ'].includes(String(field(row,['status','state','is_active'])))).length;
+            $('statActive').textContent=active.toLocaleString('ar');
+            let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0)); $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
+            $('statUpdated').textContent=state.loadedAt?state.loadedAt.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}):'—';
+        }
+        function renderCards() {
+            renderStats(); const box=$('cardsContainer');
+            if (!state.filtered.length) { box.innerHTML=`<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`; return; }
+            box.innerHTML=state.filtered.map((row,index)=>{
+                const id=esc(idOf(row)||index); const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='').slice(0,8);
+                const value=(CFG.valueFields||[]).map(k=>numeric(row&&row[k])).filter(v=>v!==0).reduce((a,b)=>a+b,0);
+                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}</div>`;
+                return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${esc(subtitleOf(row))}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(k)}</span><strong>${esc(row[k])}</strong></div>`).join('')}</div>${buttons}</article>`;
+            }).join('');
+            box.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>openDetails(b.dataset.view)));
+            box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(findRow(b.dataset.edit))));
+            box.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>deleteRow(findRow(b.dataset.delete))));
+            box.querySelectorAll('[data-resolve]').forEach(b=>b.addEventListener('click',()=>resolveRow(findRow(b.dataset.resolve))));
+        }
+        function findRow(id) { return state.rows.find((row,index)=>String(idOf(row)||index)===String(id)); }
+        function openDetails(id) { const row=findRow(id); if(!row)return; $('detailsBody').innerHTML=`<div class="detail-grid">${Object.entries(row).map(([k,v])=>`<div class="detail-item"><span>${esc(k)}</span><strong>${esc(typeof v==='object'?JSON.stringify(v):v)}</strong></div>`).join('')}</div><details style="margin-top:14px"><summary>JSON الخام</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`; openModal(null,'detailsModal'); }
+        function inputHtml(def,row) { const value=row&&row[def.key]!==undefined?row[def.key]:''; const req=def.required?'required':''; const placeholder=def.placeholder?`placeholder="${esc(def.placeholder)}"`:''; if(def.type==='textarea')return `<div class="form-group full"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><textarea class="form-input" data-key="${esc(def.key)}" rows="3" ${req} ${placeholder}>${esc(value)}</textarea></div>`; if(def.type==='select')return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input" data-key="${esc(def.key)}" ${req}><option value="">اختر...</option><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="open">مفتوح</option><option value="pending">معلق</option><option value="cash">نقدي</option><option value="credit">آجل</option><option value="morning">صباحية</option><option value="evening">مسائية</option><option value="night">ليلية</option><option value="in">إيراد</option><option value="out">مصروف</option><option value="high">عالية</option><option value="medium">متوسطة</option><option value="low">منخفضة</option><option value="completed">مكتمل</option></select></div>`; return `<div class="form-group ${def.type==='datetime-local'?'full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder}></div>`; }
+        function openForm(row=null) { if(!CFG.createMethod && !CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة في العقد الحالي',true);return;} state.editing=row; $('formTitle').textContent=row?'تعديل السجل':'إضافة سجل جديد'; $('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join(''); if(row) (CFG.fields||[]).forEach(def=>{const el=document.querySelector(`[data-key="${CSS.escape(def.key)}"]`); if(el&&def.type==='select')el.value=row[def.key]??'';}); $('formModal').classList.add('show'); }
+        function collectForm() { const payload={}; document.querySelectorAll('#recordForm [data-key]').forEach(el=>{ let value=el.value; const type=el.type; if(type==='number') value=value===''?0:Number(value); payload[el.dataset.key]=value; }); if(CFG.module==='vehicles' && CFG.title==='إدارة السائقين') payload.party_type='driver'; return payload; }
+        async function saveForm() { const form=$('recordForm'); if(!form.reportValidity())return; const payload=collectForm(); setLoading(true); try { let result; if(state.editing && CFG.updateMethod) { const id=idOf(state.editing); if(!id)throw new Error('معرف السجل غير صالح'); if(CFG.updateAction==='tankQuantity') result=await invoke(CFG.updateMethod,[Number(id),Number(payload.current_quantity||0)]); else if(CFG.updateAction==='maintenanceStatus') result=await invoke(CFG.updateMethod,[JSON.stringify({request_id:Number(id),status:payload.status||'completed'})]); else if(CFG.updateAction==='endShift') result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); else result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); } else if(CFG.createMethod) { if(CFG.createMethod==='saveBalanceSheet') result=await invoke(CFG.createMethod,[today(),0]); else result=await invoke(CFG.createMethod,[JSON.stringify(payload)]); } else throw new Error('لا توجد عملية حفظ مدعومة'); parse(result); toast('تم تنفيذ العملية والتحقق من نجاحها'); closeModal(null,'formModal'); await reloadData(); } catch(error) { toast(error.message||'فشلت العملية',true); } finally { setLoading(false); } }
+        async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
+        async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
+        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
+        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
+        function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
+        async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); toast('تم توليد التقرير من المصدر الفعلي'); } catch(e) { toast(e.message||'فشل التقرير',true); } finally { setLoading(false); } }
+        function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(titleOf(row))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
+        function exportData() { const rows=state.filtered; if(!rows.length){toast('لا توجد بيانات حقيقية لتصديرها',true);return;} const keys=[...new Set(rows.flatMap(row=>Object.keys(row||{})))]; const csv='\ufeff'+[keys, ...rows.map(row=>keys.map(k=>String(row[k]??'').replace(/"/g,'""')))].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='{filename}.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); toast('تم إنشاء ملف CSV من البيانات المحملة فعلياً'); }
+        async function askAI() { if(CFG.aiMethod!=='sendToAI'){toast('المساعد غير متاح لهذا المسار',true);return;} const prompt=($('aiPrompt').value||'').trim(); if(!prompt){toast('اكتب السؤال أولاً',true);return;} if(!bridge||typeof bridge.sendToAI!=='function'){toast('عقد المساعد غير متاح في Android Bridge',true);return;} $('aiOutput').textContent='جاري انتظار رد Android...'; window.onAIResponse=(payload)=>{ const result=typeof payload==='string'?JSON.parse(payload):payload; if(result&&result.success){ $('aiOutput').textContent=result.response||'عاد الرد دون نص'; toast('وصل رد المساعد فعلياً'); } else { $('aiOutput').textContent=result&&result.error||'فشل رد المساعد'; toast($('aiOutput').textContent,true); } setLoading(false); }; setLoading(true); try { const started=parse(bridge.sendToAI(prompt)); if(started.status!=='processing') window.onAIResponse(started); } catch(e) { setLoading(false); $('aiOutput').textContent=e.message; toast(e.message,true); } }
+        function goHome() { window.location.href='../main.html'; }
+        function applyTheme() { const saved=localStorage.getItem('theme')||'light'; if(saved==='dark')document.documentElement.dataset.theme='dark'; $('themeIcon').className=saved==='dark'?'fas fa-sun':'fas fa-moon'; }
+        function toggleTheme() { const dark=document.documentElement.dataset.theme==='dark'; if(dark)delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme='dark'; localStorage.setItem('theme',dark?'light':'dark'); $('themeIcon').className=dark?'fas fa-moon':'fas fa-sun'; }
+        function initSpecial() {
+            if(CFG.mode==='unsupported'){ $('fab').classList.add('hidden'); }
+            if(CFG.mode==='ai'){ $('fab').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="settings-wrap"><div class="settings-card"><h3>أرسل طلباً إلى المساعد</h3><p class="data-card-subtitle">لا تُحفظ الرسالة في localStorage ولا تُعرض نتيجة نجاح قبل عودة الجسر.</p><div class="action-row"><button class="btn primary" onclick="openModal(null,\'aiModal\')">فتح المساعد</button></div></div></div>'; }
+            if(CFG.mode==='backup'){ $('fab').classList.add('hidden'); $('cardsContainer').innerHTML='<div class="utility-grid"><div class="utility-card"><h3>نسخة قاعدة البيانات</h3><p>تنفيذ النسخ عبر Android ثم استقبال callback الفعلي.</p><button class="btn primary" onclick="startAsync(\'backupDatabase\',\'onBackupResult\')">إنشاء نسخة</button></div><div class="utility-card"><h3>تصدير كل البيانات</h3><p>يستخدم exportAllData ويعرض نتيجة callback.</p><button class="btn primary" onclick="startAsync(\'exportAllData\',\'onExportAllResult\')">بدء التصدير</button></div><div class="utility-card"><h3>معلومات قاعدة البيانات</h3><p id="dbInfo">اضغط لقراءة المعلومات الفعلية.</p><button class="btn" onclick="loadDbInfo()">قراءة</button></div></div>'; }
+        }
+        function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true);return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)toast(parsed.message||'اكتملت العملية فعلياً'); else toast(parsed.error||'فشلت العملية',true);}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...');}catch(e){toast(e.message,true);} }
+        async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true);}}
+        async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
+        $('searchInput').addEventListener('input',applyFilter); $('themeToggle').addEventListener('click',toggleTheme); $('fab').addEventListener('click',()=>openForm()); $('saveBtn').addEventListener('click',saveForm); $('sidebarToggle').addEventListener('click',()=>{const side=$('sidebar');side.classList.toggle('open');}); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
+        window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
+        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
+        applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
+    })();
+    </script>
+</body>
+</html>
