@@ -1,6 +1,7 @@
 package com.aistudio.dieselstationsms.kxmpzq.sms
 
 import android.content.Context
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 
@@ -9,6 +10,9 @@ import org.json.JSONObject
  * fallback هنا بين موارد مهيأة شرعياً، وليس تدويراً لإخفاء الاستهلاك أو تجاوز limits.
  */
 class SmsAiResourceOrchestrator(context: Context) {
+    private val maxAttemptsPerCandidate = 2
+    private val baseBackoffMs = 250L
+    private val maxBackoffMs = 1_000L
     private val appContext = context.applicationContext
     private val profiles = runCatching { SmsAiProviderStore(appContext) }.getOrNull()
     private val remoteProvider = SmsRemoteAiProvider()
@@ -42,27 +46,43 @@ class SmsAiResourceOrchestrator(context: Context) {
         }
 
         val failures = mutableListOf<String>()
+        val orchestrationStartedAt = System.currentTimeMillis()
         for (candidate in candidates) {
-            val startedAt = System.currentTimeMillis()
-            try {
-                val providerResponse = withTimeoutOrNull(candidate.config.timeoutMs.coerceIn(2_000L, 9_000L)) {
-                    candidate.provider.understand(request, candidate.config, tools)
-                } ?: throw SmsAiProviderException("timeout")
-                candidate.profileId?.let { profiles?.recordResult(it, success = true) }
-                return SmsAiAnalysis(
-                    availability = SmsAiAvailability.AVAILABLE,
-                    understanding = providerResponse.understanding,
-                    provider = providerResponse.provider,
-                    model = providerResponse.model,
-                    latencyMs = System.currentTimeMillis() - startedAt,
-                    usage = providerResponse.usage,
-                    fallbackReason = if (failures.isEmpty()) null else "fallback_after:${failures.joinToString(",")}"
-                )
-            } catch (error: Exception) {
-                candidate.profileId?.let {
-                    profiles?.recordResult(it, success = false, error = error.message)
+            var attempt = 0
+            while (attempt < maxAttemptsPerCandidate) {
+                val startedAt = System.currentTimeMillis()
+                try {
+                    val providerResponse = withTimeoutOrNull(candidate.config.timeoutMs.coerceIn(2_000L, 9_000L)) {
+                        candidate.provider.understand(request, candidate.config, tools)
+                    } ?: throw SmsAiProviderException("timeout", kind = SmsAiFailureKind.TIMEOUT)
+                    candidate.profileId?.let { profiles?.recordResult(it, success = true) }
+                    return SmsAiAnalysis(
+                        availability = SmsAiAvailability.AVAILABLE,
+                        understanding = providerResponse.understanding,
+                        provider = providerResponse.provider,
+                        model = providerResponse.model,
+                        latencyMs = System.currentTimeMillis() - startedAt,
+                        usage = providerResponse.usage,
+                        fallbackReason = if (failures.isEmpty()) null else "fallback_after:${failures.joinToString(",")}"
+                    )
+                } catch (error: SmsAiProviderException) {
+                    candidate.profileId?.let {
+                        profiles?.recordResult(it, success = false, error = error.message)
+                    }
+                    failures += "${candidate.config.provider}:${error.kind.name}${error.httpCode?.let { "_$it" }.orEmpty()}"
+                    val retryable = error.kind == SmsAiFailureKind.RETRYABLE_HTTP ||
+                        error.kind == SmsAiFailureKind.NETWORK ||
+                        error.kind == SmsAiFailureKind.TIMEOUT
+                    attempt += 1
+                    if (!retryable || attempt >= maxAttemptsPerCandidate) break
+                    delay((baseBackoffMs * (1L shl (attempt - 1))).coerceAtMost(maxBackoffMs))
+                } catch (error: Exception) {
+                    candidate.profileId?.let {
+                        profiles?.recordResult(it, success = false, error = error.message)
+                    }
+                    failures += "${candidate.config.provider}:${error.javaClass.simpleName}"
+                    break
                 }
-                failures += "${candidate.config.provider}:${error.javaClass.simpleName}"
             }
         }
         return SmsAiAnalysis(
@@ -70,7 +90,7 @@ class SmsAiResourceOrchestrator(context: Context) {
             understanding = null,
             provider = candidates.first().config.provider,
             model = candidates.first().config.model,
-            latencyMs = 0L,
+            latencyMs = System.currentTimeMillis() - orchestrationStartedAt,
             fallbackReason = "all_providers_failed:${failures.joinToString(",")}"
         )
     }

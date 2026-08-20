@@ -17,7 +17,9 @@ class SmsGeminiAiProvider : SmsAiProvider {
         config: SmsAiRuntimeConfig,
         tools: SmsAiToolExecutor
     ): SmsAiProviderResponse = withContext(Dispatchers.IO) {
-        require(config.usable()) { "Gemini provider is not configured" }
+        if (!config.usable()) {
+            throw SmsAiProviderException("Gemini provider is not configured", kind = SmsAiFailureKind.AUTHENTICATION)
+        }
         val contents = JSONArray().put(JSONObject().apply {
             put("role", "user")
             put("parts", JSONArray().put(JSONObject().put("text", SmsAiPromptFactory.userMessage(request))))
@@ -114,14 +116,22 @@ class SmsGeminiAiProvider : SmsAiProvider {
         return try {
             client.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) throw SmsAiProviderException("Gemini HTTP ${response.code}")
-                if (body.isBlank()) throw SmsAiProviderException("Gemini returned empty body")
+                if (!response.isSuccessful) {
+                    val kind = when (response.code) {
+                        401, 403 -> SmsAiFailureKind.AUTHENTICATION
+                        429 -> SmsAiFailureKind.QUOTA
+                        in 500..599 -> SmsAiFailureKind.RETRYABLE_HTTP
+                        else -> SmsAiFailureKind.HTTP
+                    }
+                    throw SmsAiProviderException("Gemini HTTP ${response.code}", kind = kind, httpCode = response.code)
+                }
+                if (body.isBlank()) throw SmsAiProviderException("Gemini returned empty body", kind = SmsAiFailureKind.MALFORMED_RESPONSE)
                 JSONObject(body)
             }
         } catch (e: SmsAiProviderException) {
             throw e
         } catch (e: Exception) {
-            throw SmsAiProviderException("Gemini network failure: ${e.javaClass.simpleName}", e)
+            throw SmsAiProviderException("Gemini network failure: ${e.javaClass.simpleName}", e, SmsAiFailureKind.NETWORK)
         }
     }
 

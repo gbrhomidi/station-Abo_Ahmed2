@@ -994,6 +994,21 @@ class SmsProcessor(
      * توسيع مفردات الديزل لا يتم هنا.
      * سيتم لاحقًا داخل SmsIntentDetector.kt.
      */
+    private fun buildAiContextSummary(
+        context: SmsConversationManager.ConversationContext,
+        preferences: SmsConversationManager.CustomerPreferences,
+        draft: SmsConversationManager.OrderDraft?
+    ): String = buildString {
+        if (context.lastIntent.isNotBlank()) append("Last intent: ").append(context.lastIntent).append(". ")
+        if (context.pendingAction.isNotBlank()) append("Pending action: ").append(context.pendingAction).append(". ")
+        if (preferences.preferredQuantity > 0.0) append("Previous preferred quantity: ").append(preferences.preferredQuantity).append("L. ")
+        if (preferences.preferredLocation.isNotBlank()) append("Preferred location: ").append(preferences.preferredLocation.take(120)).append(". ")
+        if (preferences.preferredTime.isNotBlank()) append("Preferred time: ").append(preferences.preferredTime.take(80)).append(". ")
+        draft?.let {
+            append("Active draft: ").append(it.product).append(", step=").append(it.step).append(", status=").append(it.status).append(". ")
+        }
+    }.trim().take(1600)
+
     private suspend fun handleSmartMessage(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String,
@@ -1018,6 +1033,7 @@ class SmsProcessor(
                 .getOrCreatePreferences(normalizedPhone)
 
         val draft = conversationManager.getOrderDraft(normalizedPhone)
+        val recentHistory = conversationManager.getInteractionHistory(normalizedPhone, limit = 6)
         val aiRequest = SmsAiRequest(
             message = rawBody,
             phone = normalizedPhone,
@@ -1037,6 +1053,16 @@ class SmsProcessor(
                 put("order_id", ctx.orderId ?: JSONObject.NULL)
                 put("draft_id", ctx.draftId)
                 put("version", ctx.version)
+                put("summary", buildAiContextSummary(ctx, prefs, draft))
+                put("recent_interactions", JSONArray().apply {
+                    recentHistory.asReversed().take(6).forEach { item ->
+                        put(JSONObject().apply {
+                            put("intent", item.intent.take(80))
+                            put("message", item.message.take(240))
+                            put("timestamp", item.timestamp)
+                        })
+                    }
+                })
             },
             preferencesJson = JSONObject().apply {
                 put("preferred_quantity", prefs.preferredQuantity)
@@ -1065,8 +1091,12 @@ class SmsProcessor(
             tools = SmsAiToolRegistry(db, customer, ctx, prefs, draft),
             routing = aiRouting
         )
-        val aiUnderstanding = aiAnalysis.understanding?.takeIf {
-            it.status == "UNDERSTOOD" && it.confidence >= 0.65
+        val validatedAiUnderstanding = aiAnalysis.understanding?.let {
+            SmsAiUnderstandingValidator.validate(it)
+        }
+        val aiUnderstanding = validatedAiUnderstanding?.takeIf {
+            it.status == "UNDERSTOOD" &&
+                it.confidence >= SmsAiUnderstandingValidator.AUTO_EXECUTE_CONFIDENCE
         }
         val cognitivePlan = cognitiveEngine.plan(
             message = rawBody,
@@ -1081,6 +1111,7 @@ class SmsProcessor(
                 eventId = inboundEventId,
                 stage = "AI_VALIDATED",
                 payload = aiAnalysis.toJson().apply {
+                    validatedAiUnderstanding?.let { put("validated_understanding", it.toJson()) }
                     put("routing_needs_ai", aiRouting.needsAi)
                     put("routing_complexity", aiRouting.complexity.name)
                     put("routing_reason", aiRouting.reason)
@@ -1349,9 +1380,10 @@ class SmsProcessor(
                         customer,
                         msgBody,
                         ctx,
-                        aiResponseDraft = aiAnalysis.understanding?.takeIf {
-                            it.status == "NEEDS_CLARIFICATION" && it.confidence >= 0.45
-                        }?.responseDraft
+                            aiResponseDraft = validatedAiUnderstanding?.takeIf {
+                                it.status == "NEEDS_CLARIFICATION" &&
+                                    it.confidence >= SmsAiUnderstandingValidator.CLARIFICATION_CONFIDENCE
+                            }?.responseDraft
                     )
             }
             runCatching {

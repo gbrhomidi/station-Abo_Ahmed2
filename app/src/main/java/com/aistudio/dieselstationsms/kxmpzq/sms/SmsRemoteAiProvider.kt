@@ -17,7 +17,9 @@ class SmsRemoteAiProvider : SmsAiProvider {
         config: SmsAiRuntimeConfig,
         tools: SmsAiToolExecutor
     ): SmsAiProviderResponse = withContext(Dispatchers.IO) {
-        require(config.usable()) { "AI provider is not configured" }
+        if (!config.usable()) {
+            throw SmsAiProviderException("AI provider is not configured", kind = SmsAiFailureKind.AUTHENTICATION)
+        }
         val messages = JSONArray()
             .put(JSONObject().apply {
                 put("role", "system")
@@ -88,7 +90,7 @@ class SmsRemoteAiProvider : SmsAiProvider {
                 val content = cleanJson(message.optString("content", ""))
                 if (content.isBlank()) throw SmsAiProviderException("AI response content is empty")
                 val understanding = runCatching { SmsAiUnderstanding.fromJson(JSONObject(content)) }
-                    .getOrElse { throw SmsAiProviderException("AI response schema validation failed", it) }
+                    .getOrElse { throw SmsAiProviderException("AI response schema validation failed", it, SmsAiFailureKind.MALFORMED_RESPONSE) }
                 return@withContext SmsAiProviderResponse(
                     understanding = understanding,
                     usage = SmsAiUsage(totalPromptTokens, totalCompletionTokens, totalTokens),
@@ -119,15 +121,21 @@ class SmsRemoteAiProvider : SmsAiProvider {
                 if (!response.isSuccessful) {
                     val providerMessage = runCatching { JSONObject(body).optString("error", "") }.getOrDefault("")
                     val safeReason = if (providerMessage.length <= 160) providerMessage else "provider_error"
-                    throw SmsAiProviderException("AI HTTP ${response.code}: $safeReason")
+                    val kind = when (response.code) {
+                        401, 403 -> SmsAiFailureKind.AUTHENTICATION
+                        429 -> SmsAiFailureKind.QUOTA
+                        in 500..599 -> SmsAiFailureKind.RETRYABLE_HTTP
+                        else -> SmsAiFailureKind.HTTP
+                    }
+                    throw SmsAiProviderException("AI HTTP ${response.code}: $safeReason", kind = kind, httpCode = response.code)
                 }
-                if (body.isBlank()) throw SmsAiProviderException("AI provider returned empty body")
+                if (body.isBlank()) throw SmsAiProviderException("AI provider returned empty body", kind = SmsAiFailureKind.MALFORMED_RESPONSE)
                 JSONObject(body)
             }
         } catch (e: SmsAiProviderException) {
             throw e
         } catch (e: Exception) {
-            throw SmsAiProviderException("AI network failure: ${e.javaClass.simpleName}", e)
+            throw SmsAiProviderException("AI network failure: ${e.javaClass.simpleName}", e, SmsAiFailureKind.NETWORK)
         }
     }
 

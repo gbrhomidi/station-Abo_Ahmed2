@@ -148,4 +148,21 @@ data class SmsAiAnalysis(
     }
 }
 
-class SmsAiProviderException(message: String, cause: Throwable? = null) : Exception(message, cause)
+enum class SmsAiFailureKind {
+    AUTHENTICATION,
+    QUOTA,
+    RETRYABLE_HTTP,
+    HTTP,
+    TIMEOUT,
+    NETWORK,
+    MALFORMED_RESPONSE,
+    UNSAFE_RESPONSE,
+    UNKNOWN
+}
+
+class SmsAiProviderException(
+    message: String,
+    cause: Throwable? = null,
+    val kind: SmsAiFailureKind = SmsAiFailureKind.UNKNOWN,
+    val httpCode: Int? = null
+) : Exception(message, cause)

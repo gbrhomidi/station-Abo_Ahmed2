@@ -18,7 +18,24 @@ class SmsAiRoutingEngine {
             normalized in setOf("نعم", "اي", "أيوه", "لا", "تمام", "نفسه", "نفسها", "غيره", "عدله") ||
                 normalized.contains("السابق")
             )
-        val needsAi = !simpleLocal && (complexSignals > 0 || hasMultipleClauses || longOrUnstructured || contextDependent)
+        val explicitFuelRequestWithEntities = normalized.contains("ديزل") || normalized.contains("بنزين") || normalized.contains("dизel") || normalized.contains("diesel")
+        val needsAi = !simpleLocal && (
+            complexSignals > 0 ||
+                hasMultipleClauses ||
+                longOrUnstructured ||
+                contextDependent ||
+                explicitFuelRequestWithEntities && (
+                    normalized.contains(Regex("\\d")) ||
+                        normalized.contains("دباب") ||
+                        normalized.contains("دبة") ||
+                        normalized.contains("لتر") ||
+                        normalized.contains("الى") ||
+                        normalized.contains("إلى") ||
+                        normalized.contains("بكرة") ||
+                        normalized.contains("بكره") ||
+                        normalized.contains("غدا")
+                    )
+            )
         return SmsAiRoutingDecision(
             needsAi = needsAi,
             complexity = when {
@@ -40,7 +57,7 @@ class SmsAiRoutingEngine {
 
     companion object {
         private val SIMPLE_LOCAL_PATTERNS = listOf(
-            Regex("^(اريد|أريد|ابغى|أبغى|اشتي|أشتي)\\s+(ديزل|دیزل).*$"),
+            Regex("^(اريد|أريد|ابغى|أبغى|اشتي|أشتي)\\s+(ديزل|دیزل)$"),
             Regex("^(رصيد|حسابي|كم رصيدي|نقاط|ولاء)$"),
             Regex("^(سعر|الاسعار|الأسعار|كم السعر)$"),
             Regex("^(عروض|عرض|خصم)$"),
