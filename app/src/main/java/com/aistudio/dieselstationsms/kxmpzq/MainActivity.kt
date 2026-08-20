@@ -6894,15 +6894,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         private fun operationalDelete(permission: String, key: String, id: Long): String {
             if (!checkPermission(permission, "delete")) return errorResponse("لا تملك صلاحية الحذف")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.deleteOperationalRecord(key, id); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
+            return try { val rows = db.deleteOperationalRecord(key, id, activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalDelete-$key", e); errorResponse(e.message) }
         }
 
         private fun operationalResolve(permission: String, key: String, id: Long, note: String): String {
             if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية الاعتماد")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.resolveOperationalRecord(key, id, note); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
+            return try { val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
         }
 

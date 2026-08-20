@@ -11836,6 +11836,74 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun operationalHasCreatedAt(table: String): Boolean = table !in setOf("bad_debts", "price_history", "price_list_items", "stocktakes", "stocktake_details", "cash_deposits", "employee_payments", "depreciation")
 
+    private fun parseAttendanceDate(value: String): Date? {
+        val text = value.trim()
+        if (text.isBlank()) return null
+        val formats = listOf("yyyy-MM-dd", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
+        for (pattern in formats) {
+            try {
+                return SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }.parse(text)
+            } catch (_: Exception) {
+                // Try the next supported SQLite/WebView date representation.
+            }
+        }
+        return null
+    }
+
+    private fun validateAttendanceRecord(data: JSONObject, existingId: Long? = null) {
+        val employeeId = data.optLong("employee_id", 0L)
+        val attendanceDate = data.optString("attendance_date", "").trim()
+        require(employeeId > 0L) { "الحقل employee_id مطلوب للحضور" }
+        require(attendanceDate.isNotBlank() && parseAttendanceDate(attendanceDate) != null) { "تاريخ الحضور غير صالح" }
+        val checkInText = data.optString("check_in", "").trim()
+        val checkOutText = data.optString("check_out", "").trim()
+        val checkIn = if (checkInText.isBlank()) null else parseAttendanceDate(checkInText)
+        val checkOut = if (checkOutText.isBlank()) null else parseAttendanceDate(checkOutText)
+        require(checkInText.isBlank() || checkIn != null) { "وقت الحضور غير صالح" }
+        require(checkOutText.isBlank() || checkOut != null) { "وقت الانصراف غير صالح" }
+        if (checkIn != null && checkOut != null) require(!checkOut.before(checkIn)) { "وقت الانصراف لا يمكن أن يسبق وقت الحضور" }
+        val numericFields = listOf("work_hours", "overtime_hours", "late_minutes", "early_leave_minutes")
+        numericFields.forEach { key ->
+            val raw = if (data.has(key) && !data.isNull(key)) data.optString(key, "").trim() else ""
+            if (raw.isNotBlank()) {
+                val number = raw.toDoubleOrNull() ?: throw IllegalArgumentException("قيمة رقمية غير صالحة: $key")
+                require(number >= 0.0) { "القيمة لا يمكن أن تكون سالبة: $key" }
+            }
+        }
+        val workHoursRaw = if (data.has("work_hours") && !data.isNull("work_hours")) data.optString("work_hours", "").trim() else ""
+        if (workHoursRaw.isNotBlank()) require(workHoursRaw.toDoubleOrNull()?.let { it <= 24.0 } == true) { "ساعات العمل لا يمكن أن تتجاوز 24 ساعة" }
+        val status = data.optString("status", "").trim()
+        if (status.isNotBlank()) require(status in setOf("present", "absent", "late", "early_leave", "on_leave", "holiday")) { "حالة حضور غير مدعومة" }
+        val shiftId = data.optLong("shift_id", 0L)
+        val args = mutableListOf(employeeId.toString(), attendanceDate)
+        val shiftClause = if (shiftId > 0L) { args += shiftId.toString(); " AND shift_id = ?" } else " AND (shift_id IS NULL OR shift_id = 0)"
+        val exclusion = if (existingId != null) { args += existingId.toString(); " AND id <> ?" } else ""
+        readableDatabase.rawQuery("SELECT id FROM attendance WHERE employee_id = ? AND attendance_date = ?$shiftClause AND is_deleted = 0$exclusion LIMIT 1", args.toTypedArray()).use { cursor -> require(!cursor.moveToFirst()) { "يوجد سجل حضور مكرر للموظف والوردية والتاريخ نفسه" } }
+    }
+
+    private fun operationalRowJson(screenKey: String, id: Long): String? {
+        val spec = operationalSpec(screenKey) ?: return null
+        readableDatabase.query(spec.table, null, "id = ?", arrayOf(id.toString()), null, null, null).use { cursor -> return if (cursor.moveToFirst()) cursorToJsonObject(cursor).toString() else null }
+    }
+
+    private fun changedOperationalColumns(oldJson: String?, newJson: String?): String {
+        val old = runCatching { oldJson?.let { JSONObject(it) } }.getOrNull() ?: JSONObject()
+        val new = runCatching { newJson?.let { JSONObject(it) } }.getOrNull() ?: JSONObject()
+        val keys = linkedSetOf<String>(); old.keys().forEach { keys += it }; new.keys().forEach { keys += it }
+        return keys.filter { key -> old.optString(key, "") != new.optString(key, "") }.joinToString(",")
+    }
+
+    private fun logOperationalAudit(screenKey: String, action: String, id: Long, actorId: Long, oldJson: String?, newJson: String?, reason: String = ""): Long {
+        val description = buildString { append("$action $screenKey #$id"); if (reason.isNotBlank()) append("؛ السبب: $reason") }
+        val values = ContentValues().apply {
+            put("uuid", UUID.randomUUID().toString()); put("user_id", actorId); put("action", action); put("action_category", "attendance")
+            put("description", description); put("description_ar", description); put("target_table", screenKey); put("target_id", id)
+            put("old_row_json", oldJson); put("new_row_json", newJson); put("old_values", oldJson); put("new_values", newJson)
+            put("changed_columns", changedOperationalColumns(oldJson, newJson)); put("request_id", UUID.randomUUID().toString()); put("is_success", 1); put("created_at", getCurrentDateTime())
+        }
+        return writableDatabase.insert("user_activity_log", null, values)
+    }
+
     private fun operationalPreparedData(screenKey: String, input: JSONObject, actorId: Long): JSONObject {
         val data = JSONObject(input.toString())
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
@@ -11937,18 +12005,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
+        if (screenKey == "attendance") validateAttendanceRecord(data)
         requireOperationalData(spec, data)
         dbLock.lock()
         return try {
             val values = ContentValues()
-            for (key in spec.columns) {
-                if (data.has(key)) putOperationalValue(values, key, data.opt(key))
-            }
+            for (key in spec.columns) if (data.has(key)) putOperationalValue(values, key, data.opt(key))
             if (operationalHasUuid(spec.table)) putOperationalValue(values, "uuid", data.optString("uuid", UUID.randomUUID().toString()))
             if (operationalHasCreatedAt(spec.table) && !data.has("created_at")) values.put("created_at", getCurrentDateTime())
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
             val id = writableDatabase.insertOrThrow(spec.table, null, values)
-            if (id > 0) logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id")
+            if (id > 0) {
+                if (screenKey == "attendance") logOperationalAudit(screenKey, "create", id, actorId, null, operationalRowJson(screenKey, id))
+                else logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id")
+            }
             id
         } finally { dbLock.unlock() }
     }
@@ -11957,41 +12027,50 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
+        if (screenKey == "attendance") validateAttendanceRecord(data, id)
         dbLock.lock()
         return try {
+            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
-            for (key in spec.columns) {
-                if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
-            }
+            for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val where = if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?"
             val rows = writableDatabase.update(spec.table, values, where, arrayOf(id.toString()))
-            if (rows > 0) logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id")
+            if (rows > 0) {
+                if (screenKey == "attendance") logOperationalAudit(screenKey, "update", id, actorId, oldRow, operationalRowJson(screenKey, id))
+                else logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id")
+            }
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun deleteOperationalRecord(screenKey: String, id: Long): Int {
+    fun deleteOperationalRecord(screenKey: String, id: Long, actorId: Long = 0L): Int {
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val rows = if (spec.softDeleted) db.update(spec.table, ContentValues().apply { put("is_deleted", 1); if (spec.hasUpdatedAt) put("updated_at", getCurrentDateTime()) }, "id = ?", arrayOf(id.toString())) else db.delete(spec.table, "id = ?", arrayOf(id.toString()))
-            if (rows > 0) logActivity("system", "delete_${spec.table}", "حذف سجل ${spec.table}: $id")
+            if (rows > 0) {
+                if (screenKey == "attendance") logOperationalAudit(screenKey, "delete", id, actorId, oldRow, operationalRowJson(screenKey, id))
+                else logActivity("system", "delete_${spec.table}", "حذف سجل ${spec.table}: $id")
+            }
             rows
         } finally { dbLock.unlock() }
     }
 
-    fun resolveOperationalRecord(screenKey: String, id: Long, note: String = ""): Int {
+    fun resolveOperationalRecord(screenKey: String, id: Long, note: String = "", actorId: Long = 0L): Int {
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             val where = "id = ?"
             when (screenKey) {
+                "attendance" -> { if (actorId > 0L) values.put("approved_by", actorId); values.put("approved_at", getCurrentDateTime()); if (note.isNotBlank()) values.put("notes", note) }
                 "bad_debts" -> { values.put("resolved", 1); values.put("resolved_date", getCurrentDateTime()) }
                 "stock_alerts" -> { values.put("is_resolved", 1); values.put("resolved_at", getCurrentDateTime()); values.put("resolution_notes", note) }
                 "maintenance_requests" -> { values.put("status", "completed"); values.put("completed_at", getCurrentDateTime()); values.put("resolution", note) }
@@ -11999,7 +12078,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 else -> error("لا توجد عملية اعتماد/حل مدعومة لهذه الشاشة")
             }
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
-            db.update(spec.table, values, where, arrayOf(id.toString()))
+            val rows = db.update(spec.table, values, where, arrayOf(id.toString()))
+            if (rows > 0 && screenKey == "attendance") logOperationalAudit(screenKey, "approve", id, actorId, oldRow, operationalRowJson(screenKey, id), note)
+            rows
         } finally { dbLock.unlock() }
     }
 
