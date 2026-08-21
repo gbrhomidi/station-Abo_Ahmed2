@@ -1742,14 +1742,29 @@ function populatePartyDropdowns(filterId, selectId) {
 // ============================================================
 // 6. تحميل الحركات والإحصائيات
 // ============================================================
+function movementQueryParams() {
+    const selectedType = document.getElementById('filter-type').value;
+    return {
+        page: currentPage,
+        limit: pageSize,
+        query: document.getElementById('search-product').value.trim(),
+        movement_type: ({ return_customer: 'return', return_supplier: 'out', waste: 'damage', stocktake: 'adjustment' })[selectedType] || selectedType,
+        start_date: document.getElementById('filter-from').value,
+        end_date: document.getElementById('filter-to').value,
+        warehouse_id: Number(document.getElementById('filter-warehouse').value || 0),
+        status: document.getElementById('filter-status').value
+    };
+}
+
 async function loadMovements() {
     showLoading(true);
     try {
-        const result = await apiCall('getMovements', { page: currentPage, limit: pageSize });
+        const result = await apiCall('getMovements', movementQueryParams());
         if (result.success) {
-            allMovements = result.data || [];
+            const payload = result.data || {};
+            allMovements = Array.isArray(payload) ? payload : (payload.rows || []);
             populateMovementsTable(allMovements);
-            updatePagination(result.total || allMovements.length);
+            updatePagination(Number(payload.total_count ?? payload.total ?? allMovements.length));
         } else {
             showToast(result.message || 'خطأ في تحميل الحركات', 'error');
         }
@@ -1853,7 +1868,7 @@ function changePage(page) {
 
 async function loadStats() {
     try {
-        const result = await apiCall('getMovementStats', {});
+        const result = await apiCall('getMovementStats', movementQueryParams());
         if (result.success) {
             const s = result.data || {};
             document.getElementById('total-movements').textContent = (s.total_movements || 0).toLocaleString('en');
@@ -1870,27 +1885,9 @@ async function loadStats() {
 // 7. دوال الفلترة
 // ============================================================
 function applyFilters() {
-    const product = document.getElementById('search-product').value.trim();
-    const selectedType = document.getElementById('filter-type').value;
-    const type = ({ return_customer: 'return', return_supplier: 'out', waste: 'damage', stocktake: 'adjustment' })[selectedType] || selectedType;
-    const from = document.getElementById('filter-from').value;
-    const to = document.getElementById('filter-to').value;
-    const warehouse = document.getElementById('filter-warehouse').value;
-    const supplier = document.getElementById('filter-supplier').value;
-    const customer = document.getElementById('filter-customer').value;
-    const status = document.getElementById('filter-status').value;
-
-    let filtered = allMovements;
-    if (product) filtered = filtered.filter(m => (m.product_name || '').toLowerCase().includes(product.toLowerCase()));
-    if (type) filtered = filtered.filter(m => m.movement_type === type);
-    if (from) filtered = filtered.filter(m => (m.movement_date || '').slice(0,10) >= from);
-    if (to) filtered = filtered.filter(m => (m.movement_date || '').slice(0,10) <= to);
-    if (warehouse) filtered = filtered.filter(m => m.warehouse_id == warehouse || m.source_warehouse_id == warehouse || m.target_warehouse_id == warehouse);
-    if (supplier) filtered = filtered.filter(m => m.supplier_id == supplier);
-    if (customer) filtered = filtered.filter(m => m.customer_id == customer);
-    if (status) filtered = filtered.filter(m => m.status === status);
-    populateMovementsTable(filtered);
-    showToast('تم تطبيق الفلترة', 'success');
+    currentPage = 1;
+    loadMovements();
+    showToast('تم تطبيق الفلترة من قاعدة البيانات', 'success');
 }
 
 function resetFilters() {

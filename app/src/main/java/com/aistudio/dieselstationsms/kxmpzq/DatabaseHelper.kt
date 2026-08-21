@@ -7807,8 +7807,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("movement_type", "out")
                         put("reference_type", "sale")
                         put("reference_id", saleId)
-                        put("station_id", stationId)
-                    }
+                    }, stationScopeId, cashierId
                 )
             }
             result.put("success", true)
@@ -7841,6 +7840,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(productId > 0) { "المنتج مطلوب" }
             require(quantity > 0.0) { "كمية الحركة يجب أن تكون أكبر من صفر" }
             require(movementType in setOf("in", "out", "adjustment", "transfer", "return", "damage")) { "نوع حركة المخزون غير صحيح" }
+            db.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(warehouseId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" }
+            }
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
+            }
             if (movementType == "adjustment") {
                 require(signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
             }
@@ -7912,6 +7917,66 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun approveStocktake(stocktakeId: Long, stationScopeId: Int, actorId: Long): Int {
+        dbLock.lock()
+        return try {
+            require(stocktakeId > 0L) { "معرف الجرد غير صالح" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(actorId > 0L) { "المستخدم المعتمد مطلوب" }
+            val db = writableDatabase
+            var warehouseId = 0L
+            var status = ""
+            db.rawQuery("SELECT st.warehouse_id, st.status FROM stocktakes st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.id = ? AND w.station_id = ? AND w.is_active = 1 AND st.archived = 0", arrayOf(stocktakeId.toString(), stationScopeId.toString())).use { cursor ->
+                if (!cursor.moveToFirst()) return 0
+                warehouseId = cursor.getLong(0)
+                status = cursor.getString(1) ?: ""
+            }
+            if (status == "completed") return 1
+            require(status == "draft" || status == "in_progress") { "لا يمكن اعتماد جرد بحالته الحالية" }
+            val details = mutableListOf<Triple<Long, Long, Double>>()
+            var allDetails = 0
+            db.rawQuery("SELECT COUNT(*) FROM stocktake_details WHERE stocktake_id = ? AND archived = 0", arrayOf(stocktakeId.toString())).use { cursor -> if (cursor.moveToFirst()) allDetails = cursor.getInt(0) }
+            db.rawQuery("SELECT sd.id, sd.product_id, sd.counted_quantity, COALESCE(p.purchase_price, 0) FROM stocktake_details sd JOIN products p ON p.id = sd.product_id WHERE sd.stocktake_id = ? AND sd.archived = 0 AND p.station_id = ? AND p.is_deleted = 0", arrayOf(stocktakeId.toString(), stationScopeId.toString())).use { cursor ->
+                while (cursor.moveToNext()) details += Triple(cursor.getLong(0), cursor.getLong(1), cursor.getDouble(2))
+            }
+            require(allDetails > 0 && details.size == allDetails) { "تفاصيل الجرد ناقصة أو تحتوي منتجاً خارج نطاق المحطة" }
+            db.beginTransaction()
+            try {
+                var totalVariance = 0.0
+                for ((detailId, productId, countedQuantity) in details) {
+                    require(countedQuantity >= 0.0) { "الكمية المعدودة غير صالحة" }
+                    val currentQuantity = db.rawQuery("SELECT COALESCE(quantity_on_hand, 0) FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?", arrayOf(productId.toString(), warehouseId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+                    val delta = countedQuantity - currentQuantity
+                    val unitCost = db.rawQuery("SELECT COALESCE(purchase_price, 0) FROM products p WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" }; cursor.getDouble(0) }
+                    totalVariance += delta * unitCost
+                    if (delta != 0.0) {
+                        val movementId = addStockMovement(JSONObject().apply {
+                            put("product_id", productId)
+                            put("warehouse_id", warehouseId)
+                            put("movement_type", "adjustment")
+                            put("quantity", kotlin.math.abs(delta))
+                            put("signed_quantity", delta)
+                            put("unit_cost", unitCost)
+                            put("reference_type", "stocktake")
+                            put("reference_id", stocktakeId)
+                            put("notes", "اعتماد فروقات الجرد رقم $stocktakeId")
+                        }, stationScopeId, actorId)
+                        require(movementId > 0L) { "فشل تسجيل حركة تسوية الجرد" }
+                    }
+                    db.update("stocktake_details", ContentValues().apply { put("variance_value", delta * unitCost) }, "id = ? AND stocktake_id = ? AND archived = 0", arrayOf(detailId.toString(), stocktakeId.toString()))
+                }
+                val rows = db.update("stocktakes", ContentValues().apply { put("status", "completed"); put("total_variance", totalVariance) }, "id = ? AND warehouse_id = ? AND archived = 0 AND status IN ('draft','in_progress')", arrayOf(stocktakeId.toString(), warehouseId.toString()))
+                require(rows == 1) { "تعذر اعتماد الجرد" }
+                db.setTransactionSuccessful()
+                1
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun getStockMovements(data: JSONObject, stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
@@ -7978,7 +8043,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = readableDatabase
             val scoped = stationId != null && stationId > 0
             val sql = if (scoped) {
-                """SELECT p.id, p.product_name, p.product_name_ar, p.minimum_stock,
+                """SELECT p.id, p.product_code, p.barcode, p.product_name, p.product_name_ar, p.minimum_stock,
                           COALESCE((SELECT SUM(il.quantity_on_hand)
                                     FROM inventory_levels il
                                     INNER JOIN warehouses w ON w.id = il.warehouse_id
@@ -7990,7 +8055,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                                  INNER JOIN warehouses w ON w.id = il.warehouse_id
                                  WHERE il.product_id = p.id AND w.station_id = ? AND w.is_active = 1), 0) <= p.minimum_stock"""
             } else {
-                """SELECT p.id, p.product_name, p.product_name_ar, p.minimum_stock,
+                """SELECT p.id, p.product_code, p.barcode, p.product_name, p.product_name_ar, p.minimum_stock,
                           COALESCE((SELECT SUM(il.quantity_on_hand) FROM inventory_levels il WHERE il.product_id = p.id), 0) AS quantity_on_hand
                    FROM products p
                    WHERE p.is_deleted = 0 AND p.status = 'active'
@@ -8002,22 +8067,89 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
+    fun getStockMovementsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        dbLock.lock()
+        return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val db = readableDatabase
+            val where = mutableListOf("im.is_deleted = 0", "im.station_id = ?")
+            val args = mutableListOf<String>(stationScopeId.toString())
+            data.optString("start_date", data.optString("from_date", "")).trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
+            data.optString("end_date", data.optString("to_date", "")).trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
+            data.optString("movement_type").trim().takeIf { it in setOf("in", "out", "adjustment", "transfer", "return", "damage") }?.let { where += "im.movement_type = ?"; args += it }
+            data.optString("status").trim().takeIf { it in setOf("draft", "completed", "cancelled", "reversed") }?.let { where += "im.status = ?"; args += it }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0L }?.let { where += "im.warehouse_id = ?"; args += it.toString() }
+            data.optLong("product_id", 0L).takeIf { it > 0L }?.let { where += "im.product_id = ?"; args += it.toString() }
+            data.optLong("movement_id", 0L).takeIf { it > 0L }?.let { where += "im.id = ?"; args += it.toString() }
+            val query = data.optString("query", data.optString("search", "")).trim()
+            if (query.isNotEmpty()) {
+                where += "(im.movement_code LIKE ? OR p.product_code LIKE ? OR p.product_name LIKE ? OR p.product_name_ar LIKE ? OR w.warehouse_name LIKE ?)"
+                repeat(5) { args += "%$query%" }
+            }
+            val whereSql = where.joinToString(" AND ")
+            val countSql = "SELECT COUNT(*) FROM inventory_movements im LEFT JOIN products p ON p.id = im.product_id LEFT JOIN warehouses w ON w.id = im.warehouse_id WHERE $whereSql"
+            val totalCount = db.rawQuery(countSql, args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            val pageSize = data.optInt("limit", 20).coerceIn(1, 200)
+            val requestedPage = data.optInt("page", 1).coerceAtLeast(1)
+            val offset = data.optInt("offset", (requestedPage - 1) * pageSize).coerceAtLeast(0)
+            val sortColumn = when (data.optString("sort_by", "date")) {
+                "quantity" -> "im.quantity_change"
+                "value" -> "im.total_cost"
+                "type" -> "im.movement_type"
+                "warehouse" -> "w.warehouse_name"
+                else -> "datetime(im.created_at)"
+            }
+            val sortDirection = if (data.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
+            val sql = """SELECT im.*, p.product_name, p.product_name_ar, p.product_code, w.warehouse_name, u.username AS performed_by_name
+                       FROM inventory_movements im
+                       LEFT JOIN products p ON p.id = im.product_id
+                       LEFT JOIN warehouses w ON w.id = im.warehouse_id
+                       LEFT JOIN users u ON u.id = im.performed_by
+                       WHERE $whereSql
+                       ORDER BY $sortColumn $sortDirection, im.id DESC LIMIT ? OFFSET ?"""
+            val pageArgs = args.toMutableList().apply { add(pageSize.toString()); add(offset.toString()) }
+            val rows = db.rawQuery(sql, pageArgs.toTypedArray()).use { cursorToJsonArray(it) }
+            val page = (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            JSONObject().apply {
+                put("rows", rows)
+                put("count", rows.length())
+                put("total_count", totalCount)
+                put("page", page)
+                put("page_size", pageSize)
+                put("total_pages", totalPages)
+                put("has_next", page < totalPages)
+                put("has_previous", page > 1)
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun checkLowStock(): JSONArray = getLowStockItems()
-    fun transferStockMovement(data: JSONObject): Long {
+    fun transferStockMovement(data: JSONObject, stationScopeId: Int, userId: Long): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(userId > 0L) { "معرف المستخدم غير صالح" }
             val productId = data.optLong("product_id", 0L)
             val sourceWarehouseId = data.optLong("source_warehouse_id", 0L)
             val targetWarehouseId = data.optLong("target_warehouse_id", 0L)
             val quantity = data.optDouble("quantity", 0.0)
             val unitCost = data.optDouble("unit_cost", 0.0)
-            val stationId = data.optInt("station_id", 1)
-            val performedBy = data.optLong("performed_by", 1L)
+            val stationId = stationScopeId
+            val performedBy = userId
             require(productId > 0L) { "المنتج مطلوب" }
             require(sourceWarehouseId > 0L && targetWarehouseId > 0L && sourceWarehouseId != targetWarehouseId) { "مستودعا المصدر والهدف مطلوبان ويجب أن يكونا مختلفين" }
             require(quantity > 0.0) { "كمية التحويل يجب أن تكون أكبر من صفر" }
             require(performedBy > 0L) { "المستخدم المنفذ مطلوب" }
+            db.rawQuery("SELECT COUNT(*) FROM warehouses WHERE id IN (?, ?) AND station_id = ? AND is_active = 1", arrayOf(sourceWarehouseId.toString(), targetWarehouseId.toString(), stationId.toString())).use { cursor ->
+                require(cursor.moveToFirst() && cursor.getInt(0) == 2) { "المستودع المصدر أو الهدف خارج نطاق المحطة" }
+            }
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
+            }
 
             db.beginTransaction()
             try {
@@ -8079,11 +8211,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun archiveStockMovement(movementId: Long, userId: Long): Int {
+    fun archiveStockMovement(movementId: Long, userId: Long, stationScopeId: Int): Int {
         dbLock.lock()
         return try {
             require(movementId > 0L) { "معرّف الحركة غير صالح" }
             require(userId > 0L) { "المستخدم المنفذ مطلوب" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val values = ContentValues().apply {
                 put("is_deleted", 1)
                 put("deleted_at", getCurrentDateTime())
@@ -8091,31 +8224,41 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_at", getCurrentDateTime())
                 put("updated_by", userId)
             }
-            writableDatabase.update("inventory_movements", values, "id = ? AND is_deleted = 0", arrayOf(movementId.toString()))
+            writableDatabase.update("inventory_movements", values, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(movementId.toString(), stationScopeId.toString()))
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getInventoryMovementStats(data: JSONObject = JSONObject()): JSONObject {
+    fun getInventoryMovementStats(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val where = mutableListOf("is_deleted = 0")
-            val args = mutableListOf<String>()
-            data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(created_at) >= date(?)"; args += it }
-            data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(created_at) <= date(?)"; args += it }
-            data.optLong("warehouse_id", 0L).takeIf { it > 0L }?.let { where += "warehouse_id = ?"; args += it.toString() }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val where = mutableListOf("im.is_deleted = 0", "im.station_id = ?")
+            val args = mutableListOf<String>(stationScopeId.toString())
+            data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
+            data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0L }?.let { where += "im.warehouse_id = ?"; args += it.toString() }
+            data.optLong("product_id", 0L).takeIf { it > 0L }?.let { where += "im.product_id = ?"; args += it.toString() }
+            data.optString("movement_type").trim().takeIf { it in setOf("in", "out", "adjustment", "transfer", "return", "damage") }?.let { where += "im.movement_type = ?"; args += it }
+            data.optString("status").trim().takeIf { it in setOf("draft", "completed", "cancelled", "reversed") }?.let { where += "im.status = ?"; args += it }
+            val query = data.optString("query", data.optString("search", "")).trim()
+            if (query.isNotEmpty()) {
+                where += "(im.movement_code LIKE ? OR p.product_code LIKE ? OR p.product_name LIKE ? OR p.product_name_ar LIKE ?)"
+                repeat(4) { args += "%$query%" }
+            }
             val sql = """
                 SELECT COUNT(*) AS total_movements,
-                       COALESCE(SUM(total_cost), 0) AS total_value,
-                       COALESCE(SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END), 0) AS today_movements,
-                       COALESCE(SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END), 0) AS pending_count,
-                       COALESCE(SUM(CASE WHEN movement_type IN ('in', 'return') THEN 1 ELSE 0 END), 0) AS inbound_count,
-                       COALESCE(SUM(CASE WHEN movement_type IN ('out', 'damage') THEN 1 ELSE 0 END), 0) AS outbound_count,
-                       COALESCE(SUM(CASE WHEN movement_type = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count,
-                       COALESCE(SUM(CASE WHEN movement_type = 'adjustment' THEN 1 ELSE 0 END), 0) AS adjustment_count
-                FROM inventory_movements
+                       COALESCE(SUM(im.total_cost), 0) AS total_value,
+                       COALESCE(SUM(CASE WHEN date(im.created_at) = date('now') THEN 1 ELSE 0 END), 0) AS today_movements,
+                       COALESCE(SUM(CASE WHEN im.status = 'draft' THEN 1 ELSE 0 END), 0) AS pending_count,
+                       COALESCE(SUM(CASE WHEN im.movement_type IN ('in', 'return') THEN 1 ELSE 0 END), 0) AS inbound_count,
+                       COALESCE(SUM(CASE WHEN im.movement_type IN ('out', 'damage') THEN 1 ELSE 0 END), 0) AS outbound_count,
+                       COALESCE(SUM(CASE WHEN im.movement_type = 'transfer' THEN 1 ELSE 0 END), 0) AS transfer_count,
+                       COALESCE(SUM(CASE WHEN im.movement_type = 'adjustment' THEN 1 ELSE 0 END), 0) AS adjustment_count
+                FROM inventory_movements im
+                LEFT JOIN products p ON p.id = im.product_id
                 WHERE ${where.joinToString(" AND ")}
             """.trimIndent()
             db.rawQuery(sql, args.toTypedArray()).use { cursor ->
@@ -8126,23 +8269,36 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getInventoryReport(data: JSONObject = JSONObject()): JSONObject {
+    fun getInventoryReport(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val reportType = data.optString("report_type", "summary").ifBlank { "summary" }
             val warehouseId = data.optLong("warehouse_id", 0L)
             val categoryId = data.optLong("category_id", 0L)
             val statusFilter = data.optString("status").trim()
             val rows = JSONArray()
+            if (data.optLong("warehouse_id", 0L) > 0L) {
+                val requestedWarehouseId = data.optLong("warehouse_id")
+                db.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(requestedWarehouseId.toString(), stationScopeId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" }
+                }
+            }
             val categoryTotals = linkedMapOf<String, Double>()
             val movementSeries = JSONArray()
             val pageSize = data.optInt("limit", 200).coerceIn(1, 1000)
             val offset = data.optInt("offset", 0).coerceAtLeast(0)
             var totalCount = 0
+            var aggregateLoaded = false
+            var aggregateTotalQuantity = 0.0
+            var aggregateTotalValue = 0.0
+            var aggregateLowStock = 0
+            var aggregateCriticalStock = 0
+            var aggregateWarehouseCount = 0
             if (reportType == "movement") {
-                val where = mutableListOf("im.is_deleted = 0")
-                val args = mutableListOf<String>()
+                val where = mutableListOf("im.is_deleted = 0", "im.station_id = ?")
+                val args = mutableListOf<String>(stationScopeId.toString())
                 data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) >= date(?)"; args += it }
                 data.optString("end_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(im.created_at) <= date(?)"; args += it }
                 if (warehouseId > 0L) { where += "im.warehouse_id = ?"; args += warehouseId.toString() }
@@ -8155,6 +8311,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 val countSql = "SELECT COUNT(*) FROM inventory_movements im LEFT JOIN products p ON im.product_id=p.id LEFT JOIN warehouses w ON im.warehouse_id=w.id WHERE ${where.joinToString(" AND ")}"
                 db.rawQuery(countSql, args.toTypedArray()).use { if (it.moveToFirst()) totalCount = it.getInt(0) }
+                db.rawQuery("SELECT COALESCE(SUM(im.quantity_change),0), COALESCE(SUM(im.total_cost),0), COUNT(DISTINCT im.warehouse_id) FROM inventory_movements im LEFT JOIN products p ON im.product_id=p.id LEFT JOIN warehouses w ON im.warehouse_id=w.id WHERE ${where.joinToString(" AND ")}", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) { aggregateTotalQuantity = cursor.getDouble(0); aggregateTotalValue = cursor.getDouble(1); aggregateWarehouseCount = cursor.getInt(2); aggregateLoaded = true } }
                 val sql = """
                     SELECT im.id AS movement_id, im.movement_code, im.created_at AS movement_date,
                            im.movement_type, im.movement_subtype, im.product_id,
@@ -8180,19 +8337,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                               COALESCE(SUM(im.total_cost), 0) AS total_value
                        FROM inventory_movements im
                        LEFT JOIN products p ON im.product_id = p.id
-                       WHERE im.is_deleted = 0
+                       WHERE im.is_deleted = 0 AND im.station_id = ?
                        GROUP BY date(im.created_at)
                        ORDER BY day ASC LIMIT 90""",
-                    null
+                    arrayOf(stationScopeId.toString())
                 ).use { cursor -> while (cursor.moveToNext()) movementSeries.put(cursorToJsonObject(cursor)) }
             } else {
                 val levelSource = if (warehouseId > 0L) {
-                    "LEFT JOIN inventory_levels il ON p.id = il.product_id AND il.warehouse_id = ${warehouseId} LEFT JOIN warehouses w ON w.id = il.warehouse_id"
+                    "LEFT JOIN inventory_levels il ON p.id = il.product_id AND il.warehouse_id = ${warehouseId} LEFT JOIN warehouses w ON w.id = il.warehouse_id AND w.station_id = ${stationScopeId}"
                 } else {
-                    "LEFT JOIN (SELECT product_id, SUM(quantity_on_hand) AS quantity_on_hand, AVG(average_cost) AS average_cost, MAX(last_count_date) AS last_count_date FROM inventory_levels GROUP BY product_id) il ON p.id = il.product_id LEFT JOIN warehouses w ON 1 = 0"
+                    "LEFT JOIN (SELECT il.product_id, SUM(il.quantity_on_hand) AS quantity_on_hand, AVG(il.average_cost) AS average_cost, MAX(il.last_count_date) AS last_count_date FROM inventory_levels il JOIN warehouses sw ON sw.id = il.warehouse_id WHERE sw.station_id = ${stationScopeId} AND sw.is_active = 1 GROUP BY il.product_id) il ON p.id = il.product_id LEFT JOIN warehouses w ON 1 = 0"
                 }
-                val where = mutableListOf("p.is_deleted = 0", "p.status = 'active'")
-                val args = mutableListOf<String>()
+                val where = mutableListOf("p.is_deleted = 0", "p.status = 'active'", "p.station_id = ?")
+                val args = mutableListOf<String>(stationScopeId.toString())
                 if (categoryId > 0L) { where += "p.category_id = ?"; args += categoryId.toString() }
                 data.optLong("product_id", 0L).takeIf { it > 0L }?.let { where += "p.id = ?"; args += it.toString() }
                 val search = data.optString("search", "").trim()
@@ -8208,6 +8365,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 val countSql = "SELECT COUNT(*) FROM products p LEFT JOIN product_categories c ON p.category_id=c.id $levelSource WHERE ${where.joinToString(" AND ")}"
                 db.rawQuery(countSql, args.toTypedArray()).use { if (it.moveToFirst()) totalCount = it.getInt(0) }
+                val aggregateSql = "SELECT COALESCE(SUM(COALESCE(il.quantity_on_hand, p.quantity, 0)),0), COALESCE(SUM(COALESCE(il.quantity_on_hand, p.quantity, 0) * COALESCE(il.average_cost, p.purchase_price, 0)),0), COALESCE(SUM(CASE WHEN COALESCE(il.quantity_on_hand, p.quantity, 0) <= p.minimum_stock AND COALESCE(il.quantity_on_hand, p.quantity, 0) > 0 THEN 1 ELSE 0 END),0), COALESCE(SUM(CASE WHEN COALESCE(il.quantity_on_hand, p.quantity, 0) <= 0 THEN 1 ELSE 0 END),0) FROM products p LEFT JOIN product_categories c ON p.category_id=c.id $levelSource WHERE ${where.joinToString(" AND ")}"
+                db.rawQuery(aggregateSql, args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) { aggregateTotalQuantity = cursor.getDouble(0); aggregateTotalValue = cursor.getDouble(1); aggregateLowStock = cursor.getInt(2); aggregateCriticalStock = cursor.getInt(3); aggregateWarehouseCount = if (warehouseId > 0L) 1 else db.rawQuery("SELECT COUNT(*) FROM warehouses WHERE station_id = ? AND is_active = 1", arrayOf(stationScopeId.toString())).use { wCursor -> if (wCursor.moveToFirst()) wCursor.getInt(0) else 0 }; aggregateLoaded = true } }
                 val sortColumn = when (data.optString("sort_by", "product_name")) {
                     "quantity" -> "quantity"
                     "purchase_price" -> "purchase_price"
@@ -8258,15 +8417,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 when (item.optString("status")) { "low" -> lowStock++; "critical" -> criticalStock++ }
                 item.optString("warehouse_name").takeIf { it.isNotBlank() }?.let { warehouses.add(it) }
             }
+            if (aggregateLoaded) {
+                totalQuantity = aggregateTotalQuantity
+                totalValue = aggregateTotalValue
+                lowStock = aggregateLowStock
+                criticalStock = aggregateCriticalStock
+            }
             val stats = JSONObject().apply {
-                put("total_items", rows.length())
+                put("total_items", totalCount)
                 put("total_quantity", totalQuantity)
                 put("total_value", totalValue)
                 put("low_stock", lowStock)
                 put("critical_stock", criticalStock)
-                put("warehouse_count", warehouses.size)
+                put("warehouse_count", if (aggregateLoaded) aggregateWarehouseCount else warehouses.size)
                 put("category_count", categoryTotals.size)
-                put("inventory_health_score", if (rows.length() == 0) 0 else (100.0 - ((criticalStock * 60.0 + lowStock * 30.0) / rows.length())).coerceIn(0.0, 100.0))
+                put("inventory_health_score", if (totalCount == 0) 0 else (100.0 - ((criticalStock * 60.0 + lowStock * 30.0) / totalCount)).coerceIn(0.0, 100.0))
             }
             val categories = JSONArray()
             categoryTotals.forEach { (name, value) -> categories.put(JSONObject().put("category_name", name).put("total_value", value)) }
@@ -8291,20 +8456,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getInventoryProductDetails(productId: Long): JSONObject? {
+    fun getInventoryProductDetails(productId: Long, stationScopeId: Int): JSONObject? {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val product = db.rawQuery(
                 """SELECT p.id AS product_id, p.product_code, p.barcode, p.product_name, p.product_name_ar,
                           p.purchase_price, p.sale_price, p.minimum_stock, p.maximum_stock, p.reorder_quantity,
                           p.status, c.category_name, COALESCE(SUM(il.quantity_on_hand), p.quantity, 0) AS quantity
                    FROM products p
                    LEFT JOIN product_categories c ON p.category_id = c.id
-                   LEFT JOIN inventory_levels il ON p.id = il.product_id
-                   WHERE p.id = ? AND p.is_deleted = 0
+                   LEFT JOIN inventory_levels il ON p.id = il.product_id AND EXISTS (SELECT 1 FROM warehouses iw WHERE iw.id = il.warehouse_id AND iw.station_id = ${stationScopeId} AND iw.is_active = 1)
+                   WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0
+
                    GROUP BY p.id""",
-                arrayOf(productId.toString())
+                arrayOf(productId.toString(), stationScopeId.toString())
             ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null } ?: return null
             val movements = JSONArray()
             db.rawQuery(
@@ -8314,9 +8481,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM inventory_movements im
                    LEFT JOIN warehouses w ON im.warehouse_id = w.id
                    LEFT JOIN users u ON im.performed_by = u.id
-                   WHERE im.product_id = ? AND im.is_deleted = 0
+                                             WHERE im.product_id = ? AND im.station_id = ? AND im.is_deleted = 0
+
                    ORDER BY datetime(im.created_at) DESC, im.id DESC LIMIT 50""",
-                arrayOf(productId.toString())
+                arrayOf(productId.toString(), stationScopeId.toString())
             ).use { cursor -> while (cursor.moveToNext()) movements.put(cursorToJsonObject(cursor)) }
             product.put("movements", movements)
             product
@@ -8325,9 +8493,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getProductMovementTrend(productId: Long, days: Int = 30): JSONObject {
+    fun getProductMovementTrend(productId: Long, days: Int = 30, stationScopeId: Int): JSONObject {
         dbLock.lock()
         return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
+            }
             val safeDays = days.coerceIn(1, 365)
             val labels = JSONArray()
             val inbound = JSONArray()
@@ -8339,9 +8511,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           COALESCE(SUM(CASE WHEN movement_type IN ('out', 'damage') THEN ABS(quantity_change) ELSE 0 END), 0) AS outbound,
                           COUNT(*) AS movement_count
                    FROM inventory_movements
-                   WHERE product_id = ? AND is_deleted = 0 AND date(created_at) >= date('now', ?)
+                   WHERE product_id = ? AND station_id = ? AND is_deleted = 0 AND date(created_at) >= date('now', ?)
                    GROUP BY date(created_at) ORDER BY day ASC""".trimIndent(),
-                arrayOf(productId.toString(), "-${safeDays} days")
+                arrayOf(productId.toString(), stationScopeId.toString(), "-${safeDays} days")
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     labels.put(cursor.getString(cursor.getColumnIndexOrThrow("day")))
@@ -8357,21 +8529,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
-    fun createStockAlert(productId: Long, threshold: Double): Long {
+    fun createStockAlert(productId: Long, threshold: Double, stationScopeId: Int, createdBy: Long): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            require(productId > 0L) { "المنتج غير صالح" }
+            require(threshold >= 0.0 && threshold.isFinite()) { "الحد الأدنى غير صالح" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(createdBy > 0L) { "المستخدم المنشئ غير صالح" }
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
+            }
+            val currentQuantity = db.rawQuery("""SELECT COALESCE(SUM(il.quantity_on_hand), 0) FROM inventory_levels il JOIN warehouses w ON w.id = il.warehouse_id WHERE il.product_id = ? AND w.station_id = ? AND w.is_active = 1""", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("product_id", productId)
-                put("station_id", 1)
+                put("station_id", stationScopeId)
                 put("alert_type", "low_stock")
                 put("alert_level", "warning")
                 put("threshold_quantity", threshold)
-                put("current_quantity", 0.0)
+                put("current_quantity", currentQuantity)
                 put("is_resolved", 0)
                 put("created_at", getCurrentDateTime())
-                put("created_by", 1)
+                put("created_by", createdBy)
             }
             db.insert("stock_alerts", null, cv)
         } finally {
@@ -12253,6 +12433,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 args += stationId.toString()
             } else if (stationId > 0 && screenKey == "bad_debts") {
                 where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "stocktakes") {
+                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+            } else if (stationId > 0 && screenKey == "stocktake_details") {
+                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12323,6 +12507,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 args += stationId.toString()
             } else if (stationId > 0 && screenKey == "bad_debts") {
                 where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "stocktakes") {
+                where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+            } else if (stationId > 0 && screenKey == "stocktake_details") {
+                where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12403,6 +12591,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun getStockAlertRecordsContract(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val params = JSONObject(data.toString()).apply { put("station_id", stationScopeId) }
+        val report = getOperationalReport("stock_alerts", params)
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val statistics = db.rawQuery(
+                """SELECT COUNT(*) AS total_count,
+                          COALESCE(SUM(CASE WHEN a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS unresolved_count,
+                          COALESCE(SUM(CASE WHEN a.alert_level = 'critical' AND a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS critical_count,
+                          COALESCE(SUM(CASE WHEN a.alert_type = 'expiry' AND a.is_resolved = 0 THEN 1 ELSE 0 END), 0) AS expiring_count,
+                          COALESCE(SUM(CASE WHEN a.alert_type = 'expiry' AND a.is_resolved = 0 THEN COALESCE(p.purchase_price, 0) * COALESCE(a.current_quantity, 0) ELSE 0 END), 0) AS expiring_value,
+                          COALESCE((SELECT COUNT(*) FROM stocktake_details sd JOIN stocktakes st ON st.id = sd.stocktake_id JOIN warehouses aw ON aw.id = st.warehouse_id WHERE aw.station_id = ? AND aw.is_active = 1 AND st.archived = 0 AND sd.archived = 0), 0) AS audit_items,
+                          COALESCE((SELECT AVG(ABS(sd.variance_value)) FROM stocktake_details sd JOIN stocktakes st ON st.id = sd.stocktake_id JOIN warehouses aw ON aw.id = st.warehouse_id WHERE aw.station_id = ? AND aw.is_active = 1 AND st.archived = 0 AND sd.archived = 0), 0) AS audit_variance
+                   FROM stock_alerts a
+                   LEFT JOIN products p ON p.id = a.product_id
+                   WHERE a.station_id = ?""",
+                arrayOf(stationScopeId.toString(), stationScopeId.toString(), stationScopeId.toString())
+            ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
+            JSONObject().apply {
+                put("rows", report.optJSONArray("rows") ?: JSONArray())
+                put("records", report.optJSONArray("rows") ?: JSONArray())
+                put("total_count", report.optInt("total_count", 0))
+                put("page", report.optInt("page", 1))
+                put("page_size", report.optInt("page_size", 200))
+                put("total_pages", report.optInt("total_pages", 0))
+                put("has_next", report.optBoolean("has_next", false))
+                put("has_previous", report.optBoolean("has_previous", false))
+                put("statistics", statistics)
+                put("critical_count", statistics.optInt("critical_count", 0))
+                put("expiring_count", statistics.optInt("expiring_count", 0))
+                put("expiring_value", statistics.optDouble("expiring_value", 0.0))
+                put("audit_items", statistics.optInt("audit_items", 0))
+                put("audit_variance", statistics.optDouble("audit_variance", 0.0))
+                put("unresolved_count", statistics.optInt("unresolved_count", 0))
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
@@ -12418,6 +12648,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
+            if (screenKey == "stocktakes" && stationId > 0) writeDb.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(data.optLong("warehouse_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" } }
+            if (screenKey == "stocktake_details" && stationId > 0) writeDb.rawQuery("SELECT st.id FROM stocktakes st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.id = ? AND w.station_id = ? AND w.is_active = 1 AND st.archived = 0", arrayOf(data.optLong("stocktake_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الجرد خارج نطاق المحطة" } }
             val id = writeDb.insertOrThrow(spec.table, null, values)
             if (id > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "create", id, actorId, null, operationalRowJson(screenKey, id))
@@ -12440,9 +12672,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
-            val scope = if (spec.columns.contains("station_id") && stationId > 0) " AND station_id = ?" else if (screenKey == "bad_debts" && stationId > 0) " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)" else ""
+            val directScope = spec.columns.contains("station_id") && stationId > 0
+            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
+            val scope = when {
+                directScope -> " AND station_id = ?"
+                screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                else -> ""
+            }
             val where = (if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?") + scope
-            val whereArgs = if (spec.columns.contains("station_id") && stationId > 0) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
+            val whereArgs = if (directScope) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
             val rows = writableDatabase.update(spec.table, values, where, whereArgs)
             if (rows > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "update", id, actorId, oldRow, operationalRowJson(screenKey, id))
@@ -12460,10 +12700,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey == "bad_debts"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
-                relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -12485,10 +12727,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey == "bad_debts"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
-                relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
+                screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -13846,12 +14090,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getDamagedProducts(data: JSONObject): JSONArray {
+    fun getDamagedProducts(data: JSONObject, stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val db = readableDatabase
-            val conditions = mutableListOf<String>()
-            val args = mutableListOf<String>()
+            val conditions = mutableListOf<String>("dp.station_id = ?")
+            val args = mutableListOf<String>(stationScopeId.toString())
             if (!data.optBoolean("include_archived", false)) {
                 conditions += "dp.archived = 0"
             }
@@ -13869,10 +14114,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             data.optLong("warehouse_id", 0L).takeIf { it > 0 }?.let {
                 conditions += "dp.warehouse_id = ?"
-                args += it.toString()
-            }
-            data.optLong("station_id", 0L).takeIf { it > 0 }?.let {
-                conditions += "dp.station_id = ?"
                 args += it.toString()
             }
             data.optString("status").trim().takeIf { it in setOf("pending", "approved", "rejected") }?.let {
@@ -13909,25 +14150,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun addDamagedProduct(data: JSONObject): Long {
+    fun addDamagedProduct(data: JSONObject, stationScopeId: Int, reportedBy: Long): Long {
         dbLock.lock()
         return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(reportedBy > 0L) { "المبلّغ مطلوب" }
             val productId = data.optLong("product_id", 0L)
             val quantity = data.optDouble("quantity", 0.0)
-            val reportedBy = data.optLong("reported_by", 0L)
             require(productId > 0) { "المنتج مطلوب" }
             require(quantity > 0.0) { "الكمية يجب أن تكون أكبر من صفر" }
-            require(reportedBy > 0) { "المبلّغ مطلوب" }
-
             val db = writableDatabase
-            db.rawQuery("SELECT id FROM products WHERE id = ? AND is_deleted = 0", arrayOf(productId.toString())).use { cursor ->
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
                 require(cursor.moveToFirst()) { "المنتج غير موجود أو غير نشط" }
             }
             val values = ContentValues().apply {
                 put("product_id", productId)
                 if (data.optLong("warehouse_id", 0L) > 0) put("warehouse_id", data.optLong("warehouse_id")) else putNull("warehouse_id")
                 if (data.optLong("tank_id", 0L) > 0) put("tank_id", data.optLong("tank_id")) else putNull("tank_id")
-                if (data.optLong("station_id", 0L) > 0) put("station_id", data.optLong("station_id")) else putNull("station_id")
+                put("station_id", stationScopeId)
                 put("quantity", quantity)
                 put("reason", data.optString("reason").trim())
                 put("notes", data.optString("notes").trim())
@@ -13936,6 +14176,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("status", "pending")
                 put("archived", 0)
             }
+            val warehouseId = data.optLong("warehouse_id", 0L)
+            if (warehouseId > 0L) db.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(warehouseId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" } }
             val id = db.insert("damaged_products", null, values)
             require(id > 0) { "تعذر حفظ سجل التالف" }
             logActivity("system", "damaged_product_created", "تم إنشاء سجل تالف رقم $id")
@@ -13945,16 +14187,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updateDamagedProduct(id: Long, data: JSONObject): Int {
+    fun updateDamagedProduct(id: Long, data: JSONObject, stationScopeId: Int): Int {
         dbLock.lock()
         return try {
             require(id > 0) { "معرف السجل غير صالح" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val productId = data.optLong("product_id", 0L)
             val quantity = data.optDouble("quantity", 0.0)
             require(productId > 0) { "المنتج مطلوب" }
             require(quantity > 0.0) { "الكمية يجب أن تكون أكبر من صفر" }
             val db = writableDatabase
-            db.rawQuery("SELECT id FROM products WHERE id = ? AND is_deleted = 0", arrayOf(productId.toString())).use { cursor ->
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
                 require(cursor.moveToFirst()) { "المنتج غير موجود أو غير نشط" }
             }
             val values = ContentValues().apply {
@@ -13965,9 +14208,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("tank_id")) {
                     if (data.isNull("tank_id")) putNull("tank_id") else put("tank_id", data.optLong("tank_id"))
                 }
-                if (data.has("station_id")) {
-                    if (data.isNull("station_id")) putNull("station_id") else put("station_id", data.optLong("station_id"))
-                }
                 put("quantity", quantity)
                 put("reason", data.optString("reason").trim())
                 put("notes", data.optString("notes").trim())
@@ -13975,9 +14215,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("report_date", data.optString("report_date").trim())
                 }
             }
-            val stationId = data.optInt("station_id", 0)
-            require(stationId > 0) { "معرف المحطة مطلوب" }
-            val rows = db.update("damaged_products", values, "id = ? AND station_id = ? AND archived = 0", arrayOf(id.toString(), stationId.toString()))
+            val warehouseId = data.optLong("warehouse_id", 0L)
+            if (warehouseId > 0L) db.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(warehouseId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" } }
+            val rows = db.update("damaged_products", values, "id = ? AND station_id = ? AND archived = 0", arrayOf(id.toString(), stationScopeId.toString()))
             if (rows > 0) logActivity("system", "damaged_product_updated", "تم تحديث سجل تالف رقم $id")
             rows
         } finally {
@@ -13985,12 +14225,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updateDamagedProductStatus(id: Long, status: String, approvedBy: Long, stationScopeId: Int? = null): Int {
+    fun updateDamagedProductStatus(id: Long, status: String, approvedBy: Long, stationScopeId: Int): Int {
         dbLock.lock()
         return try {
             require(id > 0) { "معرف السجل غير صالح" }
             require(status in setOf("pending", "approved", "rejected")) { "حالة التالف غير صحيحة" }
             require(approvedBy > 0) { "المستخدم المعتمد مطلوب" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val db = writableDatabase
             var currentStatus = ""
             var productId = 0L
@@ -13998,8 +14239,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             var warehouseId = 0L
             var stationId = 0
             var unitCost = 0.0
-            val rowWhere = if (stationScopeId != null && stationScopeId > 0) "dp.id = ? AND dp.station_id = ? AND dp.archived = 0" else "dp.id = ? AND dp.archived = 0"
-            val rowArgs = if (stationScopeId != null && stationScopeId > 0) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
+            val rowWhere = "dp.id = ? AND dp.station_id = ? AND dp.archived = 0"
+            val rowArgs = arrayOf(id.toString(), stationScopeId.toString())
             db.rawQuery(
                 "SELECT dp.status, dp.product_id, dp.quantity, dp.warehouse_id, dp.station_id, COALESCE(p.purchase_price, 0) FROM damaged_products dp LEFT JOIN products p ON p.id = dp.product_id WHERE $rowWhere",
                 rowArgs
@@ -14035,7 +14276,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("notes", "اعتماد سجل التالف رقم $id")
                         put("performed_by", approvedBy)
                     }
-                    val movementId = addStockMovement(movement)
+                    val movementId = addStockMovement(movement, stationScopeId, approvedBy)
                     require(movementId > 0) { "تعذر تسجيل خصم المخزون" }
                 }
                 val values = ContentValues().apply {
@@ -14048,8 +14289,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("approved_at", getCurrentDateTime())
                     }
                 }
-                val statusWhere = if (stationScopeId != null && stationScopeId > 0) "id = ? AND station_id = ? AND archived = 0" else "id = ? AND archived = 0"
-                val statusArgs = if (stationScopeId != null && stationScopeId > 0) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
+                val statusWhere = "id = ? AND station_id = ? AND archived = 0"
+                val statusArgs = arrayOf(id.toString(), stationScopeId.toString())
                 val rows = db.update("damaged_products", values, statusWhere, statusArgs)
                 require(rows > 0) { "تعذر تحديث حالة سجل التالف" }
                 logActivity("system", "damaged_product_status", "تم تحديث حالة سجل التالف رقم $id إلى $status")
@@ -14063,14 +14304,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun archiveDamagedProduct(id: Long, stationScopeId: Int? = null): Int {
+    fun archiveDamagedProduct(id: Long, stationScopeId: Int): Int {
         dbLock.lock()
         return try {
             require(id > 0) { "معرف السجل غير صالح" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val values = ContentValues().apply { put("archived", 1) }
-            val scoped = stationScopeId != null && stationScopeId > 0
-            val archiveWhere = if (scoped) "id = ? AND station_id = ? AND archived = 0" else "id = ? AND archived = 0"
-            val archiveArgs = if (scoped) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
+            val archiveWhere = "id = ? AND station_id = ? AND archived = 0"
+            val archiveArgs = arrayOf(id.toString(), stationScopeId.toString())
             val rows = writableDatabase.update("damaged_products", values, archiveWhere, archiveArgs)
             if (rows > 0) logActivity("system", "damaged_product_archived", "تمت أرشفة سجل التالف رقم $id")
             rows
@@ -14079,7 +14320,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deleteDamagedProduct(id: Long, stationScopeId: Int? = null): Int = archiveDamagedProduct(id, stationScopeId)
+    fun deleteDamagedProduct(id: Long, stationScopeId: Int): Int = archiveDamagedProduct(id, stationScopeId)
 
     // ========================================================================
     // دوال المنتجات (Overload)
@@ -14515,8 +14756,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("product_id", item.getLong("product_id")); put("quantity", requestedQty); put("movement_type", "return")
                 put("reference_type", "sale_return"); put("reference_id", item.getLong("sale_id"))
                 put("notes", data.optString("reason", "مرتجع مبيعات") + " - " + data.optString("notes", ""))
-                put("performed_by", actorId); put("station_id", stationId)
-            })
+            }, stationId, actorId)
             require(movementId > 0) { "فشل تسجيل حركة الإرجاع" }
             db.execSQL("UPDATE sale_items SET is_returned=1, returned_quantity=returned_quantity+? WHERE id=?", arrayOf(requestedQty, item.getLong("item_id")))
             JSONObject().apply { put("success", true); put("id", movementId); put("sale_id", item.getLong("sale_id")); put("product_id", item.getLong("product_id")) }
@@ -14577,8 +14817,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val reversal = addStockMovement(JSONObject().apply {
                 put("product_id", productId); put("quantity", qty); put("movement_type", "out")
                 put("reference_type", "sale_return_reversal"); put("reference_id", saleId)
-                put("notes", "عكس مرتجع $id"); put("performed_by", performedBy); put("station_id", movementStationId)
-            })
+                put("notes", "عكس مرتجع $id")
+            }, movementStationId, performedBy)
             require(reversal > 0) { "فشل عكس حركة المرتجع" }
             db.update("inventory_movements", ContentValues().apply { put("is_deleted", 1); put("status", "cancelled"); put("updated_at", getCurrentDateTime()) }, "id=?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }

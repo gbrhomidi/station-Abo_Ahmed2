@@ -2946,11 +2946,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                val data = JSONObject(jsonData).apply {
-                    put("performed_by", activity.currentUserId)
-                    put("station_id", getCurrentStationId(db, activity.currentUserId))
-                }
-                val id = db.transferStockMovement(data)
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val id = db.transferStockMovement(data, stationId, activity.currentUserId)
                 successResponse(id, "تم تنفيذ التحويل الذري بين المستودعين")
             } catch (e: Exception) {
                 DebugLogger.logException("StockTransfer", e)
@@ -2965,7 +2963,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val movements = db.getStockMovements(JSONObject(jsonData.ifBlank { "{}" }), getCurrentStationId(db, activity.currentUserId))
+                val movements = db.getStockMovementsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(movements)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
@@ -2983,7 +2981,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                val rows = db.archiveStockMovement(movementId, activity.currentUserId)
+                val rows = db.archiveStockMovement(movementId, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة الحركة" else "لم يتم العثور على الحركة")
             } catch (e: Exception) { DebugLogger.logException("StockArchive", e); errorResponse(e.message) }
         }
@@ -2993,7 +2991,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getInventoryMovementStats called")
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }))) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getInventoryMovementStats(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            }
             catch (e: Exception) { DebugLogger.logException("StockStats", e); errorResponse(e.message) }
         }
 
@@ -3002,7 +3003,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getInventoryReport called")
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }))) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getInventoryReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            }
             catch (e: Exception) { DebugLogger.logException("InventoryReport", e); errorResponse(e.message) }
         }
 
@@ -3012,7 +3016,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { db.getInventoryProductDetails(productId)?.let { dataResponse(it) } ?: errorResponse("المنتج غير موجود") }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                db.getInventoryProductDetails(productId, requireCurrentStationId(db, activity.currentUserId))?.let { dataResponse(it) } ?: errorResponse("المنتج غير موجود")
+            }
             catch (e: Exception) { DebugLogger.logException("InventoryProductDetails", e); errorResponse(e.message) }
         }
 
@@ -3022,7 +3029,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getProductMovementTrend(productId, days)) }
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getProductMovementTrend(productId, days, requireCurrentStationId(db, activity.currentUserId)))
+            }
             catch (e: Exception) { DebugLogger.logException("InventoryTrend", e); errorResponse(e.message) }
         }
 
@@ -3032,7 +3042,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val items = db.getLowStockItems(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val items = db.getLowStockItems(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(items)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
@@ -3065,10 +3076,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val data = JSONObject(jsonData.ifBlank { "{}" }).apply {
-                    put("station_id", getCurrentStationId(db, activity.currentUserId))
-                }
-                dataResponse(db.getDamagedProducts(data))
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                dataResponse(db.getDamagedProducts(data, requireCurrentStationId(db, activity.currentUserId)))
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
                 errorResponse(e.message)
@@ -3084,9 +3093,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val data = JSONObject(jsonData).apply {
                     if (optLong("reported_by", 0L) <= 0L) put("reported_by", activity.currentUserId)
-                    put("station_id", getCurrentStationId(db, activity.currentUserId))
                 }
-                val id = db.addDamagedProduct(data)
+                val id = db.addDamagedProduct(data, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
                 DebugLogger.info("DamagedProduct", "Added damaged product id=$id")
                 successResponse(id, "تم إضافة سجل التالف بنجاح")
             } catch (e: Exception) {
@@ -3101,8 +3109,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData).apply { put("station_id", getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)) }
-                val rows = db.updateDamagedProduct(id, data)
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.updateDamagedProduct(id, data, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم تحديث سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3117,7 +3126,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val rows = db.updateDamagedProductStatus(id, status, activity.currentUserId, getCurrentStationId(db, activity.currentUserId))
+                val rows = db.updateDamagedProductStatus(id, status, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم تحديث حالة سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3131,7 +3140,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.archiveDamagedProduct(id, getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.archiveDamagedProduct(id, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3145,7 +3155,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteDamagedProduct(id, getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.deleteDamagedProduct(id, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -5538,7 +5549,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val items = db.checkLowStock()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val items = db.getLowStockItems(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(items)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
@@ -5552,7 +5564,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val id = db.createStockAlert(productId, threshold)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val id = db.createStockAlert(productId, threshold, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
                 DebugLogger.info("Stock", "Created alert id=$id")
                 successResponse(id, "تم إنشاء التنبيه بنجاح")
             } catch (e: Exception) {
@@ -7439,7 +7452,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveInventoryMovementRecord(id: Long, note: String = "") = operationalResolve("inventory", "inventory_movements", id, note)
 
         @JavascriptInterface
-        fun getStockAlertRecords(jsonData: String = "{}") = operationalList("inventory", "stock_alerts", jsonData)
+        fun getStockAlertRecords(jsonData: String = "{}"): String {
+            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية قراءة التنبيهات")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getStockAlertRecordsContract(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) {
+                DebugLogger.logException("StockAlerts", e)
+                errorResponse(e.message)
+            }
+        }
         @JavascriptInterface
         fun generateStockAlertReport(jsonData: String = "{}") = operationalReport("inventory", "stock_alerts", jsonData)
         @JavascriptInterface
@@ -7462,7 +7485,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteStocktakeRecord(id: Long) = operationalDelete("inventory", "stocktakes", id)
         @JavascriptInterface
-        fun resolveStocktakeRecord(id: Long, note: String = "") = operationalResolve("inventory", "stocktakes", id, note)
+        fun resolveStocktakeRecord(id: Long, note: String = ""): String {
+            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية اعتماد الجرد")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.approveStocktake(id, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                successResponse(rows > 0, if (rows > 0) "تم اعتماد الجرد وتطبيق الفروقات على المخزون" else "لم يتم العثور على جرد داخل نطاق المحطة")
+            } catch (e: Exception) {
+                DebugLogger.logException("Stocktake", e)
+                errorResponse(e.message)
+            }
+        }
 
         @JavascriptInterface
         fun getStocktakeDetailRecords(jsonData: String = "{}") = operationalList("inventory", "stocktake_details", jsonData)

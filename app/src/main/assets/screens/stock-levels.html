@@ -1882,21 +1882,22 @@ async function loadInventorySummary() {
         const result = await apiCall('getInventorySummary', {});
         if (result.success) {
             const data = result.data || {};
+            const stats = data.stats || data;
             document.getElementById('totalInventoryValue').textContent = 
-                (data.total_value || 0).toLocaleString('en') + ' ريال';
-            document.getElementById('inventoryTrend').textContent = data.inventory_trend !== undefined ? ((data.inventory_trend || 0).toFixed(2) + '% عن الشهر الماضي') : '—';
+                Number(stats.total_value || 0).toLocaleString('en') + ' ريال';
+            document.getElementById('inventoryTrend').textContent = Number.isFinite(Number(data.inventory_trend)) ? ((Number(data.inventory_trend) || 0).toFixed(2) + '% عن الشهر الماضي') : 'غير متاح';
             document.getElementById('lowStockCount').textContent = 
-                (data.low_stock || 0) + ' منتج';
+                Number(stats.low_stock || 0) + ' منتج';
             document.getElementById('criticalCount').textContent = 
-                'تحذير: ' + (data.critical_count || 0) + ' منتج حرج';
+                'تحذير: ' + Number(stats.critical_stock || stats.critical_count || 0) + ' منتج حرج';
             document.getElementById('expiredValue').textContent = 
-                data.expiry_supported === false ? 'غير متاح' : ((data.expired_value || 0).toLocaleString('en') + ' ريال');
+                data.expiry_supported === true ? (Number(data.expired_value || 0).toLocaleString('en') + ' ريال') : 'غير متاح';
             document.getElementById('expiryTrend').textContent = 
-                data.expiry_supported === false ? 'غير متاح' : ('زيادة ' + (data.expiry_trend || 0).toFixed(2) + '%');
+                data.expiry_supported === true && Number.isFinite(Number(data.expiry_trend)) ? ('زيادة ' + Number(data.expiry_trend).toFixed(2) + '%') : 'غير متاح';
             document.getElementById('turnoverRate').textContent = 
-                data.turnover_rate !== undefined ? ((data.turnover_rate || 0).toFixed(2) + ' مرة') : '—';
+                Number.isFinite(Number(data.turnover_rate)) ? (Number(data.turnover_rate).toFixed(2) + ' مرة') : 'غير متاح';
             document.getElementById('turnoverStatus').textContent = 
-                data.turnover_status || 'ممتاز (المعدل المثالي 3-5)';
+                data.turnover_status || 'غير متاح';
         }
     } catch (e) {
         console.error('Error loading inventory summary:', e);
@@ -1927,7 +1928,9 @@ function populateLowStockTable(products) {
         return;
     }
     products.forEach((p, idx) => {
-        const shortage = (p.min_stock_level || 0) - (p.quantity_on_hand || 0);
+        const minimum = Number(p.minimum_stock ?? p.min_stock_level);
+        const quantityOnHand = Number(p.quantity_on_hand ?? 0);
+        const shortage = Math.max(0, minimum - quantityOnHand);
         const row = document.createElement('tr');
         row.setAttribute('data-id', p.product_id || p.id);
         row.onclick = function() { selectRow(this); };
@@ -1935,7 +1938,7 @@ function populateLowStockTable(products) {
             <td>${idx + 1}</td>
             <td>${p.product_code || '---'}</td>
             <td>${p.product_name || '---'}</td>
-            <td class="numeric">${(p.quantity_on_hand || 0).toLocaleString('en')}</td>
+            <td class="numeric">${quantityOnHand.toLocaleString('en')}</td>
             <td class="numeric">${minimum.toLocaleString('en')}</td>
             <td class="numeric" style="color: var(--error); font-weight: bold;">${shortage.toLocaleString('en')}</td>
             <td>
