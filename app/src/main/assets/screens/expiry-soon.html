@@ -2322,7 +2322,7 @@
                         let result;
                         const p = params || {};
                         const jsonParams = JSON.stringify(p);
-                        
+
                         if (action === 'getOverduePayments') result = window.AndroidInterface.getOverduePayments();
                         else if (action === 'getCustomerDebts') result = window.AndroidInterface.getCustomerDebts(p.from_date || '', p.to_date || '');
                         else if (action === 'getParties') result = window.AndroidInterface.getParties(p.type || '');
@@ -2348,7 +2348,7 @@
                             reject({ success: false, error: 'Unknown action: ' + action });
                             return;
                         }
-                        
+
                         try {
                             const parsed = JSON.parse(result);
                             resolve(parsed);
@@ -2363,7 +2363,7 @@
                 }
             });
         }
-        
+
         // ===================================================================
         // ===================================================================
         // 2. حالة التشغيل دون تخزين تجاري محلي
@@ -2510,7 +2510,7 @@
                         const derivedStatus = getExpiryStatus(item);
                         return (!expiry || (expiry >= startDate && expiry <= endDate)) && (!productId || String(id) === String(productId)) && (!categoryId || String(item.category_id || '') === String(categoryId)) && (!status || derivedStatus === status);
                     });
-                    
+
                     renderTable(expiryData);
                     updateKPIs(expiryData);
                     updateCharts(expiryData);
@@ -2841,7 +2841,7 @@
                     product_id: parseInt(productId),
                     new_expiry_date: newExpiry,
                     reason: reason,
-                    station_id: 1
+
                 };
                 const result = await apiCall('extendProductExpiry', params);
                 if (result.success) {
@@ -2888,7 +2888,7 @@
 
         async function loadProductsForExtend(selectedId) {
             try {
-                const result = await apiCall('getProducts', { station_id: 1, has_expiry: 1 });
+                const result = await apiCall('getProducts', { has_expiry: 1 });
                 const sel = document.getElementById('eProductId');
                 if (result.success && result.data) {
                     const currentVal = sel.value;
@@ -3132,7 +3132,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
 
             try {
-                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                const result = await apiCall('getDashboardStats', {  });
                 if (result.success && result.data) {
                     const stats = result.data;
                     body.innerHTML = `
@@ -3191,7 +3191,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p></div>`;
 
             try {
-                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                const result = await apiCall('getLowStockItems', {  });
                 if (result.success && result.data) {
                     const items = result.data;
                     if (items.length === 0) {
@@ -3429,8 +3429,8 @@
         async function loadDropdowns() {
             try {
                 const [productsRes, categoriesRes] = await Promise.all([
-                    apiCall('getProducts', { station_id: 1 }),
-                    apiCall('getCategories', { station_id: 1 })
+                    apiCall('getProducts', {  }),
+                    apiCall('getCategories', {  })
                 ]);
 
                 const productSel = document.getElementById('filterProduct');

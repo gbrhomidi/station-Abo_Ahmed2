@@ -1607,10 +1607,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             JSONObject()
         }
 
-        val stationId = params.optInt(
-            "station_id",
-            getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
-        )
+        val stationId = getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+        params.put("station_id", stationId)
 
         if (stationId <= 0) {
             return errorResponse("معرف المحطة غير صالح")
@@ -2672,14 +2670,14 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun processSaleReturn(jsonData: String): String {
             if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية معالجة المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.processSaleReturn(JSONObject(jsonData))) } catch (e: Exception) { DebugLogger.logException("SaleReturn", e); errorResponse(e.message) }
+            return try { dataResponse(db.processSaleReturn(operationalScopedJson(jsonData))) } catch (e: Exception) { DebugLogger.logException("SaleReturn", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getReturns(jsonData: String): String {
             if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getReturns(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
+            return try { dataResponse(db.getReturns(operationalScopedJson(jsonData))) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -2689,7 +2687,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun updateReturn(id: Long, jsonData: String): String {
             if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية تحديث المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.updateReturn(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث المرتجع" else "المرتجع غير موجود") }
+            return try { val rows = db.updateReturn(id, operationalScopedJson(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث المرتجع" else "المرتجع غير موجود") }
             catch (e: Exception) { errorResponse(e.message) }
         }
 
@@ -2697,7 +2695,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteReturn(id: Long): String {
             if (!checkPermission("sales", "delete")) return errorResponse("لا تملك صلاحية حذف المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.deleteReturn(id); successResponse(rows > 0, if (rows > 0) "تم عكس المرتجع فعلياً" else "المرتجع غير موجود") }
+            return try { val rows = db.deleteReturn(id, getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)); successResponse(rows > 0, if (rows > 0) "تم عكس المرتجع فعلياً" else "المرتجع غير موجود") }
             catch (e: Exception) { DebugLogger.logException("SaleReturn", e); errorResponse(e.message) }
         }
 
@@ -3002,7 +3000,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val items = db.getLowStockItems()
+                val items = db.getLowStockItems(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 dataResponse(items)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
@@ -3020,9 +3018,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData.ifBlank { "{}" })
-                val stationId = data.optInt("station_id", getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
-                dataResponse(db.getWarehouses(stationId.takeIf { it > 0 }))
+                val stationId = getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+                dataResponse(db.getWarehouses(stationId))
             } catch (e: Exception) {
                 DebugLogger.logException("Warehouse", e)
                 errorResponse(e.message)
@@ -3037,7 +3034,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val data = JSONObject(jsonData.ifBlank { "{}" }).apply {
-                    if (optInt("station_id", 0) <= 0) put("station_id", getCurrentStationId(db, activity.currentUserId))
+                    put("station_id", getCurrentStationId(db, activity.currentUserId))
                 }
                 dataResponse(db.getDamagedProducts(data))
             } catch (e: Exception) {
@@ -3055,7 +3052,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
                 val data = JSONObject(jsonData).apply {
                     if (optLong("reported_by", 0L) <= 0L) put("reported_by", activity.currentUserId)
-                    if (optInt("station_id", 0) <= 0) put("station_id", getCurrentStationId(db, activity.currentUserId))
+                    put("station_id", getCurrentStationId(db, activity.currentUserId))
                 }
                 val id = db.addDamagedProduct(data)
                 DebugLogger.info("DamagedProduct", "Added damaged product id=$id")
@@ -3072,7 +3069,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.updateDamagedProduct(id, JSONObject(jsonData))
+                val data = JSONObject(jsonData).apply { put("station_id", getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)) }
+                val rows = db.updateDamagedProduct(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم تحديث سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3087,7 +3085,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val rows = db.updateDamagedProductStatus(id, status, activity.currentUserId)
+                val rows = db.updateDamagedProductStatus(id, status, activity.currentUserId, getCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم تحديث حالة سجل التالف بنجاح" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3101,7 +3099,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.archiveDamagedProduct(id)
+                val rows = db.archiveDamagedProduct(id, getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3115,7 +3113,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteDamagedProduct(id)
+                val rows = db.deleteDamagedProduct(id, getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 successResponse(rows > 0, if (rows > 0) "تمت أرشفة سجل التالف" else "لم يتم العثور على سجل التالف")
             } catch (e: Exception) {
                 DebugLogger.logException("DamagedProduct", e)
@@ -3554,7 +3552,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val shift = db.getCurrentShift()
+                val shift = db.getCurrentShift(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 shift?.toString() ?: errorResponse("لا توجد وردية نشطة")
             } catch (e: Exception) {
                 DebugLogger.logException("Shift", e)
@@ -3568,7 +3566,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val shifts = db.getShifts(1)
+                val shifts = db.getShifts(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 dataResponse(shifts)
             } catch (e: Exception) {
                 DebugLogger.logException("Shift", e)
@@ -4582,7 +4580,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val products = db.getProducts()
+                val products = db.getProducts(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 dataResponse(products)
             } catch (e: Exception) {
                 DebugLogger.logException("Products", e)
@@ -4749,7 +4747,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("pumps", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val pumps = db.getPumps()
+                val pumps = db.getPumps(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
                 dataResponse(pumps)
             } catch (e: Exception) {
                 DebugLogger.logException("Pumps", e)
@@ -5636,7 +5634,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val orderId = data.optString("orderId", "")
                 val success = db.recordDieselDelivery(
                     customerId, customerName, quantityLiters, quantityDabbas,
-                    location, deliveryTime, unitPrice, totalAmount, orderId
+                    location, deliveryTime, unitPrice, totalAmount, orderId,
+                    getCurrentStationId(db, getActivity()?.currentUserId ?: 0L),
+                    getActivity()?.currentUserId ?: 0L
                 )
                 successResponse(success, if (success) "تم تسجيل التسليم بنجاح" else "فشل تسجيل التسليم")
             } catch (e: Exception) {
@@ -6936,7 +6936,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
             val stationId = getCurrentStationId(db, activity.currentUserId)
             require(stationId > 0) { "معرف المحطة غير صالح" }
-            return operationalJson(jsonData).apply { put("station_id", stationId) }
+            return operationalJson(jsonData).apply {
+                put("station_id", stationId)
+                put("created_by", activity.currentUserId)
+            }
         }
 
         private fun operationalList(permission: String, key: String, jsonData: String): String {
@@ -6957,7 +6960,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission(permission, "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { successResponse(db.saveOperationalRecord(key, operationalJson(jsonData), activity.currentUserId), "تم الحفظ فعلياً") }
+            return try {
+                val data = operationalScopedJson(jsonData)
+                if (key == "sales_transactions") {
+                    val stationId = getCurrentStationId(db, activity.currentUserId)
+                    val currentShift = db.getCurrentShift(stationId) ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
+                    data.put("shift_id", currentShift.optLong("shift_id", 0L))
+                    data.put("cashier_id", activity.currentUserId)
+                }
+                successResponse(db.saveOperationalRecord(key, data, activity.currentUserId), "تم الحفظ فعلياً")
+            }
             catch (e: Exception) { DebugLogger.logException("OperationalSave-$key", e); errorResponse(e.message) }
         }
 
@@ -6965,7 +6977,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية التعديل")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.updateOperationalRecord(key, id, operationalJson(jsonData), activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم التعديل فعلياً" else "لم يتم العثور على السجل") }
+            return try { val rows = db.updateOperationalRecord(key, id, operationalScopedJson(jsonData), activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم التعديل فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalUpdate-$key", e); errorResponse(e.message) }
         }
 
@@ -6973,7 +6985,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission(permission, "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.deleteOperationalRecord(key, id, activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
+            return try { val rows = db.deleteOperationalRecord(key, id, activity.currentUserId, getCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalDelete-$key", e); errorResponse(e.message) }
         }
 
@@ -6981,7 +6993,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية الاعتماد")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
+            return try { val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, getCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
             catch (e: Exception) { DebugLogger.logException("OperationalResolve-$key", e); errorResponse(e.message) }
         }
 

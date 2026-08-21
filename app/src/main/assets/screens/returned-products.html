@@ -2463,7 +2463,7 @@
                     product_id: productId || null,
                     customer_id: customerId || null,
                     status: status || null,
-                    station_id: 1
+
                 };
                 const result = await apiCall('getReturns', params);
                 if (result.success && result.data) {
@@ -2831,8 +2831,7 @@
                     notes: notes,
                     status: status,
                     return_date: returnDate,
-                    station_id: 1,
-                    created_by: 1
+
                 };
                 const action = id > 0 ? 'updateReturn' : 'addReturn';
                 const result = await apiCall(action, params);
@@ -3118,7 +3117,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
 
             try {
-                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                const result = await apiCall('getDashboardStats', {  });
                 if (result.success && result.data) {
                     const stats = result.data;
                     body.innerHTML = `
@@ -3177,7 +3176,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p></div>`;
 
             try {
-                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                const result = await apiCall('getLowStockItems', {  });
                 if (result.success && result.data) {
                     const items = result.data;
                     if (items.length === 0) {
@@ -3224,7 +3223,7 @@
                 const monthAgo = new Date();
                 monthAgo.setDate(monthAgo.getDate() - 30);
                 const from = monthAgo.toISOString().split('T')[0];
-                const countResult = await apiCall('getReturns', { start_date: from, end_date: today, station_id: 1 });
+                const countResult = await apiCall('getReturns', { start_date: from, end_date: today,  });
                 let totalCount = 0;
                 if (countResult.success && countResult.data) {
                     totalCount = countResult.data.length;
@@ -3412,8 +3411,8 @@
         async function loadDropdowns() {
             try {
                 const [productsRes, customersRes] = await Promise.all([
-                    apiCall('getProducts', { station_id: 1 }),
-                    apiCall('getCustomers', { station_id: 1 })
+                    apiCall('getProducts', {  }),
+                    apiCall('getCustomers', {  })
                 ]);
 
                 const productSel = document.getElementById('fProductId');

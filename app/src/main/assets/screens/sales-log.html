@@ -1532,10 +1532,10 @@
             showLoading(true);
             try {
                 const [salesRes, customersRes, fuelRes, pumpsRes] = await Promise.all([
-                    apiCall('getSalesTransactions', { station_id: 1, limit: 500 }),
+                    apiCall('getSalesTransactions', { limit: 500 }),
                     apiCall('getParties', { type: 'customer' }),
                     apiCall('getFuelTypes', {}),
-                    apiCall('getPumps', { station_id: 1 })
+                    apiCall('getPumps', {  })
                 ]);
                 if (!salesRes.success) throw new Error(salesRes.message || 'فشل جلب سجل المبيعات');
                 allSales = Array.isArray(salesRes.data) ? salesRes.data : [];
@@ -1945,9 +1945,7 @@
 
             const data = {
                 id: currentEditId || 0,
-                station_id: 1,
-                shift_id: 1,
-                customer_party_id: parseInt(customerId),
+                                                customer_party_id: parseInt(customerId),
                 sale_type: saleType,
                 fuel_type_id: fuelTypeId ? parseInt(fuelTypeId) : null,
                 pump_id: pumpId ? parseInt(pumpId) : null,
@@ -1964,8 +1962,7 @@
                 is_credit: paymentMethod === 'credit' ? 1 : 0,
                 due_date: dueDate || null,
                 notes: notes,
-                cashier_id: 1
-            };
+                            };
 
             showLoading(true);
             try {

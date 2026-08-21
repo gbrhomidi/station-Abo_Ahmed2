@@ -2981,7 +2981,7 @@
 
         async function loadCustomersForPayment() {
             try {
-                const result = await apiCall('getCustomers', { station_id: 1 });
+                const result = await apiCall('getCustomers', {  });
                 const sel = document.getElementById('pCustomerId');
                 if (result.success && result.data) {
                     const currentVal = sel.value;
@@ -3267,7 +3267,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل الملخص...</p></div>`;
 
             try {
-                const result = await apiCall('getDashboardStats', { station_id: 1 });
+                const result = await apiCall('getDashboardStats', {  });
                 if (result.success && result.data) {
                     const stats = result.data;
                     body.innerHTML = `
@@ -3326,7 +3326,7 @@
                 `<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i><p style="color:var(--text-muted);margin-top:10px;">جاري تحميل المخزون...</p></div>`;
 
             try {
-                const result = await apiCall('getLowStockItems', { station_id: 1 });
+                const result = await apiCall('getLowStockItems', {  });
                 if (result.success && result.data) {
                     const items = result.data;
                     if (items.length === 0) {
@@ -3572,7 +3572,7 @@
         // ===================================================================
         async function loadDropdowns() {
             try {
-                const customersRes = await apiCall('getCustomers', { station_id: 1 });
+                const customersRes = await apiCall('getCustomers', {  });
                 const filterCustomerSel = document.getElementById('filterCustomer');
                 if (customersRes.success && customersRes.data) {
                     const opts = customersRes.data.map(c =>
