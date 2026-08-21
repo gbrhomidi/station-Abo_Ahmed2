@@ -784,3 +784,37 @@ textarea:focus-visible,
         break-inside: avoid;
     }
 }
+
+
+/* Reports data provenance and bridge state. */
+.report-source-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: min(100% - 2rem, var(--content-max-width));
+    margin: var(--space-3) auto;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    font-size: .75rem;
+}
+
+.report-source-banner.is-verified {
+    color: var(--success-text);
+    background: var(--success-bg);
+    border-color: var(--success);
+}
+
+.report-source-banner.is-incomplete {
+    color: var(--warning-text);
+    background: var(--warning-bg);
+    border-color: var(--warning);
+}
+
+.report-source-banner.is-unavailable {
+    color: var(--danger-text);
+    background: var(--danger-bg);
+    border-color: var(--danger);
+}

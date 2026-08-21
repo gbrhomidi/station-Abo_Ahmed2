@@ -1014,8 +1014,11 @@
         }
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
     <!-- Pull-to-Refresh Indicator -->
     <div class="pull-indicator" id="pullIndicator">
@@ -1074,25 +1077,25 @@
             <div class="stat-icon blue"><i class="fas fa-money-bill-wave"></i></div>
             <div class="stat-value" id="statTotalSales">0</div>
             <div class="stat-label">إجمالي المبيعات</div>
-            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTotalSales">0%</span></div>
+            <div class="stat-trend"><i class="fas fa-minus"></i> <span id="trendTotalSales">—</span></div>
         </div>
         <div class="stat-card animate-fade-up" onclick="showStatDetail('transactions')">
             <div class="stat-icon green"><i class="fas fa-receipt"></i></div>
             <div class="stat-value" id="statTransactions">0</div>
             <div class="stat-label">عدد الفواتير</div>
-            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendTransactions">0%</span></div>
+            <div class="stat-trend"><i class="fas fa-minus"></i> <span id="trendTransactions">—</span></div>
         </div>
         <div class="stat-card animate-fade-up" onclick="showStatDetail('avg_ticket')">
             <div class="stat-icon orange"><i class="fas fa-calculator"></i></div>
             <div class="stat-value" id="statAvgTicket">0</div>
             <div class="stat-label">متوسط قيمة الفاتورة</div>
-            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendAvgTicket">0%</span></div>
+            <div class="stat-trend"><i class="fas fa-minus"></i> <span id="trendAvgTicket">—</span></div>
         </div>
         <div class="stat-card animate-fade-up" onclick="showStatDetail('credit_sales')">
             <div class="stat-icon purple"><i class="fas fa-credit-card"></i></div>
             <div class="stat-value" id="statCreditSales">0</div>
             <div class="stat-label">المبيعات الآجلة</div>
-            <div class="stat-trend up"><i class="fas fa-arrow-up"></i> <span id="trendCreditSales">0%</span></div>
+            <div class="stat-trend"><i class="fas fa-minus"></i> <span id="trendCreditSales">—</span></div>
         </div>
     </div>
 
