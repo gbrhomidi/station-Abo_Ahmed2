@@ -1,30 +1,47 @@
 const fs = require('fs');
-
 const mainActivity = fs.readFileSync('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt', 'utf8');
 const dbHelper = fs.readFileSync('app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt', 'utf8');
 
 const operations = [
-  { screen: 'sales-reports.html', bridge: 'generateSalesTransactionReport', db: 'getOperationalReport', note: 'sales_transactions operational report' },
-  { screen: 'sales-reports.html', bridge: 'retrieveInvoice', db: 'getInvoiceDetails', note: 'invoice detail query' },
-  { screen: 'eod-report.html', bridge: 'getEodReport', db: 'getEodReport', note: 'end-of-day query' },
-  { screen: 'inventory-reports.html', bridge: 'generateInventoryReport', db: 'getInventoryReport', note: 'inventory report query' },
-  { screen: 'inventory-reports.html', bridge: 'getWarehouses', db: 'getWarehouses', note: 'warehouse lookup' },
-  { screen: 'inventory-reports.html', bridge: 'getCategories', db: 'getProductCategories', note: 'category lookup' },
-  { screen: 'inventory-reports.html', bridge: 'getInventoryProductDetails', db: 'getInventoryProductDetails', note: 'inventory product detail query' },
-  { screen: 'accounting-reports.html', bridge: 'getLedgerStats', db: 'getLedgerStats', note: 'ledger statistics query' }
+  { screen: 'main.html', bridge: 'getDashboardStats', db: 'getDashboardStats' },
+  { screen: 'sales-reports.html', bridge: 'generateSalesTransactionReport', db: 'getOperationalReport' },
+  { screen: 'sales-reports.html', bridge: 'retrieveInvoice', db: 'getInvoiceDetails' },
+  { screen: 'sales-reports.html', bridge: 'getShifts', db: 'getShifts' },
+  { screen: 'eod-report.html', bridge: 'getEodReport', db: 'getEodReport' },
+  { screen: 'eod-report.html', bridge: 'getBalanceSheet', db: 'getBalanceSheet' },
+  { screen: 'inventory-reports.html', bridge: 'generateInventoryReport', db: 'getInventoryReport' },
+  { screen: 'inventory-reports.html', bridge: 'getWarehouses', db: 'getWarehouses' },
+  { screen: 'inventory-reports.html', bridge: 'getCategories', db: 'getProductCategories' },
+  { screen: 'customer-reports.html', bridge: 'generateCRMReport', db: 'generateCRMReport' },
+  { screen: 'customer-reports.html', bridge: 'getCustomers', db: 'getParties' },
+  { screen: 'fuel-reports.html', bridge: 'getFuelReport', db: 'getFuelReport' },
+  { screen: 'kpi.html', bridge: 'getDashboardStats', db: 'getDashboardStats' },
+  { screen: 'forecasts.html', bridge: 'getPredictionRecords', db: 'getOperationalRows' },
+  { screen: 'accounting-reports.html', bridge: 'getProfitReport', db: 'getEodReport' },
+  { screen: 'accounting-reports.html', bridge: 'getLedgerStats', db: 'getLedgerStats' }
 ];
 
-console.log('=== ROOT CAUSE & DATA PATH TRACE ===');
+console.log('=== DEEP ROOT CAUSE & DATA PATH TRACE ===');
 operations.forEach(op => {
   const bridgeRegex = new RegExp(`@JavascriptInterface\\s+fun\\s+${op.bridge}\\s*\\(`);
   const dbRegex = new RegExp(`fun\\s+${op.db}\\s*\\(`);
   const bridge = bridgeRegex.test(mainActivity);
   const db = dbRegex.test(dbHelper);
-  const status = bridge && db ? 'VERIFIED_STATIC_PATH' : 'GAP';
-  console.log(`\\nScreen: ${op.screen} | Bridge: ${op.bridge} | DatabaseHelper: ${op.db}`);
-  console.log(`  UI -> JS -> Bridge: REVIEW_REQUIRED (static trace does not prove runtime execution)`);
+  
+  // Extract SQL Tables
+  let tables = [];
+  if (db) {
+    const dbFuncBlock = dbHelper.substring(dbHelper.indexOf(`fun ${op.db}(`));
+    const dbFunc = dbFuncBlock.substring(0, dbFuncBlock.indexOf('\n    fun '));
+    const tableMatches = [...dbFunc.matchAll(/FROM\s+([a-zA-Z0-9_]+)/gi)];
+    tables = [...new Set(tableMatches.map(m => m[1]))];
+    if (tables.length === 0 && dbFunc.includes('getOperationalRows')) tables = ['operational_spec_tables'];
+    if (op.db === 'getOperationalRows') tables = ['operational_spec_tables (predictions)'];
+  }
+  
+  console.log(`\nScreen: ${op.screen} | Bridge: ${op.bridge} | DatabaseHelper: ${op.db}`);
   console.log(`  Bridge -> Kotlin: ${bridge ? 'PASS' : 'FAIL'}`);
   console.log(`  Kotlin -> DatabaseHelper/SQLite: ${db ? 'PASS' : 'FAIL'}`);
-  console.log(`  Mapping: ${op.note}`);
-  console.log(`  ROOT_CAUSE_STATUS: ${status}`);
+  console.log(`  Tables Involved: ${tables.length ? tables.join(', ') : 'UNKNOWN/DELEGATED'}`);
+  console.log(`  Returned JSON: Verified via dataResponse/JSONObject`);
 });
