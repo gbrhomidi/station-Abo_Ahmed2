@@ -12169,6 +12169,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val where = mutableListOf<String>()
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
+            val stationId = params.optInt("station_id", 0)
+            if (stationId > 0 && spec.columns.contains("station_id")) {
+                where += "station_id = ?"
+                args += stationId.toString()
+            }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()
@@ -12232,6 +12237,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val where = mutableListOf<String>()
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
+            val stationId = params.optInt("station_id", 0)
+            if (stationId > 0 && spec.columns.contains("station_id")) {
+                where += "station_id = ?"
+                args += stationId.toString()
+            }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()

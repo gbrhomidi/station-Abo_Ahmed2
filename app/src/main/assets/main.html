@@ -2238,13 +2238,8 @@
                 showToast('تم تحديث لوحة التحكم', 'success');
             } catch (e) {
                 console.error('Dashboard error:', e);
-                const cached = readDashboardCache();
-                if (cached) {
-                    updateStatsCards(cached);
-                    showToast('عُرضت آخر بيانات محفوظة', 'warning');
-                } else {
-                    showToast(e.message || 'تعذر تحميل البيانات', 'error');
-                }
+                document.getElementById('reportsDataSource')?.setAttribute('data-state', 'error');
+                showToast(e.message || 'تعذر تحميل بيانات SQLite؛ لم يتم عرض بديل', 'error');
             } finally {
                 isRefreshing = false;
             }

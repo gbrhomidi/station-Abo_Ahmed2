@@ -2122,13 +2122,15 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                     if (dashStatsStr) {
                         const dashResult = typeof dashStatsStr === 'string' ? JSON.parse(dashStatsStr) : dashStatsStr;
                         const dashStats = dashResult && dashResult.data ? dashResult.data : dashResult;
-                        if (dashStats && dashStats.sales_trend_data && dashStats.sales_trend_data.percentage_change !== undefined) {
-                            const pct = Number(dashStats.sales_trend_data.percentage_change);
-                            salesTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.sales_trend_data.trend_label || '') + ')';
+                        const salesTrend = dashStats && dashStats.sales_trend_data;
+                        const productsTrend = dashStats && dashStats.products_trend_data;
+                        const salesPct = salesTrend ? Number(salesTrend.percentage_change) : NaN;
+                        const productsPct = productsTrend ? Number(productsTrend.percentage_change) : NaN;
+                        if (Number.isFinite(salesPct)) {
+                            salesTrendText = (salesPct > 0 ? '+' : '') + salesPct + '% (' + (salesTrend.trend_label || '') + ')';
                         }
-                        if (dashStats && dashStats.products_trend_data && dashStats.products_trend_data.percentage_change !== undefined) {
-                            const pct = Number(dashStats.products_trend_data.percentage_change);
-                            productsTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.products_trend_data.trend_label || '') + ')';
+                        if (Number.isFinite(productsPct)) {
+                            productsTrendText = (productsPct > 0 ? '+' : '') + productsPct + '% (' + (productsTrend.trend_label || '') + ')';
                         }
                     }
                 }

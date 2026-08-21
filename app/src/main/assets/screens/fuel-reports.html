@@ -1753,14 +1753,13 @@
                 const params = {
                     from_date: from,
                     to_date: to,
-                    station_id: 1,
                     report_type: reportType,
                     search: String(document.getElementById('fuelSearch')?.value || '').trim(),
                     fuel_type_id: fuelType || null,
                     tank_id: tank || null
                 };
                 const result = reportType === 'tanks'
-                    ? await apiCall('getFuelInventoryReconciliation', { date: to, station_id: 1 })
+                    ? await apiCall('getFuelInventoryReconciliation', { date: to })
                     : reportType === 'readings'
                         ? await apiCall('generateMeterReadingReport', { ...params, limit: fuelPagination.pageSize, offset: (fuelPagination.page - 1) * fuelPagination.pageSize })
                         : await apiCall('getFuelReportPage', { ...params, limit: fuelPagination.pageSize, offset: (fuelPagination.page - 1) * fuelPagination.pageSize });

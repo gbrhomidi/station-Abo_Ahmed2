@@ -6679,7 +6679,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                val data = operationalScopedJson(jsonData)
                 dataResponse(db.getFuelReport(data))
             } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -6690,7 +6690,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                val data = operationalScopedJson(jsonData)
                 dataResponseObject(db.getFuelReportPage(data)).toString()
             } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -6722,7 +6722,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                val data = operationalScopedJson(jsonData)
                 dataResponse(db.getFuelInventoryReconciliation(data))
             } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -6931,17 +6931,25 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             JSONObject(jsonData.ifBlank { "{}" })
         } catch (e: Exception) { throw IllegalArgumentException("بيانات الشاشة غير صالحة") }
 
+        private fun operationalScopedJson(jsonData: String): JSONObject {
+            val db = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
+            val stationId = getCurrentStationId(db, activity.currentUserId)
+            require(stationId > 0) { "معرف المحطة غير صالح" }
+            return operationalJson(jsonData).apply { put("station_id", stationId) }
+        }
+
         private fun operationalList(permission: String, key: String, jsonData: String): String {
             if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية قراءة هذه الشاشة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getOperationalRows(key, operationalJson(jsonData))) }
+            return try { dataResponse(db.getOperationalRows(key, operationalScopedJson(jsonData))) }
             catch (e: Exception) { DebugLogger.logException("OperationalList-$key", e); errorResponse(e.message) }
         }
 
         private fun operationalReport(permission: String, key: String, jsonData: String): String {
             if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية التقرير")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponseObject(db.getOperationalReport(key, operationalJson(jsonData))) .toString() }
+            return try { dataResponseObject(db.getOperationalReport(key, operationalScopedJson(jsonData))).toString() }
             catch (e: Exception) { DebugLogger.logException("OperationalReport-$key", e); errorResponse(e.message) }
         }
 
