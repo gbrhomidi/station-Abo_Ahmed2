@@ -1,35 +1,62 @@
-# تقرير التنفيذ والتحقق الجذري لوحدة التقارير (MODULE-001)
+# تقرير التنفيذ والتحقق النهائي - وحدة التقارير (MODULE-001)
 
-استجابة للتوجيهات الصارمة بالانتقال من "التقارير الوصفية" إلى "التنفيذ الفعلي الموثق"، تم إجراء فحص جنائي (Production Verification & Root-Cause Validation) على الكود. أسفر الفحص عن كشف عيوب منطقية حقيقية في التنفيذ السابق، وتم إصلاحها مباشرة في الكود لضمان أن الوحدة تعمل فعلياً عبر قاعدة بيانات SQLite.
+## ملخص التنفيذ
+تم إكمال دورة `DISCOVER → FIX → TEST → VERIFY` بالكامل على الكود الفعلي لوحدة التقارير، وتم تثبيت التغييرات ورفعها إلى المستودع. جميع العمليات تعتمد حصرياً على بيانات SQLite الحقيقية دون أي بيانات وهمية (Mock/Fake) أو معالجات استباقية في JavaScript.
 
-## 1. الفجوات الجذرية المكتشفة (Root-Cause Discoveries)
-أثناء تتبع الكود من UI إلى SQLite، تم اكتشاف وإصلاح العيوب التالية:
-- **Historical Trends:** كان التنفيذ السابق يعتمد على لقطات (Snapshots) غير دقيقة ويقسم على صفر أحياناً، ولا يمرر نطاق التاريخ الفعلي من الواجهة إلى SQLite.
-- **Pagination & Filters:** كان الترقيم (LIMIT/OFFSET) لا يحتفظ بحالة الفرز (Sort) أو البحث أو الفلاتر عند الانتقال بين الصفحات، مما أدى إلى نتائج غير متسقة. كما أن البحث كان يعتمد على مطابقة جزئية في الواجهة وليس في قاعدة البيانات.
-- **Fuel Readings:** لم يكن تبويب القراءات مربوطاً بـ `generateMeterReadingReport` في الجسر، ولم تكن الفلاتر (رقم الخزان، نوع الوقود) تطبق على `meter_readings` في SQLite، وكان الفلتر الزمني يعتمد على `created_at` بدلاً من `reading_date`.
+**نقطة الرفع النهائية (Commit Hash):** `470104e`
+**الفرع:** `feature/ai-health-sqlite`
 
-## 2. المعالجات الهندسية الفعلية (Code Fixes)
+## القدرات التي تم التحقق منها فعلياً (Production Validation)
 
-### طبقة قاعدة البيانات (DatabaseHelper.kt)
-- **Trends:** تم بناء استعلامات `getSalesAmountBetween` و `getCustomersCountBetween` لحساب الفترات المتكافئة فعلياً وتجنب القسمة على الصفر بإرجاع `JSONObject.NULL`، وتم ربطها بمدخلات التاريخ المرسلة من `getDashboardStats`.
-- **Pagination:** تم ربط معامِلات `search`، `sort_by`، و `sort_dir` باستعلامات `COUNT(*)` و `LIMIT/OFFSET` لضمان تطابق البيانات الوصفية للصفحات مع النتائج المعروضة.
-- **Fuel Readings:** تم تعديل `fuelReportConditions` لدعم فلترة `meter_readings` باستخدام `reading_date` والربط عبر جداول `pumps` و `tanks` للوصول إلى الخزان ونوع الوقود.
+### 1. عزل بيانات المحطة (Station Isolation)
+- **المشكلة السابقة:** كانت الواجهة ترسل `station_id` كقيمة ثابتة (`1`)، وكان محرك التقارير يعتمد عليها مما يفتح ثغرة للوصول إلى بيانات محطات أخرى.
+- **الإصلاح الفعلي:**
+  - تمت إضافة دالة `operationalScopedJson` في `MainActivity.kt` لفرض جلب `station_id` الحقيقي للمستخدم الحالي عبر `getCurrentStationId`.
+  - تم ربط هذا القيد الإلزامي بجميع دوال التقارير (`operationalReport`, `operationalList`, `getFuelReport`, `getFuelReportPage`, `getFuelInventoryReconciliation`).
+  - تمت إزالة `station_id: 1` الثابتة من `fuel-reports.html`.
+  - تم تحديث استعلامات `getOperationalRows` و `getOperationalTotalCount` في `DatabaseHelper.kt` لتطبيق فلتر `station_id` بشكل متطابق على استعلام النتائج واستعلام العدد (COUNT).
+- **الاختبار:** اجتاز اختبار العزل في `module001_sqlite_edge_test.py` بنجاح (المحطة 1 تعرض 650، المحطة 2 تعرض 9999).
 
-### طبقة الجسر (MainActivity.kt)
-- تم تمرير `params` كاملة من `getDashboardStats` في الواجهة إلى `DatabaseHelper` لدعم الاتجاهات.
-- تمت إضافة `getFuelReportPage` دون حذف `getFuelReport` للحفاظ على التوافق، وتم إثبات بقاء جميع الـ 652 Bridge Methods كما هي.
+### 2. اتجاهات مؤشرات الأداء (Historical Trends)
+- **المشكلة السابقة:** في حالة عدم وجود بيانات سابقة، كانت القيم تُحوّل إلى `0%` أو `Infinity`، وكان فشل SQLite يؤدي إلى عرض بيانات محلية قديمة (Fallback) تخفي الفشل.
+- **الإصلاح الفعلي:**
+  - تمت إزالة آلية التخزين المحلي (LocalStorage Fallback) من `main.html` لإظهار الفشل الحقيقي عند تعذر قراءة SQLite.
+  - تم تعديل منطق حساب النسب في `kpi.html` باستخدام `Number.isFinite()` لتجاهل قيم `null` و `NaN` وعدم عرض نسب وهمية.
+  - تم التحقق من دوال الحساب في `DatabaseHelper.kt` (`getSalesAmountBetween` وغيرها) بأنها ترجع `null` بدلاً من `0` عند غياب البيانات.
+- **الاختبار:** اجتاز اختبار الحالات الحدية للنسب في `module001_sqlite_edge_test.py`.
 
-### طبقة الواجهة (JavaScript/HTML)
-- **main & kpi:** تم تعديل منطق عرض الاتجاهات للتعامل مع `JSONObject.NULL` بأمان وإظهار "لا توجد مقارنة كافية" بدلاً من `100%` مصطنعة.
-- **sales, inventory, fuel:** تم بناء شريط ترقيم (Pagination Bar) حقيقي يحافظ على حالة الفرز والبحث والفلاتر في كائن `Pagination` محلي ويُرسلها مع كل طلب للصفحة التالية.
+### 3. ترقيم الصفحات الحقيقي (Server-Side Pagination)
+- **الإصلاح الفعلي:**
+  - تم تفعيل استعلام `COUNT(*)` المتطابق مع شروط البحث والفلترة (`WHERE`) في `getOperationalTotalCount`.
+  - تم تمرير `LIMIT` و `OFFSET` إلى استعلامات `SELECT` في `getOperationalRows` و `getFuelReportPage`.
+  - تم التحقق من أن شروط الفلترة (طريقة الدفع، العميل، المنتج، الوردية) تُطبق أولاً قبل الـ Pagination.
+- **الاختبار:** اجتاز اختبار الصفحات (الأولى، الأخيرة، والفارغة) في `module001_sqlite_edge_test.py`.
 
-## 3. أدلة الاختبارات (Verification Evidence)
-تم بناء وتشغيل حزمة اختبارات جديدة (`reports-production-verification.js` و `module001_sqlite_edge_test.py`) أثبتت:
-1. **SQLite Edge Test:** نجاح حساب الفترات المتكافئة، واسترجاع الصفحة الفارغة/الأخيرة، وتطبيق فلتر `reading_date`.
-2. **Production Root-Cause:** نجاح تتبع 29 مساراً إلزامياً من UI إلى SQLite دون استخدام `Math.random` أو `Promise.resolve`.
-3. **UI & Contract:** نجاح اختبارات 9 شاشات لـ DOM، و Bridge Contract، وخلوها من Fake Data.
+### 4. قراءات الوقود (Fuel Readings)
+- **الإصلاح الفعلي:**
+  - تم تصحيح استعلام `meter_readings` لاستخدام `reading_date` بدلاً من `created_at` في الفلترة الزمنية.
+  - تم تفعيل فلاتر الخزان ونوع الوقود عبر استعلامات `IN` المتداخلة (`pump_id IN (SELECT ...)`).
+- **الاختبار:** اجتاز اختبار فلترة القراءات في `module001_sqlite_edge_test.py`.
 
-## 4. قرار البوابة (Final Gate Decision)
-- **الفرع:** `feature/ai-health-sqlite`
-- **الـ Commit النهائي:** `720ab96`
-- **حالة البوابة:** **PASS** (تم إصلاح الكود فعلياً، ولا توجد أي فجوات حرجة أو وهمية).
+## نتائج الاختبارات (Test Matrix)
+
+| الاختبار | النتيجة | التفاصيل |
+|----------|---------|----------|
+| **SQLite Edge Test** | 🟢 PASS | فحص العزل، النسب الحدية، الصفحات الفارغة، فلاتر الوقود |
+| **Production Verification** | 🟢 PASS | فحص 29 مساراً إلزامياً من UI إلى SQLite |
+| **Backend Capability** | 🟢 PASS | فحص استجابة الواجهة الخلفية لقدرات التقارير |
+| **Script Syntax** | 🟢 PASS | فحص سلامة كود JavaScript في 9 شاشات |
+| **Module Contract** | 🟢 PASS | فحص التزام الشاشات بعقود Bridge API |
+| **UI/WebView DOM** | 🟢 PASS | فحص بنية DOM للشاشات |
+| **Fake UI Forensic** | 🟢 PASS | 0 بيانات وهمية (Clean) |
+| **Bridge API Regression** | 🟢 PASS | 651 دالة سابقة موجودة، 1 مضافة (`getFuelReportPage`) |
+
+## الملفات المعدلة في الـ Commit النهائي
+1. `app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/MainActivity.kt` (تطبيق العزل الإلزامي)
+2. `app/src/main/java/com/aistudio/dieselstationsms/kxmpzq/DatabaseHelper.kt` (تطابق استعلامات النتائج والعدد مع العزل)
+3. `app/src/main/assets/main.html` (إزالة Fallback)
+4. `app/src/main/assets/screens/kpi.html` (تصحيح عرض الاتجاهات)
+5. `app/src/main/assets/screens/fuel-reports.html` (إزالة station_id الثابت)
+
+## الخاتمة
+وحدة التقارير (MODULE-001) أصبحت الآن تعمل بشكل حقيقي ومستقر، معزولة بحسب المحطة، وتعتمد بالكامل على SQLite للترقيم والبحث والفلترة دون أي فجوات أمنية أو بيانات وهمية. تم إغلاق الوحدة.
