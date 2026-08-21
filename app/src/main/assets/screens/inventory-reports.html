@@ -1400,6 +1400,10 @@
      <button class="btn-filter" onclick="goToInventoryPage(1)">الأولى</button>
      <button class="btn-filter" onclick="goToInventoryPage(inventoryPagination.page - 1)">السابق</button>
      <span id="inventoryPageStatus">صفحة 1 من 1 — 0 سجل</span>
+     <select id="inventorySort" onchange="changeInventorySort(this.value)" aria-label="ترتيب النتائج">
+      <option value="product_name">اسم المنتج</option><option value="quantity">الكمية</option><option value="purchase_price">سعر الشراء</option>
+     </select>
+     <button class="btn-filter" onclick="toggleInventorySortDirection()" id="inventorySortDirection" aria-label="تبديل اتجاه الترتيب">تصاعدي</button>
      <select id="inventoryPageSize" onchange="changeInventoryPageSize(this.value)" aria-label="عدد السجلات في الصفحة">
       <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
      </select>
@@ -1660,7 +1664,7 @@
         let currentReportPayload = {};
         let currentAlerts = [];
         let aiInsights = [];
-        let inventoryPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0 };
+        let inventoryPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0, sortBy: 'product_name', sortDir: 'asc' };
         let movementChart = null,
             categoryChart = null;async function generateReport() {
             const from = document.getElementById('filterDateFrom').value;
@@ -1672,7 +1676,7 @@
             if (from && to && from > to) { showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null, limit: inventoryPagination.pageSize, offset: (inventoryPagination.page - 1) * inventoryPagination.pageSize });
+                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null, search: String(document.getElementById('inventorySearch')?.value || '').trim(), sort_by: inventoryPagination.sortBy, sort_dir: inventoryPagination.sortDir, limit: inventoryPagination.pageSize, offset: (inventoryPagination.page - 1) * inventoryPagination.pageSize });
                 currentReportPayload = result.data || result || {};
                 inventoryPagination.page = Number(currentReportPayload.page || inventoryPagination.page);
                 inventoryPagination.pageSize = Number(currentReportPayload.page_size || inventoryPagination.pageSize);
@@ -1731,6 +1735,21 @@
 
         function changeInventoryPageSize(value) {
             inventoryPagination.pageSize = Math.min(Math.max(Number(value) || 50, 1), 1000);
+            inventoryPagination.page = 1;
+            generateReport();
+        }
+
+        function changeInventorySort(value) {
+            const allowed = ['product_name', 'quantity', 'purchase_price'];
+            inventoryPagination.sortBy = allowed.includes(value) ? value : 'product_name';
+            inventoryPagination.page = 1;
+            generateReport();
+        }
+
+        function toggleInventorySortDirection() {
+            inventoryPagination.sortDir = inventoryPagination.sortDir === 'asc' ? 'desc' : 'asc';
+            const button = document.getElementById('inventorySortDirection');
+            if (button) button.textContent = inventoryPagination.sortDir === 'asc' ? 'تصاعدي' : 'تنازلي';
             inventoryPagination.page = 1;
             generateReport();
         }

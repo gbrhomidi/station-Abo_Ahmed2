@@ -1242,6 +1242,10 @@
                 <button class="btn btn-secondary" onclick="goToSalesPage(1)" aria-label="الصفحة الأولى">الأولى</button>
                 <button class="btn btn-secondary" onclick="goToSalesPage(salesPagination.page - 1)" aria-label="الصفحة السابقة">السابق</button>
                 <span id="salesPageStatus">صفحة 1 من 1 — 0 سجل</span>
+                <select id="salesSort" onchange="changeSalesSort(this.value)" aria-label="ترتيب النتائج">
+                    <option value="id">الأحدث</option><option value="net_amount">القيمة</option><option value="invoice_number">رقم الفاتورة</option>
+                </select>
+                <button class="btn btn-secondary" onclick="toggleSalesSortDirection()" id="salesSortDirection" aria-label="تبديل اتجاه الترتيب">تنازلي</button>
                 <select id="salesPageSize" onchange="changeSalesPageSize(this.value)" aria-label="عدد السجلات في الصفحة">
                     <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
                 </select>
@@ -1746,7 +1750,9 @@
                     shift_id: shift || null,
                     search: salesPagination.search || '',
                     limit: salesPagination.pageSize,
-                    offset: (salesPagination.page - 1) * salesPagination.pageSize
+                    offset: (salesPagination.page - 1) * salesPagination.pageSize,
+                    sort_by: salesPagination.sortBy,
+                    sort_dir: salesPagination.sortDir
                 };
                 const result = await apiCall('generateSalesReport', params);
                 const payload = result && result.data !== undefined ? result.data : result;
@@ -2248,7 +2254,7 @@
         // 21. البحث والفلاتر
         // ============================================================
         let currentPaymentFilter = 'all';
-        let salesPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0, search: '' };
+        let salesPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0, search: '', sortBy: 'id', sortDir: 'desc' };
         let salesSearchTimer = null;
 
         function updateSalesPaginationUI() {
@@ -2274,6 +2280,21 @@
 
         function changeSalesPageSize(value) {
             salesPagination.pageSize = Math.min(Math.max(Number(value) || 50, 1), 1000);
+            salesPagination.page = 1;
+            generateReport(false);
+        }
+
+        function changeSalesSort(value) {
+            const allowed = ['id', 'net_amount', 'invoice_number'];
+            salesPagination.sortBy = allowed.includes(value) ? value : 'id';
+            salesPagination.page = 1;
+            generateReport(false);
+        }
+
+        function toggleSalesSortDirection() {
+            salesPagination.sortDir = salesPagination.sortDir === 'asc' ? 'desc' : 'asc';
+            const button = document.getElementById('salesSortDirection');
+            if (button) button.textContent = salesPagination.sortDir === 'asc' ? 'تصاعدي' : 'تنازلي';
             salesPagination.page = 1;
             generateReport(false);
         }

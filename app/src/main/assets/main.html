@@ -2135,8 +2135,8 @@
             grid.innerHTML = '';
 
             const formatTrend = (trendData) => {
-                if (!trendData || trendData.percentage_change === undefined) return { text: '—', up: true, label: 'لا توجد مقارنة' };
-                const pct = trendData.percentage_change;
+                if (!trendData || !Number.isFinite(Number(trendData.percentage_change))) return { text: '—', up: false, label: 'لا توجد مقارنة كافية' };
+                const pct = Number(trendData.percentage_change);
                 const dir = trendData.trend_direction;
                 return {
                     text: (pct > 0 ? '+' : '') + pct + '%',

@@ -2029,7 +2029,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                     kpiData = result.data;
                     RuntimeState.setKpiData(kpiData);
                     renderTable(kpiData);
-                    updateKPIs(kpiData);
+                    await updateKPIs(kpiData, { from_date: from, to_date: to });
                     updateCharts(kpiData);
                     updateFooter(kpiData);
                     generateAlerts(kpiData);
@@ -2090,7 +2090,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ===================================================================
         // 7. تحديث بطاقات الإحصائيات
         // ===================================================================
-        function updateKPIs(data) {
+        async function updateKPIs(data, trendParams = {}) {
             const total = data.length;
             let onTrack = 0,
                 critical = 0,
@@ -2110,7 +2110,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             document.getElementById('kpiOnTrack').textContent = onTrack;
             document.getElementById('kpiCritical').textContent = critical;
 
-            const trendValue = item => item && item.trend_percent !== null && item.trend_percent !== undefined && Number.isFinite(Number(item.trend_percent))
+            const trendValue = item => item && Number.isFinite(Number(item.trend_percent))
                 ? (Number(item.trend_percent) > 0 ? '+' : '') + Number(item.trend_percent).toFixed(1) + '%' : '—';
 
             // محاولة جلب الاتجاهات من لوحة التحكم الرئيسية إذا كانت متاحة في الكاش
@@ -2118,15 +2118,16 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             let productsTrendText = '—';
             try {
                 if (window.AndroidInterface && window.AndroidInterface.getDashboardStats) {
-                    const dashStatsStr = window.AndroidInterface.getDashboardStats("{}");
+                    const dashStatsStr = window.AndroidInterface.getDashboardStats(JSON.stringify(trendParams || {}));
                     if (dashStatsStr) {
-                        const dashStats = JSON.parse(dashStatsStr);
-                        if (dashStats.sales_trend_data && dashStats.sales_trend_data.percentage_change !== undefined) {
-                            const pct = dashStats.sales_trend_data.percentage_change;
+                        const dashResult = typeof dashStatsStr === 'string' ? JSON.parse(dashStatsStr) : dashStatsStr;
+                        const dashStats = dashResult && dashResult.data ? dashResult.data : dashResult;
+                        if (dashStats && dashStats.sales_trend_data && dashStats.sales_trend_data.percentage_change !== undefined) {
+                            const pct = Number(dashStats.sales_trend_data.percentage_change);
                             salesTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.sales_trend_data.trend_label || '') + ')';
                         }
-                        if (dashStats.products_trend_data && dashStats.products_trend_data.percentage_change !== undefined) {
-                            const pct = dashStats.products_trend_data.percentage_change;
+                        if (dashStats && dashStats.products_trend_data && dashStats.products_trend_data.percentage_change !== undefined) {
+                            const pct = Number(dashStats.products_trend_data.percentage_change);
                             productsTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.products_trend_data.trend_label || '') + ')';
                         }
                     }
