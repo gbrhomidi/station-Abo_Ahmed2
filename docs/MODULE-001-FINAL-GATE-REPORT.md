@@ -1,103 +1,84 @@
 # MODULE-001 FINAL GATE REPORT (REPORTS MODULE)
 
 ## 1. Executive Summary
-تم تنفيذ تدقيق هندسي وجنائي شامل لوحدة التقارير (MODULE-001) استجابة لتوجيه "Evidence Directive". تم التحقق من جميع الشاشات والعمليات لضمان اتصالها المباشر بقاعدة بيانات SQLite، وإزالة أي اعتماد على بيانات وهمية أو محاكاة أو مؤشرات ثابتة. يعتمد هذا التقرير حصرياً على الأدلة القابلة للفحص من الكود والمشروع. بناءً على النتائج، تم إغلاق الوحدة بنجاح تام.
+استجابة لتوجيه `GLOBAL UI EVIDENCE DIRECTIVE`، تم إجراء تدقيق هندسي وجنائي شامل لوحدة التقارير (MODULE-001). يوثق هذا التقرير الأدلة القاطعة للبحث العالمي (Global UI Benchmark)، وتحليل القدرات (Capability Matrix)، والمسار الكامل للبيانات (Full Data Path Trace)، بالإضافة إلى نتائج الاختبارات الوظيفية والمرئية لجميع الشاشات التسع.
 
-## 2. Exact Commit / Branch
-- **Branch:** `feature/ai-health-sqlite`
-- **Commit:** `0f268d5` (The latest commit containing all the evidence and fixes)
+الهدف من هذا التقرير هو إثبات أن الوحدة لا تعتمد على أي بيانات وهمية، وأنها تطبق أنماطاً عالمية متوافقة تماماً مع قدرات `SQLite` والجسر الحالي (`MainActivity.kt`). بناءً على الأدلة، تم تحديد حالة البوابة (Gate Status) بكل شفافية وموضوعية.
 
-## 3. Screens Audited
-تم تدقيق 9 شاشات رئيسية تمثل وحدة التقارير بالكامل:
-1. `main.html` (Dashboard)
-2. `screens/sales-reports.html`
-3. `screens/eod-report.html`
-4. `screens/inventory-reports.html`
-5. `screens/customer-reports.html`
-6. `screens/fuel-reports.html`
-7. `screens/kpi.html`
-8. `screens/forecasts.html`
-9. `screens/accounting-reports.html`
+## 2. Environment Details
+يعتمد هذا التقرير على حالة المشروع في الفرع المخصص، حيث تم تدقيق الشاشات الرئيسية لوحدة التقارير.
 
-## 4. Global References
-تم استخراج أنماط الشاشات من المشاريع العالمية مفتوحة المصدر التالية:
-- **Metabase** (`metabase/metabase`): `frontend/src/metabase/dashboard/containers/DashboardApp/DashboardApp.tsx`
-- **ERPNext** (`frappe/frappe`): `frappe/public/js/frappe/views/reports/report_view.js`
-- **Odoo** (`odoo/odoo`): `addons/point_of_sale/static/src/app/components/popups/closing_popup/closing_popup.js`
-- **Apache Superset** (`apache/superset`): `superset-frontend/src/dashboard/components/DashboardBuilder/DashboardBuilder.tsx`
+| Detail | Value |
+|---|---|
+| **Branch** | `feature/ai-health-sqlite` |
+| **Commit** | `4ea65bf` (Base) -> Pending new commit |
+| **Screens Audited** | `main.html`, `sales-reports.html`, `eod-report.html`, `inventory-reports.html`, `customer-reports.html`, `fuel-reports.html`, `kpi.html`, `forecasts.html`, `accounting-reports.html` |
 
-## 5. Global Patterns Actually Adopted
-تم تبني الأنماط التالية وتكييفها لتناسب بنية `SQLite` و `WebView` في المشروع:
-- **Metabase Pattern:** تم تبني `Skeleton Loading` وتصميم بطاقات `KPI` القابلة للنقر. تم استبعاد مقارنات الفترات الزمنية التلقائية (Trends) لأن `DatabaseHelper` الحالي لا يوفرها.
-- **ERPNext Pattern:** تم تبني شريط الفلاتر الموحد (Filter Bar) وجداول البيانات الديناميكية مع ملخص الإجماليات أسفل الجدول. تم إضافة بحث محلي على البيانات المستلمة لتعويض غياب البحث في بعض استعلامات `SQLite`.
-- **Odoo Pattern:** تم تبني هيكلية تقرير الإغلاق اليومي المقسمة إلى نقد، بنك، متوقع، وفعلي.
-- **Superset Pattern:** تم تبني مبدأ "لا بيانات = لا رسوم بيانية"، حيث تظهر الشاشات حالة فارغة (Empty State) واضحة بدلاً من عرض بيانات وهمية عند غياب البيانات الحقيقية.
+## 3. Global UI Benchmark Evidence
+تم استخراج الأنماط من المشاريع العالمية وتكييفها لضمان أفضل تجربة مستخدم ممكنة ضمن قيود المشروع.
 
-## 6. Screen-by-Screen Changes
-- **`main.html` & `kpi.html`:** إزالة مؤشرات الاتجاه الثابتة (`+0%`) واستبدالها بعبارة توضح عدم توفر مقارنة.
-- **`sales-reports.html`:** إصلاح فجوة فلتر الورديات (`getShifts`) ليتصل بالجسر الفعلي بدلاً من استجابة وهمية.
-- **`inventory-reports.html` & `fuel-reports.html`:** إضافة ميزة بحث محلي حقيقية (Search) تعمل على تصفية نتائج `SQLite` المستلمة. إزالة تبويب "القراءات" من `fuel-reports.html` لعدم توفر API داعم له.
-- **`customer-reports.html`:** تصحيح التعليقات البرمجية التي كانت تسبب إنذارات كاذبة في الفحص الجنائي.
-- **`forecasts.html` & `accounting-reports.html`:** التحقق من خلوها التام من أي محاكاة للبيانات واعتمادها الكلي على مخرجات الجسر.
+| Global Project | Adopted Pattern | Adaptation & Justification |
+|---|---|---|
+| **Metabase** | Skeleton Loading, Clickable KPIs | تم إزالة مؤشرات الاتجاه الثابتة لعدم دعم قاعدة البيانات للمقارنات التاريخية. |
+| **ERPNext** | `report_view.js` (Filters, Dynamic Table, Totals) | أضيفت ميزة البحث المحلي للتعويض عن غياب البحث المدمج في بعض استعلامات SQLite. |
+| **Odoo** | `ClosePosScreen` (Sectioned summary) | تقسيم تقرير الإغلاق إلى نقد، بنك، متوقع، وفعلي في `eod-report.html`. |
+| **Apache Superset** | `DashboardBuilder` (Charts, Empty States) | تطبيق قاعدة "لا بيانات = حالة فارغة" بدلاً من رسم بيانات عشوائية في التنبؤات. |
 
-## 7. Bridge Contract Verification
-تم التحقق من أن جميع دوال الجسر المستخدمة في شاشات HTML معرّفة بشكل صحيح في `MainActivity.kt` تحت التوضيح `@JavascriptInterface`. لا توجد أي استدعاءات لدوال غير موجودة. (تم التحقق عبر أداة `reports-module-contract-test.js`).
+*(لمزيد من التفاصيل، راجع `docs/GLOBAL-UI-BENCHMARK-EVIDENCE.md`)*
 
-## 8. Full Data Path Verification
-تم التحقق من مسار البيانات الكامل (UI → JS → Bridge → Kotlin → DatabaseHelper → SQLite) لجميع العمليات الرئيسية. جميع العمليات تعود ببيانات فعلية من قاعدة البيانات عبر كائنات `JSONObject` أو `JSONArray`.
+## 4. Capability Matrix & Database Alignment
+تم تدقيق الوظائف المطلوبة عالمياً مقابل قدرات الجسر وقاعدة البيانات لضمان النزاهة الهندسية.
 
-## 9. SQL / Database Verification
-تم تحديد الجداول الفعلية المستخدمة في كل عملية استعلام عبر أداة التتبع العميق. الجداول المشاركة تشمل: `sales_transactions`, `products`, `parties`, `inventory_movements`, `tanks`, `accounts`, `shifts`, `warehouses`, وغيرها. لا يوجد أي استعلام يعتمد على جداول وهمية أو بيانات مؤقتة.
+| Capability Status | Details |
+|---|---|
+| **Implemented** | Date Filters, Entity Filters, Sorting, Export/Print, Empty/Loading/Error States, Drill-down, KPI Calculation, Permissions, Responsive/RTL/Dark Mode. |
+| **Supported but not exposed** | Backend Search (موجود في بعض دوال `DatabaseHelper` لكن لم يتم ربطه بجميع الشاشات). |
+| **Backend Gap** | Pagination (مدعوم في `SQLite` عبر `LIMIT/OFFSET` لكن الجسر الحالي لا يمرر هذه المعاملات). |
+| **Database Gap** | Historical Trends (دالة `getDashboardStats` لا تحسب الفرق مع فترات سابقة). |
 
-## 10. Functional Test Results
-تم إجراء اختبارات وظيفية شاملة لجميع الشاشات:
-- **Loading State:** PASS (Verified in all screens)
-- **Empty State:** PASS (Verified in all screens)
-- **Search & Filters:** PASS (Verified where applicable)
-- **Export/Print:** PASS (Verified where applicable)
-- **Error Handling:** PASS (Verified in all screens)
+*(لمزيد من التفاصيل، راجع `docs/CAPABILITY-MATRIX.md`)*
 
-## 11. Fake UI Forensic Results
-تم تشغيل أداة الفحص الجنائي `reports-fake-ui-forensic-scan.js` على جميع الشاشات.
-- **Result:** 0 Findings. لا يوجد أي استخدام لـ `Math.random`، `mock`، `fake`، أو مؤشرات اتجاه ثابتة.
+## 5. Full Data Path Verification
+تم تشغيل أداة `trace-reports-root-cause.js` للتحقق من أن جميع دوال الجسر المستخدمة في الشاشات التسع تتصل بدوال حقيقية في `MainActivity.kt` وتصل إلى `DatabaseHelper.kt` وتستعلم من جداول `SQLite` فعلية (`sales_transactions`, `products`, `inventory_movements`, `predictions`، وغيرها). جميع العمليات (16/16) اجتازت هذا الفحص بنجاح، مما يثبت عدم وجود بيانات وهمية.
 
-## 12. KPI Verification
-جميع مؤشرات الأداء (KPIs) مرتبطة باستعلامات حقيقية في `DatabaseHelper`. تم إزالة أي مؤشرات تعتمد على قيم ثابتة أو محاكاة. في حال عدم توفر بيانات، تعرض المؤشرات قيمة `0` أو `—` بدلاً من اختراع بيانات.
+*(الأدلة الكاملة في `docs/DEEP-TRACE-EVIDENCE.txt`)*
 
-## 13. Forecast Verification
-تعتمد شاشة `forecasts.html` حصرياً على البيانات المسترجعة من جدول `predictions` عبر الدالة `getPredictionRecords`. لا توجد أي محاكاة أو توليد عشوائي للتوقعات داخل واجهة المستخدم. يتم عرض حالة فارغة في حال عدم وجود سجلات تنبؤ فعلية.
+## 6. Functional & Visual Verification
+تم تشغيل حزمة اختبارات شاملة على جميع الشاشات لضمان التوافق الوظيفي والمرئي.
 
-## 14. Audit Trail Verification
-تم التحقق من أن جميع العمليات الحساسة في وحدة التقارير تعتمد على نظام الصلاحيات المدمج وتترك أثراً في سجلات النظام حيثما كان ذلك مدعوماً من قبل `DatabaseHelper`.
+| Test Type | Result | Description |
+|---|---|---|
+| **Fake UI Forensic Scan** | PASS (0 Findings) | لا توجد دوال `Math.random()` أو `mock` أو مؤشرات ثابتة. |
+| **Script Syntax Test** | PASS (9/9) | جميع السكربتات في الشاشات التسع تعمل بدون أخطاء صياغة. |
+| **Bridge Contract Test** | PASS (9/9) | جميع دوال `AndroidInterface` المستدعاة موجودة في `MainActivity.kt`. |
+| **UI/WebView DOM Test** | PASS (9/9) | جميع الشاشات تطبق `theme.css`، `reports-runtime.js`، `dir="rtl"`. |
 
-## 15. Removed UI Elements + Justification
-- **تبويب "القراءات" في `fuel-reports.html`:** تم حذفه لأن العقد الحالي للجسر (`getFuelReport`) لا يعيد بيانات القراءات، والدالة `getReadings` غير منفذة في `Kotlin`. بقاء التبويب كان سيؤدي إلى سير عمل معطل.
-- **مؤشر "تسوية المخزون" في `fuel-reports.html`:** تم حذفه لأنه كان يعتمد على دالة `showReconciliation()` التي تقوم بمحاكاة البيانات. البيانات الحقيقية للتسوية تتطلب استدعاء API منفصل غير مدمج في لوحة الملخص الحالية.
-- **مؤشرات الاتجاه (Trends) الثابتة في كافة الشاشات:** تم إزالتها واستبدالها بـ `—` أو نص يوضح عدم توفر فترة مقارنة، نظراً لأن الاستعلامات الحالية في `DatabaseHelper` لا تدعم مقارنة الفترات الزمنية تلقائياً.
+*(الأدلة الكاملة في `docs/TEST-EVIDENCE.txt`)*
 
-## 16. Regression Test Results
-لم يؤثر تعديل وحدة التقارير سلباً على أي من مكونات النظام الأخرى. تم الحفاظ على بنية `MainActivity.kt` و `DatabaseHelper.kt` دون أي حذف لـ APIs سابقة أو تغييرات غير مصرح بها.
+## 7. Removed UI Elements & Justification
+تم توثيق وتبرير حذف أي عناصر من واجهة المستخدم بدلاً من اعتبارها فجوات تم حلها.
 
-## 17. Remaining Gaps
-- **مقارنات الفترات الزمنية (Trends):** لا تزال غير مدعومة من قبل `DatabaseHelper`، مما يمنع عرض مؤشرات اتجاه حقيقية (مثل الأسهم الخضراء والحمراء) في لوحات KPI. تم توثيق هذا كـ GAP في قدرات قاعدة البيانات الحالية.
+| Removed Element | Screen | Justification & Audit Trail Status |
+|---|---|---|
+| **"Readings" Tab** | `fuel-reports.html` | العقد الحالي للجسر (`getFuelReport`) لا يعيد بيانات القراءات. إخفاؤه يمنع سير عمل معطل. (Documented Gap) |
+| **Reconciliation KPI** | `fuel-reports.html` | الوظيفة تتطلب استدعاء API منفصل غير مدمج في لوحة الملخص، وتم حذفه لمنع استخدام بيانات محاكاة. |
+| **Static Trends** | All KPI Screens | تم استبدالها بعبارة "لا توجد مقارنة" بسبب غياب دعم `SQLite` الحالي للمقارنات التاريخية. |
 
-## 18. Evidence Table
+## 8. Forecasts & KPI Integrity
+تعتمد شاشة `forecasts.html` حصرياً على البيانات المسترجعة من جدول `predictions` عبر الدالة `getPredictionRecords`. لا توجد أي محاكاة أو توليد عشوائي للتوقعات داخل واجهة المستخدم. يتم عرض حالة فارغة في حال عدم وجود سجلات تنبؤ فعلية. جميع الـ KPIs المعروضة ناتجة عن استعلامات SQL حقيقية.
 
-| SCREEN | REFERENCE | UI PATTERNS ADOPTED | JS FUNCTIONS | BRIDGE METHODS | KOTLIN METHODS | DATABASE METHODS | TABLES | TESTS | RESULT |
-|---|---|---|---|---|---|---|---|---|---|
-| `main.html` | Metabase | Skeleton Loading, Clickable KPIs | `apiCall`, `renderStats` | `getDashboardStats` | `getDashboardStats` | `getDashboardStats` | `sales_transactions`, `products`, `parties`, etc. | Syntax, Contract, Forensic | PASS |
-| `sales-reports.html` | ERPNext | Filter Bar, Dynamic Table, Totals | `apiCall`, `renderTable` | `generateSalesTransactionReport`, `getShifts`, etc. | `generateSalesTransactionReport`, `getShifts` | `getOperationalReport`, `getShifts` | `sales_transactions`, `shifts` | Syntax, Contract, Forensic | PASS |
-| `eod-report.html` | Odoo | Sectioned Report, Clear Actions | `invoke`, `loadBalanceSheet` | `getEodReport`, `getBalanceSheet` | `getEodReport`, `getBalanceSheet` | `getEodReport`, `getBalanceSheet` | `sales_transactions`, `accounts` | Syntax, Contract, Forensic | PASS |
-| `inventory-reports.html` | ERPNext | Filter Bar, Local Search | `apiCall`, `applyInventorySearch` | `generateInventoryReport`, `getWarehouses` | `generateInventoryReport`, `getWarehouses` | `getInventoryReport`, `getWarehouses` | `inventory_movements`, `warehouses` | Syntax, Contract, Forensic | PASS |
-| `customer-reports.html` | ERPNext | Filter Bar, Totals | `apiCall`, `renderTable` | `generateCRMReport`, `getCustomers` | `generateCRMReport`, `getParties` | `generateCRMReport`, `getParties` | `parties`, `contracts` | Syntax, Contract, Forensic | PASS |
-| `fuel-reports.html` | ERPNext/Odoo | Filter Bar, Local Search | `apiCall`, `applyFuelSearch` | `getFuelReport`, `getTanks` | `getFuelReport`, `getTanks` | `getFuelReport`, `getTanks` | `sales_transactions`, `tanks` | Syntax, Contract, Forensic | PASS |
-| `kpi.html` | Metabase | Skeleton Loading, Clickable KPIs | `invoke`, `renderKPIs` | `getDashboardStats` | `getDashboardStats` | `getDashboardStats` | `sales_transactions`, `products`, etc. | Syntax, Contract, Forensic | PASS |
-| `forecasts.html` | Superset | Empty State, Charts | `invoke`, `renderCards` | `getPredictionRecords` | `getPredictionRecords` | `getOperationalRows` | `predictions` | Syntax, Contract, Forensic | PASS |
-| `accounting-reports.html` | Superset | Empty State, Charts | `invoke`, `loadBalanceSheet` | `getProfitReport`, `getLedgerStats` | `getProfitReport`, `getLedgerStats` | `getEodReport`, `getLedgerStats` | `sales_transactions`, `accounts` | Syntax, Contract, Forensic | PASS |
+## 9. Remaining Gaps
+على الرغم من اكتمال الوحدة، تم توثيق بعض الفجوات غير المانعة للإغلاق:
+- **Historical Trends:** قاعدة البيانات لا تدعم مقارنة الفترات الزمنية للـ KPIs.
+- **Pagination:** غير مدعوم عبر الجسر الحالي للتقارير الكبيرة.
+- **Fuel Readings:** غير مدعومة في الجسر الحالي.
 
-## 19. Final Gate Decision
+## 10. Final Gate Decision
+بناءً على الأدلة الهندسية التي تثبت خلو الوحدة من البيانات الوهمية، وارتباطها الكامل بقاعدة البيانات، وتوافقها مع المعايير العالمية (ضمن حدود البنية الحالية):
+
 - **CRITICAL GAPS:** 0
-- **FUNCTIONAL GAPS:** 0
+- **FUNCTIONAL GAPS:** 3 (Trends, Pagination, Fuel Readings - All Documented)
 - **FAKE FUNCTIONAL DATA:** 0
-- **GATE STATUS:** **PASS**
-- **ACTION:** Module 001 is officially closed. Ready to proceed to the next module.
+- **GATE STATUS:** **PASS WITH NON-BLOCKING GAPS**
+
+**ACTION:** Module 001 is officially closed. The documented gaps are acknowledged and deferred to backend optimization phases. Ready to proceed to the next module.
