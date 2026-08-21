@@ -7657,9 +7657,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getSales(stationId: Int = 1): JSONArray = getSalesTransactions(stationId, 10000)
+    fun getSales(stationScopeId: Int): JSONArray = getSalesTransactions(stationScopeId, 10000)
 
-    fun getTodaySales(stationId: Int = 1): JSONArray {
+    fun getTodaySales(stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
@@ -7671,7 +7671,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    LEFT JOIN parties p ON s.customer_party_id = p.id
                    WHERE date(s.created_at) = ? AND s.station_id = ? AND s.is_deleted = 0 AND s.sale_type = 'retail'
                    ORDER BY s.created_at DESC""",
-                arrayOf(today, stationId.toString())
+                arrayOf(today, stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
@@ -7714,7 +7714,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun completeSale(data: JSONObject): JSONObject {
+    fun completeSale(data: JSONObject, stationScopeId: Int, cashierId: Long): JSONObject {
         val result = JSONObject()
         dbLock.lock()
         try {
@@ -7725,11 +7725,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 total += item.optDouble("quantity") * item.optDouble("unit_price")
             }
 
-            val stationId = data.optInt("station_id", 1)
-            val shiftId = getCurrentShift(stationId)?.optLong("shift_id", 1)?.toInt() ?: 1
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(cashierId > 0) { "معرف المستخدم غير صالح" }
+            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
+                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
 
             val saleId = insertSaleTransaction(
-                stationId = stationId,
+                stationId = stationScopeId,
                 shiftId = shiftId,
                 customerPartyId = data.optInt("entity_id", 0).takeIf { it > 0 },
                 fuelTypeId = null,
@@ -7750,7 +7752,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 },
                 isCredit = data.optString("payment_type") in setOf("آجل", "credit"),
                 dueDate = null,
-                cashierId = 1,
+                cashierId = cashierId.toInt(),
                 orderType = "product"
             )
 
@@ -7794,7 +7796,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return result
     }
 
-    fun addStockMovement(data: JSONObject): Long {
+    fun addStockMovement(data: JSONObject, stationScopeId: Int, userId: Long): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -7803,8 +7805,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val movementType = data.optString("movement_type", "in")
             val unitCost = data.optDouble("unit_cost", 0.0)
             val totalCost = quantity * unitCost
-            val stationId = data.optInt("station_id", 1)
-            val warehouseId = data.optLong("warehouse_id", 1L).takeIf { it > 0L } ?: 1L
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(userId > 0) { "معرف المستخدم غير صالح" }
+            val warehouseId = data.optLong("warehouse_id", 0L)
+            require(warehouseId > 0L) { "المستودع مطلوب" }
             val signedAdjustment = data.optDouble("signed_quantity", 0.0)
 
             require(productId > 0) { "المنتج مطلوب" }
@@ -7834,7 +7838,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("uuid", UUID.randomUUID().toString())
                 put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
                 put("product_id", productId)
-                put("station_id", stationId)
+                put("station_id", stationScopeId)
                 put("warehouse_id", warehouseId)
                 put("movement_type", movementType)
                 put("movement_subtype", data.optString("movement_subtype", ""))
@@ -7846,7 +7850,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("reference_type", data.optString("reference_type", ""))
                 put("reference_id", data.optLong("reference_id", 0))
                 put("reason", data.optString("notes", ""))
-                put("performed_by", data.optInt("performed_by", 1))
+                put("performed_by", userId)
                 put("status", "completed")
                 put("created_at", getCurrentDateTime())
             }
@@ -7881,12 +7885,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getStockMovements(data: JSONObject = JSONObject()): JSONArray {
+    fun getStockMovements(data: JSONObject, stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val where = mutableListOf("im.is_deleted = 0")
-            val args = mutableListOf<String>()
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val where = mutableListOf("im.is_deleted = 0", "im.station_id = ?")
+            val args = mutableListOf<String>(stationScopeId.toString())
             data.optString("start_date").trim().takeIf { it.isNotEmpty() }?.let {
                 where += "date(im.created_at) >= date(?)"
                 args += it
@@ -12527,7 +12532,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getOrderHistoryByPhone(phone: String, limit: Int = 50): JSONArray {
+    fun getOrderHistoryByPhone(phone: String, stationScopeId: Int, limit: Int = 50): JSONArray {
         val arr = JSONArray()
         val national = smsNationalPhone(phone) ?: return arr
         val db = readableDatabase
@@ -12536,11 +12541,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                FROM sales_transactions s
                JOIN parties p ON s.customer_party_id = p.id
                JOIN party_contacts pc ON pc.party_id = p.id
-               WHERE s.is_deleted = 0 AND p.is_deleted = 0
+               WHERE s.is_deleted = 0 AND s.station_id = ? AND p.is_deleted = 0
                  AND pc.is_deleted = 0 AND pc.is_active = 1
                  AND (${smsContactPhoneMatchSql("pc")})
                ORDER BY s.id DESC LIMIT ?""",
-            smsContactPhoneArgs(national) + limit.toString()
+            arrayOf(stationScopeId.toString()) + smsContactPhoneArgs(national) + limit.toString()
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(JSONObject().apply {
@@ -12554,7 +12559,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun getOrderHistoryByPhone(phone: String): JSONArray = getOrderHistoryByPhone(phone, 50)
+    fun getOrderHistoryByPhone(phone: String, stationScopeId: Int): JSONArray = getOrderHistoryByPhone(phone, stationScopeId, 50)
 
     fun getPartyIdByPhone(phone: String): Int? {
         val national = smsNationalPhone(phone) ?: return null

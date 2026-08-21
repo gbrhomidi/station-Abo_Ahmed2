@@ -595,6 +595,8 @@ class SmsCustomerResolver(
                 )
 
         try {
+            val stationId = getActiveStationId()
+                ?: return@withContext result
 
             val cursor =
                 db.readableDatabase.rawQuery(
@@ -602,12 +604,14 @@ class SmsCustomerResolver(
                     SELECT s.*
                     FROM sales_transactions s
                     WHERE s.customer_party_id = ?
+                      AND s.station_id = ?
                       AND s.is_deleted = 0
                     ORDER BY s.id DESC
                     LIMIT ?
                     """.trimIndent(),
                     arrayOf(
                         partyId.toString(),
+                        stationId.toString(),
                         safeLimit.toString()
                     )
                 )

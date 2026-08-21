@@ -2634,7 +2634,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val result = db.completeSale(JSONObject(jsonData))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
+                val result = db.completeSale(data, stationId, activity.currentUserId)
                 dataResponse(result)
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -2741,7 +2744,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getSales()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getSales(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -2755,7 +2759,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getTodaySales()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getTodaySales(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("Sale", e)
@@ -2903,12 +2908,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
+                val stationId = getCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply {
-                    put("performed_by", activity.currentUserId)
-                    put("created_by", activity.currentUserId)
-                    put("station_id", getCurrentStationId(db, activity.currentUserId))
+                    put("station_id", stationId)
                 }
-                val id = db.addStockMovement(data)
+                val id = db.addStockMovement(data, stationId, activity.currentUserId)
                 DebugLogger.info("Stock", "Added stock movement id=$id")
                 successResponse(id, "تم إضافة حركة المخزون بنجاح")
             } catch (e: Exception) {
@@ -2942,7 +2946,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val movements = db.getStockMovements(JSONObject(jsonData.ifBlank { "{}" }))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val movements = db.getStockMovements(JSONObject(jsonData.ifBlank { "{}" }), getCurrentStationId(db, activity.currentUserId))
                 dataResponse(movements)
             } catch (e: Exception) {
                 DebugLogger.logException("Stock", e)
@@ -5617,7 +5622,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getOrderHistoryByPhone(phone: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val history = db.getOrderHistoryByPhone(phone)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val history = db.getOrderHistoryByPhone(phone, getCurrentStationId(db, activity.currentUserId))
                 dataResponse(history)
             } catch (e: Exception) {
                 DebugLogger.logException("OrderHistory", e)
