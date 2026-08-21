@@ -1498,9 +1498,14 @@ class MainActivity : AppCompatActivity() {
 
         private fun getCurrentStationId(db: DatabaseHelper, userId: Long): Int {
             return db.getUserById(userId)
-                ?.optInt("station_id", 1)
+                ?.optInt("station_id", 0)
                 ?.takeIf { it > 0 }
-                ?: 1
+                ?: 0
+        }
+
+        private fun requireCurrentStationId(db: DatabaseHelper, userId: Long): Int {
+            return getCurrentStationId(db, userId).takeIf { it > 0 }
+                ?: throw SecurityException("لا توجد محطة صالحة مرتبطة بالمستخدم الحالي")
         }
 
         private fun resolveCurrencyId(db: DatabaseHelper, requestedCurrencyId: Long): Long {
@@ -2413,9 +2418,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
-                val id = db.insertParty(data)
+                val id = db.insertParty(data, stationId)
                 DebugLogger.info("Party", "Added party id=$id")
                 successResponse(id, "تمت الإضافة بنجاح")
             } catch (e: Exception) {
@@ -2431,9 +2436,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData).apply { put("station_id", stationId) }
-                val rows = db.updateParty(id, data)
+                val rows = db.updateParty(id, data, stationId)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -2447,7 +2452,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteParty(id)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.deleteParty(id, stationId)
                 successResponse(rows > 0, if (rows > 0) "تم الحذف بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -2461,7 +2468,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.archiveParty(id)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val rows = db.archiveParty(id, stationId)
                 successResponse(rows > 0, if (rows > 0) "تم الأرشفة بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -2475,7 +2484,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val parties = db.getParties(type ?: "")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val parties = db.getParties(type ?: "", requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(parties)
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -2496,7 +2506,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val results = db.searchParties(query)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val results = db.searchParties(query, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(results)
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -2510,8 +2521,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val party = db.getPartyById(id)
-                party?.toString() ?: errorResponse("العميل غير موجود")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val party = db.getPartyById(id, requireCurrentStationId(db, activity.currentUserId))
+                party?.toString() ?: errorResponse("الطرف غير موجود")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
                 errorResponse(e.message)
@@ -2730,14 +2742,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getEntitiesByType(typeId: Long): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getPartiesByType(typeId)) } catch (e: Exception) { errorResponse(e.message) }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.getPartiesByType(typeId, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getEntityDetails(id: Long): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة الطرف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { db.getPartyById(id)?.let { dataResponse(it) } ?: errorResponse("الطرف غير موجود") }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { db.getPartyById(id, requireCurrentStationId(db, activity.currentUserId))?.let { dataResponse(it) } ?: errorResponse("الطرف غير موجود") }
             catch (e: Exception) { DebugLogger.logException("PartyDetails", e); errorResponse(e.message) }
         }
 
@@ -4912,7 +4926,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("payments", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val payments = db.getPaymentsWithCustomer()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val payments = db.getPaymentsWithCustomer(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(payments)
             } catch (e: Exception) {
                 DebugLogger.logException("Payments", e)
@@ -4933,7 +4948,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val operator = data.optString("operator", "System")
                 val notes = data.optString("notes", "").trim()
                 if (customerId <= 0 || amount <= 0) return errorResponse("بيانات غير صالحة")
-                val success = db.processPayment(customerId, amount, method, operator, notes)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val success = db.processPayment(customerId, amount, method, operator, notes, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(success, if (success) "تم التسديد بنجاح" else "فشل التسديد")
             } catch (e: Exception) {
                 DebugLogger.logException("Payment", e)
@@ -5419,7 +5435,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getCustomerCount(): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val count = db.getParties("customer").length()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val count = db.getParties("customer", requireCurrentStationId(db, activity.currentUserId)).length()
                 JSONObject().apply {
                     put("success", true)
                     put("count", count)
@@ -5857,7 +5874,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
-                val id = db.savePartyBundle(payload, activity.currentUserId)
+                val id = db.savePartyBundle(payload, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(id, "تم حفظ الطرف وجهات اتصاله في SQLite")
             } catch (e: Exception) {
                 DebugLogger.logException("PartyBundle", e)
@@ -5869,7 +5886,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getPartyCrmBundle(id: Long): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل الطرف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getPartyCrmBundle(id)) } catch (e: Exception) {
+            return try { dataResponse(db.getPartyCrmBundle(id, requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L))) } catch (e: Exception) {
                 DebugLogger.logException("PartyCrmBundle", e)
                 errorResponse(e.message)
             }
@@ -5886,7 +5903,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val creditLimit = payload.optDouble("credit_limit", Double.NaN)
                 val reason = payload.optString("reason", "تعديل من تقرير العملاء").trim()
                 if (id <= 0L || !creditLimit.isFinite() || creditLimit < 0.0) return errorResponse("بيانات الحد الائتماني غير صالحة")
-                val rows = db.updatePartyCreditLimit(id, creditLimit, reason, activity.currentUserId)
+                val rows = db.updatePartyCreditLimit(id, creditLimit, reason, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم تعديل الحد الائتماني وتسجيل العملية" else "لم يتم العثور على العميل")
             } catch (e: Exception) {
                 DebugLogger.logException("PartyCreditLimit", e)
@@ -5897,7 +5914,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun generateCRMReport(jsonData: String): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير CRM")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateCRMReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.generateCRMReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("CRMReport", e)
                 errorResponse(e.message)
             }
@@ -5910,7 +5928,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getContracts(includeArchived: Boolean): String {
             if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getContracts(includeArchived)) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.getContracts(includeArchived, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("ContractsRead", e)
                 errorResponse(e.message)
             }
@@ -5920,7 +5939,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getContractParties(): String {
             if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة أطراف العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getParties("")) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.getParties("", requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("ContractParties", e)
                 errorResponse(e.message)
             }
@@ -5929,7 +5949,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getContractBundle(id: Long): String {
             if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getContractBundle(id)) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.getContractBundle(id, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("ContractBundle", e)
                 errorResponse(e.message)
             }
@@ -5943,7 +5964,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val id = db.saveContractBundle(payload, activity.currentUserId)
+                val id = db.saveContractBundle(payload, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(id, "تم حفظ العقد فعلياً في SQLite")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractSave", e)
@@ -5957,7 +5978,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deleteContract(id, activity.currentUserId)
+                val rows = db.deleteContract(id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 if (rows > 0) successResponse(true, "تم حذف العقد منطقياً وتسجيل العملية") else errorResponse("لم يتم حذف العقد")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractDelete", e)
@@ -5971,7 +5992,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.archiveContract(id, activity.currentUserId)
+                val rows = db.archiveContract(id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 if (rows > 0) successResponse(true, "تمت أرشفة العقد فعلياً") else errorResponse("لم تتم أرشفة العقد")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractArchive", e)
@@ -5985,7 +6006,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.restoreContract(id, activity.currentUserId)
+                val rows = db.restoreContract(id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 if (rows > 0) successResponse(true, "تمت استعادة العقد فعلياً") else errorResponse("لم تتم استعادة العقد")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractRestore", e)
@@ -5999,7 +6020,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val newId = db.cloneContract(id, JSONObject(jsonData.ifBlank { "{}" }), activity.currentUserId)
+                val newId = db.cloneContract(id, JSONObject(jsonData.ifBlank { "{}" }), activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(newId, "تم نسخ العقد وبنوده وجدول دفعاته")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractClone", e)
@@ -6013,7 +6034,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.changeContractStatus(id, status, reason, activity.currentUserId)
+                val rows = db.changeContractStatus(id, status, reason, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId))
                 if (rows > 0) successResponse(true, "تم تغيير حالة العقد وتسجيلها") else errorResponse("لم تتغير حالة العقد")
             } catch (e: Exception) {
                 DebugLogger.logException("ContractStatus", e)
@@ -6025,7 +6046,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun generateContractReport(jsonData: String): String {
             if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.generateContractReport(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.generateContractReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("ContractReport", e)
                 errorResponse(e.message)
             }
@@ -6035,7 +6057,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getContractAudit(id: Long): String {
             if (!checkPermission("contracts", "audit")) return errorResponse("لا تملك صلاحية قراءة سجل العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getContractAudit(id, 100)) } catch (e: Exception) {
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try { dataResponse(db.getContractAudit(id, 100, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
                 DebugLogger.logException("ContractAudit", e)
                 errorResponse(e.message)
             }
@@ -6228,7 +6251,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val ledger = db.getCustomerLedger(partyId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val ledger = db.getCustomerLedger(partyId, 100, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(ledger)
             } catch (e: Exception) {
                 DebugLogger.logException("Ledger", e)
@@ -6242,7 +6266,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getCustomerSales(partyId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getCustomerSales(partyId, 100, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("CustomerSales", e)
@@ -6256,7 +6281,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val contacts = db.getPartyContacts(partyId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val contacts = db.getPartyContacts(partyId, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(contacts)
             } catch (e: Exception) {
                 DebugLogger.logException("Contacts", e)
@@ -6270,7 +6296,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val addresses = db.getPartyAddresses(partyId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val addresses = db.getPartyAddresses(partyId, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(addresses)
             } catch (e: Exception) {
                 DebugLogger.logException("Addresses", e)
@@ -6285,7 +6312,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
-                val id = db.addPartyContact(data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val id = db.addPartyContact(data, requireCurrentStationId(db, activity.currentUserId))
                 DebugLogger.info("Party", "Added contact id=$id")
                 successResponse(id, "تم إضافة جهة الاتصال بنجاح")
             } catch (e: Exception) {
@@ -6302,7 +6330,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val data = JSONObject(jsonData)
                 val id = data.optLong("id", 0)
-                val rows = db.updatePartyContact(id, data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.updatePartyContact(id, data, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -6316,7 +6345,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deletePartyContact(contactId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.deletePartyContact(contactId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -6331,7 +6361,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
-                val id = db.addPartyAddress(data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val id = db.addPartyAddress(data, requireCurrentStationId(db, activity.currentUserId))
                 DebugLogger.info("Party", "Added address id=$id")
                 successResponse(id, "تم إضافة العنوان بنجاح")
             } catch (e: Exception) {
@@ -6348,7 +6379,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val data = JSONObject(jsonData)
                 val id = data.optLong("id", 0)
-                val rows = db.updatePartyAddress(id, data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.updatePartyAddress(id, data, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -6362,7 +6394,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val rows = db.deletePartyAddress(addressId)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.deletePartyAddress(addressId, requireCurrentStationId(db, activity.currentUserId))
                 successResponse(rows > 0, if (rows > 0) "تم الحذف" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
                 DebugLogger.logException("Party", e)
@@ -6376,7 +6409,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val debts = db.getCustomerDebts(fromDate, toDate)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val debts = db.getCustomerDebts(fromDate, toDate, requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(debts)
             } catch (e: Exception) {
                 DebugLogger.logException("Debts", e)

@@ -1050,11 +1050,7 @@
                             </div>
                         </div>
                         <div class="form-row">
-                            <div class="form-group">
-                                <label>المحطة</label>
-                                <input type="number" class="form-control" id="stationId" min="1" value="1">
-                            </div>
-                            <div class="form-group">
+                            <div class="form-group" style="grid-column:1 / -1;">
                                 <label>العميل المُحيل</label>
                                 <select class="form-control" id="referredBy"><option value="">لا يوجد</option></select>
                             </div>
@@ -1709,7 +1705,6 @@
             document.getElementById('partyCode').value = data ? data.party_code : '';
             document.getElementById('barcode').value = data ? (data.barcode || '') : '';
             document.getElementById('qrCode').value = data ? (data.qr_code || '') : '';
-            document.getElementById('stationId').value = data ? (data.station_id || 1) : 1;
             updateReferredByOptions(data ? (data.referred_by || '') : '');
             document.getElementById('commercialName').value = data ? data.commercial_name : '';
             document.getElementById('commercialNameAr').value = data ? data.commercial_name_ar : '';
@@ -2177,7 +2172,6 @@
                 party_code: document.getElementById('partyCode').value.trim(),
                 barcode: document.getElementById('barcode').value.trim(),
                 qr_code: document.getElementById('qrCode').value.trim(),
-                station_id: Math.max(1, Math.trunc(numberValue(document.getElementById('stationId').value, 1))),
                 referred_by: document.getElementById('referredBy').value ? Number(document.getElementById('referredBy').value) : null,
                 commercial_name: document.getElementById('commercialName').value.trim(),
                 commercial_name_ar: document.getElementById('commercialNameAr').value.trim(),

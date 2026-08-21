@@ -6797,16 +6797,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال الأطراف (جزء منها، تم توفير الباقي في الملف الأصلي)
     // ========================================================================
 
-    fun getParties(typeId: Int? = null): JSONArray {
+    fun getParties(typeId: Int? = null, stationScopeId: Int? = null): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
-        val sql = if (typeId != null) {
-            "SELECT * FROM parties WHERE party_type_id=? AND is_deleted=0 ORDER BY commercial_name"
-        } else {
-            "SELECT * FROM parties WHERE is_deleted=0 ORDER BY commercial_name"
-        }
-        val args = if (typeId != null) arrayOf(typeId.toString()) else null
-        db.rawQuery(sql, args).use { cursor ->
+        val predicates = mutableListOf("is_deleted=0")
+        val args = mutableListOf<String>()
+        if (typeId != null) { predicates += "party_type_id=?"; args += typeId.toString() }
+        if (stationScopeId != null) { require(stationScopeId > 0) { "معرف المحطة غير صالح" }; predicates += "station_id=?"; args += stationScopeId.toString() }
+        val sql = "SELECT * FROM parties WHERE ${predicates.joinToString(" AND ")} ORDER BY commercial_name"
+        db.rawQuery(sql, if (args.isEmpty()) null else args.toTypedArray()).use { cursor ->
             while (cursor.moveToNext()) {
                 arr.put(partyCursorToJson(cursor))
             }
@@ -6821,15 +6820,27 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "driver" -> 4
             else -> null
         }
-        return getParties(typeId)
+        return getParties(typeId, null)
     }
 
-    fun getParty(id: Int): JSONObject? {
+    fun getParties(type: String, stationScopeId: Int): JSONArray {
+        val typeId = when (type.lowercase()) {
+            "customer" -> 1
+            "supplier" -> 6
+            "driver" -> 4
+            else -> null
+        }
+        return getParties(typeId, stationScopeId)
+    }
+
+    fun getParty(id: Int, stationScopeId: Int? = null): JSONObject? {
         val db = readableDatabase
+        val selection = if (stationScopeId != null) "id=? AND station_id=? AND is_deleted=0" else "id=? AND is_deleted=0"
+        val args = if (stationScopeId != null) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
 
         return db.rawQuery(
-            "SELECT * FROM parties WHERE id=? AND is_deleted=0",
-            arrayOf(id.toString())
+            "SELECT * FROM parties WHERE $selection",
+            args
         ).use { cursor ->
 
             if (cursor.moveToFirst()) {
@@ -6840,12 +6851,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getPartyById(id: Long): JSONObject? = getParty(id.toInt())
+    fun getPartyById(id: Long, stationScopeId: Int? = null): JSONObject? = getParty(id.toInt(), stationScopeId)
 
-    fun insertParty(data: JSONObject): Long {
+    private fun requirePartyInStation(db: SQLiteDatabase, partyId: Long, stationScopeId: Int) {
+        require(partyId > 0 && stationScopeId > 0) { "معرف الطرف والمحطة مطلوبان" }
+        val owned = db.rawQuery(
+            "SELECT 1 FROM parties WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1",
+            arrayOf(partyId.toString(), stationScopeId.toString())
+        ).use { it.moveToFirst() }
+        require(owned) { "الطرف غير موجود ضمن محطة المستخدم" }
+    }
+
+    fun insertParty(data: JSONObject, stationScopeId: Int? = null): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val authorizedStationId = stationScopeId ?: data.optInt("station_id", 0)
+            require(authorizedStationId > 0) { "معرف المحطة مطلوب" }
             val partyType = data.optString("party_type", "").trim()
             val typeId = if (data.has("party_type_id") && data.optInt("party_type_id", 0) > 0) {
                 data.optInt("party_type_id", 1)
@@ -6863,7 +6885,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("barcode", data.optString("barcode", "").trim())
                 put("qr_code", data.optString("qr_code", "").trim())
                 put("party_type_id", typeId)
-                put("station_id", data.optInt("station_id", 1))
+                put("station_id", authorizedStationId)
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
@@ -6909,15 +6931,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updateParty(id: Long, data: JSONObject): Int {
+    fun updateParty(id: Long, data: JSONObject, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val authorizedStationId = stationScopeId ?: data.optInt("station_id", 0)
+            require(authorizedStationId > 0) { "معرف المحطة مطلوب" }
             val values = ContentValues().apply {
                 if (data.has("barcode")) put("barcode", data.optString("barcode").trim())
                 if (data.has("qr_code")) put("qr_code", data.optString("qr_code").trim())
                 if (data.has("party_type_id")) put("party_type_id", data.optInt("party_type_id", 1))
-                if (data.has("station_id")) put("station_id", data.optInt("station_id", 1))
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
@@ -6966,7 +6989,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("parties", values, "id=?", arrayOf(id.toString()))
+            val rows = db.update("parties", values, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), authorizedStationId.toString()))
             if (rows > 0) logActivity("system", "update_party", "تحديث طرف: $id")
             rows
         } finally {
@@ -6974,12 +6997,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deleteParty(id: Long): Int {
+    fun deleteParty(id: Long, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val cv = ContentValues().apply { put("is_deleted", 1) }
-            val rows = db.update("parties", cv, "id=?", arrayOf(id.toString()))
+            val authorizedStationId = stationScopeId ?: 0
+            require(authorizedStationId > 0) { "معرف المحطة مطلوب" }
+            val cv = ContentValues().apply { put("is_deleted", 1); put("updated_at", getCurrentDateTime()) }
+            val rows = db.update("parties", cv, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), authorizedStationId.toString()))
             if (rows > 0) logActivity("system", "delete_party", "حذف طرف: $id")
             rows
         } finally {
@@ -6987,15 +7012,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun archiveParty(id: Long): Int {
+    fun archiveParty(id: Long, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val authorizedStationId = stationScopeId ?: 0
+            require(authorizedStationId > 0) { "معرف المحطة مطلوب" }
             val cv = ContentValues().apply {
                 put("is_active", 0)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("parties", cv, "id=?", arrayOf(id.toString()))
+            val rows = db.update("parties", cv, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), authorizedStationId.toString()))
             if (rows > 0) logActivity("system", "archive_party", "أرشفة طرف: $id")
             rows
         } finally {
@@ -7003,7 +7030,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun searchParties(query: String): JSONArray {
+    fun searchParties(query: String, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val arr = JSONArray()
@@ -7012,8 +7039,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             db.rawQuery(
                 """SELECT * FROM parties
                    WHERE (commercial_name LIKE ? OR commercial_name_ar LIKE ? OR party_code LIKE ? OR phone LIKE ?)
-                   AND is_deleted=0 ORDER BY commercial_name LIMIT 50""",
-                arrayOf(likeQuery, likeQuery, likeQuery, likeQuery)
+                   AND is_deleted=0 AND station_id=? ORDER BY commercial_name LIMIT 50""",
+                arrayOf(likeQuery, likeQuery, likeQuery, likeQuery, requireNotNull(stationScopeId).also { require(it > 0) }.toString())
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     arr.put(partyCursorToJson(cursor))
@@ -9844,15 +9871,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال المدفوعات
     // ========================================================================
 
-    fun getPaymentsWithCustomer(): JSONArray {
+    fun getPaymentsWithCustomer(stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val db = readableDatabase
+            val scopeClause = if (stationScopeId != null) " AND pt.station_id = ${stationScopeId} AND pt.is_deleted = 0" else ""
             db.rawQuery(
                 """SELECT p.*, pt.commercial_name as customer_name
                    FROM payments p
                    LEFT JOIN parties pt ON p.customer_party_id = pt.id
-                   WHERE p.is_deleted = 0
+                   WHERE p.is_deleted = 0$scopeClause
                    ORDER BY p.created_at DESC""",
                 null
             ).use { cursor -> cursorToJsonArray(cursor) }
@@ -9861,14 +9890,17 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = ""): Boolean {
+    fun processPayment(customerId: Int, amount: Double, method: String, operator: String = "System", notes: String = "", stationScopeId: Int? = null): Boolean {
         require(customerId > 0) { "معرف العميل غير صالح" }
         require(amount > 0.0 && amount.isFinite()) { "مبلغ التسديد غير صالح" }
+        if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val partyScopeClause = if (stationScopeId != null) " AND station_id = ${stationScopeId}" else ""
+        val salesScopeClause = if (stationScopeId != null) " AND station_id = ${stationScopeId}" else ""
         val db = writableDatabase
         db.beginTransaction()
         try {
             val partyBalance = db.rawQuery(
-                "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1",
+                "SELECT COALESCE(total_due, 0) FROM parties WHERE id = ? AND is_deleted = 0$partyScopeClause LIMIT 1",
                 arrayOf(customerId.toString())
             ).use { cursor ->
                 if (!cursor.moveToFirst()) return false
@@ -9880,7 +9912,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val invoices = db.rawQuery(
                 """SELECT id, COALESCE(remaining_amount, 0)
                    FROM sales_transactions
-                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0
+                   WHERE customer_party_id = ? AND remaining_amount > 0 AND is_deleted = 0$salesScopeClause
                    ORDER BY due_date ASC, id ASC""",
                 arrayOf(customerId.toString())
             )
@@ -9894,7 +9926,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                            SET paid_amount = COALESCE(paid_amount, 0) + ?,
                                remaining_amount = MAX(0, COALESCE(remaining_amount, 0) - ?),
                                payment_status = CASE WHEN COALESCE(remaining_amount, 0) - ? <= 0 THEN 'paid' ELSE 'partial' END
-                           WHERE id = ? AND is_deleted = 0"""
+                           WHERE id = ? AND is_deleted = 0$salesScopeClause"""
                     ).apply {
                         bindDouble(1, applied)
                         bindDouble(2, applied)
@@ -9911,7 +9943,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 """UPDATE parties
                    SET current_balance = MAX(0, COALESCE(current_balance, 0) - ?),
                        total_due = MAX(0, COALESCE(total_due, 0) - ?)
-                   WHERE id = ? AND is_deleted = 0"""
+                   WHERE id = ? AND is_deleted = 0$partyScopeClause"""
             ).apply {
                 bindDouble(1, amount)
                 bindDouble(2, amount)
@@ -12219,6 +12251,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
+            } else if (stationId > 0 && screenKey == "bad_debts") {
+                where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12287,6 +12321,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
+            } else if (stationId > 0 && screenKey == "bad_debts") {
+                where += "EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12379,7 +12415,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (operationalHasUuid(spec.table)) putOperationalValue(values, "uuid", data.optString("uuid", UUID.randomUUID().toString()))
             if (operationalHasCreatedAt(spec.table) && !data.has("created_at")) values.put("created_at", getCurrentDateTime())
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
-            val id = writableDatabase.insertOrThrow(spec.table, null, values)
+            val writeDb = writableDatabase
+            val stationId = data.optInt("station_id", 0)
+            if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
+            val id = writeDb.insertOrThrow(spec.table, null, values)
             if (id > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "create", id, actorId, null, operationalRowJson(screenKey, id))
                 else logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id")
@@ -12400,9 +12439,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
-            val scope = if (spec.columns.contains("station_id") && stationId > 0) " AND station_id = ?" else ""
+            if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
+            val scope = if (spec.columns.contains("station_id") && stationId > 0) " AND station_id = ?" else if (screenKey == "bad_debts" && stationId > 0) " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)" else ""
             val where = (if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?") + scope
-            val whereArgs = if (scope.isNotEmpty()) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
+            val whereArgs = if (spec.columns.contains("station_id") && stationId > 0) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
             val rows = writableDatabase.update(spec.table, values, where, whereArgs)
             if (rows > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "update", id, actorId, oldRow, operationalRowJson(screenKey, id))
@@ -12420,7 +12460,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val where = if (scoped) "id = ? AND station_id = ?" else "id = ?"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey == "bad_debts"
+            val where = when {
+                scoped -> "id = ? AND station_id = ?"
+                relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                else -> "id = ?"
+            }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
             val rows = if (spec.softDeleted) db.update(spec.table, ContentValues().apply { put("is_deleted", 1); if (spec.hasUpdatedAt) put("updated_at", getCurrentDateTime()) }, where, whereArgs) else db.delete(spec.table, where, whereArgs)
             if (rows > 0) {
@@ -12440,7 +12485,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val where = if (scoped) "id = ? AND station_id = ?" else "id = ?"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey == "bad_debts"
+            val where = when {
+                scoped -> "id = ? AND station_id = ?"
+                relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
+                else -> "id = ?"
+            }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
             when (screenKey) {
                 "attendance" -> { if (actorId > 0L) values.put("approved_by", actorId); values.put("approved_at", getCurrentDateTime()); if (note.isNotBlank()) values.put("notes", note) }
@@ -14536,12 +14586,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
 
 
-    fun getPartiesByType(typeId: Long): JSONArray {
+    fun getPartiesByType(typeId: Long, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val scopeClause = if (stationScopeId != null) " AND station_id = ${stationScopeId}" else ""
             readableDatabase.rawQuery("""SELECT id AS entity_id, id, party_code, legal_name, commercial_name, commercial_name_ar,
                     credit_limit, current_balance, payment_terms, is_active, is_deleted
-                    FROM parties WHERE party_type_id=? AND is_deleted=0 ORDER BY commercial_name""", arrayOf(typeId.toString())).use { cursorToJsonArray(it) }
+                    FROM parties WHERE party_type_id=? AND is_deleted=0$scopeClause ORDER BY commercial_name""", arrayOf(typeId.toString())).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
     }
 
@@ -14584,10 +14636,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال دفتر الأستاذ والروابط
     // ========================================================================
 
-    fun getCustomerLedger(partyId: Int, limit: Int = 100): JSONArray {
+    fun getCustomerLedger(partyId: Int, limit: Int = 100, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
             db.rawQuery(
                 """SELECT cl.id, cl.uuid, cl.party_id, cl.transaction_date, cl.transaction_type,
                           cl.transaction_id, cl.reference_number, cl.debit, cl.credit, cl.balance,
@@ -14596,22 +14649,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM customer_ledger cl
                    LEFT JOIN parties p ON cl.party_id = p.id
                    WHERE cl.party_id = ?
+                     AND (? = 0 OR EXISTS (SELECT 1 FROM parties sp WHERE sp.id = cl.party_id AND sp.station_id = ? AND sp.is_deleted = 0))
                    ORDER BY cl.transaction_date DESC, cl.id DESC
                    LIMIT ?""",
-                arrayOf(partyId.toString(), limit.toString())
+                arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString(), limit.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getCustomerLedger(partyId: Long, limit: Int = 100): JSONArray =
-        getCustomerLedger(partyId.toInt(), limit)
+    fun getCustomerLedger(partyId: Long, limit: Int = 100, stationScopeId: Int? = null): JSONArray =
+        getCustomerLedger(partyId.toInt(), limit, stationScopeId)
 
-    fun getCustomerSales(partyId: Int, limit: Int = 100): JSONArray {
+    fun getCustomerSales(partyId: Int, limit: Int = 100, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
             db.rawQuery(
                 """SELECT s.id, s.uuid, s.sale_code, s.station_id, s.shift_id, s.customer_party_id,
                           s.liters, s.price_per_liter, s.fuel_subtotal, s.subtotal,
@@ -14623,26 +14678,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                    FROM sales_transactions s
                    LEFT JOIN fuel_types f ON s.fuel_type_id = f.id
                    WHERE s.customer_party_id = ? AND s.is_deleted = 0
+                     AND (? = 0 OR s.station_id = ?)
                    ORDER BY s.created_at DESC
                    LIMIT ?""",
-                arrayOf(partyId.toString(), limit.toString())
+                arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString(), limit.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getCustomerSales(partyId: Long, limit: Int = 100): JSONArray =
-        getCustomerSales(partyId.toInt(), limit)
+    fun getCustomerSales(partyId: Long, limit: Int = 100, stationScopeId: Int? = null): JSONArray =
+        getCustomerSales(partyId.toInt(), limit, stationScopeId)
 
     // ========================================================================
     // دوال جهات الاتصال والعناوين
     // ========================================================================
 
-    fun getPartyContacts(partyId: Int): JSONArray {
+    fun getPartyContacts(partyId: Int, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
             db.rawQuery(
                 """SELECT id, uuid, party_id, contact_name, contact_name_ar, job_title,
                           department, phone, phone2, email,
@@ -14650,23 +14707,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           created_at, updated_at
                    FROM party_contacts
                    WHERE party_id = ? AND is_deleted = 0
+                     AND (? = 0 OR EXISTS (SELECT 1 FROM parties p WHERE p.id = party_contacts.party_id AND p.station_id = ? AND p.is_deleted = 0))
                    ORDER BY is_primary DESC, contact_name""",
-                arrayOf(partyId.toString())
+                arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getPartyContacts(partyId: Long): JSONArray = getPartyContacts(partyId.toInt())
+    fun getPartyContacts(partyId: Long, stationScopeId: Int? = null): JSONArray = getPartyContacts(partyId.toInt(), stationScopeId)
 
-    fun addPartyContact(data: JSONObject): Long {
+    fun addPartyContact(data: JSONObject, stationScopeId: Int? = null): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val partyId = data.optLong("party_id", 0L)
+            if (stationScopeId != null) requirePartyInStation(db, partyId, stationScopeId)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("party_id", data.optInt("party_id", 0))
+                put("party_id", partyId)
                 put("contact_name", data.optString("contact_name", ""))
                 put("contact_name_ar", data.optString("contact_name_ar", ""))
                 put("job_title", data.optString("job_title", ""))
@@ -14689,7 +14749,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updatePartyContact(id: Long, data: JSONObject): Int {
+    fun updatePartyContact(id: Long, data: JSONObject, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -14707,7 +14767,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("is_active")) put("is_active", if (data.optBoolean("is_active")) 1 else 0)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("party_contacts", cv, "id=?", arrayOf(id.toString()))
+            val scopeClause = if (stationScopeId != null) {
+                require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+                " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = party_contacts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)"
+            } else ""
+            val rows = db.update("party_contacts", cv, "id=? AND is_deleted=0$scopeClause", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "update_party_contact", "تحديث جهة اتصال: $id")
             rows
         } finally {
@@ -14715,12 +14779,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deletePartyContact(id: Long): Int {
+    fun deletePartyContact(id: Long, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val cv = ContentValues().apply { put("is_deleted", 1) }
-            val rows = db.update("party_contacts", cv, "id=?", arrayOf(id.toString()))
+            val cv = ContentValues().apply { put("is_deleted", 1); put("updated_at", getCurrentDateTime()) }
+            val scopeClause = if (stationScopeId != null) {
+                require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+                " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = party_contacts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)"
+            } else ""
+            val rows = db.update("party_contacts", cv, "id=? AND is_deleted=0$scopeClause", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "delete_party_contact", "حذف جهة اتصال: $id")
             rows
         } finally {
@@ -14728,33 +14796,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getPartyAddresses(partyId: Int): JSONArray {
+    fun getPartyAddresses(partyId: Int, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
             db.rawQuery(
                 """SELECT id, uuid, party_id, address_type, address_line1, address_line2,
                           city, state, postal_code, country, is_default,
                           created_at, updated_at
                    FROM party_addresses
                    WHERE party_id = ? AND is_deleted = 0
+                     AND (? = 0 OR EXISTS (SELECT 1 FROM parties p WHERE p.id = party_addresses.party_id AND p.station_id = ? AND p.is_deleted = 0))
                    ORDER BY is_default DESC""",
-                arrayOf(partyId.toString())
+                arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getPartyAddresses(partyId: Long): JSONArray = getPartyAddresses(partyId.toInt())
+    fun getPartyAddresses(partyId: Long, stationScopeId: Int? = null): JSONArray = getPartyAddresses(partyId.toInt(), stationScopeId)
 
-    fun addPartyAddress(data: JSONObject): Long {
+    fun addPartyAddress(data: JSONObject, stationScopeId: Int? = null): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            val partyId = data.optLong("party_id", 0L)
+            if (stationScopeId != null) requirePartyInStation(db, partyId, stationScopeId)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("party_id", data.optInt("party_id", 0))
+                put("party_id", partyId)
                 put("address_type", data.optString("address_type", ""))
                 put("address_line1", data.optString("address_line1", ""))
                 put("address_line2", data.optString("address_line2", ""))
@@ -14774,7 +14846,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updatePartyAddress(id: Long, data: JSONObject): Int {
+    fun updatePartyAddress(id: Long, data: JSONObject, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -14789,7 +14861,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 if (data.has("is_default")) put("is_default", if (data.optBoolean("is_default")) 1 else 0)
                 put("updated_at", getCurrentDateTime())
             }
-            val rows = db.update("party_addresses", cv, "id=?", arrayOf(id.toString()))
+            val scopeClause = if (stationScopeId != null) {
+                require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+                " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = party_addresses.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)"
+            } else ""
+            val rows = db.update("party_addresses", cv, "id=? AND is_deleted=0$scopeClause", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "update_party_address", "تحديث عنوان: $id")
             rows
         } finally {
@@ -14797,12 +14873,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deletePartyAddress(id: Long): Int {
+    fun deletePartyAddress(id: Long, stationScopeId: Int? = null): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val cv = ContentValues().apply { put("is_deleted", 1) }
-            val rows = db.update("party_addresses", cv, "id=?", arrayOf(id.toString()))
+            val cv = ContentValues().apply { put("is_deleted", 1); put("updated_at", getCurrentDateTime()) }
+            val scopeClause = if (stationScopeId != null) {
+                require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+                " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = party_addresses.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)"
+            } else ""
+            val rows = db.update("party_addresses", cv, "id=? AND is_deleted=0$scopeClause", arrayOf(id.toString()))
             if (rows > 0) logActivity("system", "delete_party_address", "حذف عنوان: $id")
             rows
         } finally {
@@ -14814,10 +14894,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال ديون العملاء
     // ========================================================================
 
-    fun getCustomerDebts(partyId: Int? = null): JSONArray {
+    fun getCustomerDebts(partyId: Int? = null, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null && partyId != null) requirePartyInStation(db, partyId.toLong(), stationScopeId)
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val stationClause = if (stationScopeId != null) " AND s.station_id = ${stationScopeId} AND p.station_id = ${stationScopeId} AND p.is_deleted = 0" else ""
             val sql = if (partyId != null) {
                 """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
                           s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
@@ -14825,7 +14908,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           p.commercial_name as customer_name, p.phone as customer_phone
                    FROM sales_transactions s
                    LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.customer_party_id = ? AND s.remaining_amount > 0 AND s.is_deleted = 0
+                   WHERE s.customer_party_id = ? AND s.remaining_amount > 0 AND s.is_deleted = 0$stationClause
                    ORDER BY s.due_date ASC"""
             } else {
                 """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
@@ -14834,7 +14917,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           p.commercial_name as customer_name, p.phone as customer_phone
                    FROM sales_transactions s
                    LEFT JOIN parties p ON s.customer_party_id = p.id
-                   WHERE s.remaining_amount > 0 AND s.is_deleted = 0
+                   WHERE s.remaining_amount > 0 AND s.is_deleted = 0$stationClause
                    ORDER BY s.due_date ASC"""
             }
             val args = if (partyId != null) arrayOf(partyId.toString()) else null
@@ -14844,10 +14927,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getCustomerDebts(fromDate: String?, toDate: String?): JSONArray {
+    fun getCustomerDebts(fromDate: String?, toDate: String?, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val predicates = mutableListOf("s.remaining_amount > 0", "s.is_deleted = 0")
             val args = mutableListOf<String>()
             if (!fromDate.isNullOrBlank()) {
@@ -14857,6 +14941,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (!toDate.isNullOrBlank()) {
                 predicates += "date(COALESCE(s.due_date, s.created_at)) <= date(?)"
                 args += toDate
+            }
+            if (stationScopeId != null) {
+                predicates += "s.station_id = ? AND p.station_id = ? AND p.is_deleted = 0"
+                args += stationScopeId.toString()
+                args += stationScopeId.toString()
             }
             val sql = """SELECT s.id, s.uuid, s.sale_code, s.customer_party_id, s.liters,
                               s.net_amount, s.paid_amount, s.remaining_amount, s.due_date,
@@ -15823,18 +15912,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         writableDatabase.insert("audit_logs", null, values)
     }
 
-    fun savePartyBundle(data: JSONObject, userId: Long = 0L): Long {
+    fun savePartyBundle(data: JSONObject, userId: Long = 0L, stationScopeId: Int? = null): Long {
         dbLock.lock()
         val db = writableDatabase
         db.beginTransaction()
         try {
             val requestedId = data.optLong("id", 0L)
-            val oldParty = if (requestedId > 0) getParty(requestedId.toInt()) else null
+            val oldParty = if (requestedId > 0) getParty(requestedId.toInt(), stationScopeId) else null
             val partyId = if (requestedId > 0) {
-                require(updateParty(requestedId, data) > 0) { "الطرف غير موجود أو لم يتم تحديثه" }
+                require(updateParty(requestedId, data, stationScopeId) > 0) { "الطرف غير موجود أو لم يتم تحديثه" }
                 requestedId
             } else {
-                val inserted = insertParty(data)
+                val inserted = insertParty(data, stationScopeId)
                 require(inserted > 0) { "لم يتم إنشاء الطرف" }
                 inserted
             }
@@ -15882,7 +15971,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 db.insertOrThrow("party_addresses", null, values)
             }
-            val newParty = getParty(partyId.toInt())
+            val newParty = getParty(partyId.toInt(), stationScopeId)
             recordPartyAudit(partyId, if (requestedId > 0) "update" else "insert", oldParty, newParty, userId)
             logActivity("system", if (requestedId > 0) "update_party_bundle" else "insert_party_bundle", "حفظ بيانات CRM للطرف: $partyId")
             db.setTransactionSuccessful()
@@ -15893,20 +15982,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updatePartyCreditLimit(partyId: Long, creditLimit: Double, reason: String, userId: Long = 0L): Int {
+    fun updatePartyCreditLimit(partyId: Long, creditLimit: Double, reason: String, userId: Long = 0L, stationScopeId: Int? = null): Int {
         require(partyId > 0) { "معرف العميل غير صالح" }
         require(creditLimit.isFinite() && creditLimit >= 0.0) { "حد الائتمان غير صالح" }
         dbLock.lock()
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val oldParty = getParty(partyId.toInt()) ?: return 0
+            val oldParty = getParty(partyId.toInt(), stationScopeId) ?: return 0
             val rows = db.update("parties", ContentValues().apply {
                 put("credit_limit", creditLimit)
                 put("updated_at", getCurrentDateTime())
-            }, "id = ? AND is_deleted = 0", arrayOf(partyId.toString()))
+            }, "id = ? AND is_deleted = 0" + if (stationScopeId != null) " AND station_id = ${stationScopeId}" else "", arrayOf(partyId.toString()))
             if (rows != 1) return 0
-            val newParty = getParty(partyId.toInt())
+            val newParty = getParty(partyId.toInt(), stationScopeId)
             recordPartyAudit(partyId, "update_credit_limit", oldParty, newParty, userId)
             runCatching { logActivity("system", "update_credit_limit", "تعديل حد ائتمان العميل $partyId: $reason") }
             db.setTransactionSuccessful()
@@ -15917,13 +16006,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getPartyCrmBundle(partyId: Long): JSONObject {
+    fun getPartyCrmBundle(partyId: Long, stationScopeId: Int? = null): JSONObject {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val party = getParty(partyId.toInt()) ?: throw IllegalArgumentException("الطرف غير موجود")
-            party.put("contacts", getPartyContacts(partyId))
-            party.put("addresses", getPartyAddresses(partyId))
+            if (stationScopeId != null) requirePartyInStation(db, partyId, stationScopeId)
+            val party = getParty(partyId.toInt(), stationScopeId) ?: throw IllegalArgumentException("الطرف غير موجود")
+            party.put("contacts", getPartyContacts(partyId, stationScopeId))
+            party.put("addresses", getPartyAddresses(partyId, stationScopeId))
             party.put("contracts", db.rawQuery(
                 """
                 SELECT id, uuid, contract_code, contract_name, contract_name_ar,
@@ -15931,8 +16021,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        auto_renew, created_at, updated_at
                 FROM contracts
                 WHERE party_id = ? AND is_deleted = 0
+                  AND (? = 0 OR EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ? AND p.is_deleted = 0))
                 ORDER BY COALESCE(end_date, '9999-12-31'), id DESC
-                """.trimIndent(), arrayOf(partyId.toString())
+                """.trimIndent(), arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())
             ).use { cursorToJsonArray(it) })
             party.put("invoices", db.rawQuery(
                 """
@@ -15941,9 +16032,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        payment_status, status, due_date
                 FROM sales_transactions
                 WHERE customer_party_id = ? AND is_deleted = 0
+                  AND (? = 0 OR station_id = ?)
                 ORDER BY datetime(created_at) DESC, id DESC
                 LIMIT 200
-                """.trimIndent(), arrayOf(partyId.toString())
+                """.trimIndent(), arrayOf(partyId.toString(), (stationScopeId ?: 0).toString(), (stationScopeId ?: 0).toString())
             ).use { cursorToJsonArray(it) })
             party.put("attachments", db.rawQuery(
                 """
@@ -15969,10 +16061,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun generateCRMReport(data: JSONObject): JSONArray {
+    fun generateCRMReport(data: JSONObject, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val reportType = data.optString("report_type", "parties")
             val startDate = data.optString("start_date").trim()
             val endDate = data.optString("end_date").trim()
@@ -15980,6 +16073,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val requestedStatus = if (data.isNull("status")) -1 else data.optInt("status", -1)
             val where = StringBuilder("p.is_deleted = 0")
             val whereArgs = mutableListOf<String>()
+            if (stationScopeId != null) { where.append(" AND p.station_id = ?"); whereArgs.add(stationScopeId.toString()) }
             if (requestedPartyType > 0) { where.append(" AND p.party_type_id = ?"); whereArgs.add(requestedPartyType.toString()) }
             if (requestedStatus >= 0) { where.append(" AND p.is_active = ?"); whereArgs.add(requestedStatus.toString()) }
             val dateClause = StringBuilder()
@@ -16058,8 +16152,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // =========================================================================
     // CONTRACTS_V15_DATA: عمليات العقود الفعلية عبر SQLite فقط.
     // =========================================================================
-    private fun contractRow(db: SQLiteDatabase, id: Long, includeDeleted: Boolean = false): JSONObject? {
+    private fun contractRow(db: SQLiteDatabase, id: Long, includeDeleted: Boolean = false, stationScopeId: Int? = null): JSONObject? {
         val deletedClause = if (includeDeleted) "" else " AND c.is_deleted = 0"
+        val stationClause = if (stationScopeId != null) {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            " AND p.station_id = ${stationScopeId} AND p.is_deleted = 0"
+        } else ""
         return db.rawQuery(
             """
             SELECT c.*, p.commercial_name, p.legal_name, p.commercial_name_ar,
@@ -16067,7 +16165,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             FROM contracts c
             LEFT JOIN parties p ON p.id = c.party_id
             LEFT JOIN currencies cu ON cu.id = c.currency_id
-            WHERE c.id = ? $deletedClause LIMIT 1
+            WHERE c.id = ? $deletedClause$stationClause LIMIT 1
             """.trimIndent(),
             arrayOf(id.toString())
         ).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else null }
@@ -16103,10 +16201,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ).use { cursorToJsonArray(it) }
     }
 
-    fun getContracts(includeArchived: Boolean = true): JSONArray {
+    fun getContracts(includeArchived: Boolean = true, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val archiveClause = if (includeArchived) "" else " AND c.is_archived = 0"
+            val stationClause = if (stationScopeId != null) " AND p.station_id = ${stationScopeId} AND p.is_deleted = 0" else ""
             readableDatabase.rawQuery(
                 """
                 SELECT c.id, c.uuid, c.contract_code, c.contract_name, c.contract_name_ar,
@@ -16122,7 +16222,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 FROM contracts c
                 LEFT JOIN parties p ON p.id = c.party_id
                 LEFT JOIN currencies cu ON cu.id = c.currency_id
-                WHERE c.is_deleted = 0 $archiveClause
+                WHERE c.is_deleted = 0 $archiveClause$stationClause
                 ORDER BY COALESCE(c.end_date, '9999-12-31'), c.id DESC
                 """.trimIndent(), null
             ).use { cursorToJsonArray(it) }
@@ -16131,15 +16231,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getContractBundle(id: Long): JSONObject {
+    fun getContractBundle(id: Long, stationScopeId: Int? = null): JSONObject {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val contract = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val contract = contractRow(db, id, false, stationScopeId) ?: throw IllegalArgumentException("العقد غير موجود")
             contract.put("line_items", contractChildren(db, id, "contract_line_items"))
             contract.put("payment_schedules", contractChildren(db, id, "contract_payment_schedules"))
             contract.put("attachments", contractAttachments(db, id))
-            contract.put("audit", getContractAudit(id, 100))
+            contract.put("audit", getContractAudit(id, 100, stationScopeId))
             contract
         } finally {
             dbLock.unlock()
@@ -16195,7 +16295,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun saveContractBundle(data: JSONObject, userId: Long): Long {
+    fun saveContractBundle(data: JSONObject, userId: Long, stationScopeId: Int? = null): Long {
         val db = writableDatabase
         db.beginTransaction()
         try {
@@ -16211,13 +16311,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(endDate.isEmpty() || endDate.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) { "تاريخ نهاية العقد غير صالح" }
             require(endDate.isEmpty() || endDate >= startDate) { "تاريخ نهاية العقد يجب أن يكون بعد البداية" }
             require(contractStatusValid(status)) { "حالة العقد غير صالحة" }
-            require(db.rawQuery("SELECT 1 FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(partyId.toString())).use { it.moveToFirst() }) { "الطرف غير موجود" }
+            if (stationScopeId != null) requirePartyInStation(db, partyId, stationScopeId)
+            else require(db.rawQuery("SELECT 1 FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(partyId.toString())).use { it.moveToFirst() }) { "الطرف غير موجود" }
             val parentId = if (data.isNull("parent_contract_id")) 0L else data.optLong("parent_contract_id", 0L)
             if (parentId > 0) {
                 require(parentId != id) { "لا يمكن ربط العقد بنفسه" }
-                require(contractRow(db, parentId) != null) { "العقد الرئيسي غير موجود" }
+                require(contractRow(db, parentId, false, stationScopeId) != null) { "العقد الرئيسي غير موجود" }
             }
-            val oldRow = if (id > 0) contractRow(db, id) else null
+            val oldRow = if (id > 0) contractRow(db, id, false, stationScopeId) else null
             val code = data.optString("contract_code").trim().ifEmpty { "CTR-${System.currentTimeMillis()}" }
             val values = ContentValues().apply {
                 put("contract_code", code)
@@ -16250,7 +16351,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val savedId: Long
             if (id > 0) {
                 require(oldRow != null) { "العقد غير موجود" }
-                require(db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString())) == 1) { "لم يتم تعديل العقد" }
+                require(db.update("contracts", values, "id = ? AND is_deleted = 0" + if (stationScopeId != null) " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)" else "", arrayOf(id.toString())) == 1) { "لم يتم تعديل العقد" }
                 savedId = id
             } else {
                 values.put("uuid", UUID.randomUUID().toString())
@@ -16259,7 +16360,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 savedId = db.insertOrThrow("contracts", null, values)
             }
             saveContractChildren(db, savedId, data, userId)
-            val newRow = contractRow(db, savedId)
+            val newRow = contractRow(db, savedId, false, stationScopeId)
             if (oldRow?.optString("status") != status && oldRow != null) {
                 val history = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
@@ -16279,11 +16380,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun deleteContract(id: Long, userId: Long): Int {
+    fun deleteContract(id: Long, userId: Long, stationScopeId: Int? = null): Int {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val oldRow = contractRow(db, id, false, stationScopeId) ?: throw IllegalArgumentException("العقد غير موجود")
             val values = ContentValues().apply {
                 put("is_deleted", 1)
                 put("deleted_at", getCurrentDateTime())
@@ -16291,8 +16392,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_at", getCurrentDateTime())
                 put("updated_by", if (userId > 0) userId else null)
             }
-            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-            if (rows == 1) writeContractAudit(db, userId, "delete", id, oldRow, contractRow(db, id, true))
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0" + if (stationScopeId != null) " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)" else "", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "delete", id, oldRow, contractRow(db, id, true, stationScopeId))
             db.setTransactionSuccessful()
             return rows
         } finally {
@@ -16300,11 +16401,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun archiveContract(id: Long, userId: Long): Int {
+    fun archiveContract(id: Long, userId: Long, stationScopeId: Int? = null): Int {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val oldRow = contractRow(db, id, false, stationScopeId) ?: throw IllegalArgumentException("العقد غير موجود")
             val values = ContentValues().apply {
                 put("is_archived", 1)
                 put("archived_at", getCurrentDateTime())
@@ -16312,8 +16413,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_at", getCurrentDateTime())
                 put("updated_by", if (userId > 0) userId else null)
             }
-            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
-            if (rows == 1) writeContractAudit(db, userId, "archive", id, oldRow, contractRow(db, id))
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0" + if (stationScopeId != null) " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)" else "", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "archive", id, oldRow, contractRow(db, id, false, stationScopeId))
             db.setTransactionSuccessful()
             return rows
         } finally {
@@ -16321,11 +16422,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun restoreContract(id: Long, userId: Long): Int {
+    fun restoreContract(id: Long, userId: Long, stationScopeId: Int? = null): Int {
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val oldRow = contractRow(db, id, true) ?: throw IllegalArgumentException("العقد غير موجود")
+            val oldRow = contractRow(db, id, true, stationScopeId) ?: throw IllegalArgumentException("العقد غير موجود")
             val values = ContentValues().apply {
                 put("is_archived", 0)
                 put("is_deleted", 0)
@@ -16336,8 +16437,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("updated_at", getCurrentDateTime())
                 put("updated_by", if (userId > 0) userId else null)
             }
-            val rows = db.update("contracts", values, "id = ?", arrayOf(id.toString()))
-            if (rows == 1) writeContractAudit(db, userId, "restore", id, oldRow, contractRow(db, id))
+            val rows = db.update("contracts", values, "id = ?" + if (stationScopeId != null) " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)" else "", arrayOf(id.toString()))
+            if (rows == 1) writeContractAudit(db, userId, "restore", id, oldRow, contractRow(db, id, false, stationScopeId))
             db.setTransactionSuccessful()
             return rows
         } finally {
@@ -16345,9 +16446,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun cloneContract(sourceId: Long, data: JSONObject, userId: Long): Long {
+    fun cloneContract(sourceId: Long, data: JSONObject, userId: Long, stationScopeId: Int? = null): Long {
         val db = readableDatabase
-        val source = getContractBundle(sourceId)
+        val source = getContractBundle(sourceId, stationScopeId)
         val clone = JSONObject(source.toString()).apply {
             remove("id"); remove("uuid"); remove("contract_code"); remove("created_at"); remove("updated_at")
             remove("created_by"); remove("updated_by"); remove("is_deleted"); remove("deleted_at"); remove("deleted_by")
@@ -16358,22 +16459,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             put("is_deleted", 0)
         }
         require(clone.optString("contract_code").isNotEmpty()) { "كود العقد المنسوخ مطلوب" }
-        return saveContractBundle(clone, userId)
+        return saveContractBundle(clone, userId, stationScopeId)
     }
 
-    fun changeContractStatus(id: Long, status: String, reason: String?, userId: Long): Int {
+    fun changeContractStatus(id: Long, status: String, reason: String?, userId: Long, stationScopeId: Int? = null): Int {
         require(contractStatusValid(status)) { "حالة العقد غير صالحة" }
         val db = writableDatabase
         db.beginTransaction()
         try {
-            val oldRow = contractRow(db, id) ?: throw IllegalArgumentException("العقد غير موجود")
+            val oldRow = contractRow(db, id, false, stationScopeId) ?: throw IllegalArgumentException("العقد غير موجود")
             if (oldRow.optString("status") == status) return 0
             val values = ContentValues().apply {
                 put("status", status)
                 put("updated_at", getCurrentDateTime())
                 put("updated_by", if (userId > 0) userId else null)
             }
-            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0", arrayOf(id.toString()))
+            val rows = db.update("contracts", values, "id = ? AND is_deleted = 0" + if (stationScopeId != null) " AND EXISTS (SELECT 1 FROM parties p WHERE p.id = contracts.party_id AND p.station_id = ${stationScopeId} AND p.is_deleted=0)" else "", arrayOf(id.toString()))
             if (rows == 1) {
                 val history = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
@@ -16384,7 +16485,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("changed_by", if (userId > 0) userId else null)
                 }
                 db.insertOrThrow("contract_status_history", null, history)
-                writeContractAudit(db, userId, "status_change", id, oldRow, contractRow(db, id))
+                writeContractAudit(db, userId, "status_change", id, oldRow, contractRow(db, id, false, stationScopeId))
             }
             db.setTransactionSuccessful()
             return rows
@@ -16393,11 +16494,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getContractAudit(recordId: Long = 0L, limit: Int = 100): JSONArray {
+    fun getContractAudit(recordId: Long = 0L, limit: Int = 100, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
-            val where = if (recordId > 0) "AND al.record_id = ?" else ""
-            val args = if (recordId > 0) arrayOf(recordId.toString(), limit.coerceIn(1, 500).toString()) else arrayOf(limit.coerceIn(1, 500).toString())
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val predicates = mutableListOf("al.table_name = 'contracts'")
+            val args = mutableListOf<String>()
+            if (recordId > 0) { predicates += "al.record_id = ?"; args += recordId.toString() }
+            if (stationScopeId != null) {
+                predicates += "EXISTS (SELECT 1 FROM contracts c JOIN parties p ON p.id = c.party_id WHERE c.id = al.record_id AND p.station_id = ? AND p.is_deleted = 0)"
+                args += stationScopeId.toString()
+            }
+            args += limit.coerceIn(1, 500).toString()
             readableDatabase.rawQuery(
                 """
                 SELECT al.id, al.uuid, al.action_type, al.table_name, al.record_id,
@@ -16405,25 +16513,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                        COALESCE(u.display_name, u.full_name_ar, u.full_name, u.username, 'نظام') AS username
                 FROM audit_logs al
                 LEFT JOIN users u ON u.id = al.user_id
-                WHERE al.table_name = 'contracts' $where
+                WHERE ${predicates.joinToString(" AND ")}
                 ORDER BY al.id DESC LIMIT ?
-                """.trimIndent(), args
+                """.trimIndent(), args.toTypedArray()
             ).use { cursorToJsonArray(it) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun generateContractReport(data: JSONObject): JSONArray {
+    fun generateContractReport(data: JSONObject, stationScopeId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val reportType = data.optString("report_type", "contracts")
             val startDate = data.optString("start_date").trim()
             val endDate = data.optString("end_date").trim()
             val status = data.optString("status").trim()
             val baseWhere = StringBuilder("c.is_deleted = 0")
             val args = mutableListOf<String>()
+            if (stationScopeId != null) {
+                baseWhere.append(" AND p.station_id = ? AND p.is_deleted = 0")
+                args.add(stationScopeId.toString())
+            }
             if (status.isNotEmpty()) { baseWhere.append(" AND c.status = ?"); args.add(status) }
             if (startDate.isNotEmpty()) { baseWhere.append(" AND COALESCE(c.end_date, c.start_date) >= ?"); args.add(startDate) }
             if (endDate.isNotEmpty()) { baseWhere.append(" AND c.start_date <= ?"); args.add(endDate) }
