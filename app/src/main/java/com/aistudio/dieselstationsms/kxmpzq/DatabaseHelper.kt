@@ -9510,7 +9510,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun updateMaintenanceRequestStatus(requestId: Long, status: String): Int {
+    fun updateMaintenanceRequestStatus(requestId: Long, status: String, stationScopeId: Int, userId: Long): Int {
         dbLock.lock()
         return try {
             val db = writableDatabase
@@ -9520,8 +9520,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     put("completed_at", getCurrentDateTime())
                 }
                 put("updated_at", getCurrentDateTime())
+                put("completed_by", userId)
             }
-            val rows = db.update("maintenance_requests", cv, "id=?", arrayOf(requestId.toString()))
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val rows = db.update("maintenance_requests", cv, "id=? AND station_id=?", arrayOf(requestId.toString(), stationScopeId.toString()))
             if (rows > 0) logActivity("system", "update_maintenance_status", "تحديث حالة طلب الصيانة $requestId إلى $status")
             rows
         } finally {

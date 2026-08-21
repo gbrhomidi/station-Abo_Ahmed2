@@ -2365,7 +2365,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val stats = db.getDashboardStats(1)
+                    val stats = db.getDashboardStats(getCurrentStationId(db, activity.currentUserId))
                     val prompt = """
                         أنت مساعد ذكي لمحطة وقود. قدم تحليلاً مختصراً للبيانات التالية:
                         - المخزون المتبقي: ${stats.optDouble("total_remaining", 0.0).toInt()} لتر
@@ -2412,7 +2412,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.insertParty(data)
                 DebugLogger.info("Party", "Added party id=$id")
                 successResponse(id, "تمت الإضافة بنجاح")
@@ -2428,7 +2430,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val rows = db.updateParty(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث بنجاح" else "لم يتم العثور على السجل")
             } catch (e: Exception) {
@@ -3359,7 +3363,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("assets", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.addAsset(data)
                 DebugLogger.info("Asset", "Added asset id=$id")
                 successResponse(id, "تم إضافة الأصل بنجاح")
@@ -3375,7 +3381,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("assets", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val assets = db.getAssets()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val assets = db.getAssets(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(assets)
             } catch (e: Exception) {
                 DebugLogger.logException("Asset", e)
@@ -3535,7 +3542,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية بدء الوردية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply {
+                    put("station_id", stationId)
+                    put("cashier_id", activity.currentUserId)
+                }
                 val id = db.startShift(data)
                 DebugLogger.info("Shift", "Started shift id=$id")
                 successResponse(id, "تم بدء الوردية بنجاح")
@@ -4608,7 +4620,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("products", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val id = db.insertProduct(data)
                 DebugLogger.info("Product", "Added product id=$id")
                 successResponse(id, "تم إضافة المنتج بنجاح")
@@ -4624,7 +4638,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("products", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
                 val rows = db.updateProduct(id, data)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على المنتج")
             } catch (e: Exception) {
@@ -4747,7 +4763,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val tanks = db.getTanks()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val tanks = db.getTanks(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(tanks)
             } catch (e: Exception) {
                 DebugLogger.logException("Tanks", e)
@@ -4811,11 +4828,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
-                val stationId = data.optInt("station_id", 0)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
                 val status = data.optString("status").takeIf { it.isNotBlank() }
-                if (stationId <= 0) {
-                    return errorResponse("رقم المحطة غير صحيح")
-                }
                 val requests = db.getMaintenanceRequests(stationId, status)
                 dataResponse(requests)
             } catch (e: Exception) {
@@ -4840,7 +4855,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 if (assetId <= 0 || requestType.isBlank() || title.isBlank() || description.isBlank()) {
                     return errorResponse("بيانات غير صالحة")
                 }
-                val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, 1, 1)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val id = db.addMaintenanceRequest(assetType, assetId, requestType, priority, title, description, stationId, activity.currentUserId.toInt())
                 DebugLogger.info("Maintenance", "Added request id=$id")
                 successResponse(id, "تم إضافة طلب الصيانة بنجاح")
             } catch (e: Exception) {
@@ -4859,7 +4876,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val requestId = data.optLong("request_id", 0)
                 val status = data.optString("status", "")
                 if (requestId <= 0 || status.isBlank()) return errorResponse("بيانات غير صالحة")
-                val rows = db.updateMaintenanceRequestStatus(requestId, status)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val rows = db.updateMaintenanceRequestStatus(requestId, status, getCurrentStationId(db, activity.currentUserId), activity.currentUserId)
                 successResponse(rows > 0, if (rows > 0) "تم التحديث" else "لم يتم العثور على الطلب")
             } catch (e: Exception) {
                 DebugLogger.logException("Maintenance", e)
@@ -4970,7 +4988,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getMonthlySales(1)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getMonthlySales(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
@@ -4984,7 +5003,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val sales = db.getDailySales(1, date)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val sales = db.getDailySales(getCurrentStationId(db, activity.currentUserId), date)
                 dataResponse(sales)
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
@@ -4998,7 +5018,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val report = db.getEodReport(1)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val report = db.getEodReport(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(report)
             } catch (e: Exception) {
                 DebugLogger.logException("Reports", e)
@@ -5012,7 +5033,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val report = db.getEodReport(1, fromDate, toDate)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val report = db.getEodReport(getCurrentStationId(db, activity.currentUserId), fromDate, toDate)
                 val profit = report.optDouble("total_sales", 0.0) - report.optDouble("total_payments", 0.0)
                 report.put("profit", profit)
                 report.put("revenue", report.optDouble("total_sales", 0.0))
