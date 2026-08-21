@@ -1286,16 +1286,16 @@
     <main class="page-container">
         <div class="notice-card"><i class="fas fa-shield-halved"></i><span>يستخدم المساعد AI Gateway الحقيقي عند الحاجة، وتُحفظ الأسرار داخل Android Keystore فقط؛ لا تُحفظ مفاتيح AI في هذه الصفحة أو localStorage.</span></div>
 
-        <div class="data-panel" style="margin-bottom: 16px;">
+        <div class="data-panel" id="ai-health-center" style="margin-bottom: 16px;">
             <div class="section-title">
                 <h3><i class="fas fa-heartbeat"></i> صحة الذكاء الاصطناعي (Circuit Breaker)</h3>
-                <span class="count-badge" id="aiSystemBadge" style="background:var(--success);color:white;">HEALTHY</span>
+                <span class="count-badge" id="system-status-badge" style="background:var(--success);color:white;">HEALTHY</span>
             </div>
             <div style="display:flex;gap:10px;margin-bottom:15px;font-size:0.85rem;">
                 <span style="background:var(--primary-dim);color:var(--primary-color);padding:4px 12px;border-radius:20px;" id="aiAvailableBadge">متوفر: 0</span>
                 <span style="background:var(--accent-dim);color:var(--accent-color);padding:4px 12px;border-radius:20px;" id="aiCooldownBadge">في فترة تبريد: 0</span>
             </div>
-            <div id="aiHealthList">
+            <div id="providers-health-list">
                 <div class="empty-state">جاري تحميل بيانات الصحة...</div>
             </div>
         </div>
@@ -1437,21 +1437,24 @@
         async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
         $('searchInput').addEventListener('input',applyFilter); $('themeToggle').addEventListener('click',toggleTheme); $('fab').addEventListener('click',()=>openForm()); $('saveBtn').addEventListener('click',saveForm); $('sidebarToggle').addEventListener('click',()=>{const side=$('sidebar');side.classList.toggle('open');}); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
         window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
-        async function loadAiHealth() {
+        async function loadAiHealthStatus() {
             if (!bridge || typeof bridge.getAiHealthStatus !== 'function') return;
             try {
                 const result = await invoke('getAiHealthStatus', []);
                 const health = dataOf(result) || {};
                 const providers = Array.isArray(health.providers) ? health.providers : [];
 
-                const sysBadge = $('aiSystemBadge');
-                sysBadge.textContent = health.system_status || 'UNKNOWN';
-                sysBadge.style.background = health.system_status === 'HEALTHY' ? 'var(--success)' : 'var(--error)';
+                const sysBadge = $('system-status-badge');
+                if(sysBadge) {
+                    sysBadge.textContent = health.system_status || 'UNKNOWN';
+                    sysBadge.style.background = health.system_status === 'HEALTHY' ? 'var(--success)' : 'var(--error)';
+                }
 
-                $('aiAvailableBadge').textContent = 'متوفر: ' + (health.available_count || 0);
-                $('aiCooldownBadge').textContent = 'في فترة تبريد: ' + (health.cooldown_count || 0);
+                if($('aiAvailableBadge')) $('aiAvailableBadge').textContent = 'متوفر: ' + (health.available_count || 0);
+                if($('aiCooldownBadge')) $('aiCooldownBadge').textContent = 'في فترة تبريد: ' + (health.cooldown_count || 0);
 
-                $('aiHealthList').innerHTML = providers.length ? providers.map(p => `
+                const list = $('providers-health-list');
+                if(list) list.innerHTML = providers.length ? providers.map(p => `
                     <div class="data-card" style="border-left: 4px solid ${p.is_cooldown ? 'var(--error)' : (p.enabled ? 'var(--success)' : 'var(--text-muted)')}">
                         <div class="data-card-head">
                             <div>
@@ -1471,9 +1474,9 @@
             }
         }
 
-        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI, loadAiAdmin, saveAiProvider, deleteAiProvider, toggleAiProvider, testAiProvider, loadAiHealth});
+        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI, loadAiAdmin, saveAiProvider, deleteAiProvider, toggleAiProvider, testAiProvider, loadAiHealthStatus});
         applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
-        if (CFG.mode === 'ai') loadAiHealth();
+        if (CFG.mode === 'ai') loadAiHealthStatus();
     })();
     </script>
 </body>
