@@ -10903,11 +10903,90 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
 
-        // حساب نسبة الإشغال (تقريبي بناءً على عدد المنتجات والحد الأقصى الافتراضي)
-        val totalProducts = stats.optInt("total_products", 0)
-        stats.put("occupancy_rate", Math.min(100, Math.round((totalProducts * 100.0) / 50.0).toInt()))
+        // نسبة امتلاء خزانات المحطة — تُحسب من الكمية الحالية والسعة الفعلية في SQLite.
+        // نحتفظ بالمفتاح occupancy_rate للتوافق مع الشاشات القديمة، مع إضافة مفاتيح صريحة جديدة.
+        db.rawQuery(
+            "SELECT COALESCE(SUM(current_quantity), 0), COALESCE(SUM(capacity_liters), 0), COUNT(*) FROM tanks WHERE station_id=? AND is_deleted=0",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val currentTankQuantity = cursor.getDouble(0)
+                val totalTankCapacity = cursor.getDouble(1)
+                val tankCount = cursor.getInt(2)
+                val fillRate = if (totalTankCapacity > 0.0) {
+                    ((currentTankQuantity / totalTankCapacity) * 100.0).coerceIn(0.0, 100.0)
+                } else {
+                    0.0
+                }
+                stats.put("total_tank_quantity", currentTankQuantity)
+                stats.put("total_tank_capacity", totalTankCapacity)
+                stats.put("tank_count", tankCount)
+                stats.put("occupancy_rate", Math.round(fillRate * 100.0) / 100.0)
+                stats.put("occupancy_rate_source", "tanks.current_quantity/tanks.capacity_liters")
+            }
+        }
 
         return stats
+    }
+
+    /**
+     * يقوم بتجميع حالة صحة مزودي الذكاء الاصطناعي بناءً على السجلات الفعلية في جدول sms_ai_runs
+     */
+    fun getAiHealthStatusQuery(): JSONObject {
+        val result = JSONObject()
+        val arr = JSONArray()
+        val db = readableDatabase
+
+        var availableCount = 0
+        var totalCooldowns = 0
+
+        // جلب جميع المزودين الفريدين مع إحصائياتهم
+        val query = """
+            SELECT
+                provider,
+                MAX(model) as model,
+                COUNT(*) as total_runs,
+                SUM(CASE WHEN error_type IS NULL AND fallback_reason IS NULL THEN 1 ELSE 0 END) as success_count,
+                SUM(CASE WHEN error_type IS NOT NULL OR fallback_reason IS NOT NULL THEN 1 ELSE 0 END) as failure_count,
+                MAX(created_at) as last_run_time
+            FROM sms_ai_runs
+            GROUP BY provider
+        """.trimIndent()
+
+        db.rawQuery(query, null).use { cursor ->
+            while (cursor.moveToNext()) {
+                val provider = cursor.getString(0) ?: "unknown"
+                val model = cursor.getString(1) ?: "unknown"
+                val totalRuns = cursor.getInt(2)
+                val successCount = cursor.getInt(3)
+                val failureCount = cursor.getInt(4)
+
+                // حساب الصحة (Circuit Breaker logic)
+                val isCooldown = failureCount > 3 && successCount == 0 // نفس منطق Orchestrator
+                val healthScore = if (totalRuns == 0) 0.5 else successCount.toDouble() / totalRuns.toDouble()
+
+                if (!isCooldown) availableCount++
+                if (isCooldown) totalCooldowns++
+
+                arr.put(JSONObject().apply {
+                    put("id", provider) // نستخدم provider كـ id مؤقت
+                    put("provider", provider)
+                    put("model", model)
+                    put("enabled", true) // نفترض أنه مفعل إذا كان له سجلات
+                    put("is_cooldown", isCooldown)
+                    put("health_score", healthScore)
+                    put("failures", failureCount)
+                    put("successes", successCount)
+                })
+            }
+        }
+
+        result.put("providers", arr)
+        result.put("available_count", availableCount)
+        result.put("cooldown_count", totalCooldowns)
+        result.put("system_status", if (availableCount > 0) "HEALTHY" else "DEGRADED")
+
+        return result
     }
 
     // ========================================================================

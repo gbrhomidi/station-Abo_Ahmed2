@@ -1321,7 +1321,7 @@
 
                 <!-- معلومات التحديث -->
                 <div class="data-update-info">
-                    <i class="fas fa-sync-alt"></i> تم تحديث البيانات في: <span id="last-update">يتم التحميل...</span>
+                    <i class="fas fa-database"></i> مصدر المؤشرات: SQLite عبر DatabaseHelper — آخر قراءة: <span id="last-update">يتم التحميل...</span>
                     <button class="refresh-btn" onclick="manualRefresh()" title="تحديث الآن"><i class="fas fa-rotate-right"></i></button>
                 </div>
 
@@ -2131,40 +2131,19 @@
             grid.innerHTML = '';
 
             const cardDefs = [
-                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products ||
-                        0, label: 'منتج في النظام', trend: stats.products_trend || '+0%', trendUp: true,
-                    progress: 70 },
-                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats
-                        .daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats
-                        .sales_trend || '+0%', trendUp: true, cls: 'success-card' },
-                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats
-                        .active_customers || 0, label: 'عميل نشط', cls: '' },
-                { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats
-                        .expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0,
-                    cls: 'warning-card' },
-                { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats
-                        .low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0,
-                    cls: 'danger-card' },
-                { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice', value: stats
-                        .due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
-                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo', value: (stats
-                        .returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)',
-                    cls: 'returned-card' },
-                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban', value: (stats
-                        .damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)',
-                    cls: 'damaged-card' },
-                { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd', value: (stats
-                        .customer_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الديون المستحقة',
-                    cls: 'warning-card' },
-                { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar',
-                    value: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الدين للموردين',
-                    cls: '' },
-                { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse', value: (stats
-                        .inventory_value || 0).toFixed(2) + ' ر.ي', label: 'القيمة الإجمالية للمخزون',
-                    cls: 'success-card' },
-                { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks', value: stats.pending_tasks ||
-                        0, label: 'مهمة تحتاج لمراجعتك', badge: stats.pending_tasks || 0, cls: 'info-card' },
-                { id: 'card-occupancy', header: 'نسبة الإشغال', icon: 'fa-tachometer-alt', value: (stats.occupancy_rate || 0) + '%', label: 'معدل استخدام الخزانات', progress: (stats.occupancy_rate || 0), cls: 'info-card' }
+                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products || 0, label: 'منتج في النظام', trend: stats.products_trend || '+0%', trendUp: (stats.products_trend && !stats.products_trend.startsWith('-')) },
+                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats.sales_trend || '+0%', trendUp: (stats.sales_trend && !stats.sales_trend.startsWith('-')), cls: 'success-card' },
+                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats.active_customers || 0, label: 'عميل نشط', cls: '' },
+                { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0, cls: 'warning-card' },
+                { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats.low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0, cls: 'danger-card' },
+                { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice', value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },
+                { id: 'card-returned-products', header: 'المنتجات المرتجعة', icon: 'fa-undo', value: (stats.returned_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)', cls: 'returned-card' },
+                { id: 'card-damaged-products', header: 'المنتجات التالفة', icon: 'fa-ban', value: (stats.damaged_products_today || 0).toFixed(2), label: 'كمية اليوم (لتر)', cls: 'damaged-card' },
+                { id: 'card-customer-debts', header: 'مديونية العملاء', icon: 'fa-hand-holding-usd', value: (stats.customer_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الديون المستحقة', cls: 'warning-card' },
+                { id: 'card-supplier-debts', header: 'مديونية الموردين', icon: 'fa-file-invoice-dollar', value: (stats.supplier_debts || 0).toFixed(2) + ' ر.ي', label: 'إجمالي الدين للموردين', cls: '' },
+                { id: 'card-inventory-value', header: 'قيمة المخزون', icon: 'fa-warehouse', value: (stats.inventory_value || 0).toFixed(2) + ' ر.ي', label: 'القيمة الإجمالية للمخزون', cls: 'success-card' },
+                { id: 'card-pending-tasks', header: 'المهام المعلقة', icon: 'fa-tasks', value: stats.pending_tasks || 0, label: 'مهمة تحتاج لمراجعتك', badge: stats.pending_tasks || 0, cls: 'info-card' },
+                { id: 'card-occupancy', header: 'امتلاء الخزانات', icon: 'fa-tachometer-alt', value: (Number(stats.occupancy_rate) || 0).toFixed(2) + '%', label: `${stats.tank_count || 0} خزانات — من الكمية والسعة الفعلية`, progress: (Number(stats.occupancy_rate) || 0), cls: 'info-card' }
             ];
 
             cardDefs.forEach(def => {
@@ -2226,13 +2205,8 @@
 
             renderSkeletons();
 
-            if (!forceRefresh && dashboardCache) {
-                updateStatsCards(dashboardCache);
-                showToast('تم عرض آخر بيانات محملة', 'info');
-                isRefreshing = false;
-                return;
-            }
-
+            // لا نعرض الـ cache كبديل عن القراءة الحالية؛ كل تحميل عادي يطلب أحدث snapshot من SQLite.
+            // يُستخدم cache فقط عند تعذر الجسر، مع إظهار رسالة واضحة للمستخدم.
             try {
                 const result = await apiCall('getDashboardStats');
                 if (!result.success || !result.data) {
