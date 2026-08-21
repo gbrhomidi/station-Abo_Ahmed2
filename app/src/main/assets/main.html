@@ -1222,8 +1222,11 @@
             font-size: 14px;
         }
     </style>
+    <meta name="reports-bridge-methods" content="getDashboardStats">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
 
     <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
@@ -2132,8 +2135,8 @@
             grid.innerHTML = '';
 
             const cardDefs = [
-                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products || 0, label: 'منتج في النظام', trend: stats.products_trend || '+0%', trendUp: (stats.products_trend && !stats.products_trend.startsWith('-')) },
-                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats.sales_trend || '+0%', trendUp: (stats.sales_trend && !stats.sales_trend.startsWith('-')), cls: 'success-card' },
+                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products || 0, label: 'منتج في النظام', trend: stats.products_trend || '—', trendUp: (stats.products_trend && !stats.products_trend.startsWith('-')) },
+                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats.sales_trend || '—', trendUp: (stats.sales_trend && !stats.sales_trend.startsWith('-')), cls: 'success-card' },
                 { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats.active_customers || 0, label: 'عميل نشط', cls: '' },
                 { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0, cls: 'warning-card' },
                 { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats.low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0, cls: 'danger-card' },

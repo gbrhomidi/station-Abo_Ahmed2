@@ -1168,8 +1168,11 @@
         }
   </style>
      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="generateCRMReport,getCustomers">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
@@ -2186,7 +2189,7 @@
                 }
             });
 
-            // نشاط العملاء الفعلي حسب آخر عملية مسجلة، دون توليد بيانات محاكاة.
+            // نشاط العملاء الفعلي محسوب من آخر عملية مسجلة في النتائج المستلمة.
             const activityMap = {};
             data.forEach(item => {
                 const date = String(item.last_activity || '').slice(0, 10);

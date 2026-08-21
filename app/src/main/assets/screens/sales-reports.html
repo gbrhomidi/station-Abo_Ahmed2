@@ -1014,7 +1014,7 @@
         }
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
-    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice">
+    <meta name="reports-bridge-methods" content="generateSalesTransactionReport,retrieveInvoice,getShifts">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
@@ -1357,7 +1357,7 @@
                     case 'getInvoiceDetails': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
                     case 'getProducts': raw = AndroidInterface.getProducts(); break;
                     case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
-                    case 'getShifts': return Promise.resolve({ success: false, data: [], message: 'فلتر الورديات غير متاح في عقد SQLite الحالي' });
+                    case 'getShifts': raw = AndroidInterface.getShifts(); break;
                     default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
                 }
                 return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);

@@ -1032,8 +1032,11 @@
         }
   </style>
      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="generateInventoryReport,getWarehouses,getCategories,getInventoryProductDetails">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
@@ -1088,6 +1091,10 @@
    </div>
    <!-- الفلاتر -->
    <div class="filter-bar">
+    <div class="filter-group">
+     <i class="fas fa-search"></i>
+     <input id="inventorySearch" type="search" placeholder="ابحث في النتائج المحملة" oninput="applyInventorySearch()" aria-label="البحث في نتائج المخزون">
+    </div>
     <div class="filter-group">
      <i class="fas fa-calendar-alt">
      </i>
@@ -1657,7 +1664,7 @@
                 const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null });
                 currentReportPayload = result.data || {};
                 inventoryData = currentReportPayload.rows || [];
-                renderTable(inventoryData, type);
+                renderTable(getFilteredInventoryData(), type);
                 updateKPIs(inventoryData, currentReportPayload.stats || {});
                 updateCharts(inventoryData, currentReportPayload);
                 updateFooter(inventoryData, currentReportPayload.stats || {});
@@ -1685,6 +1692,17 @@
                 const value = Number(item.quantity || 0) * Number(item.purchase_price || 0);
                 return `<tr><td>${idx + 1}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || 'جميع المستودعات')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.purchase_price)}</td><td>${formatCurrency(item.sale_price)}</td><td class="amount debit">${formatCurrency(value)}</td><td><span class="status-badge ${getStatusClass(status)}">${getStatusLabel(status)}</span></td><td><button class="btn-view" onclick="viewProduct(${Number(item.product_id || item.id || 0)})" title="تفاصيل"><i class="fas fa-eye"></i></button></td></tr>`;
             }).join('');
+        }
+
+        function getFilteredInventoryData() {
+            const query = String(document.getElementById('inventorySearch')?.value || '').trim().toLocaleLowerCase();
+            if (!query) return inventoryData;
+            return inventoryData.filter(item => Object.values(item || {}).some(value => String(value ?? '').toLocaleLowerCase().includes(query)));
+        }
+
+        function applyInventorySearch() {
+            const reportType = document.getElementById('filterReportType').value;
+            renderTable(getFilteredInventoryData(), reportType);
         }
 
         // ================================================================
@@ -1938,6 +1956,7 @@
         function resetFilters() {
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
+            document.getElementById('inventorySearch').value = '';
             document.getElementById('filterWarehouse').value = '';
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterReportType').value = 'summary';

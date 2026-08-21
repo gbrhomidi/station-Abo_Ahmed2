@@ -1140,8 +1140,11 @@
         }
   </style>
      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="getFuelReport,getTanks,getPumps">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
@@ -1197,6 +1200,10 @@
    <!-- الفلاتر -->
    <div class="filter-bar">
     <div class="filter-group">
+     <i class="fas fa-search"></i>
+     <input id="fuelSearch" type="search" placeholder="ابحث في النتائج المحملة" oninput="applyFuelSearch()" aria-label="البحث في نتائج الوقود">
+    </div>
+    <div class="filter-group">
      <i class="fas fa-calendar-alt">
      </i>
      <input id="filterDateFrom" placeholder="من" type="date">
@@ -1237,9 +1244,6 @@
       <option value="refills">
        التزود
       </option>
-      <option value="readings">
-       القراءات
-      </option>
       <option value="tanks">
        الخزانات
       </option>
@@ -1272,7 +1276,7 @@
     </div>
     <div class="kpi-value" id="kpiTotalLiters">0.0</div>
     <div class="kpi-label">⛽ إجمالي اللترات</div>
-    <div class="kpi-trend up" id="trendLiters"><i class="fas fa-arrow-up"></i> 0.0%</div>
+    <div class="kpi-trend" id="trendLiters">للفترة المحددة</div>
    </div>
    <div class="kpi-card">
     <div class="kpi-icon gold">
@@ -1280,81 +1284,21 @@
     </div>
     <div class="kpi-value" id="kpiTotalAmount">0.00</div>
     <div class="kpi-label">💰 إجمالي المبيعات</div>
-    <div class="kpi-trend up" id="trendAmount"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-   <div class="kpi-card" onclick="showReconciliation()">
-    <div class="kpi-icon green">
-     <i class="fas fa-balance-scale"></i>
-    </div>
-    <div class="kpi-value" id="kpiReconciliation">0.00</div>
-    <div class="kpi-label">⚖️ تسوية المخزون</div>
-    <div class="kpi-trend" id="trendRecon"><i class="fas fa-check-circle"></i> متوازن</div>
+    <div class="kpi-trend" id="trendAmount">للفترة المحددة</div>
    </div>
    <div class="kpi-card">
-    <div class="kpi-icon red">
-     <i class="fas fa-receipt"></i>
+    <div class="kpi-icon green">
+     <i class="fas fa-chart-line"></i>
     </div>
+    <div class="kpi-value" id="kpiAvgPrice">0.00</div>
+    <div class="kpi-label">📊 متوسط السعر</div>
+    <div class="kpi-trend" id="trendPrice">للفترة المحددة</div>
+   </div>
+   <div class="kpi-card">
+    <div class="kpi-icon red"><i class="fas fa-receipt"></i></div>
     <div class="kpi-value" id="kpiTransactions">0</div>
     <div class="kpi-label">📄 عدد العمليات</div>
-    <div class="kpi-trend up" id="trendTx"><i class="fas fa-arrow-up"></i> 0.0%</div>
-   </div>
-  </div>
-   <div class="kpi-card">
-    <div class="kpi-icon gold">
-     <i class="fas fa-money-bill-wave">
-     </i>
-    </div>
-    <div class="kpi-value" id="kpiTotalAmount">
-     0.00
-    </div>
-    <div class="kpi-label">
-     💰 إجمالي المبيعات
-    </div>
-    <div class="kpi-trend up">
-     <i class="fas fa-arrow-up">
-     </i>
-     <span id="trendAmount">
-      +0%
-     </span>
-    </div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-icon green">
-     <i class="fas fa-chart-line">
-     </i>
-    </div>
-    <div class="kpi-value" id="kpiAvgPrice">
-     0.00
-    </div>
-    <div class="kpi-label">
-     📊 متوسط السعر
-    </div>
-    <div class="kpi-trend up">
-     <i class="fas fa-arrow-up">
-     </i>
-     <span id="trendPrice">
-      +0%
-     </span>
-    </div>
-   </div>
-   <div class="kpi-card">
-    <div class="kpi-icon red">
-     <i class="fas fa-exchange-alt">
-     </i>
-    </div>
-    <div class="kpi-value" id="kpiTransactions">
-     0
-    </div>
-    <div class="kpi-label">
-     📄 عدد المعاملات
-    </div>
-    <div class="kpi-trend down">
-     <i class="fas fa-arrow-down">
-     </i>
-     <span id="trendTx">
-      -0%
-     </span>
-    </div>
+    <div class="kpi-trend" id="trendTx">للفترة المحددة</div>
    </div>
   </div>
   <!-- ===================================================================
@@ -1567,13 +1511,6 @@
     </i>
     <span>
      التزود
-    </span>
-   </button>
-   <button class="nav-item" onclick="switchTab('readings')">
-    <i class="fas fa-gauge-high">
-    </i>
-    <span>
-     القراءات
     </span>
    </button>
    <button class="nav-item" onclick="switchTab('tanks')">
@@ -1800,11 +1737,10 @@
                     : await apiCall('getFuelReport', params);
                 if (result.success && result.data) {
                     fuelData = normalizeFuelRows(result.data, reportType);
-                    if (reportType === 'readings') { showToast('⚠️ القراءات غير متاحة في عقد الجسر الحالي', 'warning'); return; }
                     if (fuelType && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.fuel_type_id || '') === String(fuelType));
                     if (tank && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.tank_id || '') === String(tank));
                     
-                    renderTable(fuelData, reportType);
+                    renderTable(getFilteredFuelData(), reportType);
                     updateKPIs(fuelData);
                     updateCharts(fuelData);
                     updateFooter(fuelData);
@@ -1829,9 +1765,19 @@
         // ===================================================================
         function normalizeFuelRows(data, reportType) {
             const rows = Array.isArray(data) ? data : [];
-            if (reportType === 'readings') return [];
             if (reportType === 'tanks') return rows.map(item => ({ ...item, id: item.tank_id || item.id, type: 'tank', code: `TANK-${item.tank_id || item.id || ''}`, difference: Number(item.difference || 0), quantity: Number(item.measured_level || item.closing_level || 0), fuel_name: item.fuel_name || '---', status: Math.abs(Number(item.difference || 0)) > 5 ? 'rejected' : 'completed' }));
             return rows.filter(item => reportType === 'summary' || (reportType === 'sales' && item.type === 'sale') || (reportType === 'refills' && item.type === 'refill')).map(item => item.type === 'sale' ? ({ ...item, sale_code: item.code, sale_date: item.date, liters: item.quantity, net_amount: item.amount, transaction_id: item.id, transaction_type: 'sale' }) : ({ ...item, refill_code: item.code, arrival_date: item.date, delivered_quantity: item.quantity, total_amount: item.amount, transaction_id: item.id, transaction_type: 'refill' }));
+        }
+
+        function getFilteredFuelData() {
+            const query = String(document.getElementById('fuelSearch')?.value || '').trim().toLocaleLowerCase();
+            if (!query) return fuelData;
+            return fuelData.filter(item => Object.values(item || {}).some(value => String(value ?? '').toLocaleLowerCase().includes(query)));
+        }
+
+        function applyFuelSearch() {
+            const reportType = document.getElementById('filterReportType').value;
+            renderTable(getFilteredFuelData(), reportType);
         }
 
         function renderTable(data, reportType) {
@@ -1843,7 +1789,7 @@
             }
             // دمج البيانات من مصادر مختلفة (مبيعات، تزود، قراءات) حسب نوع التقرير
             let rows = [];
-            if ((reportType === 'sales' || reportType === 'summary') && item.type === 'sale') {
+            if (reportType === 'sales' || reportType === 'summary') {
                 data.forEach((item, idx) => {
                     rows.push({
                         id: item.id,
@@ -1861,7 +1807,7 @@
                     });
                 });
             }
-            if ((reportType === 'refills' || reportType === 'summary') && item.type === 'refill') {
+            if (reportType === 'refills' || reportType === 'summary') {
                 data.forEach((item, idx) => {
                     if (item.refill_code) {
                         rows.push({
@@ -1881,7 +1827,7 @@
                     }
                 });
             }
-            if (reportType === 'readings' || reportType === 'summary') {
+            if (reportType === 'summary') {
                 data.forEach((item, idx) => {
                     if (item.reading_code) {
                         rows.push({
@@ -1948,11 +1894,11 @@
             document.getElementById('kpiAvgPrice').textContent = formatCurrency(avgPrice);
             document.getElementById('kpiTransactions').textContent = count;
 
-            // محاكاة الاتجاهات
-            document.getElementById('trendLiters').textContent = '—';
-            document.getElementById('trendAmount').textContent = '—';
-            document.getElementById('trendPrice').textContent = '—';
-            document.getElementById('trendTx').textContent = '—';
+            // لا يُعرض اتجاه مقارن لعدم وجود baseline تاريخي في عقد التقرير الحالي.
+            document.getElementById('trendLiters').textContent = 'للفترة المحددة';
+            document.getElementById('trendAmount').textContent = 'للفترة المحددة';
+            document.getElementById('trendPrice').textContent = 'للفترة المحددة';
+            document.getElementById('trendTx').textContent = 'للفترة المحددة';
         }
 
         function resetKPIs() {
@@ -2058,7 +2004,7 @@
         // ===================================================================
         function generateAlerts(data) {
             const alerts = [];
-            // تنبيه انخفاض المخزون - محاكاة
+            // تنبيه انخفاض المخزون محسوب من الكمية والسعة الراجعتين من مصدر التقرير
             const lowTanks = data.filter(item => item.current_quantity && item.capacity_liters && (item.current_quantity /
                 item.capacity_liters < 0.2));
             if (lowTanks.length > 0) {
@@ -2304,6 +2250,7 @@
             const today = new Date();
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
+            document.getElementById('fuelSearch').value = '';
             document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
             document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
             document.getElementById('filterFuelType').value = '';
@@ -2320,8 +2267,7 @@
             document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
             const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
             if (target) target.classList.add('active');
-            const map = { 'summary': 'summary', 'sales': 'sales', 'refills': 'refills', 'readings': 'readings',
-                'tanks': 'tanks' };
+            const map = { 'summary': 'summary', 'sales': 'sales', 'refills': 'refills', 'tanks': 'tanks' };
             document.getElementById('filterReportType').value = map[tab] || 'summary';
             generateReport();
         }

@@ -1268,8 +1268,11 @@
         @media print { .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,.offline-banner,.action-row,.icon-btn,.notice-card { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
 </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="getPredictionRecords">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
 <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
     <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
     <header class="top-bar">

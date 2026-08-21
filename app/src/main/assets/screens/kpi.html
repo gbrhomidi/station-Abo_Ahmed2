@@ -1344,8 +1344,11 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
     </style>
      <script src="file:///android_asset/assets-local/js/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="reports-bridge-methods" content="getDashboardStats">
+    <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  <body>
+    <div id="reportsDataSource" class="report-source-banner" data-state="unavailable" role="status"><i class="fas fa-plug-circle-xmark" aria-hidden="true"></i><span>جاري التحقق من مصدر بيانات SQLite...</span></div>
   <!-- Pull-to-Refresh -->
   <div class="pull-indicator" id="pullIndicator">
    <i class="fas fa-arrow-down">
@@ -1493,7 +1496,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendTotal">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -1503,7 +1506,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
      </i>
     </div>
     <div class="kpi-value" id="kpiAchievement">
-     0%
+     —
     </div>
     <div class="kpi-label">
      🎯 نسبة الإنجاز
@@ -1512,7 +1515,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendAchiev">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -1531,7 +1534,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
      <i class="fas fa-arrow-up">
      </i>
      <span id="trendOnTrack">
-      +0%
+      —
      </span>
     </div>
    </div>
@@ -2109,16 +2112,16 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
             const trendValue = item => item && item.trend_percent !== null && item.trend_percent !== undefined && Number.isFinite(Number(item.trend_percent))
                 ? Number(item.trend_percent).toFixed(1) + '%' : '—';
-            document.getElementById('trendTotal').textContent = data.length ? '—' : '0%';
-            document.getElementById('trendAchiev').textContent = data.length ? avgAchiev.toFixed(1) + '%' : '0%';
-            document.getElementById('trendOnTrack').textContent = data.length ? ((onTrack / data.length) * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('trendTotal').textContent = data.length ? '—' : 'لا توجد فترة مقارنة';
+            document.getElementById('trendAchiev').textContent = data.length ? avgAchiev.toFixed(1) + '%' : 'لا توجد فترة مقارنة';
+            document.getElementById('trendOnTrack').textContent = data.length ? ((onTrack / data.length) * 100).toFixed(1) + '%' : 'لا توجد فترة مقارنة';
             const criticalTrend = data.find(item => item.trend_percent !== null && item.trend_percent !== undefined);
             document.getElementById('trendCritical').textContent = trendValue(criticalTrend);
         }
 
         function resetKPIs() {
             document.getElementById('kpiTotalKPIs').textContent = '0';
-            document.getElementById('kpiAchievement').textContent = '0%';
+            document.getElementById('kpiAchievement').textContent = '—';
             document.getElementById('kpiOnTrack').textContent = '0';
             document.getElementById('kpiCritical').textContent = '0';
         }
