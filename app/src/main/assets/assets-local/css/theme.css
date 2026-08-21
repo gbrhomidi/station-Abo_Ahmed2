@@ -469,3 +469,318 @@ h1, h2, h3, h4, h5, h6 {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+
+/* ============================================================
+   GLOBAL DESIGN SYSTEM SPECIFICATION v1.0
+   Shared operational primitives for all WebView screens.
+   ============================================================ */
+
+:root {
+    --font-sans: 'Tajawal', 'Cairo', system-ui, -apple-system, sans-serif;
+    --font-heading: 'Tajawal', 'Cairo', var(--font-sans);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+    --touch-target: 44px;
+    --content-max-width: 1440px;
+    --z-sticky: 100;
+    --z-overlay: 1000;
+    --z-toast: 1100;
+}
+
+html {
+    direction: rtl;
+    min-width: 320px;
+    text-rendering: optimizeLegibility;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+.btn,
+.btn-icon,
+.tab-btn,
+.refresh-btn,
+.pagination button,
+.pagination a {
+    min-height: var(--touch-target);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    box-shadow: var(--focus-ring);
+}
+
+/* Standard page and responsive layout primitives. */
+.container,
+.page-container {
+    width: min(100% - 2rem, var(--content-max-width));
+    margin-inline: auto;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.cluster {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.grid-auto {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--space-4);
+}
+
+/* KPI cards: data must be supplied by a real bridge/database path. */
+.kpi-grid,
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-4);
+}
+
+.kpi-card,
+.stat-card {
+    position: relative;
+    min-height: 132px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.kpi-card:hover,
+.stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.kpi-card .kpi-value,
+.stat-card .stat-value {
+    font-size: clamp(1.25rem, 3vw, 2rem);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-card .kpi-label,
+.stat-card .stat-label {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+/* Loading, empty, error, and unavailable states are explicit UI states. */
+.skeleton,
+.skeleton-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-surface-hover);
+    color: transparent;
+    pointer-events: none;
+}
+
+.skeleton::after,
+.skeleton-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+    animation: ds-shimmer 1.2s infinite;
+}
+
+.empty-state,
+.error-state,
+.unavailable-state {
+    display: grid;
+    place-items: center;
+    gap: var(--space-3);
+    min-height: 180px;
+    padding: var(--space-8);
+    text-align: center;
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+}
+
+.error-state {
+    color: var(--danger-text);
+    border-color: var(--danger);
+    background: var(--danger-bg);
+}
+
+/* Operational alerts and toast notifications. */
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+}
+
+.alert-success { color: var(--success-text); background: var(--success-bg); }
+.alert-danger { color: var(--danger-text); background: var(--danger-bg); }
+.alert-warning { color: var(--warning-text); background: var(--warning-bg); }
+.alert-info { color: var(--info-text); background: var(--info-bg); }
+
+.toast-container {
+    position: fixed;
+    inset-inline-end: var(--space-4);
+    inset-block-end: var(--space-4);
+    z-index: var(--z-toast);
+    display: grid;
+    gap: var(--space-2);
+    width: min(360px, calc(100vw - 2rem));
+}
+
+/* Sticky operational controls and data-table safety on narrow WebViews. */
+.sticky-actions {
+    position: sticky;
+    inset-block-end: 0;
+    z-index: var(--z-sticky);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    border-top: 1px solid var(--border-color);
+    backdrop-filter: blur(8px);
+}
+
+.table-container,
+.table-responsive {
+    max-width: 100%;
+}
+
+.data-table th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+}
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+}
+
+.pagination button,
+.pagination a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--touch-target);
+    padding-inline: var(--space-3);
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+}
+
+.pagination .active,
+.pagination button[aria-current='page'],
+.pagination a[aria-current='page'] {
+    color: #fff;
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+@keyframes ds-shimmer {
+    100% { transform: translateX(100%); }
+}
+
+@media (max-width: 640px) {
+    .page-container,
+    .container {
+        width: min(100% - 1rem, var(--content-max-width));
+        padding-inline: 0;
+    }
+
+    .page-header,
+    .page-actions,
+    .filter-bar {
+        align-items: stretch;
+    }
+
+    .page-actions > *,
+    .filter-bar > *,
+    .search-input-wrapper {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .modal-content {
+        width: calc(100% - 1rem);
+        max-height: 92vh;
+        margin-inline: .5rem;
+    }
+
+    .data-table {
+        min-width: 680px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}
+
+@media print {
+    .page-actions,
+    .filter-bar,
+    .toast-container,
+    .sticky-actions,
+    .modal-overlay {
+        display: none !important;
+    }
+
+    body {
+        background: #fff;
+        color: #000;
+    }
+
+    .card,
+    .table-container,
+    .kpi-card,
+    .stat-card {
+        box-shadow: none;
+        break-inside: avoid;
+    }
+}
