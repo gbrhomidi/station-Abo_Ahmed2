@@ -2134,10 +2134,24 @@
             const grid = document.getElementById('dashStats');
             grid.innerHTML = '';
 
+            const formatTrend = (trendData) => {
+                if (!trendData || trendData.percentage_change === undefined) return { text: '—', up: true, label: 'لا توجد مقارنة' };
+                const pct = trendData.percentage_change;
+                const dir = trendData.trend_direction;
+                return {
+                    text: (pct > 0 ? '+' : '') + pct + '%',
+                    up: dir === 'up',
+                    label: trendData.trend_label || 'مقارنة سابقة'
+                };
+            };
+            const prodTrend = formatTrend(stats.products_trend_data);
+            const salesTrend = formatTrend(stats.sales_trend_data);
+            const custTrend = formatTrend(stats.customers_trend_data);
+
             const cardDefs = [
-                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products || 0, label: 'منتج في النظام', trend: stats.products_trend || '—', trendUp: (stats.products_trend && !stats.products_trend.startsWith('-')) },
-                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: 'إجمالي المبيعات اليوم', trend: stats.sales_trend || '—', trendUp: (stats.sales_trend && !stats.sales_trend.startsWith('-')), cls: 'success-card' },
-                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats.active_customers || 0, label: 'عميل نشط', cls: '' },
+                { id: 'card-total-products', header: 'إجمالي المنتجات', icon: 'fa-boxes', value: stats.total_products || 0, label: prodTrend.label, trend: prodTrend.text, trendUp: prodTrend.up },
+                { id: 'card-daily-sales', header: 'المبيعات اليومية', icon: 'fa-chart-line', value: (stats.daily_sales || 0).toFixed(2) + ' ر.ي', label: salesTrend.label, trend: salesTrend.text, trendUp: salesTrend.up, cls: 'success-card' },
+                { id: 'card-active-customers', header: 'العملاء النشطين', icon: 'fa-users', value: stats.active_customers || 0, label: custTrend.label, trend: custTrend.text, trendUp: custTrend.up, cls: '' },
                 { id: 'card-expiry-soon', header: 'المنتهية قريباً', icon: 'fa-hourglass-half', value: stats.expiry_soon || 0, label: 'منتج خلال 30 يومًا', badge: stats.expiry_soon || 0, cls: 'warning-card' },
                 { id: 'card-low-stock', header: 'انخفاض المخزون', icon: 'fa-exclamation-circle', value: stats.low_stock || 0, label: 'تحت الحد الأدنى', badge: stats.low_stock || 0, cls: 'danger-card' },
                 { id: 'card-due-invoices', header: 'الفواتير المستحقة', icon: 'fa-file-invoice', value: stats.due_invoices || 0, label: 'فاتورة خلال أسبوع', cls: 'info-card' },

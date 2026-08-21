@@ -1621,7 +1621,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             "Loading dashboard statistics for stationId=$stationId"
         )
 
-        val stats = db.getDashboardStats(stationId)
+        val stats = db.getDashboardStats(stationId, params)
 
         JSONObject().apply {
             put("success", true)
@@ -2250,8 +2250,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getAiHealthStatus(): String {
             if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة صحة AI")
             return try {
-                val orchestrator = com.aistudio.dieselstationsms.kxmpzq.sms.SmsAiResourceOrchestrator(this@MainActivity)
-                val status = orchestrator.getHealthStatus()
+                // جلب بيانات الصحة الحقيقية من قاعدة بيانات SQLite بدلاً من SharedPreferences
+                val status = dbHelper.getAiHealthStatusQuery()
                 dataResponse(status)
             } catch (e: Exception) {
                 DebugLogger.logException("AI_HEALTH", e)
@@ -6681,6 +6681,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try {
                 val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
                 dataResponse(db.getFuelReport(data))
+            } catch (e: Exception) { errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getFuelReportPage(jsonData: String = "{}"): String {
+            DebugLogger.info("WebAppInterface", "getFuelReportPage called")
+            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val data = JSONObject(if (jsonData.isBlank()) "{}" else jsonData)
+                dataResponseObject(db.getFuelReportPage(data)).toString()
             } catch (e: Exception) { errorResponse(e.message) }
         }
 

@@ -1,0 +1,1502 @@
+[
+  {
+    "id": "001",
+    "file": "main.html",
+    "name": "محطة أبو أحمد – لوحة التحكم",
+    "domain": "AI",
+    "jsFunctions": 43,
+    "bridgeMethods": [
+      "getCurrentUser",
+      "exitApplication",
+      "screenExists",
+      "getDashboardStats"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "002",
+    "file": "screens/SmsCoreDiagnostics.html",
+    "name": "تشخيصات جوهر الرسائل",
+    "domain": "General / Core",
+    "jsFunctions": 37,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "003",
+    "file": "screens/accounting-reports.html",
+    "name": "نظام إدارة محطة الوقود – التقارير المحاسبية",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "004",
+    "file": "screens/activity-log.html",
+    "name": "سجل النشاطات – نظام محطات الوقود",
+    "domain": "Reports & Logs",
+    "jsFunctions": 80,
+    "bridgeMethods": [
+      "getActivityLogs",
+      "getCurrentUser",
+      "getSetting",
+      "setSetting",
+      "deleteActivityLog",
+      "cleanupActivityLogs"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "005",
+    "file": "screens/ai-assistant.html",
+    "name": "نظام إدارة محطة الوقود – المساعد الذكي",
+    "domain": "AI",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getSmsAiConfig",
+      "configureSmsAiProvider",
+      "deleteSmsAiProvider",
+      "setSmsAiProviderEnabled",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords",
+      "getAiHealthStatus"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "006",
+    "file": "screens/assets-v12.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الأصول V12",
+    "domain": "General / Core",
+    "jsFunctions": 48,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "007",
+    "file": "screens/attendance.html",
+    "name": "نظام إدارة محطة الوقود – الحضور والانصراف",
+    "domain": "HR",
+    "jsFunctions": 81,
+    "bridgeMethods": [
+      "getEmployees",
+      "getShifts",
+      "getStations",
+      "getUserActivityLog",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "008",
+    "file": "screens/audit-logs.html",
+    "name": "نظام إدارة محطة الوقود – سجلات التدقيق",
+    "domain": "Reports & Logs",
+    "jsFunctions": 65,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "009",
+    "file": "screens/backups.html",
+    "name": "نظام إدارة محطة الوقود – النسخ الاحتياطي",
+    "domain": "General / Core",
+    "jsFunctions": 57,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "010",
+    "file": "screens/bad-debts.html",
+    "name": "نظام إدارة محطة الوقود – الديون المعدومة",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "011",
+    "file": "screens/balance-sheet.html",
+    "name": "نظام إدارة محطات الوقود – الميزانية العمومية",
+    "domain": "Accounting",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "saveBalanceSheet",
+      "getCurrencies"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "012",
+    "file": "screens/banks-accounts.html",
+    "name": "نظام إدارة محطات الوقود – البنوك والحسابات",
+    "domain": "Accounting",
+    "jsFunctions": 59,
+    "bridgeMethods": [
+      "generateBankReport",
+      "getBanks",
+      "getBankAccounts",
+      "getCurrencies",
+      "saveBank",
+      "deleteBank",
+      "saveBankAccount",
+      "deleteBankAccount"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "013",
+    "file": "screens/budgets.html",
+    "name": "نظام إدارة محطة الوقود – الميزانيات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "014",
+    "file": "screens/cash-deposits.html",
+    "name": "نظام إدارة محطة الوقود – الإيداعات النقدية",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "015",
+    "file": "screens/cash-movements.html",
+    "name": "نظام إدارة محطة الوقود – حركات النقدية",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "016",
+    "file": "screens/cashboxes.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الصناديق",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "017",
+    "file": "screens/chart-of-accounts.html",
+    "name": "نظام إدارة محطات الوقود – شجرة الحسابات",
+    "domain": "Accounting",
+    "jsFunctions": 60,
+    "bridgeMethods": [
+      "getChartTrialBalance",
+      "getBalanceSheet",
+      "getChartAccounts",
+      "getBankAccounts",
+      "saveChartAccount",
+      "deleteChartAccount",
+      "cloneChartAccount",
+      "moveChartAccount",
+      "getChartAccountAudit"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "018",
+    "file": "screens/company-settings.html",
+    "name": "نظام إدارة محطات الوقود – إعدادات النظام",
+    "domain": "Administration",
+    "jsFunctions": 33,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "019",
+    "file": "screens/contracts.html",
+    "name": "contracts.html",
+    "domain": "General / Core",
+    "jsFunctions": 74,
+    "bridgeMethods": [
+      "getContracts",
+      "getParties",
+      "getCurrencies",
+      "getCurrentUser",
+      "getContractBundle",
+      "deleteContract",
+      "cloneContract",
+      "changeContractStatus",
+      "generateContractReport",
+      "backupDatabase",
+      "getContractAudit"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "020",
+    "file": "screens/crm.html",
+    "name": "نظام إدارة محطات الوقود – إدارة العلاقات (CRM)",
+    "domain": "CRM",
+    "jsFunctions": 52,
+    "bridgeMethods": [
+      "generateCRMReport",
+      "getParties",
+      "getPartyTypes",
+      "savePartyBundle",
+      "getPartyCrmBundle",
+      "deleteParty"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "021",
+    "file": "screens/customer-debts.html",
+    "name": "نظام إدارة محطات الوقود – ديون العملاء",
+    "domain": "CRM",
+    "jsFunctions": 54,
+    "bridgeMethods": [
+      "getPayments",
+      "getCustomerDebts",
+      "makePayment",
+      "getCustomers",
+      "getPartyById",
+      "getCustomerSales",
+      "getCustomerLedger",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "022",
+    "file": "screens/customer-reports.html",
+    "name": "customer-reports.html",
+    "domain": "CRM",
+    "jsFunctions": 48,
+    "bridgeMethods": [
+      "generateCRMReport",
+      "getCustomerDebts",
+      "getPartyCrmBundle",
+      "updatePartyCreditLimit",
+      "getPartyTypes"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "023",
+    "file": "screens/customers.html",
+    "name": "أبو أحمد – النظام المتكامل",
+    "domain": "CRM",
+    "jsFunctions": 65,
+    "bridgeMethods": [
+      "get_customers",
+      "get_party_types",
+      "get_currencies",
+      "get_users",
+      "get_fuel_types",
+      "get_customer_bundle",
+      "get_customer_ledger",
+      "get_customer_sales",
+      "add_contact",
+      "delete_contact",
+      "update_contact",
+      "add_address",
+      "delete_address",
+      "update_address",
+      "delete_customer",
+      "make_payment",
+      "get_party_report",
+      "get_customer_debts",
+      "get_payments",
+      "get_tanks",
+      "get_products"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "024",
+    "file": "screens/damaged-products.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات التالفة",
+    "domain": "Inventory",
+    "jsFunctions": 55,
+    "bridgeMethods": [
+      "getDamagedProducts",
+      "addNotification",
+      "updateDamagedProductStatus",
+      "archiveDamagedProduct",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getProducts",
+      "getWarehouses",
+      "getTanks",
+      "getUsers"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "025",
+    "file": "screens/debt-reminders.html",
+    "name": "تذكيرات الديون",
+    "domain": "Accounting",
+    "jsFunctions": 61,
+    "bridgeMethods": [
+      "addNotification",
+      "addSmsMessage",
+      "makePayment",
+      "setSetting"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "026",
+    "file": "screens/deliveries.html",
+    "name": "نظام إدارة محطة الوقود – إدارة التوصيلات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "027",
+    "file": "screens/depreciation.html",
+    "name": "نظام إدارة محطة الوقود – الإهلاك",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "028",
+    "file": "screens/devices.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الأجهزة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "029",
+    "file": "screens/documents.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الوثائق",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "030",
+    "file": "screens/drivers.html",
+    "name": "نظام إدارة محطة الوقود – إدارة السائقين",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "031",
+    "file": "screens/employee-payments.html",
+    "name": "نظام إدارة محطة الوقود – دفعات الموظفين",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "032",
+    "file": "screens/employees.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الموظفين",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "033",
+    "file": "screens/eod-report.html",
+    "name": "نظام إدارة محطة الوقود – تقرير نهاية اليوم",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "034",
+    "file": "screens/equipment-calibration.html",
+    "name": "نظام إدارة محطة الوقود – معايرة المعدات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "035",
+    "file": "screens/exchange-rates.html",
+    "name": "نظام إدارة محطة الوقود – أسعار الصرف",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "036",
+    "file": "screens/expense-categories.html",
+    "name": "نظام إدارة محطة الوقود – فئات المصروفات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "037",
+    "file": "screens/expenses.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المصروفات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "038",
+    "file": "screens/expiry-soon.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات منتهية الصلاحية قريباً",
+    "domain": "General / Core",
+    "jsFunctions": 47,
+    "bridgeMethods": [
+      "getExpirySoonProducts",
+      "extendProductExpiry",
+      "getProducts",
+      "markProductExpired",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getCategories"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "039",
+    "file": "screens/first-user-setup.html",
+    "name": "إضافة المستخدم الأول - نظام إدارة محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 12,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "040",
+    "file": "screens/fixed-assets.html",
+    "name": "نظام إدارة محطة الوقود – الأصول الثابتة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "041",
+    "file": "screens/forecasts.html",
+    "name": "نظام إدارة محطة الوقود – التنبؤات والتحليلات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "042",
+    "file": "screens/fuel-reports.html",
+    "name": "fuel-reports.html",
+    "domain": "Fuel / Station",
+    "jsFunctions": 32,
+    "bridgeMethods": [
+      "getFuelInventoryReconciliation",
+      "getFuelReport",
+      "getFuelTransactionDetails",
+      "getFuelTypes",
+      "getTanks"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "043",
+    "file": "screens/fuel-sales.html",
+    "name": "نظام إدارة محطة الوقود – مبيعات الوقود",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "044",
+    "file": "screens/fuel-types.html",
+    "name": "نظام إدارة محطة الوقود – أنواع الوقود",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "045",
+    "file": "screens/inventory-alerts.html",
+    "name": "نظام إدارة محطة الوقود – تنبيهات المخزون",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "046",
+    "file": "screens/inventory-movements.html",
+    "name": "تفاصيل الحركة",
+    "domain": "Inventory",
+    "jsFunctions": 41,
+    "bridgeMethods": [
+      "getProducts",
+      "getWarehouses",
+      "getSuppliers",
+      "getCustomers",
+      "getMovements",
+      "getMovementStats",
+      "getInventoryDetails",
+      "saveMovement",
+      "getMovement",
+      "deleteMovement",
+      "generateReport",
+      "getInventoryAnalytics",
+      "getProductTrend"
+    ],
+    "hasMock": false
+  },
+  {
+    "id": "047",
+    "file": "screens/inventory-reports.html",
+    "name": "inventory-reports.html",
+    "domain": "Inventory",
+    "jsFunctions": 32,
+    "bridgeMethods": [
+      "generateInventoryReport",
+      "getProductDetails",
+      "getWarehouses",
+      "getCategories"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "048",
+    "file": "screens/invoice-templates.html",
+    "name": "نظام إدارة محطة الوقود – قوالب الفواتير",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "049",
+    "file": "screens/journal-entries.html",
+    "name": "نظام إدارة محطات الوقود – القيود المحاسبية",
+    "domain": "General / Core",
+    "jsFunctions": 71,
+    "bridgeMethods": [
+      "generateJournalReport",
+      "getJournalEntries",
+      "getJournalItems",
+      "getChartAccounts",
+      "getCurrencies",
+      "getNextEntryNumber",
+      "saveJournalEntry",
+      "deleteJournalEntry",
+      "postJournalEntry",
+      "reverseJournalEntry"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "050",
+    "file": "screens/kpi.html",
+    "name": "kpi.html",
+    "domain": "Dashboard",
+    "jsFunctions": 40,
+    "bridgeMethods": [
+      "getKPIDashboard",
+      "getKPIDetails"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "051",
+    "file": "screens/ledger.html",
+    "name": "نظام إدارة محطات الوقود – دفتر الأستاذ العام",
+    "domain": "Accounting",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "generateLedgerReport",
+      "getChartAccounts",
+      "getLedgerStats",
+      "getLedgerEntries",
+      "getJournalEntryDetails"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "052",
+    "file": "screens/login.html",
+    "name": "تسجيل الدخول - نظام إدارة محطات الوقود",
+    "domain": "Reports & Logs",
+    "jsFunctions": 38,
+    "bridgeMethods": [
+      "has_saved_credentials",
+      "save_credentials",
+      "load_credentials",
+      "clear_remembered_credentials",
+      "request_password_reset_sms",
+      "verify_reset_code",
+      "reset_password",
+      "login"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "053",
+    "file": "screens/maintenance-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "054",
+    "file": "screens/maintenance-requests.html",
+    "name": "نظام إدارة محطة الوقود – طلبات الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "055",
+    "file": "screens/maintenance-schedule.html",
+    "name": "نظام إدارة محطة الوقود – جدولة الصيانة",
+    "domain": "AI",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "056",
+    "file": "screens/message-log.html",
+    "name": "سجل الرسائل",
+    "domain": "SMS / Messaging",
+    "jsFunctions": 32,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "057",
+    "file": "screens/messages.html",
+    "name": "إدارة الرسائل",
+    "domain": "SMS / Messaging",
+    "jsFunctions": 55,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "058",
+    "file": "screens/meter-readings.html",
+    "name": "نظام إدارة محطة الوقود – قراءات العدادات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "059",
+    "file": "screens/notification-inbox.html",
+    "name": "صندوق الإشعارات",
+    "domain": "General / Core",
+    "jsFunctions": 41,
+    "bridgeMethods": [
+      "getCurrentUser",
+      "getNotifications",
+      "markNotificationRead"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "060",
+    "file": "screens/notification-templates.html",
+    "name": "إدارة قوالب الإشعارات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getNotificationTemplates",
+      "updateNotificationTemplate",
+      "deleteNotificationTemplate"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "061",
+    "file": "screens/orders.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الطلبات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "062",
+    "file": "screens/party-types.html",
+    "name": "نظام إدارة محطات الوقود – أنواع الأطراف",
+    "domain": "General / Core",
+    "jsFunctions": 35,
+    "bridgeMethods": [
+      "generatePartyTypeReport",
+      "getPartyTypes",
+      "savePartyType",
+      "deletePartyType"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "063",
+    "file": "screens/payments.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المدفوعات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "064",
+    "file": "screens/payroll.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الرواتب",
+    "domain": "HR",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "065",
+    "file": "screens/pos.html",
+    "name": "نظام إدارة محطات الوقود – نقاط البيع",
+    "domain": "Sales",
+    "jsFunctions": 57,
+    "bridgeMethods": [
+      "getProductByBarcode",
+      "getNextInvoiceNumber",
+      "completeSale",
+      "printReceipt",
+      "getCustomers",
+      "getEntityTypes",
+      "getEntitiesByType",
+      "getEntityDetails",
+      "searchCustomers",
+      "addCustomer",
+      "searchSales",
+      "saveReturn",
+      "processReturn",
+      "searchInvoices",
+      "retrieveInvoice",
+      "salesReport"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "066",
+    "file": "screens/price-change-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل تغيير الأسعار",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "067",
+    "file": "screens/price-lists.html",
+    "name": "نظام إدارة محطة الوقود – قوائم الأسعار",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "068",
+    "file": "screens/printer-settings.html",
+    "name": "نظام إدارة محطة الوقود – إعدادات الطابعات",
+    "domain": "Administration",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "069",
+    "file": "screens/product-categories.html",
+    "name": "نظام إدارة محطات الوقود – إدارة الفئات",
+    "domain": "Inventory",
+    "jsFunctions": 16,
+    "bridgeMethods": [
+      "getCategories",
+      "saveCategory",
+      "deleteCategory",
+      "searchCategories",
+      "getCategory"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "070",
+    "file": "screens/products.html",
+    "name": "نظام إدارة محطات الوقود – إدارة المنتجات",
+    "domain": "Inventory",
+    "jsFunctions": 39,
+    "bridgeMethods": [
+      "getCategories",
+      "getUnits",
+      "getProducts",
+      "saveProduct",
+      "getProduct",
+      "deleteProduct",
+      "searchProducts",
+      "filterProducts",
+      "exportProducts",
+      "importProducts",
+      "checkProductExists"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "071",
+    "file": "screens/pumps.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المضخات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "072",
+    "file": "screens/quality-checks.html",
+    "name": "نظام إدارة محطة الوقود – فحوصات الجودة",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "073",
+    "file": "screens/receipt-templates.html",
+    "name": "نظام إدارة محطة الوقود – قوالب الإيصالات",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "074",
+    "file": "screens/receipts.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الإيصالات",
+    "domain": "Sales",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "075",
+    "file": "screens/returned-products.html",
+    "name": "نظام إدارة محطات الوقود – المنتجات المرتجعة",
+    "domain": "Inventory",
+    "jsFunctions": 44,
+    "bridgeMethods": [
+      "getReturns",
+      "deleteReturn",
+      "getDashboardStats",
+      "getLowStockItems",
+      "getSetting",
+      "setSetting",
+      "getProducts",
+      "getCustomers"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "076",
+    "file": "screens/roles.html",
+    "name": "إدارة الصلاحيات – نظام محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 57,
+    "bridgeMethods": [
+      "getPermissions",
+      "getScreens",
+      "getUsers",
+      "getGroups",
+      "getRoles",
+      "deletePermission",
+      "grantUserPermission",
+      "getGrantedPermissions",
+      "revokeUserPermission",
+      "getGroupPermissions",
+      "grantGroupPermission",
+      "revokeGroupPermission",
+      "grantDelegatedPermission",
+      "getDelegatedPermissions",
+      "revokeDelegatedPermission"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "077",
+    "file": "screens/sales-log.html",
+    "name": "نظام إدارة محطات الوقود – سجل المبيعات",
+    "domain": "Sales",
+    "jsFunctions": 38,
+    "bridgeMethods": [
+      "getSalesTransactions",
+      "getParties",
+      "getFuelTypes",
+      "getPumps",
+      "saveSaleTransaction",
+      "deleteSaleTransaction"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "078",
+    "file": "screens/sales-reports.html",
+    "name": "نظام إدارة محطات الوقود – تقارير المبيعات",
+    "domain": "Sales",
+    "jsFunctions": 39,
+    "bridgeMethods": [
+      "generateSalesReport",
+      "getInvoiceDetails",
+      "getProducts",
+      "getCustomers",
+      "getShifts"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "079",
+    "file": "screens/screens.html",
+    "name": "إدارة شاشات التطبيق – نظام محطات الوقود",
+    "domain": "General / Core",
+    "jsFunctions": 43,
+    "bridgeMethods": [
+      "getScreens",
+      "getModules",
+      "getPermissions",
+      "getScreenPermissions",
+      "deleteScreen"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "080",
+    "file": "screens/settings.html",
+    "name": "نظام إدارة محطات الوقود – إعدادات النظام",
+    "domain": "Administration",
+    "jsFunctions": 33,
+    "bridgeMethods": [],
+    "hasMock": true
+  },
+  {
+    "id": "081",
+    "file": "screens/shifts.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الورديات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "082",
+    "file": "screens/stations.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المحطات",
+    "domain": "General / Core",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "083",
+    "file": "screens/stock-levels.html",
+    "name": "stock-levels.html",
+    "domain": "Inventory",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "getWarehouses",
+      "getCategories",
+      "getInventorySummary",
+      "getLowStockProducts",
+      "getInventoryAlerts",
+      "getInventoryCharts",
+      "getMovements",
+      "getStockValues",
+      "getAlerts",
+      "filterInventory",
+      "advancedFilter",
+      "searchProducts",
+      "addProduct"
+    ],
+    "hasMock": false
+  },
+  {
+    "id": "084",
+    "file": "screens/stocktake.html",
+    "name": "نظام إدارة محطة الوقود – الجرد والتسوية",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "085",
+    "file": "screens/suppliers.html",
+    "name": "نظام إدارة محطات الوقود – الموردين (AI Edition)",
+    "domain": "General / Core",
+    "jsFunctions": 60,
+    "bridgeMethods": [
+      "getSuppliers",
+      "deleteSupplier",
+      "getPartyById"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "086",
+    "file": "screens/sync-log.html",
+    "name": "نظام إدارة محطة الوقود – سجل المزامنة",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "087",
+    "file": "screens/system-logs.html",
+    "name": "نظام إدارة محطة الوقود – سجلات النظام",
+    "domain": "Reports & Logs",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "088",
+    "file": "screens/tank-filling.html",
+    "name": "نظام إدارة محطة الوقود – تعبئة الخزانات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "089",
+    "file": "screens/tanks.html",
+    "name": "نظام إدارة محطة الوقود – إدارة الخزانات",
+    "domain": "Fuel / Station",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "090",
+    "file": "screens/tasks.html",
+    "name": "tasks.html",
+    "domain": "General / Core",
+    "jsFunctions": 59,
+    "bridgeMethods": [
+      "getPendingTasks",
+      "archiveTask",
+      "resolveTask",
+      "generateTaskReport",
+      "backupData",
+      "getAuditLogs"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "091",
+    "file": "screens/trips.html",
+    "name": "نظام إدارة محطة الوقود – رحلات المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "092",
+    "file": "screens/users.html",
+    "name": "إدارة المستخدمين – نظام محطات الوقود",
+    "domain": "Administration",
+    "jsFunctions": 62,
+    "bridgeMethods": [
+      "getUsers",
+      "getRoles",
+      "getStations",
+      "getGroups",
+      "getPermissions",
+      "getUserPermissions",
+      "revokeUserPermission",
+      "deleteUser",
+      "getUserSessions",
+      "terminateSession",
+      "getUserActivityLog",
+      "getUserNotifications",
+      "markNotificationRead",
+      "deleteGroup"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "093",
+    "file": "screens/vehicle-expenses.html",
+    "name": "نظام إدارة محطة الوقود – مصروفات المركبات",
+    "domain": "Accounting",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "094",
+    "file": "screens/vehicle-tracking.html",
+    "name": "نظام إدارة محطة الوقود – تتبع المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "095",
+    "file": "screens/vehicles.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المركبات",
+    "domain": "Fleet",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "096",
+    "file": "screens/warehouses.html",
+    "name": "نظام إدارة محطة الوقود – إدارة المستودعات",
+    "domain": "Inventory",
+    "jsFunctions": 42,
+    "bridgeMethods": [
+      "getBalanceSheet",
+      "getEodReport",
+      "generate",
+      "getDatabaseInfo",
+      "getBackupHistoryRecords"
+    ],
+    "hasMock": true
+  },
+  {
+    "id": "097",
+    "file": "screens/whitelist.html",
+    "name": "القائمة البيضاء - إدارة الأرقام",
+    "domain": "General / Core",
+    "jsFunctions": 49,
+    "bridgeMethods": [
+      "getWhitelist",
+      "removeWhitelist",
+      "addSmsMessage",
+      "updateWhitelist"
+    ],
+    "hasMock": true
+  }
+]

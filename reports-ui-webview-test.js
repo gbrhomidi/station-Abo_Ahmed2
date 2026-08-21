@@ -30,7 +30,7 @@ const inventory = fs.readFileSync('app/src/main/assets/screens/inventory-reports
 if (!/id="inventorySearch"/.test(inventory) || !/applyInventorySearch/.test(inventory)) failures.push('inventory-reports.html: search workflow missing');
 const fuel = fs.readFileSync('app/src/main/assets/screens/fuel-reports.html', 'utf8');
 if (!/id="fuelSearch"/.test(fuel) || !/applyFuelSearch/.test(fuel)) failures.push('fuel-reports.html: search workflow missing');
-if (/switchTab\('readings'\)|value="readings"|القراءات غير متاحة/.test(fuel)) failures.push('fuel-reports.html: unsupported readings workflow remains visible');
+if (!/switchTab\('readings'\)|value="readings"|generateMeterReadingReport|meter_readings/.test(fuel)) failures.push('fuel-reports.html: real readings workflow missing');
 const renderTableBody = fuel.slice(fuel.indexOf('function renderTable'), fuel.indexOf('// ===================================================================', fuel.indexOf('function renderTable') + 1));
 if (/&& item\\.type === '(?:sale|refill)'/.test(renderTableBody)) failures.push('fuel-reports.html: renderTable item scope regression');
 console.log(`UI/WebView DOM checked: ${files.length} screens.`);

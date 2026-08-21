@@ -10708,7 +10708,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
      * @param stationId معرف المحطة (افتراضي 1)
      * @return JSONObject يحتوي على جميع الإحصائيات المطلوبة
      */
-    fun getDashboardStats(stationId: Int = 1): JSONObject {
+    private fun getSalesAmountBetween(stationId: Int, fromDate: String, toDate: String): Double {
+        readableDatabase.rawQuery(
+            "SELECT COALESCE(SUM(net_amount),0) FROM sales_transactions WHERE station_id=? AND date(created_at) BETWEEN date(?) AND date(?) AND is_deleted=0",
+            arrayOf(stationId.toString(), fromDate, toDate)
+        ).use { cursor -> return if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+    }
+
+    private fun shiftDate(dateText: String, days: Int): String {
+        return try {
+            val calendar = Calendar.getInstance()
+            calendar.time = getDateOnlyFormat().parse(dateText) ?: Date()
+            calendar.add(Calendar.DAY_OF_YEAR, days)
+            getDateOnlyFormat().format(calendar.time)
+        } catch (_: Exception) { dateText }
+    }
+
+    fun getDashboardStats(stationId: Int = 1, params: JSONObject = JSONObject()): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
 
@@ -10829,31 +10845,62 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (cursor.moveToFirst()) stats.put("pending_tasks", cursor.getInt(0))
         }
 
-        // 13. حساب اتجاه المبيعات (مقارنة بالأمس)
+        // 13. حساب اتجاه المبيعات من فترتين متكافئتين فعليتين في SQLite
         val today = getCurrentDate()
-        val yesterday = getDateOnlyFormat().format(Date(System.currentTimeMillis() - 86400000))
-        val todaySales = getDailySalesAmount(stationId, today)
-        val yesterdaySales = getDailySalesAmount(stationId, yesterday)
-        val salesTrend = if (yesterdaySales > 0) {
-            "%.1f%%".format(((todaySales - yesterdaySales) / yesterdaySales) * 100)
-        } else if (todaySales > 0) {
-            "+100%"
-        } else {
-            "+0%"
+        val requestedFrom = params.optString("from_date", "").trim()
+        val requestedTo = params.optString("to_date", "").trim()
+        val currentEnd = if (requestedTo.isNotBlank()) requestedTo else today
+        val currentStart = if (requestedFrom.isNotBlank()) requestedFrom else currentEnd
+        val currentParsed = try { getDateOnlyFormat().parse(currentStart) to getDateOnlyFormat().parse(currentEnd) } catch (_: Exception) { null to null }
+        val periodDays = if (currentParsed.first != null && currentParsed.second != null) {
+            (((currentParsed.second!!.time - currentParsed.first!!.time) / 86400000L).toInt() + 1).coerceAtLeast(1)
+        } else 1
+        val previousEnd = shiftDate(currentStart, -1)
+        val previousStart = shiftDate(previousEnd, -(periodDays - 1))
+        val todaySales = getSalesAmountBetween(stationId, currentStart, currentEnd)
+        val yesterdaySales = getSalesAmountBetween(stationId, previousStart, previousEnd)
+        val salesTrendObj = JSONObject().apply {
+            put("current_period", todaySales)
+            put("previous_period", yesterdaySales)
+            put("difference", todaySales - yesterdaySales)
+            if (yesterdaySales > 0) {
+                val percent = ((todaySales - yesterdaySales) / yesterdaySales) * 100
+                put("percentage_change", Math.round(percent * 100.0) / 100.0)
+                put("trend_direction", if (percent > 0) "up" else if (percent < 0) "down" else "neutral")
+            } else {
+                put("percentage_change", if (todaySales > 0) 100.0 else 0.0)
+                put("trend_direction", if (todaySales > 0) "up" else "neutral")
+            }
+            put("current_from", currentStart)
+            put("current_to", currentEnd)
+            put("previous_from", previousStart)
+            put("previous_to", previousEnd)
+            put("trend_label", "مقارنة بالفترة السابقة المكافئة")
         }
-        stats.put("sales_trend", salesTrend)
+        stats.put("sales_trend_data", salesTrendObj)
+        // للحفاظ على التوافق القديم مؤقتاً
+        stats.put("sales_trend", if (salesTrendObj.getDouble("percentage_change") > 0) "+${salesTrendObj.getDouble("percentage_change")}%" else "${salesTrendObj.getDouble("percentage_change")}%")
 
         // 14. حساب اتجاه عدد المنتجات (مقارنة بالشهر الماضي)
         val currentProducts = getActiveProductsCount(stationId)
         val lastMonthProducts = getActiveProductsCount(stationId, 30)
-        val productsTrend = if (lastMonthProducts > 0) {
-            "%.1f%%".format(((currentProducts - lastMonthProducts) / lastMonthProducts) * 100)
-        } else if (currentProducts > 0) {
-            "+100%"
-        } else {
-            "+0%"
+        val productsTrendObj = JSONObject().apply {
+            put("current_period", currentProducts)
+            put("previous_period", lastMonthProducts)
+            put("difference", currentProducts - lastMonthProducts)
+            if (lastMonthProducts > 0) {
+                val percent = ((currentProducts - lastMonthProducts).toDouble() / lastMonthProducts) * 100
+                put("percentage_change", Math.round(percent * 100.0) / 100.0)
+                put("trend_direction", if (percent > 0) "up" else if (percent < 0) "down" else "neutral")
+            } else {
+                put("percentage_change", if (currentProducts > 0) 100.0 else 0.0)
+                put("trend_direction", if (currentProducts > 0) "up" else "neutral")
+            }
+            put("trend_label", "مقارنة بالشهر الماضي")
         }
-        stats.put("products_trend", productsTrend)
+        stats.put("products_trend_data", productsTrendObj)
+        // للحفاظ على التوافق القديم مؤقتاً
+        stats.put("products_trend", if (productsTrendObj.getDouble("percentage_change") > 0) "+${productsTrendObj.getDouble("percentage_change")}%" else "${productsTrendObj.getDouble("percentage_change")}%")
 
         // الاحتفاظ بالمفاتيح القديمة لتوافق مع أي كود آخر (مع تحديثها لتراعي المحطة)
         // إجمالي المبيعات والليترات وعدد المعاملات اليوم
@@ -10889,7 +10936,33 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "SELECT COUNT(DISTINCT p.id) FROM parties p JOIN sales_transactions s ON s.customer_party_id = p.id WHERE s.station_id=? AND p.is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
-            if (cursor.moveToFirst()) stats.put("total_customers", cursor.getInt(0))
+            if (cursor.moveToFirst()) {
+                val totalCustomers = cursor.getInt(0)
+                stats.put("total_customers", totalCustomers)
+
+                // حساب اتجاه العملاء (مقارنة بالشهر الماضي بناءً على المبيعات)
+                db.rawQuery(
+                    "SELECT COUNT(DISTINCT p.id) FROM parties p JOIN sales_transactions s ON s.customer_party_id = p.id WHERE s.station_id=? AND p.is_deleted=0 AND date(s.created_at) < date('now', '-30 days')",
+                    arrayOf(stationId.toString())
+                ).use { prevCursor ->
+                    val previousCustomers = if (prevCursor.moveToFirst()) prevCursor.getInt(0) else 0
+                    val customersTrendObj = JSONObject().apply {
+                        put("current_period", totalCustomers)
+                        put("previous_period", previousCustomers)
+                        put("difference", totalCustomers - previousCustomers)
+                        if (previousCustomers > 0) {
+                            val percent = ((totalCustomers - previousCustomers).toDouble() / previousCustomers) * 100
+                            put("percentage_change", Math.round(percent * 100.0) / 100.0)
+                            put("trend_direction", if (percent > 0) "up" else if (percent < 0) "down" else "neutral")
+                        } else {
+                            put("percentage_change", if (totalCustomers > 0) 100.0 else 0.0)
+                            put("trend_direction", if (totalCustomers > 0) "up" else "neutral")
+                        }
+                        put("trend_label", "مقارنة بالشهر الماضي")
+                    }
+                    stats.put("customers_trend_data", customersTrendObj)
+                }
+            }
         }
 
         // عدد ومبلغ الفواتير المتأخرة في المحطة
@@ -12067,6 +12140,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "fuel_sales" -> "sale_date"
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
+                "meter_readings" -> "reading_date"
                 else -> "created_at"
             }
             val from = params.optString("from_date", "").trim()
@@ -12081,6 +12155,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
+    private fun getOperationalTotalCount(screenKey: String, params: JSONObject = JSONObject()): Int {
+        val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
+        dbLock.lock()
+        return try {
+            val where = mutableListOf<String>()
+            val args = mutableListOf<String>()
+            if (spec.softDeleted) where += "is_deleted = 0"
+            val includeArchived = params.optBoolean("include_archived", false)
+            if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
+            val search = params.optString("search", "").trim()
+            if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
+                where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
+                repeat(spec.searchColumns.size) { args += "%$search%" }
+            }
+            if (spec.hasStatus && spec.columns.contains("status")) {
+                val status = params.optString("status", "").trim()
+                if (status.isNotBlank()) { where += "status = ?"; args += status }
+            }
+            val dateColumn = when (screenKey) {
+                "bad_debts" -> "date"
+                "price_history" -> "change_date"
+                "fuel_sales" -> "sale_date"
+                "deliveries" -> "delivery_date"
+                "cash_deposits", "employee_payments" -> "date"
+                "meter_readings" -> "reading_date"
+                else -> "created_at"
+            }
+            val from = params.optString("from_date", "").trim()
+            val to = params.optString("to_date", "").trim()
+            if (from.isNotBlank()) { where += "date($dateColumn) >= date(?)"; args += from }
+            if (to.isNotBlank()) { where += "date($dateColumn) <= date(?)"; args += to }
+            val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
+            readableDatabase.rawQuery("SELECT COUNT(*) FROM ${spec.table}$whereSql", args.toTypedArray()).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else 0
+            }
+        } finally { dbLock.unlock() }
+    }
+
     fun getOperationalReport(screenKey: String, params: JSONObject = JSONObject()): JSONObject {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val rows = getOperationalRows(screenKey, params)
@@ -12090,7 +12202,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (i in 0 until rows.length()) total += rows.optJSONObject(i)?.optDouble(key, 0.0) ?: 0.0
             totals.put(key, total)
         }
-        return JSONObject().apply { put("rows", rows); put("count", rows.length()); put("totals", totals); put("source", spec.table) }
+        val pageSize = params.optInt("limit", 200).coerceIn(1, 1000)
+        val offset = params.optInt("offset", 0).coerceAtLeast(0)
+        val totalCount = getOperationalTotalCount(screenKey, params)
+        val page = (offset / pageSize) + 1
+        val totalPages = if (totalCount == 0) 0 else ((totalCount + pageSize - 1) / pageSize)
+        return JSONObject().apply {
+            put("rows", rows)
+            put("count", rows.length())
+            put("total_count", totalCount)
+            put("page", page)
+            put("page_size", pageSize)
+            put("total_pages", totalPages)
+            put("has_next", page < totalPages)
+            put("has_previous", page > 1)
+            put("totals", totals)
+            put("source", spec.table)
+        }
     }
 
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
@@ -17008,14 +17136,54 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 WHERE r.station_id = ? ${conditions}
                 ORDER BY date DESC
             """
-            
+            val limit = data.optInt("limit", 0).coerceAtLeast(0)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val pagedSql = if (limit > 0) "$sql LIMIT ? OFFSET ?" else sql
             val allArgs = mutableListOf<String>()
             allArgs.addAll(args)
             allArgs.addAll(args)
-            
-            readableDatabase.rawQuery(sql, allArgs.toTypedArray()).use { cursorToJsonArray(it) }
+            if (limit > 0) { allArgs.add(limit.toString()); allArgs.add(offset.toString()) }
+            readableDatabase.rawQuery(pagedSql, allArgs.toTypedArray()).use { cursorToJsonArray(it) }
         } finally {
             dbLock.unlock()
+        }
+    }
+
+    private fun getFuelReportTotalCount(data: JSONObject): Int {
+        dbLock.lock()
+        return try {
+            val fromDate = data.optString("from_date")
+            val toDate = data.optString("to_date")
+            val stationId = data.optInt("station_id", 1)
+            val conditions = StringBuilder()
+            val saleArgs = mutableListOf(stationId.toString())
+            if (fromDate.isNotBlank()) { conditions.append(" AND date(created_at) >= ?"); saleArgs.add(fromDate) }
+            if (toDate.isNotBlank()) { conditions.append(" AND date(created_at) <= ?"); saleArgs.add(toDate) }
+            val refillArgs = saleArgs.toMutableList()
+            val salesCount = readableDatabase.rawQuery("SELECT COUNT(*) FROM sales_transactions WHERE station_id = ? AND is_deleted = 0 AND order_type = 'fuel' $conditions", saleArgs.toTypedArray()).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            val refillCount = readableDatabase.rawQuery("SELECT COUNT(*) FROM tank_refills WHERE station_id = ? $conditions", refillArgs.toTypedArray()).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            salesCount + refillCount
+        } finally { dbLock.unlock() }
+    }
+
+    fun getFuelReportPage(data: JSONObject): JSONObject {
+        val limit = data.optInt("limit", 50).coerceIn(1, 1000)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val query = JSONObject(data.toString()).apply { put("limit", limit); put("offset", offset) }
+        val rows = getFuelReport(query)
+        val totalCount = getFuelReportTotalCount(query)
+        val page = (offset / limit) + 1
+        val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
+        return JSONObject().apply {
+            put("rows", rows)
+            put("count", rows.length())
+            put("total_count", totalCount)
+            put("page", page)
+            put("page_size", limit)
+            put("total_pages", totalPages)
+            put("has_next", page < totalPages)
+            put("has_previous", page > 1)
+            put("source", "sales_transactions+tank_refills")
         }
     }
 

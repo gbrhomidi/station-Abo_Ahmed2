@@ -3,11 +3,11 @@ const path = require('path');
 
 const reports = {
   'main.html': ['getDashboardStats'],
-  'screens/sales-reports.html': ['generateSalesTransactionReport', 'retrieveInvoice'],
+  'screens/sales-reports.html': ['generateSalesTransactionReport', 'retrieveInvoice', 'getShifts'],
   'screens/eod-report.html': ['getEodReport', 'getBalanceSheet'],
   'screens/inventory-reports.html': ['generateInventoryReport', 'getWarehouses', 'getCategories', 'getInventoryProductDetails'],
   'screens/customer-reports.html': ['generateCRMReport', 'getCustomers'],
-  'screens/fuel-reports.html': ['getFuelReport', 'getTanks', 'getPumps'],
+  'screens/fuel-reports.html': ['getFuelReport', 'getFuelReportPage', 'getTanks', 'getPumps', 'generateMeterReadingReport'],
   'screens/kpi.html': ['getDashboardStats'],
   'screens/forecasts.html': ['getPredictionRecords'],
   'screens/accounting-reports.html': ['getProfitReport', 'getBalanceSheet', 'getLedgerStats']

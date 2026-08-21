@@ -2111,9 +2111,32 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             document.getElementById('kpiCritical').textContent = critical;
 
             const trendValue = item => item && item.trend_percent !== null && item.trend_percent !== undefined && Number.isFinite(Number(item.trend_percent))
-                ? Number(item.trend_percent).toFixed(1) + '%' : '—';
-            document.getElementById('trendTotal').textContent = data.length ? '—' : 'لا توجد فترة مقارنة';
-            document.getElementById('trendAchiev').textContent = data.length ? avgAchiev.toFixed(1) + '%' : 'لا توجد فترة مقارنة';
+                ? (Number(item.trend_percent) > 0 ? '+' : '') + Number(item.trend_percent).toFixed(1) + '%' : '—';
+
+            // محاولة جلب الاتجاهات من لوحة التحكم الرئيسية إذا كانت متاحة في الكاش
+            let salesTrendText = '—';
+            let productsTrendText = '—';
+            try {
+                if (window.AndroidInterface && window.AndroidInterface.getDashboardStats) {
+                    const dashStatsStr = window.AndroidInterface.getDashboardStats("{}");
+                    if (dashStatsStr) {
+                        const dashStats = JSON.parse(dashStatsStr);
+                        if (dashStats.sales_trend_data && dashStats.sales_trend_data.percentage_change !== undefined) {
+                            const pct = dashStats.sales_trend_data.percentage_change;
+                            salesTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.sales_trend_data.trend_label || '') + ')';
+                        }
+                        if (dashStats.products_trend_data && dashStats.products_trend_data.percentage_change !== undefined) {
+                            const pct = dashStats.products_trend_data.percentage_change;
+                            productsTrendText = (pct > 0 ? '+' : '') + pct + '% (' + (dashStats.products_trend_data.trend_label || '') + ')';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to fetch dashboard trends for KPI', e);
+            }
+
+            document.getElementById('trendTotal').textContent = data.length ? productsTrendText : 'لا توجد فترة مقارنة';
+            document.getElementById('trendAchiev').textContent = data.length ? salesTrendText : 'لا توجد فترة مقارنة';
             document.getElementById('trendOnTrack').textContent = data.length ? ((onTrack / data.length) * 100).toFixed(1) + '%' : 'لا توجد فترة مقارنة';
             const criticalTrend = data.find(item => item.trend_percent !== null && item.trend_percent !== undefined);
             document.getElementById('trendCritical').textContent = trendValue(criticalTrend);

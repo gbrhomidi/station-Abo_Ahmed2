@@ -1140,7 +1140,7 @@
         }
   </style>
      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
-    <meta name="reports-bridge-methods" content="getFuelReport,getTanks,getPumps">
+    <meta name="reports-bridge-methods" content="getFuelReport,getFuelReportPage,getTanks,getPumps,generateMeterReadingReport">
     <script src="file:///android_asset/assets-local/js/reports-runtime.js" defer></script>
 </head>
  <body>
@@ -1243,6 +1243,9 @@
       </option>
       <option value="refills">
        التزود
+      </option>
+      <option value="readings">
+       القراءات
       </option>
       <option value="tanks">
        الخزانات
@@ -1426,6 +1429,16 @@
       </span>
      </span>
     </div>
+    <div class="pagination-bar" id="fuelPagination" aria-label="ترقيم تقارير الوقود">
+     <button class="btn-filter" onclick="goToFuelPage(1)">الأولى</button>
+     <button class="btn-filter" onclick="goToFuelPage(fuelPagination.page - 1)">السابق</button>
+     <span id="fuelPageStatus">صفحة 1 من 1 — 0 سجل</span>
+     <select id="fuelPageSize" onchange="changeFuelPageSize(this.value)" aria-label="عدد السجلات في الصفحة">
+      <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+     </select>
+     <button class="btn-filter" onclick="goToFuelPage(fuelPagination.page + 1)">التالي</button>
+     <button class="btn-filter" onclick="goToFuelPage(fuelPagination.totalPages)">الأخيرة</button>
+    </div>
    </div>
   </div>
   <!-- ===================================================================
@@ -1513,6 +1526,13 @@
      التزود
     </span>
    </button>
+   <button class="nav-item" onclick="switchTab('readings')">
+    <i class="fas fa-gauge-high">
+    </i>
+    <span>
+     القراءات
+    </span>
+   </button>
    <button class="nav-item" onclick="switchTab('tanks')">
     <i class="fas fa-tank">
     </i>
@@ -1594,6 +1614,8 @@
                         else if (action === 'extendProductExpiry') result = window.AndroidInterface.extendProductExpiry(p.id, p.new_date);
                         else if (action === 'markProductExpired') result = window.AndroidInterface.markProductExpired(p.id);
                         else if (action === 'getFuelReport') result = window.AndroidInterface.getFuelReport(jsonParams);
+                        else if (action === 'getFuelReportPage') result = window.AndroidInterface.getFuelReportPage(jsonParams);
+                        else if (action === 'generateMeterReadingReport') result = window.AndroidInterface.generateMeterReadingReport(jsonParams);
                         else if (action === 'getFuelInventoryReconciliation') result = window.AndroidInterface.getFuelInventoryReconciliation(jsonParams);
                         else if (action === 'getFuelTransactionDetails') result = window.AndroidInterface.getFuelTransactionDetails(p.id, p.type);
                         else if (action === 'getSetting') result = window.AndroidInterface.getSetting(p.key);
@@ -1710,6 +1732,7 @@
         // 5. توليد التقرير
         // ===================================================================
         let fuelData = [];
+        let fuelPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0 };
         let salesTrendChart = null,
             fuelTypeChart = null;
 
@@ -1734,9 +1757,19 @@
                 };
                 const result = reportType === 'tanks'
                     ? await apiCall('getFuelInventoryReconciliation', { date: to, station_id: 1 })
-                    : await apiCall('getFuelReport', params);
-                if (result.success && result.data) {
-                    fuelData = normalizeFuelRows(result.data, reportType);
+                    : reportType === 'readings'
+                        ? await apiCall('generateMeterReadingReport', { from_date: from, to_date: to, station_id: 1, limit: fuelPagination.pageSize, offset: (fuelPagination.page - 1) * fuelPagination.pageSize })
+                        : await apiCall('getFuelReportPage', { ...params, limit: fuelPagination.pageSize, offset: (fuelPagination.page - 1) * fuelPagination.pageSize });
+                const payload = result && result.data !== undefined ? result.data : result;
+                if (result.success && payload) {
+                    fuelData = normalizeFuelRows(payload.rows || payload, reportType);
+                    if (payload.total_count !== undefined) {
+                        fuelPagination.page = Number(payload.page || fuelPagination.page);
+                        fuelPagination.pageSize = Number(payload.page_size || fuelPagination.pageSize);
+                        fuelPagination.totalCount = Number(payload.total_count || 0);
+                        fuelPagination.totalPages = Number(payload.total_pages || 0);
+                        updateFuelPaginationUI();
+                    }
                     if (fuelType && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.fuel_type_id || '') === String(fuelType));
                     if (tank && reportType !== 'tanks') fuelData = fuelData.filter(r => String(r.tank_id || '') === String(tank));
                     
@@ -1765,8 +1798,34 @@
         // ===================================================================
         function normalizeFuelRows(data, reportType) {
             const rows = Array.isArray(data) ? data : [];
+            if (reportType === 'readings') return rows.map(item => ({ ...item, id: item.id, type: 'reading', code: item.reading_code || `READ-${item.id || ''}`, date: item.reading_date, quantity: Number(item.sold_liters || 0), amount: Number(item.adjustment_amount || 0), status: item.status || 'draft' }));
             if (reportType === 'tanks') return rows.map(item => ({ ...item, id: item.tank_id || item.id, type: 'tank', code: `TANK-${item.tank_id || item.id || ''}`, difference: Number(item.difference || 0), quantity: Number(item.measured_level || item.closing_level || 0), fuel_name: item.fuel_name || '---', status: Math.abs(Number(item.difference || 0)) > 5 ? 'rejected' : 'completed' }));
             return rows.filter(item => reportType === 'summary' || (reportType === 'sales' && item.type === 'sale') || (reportType === 'refills' && item.type === 'refill')).map(item => item.type === 'sale' ? ({ ...item, sale_code: item.code, sale_date: item.date, liters: item.quantity, net_amount: item.amount, transaction_id: item.id, transaction_type: 'sale' }) : ({ ...item, refill_code: item.code, arrival_date: item.date, delivered_quantity: item.quantity, total_amount: item.amount, transaction_id: item.id, transaction_type: 'refill' }));
+        }
+
+        function updateFuelPaginationUI() {
+            const status = document.getElementById('fuelPageStatus');
+            if (status) status.textContent = `صفحة ${fuelPagination.page} من ${fuelPagination.totalPages || 1} — ${fuelPagination.totalCount} سجل`;
+            const root = document.getElementById('fuelPagination');
+            if (root) root.querySelectorAll('button').forEach((button, index) => {
+                const disabled = (index < 2) ? fuelPagination.page <= 1 : fuelPagination.page >= (fuelPagination.totalPages || 1);
+                button.disabled = disabled;
+                button.setAttribute('aria-disabled', String(disabled));
+            });
+        }
+
+        function goToFuelPage(page) {
+            const maxPage = fuelPagination.totalPages || 1;
+            const nextPage = Math.min(Math.max(Number(page) || 1, 1), maxPage);
+            if (nextPage === fuelPagination.page && fuelData.length) return;
+            fuelPagination.page = nextPage;
+            generateReport();
+        }
+
+        function changeFuelPageSize(value) {
+            fuelPagination.pageSize = Math.min(Math.max(Number(value) || 50, 1), 1000);
+            fuelPagination.page = 1;
+            generateReport();
         }
 
         function getFilteredFuelData() {
@@ -1827,11 +1886,11 @@
                     }
                 });
             }
-            if (reportType === 'summary') {
+            if (reportType === 'readings' || reportType === 'summary') {
                 data.forEach((item, idx) => {
-                    if (item.reading_code) {
+                    if (reportType === 'readings' || item.reading_code) {
                         rows.push({
-                            id: idx + 200,
+                            id: item.id || idx + 200,
                             code: item.reading_code || 'RDG-' + item.id,
                             date: item.reading_date || item.created_at,
                             fuel: item.fuel_name || '---',
@@ -2251,6 +2310,7 @@
             const monthAgo = new Date();
             monthAgo.setDate(monthAgo.getDate() - 30);
             document.getElementById('fuelSearch').value = '';
+            fuelPagination.page = 1;
             document.getElementById('filterDateFrom').value = monthAgo.toISOString().split('T')[0];
             document.getElementById('filterDateTo').value = today.toISOString().split('T')[0];
             document.getElementById('filterFuelType').value = '';
@@ -2267,7 +2327,7 @@
             document.querySelectorAll('.bottom-nav .nav-item').forEach(t => t.classList.remove('active'));
             const target = document.querySelector(`.bottom-nav .nav-item[onclick*="${tab}"]`);
             if (target) target.classList.add('active');
-            const map = { 'summary': 'summary', 'sales': 'sales', 'refills': 'refills', 'tanks': 'tanks' };
+            const map = { 'summary': 'summary', 'sales': 'sales', 'refills': 'refills', 'readings': 'readings', 'tanks': 'tanks' };
             document.getElementById('filterReportType').value = map[tab] || 'summary';
             generateReport();
         }

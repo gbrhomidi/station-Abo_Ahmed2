@@ -1396,6 +1396,16 @@
       </span>
      </span>
     </div>
+    <div class="pagination-bar" id="inventoryPagination" aria-label="ترقيم تقرير المخزون">
+     <button class="btn-filter" onclick="goToInventoryPage(1)">الأولى</button>
+     <button class="btn-filter" onclick="goToInventoryPage(inventoryPagination.page - 1)">السابق</button>
+     <span id="inventoryPageStatus">صفحة 1 من 1 — 0 سجل</span>
+     <select id="inventoryPageSize" onchange="changeInventoryPageSize(this.value)" aria-label="عدد السجلات في الصفحة">
+      <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+     </select>
+     <button class="btn-filter" onclick="goToInventoryPage(inventoryPagination.page + 1)">التالي</button>
+     <button class="btn-filter" onclick="goToInventoryPage(inventoryPagination.totalPages)">الأخيرة</button>
+    </div>
    </div>
   </div>
   <!-- ================================================================
@@ -1650,6 +1660,7 @@
         let currentReportPayload = {};
         let currentAlerts = [];
         let aiInsights = [];
+        let inventoryPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0 };
         let movementChart = null,
             categoryChart = null;async function generateReport() {
             const from = document.getElementById('filterDateFrom').value;
@@ -1661,8 +1672,13 @@
             if (from && to && from > to) { showToast('❌ تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null });
-                currentReportPayload = result.data || {};
+                const result = await apiCall('generateInventoryReport', { start_date: from, end_date: to, warehouse_id: warehouse || null, category_id: category || null, report_type: type, status: status || null, limit: inventoryPagination.pageSize, offset: (inventoryPagination.page - 1) * inventoryPagination.pageSize });
+                currentReportPayload = result.data || result || {};
+                inventoryPagination.page = Number(currentReportPayload.page || inventoryPagination.page);
+                inventoryPagination.pageSize = Number(currentReportPayload.page_size || inventoryPagination.pageSize);
+                inventoryPagination.totalCount = Number(currentReportPayload.total_count ?? currentReportPayload.count ?? 0);
+                inventoryPagination.totalPages = Number(currentReportPayload.total_pages ?? Math.max(1, Math.ceil(inventoryPagination.totalCount / inventoryPagination.pageSize)));
+                updateInventoryPaginationUI();
                 inventoryData = currentReportPayload.rows || [];
                 renderTable(getFilteredInventoryData(), type);
                 updateKPIs(inventoryData, currentReportPayload.stats || {});
@@ -1692,6 +1708,31 @@
                 const value = Number(item.quantity || 0) * Number(item.purchase_price || 0);
                 return `<tr><td>${idx + 1}</td><td class="product-code">${escapeHtml(item.product_code || '---')}</td><td>${escapeHtml(item.product_name_ar || item.product_name || '---')}</td><td>${escapeHtml(item.category_name || '---')}</td><td>${escapeHtml(item.warehouse_name || 'جميع المستودعات')}</td><td>${Number(item.quantity || 0).toLocaleString('en')}</td><td>${formatCurrency(item.purchase_price)}</td><td>${formatCurrency(item.sale_price)}</td><td class="amount debit">${formatCurrency(value)}</td><td><span class="status-badge ${getStatusClass(status)}">${getStatusLabel(status)}</span></td><td><button class="btn-view" onclick="viewProduct(${Number(item.product_id || item.id || 0)})" title="تفاصيل"><i class="fas fa-eye"></i></button></td></tr>`;
             }).join('');
+        }
+
+        function updateInventoryPaginationUI() {
+            const status = document.getElementById('inventoryPageStatus');
+            if (status) status.textContent = `صفحة ${inventoryPagination.page} من ${inventoryPagination.totalPages || 1} — ${inventoryPagination.totalCount} سجل`;
+            const root = document.getElementById('inventoryPagination');
+            if (root) root.querySelectorAll('button').forEach((button, index) => {
+                const disabled = (index < 2) ? inventoryPagination.page <= 1 : inventoryPagination.page >= (inventoryPagination.totalPages || 1);
+                button.disabled = disabled;
+                button.setAttribute('aria-disabled', String(disabled));
+            });
+        }
+
+        function goToInventoryPage(page) {
+            const maxPage = inventoryPagination.totalPages || 1;
+            const nextPage = Math.min(Math.max(Number(page) || 1, 1), maxPage);
+            if (nextPage === inventoryPagination.page && inventoryData.length) return;
+            inventoryPagination.page = nextPage;
+            generateReport();
+        }
+
+        function changeInventoryPageSize(value) {
+            inventoryPagination.pageSize = Math.min(Math.max(Number(value) || 50, 1), 1000);
+            inventoryPagination.page = 1;
+            generateReport();
         }
 
         function getFilteredInventoryData() {
@@ -1957,6 +1998,7 @@
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
             document.getElementById('inventorySearch').value = '';
+            inventoryPagination.page = 1;
             document.getElementById('filterWarehouse').value = '';
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterReportType').value = 'summary';

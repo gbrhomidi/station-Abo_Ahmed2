@@ -1238,6 +1238,16 @@
                 <span class="total-item"><span class="label">عدد الفواتير:</span><span class="value" id="summaryCount">0</span></span>
                 <span class="total-item"><span class="label">متوسط الفاتورة:</span><span class="value" id="summaryAvg">0.00</span></span>
             </div>
+            <div class="pagination-bar" id="salesPagination" aria-label="ترقيم صفحات تقرير المبيعات">
+                <button class="btn btn-secondary" onclick="goToSalesPage(1)" aria-label="الصفحة الأولى">الأولى</button>
+                <button class="btn btn-secondary" onclick="goToSalesPage(salesPagination.page - 1)" aria-label="الصفحة السابقة">السابق</button>
+                <span id="salesPageStatus">صفحة 1 من 1 — 0 سجل</span>
+                <select id="salesPageSize" onchange="changeSalesPageSize(this.value)" aria-label="عدد السجلات في الصفحة">
+                    <option value="25">25</option><option value="50" selected>50</option><option value="100">100</option>
+                </select>
+                <button class="btn btn-secondary" onclick="goToSalesPage(salesPagination.page + 1)" aria-label="الصفحة التالية">التالي</button>
+                <button class="btn btn-secondary" onclick="goToSalesPage(salesPagination.totalPages)" aria-label="الصفحة الأخيرة">الأخيرة</button>
+            </div>
         </div>
     </div>
 
@@ -1733,12 +1743,22 @@
                     payment_method: paymentMethod || null,
                     report_type: reportType,
                     status: status || null,
-                    shift_id: shift || null
+                    shift_id: shift || null,
+                    search: salesPagination.search || '',
+                    limit: salesPagination.pageSize,
+                    offset: (salesPagination.page - 1) * salesPagination.pageSize
                 };
                 const result = await apiCall('generateSalesReport', params);
-                if (result.success && result.data) {
-                    const sales = result.data;
+                const payload = result && result.data !== undefined ? result.data : result;
+                if (result.success && payload) {
+                    const report = Array.isArray(payload) ? { rows: payload, total_count: payload.length, total_pages: 1, page: 1 } : payload;
+                    const sales = Array.isArray(report.rows) ? report.rows : [];
+                    salesPagination.page = Number(report.page || salesPagination.page || 1);
+                    salesPagination.pageSize = Number(report.page_size || salesPagination.pageSize || 50);
+                    salesPagination.totalCount = Number(report.total_count ?? sales.length);
+                    salesPagination.totalPages = Number(report.total_pages ?? Math.max(1, Math.ceil(salesPagination.totalCount / salesPagination.pageSize)));
                     window.__salesReportData = sales;
+                    updateSalesPaginationUI();
                     renderSalesTable(sales);
                     updateStats(sales);
                     updateCharts(sales);
@@ -2227,38 +2247,52 @@
         // ============================================================
         // 21. البحث والفلاتر
         // ============================================================
-        function handleSearch(query) {
-            const search = query.trim().toLowerCase();
-            const rows = document.querySelectorAll('#salesTableBody tr');
-            rows.forEach(row => {
-                if (row.classList.contains('empty-state')) return;
-                const text = row.textContent.toLowerCase();
-                if (text.includes(search)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+        let currentPaymentFilter = 'all';
+        let salesPagination = { page: 1, pageSize: 50, totalCount: 0, totalPages: 0, search: '' };
+        let salesSearchTimer = null;
+
+        function updateSalesPaginationUI() {
+            const status = document.getElementById('salesPageStatus');
+            if (status) status.textContent = `صفحة ${salesPagination.page} من ${salesPagination.totalPages || 1} — ${salesPagination.totalCount} سجل`;
+            const root = document.getElementById('salesPagination');
+            if (root) {
+                root.querySelectorAll('button').forEach((button, index) => {
+                    const disabled = (index === 0 || index === 1) ? salesPagination.page <= 1 : salesPagination.page >= (salesPagination.totalPages || 1);
+                    button.disabled = disabled;
+                    button.setAttribute('aria-disabled', String(disabled));
+                });
+            }
         }
 
-        let currentPaymentFilter = 'all';
+        function goToSalesPage(page) {
+            const maxPage = salesPagination.totalPages || 1;
+            const nextPage = Math.min(Math.max(Number(page) || 1, 1), maxPage);
+            if (nextPage === salesPagination.page && window.__salesReportData) return;
+            salesPagination.page = nextPage;
+            generateReport(false);
+        }
+
+        function changeSalesPageSize(value) {
+            salesPagination.pageSize = Math.min(Math.max(Number(value) || 50, 1), 1000);
+            salesPagination.page = 1;
+            generateReport(false);
+        }
+
+        function handleSearch(query) {
+            salesPagination.search = String(query || '').trim();
+            clearTimeout(salesSearchTimer);
+            salesSearchTimer = setTimeout(() => {
+                salesPagination.page = 1;
+                generateReport(false);
+            }, 250);
+        }
 
         function setFilter(filter, btn) {
             currentPaymentFilter = filter;
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
-            // إعادة تطبيق التصفية على البيانات الحالية
-            const sales = window.__salesReportData || [];
-            if (sales.length > 0) {
-                let filtered = [...sales];
-                if (filter !== 'all') {
-                    filtered = filtered.filter(s => s.payment_method === filter);
-                }
-                renderSalesTable(filtered);
-                updateStats(filtered);
-                updateSummary(filtered);
-                updateCharts(filtered);
-            }
+            salesPagination.page = 1;
+            generateReport(false);
             hapticFeedback('light');
         }
 
