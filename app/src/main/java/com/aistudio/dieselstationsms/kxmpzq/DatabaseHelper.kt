@@ -7418,7 +7418,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال الطلبات والتوصيلات (جزء منها)
     // ========================================================================
 
-    fun addOrder(data: JSONObject): Long {
+    fun addOrder(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
         dbLock.lock()
         return try {
             val customerPartyId = data.optLong("party_id", 0).toInt()
@@ -7429,14 +7429,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val deliveryLocation = data.optString("delivery_location", data.optString("location", ""))
             val deliveryTime = data.optString("delivery_time", "")
             val notes = data.optString("notes", "")
-            val stationId = data.optInt("station_id", 1)
-            val shiftId = getCurrentShift(stationId)?.optLong("shift_id", 1)?.toInt() ?: 1
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(cashierId > 0) { "معرف المستخدم غير صالح" }
+            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
+                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
+            val fuelTypeId = readableDatabase.rawQuery(
+                "SELECT id FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
+                arrayOf("DIESEL")
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else throw IllegalStateException("نوع وقود الديزل غير مهيأ")
+            }
 
             insertSaleTransaction(
-                stationId = stationId,
+                stationId = stationScopeId,
                 shiftId = shiftId,
                 customerPartyId = if (customerPartyId > 0) customerPartyId else null,
-                fuelTypeId = 1,
+                fuelTypeId = fuelTypeId,
                 pumpId = null,
                 nozzleId = null,
                 liters = liters,
@@ -7449,7 +7457,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 paymentMethod = data.optString("payment_method", "credit"),
                 isCredit = true,
                 dueDate = data.optString("due_date", null),
-                cashierId = 1,
+                cashierId = cashierId.toInt(),
                 notes = notes,
                 deliveryLocation = deliveryLocation,
                 deliveryTime = deliveryTime,
@@ -7460,12 +7468,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getOrders(status: String?): JSONArray {
+    fun getOrders(status: String?, stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val selection = if (status != null) "status = ? AND order_type != 'retail'" else "order_type != 'retail'"
-            val selectionArgs = if (status != null) arrayOf(status) else null
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val selection = if (status != null) "station_id = ? AND status = ? AND order_type != 'retail'" else "station_id = ? AND order_type != 'retail'"
+            val selectionArgs = if (status != null) arrayOf(stationScopeId.toString(), status) else arrayOf(stationScopeId.toString())
             db.query("sales_transactions", null, selection, selectionArgs, null, null, "created_at DESC")
                 .use { cursor -> cursorToJsonArray(cursor) }
         } finally {
@@ -7473,7 +7482,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun addDelivery(data: JSONObject): Long {
+    fun addDelivery(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
         dbLock.lock()
         return try {
             val partyId = data.optLong("party_id", 0).toInt()
@@ -7483,14 +7492,22 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val totalAmount = data.optDouble("total_amount", subtotal)
             val location = data.optString("location", "")
             val deliveryTime = data.optString("delivery_time", data.optString("delivery_date", ""))
-            val stationId = data.optInt("station_id", 1)
-            val shiftId = getCurrentShift(stationId)?.optLong("shift_id", 1)?.toInt() ?: 1
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(cashierId > 0) { "معرف المستخدم غير صالح" }
+            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
+                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
+            val fuelTypeId = readableDatabase.rawQuery(
+                "SELECT id FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
+                arrayOf("DIESEL")
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getInt(0) else throw IllegalStateException("نوع وقود الديزل غير مهيأ")
+            }
 
             val saleId = insertSaleTransaction(
-                stationId = stationId,
+                stationId = stationScopeId,
                 shiftId = shiftId,
                 customerPartyId = if (partyId > 0) partyId else null,
-                fuelTypeId = 1,
+                fuelTypeId = fuelTypeId,
                 pumpId = null,
                 nozzleId = null,
                 liters = liters,
@@ -7503,7 +7520,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 paymentMethod = data.optString("payment_method", "credit"),
                 isCredit = true,
                 dueDate = data.optString("due_date", null),
-                cashierId = 1,
+                cashierId = cashierId.toInt(),
                 notes = data.optString("notes", ""),
                 deliveryLocation = location,
                 deliveryTime = deliveryTime,
@@ -7533,35 +7550,37 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getDeliveries(): JSONArray {
+    fun getDeliveries(stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             db.rawQuery(
                 """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time, s.created_at as sale_date
                    FROM deliveries d
-                   LEFT JOIN sales_transactions s ON d.sale_id = s.id
-                   WHERE d.is_deleted = 0
+                   INNER JOIN sales_transactions s ON d.sale_id = s.id
+                   WHERE d.is_deleted = 0 AND s.station_id = ?
                    ORDER BY d.created_at DESC""",
-                null
+                arrayOf(stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun getTodayDeliveries(): JSONArray {
+    fun getTodayDeliveries(stationScopeId: Int): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
             val today = getCurrentDate()
             db.rawQuery(
                 """SELECT d.*, s.sale_code, s.delivery_location, s.delivery_time
                    FROM deliveries d
-                   LEFT JOIN sales_transactions s ON d.sale_id = s.id
-                   WHERE d.delivery_date = ? AND d.is_deleted = 0
+                   INNER JOIN sales_transactions s ON d.sale_id = s.id
+                   WHERE d.delivery_date = ? AND d.is_deleted = 0 AND s.station_id = ?
                    ORDER BY d.created_at DESC""",
-                arrayOf(today)
+                arrayOf(today, stationScopeId.toString())
             ).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
@@ -7572,21 +7591,28 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال مبيعات الوقود
     // ========================================================================
 
-    fun addFuelSale(data: JSONObject): Long {
+    fun addFuelSale(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
         dbLock.lock()
         return try {
             val liters = data.optDouble("quantity", 0.0)
             val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
             val subtotal = liters * pricePerLiter
             val totalAmount = data.optDouble("total_amount", subtotal)
-            val stationId = data.optInt("station_id", 1)
-            val shiftId = data.optLong("shift_id", 1).toInt()
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            require(cashierId > 0) { "معرف المستخدم غير صالح" }
+            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
+                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
             val customerId = data.optLong("customer_id", 0).toInt()
             val pumpId = data.optLong("pump_id", 0).toInt()
-            val fuelTypeId = data.optLong("fuel_type_id", 1).toInt()
+            val fuelTypeId = data.optLong("fuel_type_id", 0).toInt()
+            require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
+            readableDatabase.rawQuery(
+                "SELECT id FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
+                arrayOf(fuelTypeId.toString())
+            ).use { cursor -> require(cursor.moveToFirst()) { "نوع الوقود غير صالح" } }
 
             val saleId = insertSaleTransaction(
-                stationId = stationId,
+                stationId = stationScopeId,
                 shiftId = shiftId,
                 customerPartyId = if (customerId > 0) customerId else null,
                 fuelTypeId = fuelTypeId,
@@ -7602,7 +7628,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 paymentMethod = data.optString("payment_method", "cash"),
                 isCredit = false,
                 dueDate = null,
-                cashierId = 1,
+                cashierId = cashierId.toInt(),
                 notes = data.optString("notes", ""),
                 orderType = "fuel"
             )

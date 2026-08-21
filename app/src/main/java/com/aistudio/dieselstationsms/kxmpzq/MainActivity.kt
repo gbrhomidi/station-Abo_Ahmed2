@@ -2524,8 +2524,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("orders", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
-                val id = db.addOrder(data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
+                val id = db.addOrder(data, stationId, activity.currentUserId)
                 DebugLogger.info("Order", "Added order id=$id")
                 successResponse(id, "تم إضافة الطلب بنجاح")
             } catch (e: Exception) {
@@ -2540,7 +2542,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("orders", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val orders = db.getOrders(status)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val orders = db.getOrders(status, getCurrentStationId(db, activity.currentUserId))
                 dataResponse(orders)
             } catch (e: Exception) {
                 DebugLogger.logException("Order", e)
@@ -2561,8 +2564,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("deliveries", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
-                val id = db.addDelivery(data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
+                val id = db.addDelivery(data, stationId, activity.currentUserId)
                 DebugLogger.info("Delivery", "Added delivery id=$id")
                 successResponse(id, "تم إضافة التسليم بنجاح")
             } catch (e: Exception) {
@@ -2577,7 +2582,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val deliveries = db.getDeliveries()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val deliveries = db.getDeliveries(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(deliveries)
             } catch (e: Exception) {
                 DebugLogger.logException("Delivery", e)
@@ -2591,7 +2597,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val deliveries = db.getTodayDeliveries()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val deliveries = db.getTodayDeliveries(getCurrentStationId(db, activity.currentUserId))
                 dataResponse(deliveries)
             } catch (e: Exception) {
                 DebugLogger.logException("Delivery", e)
@@ -2609,8 +2616,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("sales", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val data = JSONObject(jsonData)
-                val id = db.addFuelSale(data)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = getCurrentStationId(db, activity.currentUserId)
+                val data = JSONObject(jsonData).apply { put("station_id", stationId) }
+                val id = db.addFuelSale(data, stationId, activity.currentUserId)
                 DebugLogger.info("Sale", "Added sale id=$id")
                 successResponse(id, "تم إضافة البيع بنجاح")
             } catch (e: Exception) {
