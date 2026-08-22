@@ -1155,8 +1155,7 @@
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
-
+<body class="report-screen" data-module="module-003" data-screen="party-types">
     <!-- Pull-to-Refresh Indicator -->
     <div class="pull-indicator" id="pullIndicator">
         <i class="fas fa-arrow-down"></i>
@@ -1165,7 +1164,7 @@
 
     <!-- Offline Banner -->
     <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+        <i class="fas fa-link-slash"></i> Android Bridge غير متاح؛ لا يمكن قراءة أو حفظ أنواع الأطراف
     </div>
 
     <!-- Loading -->
@@ -1456,48 +1455,28 @@
         // ============================================================
         // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
+        async function apiCall(action, params = {}) {
             const p = params || {};
-            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-            try {
-                let raw;
-                switch (action) {
-                    case 'getPartyTypes': raw = AndroidInterface.getPartyTypes(); break;
-                    case 'savePartyType': raw = Number(p.id || 0) > 0 ? AndroidInterface.updatePartyType(Number(p.id), JSON.stringify(p)) : AndroidInterface.addPartyType(JSON.stringify(p)); break;
-                    case 'deletePartyType': raw = AndroidInterface.deletePartyType(Number(p.id)); break;
-                    case 'generatePartyTypeReport': raw = AndroidInterface.generatePartyTypeReport(JSON.stringify(p)); break;
-                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
-                }
-                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
-        }
-
-        // ============================================================
-        // 2. حالة الاتصال — بيانات الأعمال لا تُخزّن محلياً
-        // ============================================================
-        // ============================================================
-        // 3. حالة الاتصال
-        // ============================================================
-        let isOnline = navigator.onLine;
-
-        function updateOnlineStatus() {
-            isOnline = navigator.onLine;
-            const banner = document.getElementById('offlineBanner');
-            if (!isOnline) {
-                banner.classList.add('show');
-                showToast('⚠️ لا يوجد اتصال — بيانات أنواع الأطراف للقراءة من قاعدة التطبيق فقط', 'warning');
-            } else {
-                banner.classList.remove('show');
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('جسر Android غير متاح؛ افتح الشاشة داخل التطبيق');
+            let raw;
+            switch (action) {
+                case 'getPartyTypes': raw = bridge.getPartyTypes(); break;
+                case 'savePartyType': raw = Number(p.id || 0) > 0 ? bridge.updatePartyType(Number(p.id), JSON.stringify(p)) : bridge.addPartyType(JSON.stringify(p)); break;
+                case 'deletePartyType': raw = bridge.deletePartyType(Number(p.id)); break;
+                case 'generatePartyTypeReport': raw = bridge.generatePartyTypeReport(JSON.stringify(p)); break;
+                default: throw new Error('العملية غير مدعومة: ' + action);
             }
+            const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!result || result.success === false) throw new Error(result?.message || result?.error || 'فشلت عملية SQLite');
+            return result;
         }
 
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
-
-        // ============================================================
-        // 4. مزامنة العمليات المعلقة
-        // ============================================================
-        async function syncPendingOperations() { return; }
+        // لا توجد مزامنة محلية للبيانات التجارية؛ المصدر الوحيد هو Android Bridge/SQLite.
+        function updateBridgeStatus() {
+            const banner = document.getElementById('offlineBanner');
+            if (banner) banner.classList.toggle('show', !window.AndroidInterface);
+        }
 
         // ============================================================
         // 5. Haptic Feedback        // ============================================================
@@ -2273,16 +2252,13 @@
             loadSavedTheme();
             setupSidebar();
             document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-            updateOnlineStatus();
+            updateBridgeStatus();
             loadPartyTypes();
 
             document.getElementById('reportModal').addEventListener('click', function(e) {
                 if (e.target === this) closeReportModal();
             });
 
-            if (isOnline) {
-                syncPendingOperations();
-            }
         });
     </script>
 

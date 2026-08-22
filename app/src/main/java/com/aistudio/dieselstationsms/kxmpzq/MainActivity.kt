@@ -6256,6 +6256,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getPartyTypes(): String {
+            if (!checkPermission("party_types", "read")) return errorResponse("لا تملك صلاحية قراءة أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val types = db.getPartyTypes()
@@ -6292,7 +6293,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun generatePartyTypeReport(jsonData: String): String {
             if (!checkPermission("party_types", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.getPartyTypeReport(JSONObject(jsonData.ifBlank { "{}" }).optString("report_type", "types"))) } catch (e: Exception) { errorResponse(e.message) }
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            return try {
+                val reportType = JSONObject(jsonData.ifBlank { "{}" }).optString("report_type", "types")
+                dataResponse(db.getPartyTypeReport(reportType, requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) { errorResponse(e.message) }
         }
 
 

@@ -1539,8 +1539,7 @@
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
-
+<body class="report-screen" data-module="module-003" data-screen="suppliers">
     <!-- Pull-to-Refresh Indicator -->
     <div class="pull-indicator" id="pullIndicator">
         <i class="fas fa-arrow-down"></i>
@@ -1549,7 +1548,7 @@
 
     <!-- Offline Banner -->
     <div class="offline-banner" id="offlineBanner">
-        <i class="fas fa-wifi-slash"></i> أنت في وضع عدم الاتصال - سيتم حفظ التغييرات محلياً
+        <i class="fas fa-link-slash"></i> Android Bridge غير متاح؛ لا يمكن قراءة أو حفظ بيانات الموردين
     </div>
 
     <!-- Loading -->
@@ -1960,34 +1959,31 @@
         // ============================================================
         // 1. دالة apiCall الموحدة
         // ============================================================
-        function apiCall(action, params) {
+        async function apiCall(action, params = {}) {
             const p = params || {};
-            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-            try {
-                let raw;
-                switch (action) {
-                    case 'getSuppliers': raw = AndroidInterface.getSuppliers(); break;
-                    case 'getPartyById': raw = AndroidInterface.getPartyById(Number(p.id)); break;
-                    case 'addSupplier': raw = AndroidInterface.addParty(JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
-                    case 'updateSupplier': raw = AndroidInterface.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier', party_type_id: 6 })); break;
-                    case 'deleteSupplier': raw = AndroidInterface.deleteParty(Number(p.id)); break;
-                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
-                }
-                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('جسر Android غير متاح؛ افتح الشاشة داخل التطبيق');
+            let raw;
+            switch (action) {
+                case 'getSuppliers': raw = bridge.getSuppliers(); break;
+                case 'getPartyById': raw = bridge.getPartyById(Number(p.id)); break;
+                case 'addSupplier': raw = bridge.addParty(JSON.stringify({ ...p, party_type: 'supplier' })); break;
+                case 'updateSupplier': raw = bridge.updateParty(Number(p.id), JSON.stringify({ ...p, party_type: 'supplier' })); break;
+                case 'deleteSupplier': raw = bridge.deleteParty(Number(p.id)); break;
+                default: throw new Error('العملية غير مدعومة: ' + action);
+            }
+            const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (!result || result.success === false) throw new Error(result?.message || result?.error || 'فشلت عملية SQLite');
+            return result;
         }
 
-        let isOnline = navigator.onLine;
         let supplierInsights = [];
         let supplierNotifications = [];
-        function updateOnlineStatus() {
-            isOnline = navigator.onLine;
+        function updateBridgeStatus() {
             const banner = document.getElementById('offlineBanner');
-            if (!isOnline) { banner.classList.add('show'); showToast('⚠️ لا يوجد اتصال — عمليات الموردين متاحة عند اتصال SQLite فقط', 'warning'); }
-            else banner.classList.remove('show');
+            if (banner) banner.classList.toggle('show', !window.AndroidInterface);
         }
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
+        window.addEventListener('load', updateBridgeStatus);
 
         // 2. دالة مساعدة للوصول إلى الحقول بأسماء متعددة (توحيد)        // 2. دالة مساعدة للوصول إلى الحقول بأسماء متعددة (توحيد)
         // ============================================================
@@ -2954,7 +2950,6 @@
                 region: document.getElementById('state').value.trim(),
                 is_active: parseInt(document.getElementById('isActive').value),
                 notes: document.getElementById('notes').value.trim(),
-                party_type_id: 6
             };
 
             showLoading(true);

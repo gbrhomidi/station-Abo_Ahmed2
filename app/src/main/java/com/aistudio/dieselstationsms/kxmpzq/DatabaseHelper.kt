@@ -224,12 +224,49 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         createSmsPlatformTables(db)
         createSmsCognitiveTables(db)
         ensureActivityPermissions(db)
+        ensurePartyTypePermissions(db)
+        ensureModule003Indexes(db)
         ensureDeliveriesSchema(db)
         ensureLegacyAssetsSchema(db)
         createTasksTable(db)
         ensureTaskPermissions(db)
         ensureMessagingPermissions(db)
         ensureSmsSettings(db)
+    }
+
+    private fun ensurePartyTypePermissions(db: SQLiteDatabase) {
+        db.execSQL("""
+            INSERT OR IGNORE INTO permissions (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+            VALUES
+                ('PER-PT-READ-UUID', 'party_types.read', 'View Party Types', 'عرض أنواع الأطراف', 'party_types', 'أنواع الأطراف', 'read'),
+                ('PER-PT-CREATE-UUID', 'party_types.create', 'Create Party Types', 'إنشاء أنواع الأطراف', 'party_types', 'أنواع الأطراف', 'create'),
+                ('PER-PT-UPDATE-UUID', 'party_types.update', 'Edit Party Types', 'تعديل أنواع الأطراف', 'party_types', 'أنواع الأطراف', 'update'),
+                ('PER-PT-DELETE-UUID', 'party_types.delete', 'Delete Party Types', 'حذف أنواع الأطراف', 'party_types', 'أنواع الأطراف', 'delete'),
+                ('PER-PARTY-READ-UUID', 'parties.read', 'View Parties', 'عرض الأطراف', 'parties', 'الأطراف', 'read'),
+                ('PER-PARTY-CREATE-UUID', 'parties.create', 'Create Parties', 'إنشاء الأطراف', 'parties', 'الأطراف', 'create'),
+                ('PER-PARTY-UPDATE-UUID', 'parties.update', 'Edit Parties', 'تعديل الأطراف', 'parties', 'الأطراف', 'update'),
+                ('PER-PARTY-DELETE-UUID', 'parties.delete', 'Delete Parties', 'حذف الأطراف', 'parties', 'الأطراف', 'delete')
+        """)
+        db.execSQL("""
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-PT-' || r.id || '-' || p.module || '-' || p.action, r.id, p.id,
+                   CASE WHEN p.action = 'create' AND ((p.module = 'party_types' AND r.id IN (1, 2)) OR (p.module = 'parties' AND r.id IN (1, 2, 3))) THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'read' AND r.id BETWEEN 1 AND 7 THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'update' AND ((p.module = 'party_types' AND r.id IN (1, 2)) OR (p.module = 'parties' AND r.id IN (1, 2, 3))) THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'delete' AND ((p.module = 'party_types' AND r.id IN (1, 2)) OR (p.module = 'parties' AND r.id IN (1, 2, 3))) THEN 1 ELSE 0 END,
+                   0, 0, 0
+            FROM roles r CROSS JOIN permissions p
+            WHERE p.permission_code IN ('party_types.read', 'party_types.create', 'party_types.update', 'party_types.delete', 'parties.read', 'parties.create', 'parties.update', 'parties.delete')
+              AND r.id BETWEEN 1 AND 7
+        """)
+    }
+
+    private fun ensureModule003Indexes(db: SQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_parties_station_type_deleted_name ON parties(station_id, party_type_id, is_deleted, commercial_name)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_bad_debts_customer_resolved_date ON bad_debts(customer_id, resolved, date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_contracts_party_deleted_end ON contracts(party_id, is_deleted, end_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_customer_deleted_date ON sales_transactions(station_id, customer_party_id, is_deleted, created_at)")
     }
 
     private fun ensureSmsMessagesTable(db: SQLiteDatabase) {
@@ -6894,24 +6931,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun getParties(type: String): JSONArray {
-        val typeId = when (type.lowercase()) {
-            "customer" -> 1
-            "supplier" -> 6
-            "driver" -> 4
-            else -> null
-        }
-        return getParties(typeId, null)
+        private fun partyTypeCodesFor(kind: String): List<String>? = when (kind.trim().lowercase(Locale.US)) {
+        "customer", "customers" -> listOf("INDIVIDUAL", "COMPANY", "GOVERNMENT", "TRANSPORT", "CONTRACTOR")
+        "supplier", "suppliers" -> listOf("SUPPLIER")
+        "driver", "drivers" -> listOf("DRIVER")
+        else -> null
     }
 
-    fun getParties(type: String, stationScopeId: Int): JSONArray {
-        val typeId = when (type.lowercase()) {
-            "customer" -> 1
-            "supplier" -> 6
-            "driver" -> 4
-            else -> null
+    fun getParties(type: String): JSONArray = getParties(type, null)
+
+    fun getParties(type: String, stationScopeId: Int?): JSONArray {
+        val codes = partyTypeCodesFor(type)
+        if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        val db = readableDatabase
+        val predicates = mutableListOf("p.is_deleted=0")
+        val args = mutableListOf<String>()
+        if (codes != null) {
+            predicates += "p.party_type_id IN (SELECT id FROM party_types WHERE is_deleted=0 AND type_code IN (${codes.joinToString(",") { "?" }}))"
+            args += codes
         }
-        return getParties(typeId, stationScopeId)
+        if (stationScopeId != null) {
+            predicates += "p.station_id=?"
+            args += stationScopeId.toString()
+        }
+        val sql = "SELECT p.* FROM parties p WHERE ${predicates.joinToString(" AND ")} ORDER BY p.commercial_name"
+        db.rawQuery(sql, if (args.isEmpty()) null else args.toTypedArray()).use { cursor ->
+            val arr = JSONArray()
+            while (cursor.moveToNext()) arr.put(partyCursorToJson(cursor))
+            return arr
+        }
     }
 
     fun getParty(id: Int, stationScopeId: Int? = null): JSONObject? {
@@ -6934,13 +6982,48 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun getPartyById(id: Long, stationScopeId: Int? = null): JSONObject? = getParty(id.toInt(), stationScopeId)
 
-    private fun requirePartyInStation(db: SQLiteDatabase, partyId: Long, stationScopeId: Int) {
+        private fun requirePartyInStation(db: SQLiteDatabase, partyId: Long, stationScopeId: Int) {
         require(partyId > 0 && stationScopeId > 0) { "معرف الطرف والمحطة مطلوبان" }
         val owned = db.rawQuery(
             "SELECT 1 FROM parties WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1",
             arrayOf(partyId.toString(), stationScopeId.toString())
         ).use { it.moveToFirst() }
         require(owned) { "الطرف غير موجود ضمن محطة المستخدم" }
+    }
+
+    private fun jsonBooleanFlag(data: JSONObject, key: String, defaultValue: Int = 1): Int {
+        if (!data.has(key) || data.isNull(key)) return defaultValue
+        return when (val value = data.opt(key)) {
+            is Boolean -> if (value) 1 else 0
+            is Number -> if (value.toInt() != 0) 1 else 0
+            is String -> when (value.trim().lowercase(Locale.US)) {
+                "1", "true", "yes", "on" -> 1
+                "0", "false", "no", "off" -> 0
+                else -> defaultValue
+            }
+            else -> defaultValue
+        }
+    }
+
+    private fun resolvePartyTypeId(db: SQLiteDatabase, requestedId: Int, requestedKind: String): Int {
+        val normalized = requestedKind.trim().lowercase(Locale.US)
+        val typeCode = when (normalized) {
+            "customer", "customers" -> "INDIVIDUAL"
+            "supplier", "suppliers" -> "SUPPLIER"
+            "driver", "drivers" -> "DRIVER"
+            else -> ""
+        }
+        val cursorArgs = if (requestedId > 0) arrayOf(requestedId.toString()) else arrayOf(typeCode)
+        val sql = if (requestedId > 0) {
+            "SELECT id FROM party_types WHERE id=? AND is_deleted=0 AND is_active=1 LIMIT 1"
+        } else {
+            require(typeCode.isNotBlank()) { "نوع الطرف مطلوب" }
+            "SELECT id FROM party_types WHERE type_code=? AND is_deleted=0 AND is_active=1 LIMIT 1"
+        }
+        return db.rawQuery(sql, cursorArgs).use { cursor ->
+            require(cursor.moveToFirst()) { "نوع الطرف غير موجود أو غير نشط" }
+            cursor.getInt(0)
+        }
     }
 
     fun insertParty(data: JSONObject, stationScopeId: Int? = null): Long {
@@ -6950,16 +7033,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val authorizedStationId = stationScopeId ?: data.optInt("station_id", 0)
             require(authorizedStationId > 0) { "معرف المحطة مطلوب" }
             val partyType = data.optString("party_type", "").trim()
-            val typeId = if (data.has("party_type_id") && data.optInt("party_type_id", 0) > 0) {
-                data.optInt("party_type_id", 1)
-            } else {
-                when (partyType.lowercase()) {
-                    "customer" -> 1
-                    "supplier" -> 6
-                    "driver" -> 4
-                    else -> 1
-                }
-            }
+            val typeId = resolvePartyTypeId(db, data.optInt("party_type_id", 0), partyType)
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("party_code", data.optString("party_code", "PTY-${System.currentTimeMillis()}"))
@@ -6998,7 +7072,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("on_time_rate", data.optDouble("on_time_rate", 100.0))
                 if (data.has("fuel_type_preference_id") && !data.isNull("fuel_type_preference_id")) put("fuel_type_preference_id", data.optLong("fuel_type_preference_id"))
                 put("fleet_size", data.optInt("fleet_size", 0))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("is_active", jsonBooleanFlag(data, "is_active", 1))
                 put("notes", data.optString("notes", ""))
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("created_at", getCurrentDateTime())
@@ -7021,7 +7095,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val values = ContentValues().apply {
                 if (data.has("barcode")) put("barcode", data.optString("barcode").trim())
                 if (data.has("qr_code")) put("qr_code", data.optString("qr_code").trim())
-                if (data.has("party_type_id")) put("party_type_id", data.optInt("party_type_id", 1))
+                if (data.has("party_type_id")) {
+                    val requestedTypeId = data.optInt("party_type_id", 0)
+                    put("party_type_id", resolvePartyTypeId(db, requestedTypeId, data.optString("party_type", "")))
+                }
                 put("commercial_name", data.optString("commercial_name", data.optString("party_name", "")))
                 put("commercial_name_ar", data.optString("commercial_name_ar", data.optString("party_name_ar", "")))
                 put("legal_name", data.optString("legal_name", ""))
@@ -7065,7 +7142,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     if (data.isNull("fuel_type_preference_id")) putNull("fuel_type_preference_id") else put("fuel_type_preference_id", data.optLong("fuel_type_preference_id"))
                 }
                 if (data.has("fleet_size")) put("fleet_size", data.optInt("fleet_size", 0))
-                put("is_active", if (data.optBoolean("is_active", true)) 1 else 0)
+                put("is_active", jsonBooleanFlag(data, "is_active", 1))
                 put("notes", data.optString("notes", ""))
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("updated_at", getCurrentDateTime())
@@ -11246,7 +11323,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.rawQuery(
             "SELECT COALESCE(SUM(p.current_balance),0) FROM parties p " +
                     "JOIN tank_refills tr ON tr.supplier_id = p.id " +
-                    "WHERE tr.station_id = ? AND p.party_type_id = 6 AND p.is_deleted=0",
+                    "WHERE tr.station_id = ? AND p.party_type_id IN (SELECT id FROM party_types WHERE type_code = 'SUPPLIER' AND is_deleted=0) AND p.is_deleted=0",
             arrayOf(stationId.toString())
         ).use { cursor ->
             if (cursor.moveToFirst()) stats.put("supplier_debts", cursor.getDouble(0))
@@ -13215,12 +13292,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun getCustomerCount(): Int {
+    fun getCustomerCount(stationScopeId: Int? = null): Int {
+        if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         val db = readableDatabase
-        db.rawQuery("SELECT COUNT(*) FROM parties WHERE party_type_id = 1 AND is_deleted = 0", null)
-            .use { cursor ->
-                if (cursor.moveToFirst()) return cursor.getInt(0)
-            }
+        val stationClause = if (stationScopeId != null) " AND p.station_id = ?" else ""
+        val args = if (stationScopeId != null) arrayOf(stationScopeId.toString()) else null
+        db.rawQuery("""
+            SELECT COUNT(*) FROM parties p
+            WHERE p.is_deleted = 0
+              AND p.party_type_id IN (SELECT id FROM party_types WHERE type_code IN ('INDIVIDUAL','COMPANY','GOVERNMENT','TRANSPORT','CONTRACTOR') AND is_deleted=0)
+              $stationClause
+        """.trimIndent(), args).use { cursor ->
+            if (cursor.moveToFirst()) return cursor.getInt(0)
+        }
         return 0
     }
 
@@ -14894,90 +14978,140 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val code = data.optString("type_code").trim()
             val name = data.optString("type_name", data.optString("type_name_ar", "")).trim()
+            val discount = data.optDouble("default_discount", Double.NaN)
+            val creditLimit = data.optDouble("default_credit_limit", Double.NaN)
+            val paymentDays = data.optInt("payment_terms_days", 0)
+            val active = data.optInt("is_active", 1)
             require(code.isNotEmpty()) { "كود النوع مطلوب" }
             require(name.isNotEmpty()) { "اسم النوع مطلوب" }
+            require(discount.isFinite() && discount >= 0.0) { "الخصم الافتراضي غير صالح" }
+            require(creditLimit.isFinite() && creditLimit >= 0.0) { "الحد الائتماني الافتراضي غير صالح" }
+            require(paymentDays >= 0) { "أيام السداد غير صالحة" }
+            require(active == 0 || active == 1) { "حالة النوع غير صالحة" }
+            val db = writableDatabase
+            val duplicate = db.rawQuery("SELECT 1 FROM party_types WHERE (lower(type_code)=lower(?) OR lower(type_name)=lower(?)) AND is_deleted=0 LIMIT 1", arrayOf(code, name)).use { it.moveToFirst() }
+            require(!duplicate) { "كود أو اسم نوع الطرف مستخدم مسبقاً" }
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("type_code", code)
                 put("type_name", name)
-                put("type_name_ar", data.optString("type_name_ar", name))
+                put("type_name_ar", data.optString("type_name_ar", name).trim())
                 put("description", data.optString("description", ""))
-                put("default_discount", data.optDouble("default_discount", 0.0))
-                put("default_credit_limit", data.optDouble("default_credit_limit", 0.0))
-                put("payment_terms_days", data.optInt("payment_terms_days", 0))
-                put("is_active", data.optInt("is_active", 1))
+                put("default_discount", discount)
+                put("default_credit_limit", creditLimit)
+                put("payment_terms_days", paymentDays)
+                put("is_active", active)
                 put("remarks", data.optString("remarks", ""))
                 put("extra_data", data.optString("extra_data", ""))
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
             }
-            writableDatabase.insertOrThrow("party_types", null, values)
+            db.insertOrThrow("party_types", null, values)
         } finally { dbLock.unlock() }
     }
 
     fun updatePartyType(id: Long, data: JSONObject): Int {
         dbLock.lock()
         return try {
+            require(id > 0) { "معرف نوع الطرف غير صالح" }
+            val db = writableDatabase
+            val current = db.rawQuery("SELECT type_code, type_name FROM party_types WHERE id=? AND is_deleted=0", arrayOf(id.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "نوع الطرف غير موجود" }
+                arrayOf(cursor.getString(0), cursor.getString(1))
+            }
+            val code = data.optString("type_code", current[0]).trim()
+            val name = data.optString("type_name", current[1]).trim()
+            val discount = data.optDouble("default_discount", 0.0)
+            val creditLimit = data.optDouble("default_credit_limit", 0.0)
+            val paymentDays = data.optInt("payment_terms_days", 0)
+            val active = data.optInt("is_active", 1)
+            require(code.isNotEmpty() && name.isNotEmpty()) { "كود واسم النوع مطلوبان" }
+            require(discount.isFinite() && discount >= 0.0) { "الخصم الافتراضي غير صالح" }
+            require(creditLimit.isFinite() && creditLimit >= 0.0) { "الحد الائتماني الافتراضي غير صالح" }
+            require(paymentDays >= 0 && (active == 0 || active == 1)) { "بيانات نوع الطرف غير صالحة" }
+            val duplicate = db.rawQuery("SELECT 1 FROM party_types WHERE id<>? AND (lower(type_code)=lower(?) OR lower(type_name)=lower(?)) AND is_deleted=0 LIMIT 1", arrayOf(id.toString(), code, name)).use { it.moveToFirst() }
+            require(!duplicate) { "كود أو اسم نوع الطرف مستخدم مسبقاً" }
             val values = ContentValues().apply {
-                if (data.has("type_code")) put("type_code", data.optString("type_code"))
-                if (data.has("type_name")) put("type_name", data.optString("type_name"))
-                if (data.has("type_name_ar")) put("type_name_ar", data.optString("type_name_ar"))
+                put("type_code", code)
+                put("type_name", name)
+                if (data.has("type_name_ar")) put("type_name_ar", data.optString("type_name_ar").trim())
                 if (data.has("description")) put("description", data.optString("description"))
-                if (data.has("default_discount")) put("default_discount", data.optDouble("default_discount", 0.0))
-                if (data.has("default_credit_limit")) put("default_credit_limit", data.optDouble("default_credit_limit", 0.0))
-                if (data.has("payment_terms_days")) put("payment_terms_days", data.optInt("payment_terms_days", 0))
-                if (data.has("is_active")) put("is_active", data.optInt("is_active", 1))
+                put("default_discount", discount)
+                put("default_credit_limit", creditLimit)
+                put("payment_terms_days", paymentDays)
+                put("is_active", active)
                 if (data.has("remarks")) put("remarks", data.optString("remarks"))
                 if (data.has("extra_data")) put("extra_data", data.optString("extra_data"))
                 put("updated_at", getCurrentDateTime())
             }
-            writableDatabase.update("party_types", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
+            db.update("party_types", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
 
     fun deletePartyType(id: Long): Int {
         dbLock.lock()
         return try {
-            writableDatabase.update("party_types", ContentValues().apply {
+            require(id > 0) { "معرف نوع الطرف غير صالح" }
+            val db = writableDatabase
+            val linked = db.rawQuery("SELECT COUNT(*) FROM parties WHERE party_type_id=? AND is_deleted=0", arrayOf(id.toString())).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            require(linked == 0) { "لا يمكن حذف نوع مرتبط بأطراف؛ عطّله بدلاً من ذلك" }
+            db.update("party_types", ContentValues().apply {
                 put("is_deleted", 1); put("updated_at", getCurrentDateTime())
             }, "id=? AND is_deleted=0", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
 
-    fun getPartyTypeReport(reportType: String): JSONArray {
+    fun getPartyTypeReport(reportType: String, stationScopeId: Int? = null): JSONArray {
+        if (stationScopeId != null) require(stationScopeId > 0) { "معرف المحطة غير صالح" }
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val sql = when (reportType) {
-                "parties_by_type" -> """
-                    SELECT pt.id AS type_id, pt.type_code, pt.type_name, pt.type_name_ar,
-                           COUNT(p.id) AS total_parties,
-                           SUM(CASE WHEN p.is_active=1 THEN 1 ELSE 0 END) AS active_parties,
-                           SUM(CASE WHEN p.is_active=0 THEN 1 ELSE 0 END) AS inactive_parties,
-                           COALESCE(SUM(p.total_purchases),0) AS total_purchases,
-                           COALESCE(SUM(p.total_payments),0) AS total_payments
-                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
-                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
-                """.trimIndent()
-                "credit_analysis" -> """
-                    SELECT pt.id AS type_id, pt.type_name, COUNT(p.id) AS party_count,
-                           COALESCE(AVG(p.credit_limit),0) AS avg_credit,
-                           COALESCE(SUM(p.credit_limit),0) AS total_credit,
-                           COALESCE(SUM(p.current_balance),0) AS total_balance
-                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
-                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
-                """.trimIndent()
-                "activity" -> """
-                    SELECT pt.id AS type_id, pt.type_name, COUNT(DISTINCT s.id) AS invoice_count,
-                           COALESCE(SUM(s.net_amount),0) AS total_sales, 0 AS payment_count,
-                           MAX(s.created_at) AS last_activity
-                    FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0
-                    LEFT JOIN sales_transactions s ON s.customer_party_id=p.id AND s.is_deleted=0
-                    WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
-                """.trimIndent()
-                else -> "SELECT id, uuid, type_code, type_name, type_name_ar, description, default_discount, default_credit_limit, payment_terms_days, is_active FROM party_types WHERE is_deleted=0 ORDER BY type_name"
+            val scope = stationScopeId?.toString()
+            val partyScope = if (scope != null) " AND p.station_id = ?" else ""
+            val salesScope = if (scope != null) " AND s.station_id = ?" else ""
+            val sql: String
+            val args = mutableListOf<String>()
+            when (reportType) {
+                "parties_by_type" -> {
+                    sql = """
+                        SELECT pt.id AS type_id, pt.type_code, pt.type_name, pt.type_name_ar,
+                               COUNT(p.id) AS total_parties,
+                               SUM(CASE WHEN p.is_active=1 THEN 1 ELSE 0 END) AS active_parties,
+                               SUM(CASE WHEN p.is_active=0 THEN 1 ELSE 0 END) AS inactive_parties,
+                               COALESCE(SUM(p.total_purchases),0) AS total_purchases,
+                               COALESCE(SUM(p.total_payments),0) AS total_payments
+                        FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0$partyScope
+                        WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                    """.trimIndent()
+                    if (scope != null) args += scope
+                }
+                "credit_analysis" -> {
+                    sql = """
+                        SELECT pt.id AS type_id, pt.type_name, COUNT(p.id) AS party_count,
+                               COALESCE(AVG(p.credit_limit),0) AS avg_credit,
+                               COALESCE(SUM(p.credit_limit),0) AS total_credit,
+                               COALESCE(SUM(p.current_balance),0) AS total_balance
+                        FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0$partyScope
+                        WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                    """.trimIndent()
+                    if (scope != null) args += scope
+                }
+                "activity" -> {
+                    sql = """
+                        SELECT pt.id AS type_id, pt.type_name, COUNT(DISTINCT s.id) AS invoice_count,
+                               COALESCE(SUM(s.net_amount),0) AS total_sales, 0 AS payment_count,
+                               MAX(s.created_at) AS last_activity
+                        FROM party_types pt LEFT JOIN parties p ON p.party_type_id=pt.id AND p.is_deleted=0$partyScope
+                        LEFT JOIN sales_transactions s ON s.customer_party_id=p.id AND s.is_deleted=0$salesScope
+                        WHERE pt.is_deleted=0 GROUP BY pt.id ORDER BY pt.type_name
+                    """.trimIndent()
+                    if (scope != null) { args += scope; args += scope }
+                }
+                else -> {
+                    sql = "SELECT id, uuid, type_code, type_name, type_name_ar, description, default_discount, default_credit_limit, payment_terms_days, is_active FROM party_types WHERE is_deleted=0 ORDER BY type_name"
+                }
             }
-            db.rawQuery(sql, null).use { cursorToJsonArray(it) }
+            db.rawQuery(sql, if (args.isEmpty()) null else args.toTypedArray()).use { cursorToJsonArray(it) }
         } finally { dbLock.unlock() }
     }
 
@@ -16707,7 +16841,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     """.trimIndent(), args.toTypedArray()
                 ).use { cursorToJsonArray(it) }
                 else -> {
-                    val order = if (reportType == "suppliers") "p.party_type_id = 6" else if (reportType == "customers") "p.party_type_id IN (1, 2, 3, 4, 5)" else "1=1"
+                    val order = when (reportType) {
+                        "suppliers" -> "EXISTS (SELECT 1 FROM party_types rpt WHERE rpt.id = p.party_type_id AND rpt.type_code = 'SUPPLIER' AND rpt.is_deleted = 0)"
+                        "customers" -> "EXISTS (SELECT 1 FROM party_types rpt WHERE rpt.id = p.party_type_id AND rpt.type_code IN ('INDIVIDUAL','COMPANY','GOVERNMENT','TRANSPORT','CONTRACTOR') AND rpt.is_deleted = 0)"
+                        else -> "1=1"
+                    }
                     val finalWhere = if (where.isEmpty()) order else "$where AND $order"
                     db.rawQuery(
                         """

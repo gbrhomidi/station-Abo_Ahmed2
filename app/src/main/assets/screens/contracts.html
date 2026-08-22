@@ -1599,7 +1599,7 @@
   </style>
      <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
- <body>
+ <body class="report-screen" data-module="module-003" data-screen="contracts">
   <!-- ============================================================
     Skip Link – للوصول السريع
     ============================================================ -->
@@ -2442,28 +2442,26 @@
             return parsed;
         }
         function apiCall(action, params = {}) {
-            return Promise.resolve().then(() => {
-                const bridge = window.AndroidInterface;
-                if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
-                switch (action) {
-                    case 'getContracts': return parseBridgeResponse(bridge.getContracts(Boolean(params.includeArchived)));
-                    case 'getContractBundle': return parseBridgeObject(bridge.getContractBundle(Number(params.id)));
-                    case 'saveContract':
-                    case 'updateContract': return parseBridgeResponse(bridge.saveContract(JSON.stringify(params)));
-                    case 'deleteContract': return parseBridgeResponse(bridge.deleteContract(Number(params.id)));
-                    case 'archiveContract': return parseBridgeResponse(bridge.archiveContract(Number(params.id)));
-                    case 'restoreContract': return parseBridgeResponse(bridge.restoreContract(Number(params.id)));
-                    case 'cloneContract': return parseBridgeResponse(bridge.cloneContract(Number(params.id), JSON.stringify(params)));
-                    case 'changeContractStatus': return parseBridgeResponse(bridge.changeContractStatus(Number(params.id), String(params.status), params.reason || ''));
-                    case 'generateContractReport': return parseBridgeResponse(bridge.generateContractReport(JSON.stringify(params)));
-                    case 'getContractAudit': return parseBridgeResponse(bridge.getContractAudit(Number(params.id || 0)));
-                    case 'getParties': return parseBridgeResponse(bridge.getContractParties());
-                    case 'getCurrencies': return parseBridgeResponse(bridge.getCurrencies());
-                    case 'getCurrentUser': return parseBridgeObject(bridge.getCurrentUser());
-                    case 'backupDatabase': return parseBridgeResponse(bridge.backupDatabase());
-                    default: throw new Error('عملية Bridge غير مدعومة: ' + action);
-                }
-            });
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
+            switch (action) {
+                case 'getContracts': return parseBridgeResponse(bridge.getContracts(Boolean(params.includeArchived)));
+                case 'getContractBundle': return parseBridgeObject(bridge.getContractBundle(Number(params.id)));
+                case 'saveContract':
+                case 'updateContract': return parseBridgeResponse(bridge.saveContract(JSON.stringify(params)));
+                case 'deleteContract': return parseBridgeResponse(bridge.deleteContract(Number(params.id)));
+                case 'archiveContract': return parseBridgeResponse(bridge.archiveContract(Number(params.id)));
+                case 'restoreContract': return parseBridgeResponse(bridge.restoreContract(Number(params.id)));
+                case 'cloneContract': return parseBridgeResponse(bridge.cloneContract(Number(params.id), JSON.stringify(params)));
+                case 'changeContractStatus': return parseBridgeResponse(bridge.changeContractStatus(Number(params.id), String(params.status), params.reason || ''));
+                case 'generateContractReport': return parseBridgeResponse(bridge.generateContractReport(JSON.stringify(params)));
+                case 'getContractAudit': return parseBridgeResponse(bridge.getContractAudit(Number(params.id || 0)));
+                case 'getParties': return parseBridgeResponse(bridge.getContractParties());
+                case 'getCurrencies': return parseBridgeResponse(bridge.getCurrencies());
+                case 'getCurrentUser': return parseBridgeObject(bridge.getCurrentUser());
+                case 'backupDatabase': return parseBridgeResponse(bridge.backupDatabase());
+                default: throw new Error('عملية Bridge غير مدعومة: ' + action);
+            }
         }
 
         /* ============================================================

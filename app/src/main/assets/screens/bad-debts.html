@@ -1269,7 +1269,7 @@
 </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
+<body class="report-screen" data-module="module-003" data-screen="bad-debts">
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
     <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
     <header class="top-bar">
@@ -1335,7 +1335,10 @@
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
-        function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
+        function invoke(method,args=[]) {
+            if (!bridge || typeof bridge[method] !== 'function') throw new Error('العقد '+method+' غير متاح في Android Bridge');
+            return parse(bridge[method](...args));
+        }
         function argsForLoad() {
             if (CFG.operationKey) return [JSON.stringify({limit: 200, search: $('searchInput').value || ''})];
             if (CFG.reportKind === 'balanceSheet') return [today(), 0];

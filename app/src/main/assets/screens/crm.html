@@ -1273,8 +1273,7 @@
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
-
+<body class="report-screen" data-module="module-003" data-screen="crm">
     <!-- Pull-to-Refresh Indicator -->
     <div class="pull-indicator" id="pullIndicator">
         <i class="fas fa-arrow-down"></i>
@@ -1702,21 +1701,19 @@
             return parsed;
         }
         function apiCall(action, params = {}) {
-            return Promise.resolve().then(() => {
-                const bridge = window.AndroidInterface;
-                if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
-                switch (action) {
-                    case 'getParties': return parseBridgeResponse(bridge.getParties(''));
-                    case 'getPartyTypes': return parseBridgeResponse(bridge.getPartyTypes());
-                    case 'getPartyById': return parseBridgeObject(bridge.getPartyById(Number(params.id)));
-                    case 'getPartyCrmBundle': return parseBridgeResponse(bridge.getPartyCrmBundle(Number(params.id)));
-                    case 'savePartyBundle': return parseBridgeResponse(bridge.savePartyBundle(JSON.stringify(params)));
-                    case 'deleteParty': return parseBridgeResponse(bridge.deleteParty(Number(params.id)));
-                    case 'archiveParty': return parseBridgeResponse(bridge.archiveParty(Number(params.id)));
-                    case 'generateCRMReport': return parseBridgeResponse(bridge.generateCRMReport(JSON.stringify(params)));
-                    default: throw new Error('عملية Bridge غير مدعومة: ' + action);
-                }
-            });
+            const bridge = window.AndroidInterface;
+            if (!bridge) throw new Error('جسر AndroidInterface غير متاح؛ افتح الشاشة من داخل تطبيق Android');
+            switch (action) {
+                case 'getParties': return parseBridgeResponse(bridge.getParties(''));
+                case 'getPartyTypes': return parseBridgeResponse(bridge.getPartyTypes());
+                case 'getPartyById': return parseBridgeObject(bridge.getPartyById(Number(params.id)));
+                case 'getPartyCrmBundle': return parseBridgeResponse(bridge.getPartyCrmBundle(Number(params.id)));
+                case 'savePartyBundle': return parseBridgeResponse(bridge.savePartyBundle(JSON.stringify(params)));
+                case 'deleteParty': return parseBridgeResponse(bridge.deleteParty(Number(params.id)));
+                case 'archiveParty': return parseBridgeResponse(bridge.archiveParty(Number(params.id)));
+                case 'generateCRMReport': return parseBridgeResponse(bridge.generateCRMReport(JSON.stringify(params)));
+                default: throw new Error('عملية Bridge غير مدعومة: ' + action);
+            }
         }
 
         // حالة واجهة مؤقتة فقط؛ لا تُحفظ بيانات الأعمال في المتصفح.
