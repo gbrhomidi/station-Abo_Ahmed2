@@ -19885,4 +19885,293 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-}
+
+    // MODULE-011: Fixed Assets Typed Methods
+    fun getFixedAssetsPage(stationId: Int, limit: Int = 100, offset: Int = 0, status: String? = null, assetType: String? = null, search: String? = null): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            var selection = "station_id = ? AND is_deleted = 0"
+            val args = mutableListOf(stationId.toString())
+            
+            if (!status.isNullOrEmpty()) { selection += " AND status = ?"; args.add(status) }
+            if (!assetType.isNullOrEmpty()) { selection += " AND asset_type = ?"; args.add(assetType) }
+            if (!search.isNullOrEmpty()) { selection += " AND (asset_name LIKE ? OR asset_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
+            
+            db.rawQuery("SELECT * FROM fixed_assets WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun updateFixedAsset(assetId: Long, stationId: Int, payload: JSONObject, userId: Long): Int {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            val cv = ContentValues().apply {
+                if(payload.has("asset_name")) put("asset_name", payload.optString("asset_name"))
+                if(payload.has("asset_type")) put("asset_type", payload.optString("asset_type"))
+                if(payload.has("status")) put("status", payload.optString("status"))
+                if(payload.has("purchase_date")) put("purchase_date", payload.optString("purchase_date"))
+                if(payload.has("purchase_cost")) put("purchase_cost", payload.optDouble("purchase_cost", 0.0))
+                if(payload.has("useful_life")) put("useful_life", payload.optInt("useful_life", 0))
+                if(payload.has("salvage_value")) put("salvage_value", payload.optDouble("salvage_value", 0.0))
+                if(payload.has("location")) put("location", payload.optString("location"))
+                if(payload.has("notes")) put("notes", payload.optString("notes"))
+                put("updated_at", getCurrentDateTime())
+                put("updated_by", userId)
+            }
+            return db.update("fixed_assets", cv, "id = ? AND station_id = ?", arrayOf(assetId.toString(), stationId.toString()))
+        } finally { dbLock.unlock() }
+    }
+    
+    fun getMaintenanceRequestsPage(stationId: Int, limit: Int = 100, offset: Int = 0, status: String? = null, priority: String? = null, search: String? = null): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            // Join with fixed_assets to enforce station isolation and get asset name
+            var query = "SELECT m.*, a.asset_name FROM maintenance_requests m INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE a.station_id = ?"
+            val args = mutableListOf(stationId.toString())
+            
+            if (!status.isNullOrEmpty()) { query += " AND m.status = ?"; args.add(status) }
+            if (!priority.isNullOrEmpty()) { query += " AND m.priority = ?"; args.add(priority) }
+            if (!search.isNullOrEmpty()) { query += " AND (m.title LIKE ? OR m.request_code LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
+            
+            query += " ORDER BY m.id DESC LIMIT ? OFFSET ?"
+            args.add(limit.toString())
+            args.add(offset.toString())
+            
+            db.rawQuery(query, args.toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun addMaintenanceRequestTyped(payload: JSONObject, stationId: Int, userId: Long): Long {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            val assetId = payload.optLong("asset_id", 0)
+            require(assetId > 0) { "يجب تحديد الأصل" }
+            
+            // Verify asset belongs to station
+            var valid = false
+            db.rawQuery("SELECT id FROM fixed_assets WHERE id = ? AND station_id = ?", arrayOf(assetId.toString(), stationId.toString())).use {
+                if (it.moveToFirst()) valid = true
+            }
+            require(valid) { "الأصل غير موجود أو لا ينتمي لهذه المحطة" }
+            
+            val cv = ContentValues().apply {
+                put("uuid", java.util.UUID.randomString())
+                put("request_code", "MNT-" + System.currentTimeMillis())
+                put("asset_type", payload.optString("asset_type", "fixed_asset"))
+                put("asset_id", assetId)
+                put("request_type", payload.optString("request_type", "corrective"))
+                put("priority", payload.optString("priority", "medium"))
+                put("title", payload.optString("title"))
+                put("description", payload.optString("description"))
+                put("reported_by", userId)
+                put("status", "pending")
+            }
+            return db.insert("maintenance_requests", null, cv)
+        } finally { dbLock.unlock() }
+    }
+    
+    fun updateMaintenanceRequestTyped(requestId: Long, payload: JSONObject, stationId: Int, userId: Long): Int {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            // Verify ownership via join
+            var valid = false
+            db.rawQuery("SELECT m.id FROM maintenance_requests m INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE m.id = ? AND a.station_id = ?", arrayOf(requestId.toString(), stationId.toString())).use {
+                if (it.moveToFirst()) valid = true
+            }
+            require(valid) { "الطلب غير موجود أو لا تملك صلاحية تعديله" }
+            
+            val cv = ContentValues().apply {
+                if(payload.has("title")) put("title", payload.optString("title"))
+                if(payload.has("description")) put("description", payload.optString("description"))
+                if(payload.has("priority")) put("priority", payload.optString("priority"))
+                if(payload.has("request_type")) put("request_type", payload.optString("request_type"))
+            }
+            return db.update("maintenance_requests", cv, "id = ?", arrayOf(requestId.toString()))
+        } finally { dbLock.unlock() }
+    }
+    
+    fun completeMaintenanceRequest(payload: JSONObject, stationId: Int, userId: Long): Long {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val reqId = payload.optLong("id", 0)
+                require(reqId > 0) { "معرف الطلب مطلوب" }
+                
+                // Verify ownership
+                var valid = false
+                db.rawQuery("SELECT m.id FROM maintenance_requests m INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE m.id = ? AND a.station_id = ?", arrayOf(reqId.toString(), stationId.toString())).use {
+                    if (it.moveToFirst()) valid = true
+                }
+                require(valid) { "الطلب غير موجود أو لا تملك صلاحية إكماله" }
+                
+                // Update request
+                val cv = ContentValues().apply {
+                    put("status", "completed")
+                    put("completed_at", getCurrentDateTime())
+                }
+                db.update("maintenance_requests", cv, "id = ?", arrayOf(reqId.toString()))
+                
+                // Add to history
+                val hcv = ContentValues().apply {
+                    put("uuid", java.util.UUID.randomString())
+                    put("maintenance_request_id", reqId)
+                    put("event_type", "completion")
+                    put("event_description", payload.optString("notes", "تم إكمال الصيانة"))
+                    put("performed_by", userId)
+                }
+                val histId = db.insert("maintenance_history", null, hcv)
+                
+                db.setTransactionSuccessful()
+                return histId
+            } finally {
+                db.endTransaction()
+            }
+        } finally { dbLock.unlock() }
+    }
+    
+    fun getMaintenanceHistoryPage(stationId: Int, assetId: Long? = null, limit: Int = 100, offset: Int = 0): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            var query = "SELECT h.*, a.asset_name FROM maintenance_history h INNER JOIN maintenance_requests m ON h.maintenance_request_id = m.id INNER JOIN fixed_assets a ON m.asset_id = a.id WHERE a.station_id = ?"
+            val args = mutableListOf(stationId.toString())
+            
+            if (assetId != null && assetId > 0) { query += " AND a.id = ?"; args.add(assetId.toString()) }
+            
+            query += " ORDER BY h.id DESC LIMIT ? OFFSET ?"
+            args.add(limit.toString())
+            args.add(offset.toString())
+            
+            db.rawQuery(query, args.toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun getDepreciationPage(stationId: Int, assetId: Long? = null, limit: Int = 100, offset: Int = 0): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            var query = "SELECT d.*, a.asset_name FROM depreciation d INNER JOIN fixed_assets a ON d.asset_id = a.id WHERE a.station_id = ? AND d.archived = 0"
+            val args = mutableListOf(stationId.toString())
+            
+            if (assetId != null && assetId > 0) { query += " AND a.id = ?"; args.add(assetId.toString()) }
+            
+            query += " ORDER BY d.id DESC LIMIT ? OFFSET ?"
+            args.add(limit.toString())
+            args.add(offset.toString())
+            
+            db.rawQuery(query, args.toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun addDepreciationTyped(payload: JSONObject, stationId: Int, userId: Long): Long {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val assetId = payload.optLong("asset_id", 0)
+                val amount = payload.optDouble("depreciation_amount", 0.0)
+                require(assetId > 0) { "يجب تحديد الأصل" }
+                require(amount > 0) { "قيمة الإهلاك يجب أن تكون موجبة" }
+                
+                // Verify asset and get current value
+                var currentValue = 0.0
+                var salvageValue = 0.0
+                var valid = false
+                db.rawQuery("SELECT current_value, salvage_value FROM fixed_assets WHERE id = ? AND station_id = ?", arrayOf(assetId.toString(), stationId.toString())).use {
+                    if (it.moveToFirst()) {
+                        valid = true
+                        currentValue = it.getDouble(it.getColumnIndexOrThrow("current_value"))
+                        salvageValue = it.getDouble(it.getColumnIndexOrThrow("salvage_value"))
+                    }
+                }
+                require(valid) { "الأصل غير موجود أو لا ينتمي لهذه المحطة" }
+                
+                val newValue = currentValue - amount
+                require(newValue >= salvageValue) { "لا يمكن إهلاك الأصل بأقل من قيمة الخردة ($salvageValue)" }
+                
+                // Get accumulated depreciation
+                var accumulated = amount
+                db.rawQuery("SELECT SUM(depreciation_amount) as acc FROM depreciation WHERE asset_id = ? AND archived = 0", arrayOf(assetId.toString())).use {
+                    if (it.moveToFirst()) accumulated += it.getDouble(0)
+                }
+                
+                // Insert depreciation record
+                val cv = ContentValues().apply {
+                    put("asset_id", assetId)
+                    put("depreciation_amount", amount)
+                    put("depreciation_date", payload.optString("depreciation_date", getCurrentDate()))
+                    put("accumulated_depreciation", accumulated)
+                    put("remaining_value", newValue)
+                    put("created_by", userId)
+                }
+                val depId = db.insert("depreciation", null, cv)
+                
+                // Update asset value
+                val acv = ContentValues().apply { put("current_value", newValue) }
+                db.update("fixed_assets", acv, "id = ?", arrayOf(assetId.toString()))
+                
+                db.setTransactionSuccessful()
+                return depId
+            } finally {
+                db.endTransaction()
+            }
+        } finally { dbLock.unlock() }
+    }
+    
+    fun deleteDepreciationRecordTyped(depId: Long, stationId: Int): Int {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                // Get record info and verify ownership
+                var assetId = 0L
+                var amount = 0.0
+                var valid = false
+                db.rawQuery("SELECT d.asset_id, d.depreciation_amount FROM depreciation d INNER JOIN fixed_assets a ON d.asset_id = a.id WHERE d.id = ? AND a.station_id = ? AND d.archived = 0", arrayOf(depId.toString(), stationId.toString())).use {
+                    if (it.moveToFirst()) {
+                        valid = true
+                        assetId = it.getLong(0)
+                        amount = it.getDouble(1)
+                    }
+                }
+                require(valid) { "سجل الإهلاك غير موجود أو لا تملك صلاحية حذفه" }
+                
+                // Archive record
+                val cv = ContentValues().apply { put("archived", 1) }
+                db.update("depreciation", cv, "id = ?", arrayOf(depId.toString()))
+                
+                // Restore asset value
+                db.execSQL("UPDATE fixed_assets SET current_value = current_value + ? WHERE id = ?", arrayOf(amount, assetId))
+                
+                db.setTransactionSuccessful()
+                return 1
+            } finally {
+                db.endTransaction()
+            }
+        } finally { dbLock.unlock() }
+    }
+    }

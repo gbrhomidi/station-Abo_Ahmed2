@@ -7659,7 +7659,136 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(db.createPayroll(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId), "تم احتساب مسيرة الرواتب") }
             catch (e: Exception) { DebugLogger.logException("PayrollCreate", e); errorResponse(e.message) }
         }
-        private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
+        
+        // MODULE-011 Bridges
+        @JavascriptInterface
+        fun getFixedAssetsPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getFixedAssetsPage(
+                    requireCurrentStationId(db, activity.currentUserId),
+                    obj.optInt("limit", 100),
+                    obj.optInt("offset", 0),
+                    obj.optString("status", null).takeIf { it.isNotEmpty() },
+                    obj.optString("asset_type", null).takeIf { it.isNotEmpty() },
+                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateFixedAsset(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = obj.optLong("id", 0)
+                db.updateFixedAsset(id, requireCurrentStationId(db, activity.currentUserId), obj, activity.currentUserId)
+                successResponse(id, "تم تحديث الأصل بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getMaintenanceRequestsPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getMaintenanceRequestsPage(
+                    requireCurrentStationId(db, activity.currentUserId),
+                    obj.optInt("limit", 100),
+                    obj.optInt("offset", 0),
+                    obj.optString("status", null).takeIf { it.isNotEmpty() },
+                    obj.optString("priority", null).takeIf { it.isNotEmpty() },
+                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun addMaintenanceRequestTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = db.addMaintenanceRequestTyped(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                successResponse(id, "تم إضافة طلب الصيانة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateMaintenanceRequestTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = obj.optLong("id", 0)
+                db.updateMaintenanceRequestTyped(id, obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                successResponse(id, "تم تحديث الطلب بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun completeMaintenanceRequest(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = db.completeMaintenanceRequest(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                successResponse(id, "تم إكمال الصيانة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getMaintenanceHistoryPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val assetId = obj.optLong("asset_id", 0).takeIf { it > 0 }
+                val arr = db.getMaintenanceHistoryPage(
+                    requireCurrentStationId(db, activity.currentUserId),
+                    assetId,
+                    obj.optInt("limit", 100),
+                    obj.optInt("offset", 0)
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getDepreciationPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val assetId = obj.optLong("asset_id", 0).takeIf { it > 0 }
+                val arr = db.getDepreciationPage(
+                    requireCurrentStationId(db, activity.currentUserId),
+                    assetId,
+                    obj.optInt("limit", 100),
+                    obj.optInt("offset", 0)
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun addDepreciationTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = db.addDepreciationTyped(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId)
+                successResponse(id, "تم تسجيل الإهلاك بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun deleteDepreciationRecordTyped(id: Long): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                db.deleteDepreciationRecordTyped(id, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(id, "تم التراجع عن الإهلاك بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+    
+    private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return
                 val phone = employee.optString("phone").trim().ifBlank { employee.optString("phone2").trim() }
