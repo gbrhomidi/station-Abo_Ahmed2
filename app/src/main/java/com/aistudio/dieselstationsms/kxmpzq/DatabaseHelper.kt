@@ -7446,33 +7446,76 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun openShift(stationId: Int, shiftType: String, cashierId: Int, openingCash: Double, openingBank: Double = 0.0): Long {
         require(stationId > 0) { "معرف المحطة مطلوب لبدء الوردية" }
         require(cashierId > 0) { "معرف أمين الصندوق غير صالح" }
-        val shiftCode = "SHF-${System.currentTimeMillis()}"
-        val cv = ContentValues().apply {
-            put("uuid", UUID.randomUUID().toString())
-            put("shift_code", shiftCode)
-            put("station_id", stationId)
-            put("shift_date", getCurrentDate())
-            put("shift_type", shiftType)
-            put("start_time", getCurrentDateTime())
-            put("cashier_id", cashierId)
-            put("opening_cash", openingCash)
-            put("opening_bank", openingBank)
-            put("status", "open")
-        }
-        return writableDatabase.insertOrThrow("shifts", null, cv)
+        require(shiftType in setOf("morning", "evening", "night", "full_day")) { "نوع الوردية غير صالح" }
+        require(openingCash.isFinite() && openingCash >= 0.0) { "الرصيد النقدي الافتتاحي غير صالح" }
+        require(openingBank.isFinite() && openingBank >= 0.0) { "الرصيد البنكي الافتتاحي غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                db.rawQuery("SELECT id FROM shifts WHERE station_id = ? AND status = 'open' AND is_deleted = 0 LIMIT 1", arrayOf(stationId.toString())).use { cursor ->
+                    require(!cursor.moveToFirst()) { "توجد وردية مفتوحة للمحطة الحالية" }
+                }
+                val shiftCode = "SHF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("shift_code", shiftCode)
+                    put("station_id", stationId)
+                    put("shift_date", getCurrentDate())
+                    put("shift_type", shiftType)
+                    put("start_time", getCurrentDateTime())
+                    put("cashier_id", cashierId)
+                    put("opening_cash", openingCash)
+                    put("opening_bank", openingBank)
+                    put("status", "open")
+                }
+                val id = db.insertOrThrow("shifts", null, cv)
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
     }
 
     fun closeShift(shiftId: Int, stationScopeId: Int, closingCash: Double, closingBank: Double, totalSales: Double, operator: String): Boolean {
         require(shiftId > 0) { "معرف الوردية غير صالح" }
         require(stationScopeId > 0) { "معرف المحطة مطلوب لإغلاق الوردية" }
+        require(closingCash.isFinite() && closingCash >= 0.0) { "الرصيد النقدي الختامي غير صالح" }
+        require(closingBank.isFinite() && closingBank >= 0.0) { "الرصيد البنكي الختامي غير صالح" }
         val db = writableDatabase
         db.beginTransaction()
         try {
+            var openingCash = 0.0
+            db.rawQuery("SELECT opening_cash FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
+                if (!cursor.moveToFirst()) return false
+                openingCash = cursor.getDouble(0)
+            }
+            var total = 0.0
+            var cash = 0.0
+            var card = 0.0
+            var transfer = 0.0
+            var credit = 0.0
+            var other = 0.0
+            db.rawQuery("""SELECT COALESCE(SUM(net_amount),0),
+                    COALESCE(SUM(CASE WHEN payment_method='cash' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN payment_method='credit_card' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN payment_method='bank_transfer' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN payment_method='credit' THEN net_amount ELSE 0 END),0),
+                    COALESCE(SUM(CASE WHEN payment_method NOT IN ('cash','credit_card','bank_transfer','credit') THEN net_amount ELSE 0 END),0)
+                    FROM sales_transactions WHERE shift_id=? AND station_id=? AND status='completed' AND is_deleted=0""", arrayOf(shiftId.toString(), stationScopeId.toString())).use { cursor ->
+                if (cursor.moveToFirst()) { total = cursor.getDouble(0); cash = cursor.getDouble(1); card = cursor.getDouble(2); transfer = cursor.getDouble(3); credit = cursor.getDouble(4); other = cursor.getDouble(5) }
+            }
             val cv = ContentValues().apply {
                 put("end_time", getCurrentDateTime())
                 put("closing_cash", closingCash)
                 put("closing_bank", closingBank)
-                put("total_sales", totalSales)
+                put("total_sales", total)
+                put("total_cash", cash)
+                put("total_credit_card", card)
+                put("total_bank_transfer", transfer)
+                put("total_credit_sales", credit)
+                put("total_other", other)
+                put("cash_variance", closingCash - (openingCash + cash))
                 put("status", "closed")
             }
             val rows = db.update("shifts", cv, "id = ? AND station_id = ? AND is_deleted = 0 AND status = 'open'", arrayOf(shiftId.toString(), stationScopeId.toString()))
@@ -7584,87 +7627,260 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         notes: String = "",
         deliveryLocation: String? = null,
         deliveryTime: String? = null,
-        orderType: String = "sale"
+        orderType: String = "sale",
+        paidAmount: Double? = null,
+        manageTransaction: Boolean = true
     ): Long {
-        val db = writableDatabase
-        db.beginTransaction()
-        try {
-            val saleCode = "SALE-${System.currentTimeMillis()}"
-            val invoiceNo = "INV-${System.currentTimeMillis()}"
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("sale_code", saleCode)
-                put("station_id", stationId)
-                put("shift_id", shiftId)
-                if (customerPartyId != null) put("customer_party_id", customerPartyId)
-                if (fuelTypeId != null) put("fuel_type_id", fuelTypeId)
-                if (pumpId != null) put("pump_id", pumpId)
-                if (nozzleId != null) put("nozzle_id", nozzleId)
-                put("liters", liters)
-                put("price_per_liter", pricePerLiter)
-                put("fuel_subtotal", liters * pricePerLiter)
-                put("subtotal", subtotal)
-                put("discount_amount", discountAmount)
-                put("tax_amount", taxAmount)
-                put("gross_amount", grossAmount)
-                put("net_amount", netAmount)
-                put("payment_method", paymentMethod)
-                put("payment_status", if (isCredit) "pending" else "paid")
-                put("paid_amount", if (isCredit) 0.0 else netAmount)
-                put("remaining_amount", if (isCredit) netAmount else 0.0)
-                put("is_credit", if (isCredit) 1 else 0)
-                if (dueDate != null) put("due_date", dueDate)
-                put("invoice_number", invoiceNo)
-                put("cashier_id", cashierId)
-                put("status", "completed")
-                put("remarks", notes)
-                put("order_type", orderType)
-                if (deliveryLocation != null) put("delivery_location", deliveryLocation)
-                if (deliveryTime != null) put("delivery_time", deliveryTime)
-            }
-            val saleId = db.insert("sales_transactions", null, cv)
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        require(shiftId > 0) { "معرف الوردية غير صالح" }
+        require(cashierId > 0) { "معرف المستخدم غير صالح" }
+        require(liters.isFinite() && liters >= 0.0) { "كمية الوقود غير صالحة" }
+        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير صالح" }
+        require(subtotal.isFinite() && subtotal >= 0.0) { "الإجمالي الفرعي غير صالح" }
+        require(discountAmount.isFinite() && discountAmount >= 0.0) { "الخصم غير صالح" }
+        require(taxAmount.isFinite() && taxAmount >= 0.0) { "الضريبة غير صالحة" }
+        require(grossAmount.isFinite() && grossAmount >= 0.0) { "الإجمالي غير صالح" }
+        require(netAmount.isFinite() && netAmount >= 0.0) { "الصافي غير صالح" }
+        require(paymentMethod in setOf("cash", "credit_card", "bank_transfer", "credit", "cheque", "mobile_money", "loyalty_points")) { "طريقة الدفع غير مدعومة" }
+        require(!isCredit || customerPartyId != null) { "العميل مطلوب للبيع الآجل" }
+        val actualPaid = paidAmount ?: if (isCredit) 0.0 else netAmount
+        require(actualPaid.isFinite() && actualPaid >= 0.0) { "المبلغ المدفوع غير صالح" }
+        require(isCredit || actualPaid + 1e-9 >= netAmount) { "المبلغ المدفوع أقل من الإجمالي" }
 
-            if (pumpId != null && fuelTypeId != null) {
-                db.execSQL(
-                    "UPDATE tanks SET current_quantity = current_quantity - ? WHERE id = (SELECT tank_id FROM pumps WHERE id = ?)",
-                    arrayOf(liters, pumpId)
-                )
-            }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            if (manageTransaction) db.beginTransaction()
+            try {
+                db.rawQuery(
+                    "SELECT id FROM shifts WHERE id = ? AND station_id = ? AND status = 'open' AND is_deleted = 0",
+                    arrayOf(shiftId.toString(), stationId.toString())
+                ).use { cursor -> require(cursor.moveToFirst()) { "الوردية غير مفتوحة أو خارج نطاق المحطة" } }
 
-            db.execSQL(
-                "UPDATE shifts SET total_sales = total_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ?",
-                arrayOf(netAmount, liters, shiftId)
-            )
-
-            if (isCredit && customerPartyId != null) {
-                db.execSQL(
-                    "UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ?",
-                    arrayOf(netAmount, netAmount, customerPartyId)
-                )
-                val ledgerCv = ContentValues().apply {
-                    put("uuid", UUID.randomUUID().toString())
-                    put("party_id", customerPartyId)
-                    put("transaction_date", getCurrentDateTime())
-                    put("transaction_type", "sale_credit")
-                    put("transaction_id", saleId.toInt())
-                    put("reference_number", invoiceNo)
-                    put("debit", netAmount)
-                    put("credit", 0.0)
-                    put("balance", getPartyBalance(customerPartyId))
-                    put("description", "فاتورة بيع آجل: $invoiceNo")
+                if (customerPartyId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1",
+                        arrayOf(customerPartyId.toString(), stationId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "العميل خارج نطاق المحطة أو غير نشط" } }
                 }
-                db.insert("customer_ledger", null, ledgerCv)
-            }
+                if (fuelTypeId != null) {
+                    db.rawQuery(
+                        "SELECT id FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1",
+                        arrayOf(fuelTypeId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "نوع الوقود غير صالح" } }
+                }
 
-            db.setTransactionSuccessful()
-            logActivity("cashier_$cashierId", "sale", "بيع جديد: $liters لتر - $netAmount")
-            return saleId
+                var tankId: Long? = null
+                if (pumpId != null) {
+                    db.rawQuery(
+                        "SELECT p.tank_id, t.fuel_type_id, t.current_quantity FROM pumps p JOIN tanks t ON t.id = p.tank_id WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0 AND p.status = 'active' AND t.station_id = ? AND t.is_deleted = 0 AND t.status <> 'retired'",
+                        arrayOf(pumpId.toString(), stationId.toString(), stationId.toString())
+                    ).use { cursor ->
+                        require(cursor.moveToFirst()) { "المضخة خارج نطاق المحطة أو غير نشطة" }
+                        tankId = cursor.getLong(0)
+                        val tankFuelType = cursor.getLong(1)
+                        require(fuelTypeId == null || tankFuelType == fuelTypeId.toLong()) { "نوع الوقود لا يطابق خزان المضخة" }
+                        require(liters <= cursor.getDouble(2) + 1e-9) { "كمية الوقود غير متوفرة في الخزان" }
+                    }
+                }
+
+                val saleCode = "SALE-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+                val invoiceNo = "INV-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("sale_code", saleCode)
+                    put("station_id", stationId)
+                    put("shift_id", shiftId)
+                    if (customerPartyId != null) put("customer_party_id", customerPartyId)
+                    if (fuelTypeId != null) put("fuel_type_id", fuelTypeId)
+                    if (pumpId != null) put("pump_id", pumpId)
+                    if (nozzleId != null) put("nozzle_id", nozzleId)
+                    put("liters", liters)
+                    put("price_per_liter", pricePerLiter)
+                    put("fuel_subtotal", liters * pricePerLiter)
+                    put("subtotal", subtotal)
+                    put("discount_amount", discountAmount)
+                    put("tax_amount", taxAmount)
+                    put("gross_amount", grossAmount)
+                    put("net_amount", netAmount)
+                    put("payment_method", paymentMethod)
+                    put("payment_status", if (isCredit) "pending" else "paid")
+                    put("paid_amount", actualPaid)
+                    put("remaining_amount", (netAmount - actualPaid).coerceAtLeast(0.0))
+                    put("is_credit", if (isCredit) 1 else 0)
+                    if (dueDate != null) put("due_date", dueDate)
+                    put("invoice_number", invoiceNo)
+                    put("cashier_id", cashierId)
+                    put("status", "completed")
+                    put("remarks", notes)
+                    put("order_type", orderType)
+                    if (deliveryLocation != null) put("delivery_location", deliveryLocation)
+                    if (deliveryTime != null) put("delivery_time", deliveryTime)
+                }
+                val saleId = db.insertOrThrow("sales_transactions", null, cv)
+                if (actualPaid > 0.0) {
+                    val payment = ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("payment_code", "PAY-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}")
+                        put("sale_id", saleId)
+                        if (customerPartyId != null) put("customer_party_id", customerPartyId)
+                        put("payment_type", if (paymentMethod == "credit") "cash" else paymentMethod)
+                        put("payment_method", paymentMethod)
+                        put("amount", actualPaid)
+                        put("is_partial", if (actualPaid + 1e-9 < netAmount) 1 else 0)
+                        put("total_invoice_amount", netAmount)
+                        put("remaining_after", (netAmount - actualPaid).coerceAtLeast(0.0))
+                        put("status", "completed")
+                        put("created_by", cashierId)
+                    }
+                    db.insertOrThrow("payments", null, payment)
+                }
+
+                if (tankId != null && liters > 0.0) {
+                    val changed = db.compileStatement("UPDATE tanks SET current_quantity = current_quantity - ? WHERE id = ? AND station_id = ? AND is_deleted = 0 AND current_quantity >= ?").apply {
+                        bindDouble(1, liters)
+                        bindLong(2, tankId!!)
+                        bindLong(3, stationId.toLong())
+                        bindDouble(4, liters)
+                    }.executeUpdateDelete()
+                    require(changed == 1) { "تعذر خصم كمية الوقود من الخزان" }
+                }
+
+                val shiftUpdated = db.compileStatement("UPDATE shifts SET total_sales = total_sales + ?, total_fuel_liters = total_fuel_liters + ? WHERE id = ? AND station_id = ? AND status = 'open' AND is_deleted = 0").apply {
+                    bindDouble(1, netAmount)
+                    bindDouble(2, liters)
+                    bindLong(3, shiftId.toLong())
+                    bindLong(4, stationId.toLong())
+                }.executeUpdateDelete()
+                require(shiftUpdated == 1) { "تعذر تحديث إجمالي الوردية" }
+
+                if (isCredit && customerPartyId != null) {
+                    val partyUpdated = db.compileStatement("UPDATE parties SET current_balance = current_balance + ?, total_due = total_due + ? WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1").apply {
+                        bindDouble(1, netAmount)
+                        bindDouble(2, netAmount)
+                        bindLong(3, customerPartyId.toLong())
+                        bindLong(4, stationId.toLong())
+                    }.executeUpdateDelete()
+                    require(partyUpdated == 1) { "تعذر تحديث رصيد العميل" }
+                    val ledgerCv = ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("party_id", customerPartyId)
+                        put("transaction_date", getCurrentDateTime())
+                        put("transaction_type", "sale_credit")
+                        put("transaction_id", saleId.toInt())
+                        put("reference_number", invoiceNo)
+                        put("debit", netAmount)
+                        put("credit", 0.0)
+                        put("balance", getPartyBalance(customerPartyId))
+                        put("description", "فاتورة بيع آجل: $invoiceNo")
+                    }
+                    db.insertOrThrow("customer_ledger", null, ledgerCv)
+                }
+
+                if (manageTransaction) db.setTransactionSuccessful()
+                logActivity("cashier_$cashierId", "sale", "بيع جديد: $saleId - $netAmount")
+                saleId
+            } finally {
+                if (manageTransaction) db.endTransaction()
+            }
         } finally {
-            db.endTransaction()
+            dbLock.unlock()
         }
     }
 
-    fun getSalesTransactions(stationId: Int = 1, limit: Int = 200, offset: Int = 0): JSONArray {
+    private fun module008Page(rows: JSONArray, totalCount: Int, limit: Int, offset: Int): JSONObject = JSONObject().apply {
+        put("rows", rows)
+        put("total_count", totalCount)
+        put("page_size", limit)
+        put("offset", offset)
+        put("page", if (totalCount == 0) 0 else offset / limit)
+        put("total_pages", if (totalCount == 0) 0 else (totalCount + limit - 1) / limit)
+    }
+
+    fun getSalesPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة المبيعات" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("s.station_id = ?", "s.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; args += like; args += like; args += like }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "s.status = ?"; args += it }
+        data.optString("payment_method").trim().takeIf { it.isNotEmpty() }?.let { where += "s.payment_method = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "invoice_number" -> "s.invoice_number"; "net_amount" -> "s.net_amount"; "payment_method" -> "s.payment_method"; "created_at" -> "s.created_at"; else -> "s.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT s.id AS sale_id, s.sale_code, s.invoice_number, s.station_id, s.shift_id, s.customer_party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, s.subtotal, s.discount_amount, s.tax_amount, s.gross_amount, s.net_amount, s.payment_method, s.payment_status, s.paid_amount, s.remaining_amount, s.status, s.order_type, s.created_at, (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getOrdersPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة الطلبات" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("s.station_id = ?", "s.is_deleted = 0", "s.order_type = 'order'")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; args += like; args += like; args += like }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "s.status = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "total_amount", "net_amount" -> "s.net_amount"; "status" -> "s.status"; "created_at" -> "s.created_at"; else -> "s.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT s.id AS order_id, s.sale_code AS order_number, s.invoice_number, s.shift_id, s.customer_party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, s.liters AS quantity, s.price_per_liter, s.net_amount AS total_amount, s.payment_method, s.payment_status, s.status, s.delivery_location, s.delivery_time, s.created_at FROM sales_transactions s LEFT JOIN parties p ON p.id = s.customer_party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getDeliveriesPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة التوصيلات" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("s.station_id = ?", "d.is_deleted = 0", "s.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(p.commercial_name,'') LIKE ? OR COALESCE(d.location,'') LIKE ?)"; repeat(4) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "d.status = ?"; args += it }
+        data.optLong("driver_id", 0L).takeIf { it > 0L }?.let { where += "d.driver_id = ?"; args += it.toString() }
+        data.optLong("vehicle_id", 0L).takeIf { it > 0L }?.let { where += "d.vehicle_id = ?"; args += it.toString() }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(d.delivery_date) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(d.delivery_date) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM deliveries d JOIN sales_transactions s ON s.id = d.sale_id LEFT JOIN parties p ON p.id = d.party_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "delivery_date" -> "d.delivery_date"; "total_amount" -> "d.total_amount"; "status" -> "d.status"; else -> "d.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT d.id AS delivery_id, d.sale_id, s.sale_code, s.invoice_number, d.party_id, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name, d.vehicle_id, d.driver_id, d.delivery_date, d.quantity, d.fuel_type, d.price_per_liter, d.total_amount, d.status, d.location, d.notes, d.created_at FROM deliveries d JOIN sales_transactions s ON s.id = d.sale_id LEFT JOIN parties p ON p.id = d.party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getFuelSalesPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لقراءة مبيعات الوقود" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("s.station_id = ?", "fs.is_deleted = 0", "s.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(s.sale_code LIKE ? OR s.invoice_number LIKE ? OR COALESCE(f.fuel_name,'') LIKE ? OR COALESCE(f.fuel_name_ar,'') LIKE ?)"; repeat(4) { args += like } }
+        data.optLong("fuel_type_id", 0L).takeIf { it > 0L }?.let { where += "fs.fuel_type_id = ?"; args += it.toString() }
+        data.optLong("pump_id", 0L).takeIf { it > 0L }?.let { where += "fs.pump_id = ?"; args += it.toString() }
+        data.optLong("shift_id", 0L).takeIf { it > 0L }?.let { where += "fs.shift_id = ?"; args += it.toString() }
+        data.optString("payment_method").trim().takeIf { it.isNotEmpty() }?.let { where += "fs.payment_method = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(fs.sale_date) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(fs.sale_date) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM fuel_sales fs JOIN sales_transactions s ON s.id = fs.sale_id LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "sale_date" -> "fs.sale_date"; "quantity" -> "fs.quantity"; "total_amount" -> "fs.total_amount"; else -> "fs.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT fs.id AS fuel_sale_id, fs.sale_id, s.sale_code, s.invoice_number, fs.shift_id, fs.pump_id, fs.fuel_type_id, COALESCE(f.fuel_name, f.fuel_name_ar, '') AS fuel_name, fs.quantity, fs.price_per_liter, fs.total_amount, fs.payment_method, fs.customer_id, fs.vehicle_plate, fs.sale_date, fs.sale_time, fs.notes, fs.created_at FROM fuel_sales fs JOIN sales_transactions s ON s.id = fs.sale_id LEFT JOIN fuel_types f ON f.id = fs.fuel_type_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getSalesTransactions(stationId: Int, limit: Int = 200, offset: Int = 0): JSONArray {
+        require(stationId > 0) { "معرف المحطة مطلوب لقراءة المبيعات" }
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery(
@@ -7682,12 +7898,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun getSaleTransactionById(id: Int): JSONObject? {
+    fun getSaleTransactionById(id: Int, stationScopeId: Int): JSONObject? {
+        require(id > 0 && stationScopeId > 0) { "معرف البيع والمحطة مطلوبان" }
         val db = readableDatabase
 
         return db.rawQuery(
-            "SELECT * FROM sales_transactions WHERE id=?",
-            arrayOf(id.toString())
+            "SELECT * FROM sales_transactions WHERE id=? AND station_id=? AND is_deleted=0",
+            arrayOf(id.toString(), stationScopeId.toString())
         ).use { cursor ->
 
             if (cursor.moveToFirst()) {
@@ -7732,31 +7949,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     fun addOrder(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        require(cashierId > 0) { "معرف المستخدم غير صالح" }
+        val customerPartyId = data.optLong("party_id", 0L).takeIf { it > 0L }?.toInt()
+        val liters = data.optDouble("quantity", 0.0)
+        require(liters.isFinite() && liters > 0.0) { "كمية الطلب يجب أن تكون أكبر من صفر" }
+        val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
+        require(fuelTypeId > 0) { "نوع الوقود مطلوب للطلب" }
+        val db = writableDatabase
+        val pricePerLiter = if (data.has("price_per_liter") && !data.isNull("price_per_liter")) data.optDouble("price_per_liter", Double.NaN) else db.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1",
+            arrayOf(fuelTypeId.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else Double.NaN }
+        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير متاح أو غير صالح" }
+        val subtotal = liters * pricePerLiter
+        val totalAmount = data.optDouble("total_amount", subtotal)
+        require(totalAmount.isFinite() && totalAmount >= 0.0) { "إجمالي الطلب غير صالح" }
+        val paymentMethod = when (data.optString("payment_method", "credit")) {
+            "بطاقة", "credit_card" -> "credit_card"
+            "تحويل", "bank_transfer" -> "bank_transfer"
+            "شيك", "cheque" -> "cheque"
+            "نقداً", "cash" -> "cash"
+            else -> "credit"
+        }
         dbLock.lock()
         return try {
-            val customerPartyId = data.optLong("party_id", 0).toInt()
-            val liters = data.optDouble("quantity", 0.0)
-            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
-            val subtotal = liters * pricePerLiter
-            val netAmount = data.optDouble("total_amount", subtotal)
-            val deliveryLocation = data.optString("delivery_location", data.optString("location", ""))
-            val deliveryTime = data.optString("delivery_time", "")
-            val notes = data.optString("notes", "")
-            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-            require(cashierId > 0) { "معرف المستخدم غير صالح" }
-            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
-                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
-            val fuelTypeId = readableDatabase.rawQuery(
-                "SELECT id FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
-                arrayOf("DIESEL")
-            ).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getInt(0) else throw IllegalStateException("نوع وقود الديزل غير مهيأ")
-            }
-
             insertSaleTransaction(
                 stationId = stationScopeId,
-                shiftId = shiftId,
-                customerPartyId = if (customerPartyId > 0) customerPartyId else null,
+                shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt() ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية"),
+                customerPartyId = customerPartyId,
                 fuelTypeId = fuelTypeId,
                 pumpId = null,
                 nozzleId = null,
@@ -7765,20 +7986,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 subtotal = subtotal,
                 discountAmount = data.optDouble("discount", 0.0),
                 taxAmount = 0.0,
-                grossAmount = netAmount,
-                netAmount = netAmount,
-                paymentMethod = data.optString("payment_method", "credit"),
-                isCredit = true,
+                grossAmount = totalAmount,
+                netAmount = totalAmount,
+                paymentMethod = paymentMethod,
+                isCredit = paymentMethod == "credit",
                 dueDate = data.optString("due_date", null),
                 cashierId = cashierId.toInt(),
-                notes = notes,
-                deliveryLocation = deliveryLocation,
-                deliveryTime = deliveryTime,
-                orderType = data.optString("order_type", "sale")
+                notes = data.optString("notes", ""),
+                deliveryLocation = data.optString("delivery_location", data.optString("location", "")),
+                deliveryTime = data.optString("delivery_time", ""),
+                orderType = "order",
+                paidAmount = data.optDouble("amount_paid", if (paymentMethod == "credit") 0.0 else totalAmount)
             )
-        } finally {
-            dbLock.unlock()
-        }
+        } finally { dbLock.unlock() }
     }
 
     fun getOrders(status: String?, stationScopeId: Int): JSONArray {
@@ -7796,71 +8016,84 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun addDelivery(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        require(cashierId > 0) { "معرف المستخدم غير صالح" }
+        val partyId = data.optLong("party_id", 0L).takeIf { it > 0L }?.toInt()
+        val vehicleId = data.optLong("vehicle_id", 0L).takeIf { it > 0L }?.toInt()
+        val driverId = data.optLong("driver_id", 0L).takeIf { it > 0L }?.toInt()
+        val liters = data.optDouble("quantity", 0.0)
+        require(liters.isFinite() && liters > 0.0) { "كمية التوصيل يجب أن تكون أكبر من صفر" }
+        val db = writableDatabase
+        val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt().takeIf { it > 0 }
+            ?: data.optString("fuel_type", "").trim().takeIf { it.isNotEmpty() }?.let { fuelCode ->
+                db.rawQuery("SELECT id FROM fuel_types WHERE (fuel_code = ? OR fuel_name = ? OR fuel_name_ar = ?) AND is_deleted = 0 AND is_active = 1 LIMIT 1", arrayOf(fuelCode, fuelCode, fuelCode)).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            } ?: 0
+        require(fuelTypeId > 0) { "نوع الوقود مطلوب للتوصيل" }
+        val pricePerLiter = if (data.has("price_per_liter") && !data.isNull("price_per_liter")) data.optDouble("price_per_liter", Double.NaN) else db.rawQuery(
+            "SELECT default_sale_price FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1",
+            arrayOf(fuelTypeId.toString())
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else Double.NaN }
+        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير متاح أو غير صالح" }
+        val totalAmount = data.optDouble("total_amount", liters * pricePerLiter)
+        require(totalAmount.isFinite() && totalAmount >= 0.0) { "إجمالي التوصيل غير صالح" }
+        val deliveryDate = data.optString("delivery_date", getCurrentDate()).trim()
+        require(deliveryDate.isNotEmpty()) { "تاريخ التوصيل مطلوب" }
+        val status = data.optString("status", "pending").trim()
+        require(status in setOf("pending", "assigned", "out_for_delivery", "delivered", "failed", "cancelled")) { "حالة التوصيل غير صحيحة" }
+        if (vehicleId != null) db.rawQuery("SELECT id FROM vehicles WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'", arrayOf(vehicleId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المركبة خارج نطاق المحطة أو غير نشطة" } }
+        if (driverId != null) db.rawQuery("SELECT id FROM drivers WHERE id = ? AND (station_id = ? OR station_id IS NULL) AND is_deleted = 0 AND status = 'active'", arrayOf(driverId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "السائق خارج نطاق المحطة أو غير نشط" } }
+
         dbLock.lock()
         return try {
-            val partyId = data.optLong("party_id", 0).toInt()
-            val liters = data.optDouble("quantity", 0.0)
-            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
-            val subtotal = liters * pricePerLiter
-            val totalAmount = data.optDouble("total_amount", subtotal)
-            val location = data.optString("location", "")
-            val deliveryTime = data.optString("delivery_time", data.optString("delivery_date", ""))
-            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-            require(cashierId > 0) { "معرف المستخدم غير صالح" }
-            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
-                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
-            val fuelTypeId = readableDatabase.rawQuery(
-                "SELECT id FROM fuel_types WHERE fuel_code = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
-                arrayOf("DIESEL")
-            ).use { cursor ->
-                if (cursor.moveToFirst()) cursor.getInt(0) else throw IllegalStateException("نوع وقود الديزل غير مهيأ")
-            }
-
-            val saleId = insertSaleTransaction(
-                stationId = stationScopeId,
-                shiftId = shiftId,
-                customerPartyId = if (partyId > 0) partyId else null,
-                fuelTypeId = fuelTypeId,
-                pumpId = null,
-                nozzleId = null,
-                liters = liters,
-                pricePerLiter = pricePerLiter,
-                subtotal = subtotal,
-                discountAmount = 0.0,
-                taxAmount = 0.0,
-                grossAmount = totalAmount,
-                netAmount = totalAmount,
-                paymentMethod = data.optString("payment_method", "credit"),
-                isCredit = true,
-                dueDate = data.optString("due_date", null),
-                cashierId = cashierId.toInt(),
-                notes = data.optString("notes", ""),
-                deliveryLocation = location,
-                deliveryTime = deliveryTime,
-                orderType = "delivery"
-            )
-
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("sale_id", saleId)
-                if (partyId > 0) put("party_id", partyId)
-                put("vehicle_id", data.optLong("vehicle_id", 0))
-                put("driver_id", data.optLong("driver_id", 0))
-                put("delivery_date", data.optString("delivery_date", getCurrentDate()))
-                put("quantity", liters)
-                put("fuel_type", data.optString("fuel_type", "diesel"))
-                put("price_per_liter", pricePerLiter)
-                put("total_amount", totalAmount)
-                put("status", data.optString("status", "delivered"))
-                put("location", location)
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            writableDatabase.insert("deliveries", null, cv)
-            saleId
-        } finally {
-            dbLock.unlock()
-        }
+            db.beginTransaction()
+            try {
+                val saleId = insertSaleTransaction(
+                    stationId = stationScopeId,
+                    shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt() ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية"),
+                    customerPartyId = partyId,
+                    fuelTypeId = fuelTypeId,
+                    pumpId = null,
+                    nozzleId = null,
+                    liters = liters,
+                    pricePerLiter = pricePerLiter,
+                    subtotal = liters * pricePerLiter,
+                    discountAmount = 0.0,
+                    taxAmount = 0.0,
+                    grossAmount = totalAmount,
+                    netAmount = totalAmount,
+                    paymentMethod = "credit",
+                    isCredit = true,
+                    dueDate = data.optString("due_date", null),
+                    cashierId = cashierId.toInt(),
+                    notes = data.optString("notes", ""),
+                    deliveryLocation = data.optString("location", ""),
+                    deliveryTime = data.optString("delivery_time", ""),
+                    orderType = "delivery",
+                    paidAmount = data.optDouble("amount_paid", 0.0),
+                    manageTransaction = false
+                )
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("sale_id", saleId)
+                    if (partyId != null) put("party_id", partyId)
+                    if (vehicleId != null) put("vehicle_id", vehicleId)
+                    if (driverId != null) put("driver_id", driverId)
+                    put("delivery_date", deliveryDate)
+                    put("quantity", liters)
+                    put("fuel_type", fuelTypeId.toString())
+                    put("price_per_liter", pricePerLiter)
+                    put("total_amount", totalAmount)
+                    put("status", status)
+                    put("location", data.optString("location", ""))
+                    put("notes", data.optString("notes", ""))
+                    put("created_at", getCurrentDateTime())
+                    put("updated_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("deliveries", null, cv)
+                db.setTransactionSuccessful()
+                saleId
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
     }
 
     fun getDeliveries(stationScopeId: Int): JSONArray {
@@ -7905,69 +8138,77 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
 
     fun addFuelSale(data: JSONObject, stationScopeId: Int, cashierId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        require(cashierId > 0) { "معرف المستخدم غير صالح" }
+        val liters = data.optDouble("quantity", 0.0)
+        val pricePerLiter = data.optDouble("price_per_liter", Double.NaN)
+        require(liters.isFinite() && liters > 0.0) { "كمية الوقود يجب أن تكون أكبر من صفر" }
+        require(pricePerLiter.isFinite() && pricePerLiter >= 0.0) { "سعر الوقود غير صالح" }
+        val subtotal = liters * pricePerLiter
+        val totalAmount = data.optDouble("total_amount", subtotal)
+        require(totalAmount.isFinite() && totalAmount >= 0.0) { "إجمالي مبيعات الوقود غير صالح" }
+        val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt()
+            ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
+        val customerId = data.optLong("customer_id", 0L).takeIf { it > 0L }?.toInt()
+        val pumpId = data.optLong("pump_id", 0L).takeIf { it > 0L }?.toInt()
+        val fuelTypeId = data.optLong("fuel_type_id", 0L).toInt()
+        require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
+        val paymentMethod = when (data.optString("payment_method", "cash")) {
+            "بطاقة", "credit_card" -> "credit_card"
+            "تحويل", "bank_transfer" -> "bank_transfer"
+            "شيك", "cheque" -> "cheque"
+            else -> "cash"
+        }
         dbLock.lock()
         return try {
-            val liters = data.optDouble("quantity", 0.0)
-            val pricePerLiter = data.optDouble("price_per_liter", getDieselPrice())
-            val subtotal = liters * pricePerLiter
-            val totalAmount = data.optDouble("total_amount", subtotal)
-            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-            require(cashierId > 0) { "معرف المستخدم غير صالح" }
-            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
-                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
-            val customerId = data.optLong("customer_id", 0).toInt()
-            val pumpId = data.optLong("pump_id", 0).toInt()
-            val fuelTypeId = data.optLong("fuel_type_id", 0).toInt()
-            require(fuelTypeId > 0) { "نوع الوقود مطلوب" }
-            readableDatabase.rawQuery(
-                "SELECT id FROM fuel_types WHERE id = ? AND is_deleted = 0 AND is_active = 1 LIMIT 1",
-                arrayOf(fuelTypeId.toString())
-            ).use { cursor -> require(cursor.moveToFirst()) { "نوع الوقود غير صالح" } }
-
-            val saleId = insertSaleTransaction(
-                stationId = stationScopeId,
-                shiftId = shiftId,
-                customerPartyId = if (customerId > 0) customerId else null,
-                fuelTypeId = fuelTypeId,
-                pumpId = if (pumpId > 0) pumpId else null,
-                nozzleId = null,
-                liters = liters,
-                pricePerLiter = pricePerLiter,
-                subtotal = subtotal,
-                discountAmount = 0.0,
-                taxAmount = 0.0,
-                grossAmount = totalAmount,
-                netAmount = totalAmount,
-                paymentMethod = data.optString("payment_method", "cash"),
-                isCredit = false,
-                dueDate = null,
-                cashierId = cashierId.toInt(),
-                notes = data.optString("notes", ""),
-                orderType = "fuel"
-            )
-
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("sale_id", saleId)
-                put("shift_id", shiftId)
-                if (pumpId > 0) put("pump_id", pumpId)
-                put("fuel_type_id", fuelTypeId)
-                put("quantity", liters)
-                put("price_per_liter", pricePerLiter)
-                put("total_amount", totalAmount)
-                put("payment_method", data.optString("payment_method", "cash"))
-                if (customerId > 0) put("customer_id", customerId)
-                put("vehicle_plate", data.optString("vehicle_plate", ""))
-                put("sale_date", data.optString("sale_date", getCurrentDate()))
-                put("sale_time", data.optString("sale_time", getCurrentTime()))
-                put("notes", data.optString("notes", ""))
-                put("created_at", getCurrentDateTime())
-            }
-            writableDatabase.insert("fuel_sales", null, cv)
-            saleId
-        } finally {
-            dbLock.unlock()
-        }
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val saleId = insertSaleTransaction(
+                    stationId = stationScopeId,
+                    shiftId = shiftId,
+                    customerPartyId = customerId,
+                    fuelTypeId = fuelTypeId,
+                    pumpId = pumpId,
+                    nozzleId = data.optLong("nozzle_id", 0L).takeIf { it > 0L }?.toInt(),
+                    liters = liters,
+                    pricePerLiter = pricePerLiter,
+                    subtotal = subtotal,
+                    discountAmount = 0.0,
+                    taxAmount = 0.0,
+                    grossAmount = totalAmount,
+                    netAmount = totalAmount,
+                    paymentMethod = paymentMethod,
+                    isCredit = false,
+                    dueDate = null,
+                    cashierId = cashierId.toInt(),
+                    notes = data.optString("notes", ""),
+                    orderType = "fuel",
+                    paidAmount = data.optDouble("amount_paid", totalAmount),
+                    manageTransaction = false
+                )
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("sale_id", saleId)
+                    put("shift_id", shiftId)
+                    if (pumpId != null) put("pump_id", pumpId)
+                    put("fuel_type_id", fuelTypeId)
+                    put("quantity", liters)
+                    put("price_per_liter", pricePerLiter)
+                    put("total_amount", totalAmount)
+                    put("payment_method", paymentMethod)
+                    if (customerId != null) put("customer_id", customerId)
+                    put("vehicle_plate", data.optString("vehicle_plate", ""))
+                    put("sale_date", data.optString("sale_date", getCurrentDate()))
+                    put("sale_time", data.optString("sale_time", getCurrentTime()))
+                    put("notes", data.optString("notes", ""))
+                    put("created_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("fuel_sales", null, cv)
+                db.setTransactionSuccessful()
+                saleId
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
     }
 
     fun getSales(stationScopeId: Int): JSONArray = getSalesTransactions(stationScopeId, 10000)
@@ -8029,24 +8270,72 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     fun completeSale(data: JSONObject, stationScopeId: Int, cashierId: Long): JSONObject {
         val result = JSONObject()
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        require(cashierId > 0) { "معرف المستخدم غير صالح" }
         dbLock.lock()
+        val db = writableDatabase
+        var transactionStarted = false
         try {
-            val products = data.getJSONArray("products")
+            val products = data.optJSONArray("products") ?: throw IllegalArgumentException("بنود البيع مطلوبة")
+            require(products.length() > 0) { "لا يمكن إتمام بيع بلا بنود" }
+            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0L)?.toInt()
+                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
+            val warehouseId = db.rawQuery(
+                "SELECT id FROM warehouses WHERE station_id = ? AND is_active = 1 ORDER BY is_default DESC, id ASC LIMIT 1",
+                arrayOf(stationScopeId.toString())
+            ).use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0) else throw IllegalStateException("لا يوجد مستودع نشط للمحطة الحالية")
+            }
+
+            data.optLong("entity_id", 0L).takeIf { it > 0L }?.let { customerId ->
+                db.rawQuery("SELECT id FROM parties WHERE id = ? AND station_id = ? AND is_deleted = 0 AND is_active = 1", arrayOf(customerId.toString(), stationScopeId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "العميل خارج نطاق المحطة أو غير نشط" }
+                }
+            }
+
+            val prepared = mutableListOf<JSONObject>()
             var total = 0.0
             for (i in 0 until products.length()) {
                 val item = products.getJSONObject(i)
-                total += item.optDouble("quantity") * item.optDouble("unit_price")
+                val productId = item.optLong("product_id", 0L)
+                val quantity = item.optDouble("quantity", 0.0)
+                require(productId > 0L) { "المنتج في السطر ${i + 1} غير صالح" }
+                require(quantity.isFinite() && quantity > 0.0) { "كمية السطر ${i + 1} غير صالحة" }
+                val product = db.rawQuery(
+                    "SELECT id, sale_price, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0 AND status = 'active'",
+                    arrayOf(productId.toString(), stationScopeId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) { "المنتج في السطر ${i + 1} خارج نطاق المحطة أو غير نشط" }
+                    JSONObject().apply { put("id", cursor.getLong(0)); put("unit_price", cursor.getDouble(1)); put("product_name", cursor.getString(2)) }
+                }
+                val unitPrice = product.getDouble("unit_price")
+                require(unitPrice.isFinite() && unitPrice >= 0.0) { "سعر المنتج غير صالح" }
+                val lineTotal = quantity * unitPrice
+                require(lineTotal.isFinite() && lineTotal >= 0.0) { "إجمالي السطر غير صالح" }
+                total += lineTotal
+                prepared += JSONObject().apply { put("product_id", productId); put("quantity", quantity); put("unit_price", unitPrice); put("line_total", lineTotal) }
             }
+            require(total.isFinite() && total >= 0.0) { "إجمالي البيع غير صالح" }
+            val paymentType = data.optString("payment_type", "cash")
+            val paymentMethod = when (paymentType) {
+                "آجل", "credit" -> "credit"
+                "بطاقة", "credit_card" -> "credit_card"
+                "تحويل", "bank_transfer" -> "bank_transfer"
+                "شيك", "cheque" -> "cheque"
+                else -> "cash"
+            }
+            val isCredit = paymentMethod == "credit"
+            val paidAmount = data.optDouble("amount_paid", if (isCredit) 0.0 else total)
+            require(paidAmount.isFinite() && paidAmount >= 0.0) { "المبلغ المدفوع غير صالح" }
+            require(isCredit || paidAmount + 1e-9 >= total) { "المبلغ المدفوع أقل من الإجمالي" }
+            if (isCredit) require(data.optLong("entity_id", 0L) > 0L) { "العميل مطلوب للبيع الآجل" }
 
-            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
-            require(cashierId > 0) { "معرف المستخدم غير صالح" }
-            val shiftId = getCurrentShift(stationScopeId)?.optLong("shift_id", 0)?.toInt()
-                ?: throw IllegalStateException("لا توجد وردية مفتوحة للمحطة الحالية")
-
+            db.beginTransaction()
+            transactionStarted = true
             val saleId = insertSaleTransaction(
                 stationId = stationScopeId,
                 shiftId = shiftId,
-                customerPartyId = data.optInt("entity_id", 0).takeIf { it > 0 },
+                customerPartyId = data.optLong("entity_id", 0L).takeIf { it > 0L }?.toInt(),
                 fuelTypeId = null,
                 pumpId = null,
                 nozzleId = null,
@@ -8057,52 +8346,53 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 taxAmount = 0.0,
                 grossAmount = total,
                 netAmount = total,
-                paymentMethod = when (data.optString("payment_type", "cash")) {
-                    "آجل", "credit" -> "credit"
-                    "بطاقة", "credit_card" -> "credit_card"
-                    "تحويل", "bank_transfer" -> "bank_transfer"
-                    else -> "cash"
-                },
-                isCredit = data.optString("payment_type") in setOf("آجل", "credit"),
-                dueDate = null,
+                paymentMethod = paymentMethod,
+                isCredit = isCredit,
+                dueDate = data.optString("due_date", null),
                 cashierId = cashierId.toInt(),
-                orderType = "product"
+                notes = data.optString("notes", ""),
+                orderType = "product",
+                paidAmount = paidAmount,
+                manageTransaction = false
             )
 
-            val db = writableDatabase
-            for (i in 0 until products.length()) {
-                val item = products.getJSONObject(i)
-                val qty = item.optDouble("quantity")
-                val price = item.optDouble("unit_price")
+            prepared.forEachIndexed { index, item ->
+                val productId = item.getLong("product_id")
+                val quantity = item.getDouble("quantity")
+                val unitPrice = item.getDouble("unit_price")
                 val cv = ContentValues().apply {
                     put("uuid", UUID.randomUUID().toString())
                     put("sale_id", saleId)
-                    put("line_number", i + 1)
+                    put("line_number", index + 1)
                     put("item_type", "product")
-                    put("product_id", item.getInt("product_id"))
-                    put("quantity", qty)
-                    put("unit_price", price)
-                    put("subtotal", qty * price)
-                    put("line_total", qty * price)
+                    put("product_id", productId)
+                    put("quantity", quantity)
+                    put("unit_price", unitPrice)
+                    put("subtotal", quantity * unitPrice)
+                    put("line_total", quantity * unitPrice)
                 }
-                db.insert("sale_items", null, cv)
+                db.insertOrThrow("sale_items", null, cv)
                 addStockMovement(
                     JSONObject().apply {
-                        put("product_id", item.getInt("product_id"))
-                        put("quantity", qty)
+                        put("product_id", productId)
+                        put("warehouse_id", warehouseId)
+                        put("quantity", quantity)
                         put("movement_type", "out")
                         put("reference_type", "sale")
                         put("reference_id", saleId)
+                        put("unit_cost", unitPrice)
                     }, stationScopeId, cashierId
                 )
             }
+            db.setTransactionSuccessful()
             result.put("success", true)
             result.put("sale_id", saleId)
-            result.put("invoice_number", getSaleTransactionById(saleId.toInt())?.optString("invoice_number", "INV-$saleId") ?: "INV-$saleId")
+            result.put("invoice_number", getSaleTransactionById(saleId.toInt(), stationScopeId)?.optString("invoice_number", "") ?: "")
         } catch (e: Exception) {
             result.put("success", false)
-            result.put("error", e.message)
+            result.put("error", e.message ?: "فشل إتمام البيع")
         } finally {
+            if (transactionStarted) db.endTransaction()
             dbLock.unlock()
         }
         return result
@@ -15918,11 +16208,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
-    fun searchInvoices(data: JSONObject): JSONArray {
+    fun searchInvoices(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للبحث في الفواتير" }
         dbLock.lock()
         return try {
-            val where = mutableListOf("s.is_deleted=0")
-            val args = mutableListOf<String>()
+            val where = mutableListOf("s.is_deleted=0", "s.station_id=?")
+            val args = mutableListOf(stationScopeId.toString())
             data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
             data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
             val limit = data.optInt("limit", 100).coerceIn(1, 500)
@@ -15935,11 +16226,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
-    fun getInvoiceDetails(invoiceNumber: String): JSONObject? {
+    fun getInvoiceDetails(invoiceNumber: String, stationScopeId: Int): JSONObject? {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب لتفاصيل الفاتورة" }
         dbLock.lock()
         return try {
             val db = readableDatabase
-            val sale = db.rawQuery("SELECT s.*, p.commercial_name AS customer_name FROM sales_transactions s LEFT JOIN parties p ON p.id=s.customer_party_id WHERE s.invoice_number=? AND s.is_deleted=0 LIMIT 1", arrayOf(invoiceNumber)).use { cursor ->
+            val sale = db.rawQuery("SELECT s.*, p.commercial_name AS customer_name FROM sales_transactions s LEFT JOIN parties p ON p.id=s.customer_party_id WHERE s.invoice_number=? AND s.station_id=? AND s.is_deleted=0 LIMIT 1", arrayOf(invoiceNumber, stationScopeId.toString())).use { cursor ->
                 if (!cursor.moveToFirst()) return null
                 JSONObject().apply {
                     put("sale_id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
@@ -15959,11 +16251,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
     }
 
-    fun searchSaleItems(data: JSONObject): JSONArray {
+    fun searchSaleItems(data: JSONObject, stationScopeId: Int): JSONArray {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للبحث في بنود المبيعات" }
         dbLock.lock()
         return try {
-            val where = mutableListOf("s.is_deleted=0", "si.item_type='product'")
-            val args = mutableListOf<String>()
+            val where = mutableListOf("s.is_deleted=0", "si.item_type='product'", "s.station_id=?")
+            val args = mutableListOf(stationScopeId.toString())
             data.optString("start_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) >= date(?)"; args += it }
             data.optString("end_date").takeIf { it.isNotBlank() }?.let { where += "date(s.created_at) <= date(?)"; args += it }
             val sql = """SELECT s.id AS sale_id, s.invoice_number, s.created_at AS sale_date,

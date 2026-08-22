@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
         private const val DEV_MODE_ADMIN_USER_ID = 1L
 
         private var webViewInstanceId = 0
+        private var pendingWebPermissionRequest: android.webkit.PermissionRequest? = null
 
         // ============================
         // DebugLogger - نظام التشخيص المركزي
@@ -386,6 +387,8 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
 
         DebugLogger.detachWebView()
+        pendingWebPermissionRequest?.deny()
+        pendingWebPermissionRequest = null
 
         try {
             val wv = webView
@@ -596,6 +599,15 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode != PERMISSION_REQUEST_CODE) return
         if (grantResults.isEmpty()) return
+
+        pendingWebPermissionRequest?.let { request ->
+            if (isPermissionGranted(Manifest.permission.CAMERA)) {
+                request.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE))
+            } else {
+                request.deny()
+            }
+            pendingWebPermissionRequest = null
+        }
 
         val denied = permissions.zip(grantResults.toList())
             .filter { it.second != PackageManager.PERMISSION_GRANTED }
@@ -1094,6 +1106,21 @@ class MainActivity : AppCompatActivity() {
 
                             webViewClient = createWebViewClient()
                             webChromeClient = object : WebChromeClient() {
+                                override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+                                    val wantsCamera = request.resources?.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE) == true
+                                    if (!wantsCamera) {
+                                        request.deny()
+                                        return
+                                    }
+                                    if (isPermissionGranted(Manifest.permission.CAMERA)) {
+                                        request.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE))
+                                    } else {
+                                        pendingWebPermissionRequest?.deny()
+                                        pendingWebPermissionRequest = request
+                                        requestPermissions(arrayOf(Manifest.permission.CAMERA), PERMISSION_REQUEST_CODE)
+                                    }
+                                }
+
                                 override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                                     val msg = consoleMessage.message()
                                     val line = consoleMessage.lineNumber()
@@ -2624,20 +2651,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun searchInvoices(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.searchInvoices(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.searchInvoices(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) { DebugLogger.logException("InvoiceSearch", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun retrieveInvoice(invoiceNumber: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { db.getInvoiceDetails(invoiceNumber)?.let { dataResponse(it) } ?: errorResponse("الفاتورة غير موجودة") }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); db.getInvoiceDetails(invoiceNumber, requireCurrentStationId(db, activity.currentUserId))?.let { dataResponse(it) } ?: errorResponse("الفاتورة غير موجودة") }
             catch (e: Exception) { DebugLogger.logException("Invoice", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun searchSales(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { dataResponse(db.searchSaleItems(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.searchSaleItems(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) { DebugLogger.logException("SalesSearch", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -7313,6 +7340,34 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteStocktakeDetailRecord(id: Long) = operationalDelete("inventory", "stocktake_details", id)
         @JavascriptInterface
         fun resolveStocktakeDetailRecord(id: Long, note: String = "") = operationalResolve("inventory", "stocktake_details", id, note)
+
+        @JavascriptInterface
+        fun getSalesPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getSalesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("SalesPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getOrdersPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getOrdersPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("OrdersPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getDeliveriesPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getDeliveriesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("DeliveriesPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getFuelSalesPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getFuelSalesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("FuelSalesPage", e); errorResponse(e.message) }
+        }
 
         @JavascriptInterface
         fun getShiftRecords(jsonData: String = "{}") = operationalList("sales", "shifts", jsonData)

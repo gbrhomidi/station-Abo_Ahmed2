@@ -2891,30 +2891,37 @@
 // ============================================================
 function apiCall(action, params) {
     const p = params || {};
-    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-    try {
-        let raw;
-        switch (action) {
-            case 'getProductByBarcode': raw = AndroidInterface.getProductByBarcode(String(p.barcode || '')); break;
-            case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
-            case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
-            case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
-            case 'getEntityTypes': raw = AndroidInterface.getEntityTypes(); break;
-            case 'getEntitiesByType': raw = AndroidInterface.getEntitiesByType(Number(p.entity_type_id || 0)); break;
-            case 'getEntityDetails': raw = AndroidInterface.getEntityDetails(Number(p.entity_id || 0)); break;
-            case 'searchCustomers': raw = AndroidInterface.searchParties(String(p.query || '')); break;
-            case 'addCustomer': raw = AndroidInterface.addParty(JSON.stringify({ party_type_id: Number(p.entity_type_id || 1), commercial_name: p.name, commercial_name_ar: p.name, phone: p.phone, email: p.email || '', credit_limit: Number(p.credit_limit || 0), is_active: true })); break;
-            case 'searchSales': raw = AndroidInterface.searchSales(JSON.stringify(p)); break;
-            case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
-            case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
-            case 'searchInvoices': raw = AndroidInterface.searchInvoices(JSON.stringify(p)); break;
-            case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
-            case 'salesReport': raw = AndroidInterface.salesReport(); break;
-            case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
-            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
+    return new Promise((resolve, reject) => {
+        if (!window.AndroidInterface) {
+            reject({ success: false, message: 'جسر Android غير متاح' });
+            return;
         }
-        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+        try {
+            let raw;
+            switch (action) {
+                case 'getProductByBarcode': raw = AndroidInterface.getProductByBarcode(String(p.barcode || '')); break;
+                case 'getNextInvoiceNumber': raw = AndroidInterface.getNextInvoiceNumber(); break;
+                case 'completeSale': raw = AndroidInterface.completeSale(JSON.stringify(p)); break;
+                case 'getCustomers': raw = AndroidInterface.getCustomers(); break;
+                case 'getEntityTypes': raw = AndroidInterface.getEntityTypes(); break;
+                case 'getEntitiesByType': raw = AndroidInterface.getEntitiesByType(Number(p.entity_type_id || 0)); break;
+                case 'getEntityDetails': raw = AndroidInterface.getEntityDetails(Number(p.entity_id || 0)); break;
+                case 'searchCustomers': raw = AndroidInterface.searchParties(String(p.query || '')); break;
+                case 'addCustomer': raw = AndroidInterface.addParty(JSON.stringify({ party_type_id: Number(p.entity_type_id || 0), commercial_name: p.name, commercial_name_ar: p.name, phone: p.phone, email: p.email || '', credit_limit: Number(p.credit_limit || 0), is_active: true })); break;
+                case 'searchSales': raw = AndroidInterface.searchSales(JSON.stringify(p)); break;
+                case 'saveReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                case 'processReturn': raw = AndroidInterface.processSaleReturn(JSON.stringify(p)); break;
+                case 'searchInvoices': raw = AndroidInterface.searchInvoices(JSON.stringify(p)); break;
+                case 'retrieveInvoice': raw = AndroidInterface.retrieveInvoice(String(p.invoice_number || '')); break;
+                case 'salesReport': raw = AndroidInterface.salesReport(); break;
+                case 'printReceipt': raw = AndroidInterface.printCurrentPage(); break;
+                default: reject({ success: false, message: 'العملية غير مدعومة: ' + action }); return;
+            }
+            resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
+        } catch (e) {
+            reject({ success: false, message: e.message || 'فشل استدعاء الجسر' });
+        }
+    });
 }
 
 function handleAndroidResult(action, data) {
@@ -2956,7 +2963,8 @@ let isScanning = false;
 let flashEnabled = false;
 let scannerActive = true;
 let lastScannedBarcode = '';
-let audioDing = new Audio('/static/sound/Ding.mp3'); // سيتم استبداله بملف صوتي محلي لاحقاً
+let audioDing = null;
+let scanProcessing = false;
 let inactivityTimer;
 let sleepModeTimer;
 const INACTIVITY_TIMEOUT = 10000;
@@ -3070,12 +3078,15 @@ function toggleFlash() {
 
 function onScanSuccess(decodedText) {
     decodedText = decodedText.trim();
+    if (!decodedText || scanProcessing) return;
+    scanProcessing = true;
     document.getElementById('manualBarcodeInput').value = decodedText;
     addProductByBarcode(decodedText);
-    try { audioDing.play(); } catch (e) { console.log('Error playing sound:', e); }
+    if (audioDing && typeof audioDing.play === 'function') audioDing.play().catch(() => {});
     stopScanner();
     setTimeout(() => {
         if (!isScanning) initBarcodeScanner();
+        scanProcessing = false;
     }, 1000);
 }
 
@@ -3096,6 +3107,7 @@ function stopScanner() {
 // ============================================================
 let lastSaleId = null;
 let lastInvoiceNumber = '';
+let saleInFlight = false;
 let selectedReturnSale = null;
 
 function addProductByBarcode(barcode) {
@@ -3323,6 +3335,7 @@ function resetForm() {
 }
 
 function completeSale() {
+    if (saleInFlight) return;
     const total = parseFloat(document.getElementById('totalAmount').value) || 0;
     const paid = parseFloat(document.getElementById('amountPaid').value) || 0;
 
@@ -3360,6 +3373,8 @@ function completeSale() {
         amount_paid: paid
     };
 
+    saleInFlight = true;
+    document.getElementById('completeSaleBtn').disabled = true;
     showLoading(true);
     apiCall('completeSale', invoiceData)
         .then(data => {
@@ -3375,7 +3390,11 @@ function completeSale() {
         .catch(error => {
             showToast('حدث خطأ أثناء الترحيل', 'error');
         })
-        .finally(() => showLoading(false));
+        .finally(() => {
+            saleInFlight = false;
+            document.getElementById('completeSaleBtn').disabled = false;
+            showLoading(false);
+        });
 }
 
 function printReceipt() {
