@@ -2891,8 +2891,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("tanks", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
                 val data = JSONObject(jsonData)
-                val id = db.addTankReading(data)
+                val id = db.addTankReading(data, stationId)
                 DebugLogger.info("Tank", "Added tank reading id=$id")
                 successResponse(id, "تم إضافة قراءة الخزان بنجاح")
             } catch (e: Exception) {
@@ -2907,7 +2909,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val readings = db.getTankReadings()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val readings = db.getTankReadings(stationId)
                 dataResponse(readings)
             } catch (e: Exception) {
                 DebugLogger.logException("Tank", e)
@@ -4804,7 +4808,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
-                val tanks = db.getTanks(getCurrentStationId(db, activity.currentUserId))
+                val tanks = db.getTanks(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(tanks)
             } catch (e: Exception) {
                 DebugLogger.logException("Tanks", e)
@@ -4818,7 +4822,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("pumps", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val pumps = db.getPumps(getCurrentStationId(db, getActivity()?.currentUserId ?: 0L))
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val pumps = db.getPumps(requireCurrentStationId(db, activity.currentUserId))
                 dataResponse(pumps)
             } catch (e: Exception) {
                 DebugLogger.logException("Pumps", e)
@@ -4832,7 +4837,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val stats = db.getTankStats()
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val stats = db.getTankStats(stationId)
                 dataResponse(stats)
             } catch (e: Exception) {
                 DebugLogger.logException("Tanks", e)
@@ -4846,7 +4853,9 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             if (!checkPermission("tanks", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                db.updateTankQuantity(tankId, quantity, "System")
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                db.updateTankQuantity(tankId, quantity, "System", stationId)
                 DebugLogger.info("Tank", "Updated quantity for tank $tankId")
                 successResponse(0, "تم التحديث")
             } catch (e: Exception) {

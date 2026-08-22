@@ -7105,7 +7105,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال الخزانات والمضخات (جزء منها)
     // ========================================================================
 
-    fun getTanks(stationId: Int = 1): JSONArray {
+    fun getTanks(stationId: Int): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery(
@@ -7129,7 +7129,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun getPumps(stationId: Int = 1): JSONArray {
+    fun getPumps(stationId: Int): JSONArray {
         val arr = JSONArray()
         val db = readableDatabase
         db.rawQuery(
@@ -7175,8 +7175,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return arr
     }
 
-    fun updateTankQuantity(tankId: Int, newQuantity: Double, operator: String = "System"): Boolean {
+    fun updateTankQuantity(tankId: Int, newQuantity: Double, operator: String = "System", stationScopeId: Int? = null): Boolean {
         val db = writableDatabase
+        if (stationScopeId != null && stationScopeId > 0) {
+            db.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ?", arrayOf(tankId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" }
+            }
+        }
         db.beginTransaction()
         try {
             db.execSQL("UPDATE tanks SET current_quantity = ? WHERE id = ?", arrayOf(newQuantity, tankId))
@@ -12441,6 +12446,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "price_list_items") {
                 where += "EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "tank_level_log") {
+                where += "EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "fuel_quality_tests") {
+                where += "EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12519,6 +12528,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
             } else if (stationId > 0 && screenKey == "price_list_items") {
                 where += "EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "tank_level_log") {
+                where += "EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "fuel_quality_tests") {
+                where += "EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12659,6 +12672,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0) writeDb.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
             if (screenKey == "price_list_items" && stationId > 0) writeDb.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
+            if (screenKey == "tank_level_log" && stationId > 0) writeDb.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("tank_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
+            if (screenKey == "fuel_quality_tests" && stationId > 0) writeDb.rawQuery("SELECT tr.id FROM tank_refills tr JOIN tanks t ON t.id = tr.tank_id WHERE tr.id = ? AND t.station_id = ? AND t.is_deleted = 0", arrayOf(data.optLong("refill_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة خارج نطاق المحطة" } }
             if (screenKey == "stocktakes" && stationId > 0) writeDb.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(data.optLong("warehouse_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" } }
             if (screenKey == "stocktake_details" && stationId > 0) writeDb.rawQuery("SELECT st.id FROM stocktakes st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.id = ? AND w.station_id = ? AND w.is_active = 1 AND st.archived = 0", arrayOf(data.optLong("stocktake_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الجرد خارج نطاق المحطة" } }
             val id = writeDb.insertOrThrow(spec.table, null, values)
@@ -12686,8 +12701,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0 && data.has("product_id")) writableDatabase.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
             if (screenKey == "price_list_items" && stationId > 0 && data.has("price_list_id")) writableDatabase.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
+            if (screenKey == "tank_level_log" && stationId > 0 && data.has("tank_id")) writableDatabase.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("tank_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
+            if (screenKey == "fuel_quality_tests" && stationId > 0 && data.has("refill_id")) writableDatabase.rawQuery("SELECT tr.id FROM tank_refills tr JOIN tanks t ON t.id = tr.tank_id WHERE tr.id = ? AND t.station_id = ? AND t.is_deleted = 0", arrayOf(data.optLong("refill_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة خارج نطاق المحطة" } }
             val directScope = spec.columns.contains("station_id") && stationId > 0
-            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
+            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
             val scope = when {
                 directScope -> " AND station_id = ?"
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
@@ -12695,6 +12712,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationalScope -> " AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationalScope -> " AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
+                screenKey == "tank_level_log" && relationalScope -> " AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+                screenKey == "fuel_quality_tests" && relationalScope -> " AND EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
                 else -> ""
             }
             val where = (if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?") + scope
@@ -12716,7 +12735,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
@@ -12724,6 +12743,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
+                screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+                screenKey == "fuel_quality_tests" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -12745,7 +12766,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
@@ -12753,6 +12774,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
                 screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
                 screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
+                screenKey == "tank_level_log" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tanks scope_t WHERE scope_t.id = tank_level_log.tank_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
+                screenKey == "fuel_quality_tests" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM tank_refills scope_tr JOIN tanks scope_t ON scope_t.id = scope_tr.tank_id WHERE scope_tr.id = fuel_quality_tests.refill_id AND scope_t.station_id = ${stationId} AND scope_t.is_deleted = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -13754,7 +13777,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال إحصائيات الخزانات
     // ========================================================================
 
-    fun getTankStats(): JSONArray {
+    fun getTankStats(stationId: Int): JSONArray {
         dbLock.lock()
         return try {
             val arr = JSONArray()
@@ -13764,9 +13787,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                           ROUND((t.current_quantity / t.capacity_liters * 100), 2) as fill_percent
                    FROM tanks t
                    LEFT JOIN fuel_types f ON t.fuel_type_id = f.id
-                   WHERE t.is_deleted = 0
+                   WHERE t.station_id = ? AND t.is_deleted = 0
                    ORDER BY t.tank_code""",
-                null
+                arrayOf(stationId.toString())
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     arr.put(JSONObject().apply {
@@ -15410,16 +15433,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
-    fun getTankReadings(tankId: Int? = null, limit: Int = 100): JSONArray {
+    fun getTankReadings(stationScopeId: Int, tankId: Int? = null, limit: Int = 100): JSONArray {
         dbLock.lock()
         return try {
             val db = readableDatabase
             val sql = if (tankId != null) {
-                "SELECT * FROM tank_level_log WHERE tank_id = ? ORDER BY reading_date DESC, id DESC LIMIT ?"
+                "SELECT tl.* FROM tank_level_log tl JOIN tanks t ON t.id = tl.tank_id WHERE tl.tank_id = ? AND t.station_id = ? AND t.is_deleted = 0 ORDER BY tl.reading_date DESC, tl.id DESC LIMIT ?"
             } else {
-                "SELECT * FROM tank_level_log ORDER BY reading_date DESC, id DESC LIMIT ?"
+                "SELECT tl.* FROM tank_level_log tl JOIN tanks t ON t.id = tl.tank_id WHERE t.station_id = ? AND t.is_deleted = 0 ORDER BY tl.reading_date DESC, tl.id DESC LIMIT ?"
             }
-            val args = if (tankId != null) arrayOf(tankId.toString(), limit.toString()) else arrayOf(limit.toString())
+            val args = if (tankId != null) arrayOf(tankId.toString(), stationScopeId.toString(), limit.toString()) else arrayOf(stationScopeId.toString(), limit.toString())
             db.rawQuery(sql, args).use { cursor -> cursorToJsonArray(cursor) }
         } finally {
             dbLock.unlock()
@@ -15628,10 +15651,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
 
-    fun addTankReading(data: JSONObject): Long {
+    fun addTankReading(data: JSONObject, stationScopeId: Int? = null): Long {
         dbLock.lock()
         return try {
             val db = writableDatabase
+            if (stationScopeId != null && stationScopeId > 0) {
+                db.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ?", arrayOf(data.optInt("tank_id", 0).toString(), stationScopeId.toString())).use { cursor ->
+                    require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" }
+                }
+            }
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
                 put("tank_id", data.optInt("tank_id", 0))
