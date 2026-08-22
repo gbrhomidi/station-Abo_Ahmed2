@@ -8095,6 +8095,52 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
     
+    
+        // MODULE-015 Bridges
+        @JavascriptInterface
+        fun getSyncDevicesPageTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getSyncDevicesPageTyped(obj, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateSyncDeviceStatusTyped(id: Long, isActive: Int): String {
+            return try {
+                db.updateSyncDeviceStatusTyped(id, isActive)
+                successResponse(id, "تم تحديث الحالة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getSyncLogsPageTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getSyncLogsPageTyped(obj)
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getBackupHistoryPageTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getBackupHistoryPageTyped(obj)
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun restoreDatabaseSafe(path: String): String {
+            return try {
+                val res = db.restoreDatabaseSafe(path)
+                successResponse(res)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+    
     private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return

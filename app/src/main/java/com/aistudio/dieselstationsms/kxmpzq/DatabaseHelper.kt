@@ -20641,4 +20641,90 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             return db.delete("documents", "id = ?", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
+    
+    // MODULE-015: Sync & Backup Typed Methods
+    
+    fun getSyncDevicesPageTyped(params: JSONObject, stationId: Int): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            var selection = "station_id = ?"
+            val args = mutableListOf(stationId.toString())
+            
+            val search = params.optString("search", "")
+            val isActive = params.optInt("is_active", -1)
+            
+            if (search.isNotEmpty()) { selection += " AND (device_name LIKE ? OR device_id LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
+            if (isActive != -1) { selection += " AND is_active = ?"; args.add(isActive.toString()) }
+            
+            val limit = params.optInt("limit", 50)
+            val offset = params.optInt("offset", 0)
+            
+            db.rawQuery("SELECT * FROM sync_devices WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } catch (e: Exception) {
+            // Table might not exist
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun updateSyncDeviceStatusTyped(id: Long, isActive: Int): Int {
+        dbLock.lock()
+        try {
+            val db = writableDatabase
+            val cv = ContentValues().apply { put("is_active", isActive) }
+            return db.update("sync_devices", cv, "id = ?", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+    
+    fun getSyncLogsPageTyped(params: JSONObject): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            var selection = "1=1"
+            val args = mutableListOf<String>()
+            
+            val status = params.optString("status", "")
+            val direction = params.optString("sync_direction", "")
+            val dateFrom = params.optString("date_from", "")
+            val dateTo = params.optString("date_to", "")
+            val search = params.optString("search", "")
+            
+            if (status.isNotEmpty()) { selection += " AND status = ?"; args.add(status) }
+            if (direction.isNotEmpty()) { selection += " AND sync_direction = ?"; args.add(direction) }
+            if (dateFrom.isNotEmpty()) { selection += " AND DATE(started_at) >= ?"; args.add(dateFrom) }
+            if (dateTo.isNotEmpty()) { selection += " AND DATE(started_at) <= ?"; args.add(dateTo) }
+            if (search.isNotEmpty()) { selection += " AND (device_name LIKE ? OR entity_type LIKE ?)"; args.add("%$search%"); args.add("%$search%") }
+            
+            val limit = params.optInt("limit", 50)
+            val offset = params.optInt("offset", 0)
+            
+            db.rawQuery("SELECT * FROM sync_logs WHERE $selection ORDER BY id DESC LIMIT ? OFFSET ?", (args + listOf(limit.toString(), offset.toString())).toTypedArray()).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } catch (e: Exception) {
+            // Table might not exist
+        } finally { dbLock.unlock() }
+        return arr
+    }
+    
+    fun getBackupHistoryPageTyped(params: JSONObject): JSONArray {
+        val arr = JSONArray()
+        dbLock.lock()
+        try {
+            val db = readableDatabase
+            val limit = params.optInt("limit", 50)
+            val offset = params.optInt("offset", 0)
+            
+            db.rawQuery("SELECT * FROM backup_history ORDER BY id DESC LIMIT ? OFFSET ?", arrayOf(limit.toString(), offset.toString())).use { c ->
+                while (c.moveToNext()) arr.put(cursorRowToJson(c))
+            }
+        } catch (e: Exception) {
+            // Table might not exist
+        } finally { dbLock.unlock() }
+        return arr
+    }
     }
