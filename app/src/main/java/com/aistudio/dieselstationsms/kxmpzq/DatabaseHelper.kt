@@ -43,7 +43,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 26
+        const val VERSION = 27
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -190,6 +190,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     23 -> migrateV23ToV24(db)
                     24 -> migrateV24ToV25(db)
                     25 -> cleanupRetiredChannelArtifacts(db)
+                    26 -> migrateV26ToV27(db)
                 }
             }
             ensureDeliveriesSchema(db)
@@ -659,6 +660,46 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun migrateV24ToV25(db: SQLiteDatabase) {
         Log.d(TAG, "Migrated channel delivery events schema to V25 successfully")
+    }
+
+    private fun migrateV26ToV27(db: SQLiteDatabase) {
+        // Add a persisted station scope. Legacy rows that cannot be mapped are
+        // retained with scope 0 and are fail-closed by every operational query.
+        ensureColumn(db, "calibration_records", "station_id", "INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("""
+            UPDATE calibration_records
+            SET station_id = COALESCE((
+                SELECT t.station_id FROM tanks t
+                WHERE lower(calibration_records.entity_type) IN ('tank', 'tanks')
+                  AND t.id = calibration_records.entity_id
+                  AND t.is_deleted = 0
+            ), 0)
+            WHERE station_id = 0 OR station_id IS NULL
+        """)
+        db.execSQL("""
+            UPDATE calibration_records
+            SET station_id = COALESCE((
+                SELECT p.station_id FROM pumps p
+                WHERE lower(calibration_records.entity_type) IN ('pump', 'pumps')
+                  AND p.id = calibration_records.entity_id
+                  AND p.is_deleted = 0
+            ), 0)
+            WHERE station_id = 0 OR station_id IS NULL
+        """)
+        db.execSQL("""
+            UPDATE calibration_records
+            SET station_id = COALESCE((
+                SELECT p.station_id FROM pump_nozzles n
+                JOIN pumps p ON p.id = n.pump_id
+                WHERE lower(calibration_records.entity_type) IN ('nozzle', 'nozzles', 'pump_nozzle', 'pump_nozzles')
+                  AND n.id = calibration_records.entity_id
+                  AND n.is_deleted = 0
+                  AND p.is_deleted = 0
+            ), 0)
+            WHERE station_id = 0 OR station_id IS NULL
+        """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_station_entity ON calibration_records(station_id, entity_type, entity_id)")
+        Log.d(TAG, "Migrated calibration station authority schema to V27 successfully")
     }
 
     private fun migrateV17ToV18(db: SQLiteDatabase) {
@@ -2553,6 +2594,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 calibration_code VARCHAR(30) UNIQUE NOT NULL,
                 entity_type VARCHAR(30) NOT NULL,
                 entity_id INTEGER NOT NULL,
+                station_id INTEGER NOT NULL REFERENCES stations(id),
                 calibration_date DATE NOT NULL,
                 technician VARCHAR(100),
                 before_value DECIMAL(12,4),
@@ -5834,6 +5876,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_date ON meter_readings(reading_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_readings_station ON meter_readings(station_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_entity ON calibration_records(entity_type, entity_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_station_entity ON calibration_records(station_id, entity_type, entity_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_code ON products(product_code)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)")
@@ -11941,13 +11984,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "calibration_records" -> OperationalTableSpec(
                 table = "calibration_records",
-                columns = listOf("calibration_code", "entity_type", "entity_id", "calibration_date", "technician", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor", "certificate_number", "certificate_path", "next_calibration_date", "notes", "status"),
-                required = listOf("calibration_code", "entity_type", "entity_id", "calibration_date"),
+                columns = listOf("calibration_code", "entity_type", "entity_id", "station_id", "calibration_date", "technician", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor", "certificate_number", "certificate_path", "next_calibration_date", "notes", "status"),
+                required = listOf("calibration_code", "entity_type", "entity_id", "station_id", "calibration_date"),
                 searchColumns = listOf("calibration_code", "entity_type", "technician", "certificate_number", "status"),
                 softDeleted = false,
                 hasUpdatedAt = false,
                 hasStatus = true,
-                numericColumns = listOf("entity_id", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor")
+                numericColumns = listOf("entity_id", "station_id", "before_value", "after_value", "error_value", "correction_percent", "calibration_factor")
             )
             "warehouses" -> OperationalTableSpec(
                 table = "warehouses",
@@ -12424,6 +12467,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    private fun requireCalibrationEntityInStation(db: SQLiteDatabase, data: JSONObject, stationId: Int, existingId: Long? = null) {
+        require(stationId > 0) { "معرف المحطة مطلوب لسجل المعايرة" }
+        var entityType = data.optString("entity_type", "").trim().lowercase(Locale.US)
+        var entityId = data.optLong("entity_id", 0L)
+        if ((entityType.isBlank() || entityId <= 0L) && existingId != null) {
+            db.rawQuery("SELECT entity_type, entity_id FROM calibration_records WHERE id = ? AND station_id = ?", arrayOf(existingId.toString(), stationId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "سجل المعايرة خارج نطاق المحطة" }
+                if (entityType.isBlank()) entityType = cursor.getString(0).trim().lowercase(Locale.US)
+                if (entityId <= 0L) entityId = cursor.getLong(1)
+            }
+        }
+        require(entityId > 0L) { "معرف الكيان مطلوب لسجل المعايرة" }
+        val targetExists = when (entityType) {
+            "tank", "tanks" -> db.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(entityId.toString(), stationId.toString())).use { it.moveToFirst() }
+            "pump", "pumps" -> db.rawQuery("SELECT id FROM pumps WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(entityId.toString(), stationId.toString())).use { it.moveToFirst() }
+            "nozzle", "nozzles", "pump_nozzle", "pump_nozzles" -> db.rawQuery("SELECT n.id FROM pump_nozzles n JOIN pumps p ON p.id = n.pump_id WHERE n.id = ? AND p.station_id = ? AND n.is_deleted = 0 AND p.is_deleted = 0", arrayOf(entityId.toString(), stationId.toString())).use { it.moveToFirst() }
+            else -> false
+        }
+        require(targetExists) { "كيان المعايرة غير موجود أو خارج نطاق المحطة" }
+    }
+
+    private fun calibrationStationPredicate(stationId: Int): String = "station_id = ${stationId} AND (EXISTS (SELECT 1 FROM tanks scope_ct WHERE lower(calibration_records.entity_type) IN ('tank', 'tanks') AND scope_ct.id = calibration_records.entity_id AND scope_ct.station_id = ${stationId} AND scope_ct.is_deleted = 0) OR EXISTS (SELECT 1 FROM pumps scope_cp WHERE lower(calibration_records.entity_type) IN ('pump', 'pumps') AND scope_cp.id = calibration_records.entity_id AND scope_cp.station_id = ${stationId} AND scope_cp.is_deleted = 0) OR EXISTS (SELECT 1 FROM pump_nozzles scope_cn JOIN pumps scope_cp2 ON scope_cp2.id = scope_cn.pump_id WHERE lower(calibration_records.entity_type) IN ('nozzle', 'nozzles', 'pump_nozzle', 'pump_nozzles') AND scope_cn.id = calibration_records.entity_id AND scope_cp2.station_id = ${stationId} AND scope_cn.is_deleted = 0 AND scope_cp2.is_deleted = 0))"
+
     fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -12433,7 +12499,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
-            if (stationId > 0 && spec.columns.contains("station_id")) {
+            if (stationId > 0 && screenKey == "calibration_records") {
+                where += calibrationStationPredicate(stationId)
+            } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
             } else if (stationId > 0 && screenKey == "bad_debts") {
@@ -12515,7 +12583,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
-            if (stationId > 0 && spec.columns.contains("station_id")) {
+            if (stationId > 0 && screenKey == "calibration_records") {
+                where += calibrationStationPredicate(stationId)
+            } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
             } else if (stationId > 0 && screenKey == "bad_debts") {
@@ -12668,7 +12738,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
-            if (screenKey in setOf("price_lists", "price_history", "price_list_items")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey == "calibration_records") requireCalibrationEntityInStation(writeDb, data, stationId)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0) writeDb.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
             if (screenKey == "price_list_items" && stationId > 0) writeDb.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
@@ -12697,16 +12768,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
-            if (screenKey in setOf("price_lists", "price_history", "price_list_items")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey == "calibration_records") requireCalibrationEntityInStation(writableDatabase, data, stationId, id)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0 && data.has("product_id")) writableDatabase.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
             if (screenKey == "price_list_items" && stationId > 0 && data.has("price_list_id")) writableDatabase.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
             if (screenKey == "tank_level_log" && stationId > 0 && data.has("tank_id")) writableDatabase.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("tank_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
             if (screenKey == "fuel_quality_tests" && stationId > 0 && data.has("refill_id")) writableDatabase.rawQuery("SELECT tr.id FROM tank_refills tr JOIN tanks t ON t.id = tr.tank_id WHERE tr.id = ? AND t.station_id = ? AND t.is_deleted = 0", arrayOf(data.optLong("refill_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة خارج نطاق المحطة" } }
-            val directScope = spec.columns.contains("station_id") && stationId > 0
-            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
+            val directScope = spec.columns.contains("station_id") && stationId > 0 && screenKey != "calibration_records"
+            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
             val scope = when {
                 directScope -> " AND station_id = ?"
+                screenKey == "calibration_records" && relationalScope -> " AND " + calibrationStationPredicate(stationId)
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
@@ -12734,10 +12807,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
-            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
+            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
+                screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
@@ -12765,10 +12839,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
-            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests")
+            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records"
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
+                screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"

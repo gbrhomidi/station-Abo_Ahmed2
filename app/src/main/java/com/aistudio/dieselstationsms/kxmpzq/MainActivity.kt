@@ -7042,8 +7042,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         private fun operationalScopedJson(jsonData: String): JSONObject {
             val db = getDbHelper() ?: throw IllegalStateException("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: throw IllegalStateException("النشاط غير متاح")
-            val stationId = getCurrentStationId(db, activity.currentUserId)
-            require(stationId > 0) { "معرف المحطة غير صالح" }
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
             return operationalJson(jsonData).apply {
                 put("station_id", stationId)
                 put("created_by", activity.currentUserId)
