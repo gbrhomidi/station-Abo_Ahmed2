@@ -67,39 +67,18 @@
         .page-container { max-width:1280px; margin:0 auto; }
         .notice-card { margin:16px; padding:14px 16px; display:flex; gap:12px; align-items:flex-start; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; box-shadow:var(--shadow-glow); color:var(--text-muted); font-size:.8rem; line-height:1.8; }
         .notice-card i { color:var(--primary-color); font-size:1.15rem; margin-top:3px; }
-        .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; padding:0 16px 16px; }
-        .stat-card { position:relative; overflow:hidden; padding:15px; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:16px; transition:all .3s; }
-        .stat-card:hover { transform:translateY(-3px); border-color:var(--primary-color); box-shadow:var(--shadow-glow); }
-        .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg,var(--primary-color),var(--accent-color)); opacity:.8; }
-        .stat-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
-        .stat-icon.blue { background:var(--primary-dim); color:var(--primary-color); } .stat-icon.green { background:rgba(16,185,129,.15); color:var(--success); } .stat-icon.orange { background:var(--accent-dim); color:var(--accent-color); } .stat-icon.red { background:rgba(239,68,68,.15); color:var(--error); }
-        .stat-value { font-size:1.35rem; font-weight:800; color:var(--data-text-color); }
-        .stat-label { margin-top:4px; color:var(--text-muted); font-size:.72rem; }
-        @media(min-width:768px) { .stats-grid { grid-template-columns:repeat(4,1fr); } }
-        .content-area { padding:0 16px 30px; }
-        .panel { display:none; animation:fadeIn .25s ease; }
-        .panel.active { display:block; }
-        .settings-card { margin-bottom:14px; padding:16px; background:var(--surface-elevated); border:var(--border-width) var(--border-style) var(--border-color); border-radius:18px; transition:all .3s; }
-        .settings-card:hover { border-color:var(--primary-color); box-shadow:var(--shadow-glow); }
-        .card-header { display:flex; justify-content:space-between; align-items:center; gap:10px; padding-bottom:12px; margin-bottom:9px; border-bottom:var(--border-width) var(--border-style) var(--border-color); }
-        .card-header h3 { font-size:1rem; font-weight:800; color:var(--data-text-color); }
-        .card-header .card-avatar { width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,var(--primary-color),#6366f1); }
-        .card-header .card-badge { padding:4px 10px; border-radius:20px; border:var(--border-width) var(--border-style) var(--border-color); color:var(--text-muted); font-size:.68rem; }
-        .field { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:58px; padding:10px 0; border-bottom:1px dashed rgba(106,127,148,.35); }
-        .field:last-child { border-bottom:0; }
-        .field-info { flex:1; min-width:0; }
-        .field-info label { display:block; color:var(--data-text-color); font-size:.84rem; font-weight:700; }
-        .field-info small { display:block; color:var(--text-muted); font-size:.69rem; line-height:1.5; margin-top:3px; }
-        .field-control { width:150px; max-width:46%; flex-shrink:0; }
-        .form-input { width:100%; padding:10px 12px; border-radius:12px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--input-bg); color:var(--text-color); outline:none; transition:all .3s; }
-        .form-input:focus { border-color:var(--primary-color); box-shadow:0 0 0 3px var(--primary-dim); }
-        .form-input[type="checkbox"] { width:23px; height:23px; padding:0; accent-color:var(--primary-color); }
-        .switch-control { width:48px; height:27px; position:relative; display:inline-block; }
-        .switch-control input { opacity:0; width:0; height:0; }
-        .switch-slider { position:absolute; inset:0; border-radius:20px; background:#94a3b8; transition:.3s; cursor:pointer; }
-        .switch-slider::before { content:''; position:absolute; width:21px; height:21px; right:3px; top:3px; border-radius:50%; background:#fff; transition:.3s; box-shadow:0 2px 6px rgba(0,0,0,.25); }
-        .switch-control input:checked + .switch-slider { background:var(--primary-color); }
-        .switch-control input:checked + .switch-slider::before { transform:translateX(-21px); }
+        /* تم استبدال الأنماط الداخلية بأنماط theme.css الموحدة */
+        .content-area { padding: 0 16px 30px; }
+        .panel { display: none; animation: fadeIn .25s ease; }
+        .panel.active { display: block; }
+        .field { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 58px; padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+        .field:last-child { border-bottom: 0; }
+        .field-info { flex: 1; min-width: 0; }
+        .field-info label { display: block; color: var(--text-primary); font-size: 0.9rem; font-weight: 700; margin-bottom: 4px; }
+        .field-info small { display: block; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.5; }
+        .field-control { width: 180px; max-width: 50%; flex-shrink: 0; }
+        .form-input { width: 100%; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); outline: none; transition: all 0.3s; }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
         .actions { display:flex; gap:9px; flex-wrap:wrap; margin-top:14px; }
         .action-btn { flex:1; min-width:130px; padding:11px 13px; border-radius:12px; border:var(--border-width) var(--border-style) var(--border-color); background:var(--surface-color); color:var(--text-muted); font-weight:700; font-size:.78rem; transition:all .3s; }
         .action-btn:hover { background:var(--primary-dim); color:var(--primary-color); border-color:var(--primary-color); transform:translateY(-2px); }
@@ -142,7 +121,7 @@
     </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
+<body class="report-screen">
 <div class="offline-banner" id="offlineBanner"><i class="fas fa-exclamation-triangle"></i> Android Bridge غير متاح؛ لن تُحفظ أي تغييرات</div>
 <div class="loading-indicator" id="loading"><div class="spinner"></div></div>
 <header class="top-bar">
@@ -157,31 +136,31 @@
     <nav class="filter-chips" id="tabs" aria-label="تبويبات الإعدادات"></nav>
 </header>
 <main class="page-container">
-    <div class="notice-card"><i class="fas fa-database"></i><div>تُحفظ إعدادات هذه الشاشة في <b>system_settings</b> عبر DatabaseHelper. عمليات النسخ والمراقبة والصيانة تستخدم الدوال الفعلية في Android؛ لا توجد بيانات تجريبية أو REST داخلي.</div></div>
-    <section class="stats-grid" id="summaryStats">
-        <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-cogs"></i></div><div class="stat-value" id="statFields">—</div><div class="stat-label">حقول الإعدادات</div></article>
-        <article class="stat-card"><div class="stat-icon green"><i class="fas fa-heartbeat"></i></div><div class="stat-value" id="statService">—</div><div class="stat-label">حالة خدمة SMS</div></article>
-        <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-copy"></i></div><div class="stat-value" id="statBackups">—</div><div class="stat-label">النسخ المحفوظة</div></article>
-        <article class="stat-card"><div class="stat-icon red"><i class="fas fa-shield-alt"></i></div><div class="stat-value" id="statIntegrity">—</div><div class="stat-label">سلامة SQLite</div></article>
+    <div class="report-source-banner is-verified" style="margin: 16px;"><i class="fas fa-building"></i><span>تُحفظ إعدادات هذه الشاشة في system_settings عبر DatabaseHelper. جميع العمليات متصلة بالوظائف الفعلية في Android.</span></div>
+    <section class="stats-grid" id="summaryStats" style="padding: 0 16px;">
+        <article class="stat-card info-card"><div class="card-header"><h3>حقول الإعدادات</h3><div class="card-icon-wrapper"><i class="fas fa-cogs"></i></div></div><div class="stat-value" id="statFields">—</div></article>
+        <article class="stat-card success-card"><div class="card-header"><h3>حالة خدمة SMS</h3><div class="card-icon-wrapper"><i class="fas fa-heartbeat"></i></div></div><div class="stat-value" id="statService">—</div></article>
+        <article class="stat-card warning-card"><div class="card-header"><h3>النسخ المحفوظة</h3><div class="card-icon-wrapper"><i class="fas fa-copy"></i></div></div><div class="stat-value" id="statBackups">—</div></article>
+        <article class="stat-card danger-card"><div class="card-header"><h3>سلامة SQLite</h3><div class="card-icon-wrapper"><i class="fas fa-shield-alt"></i></div></div><div class="stat-value" id="statIntegrity">—</div></article>
     </section>
     <div class="content-area">
-        <section class="panel active" id="panel-general"><div id="generalFields"></div></section>
-        <section class="panel" id="panel-startup"><div id="startupFields"></div></section>
-        <section class="panel" id="panel-sms"><div id="smsFields"></div></section>
+        <section class="panel active" id="panel-general"><div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات الشركة العامة</h3><p class="settings-card__desc">تكوين معلومات الشركة الأساسية</p></div><div class="settings-card__body" id="generalFields"></div></div></section>
+        <section class="panel" id="panel-startup"><div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات الفروع</h3><p class="settings-card__desc">تكوين معلومات الفروع والمواقع</p></div><div class="settings-card__body" id="startupFields"></div></div></section>
+        <section class="panel" id="panel-sms"><div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات الضرائب</h3><p class="settings-card__desc">تكوين نسب الضرائب والمعرفات الضريبية</p></div><div class="settings-card__body" id="smsFields"></div></div></section>
         <section class="panel" id="panel-monitoring">
-            <div id="monitoringFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>الحالة الحية</h3><span class="muted">بيانات مقروءة من SMSService وDatabaseHelper</span></div><div class="card-avatar"><i class="fas fa-heartbeat"></i></div></div><div id="monitoringState" class="status-grid"><div class="empty-state">اضغط تحديث لقراءة الحالة الفعلية.</div></div><div id="metrics" class="metrics-grid"></div><div class="actions"><button class="action-btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button><button class="action-btn" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button><button class="action-btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button><button class="action-btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button></div></div>
+            <div class="settings-card" style="margin-bottom: 16px;"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات العملة</h3><p class="settings-card__desc">تكوين العملة الافتراضية للشركة</p></div><div class="settings-card__body" id="monitoringFields"></div></div>
+            <div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">الحالة الحية</h3><p class="settings-card__desc">بيانات مقروءة من SMSService وDatabaseHelper</p></div><div class="settings-card__body"><div id="monitoringState" class="status-grid"><div class="empty-state">اضغط تحديث لقراءة الحالة الفعلية.</div></div><div id="metrics" class="metrics-grid"></div><div class="actions"><button class="action-btn primary" id="refreshMonitoring"><i class="fas fa-sync-alt"></i> تحديث الحالة</button><button class="action-btn" id="clearLogs"><i class="fas fa-broom"></i> تنظيف السجلات</button><button class="action-btn" id="clearMetrics"><i class="fas fa-chart-line"></i> تنظيف المقاييس</button><button class="action-btn" id="openMonitoringReport"><i class="fas fa-file-alt"></i> تقرير الحالة</button></div></div></div>
         </section>
-        <section class="panel" id="panel-security"><div id="securityFields"></div></section>
+        <section class="panel" id="panel-security"><div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات التراخيص</h3><p class="settings-card__desc">تكوين تراخيص الشركة وتواريخ الانتهاء</p></div><div class="settings-card__body" id="securityFields"></div></div></section>
         <section class="panel" id="panel-backup">
-            <div id="backupFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>نسخ إعدادات module</h3><span class="muted">لا تشمل جداول المبيعات والعملاء</span></div><div class="card-avatar"><i class="fas fa-copy"></i></div></div><div class="actions"><button class="action-btn primary" id="createBackup"><i class="fas fa-plus"></i> إنشاء نسخة</button><button class="action-btn" id="refreshBackups"><i class="fas fa-sync-alt"></i> تحديث القائمة</button></div><div class="table-shell"><table><thead><tr><th>المعرف</th><th>التاريخ</th><th>الحجم</th><th>تشفير</th><th>الإجراء</th></tr></thead><tbody id="backupsBody"><tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr></tbody></table></div></div>
+            <div class="settings-card" style="margin-bottom: 16px;"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات النسخ الاحتياطي</h3><p class="settings-card__desc">تكوين الجدولة والتشفير</p></div><div class="settings-card__body" id="backupFields"></div></div>
+            <div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">نسخ إعدادات الشركة</h3><p class="settings-card__desc">لا تشمل جداول المبيعات والعملاء</p></div><div class="settings-card__body"><div class="actions" style="margin-bottom: 16px;"><button class="action-btn primary" id="createBackup"><i class="fas fa-plus"></i> إنشاء نسخة</button><button class="action-btn" id="refreshBackups"><i class="fas fa-sync-alt"></i> تحديث القائمة</button></div><div class="table-wrapper"><table class="data-table"><thead><tr><th>المعرف</th><th>التاريخ</th><th>الحجم</th><th>تشفير</th><th>الإجراء</th></tr></thead><tbody id="backupsBody"><tr><td colspan="5"><div class="empty-state"><i class="fas fa-folder-open"></i>لا توجد نسخ محفوظة.</div></td></tr></tbody></table></div></div></div>
         </section>
         <section class="panel" id="panel-maintenance">
-            <div id="maintenanceFields"></div>
-            <div class="settings-card"><div class="card-header"><div><h3>صيانة قاعدة البيانات</h3><span class="muted">فحص integrity ثم VACUUM دون حذف جداول الأعمال</span></div><div class="card-avatar"><i class="fas fa-tools"></i></div></div><div class="actions"><button class="action-btn warning" id="optimizeDb"><i class="fas fa-wrench"></i> فحص وتحسين</button><button class="action-btn" id="checkIntegrity"><i class="fas fa-shield-alt"></i> فحص السلامة</button></div><div id="integrityResult" class="status-grid" style="margin-top:12px"></div></div>
+            <div class="settings-card" style="margin-bottom: 16px;"><div class="settings-card__header"><h3 class="settings-card__title">إعدادات متقدمة</h3><p class="settings-card__desc">إعدادات مخصصة للشركة</p></div><div class="settings-card__body" id="maintenanceFields"></div></div>
+            <div class="settings-card"><div class="settings-card__header"><h3 class="settings-card__title">صيانة قاعدة البيانات</h3><p class="settings-card__desc">فحص integrity ثم VACUUM دون حذف جداول الأعمال</p></div><div class="settings-card__body"><div class="actions"><button class="action-btn warning" id="optimizeDb"><i class="fas fa-wrench"></i> فحص وتحسين</button><button class="action-btn" id="checkIntegrity"><i class="fas fa-shield-alt"></i> فحص السلامة</button></div><div id="integrityResult" class="status-grid" style="margin-top:12px"></div></div></div>
         </section>
-        <div class="settings-card"><div class="actions"><button class="action-btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ وتطبيق الإعدادات</button><button class="action-btn danger" id="resetBtn"><i class="fas fa-undo"></i> إعادة الإعدادات الافتراضية</button></div></div>
+        <div class="settings-actions"><button class="action-btn danger" id="resetBtn"><i class="fas fa-undo"></i> التراجع عن التغييرات</button><button class="action-btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ الإعدادات</button></div>
     </div>
 </main>
 <button class="fab" id="fabSave" title="حفظ الإعدادات"><i class="fas fa-save"></i></button>
@@ -213,8 +192,8 @@
     function openModal(id){el(id).classList.add('show');} function closeModal(id){el(id).classList.remove('show');}
     function renderTabs(){const html=tabs.map((t,i)=>`<button class="filter-chip ${i===0?'active':''}" data-tab="${t[0]}"><i class="fas ${t[2]}"></i> ${t[1]}</button>`).join('');el('tabs').innerHTML=html;el('bottomNav').innerHTML=tabs.slice(0,5).map((t,i)=>`<button class="nav-item ${i===0?'active':''}" data-tab="${t[0]}"><i class="fas ${t[2]}"></i><span>${t[1]}</span></button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>selectTab(b.dataset.tab)));}
     function selectTab(name){document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+name));if(name==='monitoring')refreshMonitoring();if(name==='backup')refreshBackups();window.scrollTo({top:0,behavior:'smooth'});}
-    function renderField(section,def){const[key,label,type,help,...options]=def;const row=document.createElement('div');row.className='field';const info=document.createElement('div');info.className='field-info';info.innerHTML=`<label for="setting-${key}">${label}</label><small>${help||''}</small>`;const control=document.createElement('div');control.className='field-control';let input;if(type==='bool'){const wrap=document.createElement('label');wrap.className='switch-control';input=document.createElement('input');input.type='checkbox';const slider=document.createElement('span');slider.className='switch-slider';wrap.append(input,slider);control.appendChild(wrap);}else{input=document.createElement('input');input.className='form-input';input.type=type==='number'?'number':type==='password'?'password':'text';if(type==='select'){input=document.createElement('select');input.className='form-input';options.forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];input.appendChild(op);});}if(type==='array')input.placeholder='قيمة1, قيمة2';input.id='setting-'+key;control.appendChild(input);}if(type==='bool')input.id='setting-'+key;row.append(info,control);return row;}
-    function renderAllFields(){Object.keys(defs).forEach(section=>{const target=el(section+'Fields');target.innerHTML='';const title=tabs.find(t=>t[0]===section);const card=document.createElement('div');card.className='settings-card';card.innerHTML=`<div class="card-header"><div><h3>${title[1]}</h3><span class="muted">إعدادات قابلة للقراءة والحفظ من المصدر الفعلي</span></div><div class="card-avatar"><i class="fas ${title[2]}"></i></div></div>`;const fields=document.createElement('div');defs[section].forEach(def=>fields.appendChild(renderField(section,def)));card.appendChild(fields);target.appendChild(card);});}
+    function renderField(section,def){const[key,label,type,help,...options]=def;const row=document.createElement('div');row.className='settings-row field';const info=document.createElement('div');info.className='settings-row__info field-info';info.innerHTML=`<div class="settings-row__label"><label for="setting-${key}">${label}</label></div><div class="settings-row__help">${help||''}</div>`;const control=document.createElement('div');control.className='settings-row__control field-control';let input;if(type==='bool'){const wrap=document.createElement('label');wrap.className='toggle-switch';input=document.createElement('input');input.type='checkbox';const slider=document.createElement('span');slider.className='toggle-slider';wrap.append(input,slider);control.appendChild(wrap);}else{input=document.createElement('input');input.className='form-input';input.type=type==='number'?'number':type==='password'?'password':'text';if(type==='select'){input=document.createElement('select');input.className='form-input';options.forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];input.appendChild(op);});}if(type==='array')input.placeholder='قيمة1, قيمة2';input.id='setting-'+key;control.appendChild(input);}if(type==='bool')input.id='setting-'+key;row.append(info,control);return row;}
+    function renderAllFields(){Object.keys(defs).forEach(section=>{const target=el(section+'Fields');if(!target)return;target.innerHTML='';defs[section].forEach(def=>target.appendChild(renderField(section,def)));});}
     function setField(key,value){const input=el('setting-'+key);if(!input)return;if(input.type==='checkbox')input.checked=Boolean(value);else if(Array.isArray(value))input.value=value.join(', ');else input.value=value==null?'':value;}
     function loadFields(){Object.keys(settings).forEach(k=>setField(k,settings[k]));el('statFields').textContent=Object.keys(defs).reduce((n,s)=>n+defs[s].length,0);}
     function collectSettings(){const next=Object.assign({},settings);Object.keys(defs).forEach(s=>defs[s].forEach(def=>{const[key,,type]=def;const input=el('setting-'+key);if(!input)return;if(type==='bool')next[key]=input.checked;else if(type==='number')next[key]=Number(input.value||0);else if(type==='array')next[key]=input.value.split(',').map(v=>v.trim()).filter(Boolean);else next[key]=input.value;}));return next;}
