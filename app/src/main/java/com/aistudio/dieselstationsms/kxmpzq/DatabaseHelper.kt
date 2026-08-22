@@ -194,6 +194,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     26 -> migrateV26ToV27(db)
                 }
             }
+            ensureModule006Schema(db)
             ensureDeliveriesSchema(db)
             ensureLegacyAssetsSchema(db)
             db.setTransactionSuccessful()
@@ -228,12 +229,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureModule003Indexes(db)
         ensureFleetSchema(db)
         ensureFleetPermissions(db)
+        ensureModule006Schema(db)
         ensureDeliveriesSchema(db)
         ensureLegacyAssetsSchema(db)
         createTasksTable(db)
         ensureTaskPermissions(db)
         ensureMessagingPermissions(db)
         ensureSmsSettings(db)
+    }
+
+    private fun ensureModule006Schema(db: SQLiteDatabase) {
+        createTankPumpTables(db)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tanks_station_deleted ON tanks(station_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_tank_level_tank_date ON tank_level_log(tank_id, reading_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_refills_station_date ON tank_refills(station_id, arrival_date, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_refills_tank_status ON tank_refills(tank_id, status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_pumps_station_tank ON pumps(station_id, tank_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_nozzles_pump_fuel ON pump_nozzles(pump_id, fuel_type_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_station_date ON meter_readings(station_id, reading_date, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_quality_refill_date ON fuel_quality_tests(refill_id, test_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_station_next ON calibration_records(station_id, next_calibration_date)")
     }
 
     private fun ensurePartyTypePermissions(db: SQLiteDatabase) {
@@ -12152,10 +12167,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 columns = listOf("tank_code", "tank_name", "tank_name_ar", "station_id", "fuel_type_id", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "usable_capacity", "dead_volume", "tank_shape", "length_meters", "diameter_meters", "height_meters", "location", "installation_date", "manufacturer", "serial_number", "model", "sensor_serial", "sensor_type", "sensor_calibration_date", "sensor_accuracy", "leak_detection", "overfill_protection", "emergency_valve", "last_inspection_date", "next_inspection_date", "inspection_certificate", "status", "status_reason"),
                 required = listOf("tank_code", "tank_name", "station_id", "fuel_type_id", "capacity_liters"),
                 searchColumns = listOf("tank_code", "tank_name", "tank_name_ar", "location", "serial_number"),
-                softDeleted = false,
-                hasUpdatedAt = false,
-                hasStatus = false,
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
                 numericColumns = listOf("station_id", "fuel_type_id", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "usable_capacity", "dead_volume")
+            )
+            "tank_refills" -> OperationalTableSpec(
+                table = "tank_refills",
+                columns = listOf("refill_code", "tank_id", "supplier_id", "station_id", "tanker_number", "tanker_driver", "tanker_driver_phone", "seal_number", "fuel_type_id", "ordered_quantity", "delivered_quantity", "actual_quantity", "quantity_difference", "unloading_start", "unloading_end", "unloading_duration", "tank_level_before", "tank_level_after", "fuel_density", "fuel_temperature", "quality_certificate", "lab_test_result", "lab_test_notes", "unit_price", "total_amount", "transport_cost", "discount", "tax_amount", "net_amount", "currency_id", "order_date", "expected_date", "arrival_date", "received_by", "approved_by", "inspected_by", "status", "rejection_reason", "invoice_number", "invoice_path", "delivery_note_path", "photos", "remarks", "extra_data", "created_by", "updated_by"),
+                required = listOf("refill_code", "tank_id", "station_id", "fuel_type_id", "delivered_quantity"),
+                searchColumns = listOf("refill_code", "tanker_number", "tanker_driver", "invoice_number", "status", "order_date", "arrival_date"),
+                softDeleted = true,
+                hasUpdatedAt = true,
+                hasStatus = true,
+                numericColumns = listOf("tank_id", "supplier_id", "station_id", "fuel_type_id", "ordered_quantity", "delivered_quantity", "actual_quantity", "quantity_difference", "unloading_duration", "tank_level_before", "tank_level_after", "fuel_density", "fuel_temperature", "unit_price", "total_amount", "transport_cost", "discount", "tax_amount", "net_amount", "currency_id")
             )
             "pumps" -> OperationalTableSpec(
                 table = "pumps",
@@ -12648,6 +12673,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             "fuel_types" -> defaultString("fuel_code", "FUEL")
             "price_lists" -> defaultString("list_code", "PL")
             "tanks" -> defaultString("tank_code", "TANK")
+            "tank_refills" -> defaultString("refill_code", "REFILL")
             "pumps" -> defaultString("pump_code", "PUMP")
             "meter_readings" -> defaultString("reading_code", "MR")
             "calibration_records" -> defaultString("calibration_code", "CAL")
@@ -12720,6 +12746,191 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
         }
     }
+    private fun validateModule006Record(screenKey: String, data: JSONObject, db: SQLiteDatabase? = null, stationId: Int = data.optInt("station_id", 0)) {
+        fun number(key: String, minimum: Double = 0.0, maximum: Double? = null): Double? {
+            if (!data.has(key) || data.isNull(key)) return null
+            val value = data.optString(key, "").trim().toDoubleOrNull() ?: throw IllegalArgumentException("قيمة رقمية غير صالحة: $key")
+            require(value.isFinite() && value >= minimum && (maximum == null || value <= maximum)) { "القيمة خارج النطاق: $key" }
+            return value
+        }
+        fun date(key: String) { if (data.has(key) && !data.isNull(key)) require(parseAttendanceDate(data.optString(key).trim()) != null) { "التاريخ غير صالح: $key" } }
+        when (screenKey) {
+            "tanks" -> {
+                val capacity = number("capacity_liters")
+                val minimum = number("minimum_level")
+                val maximum = number("maximum_level")
+                val current = number("current_quantity")
+                require(capacity == null || capacity > 0.0) { "سعة الخزان يجب أن تكون أكبر من صفر" }
+                require(maximum == null || capacity == null || maximum <= capacity) { "الحد الأعلى يتجاوز سعة الخزان" }
+                require(minimum == null || maximum == null || maximum >= minimum) { "الحد الأعلى أقل من الحد الأدنى" }
+                require(current == null || capacity == null || current <= capacity) { "كمية الخزان تتجاوز السعة" }
+                listOf("usable_capacity", "dead_volume").forEach { number(it) }
+                date("installation_date"); date("sensor_calibration_date"); date("last_inspection_date"); date("next_inspection_date")
+            }
+            "pumps" -> {
+                listOf("max_flow_rate", "meter_start", "meter_current", "maintenance_interval").forEach { number(it) }
+                val start = number("meter_start")
+                val current = number("meter_current")
+                require(start == null || current == null || current >= start) { "قراءة المضخة الحالية أقل من البداية" }
+                date("installation_date"); date("last_maintenance"); date("next_maintenance")
+            }
+            "meter_readings" -> {
+                val opening = number("opening_reading")
+                val closing = number("closing_reading")
+                val sold = number("sold_liters")
+                require(opening == null || closing == null || closing >= opening) { "القراءة الختامية أقل من الافتتاحية" }
+                require(opening == null || closing == null || sold == null || kotlin.math.abs((closing - opening) - sold) < 0.01) { "كمية البيع لا تطابق فرق القراءات" }
+                listOf("system_sold_liters", "difference", "difference_percent", "tolerance_limit", "adjustment_amount").forEach { number(it) }
+                date("reading_date")
+                val period = data.optString("period", "").trim()
+                if (period.isNotEmpty()) require(period in setOf("morning", "evening", "night", "daily")) { "الفترة غير صالحة" }
+                val status = data.optString("status", "").trim()
+                if (status.isNotEmpty()) require(status in setOf("draft", "verified", "approved", "rejected")) { "حالة القراءة غير صالحة" }
+            }
+            "tank_refills" -> {
+                val delivered = number("delivered_quantity")
+                val actual = number("actual_quantity")
+                listOf("ordered_quantity", "quantity_difference", "tank_level_before", "tank_level_after", "fuel_density", "fuel_temperature", "unit_price", "total_amount", "transport_cost", "discount", "tax_amount", "net_amount").forEach { number(it) }
+                require(delivered != null && delivered > 0.0) { "كمية التعبئة يجب أن تكون أكبر من صفر" }
+                require(actual == null || actual > 0.0) { "الكمية الفعلية يجب أن تكون أكبر من صفر" }
+                val status = data.optString("status", "").trim()
+                if (status.isNotEmpty()) require(status in setOf("pending", "in_progress", "completed", "rejected", "cancelled")) { "حالة التعبئة غير صالحة" }
+                date("order_date"); date("expected_date"); date("arrival_date")
+            }
+            "tank_level_log" -> {
+                listOf("opening_level", "closing_level", "measured_level", "calculated_level", "difference", "fuel_temperature", "fuel_density", "volume_at_15c", "refills_total", "sales_total", "evaporation_loss").forEach { number(it) }
+                date("reading_date")
+            }
+            "fuel_quality_tests" -> {
+                listOf("density", "temperature", "water_content", "sulfur_content", "viscosity", "flash_point", "cetane_number").forEach { number(it) }
+                val result = data.optString("result", "").trim()
+                if (result.isNotEmpty()) require(result in setOf("pass", "fail", "warning")) { "نتيجة الفحص غير صالحة" }
+                date("test_date")
+            }
+            "calibration_records" -> {
+                listOf("before_value", "after_value", "error_value", "correction_percent", "calibration_factor").forEach { number(it) }
+                date("calibration_date"); date("next_calibration_date")
+                val status = data.optString("status", "").trim()
+                if (status.isNotEmpty()) require(status in setOf("scheduled", "in_progress", "completed", "failed")) { "حالة المعايرة غير صالحة" }
+            }
+        }
+    }
+
+    private fun requireTankFuelMatch(db: SQLiteDatabase, tankId: Long, fuelTypeId: Long, stationId: Int): JSONObject {
+        require(tankId > 0L && fuelTypeId > 0L && stationId > 0) { "الخزان ونوع الوقود والمحطة مطلوبة" }
+        val tank = db.rawQuery("SELECT id, fuel_type_id, current_quantity, capacity_liters FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationId.toString())).use { cursor ->
+            require(cursor.moveToFirst()) { "الخزان غير موجود ضمن محطة المستخدم" }
+            JSONObject().apply { put("id", cursor.getLong(0)); put("fuel_type_id", cursor.getLong(1)); put("current_quantity", cursor.getDouble(2)); put("capacity_liters", cursor.getDouble(3)) }
+        }
+        require(tank.optLong("fuel_type_id") == fuelTypeId) { "نوع الوقود لا يطابق نوع وقود الخزان" }
+        return tank
+    }
+
+    fun saveTankRefillRecord(input: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0 && actorId > 0L) { "المحطة والمستخدم مطلوبان" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            val data = operationalPreparedData("tank_refills", input, actorId).apply { put("station_id", stationScopeId); put("created_by", actorId); put("received_by", actorId) }
+            requireOperationalData(operationalSpec("tank_refills")!!, data)
+            validateModule006Record("tank_refills", data, db, stationScopeId)
+            val tank = requireTankFuelMatch(db, data.optLong("tank_id"), data.optLong("fuel_type_id"), stationScopeId)
+            val added = if (data.has("actual_quantity") && !data.isNull("actual_quantity")) data.optDouble("actual_quantity") else data.optDouble("delivered_quantity")
+            require(added.isFinite() && added > 0.0) { "كمية التعبئة غير صالحة" }
+            val before = tank.optDouble("current_quantity")
+            val status = data.optString("status", "completed").ifBlank { "completed" }
+            val applied = if (status == "completed") added else 0.0
+            val after = before + applied
+            require(after <= tank.optDouble("capacity_liters")) { "التعبئة تتجاوز سعة الخزان" }
+            data.put("tank_level_before", before); data.put("tank_level_after", after); data.put("actual_quantity", added); data.put("quantity_difference", added - data.optDouble("delivered_quantity")); data.put("status", status)
+            val values = ContentValues()
+            for (key in operationalSpec("tank_refills")!!.columns) if (data.has(key)) putOperationalValue(values, key, data.opt(key))
+            putOperationalValue(values, "uuid", data.optString("uuid")); values.put("created_at", getCurrentDateTime()); values.put("updated_at", getCurrentDateTime())
+            db.beginTransaction()
+            try {
+                val id = db.insertOrThrow("tank_refills", null, values)
+                val updated = db.update("tanks", ContentValues().apply { put("current_quantity", after); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(data.optLong("tank_id").toString(), stationScopeId.toString()))
+                require(updated == 1) { "تعذر تحديث كمية الخزان" }
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateTankRefillRecord(id: Long, input: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(id > 0L && stationScopeId > 0 && actorId > 0L) { "بيانات تحديث التعبئة غير صالحة" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val old = db.rawQuery("SELECT tank_id, fuel_type_id, actual_quantity, delivered_quantity, status FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة غير موجود ضمن المحطة" }; JSONObject().apply { put("tank_id", cursor.getLong(0)); put("fuel_type_id", cursor.getLong(1)); put("actual_quantity", cursor.getDouble(2)); put("delivered_quantity", cursor.getDouble(3)); put("status", cursor.getString(4)) } }
+                val data = JSONObject(input.toString()).apply {
+                    put("station_id", stationScopeId)
+                    put("tank_id", optLong("tank_id", old.optLong("tank_id")))
+                    put("fuel_type_id", optLong("fuel_type_id", old.optLong("fuel_type_id")))
+                    put("actual_quantity", if (has("actual_quantity")) optDouble("actual_quantity") else old.optDouble("actual_quantity"))
+                    put("delivered_quantity", if (has("delivered_quantity")) optDouble("delivered_quantity") else old.optDouble("delivered_quantity"))
+                    put("status", optString("status", old.optString("status", "completed")).ifBlank { old.optString("status", "completed") })
+                }
+                validateModule006Record("tank_refills", data, db, stationScopeId)
+                val tank = requireTankFuelMatch(db, data.optLong("tank_id"), data.optLong("fuel_type_id"), stationScopeId)
+                val oldApplied = if (old.optString("status") == "completed") old.optDouble("actual_quantity") else 0.0
+                val newQty = data.optDouble("actual_quantity")
+                val newApplied = if (data.optString("status") == "completed") newQty else 0.0
+                val after = tank.optDouble("current_quantity") - oldApplied + newApplied
+                require(after >= 0.0 && after <= tank.optDouble("capacity_liters")) { "كمية الخزان الناتجة خارج النطاق" }
+                data.put("tank_level_before", after - newApplied); data.put("tank_level_after", after); data.put("quantity_difference", newQty - data.optDouble("delivered_quantity")); data.put("updated_by", actorId)
+                val values = ContentValues()
+                for (key in operationalSpec("tank_refills")!!.columns) if (data.has(key)) putOperationalValue(values, key, data.opt(key))
+                values.put("updated_at", getCurrentDateTime())
+                val rows = db.update("tank_refills", values, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString()))
+                require(rows == 1) { "تعذر تحديث سجل التعبئة" }
+                require(db.update("tanks", ContentValues().apply { put("current_quantity", after); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(data.optLong("tank_id").toString(), stationScopeId.toString())) == 1) { "تعذر تحديث كمية الخزان" }
+                db.setTransactionSuccessful(); rows
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun deleteTankRefillRecord(id: Long, stationScopeId: Int): Int {
+        require(id > 0L && stationScopeId > 0) { "بيانات حذف التعبئة غير صالحة" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val old = db.rawQuery("SELECT tank_id, actual_quantity, status FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة غير موجود ضمن المحطة" }; arrayOf(cursor.getLong(0), java.lang.Double.doubleToRawLongBits(cursor.getDouble(1)), cursor.getString(2)) }
+                val tankId = old[0] as Long; val qty = if ((old[2] as String) == "completed") java.lang.Double.longBitsToDouble(old[1] as Long) else 0.0
+                val current = db.rawQuery("SELECT current_quantity FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان غير موجود ضمن المحطة" }; cursor.getDouble(0) }
+                require(current >= qty) { "لا يمكن عكس التعبئة لأن كمية الخزان الحالية أقل من الكمية المسجلة" }
+                require(db.update("tanks", ContentValues().apply { put("current_quantity", current - qty); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(tankId.toString(), stationScopeId.toString())) == 1) { "تعذر عكس كمية الخزان" }
+                val rows = db.update("tank_refills", ContentValues().apply { put("is_deleted", 1); put("deleted_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0", arrayOf(id.toString(), stationScopeId.toString()))
+                db.setTransactionSuccessful(); rows
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    private fun requireModule006RelationsInStation(db: SQLiteDatabase, screenKey: String, data: JSONObject, stationId: Int) {
+        require(stationId > 0) { "معرف المحطة مطلوب" }
+        when (screenKey) {
+            "tanks" -> if (data.has("fuel_type_id")) db.rawQuery("SELECT 1 FROM fuel_types WHERE id=? AND is_deleted=0", arrayOf(data.optLong("fuel_type_id").toString())).use { cursor -> require(cursor.moveToFirst()) { "نوع الوقود غير موجود" } }
+            "pumps" -> if (data.has("tank_id")) db.rawQuery("SELECT 1 FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(data.optLong("tank_id").toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
+            "meter_readings" -> {
+                val pumpId = data.optLong("pump_id", 0L)
+                val nozzleId = data.optLong("nozzle_id", 0L)
+                if (pumpId > 0L && nozzleId > 0L) {
+                    db.rawQuery("SELECT 1 FROM pump_nozzles n JOIN pumps p ON p.id=n.pump_id WHERE n.id=? AND n.pump_id=? AND p.station_id=? AND n.is_deleted=0 AND p.is_deleted=0", arrayOf(nozzleId.toString(), pumpId.toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الفوهة لا تتبع المضخة المحددة أو خارج نطاق المحطة" } }
+                } else if (pumpId > 0L) {
+                    db.rawQuery("SELECT 1 FROM pumps WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(pumpId.toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المضخة خارج نطاق المحطة" } }
+                } else if (nozzleId > 0L) {
+                    db.rawQuery("SELECT 1 FROM pump_nozzles n JOIN pumps p ON p.id=n.pump_id WHERE n.id=? AND p.station_id=? AND n.is_deleted=0 AND p.is_deleted=0", arrayOf(nozzleId.toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الفوهة خارج نطاق المحطة" } }
+                }
+            }
+            "tank_level_log" -> if (data.has("tank_id")) db.rawQuery("SELECT 1 FROM tanks WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(data.optLong("tank_id").toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
+            "fuel_quality_tests" -> if (data.has("refill_id")) db.rawQuery("SELECT 1 FROM tank_refills WHERE id=? AND station_id=? AND is_deleted=0", arrayOf(data.optLong("refill_id").toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "عملية التعبئة خارج نطاق المحطة" } }
+        }
+    }
+
     private fun requireCalibrationEntityInStation(db: SQLiteDatabase, data: JSONObject, stationId: Int, existingId: Long? = null) {
         require(stationId > 0) { "معرف المحطة مطلوب لسجل المعايرة" }
         var entityType = data.optString("entity_type", "").trim().lowercase(Locale.US)
@@ -12826,6 +13037,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_refills", "tank_level_log", "fuel_quality_tests", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (stationId > 0 && screenKey == "calibration_records") {
                 where += calibrationStationPredicate(stationId)
@@ -12863,6 +13075,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasStatus && spec.columns.contains("status")) {
                 val status = params.optString("status", "").trim()
                 if (status.isNotBlank()) { where += "status = ?"; args += status }
+            } else if (screenKey == "fuel_quality_tests") {
+                val result = params.optString("status", "").trim()
+                if (result.isNotBlank()) { where += "result = ?"; args += result }
             }
             if (screenKey == "sales_transactions") {
                 val paymentMethod = params.optString("payment_method", "").trim()
@@ -12887,6 +13102,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
                 "meter_readings" -> "reading_date"
+                "tank_refills" -> "arrival_date"
+                "tank_level_log" -> "reading_date"
+                "fuel_quality_tests" -> "test_date"
+                "calibration_records" -> "calibration_date"
                 "vehicle_trips" -> "trip_date"
                 "vehicle_expenses" -> "expense_date"
                 "vehicle_locations" -> "location_time"
@@ -12900,7 +13119,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
             val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
-            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id", "fuel_code", "fuel_name", "default_sale_price", "list_code", "list_name", "valid_from", "valid_to", "product_id", "old_price", "new_price", "change_date")
+            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id", "fuel_code", "fuel_name", "default_sale_price", "list_code", "list_name", "valid_from", "valid_to", "product_id", "old_price", "new_price", "change_date", "tank_code", "tank_name", "capacity_liters", "minimum_level", "maximum_level", "current_quantity", "pump_code", "pump_number", "meter_current", "nozzle_id", "refill_code", "delivered_quantity", "arrival_date", "fuel_type_id", "tank_id", "test_date", "refill_id", "result", "density", "calibration_code", "entity_type", "entity_id", "calibration_date", "next_calibration_date")
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
@@ -12916,6 +13135,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_refills", "tank_level_log", "fuel_quality_tests", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (stationId > 0 && screenKey == "calibration_records") {
                 where += calibrationStationPredicate(stationId)
@@ -12953,6 +13173,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasStatus && spec.columns.contains("status")) {
                 val status = params.optString("status", "").trim()
                 if (status.isNotBlank()) { where += "status = ?"; args += status }
+            } else if (screenKey == "fuel_quality_tests") {
+                val result = params.optString("status", "").trim()
+                if (result.isNotBlank()) { where += "result = ?"; args += result }
             }
             if (screenKey == "sales_transactions") {
                 val paymentMethod = params.optString("payment_method", "").trim()
@@ -12977,6 +13200,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
                 "meter_readings" -> "reading_date"
+                "tank_refills" -> "arrival_date"
+                "tank_level_log" -> "reading_date"
+                "fuel_quality_tests" -> "test_date"
+                "calibration_records" -> "calibration_date"
                 "vehicle_trips" -> "trip_date"
                 "vehicle_expenses" -> "expense_date"
                 "vehicle_locations" -> "location_time"
@@ -13064,11 +13291,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
+        if (screenKey == "tank_refills") return saveTankRefillRecord(input, input.optInt("station_id", 0), actorId)
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
         if (screenKey == "attendance") validateAttendanceRecord(data)
         requireOperationalData(spec, data)
         validateFleetRecord(screenKey, data)
+        if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests", "calibration_records")) validateModule006Record(screenKey, data)
         dbLock.lock()
         return try {
             val values = ContentValues()
@@ -13078,11 +13307,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses")) {
                 require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
                 requireFleetRelationsInStation(writeDb, screenKey, data, stationId)
             }
             if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) requireModule006RelationsInStation(writeDb, screenKey, data, stationId)
             if (screenKey == "calibration_records") requireCalibrationEntityInStation(writeDb, data, stationId)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0) writeDb.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
@@ -13101,6 +13332,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun updateOperationalRecord(screenKey: String, id: Long, input: JSONObject, actorId: Long = 0L): Int {
+        if (screenKey == "tank_refills") return updateTankRefillRecord(id, input, input.optInt("station_id", 0), actorId)
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
@@ -13110,6 +13342,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
         if (screenKey == "attendance") validateAttendanceRecord(data, id)
         validateFleetRecord(screenKey, data)
+        if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests", "calibration_records")) validateModule006Record(screenKey, data)
         dbLock.lock()
         return try {
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
@@ -13117,12 +13350,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses")) {
                 require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
                 requireFleetRelationsInStation(writableDatabase, screenKey, data, stationId)
             }
             if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+            if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests")) requireModule006RelationsInStation(writableDatabase, screenKey, data, stationId)
             if (screenKey == "calibration_records") requireCalibrationEntityInStation(writableDatabase, data, stationId, id)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
             if (screenKey == "price_history" && stationId > 0 && data.has("product_id")) writableDatabase.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
@@ -13156,6 +13391,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     fun deleteOperationalRecord(screenKey: String, id: Long, actorId: Long = 0L, stationId: Int? = null): Int {
+        if (screenKey == "tank_refills") return deleteTankRefillRecord(id, stationId ?: 0)
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -14288,6 +14524,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // ========================================================================
     // دوال إحصائيات الخزانات
     // ========================================================================
+
+    fun getPumpNozzlesForStation(stationId: Int): JSONArray {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery("SELECT n.*, p.pump_code, p.pump_number, f.fuel_code, f.fuel_name, f.fuel_name_ar FROM pump_nozzles n JOIN pumps p ON p.id=n.pump_id LEFT JOIN fuel_types f ON f.id=n.fuel_type_id WHERE p.station_id=? AND n.is_deleted=0 AND p.is_deleted=0 ORDER BY p.pump_number, n.nozzle_number", arrayOf(stationId.toString())).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
 
     fun getTankStats(stationId: Int): JSONArray {
         dbLock.lock()

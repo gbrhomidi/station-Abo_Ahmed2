@@ -7133,6 +7133,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolvePumpRecord(id: Long, note: String = "") = operationalResolve("pumps", "pumps", id, note)
 
         @JavascriptInterface
+        fun getPumpNozzleRecords(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getPumpNozzlesForStation(requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("PumpNozzleList", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun getMeterReadingRecords(jsonData: String = "{}") = operationalList("tanks", "meter_readings", jsonData)
         @JavascriptInterface
         fun generateMeterReadingReport(jsonData: String = "{}") = operationalReport("tanks", "meter_readings", jsonData)
@@ -7157,6 +7164,17 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteTankLevelRecord(id: Long) = operationalDelete("tanks", "tank_level_log", id)
         @JavascriptInterface
         fun resolveTankLevelRecord(id: Long, note: String = "") = operationalResolve("tanks", "tank_level_log", id, note)
+
+        @JavascriptInterface
+        fun getTankRefillRecords(jsonData: String = "{}"): String = operationalList("tanks", "tank_refills", jsonData)
+        @JavascriptInterface
+        fun generateTankRefillReport(jsonData: String = "{}"): String = operationalReport("tanks", "tank_refills", jsonData)
+        @JavascriptInterface
+        fun saveTankRefillRecord(jsonData: String): String = operationalSave("tanks", "tank_refills", jsonData)
+        @JavascriptInterface
+        fun updateTankRefillRecord(id: Long, jsonData: String): String = operationalUpdate("tanks", "tank_refills", id, jsonData)
+        @JavascriptInterface
+        fun deleteTankRefillRecord(id: Long): String = operationalDelete("tanks", "tank_refills", id)
 
         @JavascriptInterface
         fun getFuelQualityRecords(jsonData: String = "{}") = operationalList("tanks", "fuel_quality_tests", jsonData)
