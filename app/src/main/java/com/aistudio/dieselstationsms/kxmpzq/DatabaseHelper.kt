@@ -226,6 +226,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureActivityPermissions(db)
         ensurePartyTypePermissions(db)
         ensureModule003Indexes(db)
+        ensureFleetSchema(db)
+        ensureFleetPermissions(db)
         ensureDeliveriesSchema(db)
         ensureLegacyAssetsSchema(db)
         createTasksTable(db)
@@ -267,6 +269,61 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_bad_debts_customer_resolved_date ON bad_debts(customer_id, resolved, date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_contracts_party_deleted_end ON contracts(party_id, is_deleted, end_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sales_station_customer_deleted_date ON sales_transactions(station_id, customer_party_id, is_deleted, created_at)")
+    }
+
+    private fun ensureFleetSchema(db: SQLiteDatabase) {
+        ensureColumn(db, "drivers", "station_id", "INTEGER")
+        db.execSQL("""
+            UPDATE drivers
+            SET station_id = (SELECT p.station_id FROM parties p WHERE p.id = drivers.party_id AND p.is_deleted = 0)
+            WHERE station_id IS NULL AND party_id IS NOT NULL
+              AND (SELECT p.station_id FROM parties p WHERE p.id = drivers.party_id AND p.is_deleted = 0) IS NOT NULL
+        """.trimIndent())
+        db.execSQL("""
+            UPDATE drivers
+            SET station_id = (
+                SELECT p.station_id FROM vehicles v
+                JOIN parties p ON p.id = v.party_id
+                WHERE v.id = drivers.vehicle_id AND v.is_deleted = 0 AND p.is_deleted = 0
+            )
+            WHERE station_id IS NULL AND vehicle_id IS NOT NULL
+              AND (SELECT p.station_id FROM vehicles v JOIN parties p ON p.id = v.party_id WHERE v.id = drivers.vehicle_id AND v.is_deleted = 0 AND p.is_deleted = 0) IS NOT NULL
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_drivers_station_deleted_status ON drivers(station_id, is_deleted, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicles_party_deleted_status ON vehicles(party_id, is_deleted, status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations(vehicle_id, location_time)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_trips_vehicle_date ON vehicle_trips(vehicle_id, trip_date)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_vehicle_expenses_vehicle_date ON vehicle_expenses(vehicle_id, expense_date)")
+    }
+
+    private fun ensureFleetPermissions(db: SQLiteDatabase) {
+        db.execSQL("""
+            INSERT OR IGNORE INTO permissions (uuid, permission_code, permission_name, permission_name_ar, module, module_name_ar, action)
+            VALUES
+                ('PER-FLEET-READ-UUID', 'vehicles.read', 'View Fleet', 'عرض الأسطول', 'vehicles', 'الأسطول', 'read'),
+                ('PER-FLEET-CREATE-UUID', 'vehicles.create', 'Create Fleet Records', 'إنشاء سجلات الأسطول', 'vehicles', 'الأسطول', 'create'),
+                ('PER-FLEET-UPDATE-UUID', 'vehicles.update', 'Edit Fleet Records', 'تعديل سجلات الأسطول', 'vehicles', 'الأسطول', 'update'),
+                ('PER-FLEET-DELETE-UUID', 'vehicles.delete', 'Delete Fleet Records', 'حذف سجلات الأسطول', 'vehicles', 'الأسطول', 'delete')
+        """)
+        db.execSQL("""
+            INSERT OR IGNORE INTO role_permissions
+                (uuid, role_id, permission_id, can_create, can_read, can_update, can_delete, can_export, can_print, can_approve)
+            SELECT 'RP-FLEET-' || r.id || '-' || p.module || '-' || p.action, r.id, p.id,
+                   CASE WHEN p.action = 'create' AND r.id IN (1, 2, 3) THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'read' AND r.id BETWEEN 1 AND 7 THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'update' AND r.id IN (1, 2, 3) THEN 1 ELSE 0 END,
+                   CASE WHEN p.action = 'delete' AND r.id IN (1, 2, 3) THEN 1 ELSE 0 END,
+                   0, 0, 0
+            FROM roles r CROSS JOIN permissions p
+            WHERE p.permission_code IN ('vehicles.read', 'vehicles.create', 'vehicles.update', 'vehicles.delete')
+              AND r.id BETWEEN 1 AND 7
+              AND NOT EXISTS (
+                  SELECT 1 FROM role_permissions existing_rp
+                  WHERE existing_rp.role_id = r.id
+                    AND existing_rp.permission_id = p.id
+                    AND existing_rp.station_id IS NULL
+              )
+        """)
     }
 
     private fun ensureSmsMessagesTable(db: SQLiteDatabase) {
@@ -2083,6 +2140,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
                 driver_code VARCHAR(20) UNIQUE NOT NULL,
+                station_id INTEGER,
                 party_id INTEGER,
                 vehicle_id INTEGER,
                 full_name VARCHAR(200) NOT NULL,
@@ -12011,13 +12069,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "drivers" -> OperationalTableSpec(
                 table = "drivers",
-                columns = listOf("driver_code", "party_id", "vehicle_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "phone", "phone2", "email", "address", "license_number", "license_type", "license_issue_date", "license_expiry_date", "license_issuing_authority", "license_doc_path", "hire_date", "job_title", "salary", "emergency_name", "emergency_phone", "emergency_relation", "status", "termination_date", "termination_reason", "remarks", "extra_data"),
+                columns = listOf("driver_code", "station_id", "party_id", "vehicle_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "phone", "phone2", "email", "address", "license_number", "license_type", "license_issue_date", "license_expiry_date", "license_issuing_authority", "license_doc_path", "hire_date", "job_title", "salary", "emergency_name", "emergency_phone", "emergency_relation", "status", "termination_date", "termination_reason", "remarks", "extra_data"),
                 required = listOf("driver_code", "full_name"),
                 searchColumns = listOf("driver_code", "full_name", "full_name_ar", "phone", "license_number"),
                 softDeleted = true,
                 hasUpdatedAt = true,
                 hasStatus = true,
-                numericColumns = listOf("salary")
+                numericColumns = listOf("station_id", "salary")
             )
             "vehicle_locations" -> OperationalTableSpec(
                 table = "vehicle_locations",
@@ -12624,6 +12682,44 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    private fun validateFleetNumber(data: JSONObject, key: String, minimum: Double = 0.0, maximum: Double? = null) {
+        if (!data.has(key) || data.isNull(key)) return
+        val raw = data.optString(key, "").trim()
+        val value = raw.toDoubleOrNull() ?: throw IllegalArgumentException("قيمة رقمية غير صالحة: $key")
+        require(value.isFinite() && value >= minimum && (maximum == null || value <= maximum)) { "القيمة خارج النطاق أو غير صالحة: $key" }
+    }
+    private fun validateFleetDate(data: JSONObject, key: String) {
+        if (!data.has(key) || data.isNull(key)) return
+        val value = data.optString(key, "").trim()
+        require(value.isNotBlank() && parseAttendanceDate(value) != null) { "التاريخ غير صالح: $key" }
+    }
+    private fun validateFleetRecord(screenKey: String, data: JSONObject) {
+        when (screenKey) {
+            "vehicles" -> listOf("year", "engine_capacity", "tank_capacity", "current_odometer", "last_odometer", "avg_consumption").forEach { validateFleetNumber(data, it) }
+            "drivers" -> validateFleetNumber(data, "salary")
+            "vehicle_locations" -> {
+                validateFleetNumber(data, "latitude", -90.0, 90.0)
+                validateFleetNumber(data, "longitude", -180.0, 180.0)
+                listOf("speed", "fuel_level", "odometer", "accuracy").forEach { validateFleetNumber(data, it) }
+                validateFleetNumber(data, "altitude", -Double.MAX_VALUE)
+                validateFleetDate(data, "location_time")
+            }
+            "vehicle_trips" -> {
+                listOf("distance_km", "fuel_consumed", "fuel_cost", "start_odometer", "end_odometer").forEach { validateFleetNumber(data, it) }
+                validateFleetDate(data, "trip_date")
+                if (data.has("start_odometer") && data.has("end_odometer") && !data.isNull("start_odometer") && !data.isNull("end_odometer")) {
+                    val start = data.optString("start_odometer", "").trim().toDoubleOrNull()
+                    val end = data.optString("end_odometer", "").trim().toDoubleOrNull()
+                    require(start != null && end != null && end >= start) { "عداد نهاية الرحلة لا يمكن أن يسبق عداد بدايتها" }
+                }
+            }
+            "vehicle_expenses" -> {
+                validateFleetNumber(data, "amount", Double.MIN_VALUE)
+                validateFleetNumber(data, "odometer_reading")
+                validateFleetDate(data, "expense_date")
+            }
+        }
+    }
     private fun requireCalibrationEntityInStation(db: SQLiteDatabase, data: JSONObject, stationId: Int, existingId: Long? = null) {
         require(stationId > 0) { "معرف المحطة مطلوب لسجل المعايرة" }
         var entityType = data.optString("entity_type", "").trim().lowercase(Locale.US)
@@ -12647,6 +12743,80 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun calibrationStationPredicate(stationId: Int): String = "station_id = ${stationId} AND (EXISTS (SELECT 1 FROM tanks scope_ct WHERE lower(calibration_records.entity_type) IN ('tank', 'tanks') AND scope_ct.id = calibration_records.entity_id AND scope_ct.station_id = ${stationId} AND scope_ct.is_deleted = 0) OR EXISTS (SELECT 1 FROM pumps scope_cp WHERE lower(calibration_records.entity_type) IN ('pump', 'pumps') AND scope_cp.id = calibration_records.entity_id AND scope_cp.station_id = ${stationId} AND scope_cp.is_deleted = 0) OR EXISTS (SELECT 1 FROM pump_nozzles scope_cn JOIN pumps scope_cp2 ON scope_cp2.id = scope_cn.pump_id WHERE lower(calibration_records.entity_type) IN ('nozzle', 'nozzles', 'pump_nozzle', 'pump_nozzles') AND scope_cn.id = calibration_records.entity_id AND scope_cp2.station_id = ${stationId} AND scope_cn.is_deleted = 0 AND scope_cp2.is_deleted = 0))"
 
+    private fun fleetStationPredicate(screenKey: String, stationId: Int): String? {
+        require(stationId > 0) { "معرف المحطة غير صالح" }
+        return when (screenKey) {
+            "vehicles" -> "EXISTS (SELECT 1 FROM parties scope_party WHERE scope_party.id = vehicles.party_id AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0)"
+            "drivers" -> "drivers.station_id = ${stationId} AND (drivers.party_id IS NULL OR EXISTS (SELECT 1 FROM parties scope_party WHERE scope_party.id = drivers.party_id AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0)) AND (drivers.vehicle_id IS NULL OR EXISTS (SELECT 1 FROM vehicles scope_vehicle JOIN parties scope_party ON scope_party.id = scope_vehicle.party_id WHERE scope_vehicle.id = drivers.vehicle_id AND scope_vehicle.is_deleted = 0 AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0))"
+            "vehicle_locations" -> "EXISTS (SELECT 1 FROM vehicles scope_vehicle JOIN parties scope_party ON scope_party.id = scope_vehicle.party_id WHERE scope_vehicle.id = vehicle_locations.vehicle_id AND scope_vehicle.is_deleted = 0 AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0)"
+            "vehicle_trips" -> "EXISTS (SELECT 1 FROM vehicles scope_vehicle JOIN parties scope_party ON scope_party.id = scope_vehicle.party_id WHERE scope_vehicle.id = vehicle_trips.vehicle_id AND scope_vehicle.is_deleted = 0 AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0)"
+            "vehicle_expenses" -> "EXISTS (SELECT 1 FROM vehicles scope_vehicle JOIN parties scope_party ON scope_party.id = scope_vehicle.party_id WHERE scope_vehicle.id = vehicle_expenses.vehicle_id AND scope_vehicle.is_deleted = 0 AND scope_party.station_id = ${stationId} AND scope_party.is_deleted = 0)"
+            else -> null
+        }
+    }
+
+    private fun requireVehicleInStation(db: SQLiteDatabase, vehicleId: Long, stationId: Int) {
+        require(vehicleId > 0L && stationId > 0) { "معرف المركبة والمحطة مطلوبان" }
+        val owned = db.rawQuery("SELECT 1 FROM vehicles v JOIN parties p ON p.id = v.party_id WHERE v.id=? AND v.is_deleted=0 AND p.station_id=? AND p.is_deleted=0 LIMIT 1", arrayOf(vehicleId.toString(), stationId.toString())).use { it.moveToFirst() }
+        require(owned) { "المركبة غير موجودة ضمن محطة المستخدم" }
+    }
+
+    private fun requireDriverInStation(db: SQLiteDatabase, driverId: Long, stationId: Int) {
+        require(driverId > 0L && stationId > 0) { "معرف السائق والمحطة مطلوبان" }
+        val owned = db.rawQuery("""
+            SELECT 1 FROM drivers d
+            WHERE d.id=? AND d.is_deleted=0 AND d.station_id=?
+              AND (d.party_id IS NULL OR EXISTS (SELECT 1 FROM parties p WHERE p.id=d.party_id AND p.station_id=? AND p.is_deleted=0))
+              AND (d.vehicle_id IS NULL OR EXISTS (SELECT 1 FROM vehicles v JOIN parties p ON p.id=v.party_id WHERE v.id=d.vehicle_id AND v.is_deleted=0 AND p.station_id=? AND p.is_deleted=0))
+            LIMIT 1
+        """.trimIndent(), arrayOf(driverId.toString(), stationId.toString(), stationId.toString(), stationId.toString())).use { it.moveToFirst() }
+        require(owned) { "السائق غير موجود ضمن محطة المستخدم" }
+    }
+
+    private fun requireFleetRelationsInStation(db: SQLiteDatabase, screenKey: String, data: JSONObject, stationId: Int) {
+        if (stationId <= 0) return
+        when (screenKey) {
+            "vehicles" -> requirePartyInStation(db, data.optLong("party_id", 0L), stationId)
+            "drivers" -> {
+                val partyId = data.optLong("party_id", 0L)
+                val vehicleId = data.optLong("vehicle_id", 0L)
+                if (partyId > 0L) requirePartyInStation(db, partyId, stationId)
+                if (vehicleId > 0L) requireVehicleInStation(db, vehicleId, stationId)
+            }
+            "vehicle_locations", "vehicle_trips", "vehicle_expenses" -> {
+                requireVehicleInStation(db, data.optLong("vehicle_id", 0L), stationId)
+                if (screenKey == "vehicle_trips") {
+                    val driverId = data.optLong("driver_id", 0L)
+                    if (driverId > 0L) requireDriverInStation(db, driverId, stationId)
+                }
+            }
+        }
+    }
+
+    private fun fleetDataForExisting(db: SQLiteDatabase, screenKey: String, input: JSONObject, existingId: Long): JSONObject {
+        val data = JSONObject(input.toString())
+        val relationColumns = when (screenKey) {
+            "vehicles" -> listOf("party_id")
+            "drivers" -> listOf("party_id", "vehicle_id")
+            "vehicle_locations", "vehicle_expenses" -> listOf("vehicle_id")
+            "vehicle_trips" -> listOf("vehicle_id", "driver_id", "start_odometer", "end_odometer")
+            else -> emptyList()
+        }
+        val missing = relationColumns.filter { !data.has(it) || data.isNull(it) }
+        if (missing.isEmpty()) return data
+        val spec = operationalSpec(screenKey) ?: return data
+        val softDeleteClause = if (spec.softDeleted) " AND is_deleted=0" else ""
+        db.rawQuery("SELECT ${missing.joinToString(", ")} FROM ${spec.table} WHERE id=?$softDeleteClause LIMIT 1", arrayOf(existingId.toString())).use { cursor ->
+            if (cursor.moveToFirst()) {
+                missing.forEachIndexed { index, column ->
+                    val value = cursor.getLong(index)
+                    if (!cursor.isNull(index)) data.put(column, value)
+                }
+            }
+        }
+        return data
+    }
+
     fun getOperationalRows(screenKey: String, params: JSONObject = JSONObject()): JSONArray {
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         dbLock.lock()
@@ -12656,8 +12826,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
+            val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (stationId > 0 && screenKey == "calibration_records") {
                 where += calibrationStationPredicate(stationId)
+            } else if (stationId > 0 && fleetScope != null) {
+                where += fleetScope
             } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
@@ -12714,6 +12887,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
                 "meter_readings" -> "reading_date"
+                "vehicle_trips" -> "trip_date"
+                "vehicle_expenses" -> "expense_date"
+                "vehicle_locations" -> "location_time"
                 else -> "created_at"
             }
             val from = params.optString("from_date", params.optString("start_date", "")).trim()
@@ -12724,7 +12900,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
             val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
-            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status")
+            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id")
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
@@ -12740,8 +12916,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = mutableListOf<String>()
             if (spec.softDeleted) where += "is_deleted = 0"
             val stationId = params.optInt("station_id", 0)
+            val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             if (stationId > 0 && screenKey == "calibration_records") {
                 where += calibrationStationPredicate(stationId)
+            } else if (stationId > 0 && fleetScope != null) {
+                where += fleetScope
             } else if (stationId > 0 && spec.columns.contains("station_id")) {
                 where += "station_id = ?"
                 args += stationId.toString()
@@ -12798,6 +12977,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 "deliveries" -> "delivery_date"
                 "cash_deposits", "employee_payments" -> "date"
                 "meter_readings" -> "reading_date"
+                "vehicle_trips" -> "trip_date"
+                "vehicle_expenses" -> "expense_date"
+                "vehicle_locations" -> "location_time"
                 else -> "created_at"
             }
             val from = params.optString("from_date", params.optString("start_date", "")).trim()
@@ -12886,6 +13068,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val data = operationalPreparedData(screenKey, input, actorId)
         if (screenKey == "attendance") validateAttendanceRecord(data)
         requireOperationalData(spec, data)
+        validateFleetRecord(screenKey, data)
         dbLock.lock()
         return try {
             val values = ContentValues()
@@ -12895,6 +13078,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
+            if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses")) {
+                require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+                requireFleetRelationsInStation(writeDb, screenKey, data, stationId)
+            }
             if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey == "calibration_records") requireCalibrationEntityInStation(writeDb, data, stationId)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
@@ -12917,7 +13104,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         require(id > 0L) { "معرف السجل غير صالح" }
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
+        if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses")) {
+            val existing = fleetDataForExisting(readableDatabase, screenKey, input, id)
+            existing.keys().forEach { key -> data.put(key, existing.opt(key)) }
+        }
         if (screenKey == "attendance") validateAttendanceRecord(data, id)
+        validateFleetRecord(screenKey, data)
         dbLock.lock()
         return try {
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
@@ -12925,6 +13117,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
+            val fleetScope = if (stationId > 0) fleetStationPredicate(screenKey, stationId) else null
+            if (screenKey in setOf("vehicles", "drivers", "vehicle_locations", "vehicle_trips", "vehicle_expenses")) {
+                require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
+                requireFleetRelationsInStation(writableDatabase, screenKey, data, stationId)
+            }
             if (screenKey in setOf("price_lists", "price_history", "price_list_items", "calibration_records")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey == "calibration_records") requireCalibrationEntityInStation(writableDatabase, data, stationId, id)
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
@@ -12932,9 +13129,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (screenKey == "price_list_items" && stationId > 0 && data.has("price_list_id")) writableDatabase.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
             if (screenKey == "tank_level_log" && stationId > 0 && data.has("tank_id")) writableDatabase.rawQuery("SELECT id FROM tanks WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("tank_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الخزان خارج نطاق المحطة" } }
             if (screenKey == "fuel_quality_tests" && stationId > 0 && data.has("refill_id")) writableDatabase.rawQuery("SELECT tr.id FROM tank_refills tr JOIN tanks t ON t.id = tr.tank_id WHERE tr.id = ? AND t.station_id = ? AND t.is_deleted = 0", arrayOf(data.optLong("refill_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "سجل التعبئة خارج نطاق المحطة" } }
-            val directScope = spec.columns.contains("station_id") && stationId > 0 && screenKey != "calibration_records"
-            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
+            val directScope = spec.columns.contains("station_id") && stationId > 0 && screenKey != "calibration_records" && fleetScope == null
+            val relationalScope = stationId > 0 && (screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records") || fleetScope != null)
             val scope = when {
+                fleetScope != null -> " AND $fleetScope"
                 directScope -> " AND station_id = ?"
                 screenKey == "calibration_records" && relationalScope -> " AND " + calibrationStationPredicate(stationId)
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
@@ -12964,9 +13162,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
-            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records"
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
+            val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
+            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
+            val relationallyScoped = stationId != null && stationId > 0 && (screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records") || fleetScope != null)
             val where = when {
+                fleetScope != null -> "id = ? AND $fleetScope"
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
@@ -12996,9 +13196,11 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
-            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records"
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records")
+            val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
+            val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
+            val relationallyScoped = stationId != null && stationId > 0 && (screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records") || fleetScope != null)
             val where = when {
+                fleetScope != null -> "id = ? AND $fleetScope"
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "calibration_records" && relationallyScoped -> "id = ? AND " + calibrationStationPredicate(stationId!!)
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
