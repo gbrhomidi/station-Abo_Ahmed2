@@ -137,6 +137,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
     private fun getCurrentDateTime(): String = getDateFormat().format(Date())
     private fun getCurrentDate(): String = getDateOnlyFormat().format(Date())
+    fun currentDateForBridge(): String = getCurrentDate()
     private fun getCurrentTime(): String = getTimeFormat().format(Date())
 
     override fun onConfigure(db: SQLiteDatabase) {
@@ -152,6 +153,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureDeliveriesSchema(db)
             ensureLegacyAssetsSchema(db)
             ensureModule007Schema(db)
+            ensureModule010Schema(db)
             ensureReportCacheTable(db)
             insertInitialData(db)
             ensureContractSchema(db)
@@ -197,6 +199,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }
             ensureModule006Schema(db)
             ensureModule007Schema(db)
+            ensureModule010Schema(db)
             ensureDeliveriesSchema(db)
             ensureLegacyAssetsSchema(db)
             db.setTransactionSuccessful()
@@ -233,6 +236,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureFleetPermissions(db)
         ensureModule006Schema(db)
         ensureModule007Schema(db)
+        ensureModule010Schema(db)
         ensureDeliveriesSchema(db)
         ensureLegacyAssetsSchema(db)
         createTasksTable(db)
@@ -264,6 +268,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_stocktake_details_take_product ON stocktake_details(stocktake_id, product_id, archived)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_station_date ON damaged_products(station_id, report_date, status, archived)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_station_warehouse ON damaged_products(station_id, warehouse_id, product_id, archived)")
+    }
+
+    private fun ensureModule010Schema(db: SQLiteDatabase) {
+        fun addColumn(table: String, column: String, definition: String) {
+            try { db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition") } catch (_: Exception) { }
+        }
+        addColumn("payroll", "station_id", "INTEGER")
+        addColumn("employee_payments", "uuid", "TEXT")
+        addColumn("employee_payments", "station_id", "INTEGER")
+        addColumn("employee_payments", "payroll_id", "INTEGER")
+        addColumn("employee_payments", "payment_method", "TEXT DEFAULT 'cash'")
+        addColumn("employee_payments", "cash_box_id", "INTEGER")
+        addColumn("employee_payments", "bank_account_id", "INTEGER")
+        addColumn("employee_payments", "status", "TEXT DEFAULT 'completed'")
+        addColumn("employee_payments", "reference", "TEXT")
+        addColumn("employee_payments", "notes", "TEXT")
+        addColumn("employee_payments", "created_at", "TEXT")
+        addColumn("employee_payments", "updated_at", "TEXT")
+        addColumn("employee_payments", "is_deleted", "INTEGER DEFAULT 0")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_station_status ON employees(station_id, status, is_deleted, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_station_date ON attendance(station_id, attendance_date, is_deleted, employee_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_station_period ON payroll(station_id, period_start, period_end, status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_items_employee ON payroll_items(employee_id, payroll_id, payment_status)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_station_date ON employee_payments(station_id, date, is_deleted, employee_id)")
     }
 
     private fun ensurePartyTypePermissions(db: SQLiteDatabase) {
@@ -9643,6 +9671,167 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // ========================================================================
+    private fun module010Page(rows: JSONArray, totalCount: Int, limit: Int, offset: Int): JSONObject = JSONObject().apply {
+        put("rows", rows)
+        put("total_count", totalCount)
+        put("page_size", limit)
+        put("offset", offset)
+        put("page", if (totalCount == 0) 0 else offset / limit)
+        put("total_pages", if (totalCount == 0) 0 else (totalCount + limit - 1) / limit)
+    }
+
+    fun getEmployeesPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("e.station_id = ?", "e.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(e.employee_code LIKE ? OR e.full_name LIKE ? OR e.full_name_ar LIKE ? OR e.phone LIKE ? OR e.department LIKE ? OR e.job_title LIKE ?)"; repeat(6) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "e.status = ?"; args += it }
+        data.optString("employment_type").trim().takeIf { it.isNotEmpty() }?.let { where += "e.employment_type = ?"; args += it }
+        data.optString("department").trim().takeIf { it.isNotEmpty() }?.let { where += "e.department = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(e.hire_date) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(e.hire_date) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM employees e WHERE $whereSql", args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "employee_code" -> "e.employee_code"; "basic_salary" -> "e.basic_salary"; "hire_date" -> "e.hire_date"; "status" -> "e.status"; else -> "e.full_name" }
+        val direction = if (data.optString("sort_dir", "asc").equals("desc", true)) "DESC" else "ASC"
+        val rows = db.rawQuery("SELECT e.* FROM employees e WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module010Page(rows, total, limit, offset)
+    }
+
+    private fun module010DateTime(value: String): String {
+        val normalized = value.trim().replace('T', ' ')
+        require(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?").matches(normalized)) { "صيغة الوقت غير صالحة" }
+        return if (normalized.length == 16) "$normalized:00" else normalized
+    }
+
+    fun checkInEmployee(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0 && actorId > 0L) { "نطاق المحطة والمستخدم مطلوبان" }
+        val employeeId = data.optLong("employee_id", 0L)
+        val date = data.optString("attendance_date", getCurrentDate())
+        val checkIn = module010DateTime(data.optString("check_in", getCurrentDateTime()))
+        require(employeeId > 0 && Regex("\\d{4}-\\d{2}-\\d{2}").matches(date)) { "الموظف أو تاريخ الحضور غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                require(db.rawQuery("SELECT 1 FROM employees WHERE id=? AND station_id=? AND is_deleted=0 AND status IN ('active','on_leave')", arrayOf(employeeId.toString(), stationScopeId.toString())).use { it.moveToFirst() }) { "الموظف غير موجود ضمن محطة المستخدم" }
+                require(!db.rawQuery("SELECT 1 FROM attendance WHERE employee_id=? AND station_id=? AND attendance_date=? AND check_out IS NULL AND is_deleted=0 LIMIT 1", arrayOf(employeeId.toString(), stationScopeId.toString(), date)).use { it.moveToFirst() }) { "للموظف سجل حضور مفتوح مسبقاً" }
+                val cv = ContentValues().apply { put("uuid", UUID.randomUUID().toString()); put("employee_id", employeeId); put("station_id", stationScopeId); put("attendance_date", date); put("check_in", checkIn); put("check_in_method", data.optString("check_in_method", "manual")); put("status", "present"); put("notes", data.optString("notes", "")); put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime()) }
+                val id = db.insertOrThrow("attendance", null, cv)
+                db.setTransactionSuccessful(); id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun checkOutEmployee(attendanceId: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(attendanceId > 0 && stationScopeId > 0 && actorId > 0L) { "سجل الحضور أو النطاق غير صالح" }
+        val checkOut = module010DateTime(data.optString("check_out", getCurrentDateTime()))
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                var checkIn = ""
+                db.rawQuery("SELECT check_in FROM attendance WHERE id=? AND station_id=? AND is_deleted=0 AND check_out IS NULL", arrayOf(attendanceId.toString(), stationScopeId.toString())).use { c -> require(c.moveToFirst()) { "سجل الحضور غير موجود أو مغلق" }; checkIn = c.getString(0) ?: "" }
+                val parser = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                val start = parser.parse(checkIn.replace('T', ' ')) ?: throw IllegalArgumentException("وقت الدخول غير صالح")
+                val end = parser.parse(checkOut.replace('T', ' ')) ?: throw IllegalArgumentException("وقت الخروج غير صالح")
+                require(end.after(start)) { "وقت الخروج يجب أن يكون بعد الدخول" }
+                val hours = (end.time - start.time).toDouble() / 3600000.0
+                val overtime = (hours - 8.0).coerceAtLeast(0.0)
+                val rows = db.update("attendance", ContentValues().apply { put("check_out", checkOut); put("work_hours", hours); put("overtime_hours", overtime); put("updated_at", getCurrentDateTime()) }, "id=? AND station_id=? AND is_deleted=0 AND check_out IS NULL", arrayOf(attendanceId.toString(), stationScopeId.toString()))
+                require(rows == 1) { "تعذر تسجيل الانصراف" }
+                db.setTransactionSuccessful(); rows
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getAttendancePage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("a.station_id = ?", "a.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(e.employee_code LIKE ? OR e.full_name LIKE ? OR e.full_name_ar LIKE ?)"; repeat(3) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "a.status = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(a.attendance_date) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(a.attendance_date) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM attendance a JOIN employees e ON e.id=a.employee_id WHERE $whereSql", args.toTypedArray()).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        val rows = db.rawQuery("SELECT a.*, e.employee_code, e.full_name, e.full_name_ar FROM attendance a JOIN employees e ON e.id=a.employee_id WHERE $whereSql ORDER BY a.attendance_date DESC, a.id DESC LIMIT $limit OFFSET $offset", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module010Page(rows, total, limit, offset)
+    }
+
+    fun createPayroll(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0 && actorId > 0L) { "نطاق المحطة والمستخدم مطلوبان" }
+        val startDate = data.optString("period_start", "").trim(); val endDate = data.optString("period_end", "").trim()
+        require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(startDate) && Regex("\\d{4}-\\d{2}-\\d{2}").matches(endDate) && endDate >= startDate) { "فترة الراتب غير صالحة" }
+        val year = startDate.substring(0,4).toInt(); val month = startDate.substring(5,7).toInt()
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                require(!db.rawQuery("SELECT 1 FROM payroll WHERE station_id=? AND period_start=? AND period_end=? AND is_deleted=0 LIMIT 1", arrayOf(stationScopeId.toString(), startDate, endDate)).use { it.moveToFirst() }) { "توجد مسيرة رواتب لنفس الفترة" }
+                val employees = db.rawQuery("SELECT id,basic_salary,housing_allowance,transport_allowance,food_allowance,other_allowances,insurance_deduction,tax_deduction,other_deductions FROM employees WHERE station_id=? AND status='active' AND is_deleted=0 ORDER BY id", arrayOf(stationScopeId.toString()))
+                var count=0; var basic=0.0; var allowances=0.0; var deductions=0.0; var net=0.0
+                val itemData = mutableListOf<JSONObject>()
+                employees.use { c -> while(c.moveToNext()) { val id=c.getLong(0); val b=c.getDouble(1); val a=c.getDouble(2)+c.getDouble(3)+c.getDouble(4)+c.getDouble(5); val d=c.getDouble(6)+c.getDouble(7)+c.getDouble(8); val earnings=b+a; val n=earnings-d; require(n >= 0.0) { "نتيجة راتب سالبة للموظف $id" }; val workDays=db.rawQuery("SELECT COUNT(*) FROM attendance WHERE employee_id=? AND station_id=? AND attendance_date BETWEEN ? AND ? AND check_out IS NOT NULL AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString(),startDate,endDate)).use { if(it.moveToFirst()) it.getInt(0) else 0 }; val absent=db.rawQuery("SELECT COUNT(*) FROM attendance WHERE employee_id=? AND station_id=? AND attendance_date BETWEEN ? AND ? AND status='absent' AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString(),startDate,endDate)).use { if(it.moveToFirst()) it.getInt(0) else 0 }; val overtime=db.rawQuery("SELECT COALESCE(SUM(overtime_hours),0) FROM attendance WHERE employee_id=? AND station_id=? AND attendance_date BETWEEN ? AND ? AND is_deleted=0", arrayOf(id.toString(),stationScopeId.toString(),startDate,endDate)).use { if(it.moveToFirst()) it.getDouble(0) else 0.0 }; itemData += JSONObject().apply { put("employee_id",id);put("work_days",workDays);put("absent_days",absent);put("overtime_hours",overtime);put("basic_salary",b);put("housing_allowance",c.getDouble(2));put("transport_allowance",c.getDouble(3));put("food_allowance",c.getDouble(4));put("other_earnings",c.getDouble(5));put("total_earnings",earnings);put("insurance",c.getDouble(6));put("tax",c.getDouble(7));put("other_deductions",c.getDouble(8));put("total_deductions",d);put("net_salary",n) }; count++;basic+=b;allowances+=a;deductions+=d;net+=n } }
+                val code="PAYROLL-${year}-${month.toString().padStart(2,'0')}-${System.currentTimeMillis()}"
+                val payrollId=db.insertOrThrow("payroll",null,ContentValues().apply { put("uuid",UUID.randomUUID().toString());put("station_id",stationScopeId);put("payroll_code",code);put("payroll_year",year);put("payroll_month",month);put("period_start",startDate);put("period_end",endDate);put("total_employees",count);put("total_basic_salary",basic);put("total_allowances",allowances);put("total_deductions",deductions);put("total_net_salary",net);put("status","calculated");put("calculated_at",getCurrentDateTime());put("calculated_by",actorId);put("created_by",actorId);put("created_at",getCurrentDateTime())})
+                itemData.forEachIndexed { i,item -> db.insertOrThrow("payroll_items",null,ContentValues().apply { put("uuid",UUID.randomUUID().toString());put("payroll_id",payrollId);put("employee_id",item.getLong("employee_id"));put("work_days",item.getInt("work_days"));put("absent_days",item.getInt("absent_days"));put("overtime_hours",item.getDouble("overtime_hours"));put("basic_salary",item.getDouble("basic_salary"));put("housing_allowance",item.getDouble("housing_allowance"));put("transport_allowance",item.getDouble("transport_allowance"));put("food_allowance",item.getDouble("food_allowance"));put("other_earnings",item.getDouble("other_earnings"));put("total_earnings",item.getDouble("total_earnings"));put("insurance",item.getDouble("insurance"));put("tax",item.getDouble("tax"));put("other_deductions",item.getDouble("other_deductions"));put("total_deductions",item.getDouble("total_deductions"));put("net_salary",item.getDouble("net_salary")) }) }
+                db.setTransactionSuccessful(); payrollId
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getPayrollPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit=data.optInt("limit",50).coerceIn(1,100); val offset=data.optInt("offset",0).coerceAtLeast(0)
+        val where=mutableListOf("p.station_id=?","p.is_deleted=0"); val args=mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf{it.isNotEmpty()}?.let{like->val q="%$like%";where+="p.payroll_code LIKE ?";args+=q}
+        data.optString("status").trim().takeIf{it.isNotEmpty()}?.let{where+="p.status=?";args+=it}
+        data.optString("from_date").trim().takeIf{it.isNotEmpty()}?.let{where+="date(p.period_start)>=date(?)";args+=it}
+        data.optString("to_date").trim().takeIf{it.isNotEmpty()}?.let{where+="date(p.period_end)<=date(?)";args+=it}
+        val w=where.joinToString(" AND "); val db=readableDatabase
+        val total=db.rawQuery("SELECT COUNT(*) FROM payroll p WHERE $w",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0}
+        val rows=db.rawQuery("SELECT p.* FROM payroll p WHERE $w ORDER BY p.period_end DESC,p.id DESC LIMIT $limit OFFSET $offset",args.toTypedArray()).use{cursorToJsonArray(it)}
+        return module010Page(rows,total,limit,offset)
+    }
+
+    fun addEmployeePaymentTyped(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0 && actorId > 0L) { "نطاق المحطة والمستخدم مطلوبان" }
+        val employeeId=data.optLong("employee_id",0L); val amount=data.optDouble("amount",Double.NaN); val cashBoxId=data.optLong("cash_box_id",0L); val bankId=data.optLong("bank_account_id",0L); val payrollId=data.optLong("payroll_id",0L)
+        require(employeeId>0 && amount.isFinite() && amount>0.0) { "الموظف والمبلغ مطلوبان" }; require((cashBoxId>0L) xor (bankId>0L)) { "حدد صندوقاً أو حساباً بنكياً واحداً" }
+        dbLock.lock(); return try { val db=writableDatabase;db.beginTransaction();try{
+            require(db.rawQuery("SELECT 1 FROM employees WHERE id=? AND station_id=? AND is_deleted=0",arrayOf(employeeId.toString(),stationScopeId.toString())).use{it.moveToFirst()}){"الموظف خارج نطاق المحطة"}
+            if(payrollId>0){
+                var payrollItemId=0L; var netSalary=0.0; var paidAmount=0.0
+                db.rawQuery("SELECT pi.id, pi.net_salary, pi.paid_amount FROM payroll_items pi JOIN payroll p ON p.id=pi.payroll_id WHERE pi.payroll_id=? AND pi.employee_id=? AND p.station_id=? AND p.is_deleted=0",arrayOf(payrollId.toString(),employeeId.toString(),stationScopeId.toString())).use{c->require(c.moveToFirst()){"مسيرة الرواتب غير مرتبطة بالموظف"};payrollItemId=c.getLong(0);netSalary=c.getDouble(1);paidAmount=c.getDouble(2)}
+                require(amount <= netSalary-paidAmount+0.000001){"المبلغ يتجاوز المتبقي من الراتب"}
+            }
+            if(cashBoxId>0){val bal=db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND status='active' AND is_deleted=0",arrayOf(cashBoxId.toString(),stationScopeId.toString())).use{if(it.moveToFirst())it.getDouble(0)else throw IllegalArgumentException("الصندوق غير متاح")};require(bal>=amount){"رصيد الصندوق غير كافٍ"};db.update("cash_boxes",ContentValues().apply{put("current_balance",bal-amount)},"id=?",arrayOf(cashBoxId.toString()));db.insertOrThrow("cash_movements",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("cash_box_id",cashBoxId);put("movement_type","out");put("amount",amount);put("balance_before",bal);put("balance_after",bal-amount);put("description","دفع موظف");put("created_by",actorId);put("created_at",getCurrentDateTime())})}
+            if(bankId>0){val bal=db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND status='active' AND is_deleted=0",arrayOf(bankId.toString(),stationScopeId.toString())).use{if(it.moveToFirst())it.getDouble(0)else throw IllegalArgumentException("الحساب البنكي غير متاح")};require(bal>=amount){"رصيد الحساب البنكي غير كافٍ"};db.update("bank_accounts",ContentValues().apply{put("current_balance",bal-amount)},"id=?",arrayOf(bankId.toString()))}
+            val id=db.insertOrThrow("employee_payments",null,ContentValues().apply{put("uuid",UUID.randomUUID().toString());put("employee_id",employeeId);put("station_id",stationScopeId);if(payrollId>0)put("payroll_id",payrollId);put("amount",amount);put("type",data.optString("type","salary"));put("description",data.optString("description",""));put("payment_method",if(cashBoxId>0)"cash" else "bank_transfer");if(cashBoxId>0)put("cash_box_id",cashBoxId);if(bankId>0)put("bank_account_id",bankId);put("status","completed");put("reference",data.optString("reference",""));put("notes",data.optString("notes",""));put("operator",actorId.toString());put("created_at",getCurrentDateTime());put("date",getCurrentDateTime());put("is_deleted",0)})
+            if(payrollId>0){
+                val updated=db.compileStatement("UPDATE payroll_items SET paid_amount=paid_amount+?, payment_status=CASE WHEN paid_amount+? >= net_salary THEN 'paid' ELSE 'pending' END, paid_at=? WHERE payroll_id=? AND employee_id=? AND paid_amount+? <= net_salary+0.000001").apply{bindDouble(1,amount);bindDouble(2,amount);bindString(3,getCurrentDateTime());bindLong(4,payrollId);bindLong(5,employeeId);bindDouble(6,amount)}.executeUpdateDelete()
+                require(updated==1){"تعذر تحديث حالة راتب الموظف"}
+            }
+            db.setTransactionSuccessful();id
+        }finally{db.endTransaction()}}finally{dbLock.unlock()}}
+    }
+
+    fun getEmployeePaymentsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId>0){"معرف المحطة مطلوب"};val limit=data.optInt("limit",50).coerceIn(1,100);val offset=data.optInt("offset",0).coerceAtLeast(0);val where=mutableListOf("e.station_id=?","ep.is_deleted=0");val args=mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf{it.isNotEmpty()}?.let{q->val l="%$q%";where+="(e.employee_code LIKE ? OR e.full_name LIKE ? OR ep.reference LIKE ?)";repeat(3){args+=l}}
+        data.optString("type").trim().takeIf{it.isNotEmpty()}?.let{where+="ep.type=?";args+=it};data.optString("status").trim().takeIf{it.isNotEmpty()}?.let{where+="ep.status=?";args+=it};data.optString("from_date").trim().takeIf{it.isNotEmpty()}?.let{where+="date(ep.date)>=date(?)";args+=it};data.optString("to_date").trim().takeIf{it.isNotEmpty()}?.let{where+="date(ep.date)<=date(?)";args+=it};val w=where.joinToString(" AND ");val db=readableDatabase;val total=db.rawQuery("SELECT COUNT(*) FROM employee_payments ep JOIN employees e ON e.id=ep.employee_id WHERE $w",args.toTypedArray()).use{if(it.moveToFirst())it.getInt(0)else 0};val rows=db.rawQuery("SELECT ep.*,e.employee_code,e.full_name,e.full_name_ar FROM employee_payments ep JOIN employees e ON e.id=ep.employee_id WHERE $w ORDER BY date(ep.date) DESC,ep.id DESC LIMIT $limit OFFSET $offset",args.toTypedArray()).use{cursorToJsonArray(it)};return module010Page(rows,total,limit,offset)
+    }
+
     // دوال الموظفين
     // ========================================================================
 
@@ -9668,7 +9857,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("total_salary", data.optDouble("basic_salary", 0.0))
                 put("station_id", stationScopeId)
                 put("status", data.optString("status", "active"))
-                put("notes", data.optString("notes", ""))
+                put("remarks", data.optString("notes", ""))
                 put("created_by", createdBy)
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
@@ -9679,6 +9868,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
+
+    fun getEmployeeById(id: Long, stationScopeId: Int): JSONObject? {
+        require(id > 0L && stationScopeId > 0) { "معرف الموظف أو المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            readableDatabase.rawQuery("SELECT * FROM employees WHERE id=? AND station_id=? AND is_deleted=0 LIMIT 1", arrayOf(id.toString(), stationScopeId.toString())).use { cursorToJsonArray(it).optJSONObject(0) }
+        } finally { dbLock.unlock() }
     }
 
     fun getEmployees(stationScopeId: Int): JSONArray {
@@ -9746,21 +9943,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
                 db.insert("employee_payments", null, cv)
 
-                val col = when (type) {
-                    "salary" -> "total_salary"
-                    "advance" -> "advances"
-                    "penalty" -> "penalties"
-                    "bonus" -> "bonuses"
-                    else -> "total_salary"
+                if (type == "salary" || type == "other") {
+                    db.execSQL("UPDATE employees SET total_salary = COALESCE(total_salary, 0) + ? WHERE id = ?", arrayOf(amount, employeeId))
                 }
-                val sign = when (type) {
-                    "advance", "penalty" -> "-"
-                    else -> "+"
-                }
-                db.execSQL(
-                    "UPDATE employees SET $col = $col $sign ? WHERE id = ?",
-                    arrayOf(amount, employeeId)
-                )
                 db.setTransactionSuccessful()
                 logActivity(operator, "employee_payment", "دفعة $type للموظف $employeeId بمبلغ $amount")
                 true

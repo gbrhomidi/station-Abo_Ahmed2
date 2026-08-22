@@ -7490,7 +7490,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun savePaymentRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addPayment(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.getCurrentDate()}.", "pay-$id"); successResponse(id, "تم حفظ الدفعة بنجاح") }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addPayment(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "pay-$id"); successResponse(id, "تم حفظ الدفعة بنجاح") }
             catch (e: Exception) { DebugLogger.logException("Payment", e); errorResponse(e.message) }
         }
         @JavascriptInterface
@@ -7507,7 +7507,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveReceiptRecord(jsonData: String): String {
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.getCurrentDate()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
             catch (e: Exception) { DebugLogger.logException("Receipt", e); errorResponse(e.message) }
         }
         @JavascriptInterface
@@ -7617,6 +7617,72 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun resolveCashDepositRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_deposits", id, note)
 
+        @JavascriptInterface
+        fun getEmployeesPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getEmployeesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("EmployeesPage", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getAttendancePage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getAttendancePage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("AttendancePage", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getPayrollPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getPayrollPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("PayrollPage", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun getEmployeePaymentsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getEmployeePaymentsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("EmployeePaymentsPage", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun checkInEmployee(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(db.checkInEmployee(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId), "تم تسجيل الحضور") }
+            catch (e: Exception) { DebugLogger.logException("AttendanceCheckIn", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun checkOutEmployee(id: Long, jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(db.checkOutEmployee(id, JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId), "تم تسجيل الانصراف") }
+            catch (e: Exception) { DebugLogger.logException("AttendanceCheckOut", e); errorResponse(e.message) }
+        }
+        @JavascriptInterface
+        fun createPayroll(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); successResponse(db.createPayroll(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId), "تم احتساب مسيرة الرواتب") }
+            catch (e: Exception) { DebugLogger.logException("PayrollCreate", e); errorResponse(e.message) }
+        }
+        private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
+            try {
+                val employee = db.getEmployeeById(employeeId, stationId) ?: return
+                val phone = employee.optString("phone").trim().ifBlank { employee.optString("phone2").trim() }
+                if (phone.isBlank()) return
+                GlobalScope.launch {
+                    SmsReplyManager.sendReplyOnce(phone = phone, message = message, dedupeKey = "hr-$reference")
+                }
+            } catch (e: Exception) { DebugLogger.logException("EmployeeSms", e) }
+        }
+
+        @JavascriptInterface
+        fun addEmployeePayment(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
+                val payload = JSONObject(jsonData)
+                val employeeId = payload.optLong("employee_id", 0L)
+                val saved = db.addEmployeePaymentTyped(payload, stationId, activity.currentUserId)
+                if (employeeId > 0L) enqueueEmployeeSms(db, employeeId, stationId, "تم تسجيل دفعة بمبلغ ${payload.optString("amount")} بتاريخ ${db.currentDateForBridge()}.", "payment-$saved")
+                successResponse(saved, "تم تسجيل دفعة الموظف")
+            } catch (e: Exception) { DebugLogger.logException("EmployeePayment", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun getEmployeeRecords(jsonData: String = "{}") = operationalList("hr", "employees", jsonData)
         @JavascriptInterface
