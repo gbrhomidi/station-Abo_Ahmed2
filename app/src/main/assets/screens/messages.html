@@ -1742,37 +1742,36 @@ body {
             return;
         }
 
-        container.innerHTML = state.conversations.map(conv => `
-            <div class="card conversation-card" data-phone="${conv.phone}" style="margin-bottom: var(--space-3); cursor: pointer; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); transition: background var(--transition-fast);">
-                <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; flex-shrink: 0;">
-                    ${Utils.getInitials(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone)}
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <span style="font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            ${Utils.escapeHtml(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone)}
-                        </span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; margin-right: 8px;">
-                            ${Utils.formatDate(conv.lastMessage?.created_at)}
-                        </span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="font-size: 0.85rem; color: ${conv.unreadCount > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'}; font-weight: ${conv.unreadCount > 0 ? '600' : 'normal'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">
-                            ${Utils.truncate(conv.lastMessage?.message_body, 60)}
+        container.innerHTML = '<div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">' + state.conversations.map(conv => {
+            const isUnread = conv.unreadCount > 0;
+            const activeClass = isUnread ? 'convo-row--active' : '';
+            const initial = Utils.getInitials(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone);
+            const title = Utils.escapeHtml(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || Utils.formatPhone(conv.phone));
+            const preview = Utils.escapeHtml(conv.lastMessage?.message_body || '');
+            const timeStr = Utils.formatDate(conv.lastMessage?.created_at).split(' ')[1] || Utils.formatDate(conv.lastMessage?.created_at);
+
+            return `
+                <div class="convo-row ${activeClass} conversation-card" data-phone="${conv.phone}">
+                    <div class="convo-row__avatar">${initial}</div>
+                    <div class="convo-row__body">
+                        <div class="convo-row__top">
+                            <span class="convo-row__title">${title}</span>
+                            <time class="convo-row__time">${timeStr}</time>
                         </div>
-                        ${conv.unreadCount > 0 ? `<span class="badge badge-primary" style="background: var(--primary); color: white; margin-right: 8px;">${conv.unreadCount}</span>` : ''}
+                        <div class="convo-row__bottom">
+                            <span class="convo-row__preview">${preview}</span>
+                            ${isUnread ? `<span class="convo-row__badge">${conv.unreadCount}</span>` : ''}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('') + '</div>';
 
         container.querySelectorAll('.conversation-card').forEach(card => {
-            card.addEventListener('mouseover', () => { card.style.background = 'var(--bg-surface-hover)'; });
-            card.addEventListener('mouseout', () => { card.style.background = 'var(--bg-surface)'; });
             card.addEventListener('click', () => {
                 const phone = card.dataset.phone;
                 const result = Bridge.getSmsMessagesByPhone(phone);
-                const messages = Utils.parseJSON(result) || [];
+                const messages = Utils.dataArray(result);
                 renderMessageList(messages, 'messageList');
                 UI.switchTab('all');
             });

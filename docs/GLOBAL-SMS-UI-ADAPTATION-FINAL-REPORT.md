@@ -42,10 +42,22 @@
 
 **النتيجة الإجمالية:** 18/18 اختبار ناجح.
 
-## 4. الخطوات القادمة
-1. دمج التعديلات (Commit & Push) إلى مستودع GitHub.
-2. متابعة CI/CD للتأكد من عدم وجود أي تعارضات (Build Verified).
-3. (مستقبلاً) تطوير Dashboard الرئيسي (`main.html`) بمؤشرات KPI حقيقية مرتبطة بـ SQLite، أسوة بما تم في شاشات الرسائل والمساعد الذكي.
+## 4. الخطوات القادمة (محدثة بناءً على المراجع العالمية - WhatUp & Jasmin)
+
+بعد إجراء بحث هندسي إضافي في مستودعات GitHub (مثل `n0minal/WhatUp` و `Jasmin Web Panel`)، تم تحديد الفجوات التالية في التصميم الحالي لـ `messages.html` وسيتم معالجتها في الخطوات القادمة:
+
+### 4.1. المراجع العالمية المستخدمة للمواءمة:
+- **WhatUp (Conversational SMS):**
+  - **نمط المحادثة (Conversational Threads):** سيتم استبدال القائمة المسطحة الحالية (Data Cards) بنمط `convo-row` للقائمة الجانبية (Sidebar) و `bubble--inbound`/`bubble--outbound` لمنطقة المحادثة.
+  - **الخلفية والمظهر:** استخدام نمط `radial-gradient` لخلفية المحادثة، وتخصيص `border-radius` للفقاعات حسب اتجاه الرسالة.
+- **Jasmin SMS / ERPNext:**
+  - **مؤشرات الأداء (Observability Grids):** تمثيل حي لحالة النظام عبر `Stats Bar` و `Trace Item` (مطبق جزئياً وسيتم تحسينه).
+
+### 4.2. خطة التطبيق الفعلية على `messages.html`:
+1. **تنظيف التبويبات الوهمية (Mock Tabs):** التبويبات `logs`, `recurring`, `preferences`, `otp`, `reminders`, `context`, `ratelimits` غير موصولة بـ Bridge (تعرض `renderUnavailable`). سيتم إخفاؤها أو إزالتها لتبسيط الواجهة وتركيزها على الوظائف الحقيقية (المحادثات، التتبع، القوالب، القائمة البيضاء).
+2. **إضافة أنماط المحادثة (Chat Bubbles):** دمج أنماط `WhatUp` (مثل `.bubble`, `.bubble--inbound`, `.bubble--outbound`, `.chat__messages`) داخل `messages.html` مع احترام `theme.css`.
+3. **تعديل دوال العرض (Renderers):** تحديث `renderMessages` و `renderConversations` لتعرض البيانات كواجهة محادثة تفاعلية (Conversational UI) بدلاً من بطاقات بيانات (Data Cards).
+4. **التحقق (Verification):** التأكد من عدم كسر وظائف Bridge الحقيقية (مثل `getSmsMessagesPage` و `getSmsOperationalHealth`).
 
 ---
 *هذا التقرير موثق كدليل على إتمام مرحلة الهندسة العكسية والتكييف وفق بروتوكول MEGP-SMS.*

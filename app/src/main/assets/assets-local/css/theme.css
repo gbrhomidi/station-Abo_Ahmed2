@@ -128,6 +128,158 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
+/* ===== أنماط المحادثة (Conversational UI / Chat Bubbles) ===== */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--bg-surface-hover);
+    background-image: radial-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1.5px);
+    background-size: 22px 22px;
+    border-radius: var(--radius-md);
+    min-height: 400px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.chat-bubble {
+    position: relative;
+    width: fit-content;
+    max-width: min(75%, 600px);
+    padding: 10px 14px 8px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    animation: bubble-in 0.2s ease-out;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes bubble-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-bubble--inbound {
+    background: var(--bg-surface);
+    border-top-right-radius: 4px; /* RTL specific */
+    align-self: flex-start;
+    border: 1px solid var(--border-color);
+}
+
+.chat-bubble--outbound {
+    background: var(--primary-light);
+    border-top-left-radius: 4px; /* RTL specific */
+    align-self: flex-end;
+}
+
+.chat-bubble__body {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.chat-bubble__meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.chat-bubble__status {
+    font-size: 0.75rem;
+}
+.chat-bubble__status.sent { color: var(--text-muted); }
+.chat-bubble__status.delivered { color: var(--info); }
+.chat-bubble__status.read { color: var(--success); }
+.chat-bubble__status.failed { color: var(--danger); }
+
+/* Sidebar Conversation List (WhatUp Style) */
+.convo-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--border-color);
+    transition: background var(--transition-fast);
+    cursor: pointer;
+}
+
+.convo-row:hover {
+    background: var(--bg-surface-hover);
+}
+
+.convo-row--active {
+    background: var(--primary-light);
+    box-shadow: inset -3px 0 0 var(--primary); /* RTL specific */
+}
+
+.convo-row__avatar {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--info));
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.convo-row__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.convo-row__top,
+.convo-row__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.convo-row__title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.convo-row__time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.convo-row__preview {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.convo-row__badge {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    background: var(--primary);
+    border-radius: var(--radius-full);
+    padding: 2px 6px;
+}
+
 /* ===== تخطيط الصفحة (Layout) ===== */
 .page-container {
     max-width: 1400px;
