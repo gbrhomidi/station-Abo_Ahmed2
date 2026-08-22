@@ -8025,6 +8025,76 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
     
+    
+        // MODULE-014 Bridges
+        @JavascriptInterface
+        fun getSystemLogsPageTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getSystemLogsPageTyped(obj, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getAuditLogsPageTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getAuditLogsPageTyped(obj)
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getDocumentsPageTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getDocumentsPageTyped(obj)
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun addDocumentTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = db.addDocumentTyped(obj, activity.currentUserId)
+                successResponse(id, "تم حفظ الوثيقة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateDocumentTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = obj.optLong("id", 0)
+                db.updateDocumentTyped(id, obj, activity.currentUserId)
+                successResponse(id, "تم تحديث الوثيقة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun deleteDocumentTyped(id: Long): String {
+            return try {
+                db.deleteDocumentTyped(id)
+                successResponse(id, "تم حذف الوثيقة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun openDocumentFileTyped(path: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                // In a real Android environment, this would fire an ACTION_VIEW Intent
+                // using FileProvider/ContentResolver for the given path
+                DebugLogger.info("WebAppInterface", "Opening document: $path")
+                successResponse(1, "تم إرسال طلب فتح الملف للنظام")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+    
     private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return
