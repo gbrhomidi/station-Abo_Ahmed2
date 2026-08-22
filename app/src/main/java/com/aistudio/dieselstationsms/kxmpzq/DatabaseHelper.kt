@@ -11073,7 +11073,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
     }
 
-    fun getDashboardStats(stationId: Int = 1, params: JSONObject = JSONObject()): JSONObject {
+    fun getDashboardStats(stationId: Int, params: JSONObject = JSONObject()): JSONObject {
         val stats = JSONObject()
         val db = readableDatabase
 

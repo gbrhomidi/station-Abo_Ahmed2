@@ -38,8 +38,11 @@ assert('Binds total_products', html.includes('stats.total_products'));
 // 4. Check Bridge Call and response contract
 assert('Calls getDashboardStats', html.includes('getDashboardStats'));
 assert('Uses handleAndroidResult wrapper', html.includes('handleAndroidResult'));
-assert('MainActivity returns dashboard data through DatabaseHelper', mainActivity.includes('db.getDashboardStats(stationId)'));
+assert('MainActivity returns dashboard data through DatabaseHelper', mainActivity.includes('db.getDashboardStats(stationId, params)'));
 assert('MainActivity wraps dashboard response under data', mainActivity.includes('dataResponse(stats)'));
+assert('Dashboard helper has no stationId=1 fallback', !databaseHelper.includes('fun getDashboardStats(stationId: Int = 1'));
+assert('Dashboard bridge requires current station scope', mainActivity.includes('requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)'));
+assert('AI insight requires current station scope', mainActivity.includes('db.getDashboardStats(requireCurrentStationId(db, activity.currentUserId))'));
 
 // 5. Check the occupancy KPI is based on real tank columns, not a heuristic
 assert('DatabaseHelper queries tank quantity and capacity', databaseHelper.includes('SUM(current_quantity)') && databaseHelper.includes('SUM(capacity_liters)'));

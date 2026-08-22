@@ -970,3 +970,332 @@ textarea:focus-visible,
     background: var(--danger-bg);
     border-color: var(--danger);
 }
+
+
+/* ===== Report Module Components (Metabase / DashUI Adaptation) ===== */
+.report-screen {
+    --report-card-radius: var(--radius-md);
+    --report-section-gap: var(--space-6);
+}
+
+.report-screen .report-panel,
+.report-screen .chart-card,
+.report-screen .report-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+}
+
+.report-screen .report-panel__header,
+.report-screen .chart-card__header,
+.report-screen .report-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+    margin-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .report-panel__title,
+.report-screen .chart-card__title,
+.report-screen .report-card__title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.report-screen .report-grid,
+.report-screen .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-4);
+}
+
+.report-screen .report-grid > .span-4 { grid-column: span 4; }
+.report-screen .report-grid > .span-6 { grid-column: span 6; }
+.report-screen .report-grid > .span-8 { grid-column: span 8; }
+.report-screen .report-grid > .span-12 { grid-column: span 12; }
+
+.report-screen .report-toolbar,
+.report-screen .report-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+}
+
+.report-screen .report-toolbar > *,
+.report-screen .report-filters > * {
+    min-width: 160px;
+}
+
+.report-screen .report-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    background: var(--bg-surface);
+}
+
+.report-screen .report-table-wrap table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.report-screen .report-table-wrap th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 1;
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+    font-size: .78rem;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.report-screen .report-table-wrap th,
+.report-screen .report-table-wrap td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .report-table-wrap tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+.report-screen .report-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.report-screen .report-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: var(--space-4);
+}
+
+.report-screen .report-kpi-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-height: 118px;
+    padding: var(--space-4);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--report-card-radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .report-kpi-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-size: .82rem;
+}
+
+.report-screen .report-kpi-card__icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    background: var(--primary-light);
+}
+
+.report-screen .report-kpi-card__value {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.report-screen .report-kpi-card__meta {
+    color: var(--text-secondary);
+    font-size: .75rem;
+}
+
+.report-screen .report-state {
+    display: grid;
+    place-items: center;
+    gap: var(--space-2);
+    min-height: 160px;
+    padding: var(--space-6);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 800px) {
+    .report-screen .report-grid > .span-4,
+    .report-screen .report-grid > .span-6,
+    .report-screen .report-grid > .span-8 {
+        grid-column: span 12;
+    }
+}
+
+@media print {
+    .report-screen .report-toolbar,
+    .report-screen .report-filters,
+    .report-screen .report-source-banner {
+        display: none !important;
+    }
+}
+
+
+/* Apply report-system primitives to the existing MODULE-001 screen vocabulary. */
+.report-screen .top-bar {
+    background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .filter-bar,
+.report-screen .report-filters {
+    padding: var(--space-3);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .kpi-grid,
+.report-screen .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+}
+
+.report-screen .kpi-card,
+.report-screen .stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    min-height: 120px;
+    text-align: right;
+}
+
+.report-screen .kpi-card:hover,
+.report-screen .stat-card:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.report-screen .kpi-card .kpi-top,
+.report-screen .stat-card .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+.report-screen .kpi-card .kpi-icon,
+.report-screen .stat-card .stat-icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    border-radius: var(--radius-sm);
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.report-screen .kpi-card .kpi-value,
+.report-screen .stat-card .stat-value {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+.report-screen .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+}
+
+.report-screen .chart-card {
+    grid-column: span 6;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .chart-card .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .table-wrapper,
+.report-screen .sales-table-wrapper,
+.report-screen .table-section,
+.report-screen .report-results {
+    overflow-x: auto;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.report-screen .data-table,
+.report-screen .sales-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+}
+
+.report-screen .data-table th,
+.report-screen .sales-table th {
+    background: var(--bg-surface-hover);
+    color: var(--text-secondary);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.report-screen .data-table th,
+.report-screen .data-table td,
+.report-screen .sales-table th,
+.report-screen .sales-table td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-screen .data-table tbody tr:hover,
+.report-screen .sales-table tbody tr:hover {
+    background: var(--bg-surface-hover);
+}
+
+.report-screen .pagination-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+}
+
+@media (max-width: 800px) {
+    .report-screen .chart-card { grid-column: span 12; }
+    .report-screen .kpi-grid,
+    .report-screen .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+    .report-screen .kpi-grid,
+    .report-screen .stats-grid { grid-template-columns: 1fr; }
+}

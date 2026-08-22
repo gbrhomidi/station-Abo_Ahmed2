@@ -2,29 +2,10 @@
 
 ترتيب التنفيذ الهندسي بناءً على الأهمية التجارية والاعتماديات (Business Criticality & Dependencies).
 
+**ملاحظة هامة:** الوحدات من MODULE-001 إلى MODULE-006 تم إنجازها وظيفياً (Backend/Bridge/SQLite) في مراحل سابقة. المرحلة الحالية ستركز على **المعالجة المرئية وتطبيق أنماط UI العالمية** على شاشات هذه الوحدات بالترتيب، ثم الانتقال للوحدات المتبقية.
+
 ## Priority P0
-- **[parties] الأطراف والعملاء** (6 screens)
-  - `customers.html`
-  - `suppliers.html`
-  - `party-types.html`
-  - `contracts.html`
-  - `bad-debts.html`
-  - `crm.html`
-- **[inventory] المخزون والمستودعات** (6 screens)
-  - `warehouses.html`
-  - `stock-levels.html`
-  - `inventory-movements.html`
-  - `stocktake.html`
-  - `damaged-products.html`
-  - `inventory-alerts.html`
-- **[sales] المبيعات والورديات** (6 screens)
-  - `pos.html`
-  - `shifts.html`
-  - `sales-log.html`
-  - `orders.html`
-  - `deliveries.html`
-  - `fuel-sales.html`
-- **[reports] التقارير والتحليلات** (9 screens)
+- **[reports] التقارير والتحليلات (MODULE-001)** (9 screens) - *تمت معالجة Backend*
   - `main.html`
   - `sales-reports.html`
   - `eod-report.html`
@@ -34,15 +15,36 @@
   - `kpi.html`
   - `forecasts.html`
   - `accounting-reports.html`
+- **[sales] المبيعات والورديات (MODULE-002)** (6 screens) - *تمت معالجة Backend*
+  - `pos.html`
+  - `shifts.html`
+  - `sales-log.html`
+  - `orders.html`
+  - `deliveries.html`
+  - `fuel-sales.html`
+- **[parties] الأطراف والعملاء (MODULE-003)** (6 screens) - *تمت معالجة Backend*
+  - `customers.html`
+  - `suppliers.html`
+  - `party-types.html`
+  - `contracts.html`
+  - `bad-debts.html`
+  - `crm.html`
+- **[inventory] المخزون والمستودعات (MODULE-004)** (6 screens) - *تمت معالجة Backend*
+  - `warehouses.html`
+  - `stock-levels.html`
+  - `inventory-movements.html`
+  - `stocktake.html`
+  - `damaged-products.html`
+  - `inventory-alerts.html`
 
 ## Priority P1
-- **[products] المنتجات والوقود** (5 screens)
+- **[products] المنتجات والوقود (MODULE-005)** (5 screens) - *تمت معالجة Backend*
   - `fuel-types.html`
   - `products.html`
   - `product-categories.html`
   - `price-lists.html`
   - `price-change-log.html`
-- **[tanks] الخزانات والمضخات** (6 screens)
+- **[tanks] الخزانات والمضخات (MODULE-006)** (6 screens) - *تمت معالجة Backend*
   - `tanks.html`
   - `pumps.html`
   - `meter-readings.html`

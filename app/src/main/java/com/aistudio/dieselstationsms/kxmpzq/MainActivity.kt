@@ -1612,7 +1612,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             JSONObject()
         }
 
-        val stationId = getCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+        val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
         params.put("station_id", stationId)
 
         if (stationId <= 0) {
@@ -2370,7 +2370,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val stats = db.getDashboardStats(getCurrentStationId(db, activity.currentUserId))
+                    val stats = db.getDashboardStats(requireCurrentStationId(db, activity.currentUserId))
                     val prompt = """
                         أنت مساعد ذكي لمحطة وقود. قدم تحليلاً مختصراً للبيانات التالية:
                         - المخزون المتبقي: ${stats.optDouble("total_remaining", 0.0).toInt()} لتر
