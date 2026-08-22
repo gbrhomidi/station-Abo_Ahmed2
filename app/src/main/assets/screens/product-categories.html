@@ -629,6 +629,12 @@
       </div>
     </form>
 
+    <div class="module005-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0;">
+      <input type="search" id="categorySearch" class="form-control" placeholder="بحث في الكود أو الاسم" style="flex:1;min-width:220px;padding:10px;border-radius:8px;border:1px solid #ddd;">
+      <select id="categorySort" class="form-control" aria-label="فرز الفئات" style="min-width:160px;padding:10px;border-radius:8px;border:1px solid #ddd"><option value="id">الأحدث</option><option value="category_code">الكود</option><option value="category_name">الاسم</option><option value="display_order">ترتيب العرض</option><option value="product_count">عدد المنتجات</option></select>
+      <select id="categoryStatus" class="form-control" aria-label="حالة الفئة" style="min-width:140px;padding:10px;border-radius:8px;border:1px solid #ddd"><option value="">كل الحالات</option><option value="active">نشطة</option><option value="inactive">غير نشطة</option></select>
+      <button type="button" class="btn btn-secondary" id="categorySortDir">تنازلي</button>
+    </div>
     <div class="table-container">
       <table id="categoriesTable">
         <thead>
@@ -646,33 +652,37 @@
         </tbody>
       </table>
     </div>
+    <div id="categoryPagination" class="module005-toolbar" style="display:flex;justify-content:center;gap:12px;align-items:center;margin:16px 0;">
+      <button type="button" class="btn btn-secondary" id="categoryPrev">السابق</button><span id="categoryPageInfo">—</span><button type="button" class="btn btn-secondary" id="categoryNext">التالي</button>
+    </div>
   </div>
 
 <script>
 // ============================================================
 // 1. دوال apiCall و handleAndroidResult (الموحدة)
 // ============================================================
-function apiCall(action, params) {
+async function apiCall(action, params) {
     const p = params || {};
-    if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-    try {
-        let raw;
-        switch (action) {
-            case 'getCategories': raw = AndroidInterface.getCategories(); break;
-            case 'saveCategory': {
-                const payload = { category_code: p.category_code || `CAT-${Date.now()}`, category_name: p.category_name, category_name_ar: p.category_name_ar || p.category_name, category_type: p.category_type || 'product', parent_category_id: p.parent_category_id || null, tax_rate: Number(p.tax_rate || 0), description: p.description || '', is_active: Number(p.is_active ?? 1) };
-                raw = Number(p.category_id || 0) > 0 ? AndroidInterface.updateProductCategory(Number(p.category_id), JSON.stringify(payload)) : AndroidInterface.addProductCategory(JSON.stringify(payload)); break;
-            }
-            case 'deleteCategory': raw = AndroidInterface.deleteProductCategory(Number(p.category_id)); break;
-            case 'searchCategories': raw = AndroidInterface.searchProductCategories(String(p.search || '')); break;
-            case 'getCategory': {
-                const item = (AppState.categories || []).find(x => Number(x.id || x.category_id) === Number(p.category_id));
-                return Promise.resolve(item ? { success: true, data: item } : { success: false, message: 'الفئة غير موجودة' });
-            }
-            default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
+    if (!window.AndroidInterface) throw new Error('جسر Android غير متاح؛ لا توجد بيانات بديلة');
+    let raw;
+    switch (action) {
+        case 'getCategories': raw = AndroidInterface.getProductCategoryPage(JSON.stringify(p)); break;
+        case 'saveCategory': {
+            const payload = { category_code: String(p.category_code || '').trim(), category_name: String(p.category_name || '').trim(), category_name_ar: p.category_name_ar || p.category_name, category_type: p.category_type || 'product', parent_category_id: p.parent_category_id || null, tax_rate: Number(p.tax_rate || 0), description: p.description || '', is_active: Number(p.is_active ?? 1) };
+            raw = Number(p.category_id || 0) > 0 ? AndroidInterface.updateProductCategory(Number(p.category_id), JSON.stringify(payload)) : AndroidInterface.addProductCategory(JSON.stringify(payload)); break;
         }
-        return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-    } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+        case 'deleteCategory': raw = AndroidInterface.deleteProductCategory(Number(p.category_id)); break;
+        case 'searchCategories': raw = AndroidInterface.getProductCategoryPage(JSON.stringify({ search: String(p.search || '').trim(), limit: pageSize, offset: 0, sort_by: 'category_name', sort_dir: 'asc' })); break;
+        case 'getCategory': raw = AndroidInterface.getProductCategoryPage(JSON.stringify({ category_id: Number(p.category_id), limit: 1, offset: 0 })); break;
+        default: throw new Error('العملية غير مدعومة: ' + action);
+    }
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (action === 'getCategory' || action === 'searchCategories') {
+        const rows = parsed && Array.isArray(parsed.rows) ? parsed.rows : [];
+        if (action === 'getCategory') return rows.length ? { success: true, data: rows[0] } : { success: false, message: 'الفئة غير موجودة' };
+        return { success: parsed.success !== false, data: rows, total_count: parsed.total_count || rows.length, total_pages: parsed.total_pages || 0 };
+    }
+    return parsed;
 }
 
 function handleAndroidResult(action, data) {
@@ -712,41 +722,49 @@ function showLoading(show) {
 const AppState = {
     categories: [],
     parentCategories: [],
-    selectedCategoryId: null
+    selectedCategoryId: null,
+    page: 0,
+    pageSize: 25,
+    totalCount: 0,
+    totalPages: 0,
+    sortBy: 'id',
+    sortDir: 'desc',
+    query: {}
 };
+const pageSize = AppState.pageSize;
 
 // ============================================================
 // 4. دوال جلب البيانات عبر apiCall
 // ============================================================
-function loadCategories() {
+async function loadCategories(query = AppState.query) {
     showLoading(true);
-    apiCall('getCategories', {})
-    .then(result => {
-        showLoading(false);
-        if (result.success) {
-            const categories = result.data || [];
-            AppState.categories = categories;
-            AppState.parentCategories = categories.filter(c => !c.parent_category_id || c.parent_category_id === '');
-            populateTable(categories);
-            
-            // تحديث قائمة الفئات الأب
-            const parentSelect = document.getElementById('parentCategory');
-            parentSelect.innerHTML = '<option value="">اختر الفئة الأب</option>';
-            AppState.parentCategories.forEach(cat => {
-                const option = document.createElement('option');
-                option.value = cat.id;
-                option.textContent = cat.category_name || cat.name;
-                parentSelect.appendChild(option);
-            });
-        } else {
-            showToast(result.message || 'حدث خطأ أثناء جلب البيانات', 'error');
-        }
-    })
-    .catch(error => {
-        showLoading(false);
-        showToast('حدث خطأ في الاتصال بالجسر', 'error');
-        console.error(error);
-    });
+    try {
+        AppState.query = { ...query };
+        const result = apiCall('getCategories', { ...AppState.query, limit: AppState.pageSize, offset: AppState.page * AppState.pageSize, sort_by: AppState.sortBy, sort_dir: AppState.sortDir });
+        if (!result || result.success === false) throw new Error(result.message || result.error || 'فشل تحميل الفئات');
+        const envelope = result.data && !Array.isArray(result.data) ? result.data : result;
+        const categories = Array.isArray(envelope.rows) ? envelope.rows : [];
+        AppState.categories = categories;
+        AppState.totalCount = Number(envelope.total_count || 0);
+        AppState.totalPages = Number(envelope.total_pages || (AppState.totalCount ? Math.ceil(AppState.totalCount / AppState.pageSize) : 0));
+        AppState.parentCategories = categories.filter(c => !c.parent_category_id || c.parent_category_id === '');
+        populateTable(categories);
+        const parentSelect = document.getElementById('parentCategory');
+        parentSelect.innerHTML = '<option value="">اختر الفئة الأب</option>';
+        AppState.parentCategories.forEach(cat => { const option = document.createElement('option'); option.value = cat.id; option.textContent = cat.category_name || cat.name; parentSelect.appendChild(option); });
+        renderCategoryPagination();
+    } catch (error) { showToast(error.message || 'حدث خطأ في تحميل الفئات', 'error'); console.error(error); }
+    finally { showLoading(false); }
+}
+
+function renderCategoryPagination() {
+    const info = document.getElementById('categoryPageInfo');
+    const prev = document.getElementById('categoryPrev');
+    const next = document.getElementById('categoryNext');
+    if (!info || !prev || !next) return;
+    info.textContent = AppState.totalPages ? `صفحة ${AppState.page + 1} من ${AppState.totalPages} · ${AppState.totalCount.toLocaleString('ar')} فئة` : 'لا توجد نتائج';
+    prev.disabled = AppState.page <= 0;
+    next.disabled = !AppState.totalPages || AppState.page + 1 >= AppState.totalPages;
 }
 
 function populateTable(categories) {
@@ -886,26 +904,8 @@ function deleteCategory() {
 
 function searchCategory() {
     const name = document.getElementById('categoryName').value.trim();
-    if (name) {
-        showLoading(true);
-        apiCall('searchCategories', { search: name })
-        .then(result => {
-            showLoading(false);
-            if (result.success) {
-                showToast(`تم العثور على ${result.data ? result.data.length : 0} نتيجة`, 'info');
-                populateTable(result.data || []);
-            } else {
-                showToast(result.message || 'حدث خطأ أثناء البحث', 'error');
-            }
-        })
-        .catch(error => {
-            showLoading(false);
-            showToast('حدث خطأ في الاتصال بالجسر', 'error');
-            console.error(error);
-        });
-    } else {
-        loadCategories();
-    }
+    AppState.page = 0;
+    loadCategories(name ? { search: name } : {});
 }
 
 function updateCategory() {
@@ -994,8 +994,17 @@ document.addEventListener('DOMContentLoaded', function() {
     loadCategories();
     loadSavedTheme();
     setupSidebar();
-    document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
-    
+        document.getElementById('darkModeToggle').addEventListener('click', toggleMode);
+    let searchTimer;
+    document.getElementById('categorySearch').addEventListener('input', (event) => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { AppState.page = 0; loadCategories({ search: event.target.value.trim(), status: document.getElementById('categoryStatus').value }); }, 250);
+    });
+    document.getElementById('categorySort').addEventListener('change', (event) => { AppState.sortBy = event.target.value; AppState.page = 0; loadCategories(AppState.query); });
+    document.getElementById('categoryStatus').addEventListener('change', (event) => { AppState.page = 0; loadCategories({ ...AppState.query, status: event.target.value }); });
+    document.getElementById('categorySortDir').addEventListener('click', (event) => { AppState.sortDir = AppState.sortDir === 'asc' ? 'desc' : 'asc'; event.target.textContent = AppState.sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'; AppState.page = 0; loadCategories(AppState.query); });
+    document.getElementById('categoryPrev').addEventListener('click', () => { if (AppState.page > 0) { AppState.page -= 1; loadCategories(AppState.query); } });
+    document.getElementById('categoryNext').addEventListener('click', () => { if (AppState.page + 1 < AppState.totalPages) { AppState.page += 1; loadCategories(AppState.query); } });
     // التنقل بين الحقول باستخدام Enter
     const formElements = document.querySelectorAll('#categoryForm input, #categoryForm select, #categoryForm textarea');
     formElements.forEach((el, index) => {

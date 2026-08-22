@@ -1269,12 +1269,12 @@
 </style>
     <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
 </head>
-<body>
+<body class="report-screen module-005-screen" data-module="fuel_types">
     <div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> Android Bridge غير متاح؛ لن تُحفظ أو تُعرض بيانات تجارية بديلة</div>
     <div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
     <header class="top-bar">
         <div class="header-top">
-            <div class="top-title"><h2><i class="fas fa-oil-can"></i> أنواع الوقود</h2><p id="subtitle">products · مصدر البيانات: طبقة Android/SQLite</p></div>
+            <div class="top-title"><h2><i class="fas fa-oil-can"></i> أنواع الوقود</h2><p id="subtitle">fuel_types · مصدر البيانات: طبقة Android/SQLite</p></div>
             <div class="header-actions">
                 <button type="button" class="icon-btn" id="themeToggle" title="تبديل الوضع"><i class="fas fa-moon" id="themeIcon"></i></button>
                 <button type="button" class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-arrow-right"></i></button>
@@ -1282,19 +1282,27 @@
             </div>
         </div>
         <div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" id="searchInput" type="search" placeholder="ابحث في البيانات..." autocomplete="off"></div>
-        <div class="filter-chips" id="filterChips" aria-label="الفلاتر"></div>
+        <div class="module004-controls action-row" aria-label="الفرز والفلترة">
+            <label class="sr-only" for="sortSelect">الفرز</label>
+            <select class="form-input" id="sortSelect" aria-label="فرز السجلات"></select>
+            <label class="sr-only" for="statusFilter">الحالة</label>
+            <select class="form-input" id="statusFilter" aria-label="فلترة حسب الحالة" hidden></select>
+            <button type="button" class="btn" id="sortDirToggle" aria-label="تغيير اتجاه الفرز">الأحدث أولاً</button>
+        </div>
+
     </header>
     <main class="page-container">
         <div class="notice-card"><i class="fas fa-database"></i><span>تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول fuel_types وعقود Typed Bridge الفعلية.</span></div>
         <section class="stats-grid" id="statsGrid">
-            <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-oil-can"></i></div><div class="stat-value" id="statCount">—</div><div class="stat-label">عدد السجلات المعروضة</div></article>
-            <article class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="statActive">—</div><div class="stat-label">نشط / مكتمل</div></article>
-            <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-calculator"></i></div><div class="stat-value" id="statTotal">—</div><div class="stat-label">المجموع الرقمي المتاح</div></article>
+            <article class="stat-card"><div class="stat-icon blue"><i class="fas fa-oil-can"></i></div><div class="stat-value" id="statCount">—</div><div class="stat-label">إجمالي السجلات المطابقة</div></article>
+            <article class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="statActive">—</div><div class="stat-label">نشط / مكتمل في الصفحة</div></article>
+            <article class="stat-card"><div class="stat-icon orange"><i class="fas fa-calculator"></i></div><div class="stat-value" id="statTotal">—</div><div class="stat-label">المجموع الرقمي في الصفحة</div></article>
             <article class="stat-card"><div class="stat-icon purple"><i class="fas fa-clock"></i></div><div class="stat-value" id="statUpdated">—</div><div class="stat-label">آخر تحديث</div></article>
         </section>
         <section class="data-panel">
             <div class="section-title"><h3><i class="fas fa-oil-can"></i> أنواع الوقود</h3><span class="count-badge" id="itemCount">0</span></div>
             <div class="cards-container" id="cardsContainer"></div>
+            <div class="pagination action-row hidden" id="pagination" aria-live="polite"></div>
         </section>
     </main>
     <button type="button" class="fab" id="fab" title="إضافة"><i class="fas fa-plus"></i></button>
@@ -1306,7 +1314,6 @@
         <button type="button" class="sidebar-btn" onclick="window.print()"><i class="fas fa-print"></i><span>طباعة</span></button>
         <button type="button" class="sidebar-btn" onclick="goHome()"><i class="fas fa-home"></i><span>رجوع</span></button>
     </div></aside>
-    <nav class="bottom-nav" id="bottomNav" aria-label="التقارير والعمليات"></nav>
     <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
         <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة سجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
         <div class="modal-body"><form id="recordForm" class="form-grid"></form></div>
@@ -1327,7 +1334,7 @@
         'use strict';
         const CFG = {"title":"أنواع الوقود","icon":"fa-oil-can","module":"products","listMethod":"getFuelTypeRecords","listArgs":["{}"],"fields":[{"label":"كود الوقود","key":"fuel_code","type":"text","required":true,"placeholder":""},{"label":"اسم الوقود","key":"fuel_name","type":"text","required":true,"placeholder":""},{"label":"اسم الوقود بالعربية","key":"fuel_name_ar","type":"text","required":false,"placeholder":""},{"label":"الوصف","key":"description","type":"textarea","required":false,"placeholder":""},{"label":"density standard","key":"density_standard","type":"number","required":false,"placeholder":""},{"label":"temperature standard","key":"temperature_standard","type":"number","required":false,"placeholder":""},{"label":"flash point","key":"flash_point","type":"text","required":false,"placeholder":""},{"label":"default sale price","key":"default_sale_price","type":"number","required":false,"placeholder":""},{"label":"default purchase price","key":"default_purchase_price","type":"number","required":false,"placeholder":""},{"label":"tax rate","key":"tax_rate","type":"number","required":false,"placeholder":""},{"label":"vat rate","key":"vat_rate","type":"number","required":false,"placeholder":""},{"label":"color code","key":"color_code","type":"text","required":false,"placeholder":""},{"label":"icon path","key":"icon_path","type":"text","required":false,"placeholder":""},{"label":"نشط؟","key":"is_active","type":"select","required":false,"placeholder":""},{"label":"ملاحظات","key":"remarks","type":"textarea","required":false,"placeholder":""},{"label":"extra data","key":"extra_data","type":"textarea","required":false,"placeholder":""}],"valueFields":["default_sale_price","default_purchase_price","tax_rate","vat_rate"],"titleFields":["fuel_name_ar","fuel_name","description"],"subtitleFields":["fuel_code","fuel_name","fuel_name_ar","description","density_standard","temperature_standard","flash_point","default_sale_price"],"createMethod":"saveFuelTypeRecord","updateMethod":"updateFuelTypeRecord","deleteMethod":"deleteFuelTypeRecord","note":"تُنفذ هذه الشاشة عمليات القراءة والإضافة والتعديل والحذف عبر جدول fuel_types وعقود Typed Bridge الفعلية.","mode":"list","objectMode":false,"updateAction":null,"reportKind":"operational:FuelType","aiMethod":null,"reports":["الكل","ملخص","تفصيلي","تحليل","حركات"],"resolveMethod":null,"operationKey":"fuel_types"};
         const bridge = window.AndroidInterface;
-        const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
+        const state = { rows: [], filtered: [], editing: null, loadedAt: null, page: 0, pageSize: 50, totalCount: 0, totalPages: 0, reportMeta: null, searchTimer: null };
         const $ = (id) => document.getElementById(id);
         const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
         const today = () => new Date().toISOString().slice(0,10);
@@ -1335,12 +1342,38 @@
         function setLoading(value) { $('loadingIndicator').classList.toggle('show', Boolean(value)); }
         function parse(raw) { if (raw == null) throw new Error('لم يرجع الجسر نتيجة'); const value=typeof raw==='string'?JSON.parse(raw):raw; if (value && value.success === false) throw new Error(value.error || value.message || 'فشلت العملية'); return value; }
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
-        function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
+        function invoke(method,args=[]) {
+            if (!bridge || typeof bridge[method] !== 'function') throw new Error('العقد '+method+' غير متاح في Android Bridge');
+            return parse(bridge[method](...args));
+        }
+        function reportMethod() {
+            if (!String(CFG.reportKind || '').startsWith('operational:')) return null;
+            return 'generate' + String(CFG.reportKind).split(':')[1] + 'Report';
+        }
         function argsForLoad() {
-            if (CFG.operationKey) return [JSON.stringify({limit: 200, search: $('searchInput').value || ''})];
+            if (CFG.operationKey) return [JSON.stringify({
+                limit: state.pageSize,
+                offset: state.page * state.pageSize,
+                search: $('searchInput').value || '',
+                sort_by: state.sortBy || 'id',
+                sort_dir: state.sortDir || 'desc',
+                status: $('statusFilter') ? ($('statusFilter').value || '') : ''
+            })];
             if (CFG.reportKind === 'balanceSheet') return [today(), 0];
             if (CFG.reportKind === 'eod') return [];
             return CFG.listArgs || [];
+        }
+        function initModule005Controls() {
+            const sort = $('sortSelect');
+            const sortOptions = {
+                fuel_types: [['id','الأحدث'],['fuel_code','كود الوقود'],['fuel_name','اسم الوقود'],['default_sale_price','السعر الافتراضي']],
+                price_lists: [['id','الأحدث'],['list_code','كود القائمة'],['list_name','اسم القائمة'],['valid_from','بداية السريان'],['valid_to','نهاية السريان']],
+                price_history: [['change_date','تاريخ التغيير'],['product_id','المنتج'],['new_price','السعر الجديد'],['old_price','السعر السابق'],['id','الأحدث']]
+            }[CFG.operationKey] || [['id','الأحدث']];
+            sort.innerHTML = sortOptions.map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+            sort.value = state.sortBy || 'id';
+            $('sortSelect').addEventListener('change', () => { state.sortBy = sort.value; state.page = 0; reloadData(); });
+            $('sortDirToggle').addEventListener('click', () => { state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc'; $('sortDirToggle').textContent = state.sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'; state.page = 0; reloadData(); });
         }
         function rowsFrom(value) {
             const raw=dataOf(value);
@@ -1357,38 +1390,43 @@
         function idOf(row) { return field(row,['id','_id','vehicle_id','pump_id','tank_id','payment_id','shift_id','sale_id','request_id','asset_id','employee_id']); }
         function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
         function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
-        function renderFilters() {
-            const labels=CFG.reports||['الكل','ملخص','تفصيلي','تحليل','حركات'];
-            $('filterChips').innerHTML=labels.map((label,i)=>`<button type="button" class="filter-chip ${i===0?'active':''}" data-filter="${i}">${esc(label)}</button>`).join('');
-            document.querySelectorAll('#filterChips [data-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.filter; applyFilter(); }));
-            $('bottomNav').innerHTML=labels.slice(0,5).map((label,i)=>`<button type="button" class="nav-item ${i===0?'active':''}" data-bottom-filter="${i}"><i class="fas ${i===0?'fa-list':i===1?'fa-file-alt':i===2?'fa-table':i===3?'fa-chart-bar':'fa-exchange-alt'}"></i><span>${esc(label)}</span></button>`).join('');
-            document.querySelectorAll('#bottomNav [data-bottom-filter]').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('#bottomNav .nav-item').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); state.filter=btn.dataset.bottomFilter; applyFilter(); }));
-        }
+        function renderFilters() { /* المرشحات التشغيلية الحقيقية موجودة في controls وتُرسل إلى SQLite. */ }
         function applyFilter() {
-            const q=($('searchInput').value||'').trim().toLowerCase();
-            state.filtered=state.rows.filter(row=>{ const text=JSON.stringify(row||{}).toLowerCase(); return !q || text.includes(q); });
+            state.filtered=state.rows.slice();
             renderCards();
         }
+        function renderPagination() {
+            const box=$('pagination'); if(!box) return;
+            if(!state.totalPages || state.totalPages <= 1) { box.innerHTML=''; box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            const current=state.page+1;
+            box.innerHTML=`<button type="button" class="btn" data-page="prev" ${state.page===0?'disabled':''}>السابق</button><span class="pagination-status">صفحة ${current} من ${state.totalPages} · ${state.totalCount.toLocaleString('ar')} سجل</span><button type="button" class="btn" data-page="next" ${current>=state.totalPages?'disabled':''}>التالي</button>`;
+            box.querySelector('[data-page="prev"]').addEventListener('click',()=>{if(state.page>0){state.page--;reloadData();}});
+            box.querySelector('[data-page="next"]').addEventListener('click',()=>{if(state.page+1<state.totalPages){state.page++;reloadData();}});
+        }
         function renderStats() {
-            const rows=state.filtered; $('statCount').textContent=rows.length.toLocaleString('ar'); $('itemCount').textContent=rows.length.toLocaleString('ar');
+            const rows=state.filtered;
+            $('statCount').textContent=state.totalCount.toLocaleString('ar');
+            $('itemCount').textContent=state.totalCount.toLocaleString('ar');
             const active=rows.filter(row=>['active','open','pending','completed','مفتوحة','نشط','قيد التنفيذ'].includes(String(field(row,['status','state','is_active'])))).length;
-            $('statActive').textContent=active.toLocaleString('ar');
+            $('statActive').textContent=state.totalCount ? active.toLocaleString('ar') : '—';
             let total=0; (CFG.valueFields||[]).forEach(k=>total += rows.reduce((sum,row)=>sum+numeric(row&&row[k]),0)); $('statTotal').textContent=total?total.toLocaleString('ar',{maximumFractionDigits:2}):'—';
             $('statUpdated').textContent=state.loadedAt?state.loadedAt.toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit'}):'—';
         }
         function renderCards() {
             renderStats(); const box=$('cardsContainer');
-            if (!state.filtered.length) { box.innerHTML=`<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`; return; }
+            if (!state.filtered.length) { box.innerHTML=`<div class="empty-state"><i class="fas fa-inbox"></i><p>${CFG.mode==='unsupported'?'لا توجد عملية مدعومة لهذا المسار في العقد الحالي.':'لا توجد نتائج مطابقة أو لم تُرجع قاعدة البيانات سجلات.'}</p></div>`; renderPagination(); return; }
             box.innerHTML=state.filtered.map((row,index)=>{
                 const id=esc(idOf(row)||index); const fields=(CFG.subtitleFields||[]).filter(k=>row && row[k]!==undefined && row[k]!==null && row[k]!=='').slice(0,8);
                 const value=(CFG.valueFields||[]).map(k=>numeric(row&&row[k])).filter(v=>v!==0).reduce((a,b)=>a+b,0);
-                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}</div>`;
+                const buttons=`<div class="action-row"><button class="btn" type="button" data-view="${id}"><i class="fas fa-eye"></i> عرض</button>${CFG.updateMethod?`<button class="btn warning" type="button" data-edit="${id}"><i class="fas fa-edit"></i> تعديل</button>`:''}${CFG.resolveMethod?`<button class="btn" type="button" data-resolve="${id}"><i class="fas fa-check"></i> اعتماد/حل</button>`:''}${CFG.deleteMethod?`<button class="btn danger" type="button" data-delete="${id}"><i class="fas fa-trash"></i> حذف</button>`:''}</div>`;
                 return `<article class="data-card"><div class="data-card-head"><div><div class="data-card-title">${esc(titleOf(row))}</div><div class="data-card-subtitle">${esc(subtitleOf(row))}</div></div>${value?`<div class="data-card-value">${value.toLocaleString('ar',{maximumFractionDigits:2})}</div>`:''}</div><div class="data-fields">${fields.map(k=>`<div class="data-field"><span>${esc(k)}</span><strong>${esc(row[k])}</strong></div>`).join('')}</div>${buttons}</article>`;
             }).join('');
             box.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>openDetails(b.dataset.view)));
             box.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click',()=>openForm(findRow(b.dataset.edit))));
             box.querySelectorAll('[data-delete]').forEach(b=>b.addEventListener('click',()=>deleteRow(findRow(b.dataset.delete))));
             box.querySelectorAll('[data-resolve]').forEach(b=>b.addEventListener('click',()=>resolveRow(findRow(b.dataset.resolve))));
+            renderPagination();
         }
         function findRow(id) { return state.rows.find((row,index)=>String(idOf(row)||index)===String(id)); }
         function openDetails(id) { const row=findRow(id); if(!row)return; $('detailsBody').innerHTML=`<div class="detail-grid">${Object.entries(row).map(([k,v])=>`<div class="detail-item"><span>${esc(k)}</span><strong>${esc(typeof v==='object'?JSON.stringify(v):v)}</strong></div>`).join('')}</div><details style="margin-top:14px"><summary>JSON الخام</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`; openModal(null,'detailsModal'); }
@@ -1398,7 +1436,27 @@
         async function saveForm() { const form=$('recordForm'); if(!form.reportValidity())return; const payload=collectForm(); setLoading(true); try { let result; if(state.editing && CFG.updateMethod) { const id=idOf(state.editing); if(!id)throw new Error('معرف السجل غير صالح'); if(CFG.updateAction==='tankQuantity') result=await invoke(CFG.updateMethod,[Number(id),Number(payload.current_quantity||0)]); else if(CFG.updateAction==='maintenanceStatus') result=await invoke(CFG.updateMethod,[JSON.stringify({request_id:Number(id),status:payload.status||'completed'})]); else if(CFG.updateAction==='endShift') result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); else result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); } else if(CFG.createMethod) { if(CFG.createMethod==='saveBalanceSheet') result=await invoke(CFG.createMethod,[today(),0]); else result=await invoke(CFG.createMethod,[JSON.stringify(payload)]); } else throw new Error('لا توجد عملية حفظ مدعومة'); parse(result); toast('تم تنفيذ العملية والتحقق من نجاحها'); closeModal(null,'formModal'); await reloadData(); } catch(error) { toast(error.message||'فشلت العملية',true); } finally { setLoading(false); } }
         async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
         async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
-        async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
+        async function reloadData() {
+            if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; }
+            if(CFG.mode==='backup'){ loadBackupHistory(); return; }
+            if(!CFG.listMethod){ renderCards(); return; }
+            if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; }
+            setLoading(true);
+            try {
+                const method=reportMethod() || CFG.listMethod;
+                const result=await invoke(method,argsForLoad());
+                const envelope=dataOf(result);
+                state.rows=rowsFrom(result);
+                state.reportMeta=(envelope && typeof envelope==='object' && !Array.isArray(envelope)) ? envelope : null;
+                state.totalCount=Number(state.reportMeta && state.reportMeta.total_count != null ? state.reportMeta.total_count : state.rows.length);
+                state.totalPages=Number(state.reportMeta && state.reportMeta.total_pages != null ? state.reportMeta.total_pages : (state.totalCount ? Math.ceil(state.totalCount/state.pageSize) : 0));
+                state.loadedAt=new Date();
+                $('offlineBanner').classList.remove('show');
+                applyFilter();
+            } catch(error) {
+                state.rows=[]; state.totalCount=0; state.totalPages=0; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true);
+            } finally { setLoading(false); }
+        }
         function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
         function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
         async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); toast('تم توليد التقرير من المصدر الفعلي'); } catch(e) { toast(e.message||'فشل التقرير',true); } finally { setLoading(false); } }
@@ -1416,10 +1474,10 @@
         function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true);return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)toast(parsed.message||'اكتملت العملية فعلياً'); else toast(parsed.error||'فشلت العملية',true);}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...');}catch(e){toast(e.message,true);} }
         async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true);}}
         async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
-        $('searchInput').addEventListener('input',applyFilter); $('themeToggle').addEventListener('click',toggleTheme); $('fab').addEventListener('click',()=>openForm()); $('saveBtn').addEventListener('click',saveForm); $('sidebarToggle').addEventListener('click',()=>{const side=$('sidebar');side.classList.toggle('open');}); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
+        $('searchInput').addEventListener('input',()=>{ clearTimeout(state.searchTimer); state.page=0; state.searchTimer=setTimeout(reloadData,250); }); $('themeToggle').addEventListener('click',toggleTheme); $('fab').addEventListener('click',()=>openForm()); $('saveBtn').addEventListener('click',saveForm); $('sidebarToggle').addEventListener('click',()=>{const side=$('sidebar');side.classList.toggle('open');}); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
         window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
-        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
-        applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
+        Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI, renderPagination});
+        applyTheme(); renderFilters(); initModule005Controls(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
     })();
     </script>
 </body>

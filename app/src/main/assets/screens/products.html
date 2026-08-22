@@ -725,6 +725,19 @@
                     </div>
                 </div>
                 
+                <!-- بيانات التعريف والربط -->
+                <div class="horizontal-row">
+                    <div class="field-group">
+                        <label class="form-label">الباركود</label>
+                        <input type="text" name="barcode" id="barcode" placeholder="اختياري">
+                        <i class="fas fa-barcode field-icon"></i>
+                    </div>
+                    <div class="field-group">
+                        <label class="form-label">نوع الوقود</label>
+                        <select name="fuel_type_id" id="fuel_type_id"><option value="">غير مرتبط</option></select>
+                        <i class="fas fa-gas-pump field-icon"></i>
+                    </div>
+                </div>
                 <!-- الصف الثاني -->
                 <div class="horizontal-row">
                     <div class="field-group">
@@ -884,6 +897,11 @@
             </div>
         </div>
 
+        <div class="module005-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0;">
+            <input type="search" id="productSearch" class="form-control" placeholder="بحث في الكود أو الاسم أو الباركود" style="flex:1;min-width:220px;padding:10px;border-radius:8px;border:1px solid #ddd;">
+            <select id="productSort" class="form-control" aria-label="فرز المنتجات" style="min-width:160px;padding:10px;border-radius:8px;border:1px solid #ddd"><option value="id">الأحدث</option><option value="product_code">كود المنتج</option><option value="product_name">اسم المنتج</option><option value="sale_price">سعر البيع</option><option value="quantity">المخزون</option><option value="status">الحالة</option></select>
+            <button type="button" class="btn btn-secondary" id="productSortDir">تنازلي</button>
+        </div>
         <!-- جدول المنتجات -->
         <div class="table-scroll-container">
             <div class="table-scroll-wrapper">
@@ -916,6 +934,9 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+        <div id="productPagination" class="module005-toolbar" style="display:flex;justify-content:center;gap:12px;align-items:center;margin:16px 0;">
+            <button type="button" class="btn btn-secondary" id="productPrev">السابق</button><span id="productPageInfo">—</span><button type="button" class="btn btn-secondary" id="productNext">التالي</button>
         </div>
 
         <!-- النماذج المنبثقة -->
@@ -952,47 +973,32 @@
         // ============================================================
         function apiCall(action, params) {
             const p = params || {};
-            if (!window.AndroidInterface) return Promise.reject({ success: false, message: 'جسر Android غير متاح' });
-            try {
-                let raw;
-                switch (action) {
-                    case 'getCategories': raw = AndroidInterface.getCategories(); break;
-                    case 'getUnits': raw = AndroidInterface.getUnits(); break;
-                    case 'getProducts': raw = AndroidInterface.getProducts(); break;
-                    case 'getProduct': raw = AndroidInterface.getProductById(Number(p.product_id)); break;
-                    case 'saveProduct': {
-                        const payload = {
-                            product_code: String(p.product_code || '').trim(), product_name: String(p.product_name || '').trim(),
-                            product_name_ar: p.product_name_ar || p.product_name || '', category_id: Number(p.category_id || 0),
-                            unit_id: Number(p.unit_id || 0), purchase_price: Number(p.purchase_price || 0), sale_price: Number(p.sale_price || 0),
-                            quantity: Number(p.current_stock ?? p.quantity ?? 0), minimum_stock: Number(p.min_stock_level ?? p.minimum_stock ?? 10),
-                            description: p.description || '', is_service: Number(p.is_service || 0), is_batch_tracked: Number(p.is_batch_tracked || 0),
-                            is_serialized: Number(p.is_serialized || 0), has_expiry: Number(p.has_expiry || 0),
-                            expiry_date: p.expiry_date || null, status: Number(p.is_active ?? 1) === 1 ? 'active' : 'inactive'
-                        };
-                        raw = Number(p.product_id || 0) > 0 ? AndroidInterface.updateProduct(Number(p.product_id), JSON.stringify(payload)) : AndroidInterface.addProduct(JSON.stringify(payload));
-                        break;
-                    }
-                    case 'deleteProduct': raw = AndroidInterface.deleteProduct(Number(p.product_id)); break;
-                    case 'searchProducts': {
-                        const q = String(p.product_name || '').toLowerCase();
-                        const id = String(p.product_id || '').trim();
-                        const data = (window.__productsCache || []).filter(x => (!id || String(x.product_id || x.id) === id) && (!q || String(x.product_name || '').toLowerCase().includes(q) || String(x.product_code || '').toLowerCase().includes(q)));
-                        return Promise.resolve({ success: true, data });
-                    }
-                    case 'filterProducts': {
-                        const data = (window.__productsCache || []).filter(x =>
-                            (!p.product_code || String(x.product_code || '').toLowerCase().includes(String(p.product_code).toLowerCase())) &&
-                            (!p.category_id || Number(x.category_id) === Number(p.category_id)) &&
-                            (p.is_active === '' || p.is_active === undefined || (String(x.status) === 'active') === (String(p.is_active) === '1')) &&
-                            (p.has_expiry === '' || p.has_expiry === undefined || Number(x.has_expiry || 0) === Number(p.has_expiry))
-                        );
-                        return Promise.resolve({ success: true, data });
-                    }
-                    default: return Promise.reject({ success: false, message: 'العملية غير مدعومة: ' + action });
+            if (!window.AndroidInterface) throw new Error('جسر Android غير متاح؛ لا توجد بيانات بديلة');
+            let raw;
+            switch (action) {
+                case 'getCategories': raw = AndroidInterface.getCategories(); break;
+                case 'getUnits': raw = AndroidInterface.getUnits(); break;
+                case 'getProducts': raw = AndroidInterface.getProductPage(JSON.stringify(p)); break;
+                case 'getProduct': raw = AndroidInterface.getProductById(Number(p.product_id)); break;
+                case 'saveProduct': {
+                    const payload = {
+                        product_code: String(p.product_code || '').trim(), product_name: String(p.product_name || '').trim(),
+                        product_name_ar: p.product_name_ar || p.product_name || '', category_id: Number(p.category_id || 0),
+                        unit_id: Number(p.unit_id || 0), purchase_price: Number(p.purchase_price || 0), sale_price: Number(p.sale_price || 0),
+                        quantity: Number(p.current_stock ?? p.quantity ?? 0), minimum_stock: Number(p.min_stock_level ?? p.minimum_stock ?? 10),
+                        barcode: String(p.barcode || '').trim(), description: p.description || '', is_service: Number(p.is_service || 0), is_batch_tracked: Number(p.is_batch_tracked || 0),
+                        is_serialized: Number(p.is_serialized || 0), has_expiry: Number(p.has_expiry || 0), expiry_date: p.expiry_date || null,
+                        is_active: Number(p.is_active ?? 1)
+                    };
+                    raw = Number(p.product_id || 0) > 0 ? AndroidInterface.updateProduct(Number(p.product_id), JSON.stringify(payload)) : AndroidInterface.addProduct(JSON.stringify(payload));
+                    break;
                 }
-                return Promise.resolve(typeof raw === 'string' ? JSON.parse(raw) : raw);
-            } catch (e) { return Promise.reject({ success: false, message: e.message || 'فشل استدعاء الجسر' }); }
+                case 'deleteProduct': raw = AndroidInterface.deleteProduct(Number(p.product_id)); break;
+                case 'searchProducts': raw = AndroidInterface.getProductPage(JSON.stringify({ search: String(p.product_name || '').trim(), limit: pageSize, offset: 0, sort_by: 'product_name', sort_dir: 'asc' })); break;
+                case 'filterProducts': raw = AndroidInterface.getProductPage(JSON.stringify({ search: String(p.product_code || '').trim(), category_id: Number(p.category_id || 0), status: p.is_active === '' ? '' : (String(p.is_active) === '1' ? 'active' : 'inactive'), has_expiry: p.has_expiry === '' ? -1 : Number(p.has_expiry), limit: pageSize, offset: 0, sort_by: 'product_name', sort_dir: 'asc' })); break;
+                default: throw new Error('العملية غير مدعومة: ' + action);
+            }
+            return typeof raw === 'string' ? JSON.parse(raw) : raw;
         }
 
         function handleAndroidResult(action, data) {
@@ -1036,6 +1042,13 @@
         let units = [];
         let html5Qrcode = null;
         let isScanning = false;
+        let pageSize = 25;
+        let currentPage = 0;
+        let totalCount = 0;
+        let totalPages = 0;
+        let sortBy = 'id';
+        let sortDir = 'desc';
+        let activeQuery = {};
         let flashEnabled = false;
         let sidebarTimeout = null;
         const SIDEBAR_TIMEOUT_DURATION = 8000;
@@ -1072,25 +1085,55 @@
             }
         }
 
-        async function loadProducts() {
+        async function loadFuelTypes() {
+            try {
+                const result = await apiCall('getFuelTypes', {});
+                if (result.success) {
+                    const select = document.getElementById('fuel_type_id');
+                    (result.data || []).forEach(fuel => {
+                        const option = document.createElement('option');
+                        option.value = fuel.fuel_type_id || fuel.id;
+                        option.textContent = fuel.fuel_name_ar || fuel.fuel_name || fuel.fuel_code;
+                        select.appendChild(option);
+                    });
+                } else showToast('خطأ في تحميل أنواع الوقود', 'error');
+            } catch (e) { showToast(e.message || 'خطأ في تحميل أنواع الوقود', 'error'); }
+        }
+
+        async function loadProducts(query = activeQuery) {
             showLoading(true);
             try {
-                const result = await apiCall('getProducts', {});
-                if (!result.success) throw new Error(result.message || 'فشل تحميل المنتجات');
-                populateProductsTable(result.data || []);
+                activeQuery = { ...query };
+                const result = await apiCall('getProducts', { ...activeQuery, limit: pageSize, offset: currentPage * pageSize, sort_by: sortBy, sort_dir: sortDir });
+                if (!result || result.success === false) throw new Error(result.message || result.error || 'فشل تحميل المنتجات');
+                const envelope = result.data && !Array.isArray(result.data) ? result.data : result;
+                const rows = Array.isArray(envelope.rows) ? envelope.rows : (Array.isArray(envelope.data) ? envelope.data : []);
+                window.__productsCache = rows;
+                totalCount = Number(envelope.total_count || 0);
+                totalPages = Number(envelope.total_pages || (totalCount ? Math.ceil(totalCount / pageSize) : 0));
+                populateProductsTable(rows);
+                loadStats(envelope.summary || {});
+                renderProductPagination();
             } catch (e) { showToast(e.message || 'خطأ في تحميل المنتجات', 'error'); }
             finally { showLoading(false); }
         }
 
-        async function loadStats() {
-            const list = window.__productsCache || [];
-            const active = list.filter(p => String(p.status || 'active') === 'active');
-            const prices = active.map(p => Number(p.sale_price || 0));
-            const low = active.filter(p => Number(p.quantity || 0) <= Number(p.minimum_stock || 0));
-            document.getElementById('totalProducts').textContent = list.length;
-            document.getElementById('activeProducts').textContent = active.length;
-            document.getElementById('avgPrice').textContent = prices.length ? (prices.reduce((a,b) => a+b, 0) / prices.length).toFixed(2) : '0.00';
-            document.getElementById('lowStockProducts').textContent = low.length;
+        function loadStats(summary) {
+            const data = summary || {};
+            document.getElementById('totalProducts').textContent = Number(data.total_count || totalCount).toLocaleString('ar');
+            document.getElementById('activeProducts').textContent = Number(data.active_count || 0).toLocaleString('ar');
+            document.getElementById('avgPrice').textContent = Number(data.average_sale_price || 0).toFixed(2);
+            document.getElementById('lowStockProducts').textContent = Number(data.low_stock_count || 0).toLocaleString('ar');
+        }
+
+        function renderProductPagination() {
+            const info = document.getElementById('productPageInfo');
+            const prev = document.getElementById('productPrev');
+            const next = document.getElementById('productNext');
+            if (!info || !prev || !next) return;
+            info.textContent = totalPages ? `صفحة ${currentPage + 1} من ${totalPages} · ${totalCount.toLocaleString('ar')} منتج` : 'لا توجد نتائج';
+            prev.disabled = currentPage <= 0;
+            next.disabled = !totalPages || currentPage + 1 >= totalPages;
         }
 
         function populateCategoryDropdown() {
@@ -1226,6 +1269,8 @@
                 product_id: currentEditingId || 0,
                 product_code: document.getElementById('product_code').value.trim(),
                 product_name: document.getElementById('product_name').value.trim(),
+                barcode: document.getElementById('barcode').value.trim(),
+                fuel_type_id: parseInt(document.getElementById('fuel_type_id').value) || 0,
                 category_id: parseInt(document.getElementById('category_id').value) || 0,
                 unit_id: parseInt(document.getElementById('unit_id').value) || 0,
                 purchase_price: parseFloat(document.getElementById('purchase_price').value) || 0,
@@ -1269,6 +1314,8 @@
                     document.getElementById('editMode').value = p.product_id || p.id;
                     document.getElementById('product_code').value = p.product_code || '';
                     document.getElementById('product_name').value = p.product_name || '';
+                    document.getElementById('barcode').value = p.barcode || '';
+                    document.getElementById('fuel_type_id').value = p.fuel_type_id || '';
                     document.getElementById('category_id').value = p.category_id || '';
                     document.getElementById('unit_id').value = p.unit_id || '';
                     document.getElementById('purchase_price').value = p.purchase_price || 0;
@@ -1340,30 +1387,9 @@
         async function performSearch() {
             const searchId = document.getElementById('searchId').value.trim();
             const searchName = document.getElementById('searchName').value.trim();
-            showLoading(true);
-            try {
-                const result = await apiCall('searchProducts', { product_id: searchId, product_name: searchName });
-                if (result.success) {
-                    populateProductsTable(result.data || []);
-                    closeModal('searchModal');
-                    if (result.data && result.data.length > 0) {
-                        const row = document.querySelector(`tr[data-id="${result.data[0].product_id || result.data[0].id}"]`);
-                        if (row) {
-                            document.querySelectorAll('#productsTableBody tr').forEach(r => {
-                                r.classList.remove('search-highlight');
-                            });
-                            row.classList.add('search-highlight');
-                            row.scrollIntoView({ behavior: 'smooth' });
-                        }
-                    }
-                } else {
-                    showToast(result.message || 'لا توجد نتائج', 'error');
-                }
-            } catch (e) {
-                showToast('خطأ في البحث', 'error');
-            } finally {
-                showLoading(false);
-            }
+            currentPage = 0;
+            await loadProducts({ product_id: searchId ? Number(searchId) : 0, search: searchName });
+            closeModal('searchModal');
         }
 
         // ============================================================
@@ -1374,26 +1400,9 @@
             const categoryId = document.getElementById('filterCategory').value;
             const isActive = document.getElementById('filterStatus').value;
             const hasExpiry = document.getElementById('filterHasExpiry').value;
-
-            showLoading(true);
-            try {
-                const result = await apiCall('filterProducts', {
-                    product_code: productCode,
-                    category_id: categoryId,
-                    is_active: isActive,
-                    has_expiry: hasExpiry
-                });
-                if (result.success) {
-                    populateProductsTable(result.data || []);
-                    showToast('تم تطبيق التصفية', 'success');
-                } else {
-                    showToast(result.message || 'خطأ في التصفية', 'error');
-                }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            } finally {
-                showLoading(false);
-            }
+            currentPage = 0;
+            await loadProducts({ product_code: productCode, category_id: categoryId ? Number(categoryId) : 0, is_active: isActive, has_expiry: hasExpiry === '' ? -1 : Number(hasExpiry) });
+            showToast('تم تطبيق التصفية من SQLite', 'success');
         }
 
         function resetFilters() {
@@ -1401,7 +1410,8 @@
             document.getElementById('filterCategory').value = '';
             document.getElementById('filterStatus').value = '';
             document.getElementById('filterHasExpiry').value = '';
-            loadProducts();
+            currentPage = 0;
+            loadProducts({});
             showToast('تم إعادة تعيين الفلاتر', 'success');
         }
 
@@ -1744,13 +1754,22 @@
 
             loadCategories();
             loadUnits();
-            loadProducts();
-            loadStats();
+            loadFuelTypes();
+            loadProducts({});
+            let searchTimer;
+            document.getElementById('productSearch').addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => { currentPage = 0; loadProducts({ search: document.getElementById('productSearch').value.trim() }); }, 250);
+            });
+            document.getElementById('productSort').addEventListener('change', (event) => { sortBy = event.target.value; currentPage = 0; loadProducts(activeQuery); });
+            document.getElementById('productSortDir').addEventListener('click', (event) => { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; event.target.textContent = sortDir === 'asc' ? 'تصاعدي' : 'تنازلي'; currentPage = 0; loadProducts(activeQuery); });
+            document.getElementById('productPrev').addEventListener('click', () => { if (currentPage > 0) { currentPage -= 1; loadProducts(activeQuery); } });
+            document.getElementById('productNext').addEventListener('click', () => { if (currentPage + 1 < totalPages) { currentPage += 1; loadProducts(activeQuery); } });
             initBarcodeScanner(false);
             setupSidebar();
         });
 
-        setInterval(loadStats, 60000);
+        setInterval(() => loadProducts(activeQuery), 60000);
     </script>
 </body>
 </html>

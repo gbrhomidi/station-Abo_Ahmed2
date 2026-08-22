@@ -11,7 +11,7 @@ const fuel = fs.readFileSync(fuelPath, 'utf8');
 const main = fs.readFileSync(mainPath, 'utf8');
 const failures = [];
 function need(text, pattern, label) { if (!pattern.test(text)) failures.push(label); }
-need(db, /fun getDashboardStats\(stationId: Int = 1, params: JSONObject = JSONObject\(\)\)/, 'DatabaseHelper: parameterized dashboard stats missing');
+need(db, /fun getDashboardStats\(stationId: Int, params: JSONObject = JSONObject\(\)\)/, 'DatabaseHelper: parameterized dashboard stats missing');
 need(db, /getSalesAmountBetween\(stationId, currentStart, currentEnd\)/, 'DatabaseHelper: current-period SQL aggregate missing');
 need(db, /getSalesAmountBetween\(stationId, previousStart, previousEnd\)/, 'DatabaseHelper: previous-equivalent-period SQL aggregate missing');
 need(db, /sales_trend_data/, 'DatabaseHelper: structured sales trend missing');
@@ -22,7 +22,7 @@ need(db, /put\("total_pages", totalPages\)/, 'DatabaseHelper: total_pages missin
 need(db, /LIMIT \? OFFSET \?/, 'DatabaseHelper: LIMIT/OFFSET missing');
 need(db, /CREATE TABLE IF NOT EXISTS meter_readings/, 'DatabaseHelper: meter_readings schema missing');
 need(db, /"meter_readings" -> "reading_date"/, 'DatabaseHelper: meter_readings date filter missing');
-need(db, /fun getFuelReportPage\(data: JSONObject\): JSONObject/, 'DatabaseHelper: fuel page method missing');
+need(db, /fun getFuelReportPage\(data: JSONObject, stationScopeId: Int\): JSONObject/, 'DatabaseHelper: fuel page method missing');
 need(db, /getFuelReportTotalCount/, 'DatabaseHelper: fuel COUNT metadata missing');
 need(bridge, /@JavascriptInterface\s+fun getFuelReportPage\(/, 'MainActivity: getFuelReportPage bridge missing');
 need(bridge, /@JavascriptInterface\s+fun getMeterReadingRecords\(/, 'MainActivity: meter-reading list bridge missing');

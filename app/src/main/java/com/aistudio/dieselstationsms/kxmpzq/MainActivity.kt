@@ -1453,43 +1453,20 @@ class MainActivity : AppCompatActivity() {
         private fun getGeminiHelper(): GeminiAIHelper? = geminiHelperRef.get()
         private fun getActivity(): MainActivity? = activityRef.get()
 
-        private fun checkPermission(
-            permissionCode: String,
-            action: String
-        ): Boolean {
-            val activity = getActivity() ?: return false
-            val userId = activity.currentUserId
-            if (userId == 0L) return false
-
-            // DEV_MODE: تجاوز الصلاحيات محصور بالمستخدم admin رقم 1 ونسخ Debug.
-            // لا يُستخدم هذا المسار في Release؛ بقية المستخدمين يمرون عبر SQLite كالمعتاد.
-            if (activity.isDebugMode && userId == DEV_MODE_ADMIN_USER_ID) {
-                DebugLogger.info("DEV_MODE", "Full permission bypass for development admin userId=$userId action=$permissionCode.$action")
-                return true
-            }
-
-            val db = getDbHelper() ?: return false
-            return db.checkUserPermission(userId, "$permissionCode.$action")
-        }
-
         private fun getScreensForUser(
             activity: MainActivity,
             db: DatabaseHelper,
             userId: Long
         ): JSONArray {
-            if (!activity.isDebugMode || userId != DEV_MODE_ADMIN_USER_ID) {
-                return db.getUserScreens(userId)
-            }
-
-            // DEV_MODE: الشاشات المسجلة في SQLite + ملفات HTML الموجودة فعلياً في assets.
+            // Authentication identifies the active session; screen availability is not restricted by user roles.
+            // Database Authority and station scope remain enforced by each data operation.
             val combined = db.getAllActiveScreens()
             val knownNames = mutableSetOf<String>()
             for (index in 0 until combined.length()) {
                 combined.optJSONObject(index)?.optString("screen_name")?.let { knownNames.add(it) }
             }
-            val assetScreens = db.getAvailableAssetScreens()
-            for (index in 0 until assetScreens.length()) {
-                val screen = assetScreens.optJSONObject(index) ?: continue
+            for (index in 0 until db.getAvailableAssetScreens().length()) {
+                val screen = db.getAvailableAssetScreens().optJSONObject(index) ?: continue
                 val name = screen.optString("screen_name")
                 if (name.isNotBlank() && knownNames.add(name)) combined.put(screen)
             }
@@ -2143,7 +2120,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getSmsAiConfig(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة إعداد AI")
             return try {
                 dataResponse(SmsAiGateway(this@MainActivity, dbHelper).publicConfig())
             } catch (e: Exception) {
@@ -2160,7 +2136,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             apiKey: String,
             timeoutMs: Long
         ): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تعديل إعداد AI")
             return try {
                 val store = SmsAiConfigStore(this@MainActivity)
                 val previous = store.get()
@@ -2183,7 +2158,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun clearSmsAiConfig(): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية حذف إعداد AI")
             return try {
                 SmsAiConfigStore(this@MainActivity).clear()
                 dataResponse(JSONObject().put("cleared", true))
@@ -2194,7 +2168,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getSmsAiProviderProfiles(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة مزودي AI")
             return dataResponse(SmsAiGateway(this@MainActivity, dbHelper).publicConfig().optJSONArray("profiles") ?: org.json.JSONArray())
         }
 
@@ -2211,7 +2184,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             minimumConfidence: Double,
             fallbackProviderId: String
         ): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تعديل مزودي AI")
             return try {
                 val store = SmsAiProviderStore(this@MainActivity)
                 val existing = id.trim().takeIf { it.isNotBlank() }?.let { store.get(it) }
@@ -2239,19 +2211,16 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteSmsAiProvider(id: String): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية حذف مزود AI")
             return dataResponse(JSONObject().put("deleted", SmsAiGateway(this@MainActivity, dbHelper).deleteProfile(id.trim())))
         }
 
         @JavascriptInterface
         fun setSmsAiProviderEnabled(id: String, enabled: Boolean): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تعديل مزود AI")
             return dataResponse(JSONObject().put("updated", SmsAiGateway(this@MainActivity, dbHelper).setProfileEnabled(id.trim(), enabled)))
         }
 
         @JavascriptInterface
         fun getAiHealthStatus(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة صحة AI")
             return try {
                 // جلب بيانات الصحة الحقيقية من قاعدة بيانات SQLite بدلاً من SharedPreferences
                 val status = dbHelper.getAiHealthStatusQuery()
@@ -2264,7 +2233,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun testSmsAiProvider(id: String): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية اختبار مزود AI")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             activity.lifecycleScope.launch(Dispatchers.IO) {
                 val analysis = SmsAiGateway(this@MainActivity, dbHelper).testProvider(id.trim())
@@ -2366,7 +2334,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getAIInsight(): String {
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("ai", "read")) return errorResponse("لا تملك صلاحية الوصول للذكاء الاصطناعي")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -2414,7 +2381,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addParty(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addParty called")
-            if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2432,7 +2398,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateParty(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateParty called")
-            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2449,7 +2414,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteParty(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteParty called")
-            if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2465,7 +2429,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun archiveParty(id: Long): String {
             DebugLogger.info("WebAppInterface", "archiveParty called")
-            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2481,7 +2444,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getParties(type: String?): String {
             DebugLogger.info("WebAppInterface", "getParties called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2503,7 +2465,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun searchParties(query: String): String {
             DebugLogger.info("WebAppInterface", "searchParties called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2518,7 +2479,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPartyById(id: Long): String {
             DebugLogger.info("WebAppInterface", "getPartyById called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2537,7 +2497,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addOrder(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addOrder called")
-            if (!checkPermission("orders", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2555,7 +2514,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getOrders(status: String?): String {
             DebugLogger.info("WebAppInterface", "getOrders called")
-            if (!checkPermission("orders", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2577,7 +2535,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addDelivery(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addDelivery called")
-            if (!checkPermission("deliveries", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2595,7 +2552,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getDeliveries(): String {
             DebugLogger.info("WebAppInterface", "getDeliveries called")
-            if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2610,7 +2566,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTodayDeliveries(): String {
             DebugLogger.info("WebAppInterface", "getTodayDeliveries called")
-            if (!checkPermission("deliveries", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2629,7 +2584,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addSale(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addSale called")
-            if (!checkPermission("sales", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2647,7 +2601,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun completeSale(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "completeSale called")
-            if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2664,21 +2617,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getNextInvoiceNumber(): String {
-            if (!checkPermission("sales", "create")) return errorResponse("لا تملك صلاحية إنشاء فاتورة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getNextInvoiceNumber()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun searchInvoices(jsonData: String): String {
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة الفواتير")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.searchInvoices(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun retrieveInvoice(invoiceNumber: String): String {
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة الفاتورة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { db.getInvoiceDetails(invoiceNumber)?.let { dataResponse(it) } ?: errorResponse("الفاتورة غير موجودة") }
             catch (e: Exception) { DebugLogger.logException("Invoice", e); errorResponse(e.message) }
@@ -2686,7 +2636,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun searchSales(jsonData: String): String {
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة المبيعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.searchSaleItems(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -2696,14 +2645,12 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun processSaleReturn(jsonData: String): String {
-            if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية معالجة المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.processSaleReturn(operationalScopedJson(jsonData))) } catch (e: Exception) { DebugLogger.logException("SaleReturn", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getReturns(jsonData: String): String {
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية قراءة المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getReturns(operationalScopedJson(jsonData))) } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -2713,7 +2660,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun updateReturn(id: Long, jsonData: String): String {
-            if (!checkPermission("sales", "update")) return errorResponse("لا تملك صلاحية تحديث المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updateReturn(id, operationalScopedJson(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث المرتجع" else "المرتجع غير موجود") }
             catch (e: Exception) { errorResponse(e.message) }
@@ -2721,7 +2667,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteReturn(id: Long): String {
-            if (!checkPermission("sales", "delete")) return errorResponse("لا تملك صلاحية حذف المرتجعات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deleteReturn(id, requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)); successResponse(rows > 0, if (rows > 0) "تم عكس المرتجع فعلياً" else "المرتجع غير موجود") }
             catch (e: Exception) { DebugLogger.logException("SaleReturn", e); errorResponse(e.message) }
@@ -2729,7 +2674,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getEntityTypes(): String {
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val result = JSONArray()
@@ -2740,7 +2684,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getEntitiesByType(typeId: Long): String {
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.getPartiesByType(typeId, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) { errorResponse(e.message) }
@@ -2748,7 +2691,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getEntityDetails(id: Long): String {
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة الطرف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { db.getPartyById(id, requireCurrentStationId(db, activity.currentUserId))?.let { dataResponse(it) } ?: errorResponse("الطرف غير موجود") }
@@ -2759,7 +2701,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSales(): String {
             DebugLogger.info("WebAppInterface", "getSales called")
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2774,7 +2715,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTodaySales(): String {
             DebugLogger.info("WebAppInterface", "getTodaySales called")
-            if (!checkPermission("sales", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2789,7 +2729,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteSale(saleId: Long): String {
             DebugLogger.info("WebAppInterface", "deleteSale called")
-            if (!checkPermission("sales", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val dbWritable = db.writableDatabase
@@ -2810,7 +2749,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addCashMovement(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addCashMovement called")
-            if (!checkPermission("cash", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2827,7 +2765,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCashMovements(): String {
             DebugLogger.info("WebAppInterface", "getCashMovements called")
-            if (!checkPermission("cash", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2843,7 +2780,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTodayCash(): String {
             DebugLogger.info("WebAppInterface", "getTodayCash called")
-            if (!checkPermission("cash", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2863,7 +2799,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addMeterReading(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addMeterReading called")
-            if (!checkPermission("meter", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2880,7 +2815,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getMeterReadings(): String {
             DebugLogger.info("WebAppInterface", "getMeterReadings called")
-            if (!checkPermission("meter", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2896,7 +2830,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addTankReading(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addTankReading called")
-            if (!checkPermission("tanks", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2914,7 +2847,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTankReadings(): String {
             DebugLogger.info("WebAppInterface", "getTankReadings called")
-            if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2934,7 +2866,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addStockMovement(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addStockMovement called")
-            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -2954,7 +2885,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun transferStockMovement(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "transferStockMovement called")
-            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -2971,7 +2901,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getStockMovements(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getStockMovements called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -2989,7 +2918,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun archiveStockMovement(movementId: Long): String {
             DebugLogger.info("WebAppInterface", "archiveStockMovement called")
-            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -3001,7 +2929,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getInventoryMovementStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getInventoryMovementStats called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3013,7 +2940,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getInventoryReport(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getInventoryReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3025,7 +2951,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getInventoryProductDetails(productId: Long): String {
             DebugLogger.info("WebAppInterface", "getInventoryProductDetails called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -3038,7 +2963,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getProductMovementTrend(productId: Long, days: Int = 30): String {
             DebugLogger.info("WebAppInterface", "getProductMovementTrend called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             if (productId <= 0L) return errorResponse("معرّف المنتج غير صالح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -3051,7 +2975,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getLowStockItems(): String {
             DebugLogger.info("WebAppInterface", "getLowStockItems called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3070,7 +2993,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getWarehouses(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getWarehouses called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
@@ -3084,7 +3006,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getDamagedProducts(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getDamagedProducts called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3099,7 +3020,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addDamagedProduct(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addDamagedProduct called")
-            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3118,7 +3038,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateDamagedProduct(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateDamagedProduct called id=$id")
-            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData.ifBlank { "{}" })
@@ -3134,7 +3053,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateDamagedProductStatus(id: Long, status: String): String {
             DebugLogger.info("WebAppInterface", "updateDamagedProductStatus called id=$id status=$status")
-            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية اعتماد التالف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3149,7 +3067,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun archiveDamagedProduct(id: Long): String {
             DebugLogger.info("WebAppInterface", "archiveDamagedProduct called id=$id")
-            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3164,7 +3081,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteDamagedProduct(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteDamagedProduct called id=$id")
-            if (!checkPermission("stock", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3183,119 +3099,102 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
         @JavascriptInterface
         fun getStations(): String {
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getStations()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getRoles(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getRoles()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getGroups(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getGroups()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun addGroup(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { successResponse(db.addGroup(JSONObject(jsonData)), "تم إنشاء المجموعة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun updateGroup(id: Long, jsonData: String): String {
-            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updateGroup(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث المجموعة" else "لم يتم العثور على المجموعة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun deleteGroup(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deleteGroup(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة المجموعة" else "لم يتم العثور على المجموعة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getPermissions(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getPermissions()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun addPermission(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { successResponse(db.addPermission(JSONObject(jsonData)), "تم إنشاء الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun updatePermission(id: Long, jsonData: String): String {
-            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updatePermission(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun deletePermission(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deletePermission(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getScreens(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getScreens()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getModules(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getModules()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun addScreen(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { successResponse(db.addScreen(JSONObject(jsonData)), "تم إنشاء الشاشة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun updateScreen(id: Long, jsonData: String): String {
-            if (!checkPermission("permissions", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updateScreen(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث الشاشة" else "لم يتم العثور على الشاشة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun deleteScreen(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية الأرشفة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deleteScreen(id); successResponse(rows > 0, if (rows > 0) "تمت أرشفة الشاشة" else "لم يتم العثور على الشاشة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getScreenPermissions(screenId: Long): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getScreenPermissions(screenId)) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun grantUserPermission(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية المنح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3306,49 +3205,42 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getGrantedPermissions(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getGrantedPermissions()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun revokeUserPermission(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية السحب")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.revokeUserPermission(id); successResponse(rows > 0, if (rows > 0) "تم سحب الصلاحية" else "لم يتم العثور على الصلاحية") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getUserSessions(userId: Long): String {
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getUserSessions(userId)) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun terminateSession(sessionId: Long): String {
-            if (!checkPermission("users", "update")) return errorResponse("لا تملك صلاحية إنهاء الجلسة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.terminateSession(sessionId); successResponse(rows > 0, if (rows > 0) "تم إنهاء الجلسة" else "لم يتم العثور على الجلسة") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getUserActivityLog(jsonData: String): String {
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getUserActivityLog(JSONObject(jsonData.ifBlank { "{}" }))) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getDelegatedPermissions(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getDelegatedPermissions()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun grantDelegatedPermission(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية التفويض")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3361,21 +3253,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun revokeDelegatedPermission(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية إلغاء التفويض")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.revokeDelegatedPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء التفويض" else "لم يتم العثور على التفويض") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getGroupPermissions(): String {
-            if (!checkPermission("permissions", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getGroupPermissions()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun grantGroupPermission(jsonData: String): String {
-            if (!checkPermission("permissions", "create")) return errorResponse("لا تملك صلاحية ربط المجموعة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3385,7 +3274,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun revokeGroupPermission(id: Long): String {
-            if (!checkPermission("permissions", "delete")) return errorResponse("لا تملك صلاحية إلغاء الربط")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.revokeGroupPermission(id); successResponse(rows > 0, if (rows > 0) "تم إلغاء الربط" else "لم يتم العثور على الربط") } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -3397,7 +3285,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addAsset(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addAsset called")
-            if (!checkPermission("assets", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3414,7 +3301,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getAssets(): String {
             DebugLogger.info("WebAppInterface", "getAssets called")
-            if (!checkPermission("assets", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3434,7 +3320,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addUser(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addUser called")
-            if (!checkPermission("users", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3452,7 +3337,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUsers(): String {
             DebugLogger.info("WebAppInterface", "getUsers called")
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val users = db.getUsers()
@@ -3466,7 +3350,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUsersByRole(role: String): String {
             DebugLogger.info("WebAppInterface", "getUsersByRole called")
-            if (!checkPermission("users", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val users = db.getUsersByRole(role)
@@ -3480,7 +3363,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateUser(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateUser called")
-            if (!checkPermission("users", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3497,7 +3379,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteUser(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteUser called")
-            if (!checkPermission("users", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteUser(id)
@@ -3511,7 +3392,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addEmployee(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addEmployee called")
-            if (!checkPermission("employees", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3528,7 +3408,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getEmployees(): String {
             DebugLogger.info("WebAppInterface", "getEmployees called")
-            if (!checkPermission("employees", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3544,7 +3423,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateEmployee(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateEmployee called")
-            if (!checkPermission("employees", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3560,7 +3438,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteEmployee(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteEmployee called")
-            if (!checkPermission("employees", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 if (id > Int.MAX_VALUE || id < 0) return errorResponse("معرف غير صالح")
@@ -3582,7 +3459,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun startShift(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "startShift called")
-            if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية بدء الوردية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3600,7 +3476,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun endShift(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "endShift called")
-            if (!checkPermission("shifts", "update")) return errorResponse("لا تملك صلاحية إنهاء الوردية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3618,7 +3493,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCurrentShift(): String {
             DebugLogger.info("WebAppInterface", "getCurrentShift called")
-            if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3634,7 +3508,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getShifts(): String {
             DebugLogger.info("WebAppInterface", "getShifts called")
-            if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3650,7 +3523,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteShift(shiftId: Long): String {
             DebugLogger.info("WebAppInterface", "deleteShift called")
-            if (!checkPermission("shifts", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3667,7 +3539,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addShiftSale(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addShiftSale called")
-            if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3684,7 +3555,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addShiftDelivery(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addShiftDelivery called")
-            if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3701,7 +3571,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addShiftExpense(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addShiftExpense called")
-            if (!checkPermission("shifts", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3718,7 +3587,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getShiftReport(shiftId: Long): String {
             DebugLogger.info("WebAppInterface", "getShiftReport called")
-            if (!checkPermission("shifts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -3738,7 +3606,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addNotification(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addNotification called")
-            if (!checkPermission("notifications", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3754,7 +3621,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getNotifications(): String {
             DebugLogger.info("WebAppInterface", "getNotifications called")
-            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val notifications = db.getNotifications()
@@ -3768,7 +3634,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUnreadNotificationsCount(): String {
             DebugLogger.info("WebAppInterface", "getUnreadNotificationsCount called")
-            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val count = db.getUnreadNotificationsCount()
@@ -3785,7 +3650,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun markNotificationRead(id: Long): String {
             DebugLogger.info("WebAppInterface", "markNotificationRead called")
-            if (!checkPermission("notifications", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.markNotificationRead(id)
@@ -3816,7 +3680,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addSmsMessage(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addSmsMessage called")
-            if (!checkPermission("sms", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -3849,7 +3712,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsMessages(): String {
             DebugLogger.info("WebAppInterface", "getSmsMessages called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessages()
@@ -3863,7 +3725,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsMessagesPage(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "getSmsMessagesPage called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponseObject(db.getSmsMessagesPage(JSONObject(jsonData.ifBlank { "{}" }))).toString()
@@ -3876,7 +3737,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsMessagesByPhone(phone: String): String {
             DebugLogger.info("WebAppInterface", "getSmsMessagesByPhone called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessagesByPhone(phone)
@@ -3890,7 +3750,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsMessagesByStatus(status: String): String {
             DebugLogger.info("WebAppInterface", "getSmsMessagesByStatus called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val messages = db.getSmsMessagesByStatus(status)
@@ -3904,7 +3763,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateSmsStatus(id: Long, status: String): String {
             DebugLogger.info("WebAppInterface", "updateSmsStatus called")
-            if (!checkPermission("sms", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.updateSmsStatus(id, status)
@@ -3918,7 +3776,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun markSmsMessageRead(id: Long): String {
             DebugLogger.info("WebAppInterface", "markSmsMessageRead called")
-            if (!checkPermission("sms", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.markSmsMessageRead(id)
@@ -3932,7 +3789,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun retrySmsMessage(id: Long): String {
             DebugLogger.info("WebAppInterface", "retrySmsMessage called")
-            if (!checkPermission("sms", "update")) return errorResponse("لا تملك صلاحية إعادة المحاولة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val retried = db.retrySmsMessage(id)
@@ -3947,7 +3803,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteSmsMessage(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteSmsMessage called")
-            if (!checkPermission("sms", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val deleted = db.deleteSmsMessage(id)
@@ -3961,7 +3816,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsStats(): String {
             DebugLogger.info("WebAppInterface", "getSmsStats called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val stats = db.getSmsStats()
@@ -3975,7 +3829,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsOperationalHealth(): String {
             DebugLogger.info("WebAppInterface", "getSmsOperationalHealth called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة صحة SMS")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val snapshot = SmsOperationalNervousSystem(db).snapshot()
@@ -3996,7 +3849,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsConversationTrace(phone: String): String {
             DebugLogger.info("WebAppInterface", "getSmsConversationTrace called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة مسار SMS")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val trace = JSONArray()
@@ -4031,7 +3883,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsWeeklyAnalytics(days: Int = 7): String {
             DebugLogger.info("WebAppInterface", "getSmsWeeklyAnalytics called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية قراءة تحليلات SMS")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 SmsWeeklyAnalytics(db).build(days).toString()
@@ -4044,7 +3895,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsTemplates(): String {
             DebugLogger.info("WebAppInterface", "getSmsTemplates called")
-            if (!checkPermission("sms_templates", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val templates = db.getSmsTemplates()
@@ -4058,7 +3908,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getNotificationTemplates(): String {
             DebugLogger.info("WebAppInterface", "getNotificationTemplates called")
-            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getNotificationTemplates())
@@ -4071,7 +3920,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addNotificationTemplate(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addNotificationTemplate called")
-            if (!checkPermission("notifications", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4087,7 +3935,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateNotificationTemplate(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateNotificationTemplate called")
-            if (!checkPermission("notifications", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.updateNotificationTemplate(id, JSONObject(jsonData))
@@ -4101,7 +3948,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteNotificationTemplate(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteNotificationTemplate called")
-            if (!checkPermission("notifications", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteNotificationTemplate(id)
@@ -4115,7 +3961,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addSmsTemplate(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addSmsTemplate called")
-            if (!checkPermission("sms_templates", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4131,7 +3976,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateSmsTemplate(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateSmsTemplate called")
-            if (!checkPermission("sms_templates", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4146,7 +3990,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteSmsTemplate(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteSmsTemplate called")
-            if (!checkPermission("sms_templates", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteSmsTemplate(id)
@@ -4160,7 +4003,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsCoreDiagnostics(): String {
             DebugLogger.info("WebAppInterface", "getSmsCoreDiagnostics called")
-            if (!checkPermission("sms", "read")) return errorResponse("لا تملك صلاحية القراءة")
             return try {
                 dataResponseObject(SmsCoreDiagnostics.exportJson(this@MainActivity)).toString()
             } catch (e: Exception) {
@@ -4176,7 +4018,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getWhitelist(): String {
             DebugLogger.info("WebAppInterface", "getWhitelist called")
-            if (!checkPermission("whitelist", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val whitelist = db.getSmsWhitelist()
@@ -4190,7 +4031,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addWhitelist(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addWhitelist called")
-            if (!checkPermission("whitelist", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4209,7 +4049,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun removeWhitelist(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "removeWhitelist called")
-            if (!checkPermission("whitelist", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4227,7 +4066,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateWhitelist(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateWhitelist called")
-            if (!checkPermission("whitelist", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4244,7 +4082,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addSetting(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addSetting called")
-            if (!checkPermission("settings", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4260,7 +4097,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteSetting(key: String): String {
             DebugLogger.info("WebAppInterface", "deleteSetting called")
-            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteSetting(key)
@@ -4274,7 +4110,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSetting(key: String): String {
             DebugLogger.info("WebAppInterface", "getSetting called")
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val value = db.getSetting(key)
@@ -4291,7 +4126,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun setSetting(key: String, value: String): String {
             DebugLogger.info("WebAppInterface", "setSetting called")
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 db.setSetting(key, value)
@@ -4306,7 +4140,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getAllSettingsMap(): String {
             DebugLogger.info("WebAppInterface", "getAllSettingsMap called")
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val settings = db.getAllSettingsMap()
@@ -4323,7 +4156,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getApplicationSettings(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة الإعدادات")
             return try {
                 val settings = runBlocking(Dispatchers.IO) {
                     settingsModule.settingsRepository.getSettings()
@@ -4337,7 +4169,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun saveApplicationSettings(jsonData: String): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تحديث الإعدادات")
             return try {
                 val payload = JSONObject(jsonData.ifBlank { "{}" })
                 val settingsObject = payload.optJSONObject("settings") ?: payload
@@ -4356,7 +4187,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun resetApplicationSettings(): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية إعادة ضبط الإعدادات")
             return try {
                 val defaults = runBlocking(Dispatchers.IO) {
                     settingsModule.settingsRepository.resetSettings()
@@ -4372,7 +4202,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun createSettingsBackup(): String {
-            if (!checkPermission("settings", "create")) return errorResponse("لا تملك صلاحية إنشاء نسخة إعدادات")
             return try {
                 val id = runBlocking(Dispatchers.IO) {
                     settingsModule.backupManager.createBackup()
@@ -4390,7 +4219,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun listSettingsBackups(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة النسخ")
             return try {
                 val entries = runBlocking(Dispatchers.IO) {
                     settingsModule.backupManager.listBackups()
@@ -4413,7 +4241,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun restoreSettingsBackup(id: String): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية استعادة النسخ")
             return try {
                 val restored = runBlocking(Dispatchers.IO) {
                     settingsModule.backupManager.restoreBackup(id)
@@ -4428,7 +4255,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteSettingsBackup(id: String): String {
-            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية حذف النسخ")
             return try {
                 val deleted = runBlocking(Dispatchers.IO) {
                     settingsModule.backupManager.deleteBackup(id)
@@ -4442,7 +4268,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getSettingsMonitoring(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية قراءة المراقبة")
             return try {
                 val state = runBlocking(Dispatchers.IO) {
                     settingsModule.monitoringRepository.refresh()
@@ -4457,7 +4282,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun clearSettingsLogs(): String {
-            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية تنظيف السجلات")
             return try {
                 runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearLogs() }
                 successResponse(true, "تم تنظيف السجلات القديمة")
@@ -4469,7 +4293,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun clearSettingsMetrics(): String {
-            if (!checkPermission("settings", "delete")) return errorResponse("لا تملك صلاحية تنظيف المقاييس")
             return try {
                 runBlocking(Dispatchers.IO) { settingsModule.monitoringRepository.clearMetrics() }
                 successResponse(true, "تم تنظيف المقاييس القديمة")
@@ -4481,7 +4304,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun optimizeSettingsDatabase(): String {
-            if (!checkPermission("settings", "update")) return errorResponse("لا تملك صلاحية تحسين قاعدة البيانات")
             return try {
                 runBlocking(Dispatchers.IO) { settingsModule.maintenanceRepository.optimizeDatabase() }
                 successResponse(true, "تم فحص وتحسين قاعدة البيانات")
@@ -4493,7 +4315,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getSettingsDatabaseIntegrity(): String {
-            if (!checkPermission("settings", "read")) return errorResponse("لا تملك صلاحية فحص قاعدة البيانات")
             return try {
                 val valid = runBlocking(Dispatchers.IO) { dbHelper.checkIntegrity() }
                 JSONObject().apply {
@@ -4527,7 +4348,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getOverduePayments(): String {
             DebugLogger.info("WebAppInterface", "getOverduePayments called")
-            if (!checkPermission("payments", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val payments = db.getOverduePayments()
@@ -4541,7 +4361,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getActiveAlerts(): String {
             DebugLogger.info("WebAppInterface", "getActiveAlerts called")
-            if (!checkPermission("alerts", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val alerts = db.getActiveAlerts()
@@ -4555,7 +4374,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getRecentActivity(limit: Int): String {
             DebugLogger.info("WebAppInterface", "getRecentActivity called")
-            if (!checkPermission("activity", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = db.getRecentActivity(limit)
@@ -4569,7 +4387,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getActivityLogs(limit: Int): String {
             DebugLogger.info("WebAppInterface", "getActivityLogs called")
-            if (!checkPermission("activity", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getActivityLogs(limit))
@@ -4582,7 +4399,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteActivityLog(sourceTable: String, id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteActivityLog called")
-            if (!checkPermission("activity", "delete")) return errorResponse("لا تملك صلاحية حذف السجل")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteActivityLog(sourceTable, id)
@@ -4600,7 +4416,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun cleanupActivityLogs(retentionDays: Int): String {
             DebugLogger.info("WebAppInterface", "cleanupActivityLogs called")
-            if (!checkPermission("activity", "delete")) return errorResponse("لا تملك صلاحية تنظيف السجلات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val deleted = db.cleanupActivityLogs(retentionDays)
@@ -4618,7 +4433,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getBalanceSheet(reportDate: String, currencyId: Long): String {
             DebugLogger.info("WebAppInterface", "getBalanceSheet called")
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الميزانية")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -4634,7 +4448,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun saveBalanceSheet(reportDate: String, currencyId: Long): String {
             DebugLogger.info("WebAppInterface", "saveBalanceSheet called")
-            if (!checkPermission("accounting", "create")) return errorResponse("لا تملك صلاحية حفظ الميزانية")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -4655,7 +4468,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getProducts(): String {
             DebugLogger.info("WebAppInterface", "getProducts called")
-            if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4668,9 +4480,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
+        fun getProductPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponseObject(db.getProductsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))).toString()
+            } catch (e: Exception) { DebugLogger.logException("ProductPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun generateProductReport(jsonData: String = "{}"): String = getProductPage(jsonData)
+
+        @JavascriptInterface
         fun addProduct(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addProduct called")
-            if (!checkPermission("products", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4688,7 +4511,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateProduct(id: Long, jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateProduct called")
-            if (!checkPermission("products", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4705,7 +4527,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteProduct(id: Long): String {
             DebugLogger.info("WebAppInterface", "deleteProduct called")
-            if (!checkPermission("products", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4721,7 +4542,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelTypes(): String {
             DebugLogger.info("WebAppInterface", "getFuelTypes called")
-            if (!checkPermission("fuel", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val types = db.getFuelTypes()
@@ -4735,7 +4555,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCategories(): String {
             DebugLogger.info("WebAppInterface", "getCategories called")
-            if (!checkPermission("categories", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val categories = db.getProductCategories()
@@ -4748,15 +4567,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
 
         @JavascriptInterface
+        fun getProductCategoryPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { dataResponseObject(db.getProductCategoriesPage(JSONObject(jsonData.ifBlank { "{}" }))).toString() }
+            catch (e: Exception) { DebugLogger.logException("ProductCategoryPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun generateProductCategoryReport(jsonData: String = "{}"): String = getProductCategoryPage(jsonData)
+
+        @JavascriptInterface
         fun getUnits(): String {
-            if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية قراءة الوحدات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getUnits()) } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun getProductById(id: Long): String {
-            if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4766,7 +4593,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getProductByBarcode(barcode: String): String {
-            if (!checkPermission("products", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4776,7 +4602,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun addProductCategory(jsonData: String): String {
-            if (!checkPermission("categories", "create")) return errorResponse("لا تملك صلاحية إضافة الفئات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { successResponse(db.insertProductCategory(JSONObject(jsonData)), "تمت إضافة الفئة") }
             catch (e: Exception) { DebugLogger.logException("Category", e); errorResponse(e.message) }
@@ -4784,7 +4609,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun updateProductCategory(id: Long, jsonData: String): String {
-            if (!checkPermission("categories", "update")) return errorResponse("لا تملك صلاحية تحديث الفئات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updateProductCategory(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث الفئة" else "الفئة غير موجودة") }
             catch (e: Exception) { DebugLogger.logException("Category", e); errorResponse(e.message) }
@@ -4792,7 +4616,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteProductCategory(id: Long): String {
-            if (!checkPermission("categories", "delete")) return errorResponse("لا تملك صلاحية حذف الفئات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deleteProductCategory(id); successResponse(rows > 0, if (rows > 0) "تم حذف الفئة" else "الفئة غير موجودة") }
             catch (e: Exception) { DebugLogger.logException("Category", e); errorResponse(e.message) }
@@ -4800,7 +4623,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun searchProductCategories(query: String): String {
-            if (!checkPermission("categories", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.searchProductCategories(query)) } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -4813,7 +4635,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getVehicles(): String {
             DebugLogger.info("WebAppInterface", "getVehicles called")
-            if (!checkPermission("vehicles", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val vehicles = db.getVehicles()
@@ -4827,7 +4648,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTanks(): String {
             DebugLogger.info("WebAppInterface", "getTanks called")
-            if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4842,7 +4662,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPumps(): String {
             DebugLogger.info("WebAppInterface", "getPumps called")
-            if (!checkPermission("pumps", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4857,7 +4676,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getTankStats(): String {
             DebugLogger.info("WebAppInterface", "getTankStats called")
-            if (!checkPermission("tanks", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4873,7 +4691,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateTankQuantity(tankId: Int, quantity: Double): String {
             DebugLogger.info("WebAppInterface", "updateTankQuantity called")
-            if (!checkPermission("tanks", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4894,9 +4711,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getMaintenanceRequests(jsonData: String?): String {
             DebugLogger.info("WebAppInterface", "getMaintenanceRequests called")
-            if (!checkPermission("maintenance", "read")) {
-                return errorResponse("لا تملك صلاحية القراءة")
-            }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4914,7 +4728,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addMaintenanceRequest(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addMaintenanceRequest called")
-            if (!checkPermission("maintenance", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4941,7 +4754,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updateMaintenanceStatus(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updateMaintenanceStatus called")
-            if (!checkPermission("maintenance", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -4960,7 +4772,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deleteMaintenance(requestId: Long): String {
             DebugLogger.info("WebAppInterface", "deleteMaintenance called")
-            if (!checkPermission("maintenance", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val dbWritable = db.writableDatabase
@@ -4981,7 +4792,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPayments(): String {
             DebugLogger.info("WebAppInterface", "getPayments called")
-            if (!checkPermission("payments", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -4996,7 +4806,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun makePayment(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "makePayment called")
-            if (!checkPermission("payments", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -5018,7 +4827,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addDeposit(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addDeposit called")
-            if (!checkPermission("payments", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -5038,7 +4846,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deletePayment(paymentId: Long): String {
             DebugLogger.info("WebAppInterface", "deletePayment called")
-            if (!checkPermission("payments", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val dbWritable = db.writableDatabase
@@ -5059,7 +4866,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getMonthlySales(): String {
             DebugLogger.info("WebAppInterface", "getMonthlySales called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5074,7 +4880,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getDailySales(date: String?): String {
             DebugLogger.info("WebAppInterface", "getDailySales called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5089,7 +4894,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getEodReport(): String {
             DebugLogger.info("WebAppInterface", "getEodReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5104,7 +4908,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getProfitReport(fromDate: String?, toDate: String?): String {
             DebugLogger.info("WebAppInterface", "getProfitReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5123,7 +4926,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getOverdueReport(): String {
             DebugLogger.info("WebAppInterface", "getOverdueReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val overdue = db.getOverduePayments()
@@ -5137,7 +4939,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelSales(): String {
             DebugLogger.info("WebAppInterface", "getFuelSales called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val sales = db.getSalesByFuelType()
@@ -5157,7 +4958,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "backupDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية النسخ الاحتياطي")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5194,7 +4994,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getBackupHealth(): String {
             DebugLogger.info("WebAppInterface", "getBackupHealth called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية قراءة حالة النسخ")
             return try { dataResponse(db.getBackupHealth()) } catch (e: Exception) { DebugLogger.logException("BackupHealth", e); errorResponse(e.message) }
         }
 
@@ -5202,7 +5001,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun getRestorePreview(path: String): String {
             DebugLogger.info("WebAppInterface", "getRestorePreview called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية معاينة الاستعادة")
             return try { dataResponse(db.getRestorePreview(path)) } catch (e: Exception) { DebugLogger.logException("RestorePreview", e); errorResponse(e.message) }
         }
 
@@ -5210,7 +5008,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun checkDatabaseIntegrity(): String {
             DebugLogger.info("WebAppInterface", "checkDatabaseIntegrity called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "export")) return errorResponse("لا تملك صلاحية فحص سلامة قاعدة البيانات")
             return try { dataResponse(JSONObject().put("integrity_ok", db.checkIntegrity()).put("schema_version", DatabaseHelper.VERSION)) } catch (e: Exception) { DebugLogger.logException("DatabaseIntegrity", e); errorResponse(e.message) }
         }
 
@@ -5219,7 +5016,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "restoreDatabaseSafe called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية الاستعادة")
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     val result = db.restoreDatabaseSafe(path)
@@ -5240,7 +5036,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "restoreDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("backup", "import")) return errorResponse("لا تملك صلاحية الاستعادة")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5277,7 +5072,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "exportToCSV called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("export", "export")) return errorResponse("لا تملك صلاحية التصدير")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5315,7 +5109,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "importFromCSV called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("import", "import")) return errorResponse("لا تملك صلاحية الاستيراد")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5353,7 +5146,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "exportAllData called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("export", "export")) return errorResponse("لا تملك صلاحية التصدير")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5391,7 +5183,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "vacuumDatabase called")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
-            if (!checkPermission("maintenance", "update")) return errorResponse("لا تملك صلاحية الصيانة")
 
             val job = activity.lifecycleScope.launch(Dispatchers.IO) {
                 try {
@@ -5510,7 +5301,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getLatestMeterReadings(): String {
-            if (!checkPermission("meter", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5526,9 +5316,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getAssetMaintenanceHistory(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "getAssetMaintenanceHistory called")
-            if (!checkPermission("maintenance", "read")) {
-                return errorResponse("لا تملك صلاحية القراءة")
-            }
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -5549,7 +5336,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getUserNotifications(userId: Long): String {
             DebugLogger.info("WebAppInterface", "getUserNotifications called")
-            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val notifications = db.getUserNotifications(userId)
@@ -5595,7 +5381,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun checkLowStock(): String {
             DebugLogger.info("WebAppInterface", "checkLowStock called")
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5610,7 +5395,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun createStockAlert(productId: Long, threshold: Double): String {
             DebugLogger.info("WebAppInterface", "createStockAlert called")
-            if (!checkPermission("stock", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -5735,7 +5519,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun recordDieselDelivery(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "recordDieselDelivery called")
-            if (!checkPermission("deliveries", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -5767,7 +5550,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getBanks(): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة البنوك")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getBanks()) } catch (e: Exception) {
                 DebugLogger.logException("Banks", e)
@@ -5777,7 +5559,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getBankAccounts(): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة الحسابات البنكية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getBankAccounts()) } catch (e: Exception) {
                 DebugLogger.logException("BankAccounts", e)
@@ -5792,7 +5573,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData)
                 val id = data.optLong("id", 0L)
                 val permission = if (id > 0) "update" else "create"
-                if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية هذه العملية")
                 if (data.optString("bank_code").trim().isEmpty() || data.optString("bank_name_ar").trim().isEmpty()) {
                     return errorResponse("كود البنك والاسم العربي مطلوبان")
                 }
@@ -5807,7 +5587,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteBank(id: Long): String {
-            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف البنوك")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.deleteBank(id)
@@ -5826,7 +5605,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 val data = JSONObject(jsonData)
                 val id = data.optLong("id", 0L)
                 val permission = if (id > 0) "update" else "create"
-                if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية هذه العملية")
                 val accountType = data.optString("account_type", "current")
                 val status = data.optString("status", "active")
                 if (data.optString("account_code").trim().isEmpty() || data.optString("account_name_ar").trim().isEmpty() ||
@@ -5850,7 +5628,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteBankAccount(id: Long): String {
-            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف الحسابات البنكية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -5864,13 +5641,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateBankReport(jsonData: String): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير الحسابات البنكية")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData.ifBlank { "{}" })
                 val type = data.optString("report_type", "all")
                 val extra = data.optString("extra", "")
-                if (extra == "export" && !checkPermission("accounting", "export")) return errorResponse("لا تملك صلاحية التصدير")
                 val requestedStatus = if (data.isNull("status")) null else data.optInt("status", -1)
                 val result = when {
                     extra == "stats" -> {
@@ -5932,7 +5707,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun savePartyBundle(jsonData: String): String {
             val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الطرف غير صالحة") }
             val action = if (payload.optLong("id", 0L) > 0) "update" else "create"
-            if (!checkPermission("parties", action)) return errorResponse("لا تملك صلاحية هذه العملية على الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -5946,7 +5720,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getPartyCrmBundle(id: Long): String {
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل الطرف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getPartyCrmBundle(id, requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L))) } catch (e: Exception) {
                 DebugLogger.logException("PartyCrmBundle", e)
@@ -5957,7 +5730,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updatePartyCreditLimit(jsonData: String): String {
             val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الحد الائتماني غير صالحة") }
-            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية تعديل الحد الائتماني")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -5974,7 +5746,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
         @JavascriptInterface
         fun generateCRMReport(jsonData: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير CRM")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.generateCRMReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -5988,7 +5759,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
         @JavascriptInterface
         fun getContracts(includeArchived: Boolean): String {
-            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.getContracts(includeArchived, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -5999,7 +5769,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getContractParties(): String {
-            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة أطراف العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.getParties("", requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -6009,7 +5778,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
         @JavascriptInterface
         fun getContractBundle(id: Long): String {
-            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة العقد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.getContractBundle(id, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -6022,7 +5790,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun saveContract(jsonData: String): String {
             val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات العقد غير صالحة") }
             val required = if (payload.optLong("id", 0L) > 0) "update" else "create"
-            if (!checkPermission("contracts", required)) return errorResponse("لا تملك صلاحية هذه العملية على العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6036,7 +5803,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteContract(id: Long): String {
-            if (!checkPermission("contracts", "delete")) return errorResponse("لا تملك صلاحية حذف العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6050,7 +5816,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun archiveContract(id: Long): String {
-            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية أرشفة العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6064,7 +5829,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun restoreContract(id: Long): String {
-            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية استعادة العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6078,7 +5842,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun cloneContract(id: Long, jsonData: String): String {
-            if (!checkPermission("contracts", "create")) return errorResponse("لا تملك صلاحية نسخ العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6092,7 +5855,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun changeContractStatus(id: Long, status: String, reason: String?): String {
-            if (!checkPermission("contracts", "update")) return errorResponse("لا تملك صلاحية تغيير حالة العقود")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6106,7 +5868,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateContractReport(jsonData: String): String {
-            if (!checkPermission("contracts", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.generateContractReport(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -6117,7 +5878,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getContractAudit(id: Long): String {
-            if (!checkPermission("contracts", "audit")) return errorResponse("لا تملك صلاحية قراءة سجل العقود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { dataResponse(db.getContractAudit(id, 100, requireCurrentStationId(db, activity.currentUserId))) } catch (e: Exception) {
@@ -6132,7 +5892,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
         @JavascriptInterface
         fun getChartAccounts(): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة شجرة الحسابات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { reportCacheResponse(db, "chart_accounts", JSONObject(), 3600L) { dataResponseObject(db.getChartAccounts()) } } catch (e: Exception) {
                 DebugLogger.logException("ChartAccounts", e)
@@ -6144,7 +5903,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun saveChartAccount(jsonData: String): String {
             val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات الحساب غير صالحة") }
             val requiredPermission = if (payload.optLong("id", 0L) > 0) "update" else "create"
-            if (!checkPermission("accounting", requiredPermission)) return errorResponse("لا تملك صلاحية هذه العملية على الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6158,7 +5916,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteChartAccount(id: Long, cascade: Boolean): String {
-            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6172,7 +5929,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun archiveChartAccount(id: Long): String {
-            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية أرشفة الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6186,7 +5942,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun restoreChartAccount(id: Long): String {
-            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية استعادة الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6200,7 +5955,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun cloneChartAccount(id: Long, jsonData: String): String {
-            if (!checkPermission("accounting", "create")) return errorResponse("لا تملك صلاحية نسخ الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6214,7 +5968,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun moveChartAccount(id: Long, parentId: Long): String {
-            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية نقل الحسابات")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -6228,7 +5981,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getChartAccountAudit(id: Long): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة سجل الحساب")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getChartAccountAudit(id)) } catch (e: Exception) {
                 DebugLogger.logException("ChartAccountAudit", e)
@@ -6242,7 +5994,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ============================================================
         @JavascriptInterface
         fun getChartTrialBalance(fromDate: String?, toDate: String?): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة ميزان المراجعة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getChartTrialBalance(fromDate, toDate)) } catch (e: Exception) {
                 DebugLogger.logException("ChartTrialBalance", e)
@@ -6256,7 +6007,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getPartyTypes(): String {
-            if (!checkPermission("party_types", "read")) return errorResponse("لا تملك صلاحية قراءة أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val types = db.getPartyTypes()
@@ -6270,28 +6020,24 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun addPartyType(jsonData: String): String {
-            if (!checkPermission("party_types", "create")) return errorResponse("لا تملك صلاحية إضافة أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { successResponse(db.insertPartyType(JSONObject(jsonData)), "تمت إضافة نوع الطرف") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun updatePartyType(id: Long, jsonData: String): String {
-            if (!checkPermission("party_types", "update")) return errorResponse("لا تملك صلاحية تحديث أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updatePartyType(id, JSONObject(jsonData)); successResponse(rows > 0, if (rows > 0) "تم تحديث نوع الطرف" else "النوع غير موجود") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun deletePartyType(id: Long): String {
-            if (!checkPermission("party_types", "delete")) return errorResponse("لا تملك صلاحية حذف أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deletePartyType(id); successResponse(rows > 0, if (rows > 0) "تم حذف نوع الطرف" else "النوع غير موجود") } catch (e: Exception) { errorResponse(e.message) }
         }
 
         @JavascriptInterface
         fun generatePartyTypeReport(jsonData: String): String {
-            if (!checkPermission("party_types", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير أنواع الأطراف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try {
@@ -6315,7 +6061,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCustomerLedger(partyId: Long): String {
             DebugLogger.info("WebAppInterface", "getCustomerLedger called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6330,7 +6075,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCustomerSales(partyId: Long): String {
             DebugLogger.info("WebAppInterface", "getCustomerSales called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6345,7 +6089,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPartyContacts(partyId: Long): String {
             DebugLogger.info("WebAppInterface", "getPartyContacts called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6360,7 +6103,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getPartyAddresses(partyId: Long): String {
             DebugLogger.info("WebAppInterface", "getPartyAddresses called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6375,7 +6117,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addPartyContact(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addPartyContact called")
-            if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -6392,7 +6133,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updatePartyContact(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updatePartyContact called")
-            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -6409,7 +6149,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deletePartyContact(contactId: Long): String {
             DebugLogger.info("WebAppInterface", "deletePartyContact called")
-            if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6424,7 +6163,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun addPartyAddress(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "addPartyAddress called")
-            if (!checkPermission("parties", "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -6441,7 +6179,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun updatePartyAddress(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "updatePartyAddress called")
-            if (!checkPermission("parties", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val data = JSONObject(jsonData)
@@ -6458,7 +6195,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun deletePartyAddress(addressId: Long): String {
             DebugLogger.info("WebAppInterface", "deletePartyAddress called")
-            if (!checkPermission("parties", "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6473,7 +6209,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getCustomerDebts(fromDate: String?, toDate: String?): String {
             DebugLogger.info("WebAppInterface", "getCustomerDebts called")
-            if (!checkPermission("parties", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6782,7 +6517,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getExpirySoonProducts(days: Int): String {
             DebugLogger.info("WebAppInterface", "getExpirySoonProducts called")
-            if (!checkPermission("inventory", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getExpirySoonProducts(days))
@@ -6792,7 +6526,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun extendProductExpiry(id: Long, newDate: String): String {
             DebugLogger.info("WebAppInterface", "extendProductExpiry called")
-            if (!checkPermission("inventory", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.extendProductExpiry(id, newDate)
@@ -6803,7 +6536,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun markProductExpired(id: Long): String {
             DebugLogger.info("WebAppInterface", "markProductExpired called")
-            if (!checkPermission("inventory", "update")) return errorResponse("لا تملك صلاحية التحديث")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val rows = db.markProductExpired(id)
@@ -6814,7 +6546,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelReport(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "getFuelReport called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6827,7 +6558,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelReportPage(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getFuelReportPage called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6840,7 +6570,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelTransactionDetails(id: Long, type: String): String {
             DebugLogger.info("WebAppInterface", "getFuelTransactionDetails called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6853,7 +6582,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getSmsLogs(): String {
             DebugLogger.info("WebAppInterface", "getSmsLogs called")
-            if (!checkPermission("notifications", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 dataResponse(db.getSmsLogs())
@@ -6863,7 +6591,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun getFuelInventoryReconciliation(jsonData: String): String {
             DebugLogger.info("WebAppInterface", "getFuelInventoryReconciliation called")
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية القراءة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -6917,7 +6644,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         // ========================================================================
         @JavascriptInterface
         fun getJournalEntries(jsonData: String): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try {
@@ -6930,7 +6656,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getJournalItems(jsonData: String): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة بنود القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = JSONObject()
             return try { reportCacheResponse(db, "journal_items", params, 900L) { JSONObject().apply { put("success", true); put("data", db.getJournalItems()) } } }
@@ -6939,7 +6664,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getNextEntryNumber(): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة رقم القيد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { JSONObject().apply { put("success", true); put("data", JSONObject().put("next_number", db.getNextJournalEntryNumber())) }.toString() } catch (e: Exception) { errorResponse(e.message) }
         }
@@ -6948,7 +6672,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun saveJournalEntry(jsonData: String): String {
             val payload = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("بيانات القيد غير صالحة") }
             val permission = if (payload.optLong("id", 0L) > 0) "update" else "create"
-            if (!checkPermission("accounting", permission)) return errorResponse("لا تملك صلاحية حفظ القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { val saved = db.saveJournalEntry(payload, activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(saved, "تم حفظ القيد فعلياً في SQLite") } catch (e: Exception) { DebugLogger.logException("JournalSave", e); errorResponse(e.message) }
@@ -6959,7 +6682,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteJournalEntry(id: Long): String {
-            if (!checkPermission("accounting", "delete")) return errorResponse("لا تملك صلاحية حذف القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { val rows = db.deleteJournalEntry(id, activity.currentUserId); if (rows > 0) invalidateCurrentReportCache(db, activity.currentUserId); if (rows > 0) successResponse(true, "تم حذف القيد من SQLite") else errorResponse("لم يتم حذف القيد") } catch (e: Exception) { DebugLogger.logException("JournalDelete", e); errorResponse(e.message) }
@@ -6967,7 +6689,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun postJournalEntry(id: Long): String {
-            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية ترحيل القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { val rows = db.postJournalEntry(id, activity.currentUserId); if (rows > 0) invalidateCurrentReportCache(db, activity.currentUserId); if (rows > 0) successResponse(true, "تم ترحيل القيد في SQLite") else errorResponse("لم يتم ترحيل القيد") } catch (e: Exception) { DebugLogger.logException("JournalPost", e); errorResponse(e.message) }
@@ -6975,7 +6696,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun reverseJournalEntry(id: Long, reason: String): String {
-            if (!checkPermission("accounting", "update")) return errorResponse("لا تملك صلاحية إلغاء القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             return try { val reversed = db.reverseJournalEntry(id, reason, activity.currentUserId); invalidateCurrentReportCache(db, activity.currentUserId); successResponse(reversed, "تم إنشاء القيد العكسي وتحديث القيد الأصلي") } catch (e: Exception) { DebugLogger.logException("JournalReverse", e); errorResponse(e.message) }
@@ -6983,7 +6703,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getJournalEntryDetails(id: Long): String {
-            if (!checkPermission("accounting", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل القيد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = JSONObject().put("id", id)
             return try { reportCacheResponse(db, "journal_entry_details", params, 900L) { db.getJournalEntryDetails(id)?.let { dataResponseObject(it) } ?: throw IllegalArgumentException("القيد غير موجود") } }
@@ -6992,7 +6711,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateJournalReport(jsonData: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير القيود")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try { reportCacheResponse(db, "journal_report", params, 3600L) { dataResponseObject(db.generateJournalReport(params)) } }
@@ -7001,7 +6719,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getKPIDashboard(jsonData: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة مؤشرات الأداء")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try { reportCacheResponse(db, "kpi_dashboard", params, 900L) { dataResponseObject(db.getKPIDashboard(params)) } }
@@ -7010,7 +6727,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getKPIDetails(code: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تفاصيل المؤشر")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = JSONObject().put("kpi_code", code)
             return try { reportCacheResponse(db, "kpi_details", params, 900L) { db.getKPIDetails(code)?.let { dataResponseObject(it) } ?: throw IllegalArgumentException("المؤشر غير موجود") } }
@@ -7019,7 +6735,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getLedgerStats(): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة إحصائيات الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { reportCacheResponse(db, "ledger_stats", JSONObject(), 900L) { dataResponseObject(db.getLedgerStats()) } }
             catch (e: Exception) { DebugLogger.logException("LedgerStats", e); errorResponse(e.message) }
@@ -7027,7 +6742,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getLedgerEntries(jsonData: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة دفتر الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try { reportCacheResponse(db, "ledger_entries", params, 3600L) { dataResponseObject(db.getLedgerEntries(params)) } }
@@ -7036,7 +6750,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateLedgerReport(jsonData: String): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية قراءة تقارير الأستاذ")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             val params = try { JSONObject(jsonData.ifBlank { "{}" }) } catch (e: Exception) { return errorResponse("معاملات التقرير غير صالحة") }
             return try { reportCacheResponse(db, "ledger_report", params, 3600L) { dataResponseObject(db.generateLedgerReport(params)) } }
@@ -7046,7 +6759,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun printCurrentPage(): String {
-            if (!checkPermission("reports", "read")) return errorResponse("لا تملك صلاحية طباعة التقارير")
             return try {
                 runOnUiThread {
                     val manager = getSystemService(Context.PRINT_SERVICE) as? PrintManager
@@ -7088,21 +6800,18 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         private fun operationalList(permission: String, key: String, jsonData: String): String {
-            if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية قراءة هذه الشاشة")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getOperationalRows(key, operationalScopedJson(jsonData))) }
             catch (e: Exception) { DebugLogger.logException("OperationalList-$key", e); errorResponse(e.message) }
         }
 
         private fun operationalReport(permission: String, key: String, jsonData: String): String {
-            if (!checkPermission(permission, "read")) return errorResponse("لا تملك صلاحية التقرير")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponseObject(db.getOperationalReport(key, operationalScopedJson(jsonData))).toString() }
             catch (e: Exception) { DebugLogger.logException("OperationalReport-$key", e); errorResponse(e.message) }
         }
 
         private fun operationalSave(permission: String, key: String, jsonData: String): String {
-            if (!checkPermission(permission, "create")) return errorResponse("لا تملك صلاحية الإضافة")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7119,7 +6828,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         private fun operationalUpdate(permission: String, key: String, id: Long, jsonData: String): String {
-            if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية التعديل")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.updateOperationalRecord(key, id, operationalScopedJson(jsonData), activity.currentUserId); successResponse(rows > 0, if (rows > 0) "تم التعديل فعلياً" else "لم يتم العثور على السجل") }
@@ -7127,7 +6835,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         private fun operationalDelete(permission: String, key: String, id: Long): String {
-            if (!checkPermission(permission, "delete")) return errorResponse("لا تملك صلاحية الحذف")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.deleteOperationalRecord(key, id, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم الحذف فعلياً" else "لم يتم العثور على السجل") }
@@ -7135,7 +6842,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         private fun operationalResolve(permission: String, key: String, id: Long, note: String): String {
-            if (!checkPermission(permission, "update")) return errorResponse("لا تملك صلاحية الاعتماد")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { val rows = db.resolveOperationalRecord(key, id, note, activity.currentUserId, requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, if (rows > 0) "تم تنفيذ العملية فعلياً" else "لم يتم العثور على السجل") }
@@ -7148,7 +6854,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getPendingTasks(jsonData: String = "{}"): String {
-            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية قراءة المهام")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.getPendingTasks(operationalJson(jsonData))) }
             catch (e: Exception) { DebugLogger.logException("TasksList", e); errorResponse(e.message) }
@@ -7156,7 +6861,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun addTask(jsonData: String): String {
-            if (!checkPermission("tasks", "create")) return errorResponse("لا تملك صلاحية إضافة المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7171,7 +6875,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun updateTask(id: Long, jsonData: String): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية تحديث المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7186,7 +6889,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun archiveTask(id: Long): String {
-            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية أرشفة المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7201,7 +6903,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun restoreTask(id: Long): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية استعادة المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7216,7 +6917,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun resolveTask(id: Long): String {
-            if (!checkPermission("tasks", "update")) return errorResponse("لا تملك صلاحية حل المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7231,7 +6931,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun deleteTask(id: Long): String {
-            if (!checkPermission("tasks", "delete")) return errorResponse("لا تملك صلاحية حذف المهام")
             val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
@@ -7246,7 +6945,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun generateTaskReport(jsonData: String = "{}"): String {
-            if (!checkPermission("tasks", "read")) return errorResponse("لا تملك صلاحية تقرير المهام")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try { dataResponse(db.generateTaskReport(operationalJson(jsonData))) }
             catch (e: Exception) { DebugLogger.logException("TaskReport", e); errorResponse(e.message) }
@@ -7514,7 +7212,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
 
         @JavascriptInterface
         fun getStockAlertRecords(jsonData: String = "{}"): String {
-            if (!checkPermission("stock", "read")) return errorResponse("لا تملك صلاحية قراءة التنبيهات")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
@@ -7547,7 +7244,6 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteStocktakeRecord(id: Long) = operationalDelete("inventory", "stocktakes", id)
         @JavascriptInterface
         fun resolveStocktakeRecord(id: Long, note: String = ""): String {
-            if (!checkPermission("stock", "update")) return errorResponse("لا تملك صلاحية اعتماد الجرد")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
                 val activity = getActivity() ?: return errorResponse("النشاط غير متاح")

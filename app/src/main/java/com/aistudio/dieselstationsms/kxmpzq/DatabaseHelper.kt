@@ -12900,7 +12900,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val offset = params.optInt("offset", 0).coerceAtLeast(0)
             val whereSql = if (where.isEmpty()) "" else " WHERE " + where.joinToString(" AND ")
             val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
-            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id")
+            val allowedSortColumns = setOf("id", "created_at", "sale_code", "invoice_number", "net_amount", "quantity", "reading_date", "status", "vehicle_code", "plate_number", "driver_code", "full_name", "trip_date", "expense_date", "amount", "location_time", "distance_km", "current_odometer", "vehicle_id", "driver_id", "fuel_code", "fuel_name", "default_sale_price", "list_code", "list_name", "valid_from", "valid_to", "product_id", "old_price", "new_price", "change_date")
             val requestedSort = params.optString("sort_by", "id").trim()
             val sortColumn = if (requestedSort in allowedSortColumns && spec.columns.contains(requestedSort) || requestedSort == "id") requestedSort else "id"
             val sortDirection = if (params.optString("sort_dir", "desc").equals("asc", ignoreCase = true)) "ASC" else "DESC"
@@ -14929,6 +14929,77 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun getProductsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val where = mutableListOf("p.station_id = ?", "p.is_deleted = 0")
+            val args = mutableListOf(stationScopeId.toString())
+            val search = data.optString("search", "").trim()
+            if (search.isNotEmpty()) {
+                where += "(p.product_code LIKE ? OR p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.barcode LIKE ? OR p.description LIKE ?)"
+                repeat(5) { args += "%$search%" }
+            }
+            val productId = data.optLong("product_id", 0L)
+            if (productId > 0L) { where += "p.id = ?"; args += productId.toString() }
+            val productCode = data.optString("product_code", "").trim()
+            if (productCode.isNotEmpty()) { where += "p.product_code LIKE ?"; args += "%$productCode%" }
+            val categoryId = data.optLong("category_id", 0L)
+            if (categoryId > 0L) { where += "p.category_id = ?"; args += categoryId.toString() }
+            val status = data.optString("status", "").trim()
+            if (status.isNotEmpty()) { require(status in setOf("active", "inactive", "discontinued")) { "حالة المنتج غير صالحة" }; where += "p.status = ?"; args += status }
+            val hasExpiry = data.optInt("has_expiry", -1)
+            if (hasExpiry == 0 || hasExpiry == 1) { where += "p.has_expiry = ?"; args += hasExpiry.toString() }
+            val whereSql = " WHERE " + where.joinToString(" AND ")
+            val totalCount = db.rawQuery("SELECT COUNT(*) FROM products p$whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            val summary = db.rawQuery("SELECT COUNT(*) AS total_count, COALESCE(SUM(CASE WHEN p.status = 'active' THEN 1 ELSE 0 END), 0) AS active_count, COALESCE(AVG(CASE WHEN p.status = 'active' THEN p.sale_price END), 0) AS average_sale_price, COALESCE(SUM(CASE WHEN p.status = 'active' AND p.quantity <= p.minimum_stock THEN 1 ELSE 0 END), 0) AS low_stock_count FROM products p$whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursorToJsonObject(cursor) else JSONObject() }
+            val sortColumn = when (data.optString("sort_by", "id")) {
+                "product_code" -> "p.product_code"
+                "product_name" -> "p.product_name"
+                "sale_price" -> "p.sale_price"
+                "purchase_price" -> "p.purchase_price"
+                "quantity" -> "p.quantity"
+                "status" -> "p.status"
+                else -> "p.id"
+            }
+            val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+            val limit = data.optInt("limit", 50).coerceIn(1, 200)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
+            val rows = db.rawQuery("SELECT p.*, c.category_name, u.unit_name, f.fuel_name FROM products p LEFT JOIN product_categories c ON c.id = p.category_id LEFT JOIN units u ON u.id = p.unit_id LEFT JOIN fuel_types f ON f.id = p.fuel_type_id$whereSql ORDER BY $sortColumn $direction, p.id DESC LIMIT ? OFFSET ?", pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+            val page = if (totalCount == 0) 0 else (offset / limit) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
+            JSONObject().apply { put("rows", rows); put("count", rows.length()); put("total_count", totalCount); put("page", page); put("page_size", limit); put("total_pages", totalPages); put("has_next", page < totalPages); put("has_previous", page > 1); put("summary", summary); put("source", "products") }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getProductCategoriesPage(data: JSONObject = JSONObject()): JSONObject {
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val where = mutableListOf("c.is_deleted = 0")
+            val args = mutableListOf<String>()
+            val search = data.optString("search", "").trim()
+            if (search.isNotEmpty()) { where += "(c.category_code LIKE ? OR c.category_name LIKE ? OR c.category_name_ar LIKE ? OR c.description LIKE ?)"; repeat(4) { args += "%$search%" } }
+            val categoryId = data.optLong("category_id", 0L)
+            if (categoryId > 0L) { where += "c.id = ?"; args += categoryId.toString() }
+            val status = data.optString("status", "").trim()
+            if (status.isNotEmpty()) { require(status == "active" || status == "inactive") { "حالة الفئة غير صالحة" }; where += "c.is_active = ?"; args += if (status == "active") "1" else "0" }
+            val whereSql = " WHERE " + where.joinToString(" AND ")
+            val totalCount = db.rawQuery("SELECT COUNT(*) FROM product_categories c$whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+            val sortColumn = when (data.optString("sort_by", "id")) { "category_code" -> "c.category_code"; "category_name" -> "c.category_name"; "display_order" -> "c.display_order"; "product_count" -> "product_count"; else -> "c.id" }
+            val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+            val limit = data.optInt("limit", 50).coerceIn(1, 200)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val pageArgs = args.toMutableList().apply { add(limit.toString()); add(offset.toString()) }
+            val rows = db.rawQuery("SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.is_deleted = 0) AS product_count FROM product_categories c$whereSql ORDER BY $sortColumn $direction, c.id DESC LIMIT ? OFFSET ?", pageArgs.toTypedArray()).use { cursor -> cursorToJsonArray(cursor) }
+            val page = if (totalCount == 0) 0 else (offset / limit) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + limit - 1) / limit
+            JSONObject().apply { put("rows", rows); put("count", rows.length()); put("total_count", totalCount); put("page", page); put("page_size", limit); put("total_pages", totalPages); put("has_next", page < totalPages); put("has_previous", page > 1); put("source", "product_categories") }
+        } finally { dbLock.unlock() }
+    }
+
     fun getProductById(productId: Long, stationScopeId: Int): JSONObject? {
         dbLock.lock()
         return try {
@@ -14984,21 +15055,49 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         return try {
             require(stationScopeId > 0) { "معرف المحطة مطلوب لإضافة المنتج" }
             require(actorId > 0L) { "المستخدم المنشئ مطلوب" }
+            val code = data.optString("product_code", "").trim()
+            val name = data.optString("product_name", "").trim()
+            val categoryId = data.optLong("category_id", 0L)
+            val fuelTypeId = data.optLong("fuel_type_id", 0L)
+            val unitId = data.optLong("unit_id", 0L)
+            val purchasePrice = data.optDouble("purchase_price", Double.NaN)
+            val salePrice = data.optDouble("sale_price", Double.NaN)
+            val quantity = data.optDouble("quantity", 0.0)
+            val minimumStock = data.optDouble("minimum_stock", 10.0)
+            require(code.isNotEmpty()) { "كود المنتج مطلوب" }
+            require(name.isNotEmpty()) { "اسم المنتج مطلوب" }
+            require(categoryId > 0L) { "فئة المنتج مطلوبة" }
+            require(unitId > 0L) { "وحدة المنتج مطلوبة" }
+            require(purchasePrice.isFinite() && purchasePrice >= 0.0) { "سعر الشراء غير صالح" }
+            require(salePrice.isFinite() && salePrice >= 0.0 && salePrice >= purchasePrice) { "سعر البيع غير صالح أو أقل من سعر الشراء" }
+            require(quantity.isFinite() && quantity >= 0.0) { "كمية المخزون غير صالحة" }
+            require(minimumStock.isFinite() && minimumStock >= 0.0) { "الحد الأدنى للمخزون غير صالح" }
             val db = writableDatabase
+            db.rawQuery("SELECT 1 FROM product_categories WHERE id = ? AND is_deleted = 0", arrayOf(categoryId.toString())).use { cursor -> require(cursor.moveToFirst()) { "فئة المنتج غير موجودة" } }
+            db.rawQuery("SELECT 1 FROM units WHERE id = ?", arrayOf(unitId.toString())).use { cursor -> require(cursor.moveToFirst()) { "وحدة المنتج غير موجودة" } }
+            if (fuelTypeId > 0L) db.rawQuery("SELECT 1 FROM fuel_types WHERE id = ? AND is_deleted = 0", arrayOf(fuelTypeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "نوع الوقود غير موجود" } }
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("product_code", data.optString("product_code", ""))
-                put("product_name", data.optString("product_name", ""))
-                put("product_name_ar", data.optString("product_name_ar", ""))
-                put("category_id", data.optInt("category_id", 0))
-                put("fuel_type_id", data.optInt("fuel_type_id", 0))
+                put("product_code", code)
+                put("product_name", name)
+                put("product_name_ar", data.optString("product_name_ar", name).trim())
+                put("category_id", categoryId)
+                if (fuelTypeId > 0L) put("fuel_type_id", fuelTypeId) else putNull("fuel_type_id")
                 put("station_id", stationScopeId)
-                put("unit_id", data.optInt("unit_id", 1))
-                put("sale_price", data.optDouble("sale_price", 0.0))
-                put("purchase_price", data.optDouble("purchase_price", 0.0))
-                put("quantity", data.optDouble("quantity", 0.0))
-                put("minimum_stock", data.optDouble("minimum_stock", 10.0))
-                put("status", "active")
+                put("unit_id", unitId)
+                val barcode = data.optString("barcode", "").trim()
+                if (barcode.isNotEmpty()) put("barcode", barcode) else putNull("barcode")
+                put("description", data.optString("description", ""))
+                put("sale_price", salePrice)
+                put("purchase_price", purchasePrice)
+                put("quantity", quantity)
+                put("minimum_stock", minimumStock)
+                put("has_expiry", data.optInt("has_expiry", 0).coerceIn(0, 1))
+                if (data.isNull("expiry_date") || data.optString("expiry_date", "").isBlank()) putNull("expiry_date") else put("expiry_date", data.optString("expiry_date"))
+                put("is_service", data.optInt("is_service", 0).coerceIn(0, 1))
+                put("is_batch_tracked", data.optInt("is_batch_tracked", 0).coerceIn(0, 1))
+                put("is_serialized", data.optInt("is_serialized", 0).coerceIn(0, 1))
+                put("status", if (data.optInt("is_active", 1) == 1) "active" else "inactive")
                 put("created_by", actorId)
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
@@ -15018,14 +15117,35 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(actorId > 0L) { "المستخدم المعدل مطلوب" }
             val db = writableDatabase
             var oldSalePrice = 0.0
+            var oldPurchasePrice = 0.0
+            var oldQuantity = 0.0
+            var oldMinimumStock = 0.0
+            var oldCategoryId = 0L
+            var oldUnitId = 0L
             var oldProductName = ""
-            db.rawQuery("SELECT sale_price, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor ->
+            db.rawQuery("SELECT sale_price, purchase_price, quantity, minimum_stock, category_id, unit_id, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor ->
                 require(cursor.moveToFirst()) { "المنتج غير موجود في نطاق المحطة" }
                 oldSalePrice = cursor.getDouble(0)
-                oldProductName = cursor.getString(1) ?: ""
+                oldPurchasePrice = cursor.getDouble(1)
+                oldQuantity = cursor.getDouble(2)
+                oldMinimumStock = cursor.getDouble(3)
+                oldCategoryId = cursor.getLong(4)
+                oldUnitId = cursor.getLong(5)
+                oldProductName = cursor.getString(6) ?: ""
             }
-            val newSalePrice = if (data.has("sale_price")) data.optDouble("sale_price", oldSalePrice) else oldSalePrice
-            require(newSalePrice >= 0.0) { "سعر البيع غير صالح" }
+            val newSalePrice = if (data.has("sale_price")) data.optDouble("sale_price", Double.NaN) else oldSalePrice
+            val newPurchasePrice = if (data.has("purchase_price")) data.optDouble("purchase_price", Double.NaN) else oldPurchasePrice
+            val newQuantity = if (data.has("quantity")) data.optDouble("quantity", Double.NaN) else oldQuantity
+            val newMinimumStock = if (data.has("minimum_stock")) data.optDouble("minimum_stock", Double.NaN) else oldMinimumStock
+            val newCategoryId = if (data.has("category_id")) data.optLong("category_id", 0L) else oldCategoryId
+            val newUnitId = if (data.has("unit_id")) data.optLong("unit_id", 0L) else oldUnitId
+            require(newSalePrice.isFinite() && newSalePrice >= 0.0) { "سعر البيع غير صالح" }
+            require(newPurchasePrice.isFinite() && newPurchasePrice >= 0.0 && newSalePrice >= newPurchasePrice) { "سعر الشراء غير صالح أو أعلى من سعر البيع" }
+            require(newQuantity.isFinite() && newQuantity >= 0.0) { "كمية المخزون غير صالحة" }
+            require(newMinimumStock.isFinite() && newMinimumStock >= 0.0) { "الحد الأدنى للمخزون غير صالح" }
+            require(newCategoryId > 0L && newUnitId > 0L) { "فئة ووحدة المنتج مطلوبتان" }
+            db.rawQuery("SELECT 1 FROM product_categories WHERE id = ? AND is_deleted = 0", arrayOf(newCategoryId.toString())).use { cursor -> require(cursor.moveToFirst()) { "فئة المنتج غير موجودة" } }
+            db.rawQuery("SELECT 1 FROM units WHERE id = ?", arrayOf(newUnitId.toString())).use { cursor -> require(cursor.moveToFirst()) { "وحدة المنتج غير موجودة" } }
             db.beginTransaction()
             try {
                 val cv = ContentValues().apply {
@@ -15113,20 +15233,29 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun insertProductCategory(data: JSONObject): Long {
         dbLock.lock()
         return try {
+            val code = data.optString("category_code", "").trim()
             val name = data.optString("category_name", data.optString("category_name_ar", "")).trim()
+            val taxRate = data.optDouble("tax_rate", 0.0)
+            val active = data.optInt("is_active", 1)
+            val parentId = data.optLong("parent_category_id", 0L)
             require(name.isNotEmpty()) { "اسم الفئة مطلوب" }
+            require(taxRate.isFinite() && taxRate >= 0.0 && taxRate <= 100.0) { "معدل ضريبة الفئة غير صالح" }
+            require(active == 0 || active == 1) { "حالة الفئة غير صالحة" }
             val db = writableDatabase
+            val normalizedCode = if (code.isNotEmpty()) code else "CAT-${UUID.randomUUID().toString().take(8)}"
+            db.rawQuery("SELECT 1 FROM product_categories WHERE (lower(category_code)=lower(?) OR lower(category_name)=lower(?)) AND is_deleted=0 LIMIT 1", arrayOf(normalizedCode, name)).use { cursor -> require(!cursor.moveToFirst()) { "كود أو اسم الفئة مستخدم مسبقاً" } }
+            if (parentId > 0L) db.rawQuery("SELECT 1 FROM product_categories WHERE id=? AND is_deleted=0", arrayOf(parentId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الفئة الأصل غير موجودة" } }
             val values = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
-                put("category_code", data.optString("category_code", "CAT-${UUID.randomUUID().toString().take(8)}"))
+                put("category_code", normalizedCode)
                 put("category_name", name)
                 put("category_name_ar", data.optString("category_name_ar", name))
                 put("description", data.optString("description", ""))
                 put("description_ar", data.optString("description_ar", data.optString("description", "")))
                 if (data.optInt("parent_category_id", 0) > 0) put("parent_category_id", data.optInt("parent_category_id"))
                 put("category_type", data.optString("category_type", "product"))
-                put("tax_rate", data.optDouble("tax_rate", 0.0))
-                put("is_active", data.optInt("is_active", 1))
+                put("tax_rate", taxRate)
+                put("is_active", active)
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
             }
@@ -15137,28 +15266,49 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     fun updateProductCategory(id: Long, data: JSONObject): Int {
         dbLock.lock()
         return try {
+            require(id > 0L) { "معرف الفئة غير صالح" }
+            val db = writableDatabase
+            var oldCode = ""
+            var oldName = ""
+            db.rawQuery("SELECT category_code, category_name FROM product_categories WHERE id=? AND is_deleted=0", arrayOf(id.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "الفئة غير موجودة" }
+                oldCode = cursor.getString(0) ?: ""
+                oldName = cursor.getString(1) ?: ""
+            }
+            val code = if (data.has("category_code")) data.optString("category_code").trim() else oldCode
+            val name = if (data.has("category_name")) data.optString("category_name").trim() else oldName
+            val taxRate = if (data.has("tax_rate")) data.optDouble("tax_rate", Double.NaN) else 0.0
+            val active = if (data.has("is_active")) data.optInt("is_active", -1) else 1
+            val parentId = if (data.has("parent_category_id") && !data.isNull("parent_category_id")) data.optLong("parent_category_id", 0L) else 0L
+            require(code.isNotEmpty() && name.isNotEmpty()) { "كود واسم الفئة مطلوبان" }
+            require(!data.has("tax_rate") || (taxRate.isFinite() && taxRate >= 0.0 && taxRate <= 100.0)) { "معدل ضريبة الفئة غير صالح" }
+            require(!data.has("is_active") || active == 0 || active == 1) { "حالة الفئة غير صالحة" }
+            require(parentId != id) { "لا يمكن جعل الفئة أباً لنفسها" }
+            db.rawQuery("SELECT 1 FROM product_categories WHERE id<>? AND (lower(category_code)=lower(?) OR lower(category_name)=lower(?)) AND is_deleted=0 LIMIT 1", arrayOf(id.toString(), code, name)).use { cursor -> require(!cursor.moveToFirst()) { "كود أو اسم الفئة مستخدم مسبقاً" } }
+            if (parentId > 0L) db.rawQuery("SELECT 1 FROM product_categories WHERE id=? AND is_deleted=0", arrayOf(parentId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الفئة الأصل غير موجودة" } }
             val values = ContentValues().apply {
-                if (data.has("category_code")) put("category_code", data.optString("category_code"))
-                if (data.has("category_name")) put("category_name", data.optString("category_name"))
-                if (data.has("category_name_ar")) put("category_name_ar", data.optString("category_name_ar"))
+                if (data.has("category_code")) put("category_code", code)
+                if (data.has("category_name")) put("category_name", name)
+                if (data.has("category_name_ar")) put("category_name_ar", data.optString("category_name_ar").trim())
                 if (data.has("description")) put("description", data.optString("description"))
                 if (data.has("description_ar")) put("description_ar", data.optString("description_ar"))
-                if (data.has("parent_category_id")) {
-                    if (data.isNull("parent_category_id")) putNull("parent_category_id") else put("parent_category_id", data.optInt("parent_category_id"))
-                }
+                if (data.has("parent_category_id")) { if (data.isNull("parent_category_id")) putNull("parent_category_id") else put("parent_category_id", parentId) }
                 if (data.has("category_type")) put("category_type", data.optString("category_type", "product"))
-                if (data.has("tax_rate")) put("tax_rate", data.optDouble("tax_rate", 0.0))
-                if (data.has("is_active")) put("is_active", data.optInt("is_active", 1))
+                if (data.has("tax_rate")) put("tax_rate", taxRate)
+                if (data.has("is_active")) put("is_active", active)
                 put("updated_at", getCurrentDateTime())
             }
-            writableDatabase.update("product_categories", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
+            db.update("product_categories", values, "id=? AND is_deleted=0", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
     }
 
     fun deleteProductCategory(id: Long): Int {
         dbLock.lock()
         return try {
-            writableDatabase.update("product_categories", ContentValues().apply {
+            require(id > 0L) { "معرف الفئة غير صالح" }
+            val db = writableDatabase
+            db.rawQuery("SELECT COUNT(*) FROM products WHERE category_id=? AND is_deleted=0", arrayOf(id.toString())).use { cursor -> require(!cursor.moveToFirst() || cursor.getInt(0) == 0) { "لا يمكن حذف فئة مرتبطة بمنتجات" } }
+            db.update("product_categories", ContentValues().apply {
                 put("is_deleted", 1); put("deleted_at", getCurrentDateTime())
             }, "id=? AND is_deleted=0", arrayOf(id.toString()))
         } finally { dbLock.unlock() }
@@ -16267,42 +16417,6 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             dbLock.unlock()
         }
     }
-
-    fun checkUserPermission(userId: Long, permissionCode: String): Boolean {
-        if (userId <= 0 || permissionCode.isBlank()) return false
-        val action = permissionCode.substringAfterLast('.', "read")
-        val capabilityColumn = when (action) {
-            "create" -> "rp.can_create"
-            "read", "view" -> "rp.can_read"
-            "update" -> "rp.can_update"
-            "delete" -> "rp.can_delete"
-            "export" -> "rp.can_export"
-            "print" -> "rp.can_print"
-            "approve" -> "rp.can_approve"
-            else -> return false
-        }
-        dbLock.lock()
-        return try {
-            val db = readableDatabase
-            db.rawQuery(
-                """SELECT 1 FROM role_permissions rp
-                   JOIN users u ON u.role_id = rp.role_id
-                   JOIN permissions p ON p.id = rp.permission_id
-                   WHERE u.id = ?
-                     AND u.is_deleted = 0
-                     AND p.permission_code = ?
-                     AND p.is_active = 1
-                     AND p.is_deleted = 0
-                     AND rp.is_deleted = 0
-                     AND $capabilityColumn = 1
-                   LIMIT 1""".trimIndent(),
-                arrayOf(userId.toString(), permissionCode)
-            ).use { cursor -> cursor.moveToFirst() }
-        } finally {
-            dbLock.unlock()
-        }
-    }
-
 
     // ========================================================================
     // دوال البنوك والحسابات البنكية (مطابقة لـ banks و bank_accounts)
