@@ -2995,12 +2995,23 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             DebugLogger.info("WebAppInterface", "getWarehouses called")
             val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
             return try {
-                val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val stationId = requireCurrentStationId(db, activity.currentUserId)
                 dataResponse(db.getWarehouses(stationId))
             } catch (e: Exception) {
                 DebugLogger.logException("Warehouse", e)
                 errorResponse(e.message)
             }
+        }
+
+        @JavascriptInterface
+        fun getWarehousePage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val data = JSONObject(jsonData.ifBlank { "{}" })
+                dataResponse(db.getWarehousesPage(data, requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) { DebugLogger.logException("WarehousePage", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -3015,6 +3026,15 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 DebugLogger.logException("DamagedProduct", e)
                 errorResponse(e.message)
             }
+        }
+
+        @JavascriptInterface
+        fun getDamagedProductPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                dataResponse(db.getDamagedProductsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)))
+            } catch (e: Exception) { DebugLogger.logException("DamagedProductPage", e); errorResponse(e.message) }
         }
 
         @JavascriptInterface
@@ -7274,13 +7294,21 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
 
         @JavascriptInterface
-        fun getStocktakeDetailRecords(jsonData: String = "{}") = operationalList("inventory", "stocktake_details", jsonData)
+        fun getStocktakeDetailRecords(jsonData: String = "{}"): String = operationalList("inventory", "stocktake_details", jsonData)
         @JavascriptInterface
-        fun generateStocktakeDetailReport(jsonData: String = "{}") = operationalReport("inventory", "stocktake_details", jsonData)
+        fun generateStocktakeDetailReport(jsonData: String = "{}"): String = operationalReport("inventory", "stocktake_details", jsonData)
         @JavascriptInterface
-        fun saveStocktakeDetailRecord(jsonData: String) = operationalSave("inventory", "stocktake_details", jsonData)
+        fun saveStocktakeDetailRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.saveStocktakeDetail(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)); successResponse(id, "تم حفظ تفاصيل الجرد مع حساب الفرق فعلياً") }
+            catch (e: Exception) { DebugLogger.logException("StocktakeDetailSave", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
-        fun updateStocktakeDetailRecord(id: Long, jsonData: String) = operationalUpdate("inventory", "stocktake_details", id, jsonData)
+        fun updateStocktakeDetailRecord(id: Long, jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val rows = db.updateStocktakeDetail(id, JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId)); successResponse(rows > 0, "تم تحديث تفاصيل الجرد وإعادة حساب الفرق") }
+            catch (e: Exception) { DebugLogger.logException("StocktakeDetailUpdate", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun deleteStocktakeDetailRecord(id: Long) = operationalDelete("inventory", "stocktake_details", id)
         @JavascriptInterface

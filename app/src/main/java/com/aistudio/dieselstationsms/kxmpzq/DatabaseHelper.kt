@@ -151,6 +151,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             createAllTables(db)
             ensureDeliveriesSchema(db)
             ensureLegacyAssetsSchema(db)
+            ensureModule007Schema(db)
             ensureReportCacheTable(db)
             insertInitialData(db)
             ensureContractSchema(db)
@@ -195,6 +196,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 }
             }
             ensureModule006Schema(db)
+            ensureModule007Schema(db)
             ensureDeliveriesSchema(db)
             ensureLegacyAssetsSchema(db)
             db.setTransactionSuccessful()
@@ -230,6 +232,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureFleetSchema(db)
         ensureFleetPermissions(db)
         ensureModule006Schema(db)
+        ensureModule007Schema(db)
         ensureDeliveriesSchema(db)
         ensureLegacyAssetsSchema(db)
         createTasksTable(db)
@@ -249,6 +252,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_meter_station_date ON meter_readings(station_id, reading_date, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_quality_refill_date ON fuel_quality_tests(refill_id, test_date)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_calibration_station_next ON calibration_records(station_id, next_calibration_date)")
+    }
+
+    private fun ensureModule007Schema(db: SQLiteDatabase) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_warehouses_station_active ON warehouses(station_id, is_active, id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_levels_warehouse_product ON inventory_levels(warehouse_id, product_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_station_date ON inventory_movements(station_id, created_at, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_inventory_movements_station_product ON inventory_movements(station_id, product_id, warehouse_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_stock_alerts_station_resolved ON stock_alerts(station_id, is_resolved, product_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_stocktakes_warehouse_status ON stocktakes(warehouse_id, status, archived)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_stocktake_details_take_product ON stocktake_details(stocktake_id, product_id, archived)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_station_date ON damaged_products(station_id, report_date, status, archived)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_damaged_station_warehouse ON damaged_products(station_id, warehouse_id, product_id, archived)")
     }
 
     private fun ensurePartyTypePermissions(db: SQLiteDatabase) {
@@ -8109,7 +8124,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val signedAdjustment = data.optDouble("signed_quantity", 0.0)
 
             require(productId > 0) { "المنتج مطلوب" }
-            require(quantity > 0.0) { "كمية الحركة يجب أن تكون أكبر من صفر" }
+            require(quantity.isFinite() && quantity > 0.0) { "كمية الحركة يجب أن تكون رقماً أكبر من صفر" }
+            require(unitCost.isFinite() && unitCost >= 0.0) { "تكلفة الوحدة غير صالحة" }
             require(movementType in setOf("in", "out", "adjustment", "transfer", "return", "damage")) { "نوع حركة المخزون غير صحيح" }
             db.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(warehouseId.toString(), stationScopeId.toString())).use { cursor ->
                 require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" }
@@ -8118,53 +8134,53 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" }
             }
             if (movementType == "adjustment") {
-                require(signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
+                require(signedAdjustment.isFinite() && signedAdjustment != 0.0) { "التسوية يجب أن تحتوي على كمية موجبة أو سالبة" }
             }
 
-            var currentQty = 0.0
-            db.rawQuery(
-                "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
-                arrayOf(productId.toString(), warehouseId.toString())
-            ).use { cursor ->
-                if (cursor.moveToFirst()) currentQty = cursor.getDouble(0)
-            }
+            val ownsTransaction = !db.inTransaction()
+            if (ownsTransaction) db.beginTransaction()
+            try {
+                var currentQty = 0.0
+                db.rawQuery(
+                    "SELECT quantity_on_hand FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
+                    arrayOf(productId.toString(), warehouseId.toString())
+                ).use { cursor ->
+                    if (cursor.moveToFirst()) currentQty = cursor.getDouble(0)
+                }
 
-            val quantityBefore = currentQty
-            val quantityAfter = when {
-                movementType == "adjustment" -> currentQty + signedAdjustment
-                movementType == "in" || movementType == "return" -> currentQty + quantity
-                else -> currentQty - quantity
-            }
-            require(quantityAfter >= 0.0) { "لا يمكن خصم كمية أكبر من المخزون المتاح" }
+                val quantityBefore = currentQty
+                val quantityAfter = when {
+                    movementType == "adjustment" -> currentQty + signedAdjustment
+                    movementType == "in" || movementType == "return" -> currentQty + quantity
+                    else -> currentQty - quantity
+                }
+                require(quantityAfter >= 0.0) { "لا يمكن خصم كمية أكبر من المخزون المتاح" }
 
-            val cv = ContentValues().apply {
-                put("uuid", UUID.randomUUID().toString())
-                put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
-                put("product_id", productId)
-                put("station_id", stationScopeId)
-                put("warehouse_id", warehouseId)
-                put("movement_type", movementType)
-                put("movement_subtype", data.optString("movement_subtype", ""))
-                put("quantity_before", quantityBefore)
-                put("quantity_change", if (movementType == "adjustment") signedAdjustment else quantity)
-                put("quantity_after", quantityAfter)
-                put("unit_cost", unitCost)
-                put("total_cost", totalCost)
-                put("reference_type", data.optString("reference_type", ""))
-                put("reference_id", data.optLong("reference_id", 0))
-                put("reason", data.optString("notes", ""))
-                put("performed_by", userId)
-                put("status", "completed")
-                put("created_at", getCurrentDateTime())
-            }
-            val id = db.insert("inventory_movements", null, cv)
-
-            if (id > 0) {
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("movement_code", data.optString("movement_code", "INV-${System.currentTimeMillis()}"))
+                    put("product_id", productId)
+                    put("station_id", stationScopeId)
+                    put("warehouse_id", warehouseId)
+                    put("movement_type", movementType)
+                    put("movement_subtype", data.optString("movement_subtype", ""))
+                    put("quantity_before", quantityBefore)
+                    put("quantity_change", if (movementType == "adjustment") signedAdjustment else if (movementType == "in" || movementType == "return") quantity else -quantity)
+                    put("quantity_after", quantityAfter)
+                    put("unit_cost", unitCost)
+                    put("total_cost", totalCost)
+                    put("reference_type", data.optString("reference_type", ""))
+                    put("reference_id", data.optLong("reference_id", 0))
+                    put("reason", data.optString("notes", ""))
+                    put("performed_by", userId)
+                    put("status", "completed")
+                    put("created_at", getCurrentDateTime())
+                }
+                val id = db.insertOrThrow("inventory_movements", null, cv)
                 db.rawQuery(
                     "SELECT id FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?",
                     arrayOf(productId.toString(), warehouseId.toString())
                 ).use { exists ->
-
                     if (exists.moveToFirst()) {
                         db.execSQL(
                             "UPDATE inventory_levels SET quantity_on_hand = ? WHERE product_id = ? AND warehouse_id = ?",
@@ -8177,15 +8193,64 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                             put("quantity_on_hand", quantityAfter)
                             put("average_cost", unitCost)
                         }
-                        db.insert("inventory_levels", null, cvInv)
+                        require(db.insert("inventory_levels", null, cvInv) > 0) { "تعذر إنشاء مستوى المخزون" }
                     }
                 }
                 logActivity("system", "stock_movement", "$movementType: $quantity للمنتج $productId")
+                if (ownsTransaction) db.setTransactionSuccessful()
+                id
+            } finally {
+                if (ownsTransaction) db.endTransaction()
             }
-            id
         } finally {
             dbLock.unlock()
         }
+    }
+
+    fun saveStocktakeDetail(data: JSONObject, stationScopeId: Int): Long {
+        dbLock.lock()
+        return try {
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            val stocktakeId = data.optLong("stocktake_id", 0L)
+            val productId = data.optLong("product_id", 0L)
+            val countedQuantity = data.optDouble("counted_quantity", -1.0)
+            require(stocktakeId > 0L && productId > 0L) { "الجرد والمنتج مطلوبان" }
+            require(countedQuantity.isFinite() && countedQuantity >= 0.0) { "الكمية المعدودة غير صالحة" }
+            val db = writableDatabase
+            var warehouseId = 0L
+            var stocktakeStatus = ""
+            db.rawQuery("SELECT st.warehouse_id, st.status FROM stocktakes st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.id = ? AND w.station_id = ? AND w.is_active = 1 AND st.archived = 0", arrayOf(stocktakeId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "الجرد غير موجود أو خارج نطاق المحطة" }
+                warehouseId = cursor.getLong(0); stocktakeStatus = cursor.getString(1) ?: ""
+            }
+            require(stocktakeStatus == "draft" || stocktakeStatus == "in_progress") { "لا يمكن تعديل تفاصيل جرد غير مفتوح" }
+            db.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة أو غير نشط" } }
+            db.rawQuery("SELECT id FROM stocktake_details WHERE stocktake_id = ? AND product_id = ? AND archived = 0", arrayOf(stocktakeId.toString(), productId.toString())).use { cursor -> require(!cursor.moveToFirst()) { "يوجد تفصيل نشط لنفس المنتج في هذا الجرد" } }
+            val systemQuantity = db.rawQuery("SELECT COALESCE(quantity_on_hand, 0) FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?", arrayOf(productId.toString(), warehouseId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+            val unitCost = db.rawQuery("SELECT COALESCE(purchase_price, 0) FROM products p WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+            val values = ContentValues().apply { put("stocktake_id", stocktakeId); put("product_id", productId); put("system_quantity", systemQuantity); put("counted_quantity", countedQuantity); put("variance_value", (countedQuantity - systemQuantity) * unitCost); put("notes", data.optString("notes", "")); put("archived", 0) }
+            db.insertOrThrow("stocktake_details", null, values)
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateStocktakeDetail(detailId: Long, data: JSONObject, stationScopeId: Int): Int {
+        dbLock.lock()
+        return try {
+            require(detailId > 0L && stationScopeId > 0) { "معرف التفاصيل أو المحطة غير صالح" }
+            val countedQuantity = data.optDouble("counted_quantity", -1.0)
+            require(countedQuantity.isFinite() && countedQuantity >= 0.0) { "الكمية المعدودة غير صالحة" }
+            val db = writableDatabase
+            var stocktakeId = 0L; var productId = 0L; var warehouseId = 0L; var status = ""
+            db.rawQuery("SELECT sd.stocktake_id, sd.product_id, st.warehouse_id, st.status FROM stocktake_details sd JOIN stocktakes st ON st.id = sd.stocktake_id JOIN warehouses w ON w.id = st.warehouse_id JOIN products p ON p.id = sd.product_id WHERE sd.id = ? AND sd.archived = 0 AND st.archived = 0 AND w.station_id = ? AND p.station_id = ? AND p.is_deleted = 0", arrayOf(detailId.toString(), stationScopeId.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "تفاصيل الجرد غير موجودة أو خارج نطاق المحطة" }
+                stocktakeId = cursor.getLong(0); productId = cursor.getLong(1); warehouseId = cursor.getLong(2); status = cursor.getString(3) ?: ""
+            }
+            require(status == "draft" || status == "in_progress") { "لا يمكن تعديل تفاصيل جرد غير مفتوح" }
+            val systemQuantity = db.rawQuery("SELECT COALESCE(quantity_on_hand, 0) FROM inventory_levels WHERE product_id = ? AND warehouse_id = ?", arrayOf(productId.toString(), warehouseId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+            val unitCost = db.rawQuery("SELECT COALESCE(purchase_price, 0) FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor -> if (cursor.moveToFirst()) cursor.getDouble(0) else 0.0 }
+            val values = ContentValues().apply { put("system_quantity", systemQuantity); put("counted_quantity", countedQuantity); put("variance_value", (countedQuantity - systemQuantity) * unitCost); if (data.has("notes")) put("notes", data.optString("notes", "")) }
+            db.update("stocktake_details", values, "id = ? AND stocktake_id = ? AND archived = 0", arrayOf(detailId.toString(), stocktakeId.toString()))
+        } finally { dbLock.unlock() }
     }
 
     fun approveStocktake(stocktakeId: Long, stationScopeId: Int, actorId: Long): Int {
@@ -8413,7 +8478,8 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val performedBy = userId
             require(productId > 0L) { "المنتج مطلوب" }
             require(sourceWarehouseId > 0L && targetWarehouseId > 0L && sourceWarehouseId != targetWarehouseId) { "مستودعا المصدر والهدف مطلوبان ويجب أن يكونا مختلفين" }
-            require(quantity > 0.0) { "كمية التحويل يجب أن تكون أكبر من صفر" }
+            require(quantity.isFinite() && quantity > 0.0) { "كمية التحويل يجب أن تكون رقماً أكبر من صفر" }
+            require(unitCost.isFinite() && unitCost >= 0.0) { "تكلفة الوحدة غير صالحة" }
             require(performedBy > 0L) { "المستخدم المنفذ مطلوب" }
             db.rawQuery("SELECT COUNT(*) FROM warehouses WHERE id IN (?, ?) AND station_id = ? AND is_active = 1", arrayOf(sourceWarehouseId.toString(), targetWarehouseId.toString(), stationId.toString())).use { cursor ->
                 require(cursor.moveToFirst() && cursor.getInt(0) == 2) { "المستودع المصدر أو الهدف خارج نطاق المحطة" }
@@ -8439,7 +8505,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         put("movement_type", "transfer")
                         put("movement_subtype", subtype)
                         put("quantity_before", before)
-                        put("quantity_change", quantity)
+                        put("quantity_change", if (subtype == "transfer_out") -quantity else quantity)
                         put("quantity_after", after)
                         put("unit_cost", unitCost)
                         put("total_cost", quantity * unitCost)
@@ -13065,8 +13131,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()
             if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
-                where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
-                repeat(spec.searchColumns.size) { args += "%$search%" }
+                if (screenKey == "stock_alerts") {
+                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
+                    repeat(6) { args += "%$search%" }
+                } else {
+                    where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
+                    repeat(spec.searchColumns.size) { args += "%$search%" }
+                }
                 if (screenKey == "sales_transactions") {
                     where += "(EXISTS (SELECT 1 FROM products p WHERE p.id = sales_transactions.product_id AND (p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.product_code LIKE ?)) OR EXISTS (SELECT 1 FROM parties party WHERE party.id = sales_transactions.customer_party_id AND (party.legal_name LIKE ? OR party.commercial_name LIKE ? OR party.commercial_name_ar LIKE ?)))"
                     repeat(6) { args += "%$search%" }
@@ -13075,6 +13146,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasStatus && spec.columns.contains("status")) {
                 val status = params.optString("status", "").trim()
                 if (status.isNotBlank()) { where += "status = ?"; args += status }
+            } else if (screenKey == "stock_alerts") {
+                when (params.optString("status", "").trim()) {
+                    "active", "unresolved" -> where += "is_resolved = 0"
+                    "resolved" -> where += "is_resolved = 1"
+                    "critical" -> where += "alert_level = 'critical' AND is_resolved = 0"
+                    "low_stock", "out_of_stock", "overstock", "expiry" -> { where += "alert_type = ?"; args += params.optString("status").trim() }
+                }
             } else if (screenKey == "fuel_quality_tests") {
                 val result = params.optString("status", "").trim()
                 if (result.isNotBlank()) { where += "result = ?"; args += result }
@@ -13163,8 +13241,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
             val search = params.optString("search", "").trim()
             if (search.isNotBlank() && spec.searchColumns.isNotEmpty()) {
-                where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
-                repeat(spec.searchColumns.size) { args += "%$search%" }
+                if (screenKey == "stock_alerts") {
+                    where += "(alert_type LIKE ? OR alert_level LIKE ? OR EXISTS (SELECT 1 FROM products ap WHERE ap.id = stock_alerts.product_id AND (ap.product_code LIKE ? OR ap.product_name LIKE ? OR ap.product_name_ar LIKE ?)) OR EXISTS (SELECT 1 FROM warehouses aw WHERE aw.station_id = stock_alerts.station_id AND aw.warehouse_name LIKE ?))"
+                    repeat(6) { args += "%$search%" }
+                } else {
+                    where += "(" + spec.searchColumns.joinToString(" OR ") { "$it LIKE ?" } + ")"
+                    repeat(spec.searchColumns.size) { args += "%$search%" }
+                }
                 if (screenKey == "sales_transactions") {
                     where += "(EXISTS (SELECT 1 FROM products p WHERE p.id = sales_transactions.product_id AND (p.product_name LIKE ? OR p.product_name_ar LIKE ? OR p.product_code LIKE ?)) OR EXISTS (SELECT 1 FROM parties party WHERE party.id = sales_transactions.customer_party_id AND (party.legal_name LIKE ? OR party.commercial_name LIKE ? OR party.commercial_name_ar LIKE ?)))"
                     repeat(6) { args += "%$search%" }
@@ -13173,6 +13256,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasStatus && spec.columns.contains("status")) {
                 val status = params.optString("status", "").trim()
                 if (status.isNotBlank()) { where += "status = ?"; args += status }
+            } else if (screenKey == "stock_alerts") {
+                when (params.optString("status", "").trim()) {
+                    "active", "unresolved" -> where += "is_resolved = 0"
+                    "resolved" -> where += "is_resolved = 1"
+                    "critical" -> where += "alert_level = 'critical' AND is_resolved = 0"
+                    "low_stock", "out_of_stock", "overstock", "expiry" -> { where += "alert_type = ?"; args += params.optString("status").trim() }
+                }
             } else if (screenKey == "fuel_quality_tests") {
                 val result = params.optString("status", "").trim()
                 if (result.isNotBlank()) { where += "result = ?"; args += result }
@@ -14873,6 +14963,64 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال المنتجات التالفة والمستودعات
     // ========================================================================
 
+    fun getWarehousesPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val conditions = mutableListOf("w.station_id = ?")
+            val args = mutableListOf(stationScopeId.toString())
+            val status = data.optString("status").trim()
+            if (status == "active") conditions += "w.is_active = 1"
+            if (status == "inactive") conditions += "w.is_active = 0"
+            data.optString("search", data.optString("query", "")).trim().takeIf { it.isNotEmpty() }?.let {
+                conditions += "(w.warehouse_name LIKE ? OR w.location_details LIKE ?)"
+                val pattern = "%$it%"; args += pattern; args += pattern
+            }
+            val whereSql = conditions.joinToString(" AND ")
+            val totalCount = db.rawQuery("SELECT COUNT(*) FROM warehouses w WHERE $whereSql", args.toTypedArray()).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            val pageSize = data.optInt("limit", 20).coerceIn(1, 200)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val sortColumn = when (data.optString("sort_by", "warehouse_name")) {
+                "location_details" -> "w.location_details"
+                "is_active" -> "w.is_active"
+                "created_at" -> "w.created_at"
+                "total_quantity" -> "total_quantity"
+                else -> "w.warehouse_name"
+            }
+            val direction = if (data.optString("sort_dir", "asc").equals("desc", true)) "DESC" else "ASC"
+            val rows = db.rawQuery("""
+                SELECT w.id, w.uuid, w.station_id, w.warehouse_name, w.location_details, w.is_default, w.is_active, w.created_at,
+                       COUNT(DISTINCT il.product_id) AS total_products,
+                       COALESCE(SUM(il.quantity_on_hand), 0) AS total_quantity,
+                       MAX(im.created_at) AS last_movement
+                FROM warehouses w
+                LEFT JOIN inventory_levels il ON il.warehouse_id = w.id
+                LEFT JOIN inventory_movements im ON im.warehouse_id = w.id AND im.station_id = w.station_id AND im.is_deleted = 0
+                WHERE $whereSql
+                GROUP BY w.id
+                ORDER BY $sortColumn $direction, w.id ASC
+                LIMIT ? OFFSET ?
+            """.trimIndent(), (args + pageSize.toString() + offset.toString()).toTypedArray()).use { cursorToJsonArray(it) }
+            val stats = db.rawQuery("""
+                SELECT COUNT(*) AS total_warehouses,
+                       COALESCE(SUM(CASE WHEN w.is_active = 1 THEN 1 ELSE 0 END), 0) AS active_warehouses,
+                       COALESCE(SUM(CASE WHEN w.is_active = 0 THEN 1 ELSE 0 END), 0) AS inactive_warehouses,
+                       COUNT(DISTINCT il.product_id) AS total_products,
+                       COALESCE(SUM(il.quantity_on_hand), 0) AS total_quantity
+                FROM warehouses w LEFT JOIN inventory_levels il ON il.warehouse_id = w.id
+                WHERE w.station_id = ?
+            """.trimIndent(), arrayOf(stationScopeId.toString())).use { if (it.moveToFirst()) cursorToJsonObject(it) else JSONObject() }
+            val page = (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            JSONObject().apply {
+                put("rows", rows); put("count", rows.length()); put("total_count", totalCount)
+                put("page", page); put("page_size", pageSize); put("total_pages", totalPages)
+                put("has_next", page < totalPages); put("has_previous", page > 1); put("stats", stats)
+            }
+        } finally { dbLock.unlock() }
+    }
+
     fun getWarehouses(stationId: Int? = null): JSONArray {
         dbLock.lock()
         return try {
@@ -14887,6 +15035,57 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally {
             dbLock.unlock()
         }
+    }
+
+    fun getDamagedProductsPage(data: JSONObject = JSONObject(), stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+        dbLock.lock()
+        return try {
+            val db = readableDatabase
+            val conditions = mutableListOf("dp.station_id = ?", "p.station_id = ?")
+            val args = mutableListOf(stationScopeId.toString(), stationScopeId.toString())
+            if (!data.optBoolean("include_archived", false)) conditions += "dp.archived = 0"
+            data.optString("from_date", data.optString("start_date", "")).trim().takeIf { it.isNotEmpty() }?.let { conditions += "date(dp.report_date) >= date(?)"; args += it }
+            data.optString("to_date", data.optString("end_date", "")).trim().takeIf { it.isNotEmpty() }?.let { conditions += "date(dp.report_date) <= date(?)"; args += it }
+            data.optLong("product_id", 0L).takeIf { it > 0 }?.let { conditions += "dp.product_id = ?"; args += it.toString() }
+            data.optLong("warehouse_id", 0L).takeIf { it > 0 }?.let { conditions += "dp.warehouse_id = ?"; args += it.toString() }
+            data.optString("status").trim().takeIf { it in setOf("pending", "approved", "rejected") }?.let { conditions += "dp.status = ?"; args += it }
+            data.optString("search", data.optString("query", "")).trim().takeIf { it.isNotEmpty() }?.let {
+                conditions += "(dp.reason LIKE ? OR dp.notes LIKE ? OR p.product_code LIKE ? OR p.product_name LIKE ? OR w.warehouse_name LIKE ?)"
+                val pattern = "%$it%"; repeat(5) { args += pattern }
+            }
+            val whereSql = conditions.joinToString(" AND ")
+            val totalCount = db.rawQuery("SELECT COUNT(*) FROM damaged_products dp LEFT JOIN products p ON p.id=dp.product_id LEFT JOIN warehouses w ON w.id=dp.warehouse_id WHERE $whereSql", args.toTypedArray()).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            val pageSize = data.optInt("limit", 20).coerceIn(1, 200)
+            val offset = data.optInt("offset", 0).coerceAtLeast(0)
+            val sortColumn = when (data.optString("sort_by", "report_date")) {
+                "quantity" -> "dp.quantity"
+                "status" -> "dp.status"
+                "product" -> "p.product_name"
+                "warehouse" -> "w.warehouse_name"
+                else -> "datetime(dp.report_date)"
+            }
+            val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+            val rows = db.rawQuery("""
+                SELECT dp.id, dp.product_id, dp.warehouse_id, dp.tank_id, dp.station_id, dp.quantity, dp.reason, dp.notes,
+                       dp.report_date, dp.reported_by, dp.status, dp.approved_by, dp.approved_at, dp.archived, dp.created_at,
+                       p.product_code, p.product_name, p.product_name_ar, COALESCE(p.purchase_price,0) AS unit_price,
+                       COALESCE(p.purchase_price,0) * dp.quantity AS total_value, w.warehouse_name,
+                       ru.full_name AS reported_by_name, au.full_name AS approved_by_name
+                FROM damaged_products dp
+                LEFT JOIN products p ON p.id=dp.product_id
+                LEFT JOIN warehouses w ON w.id=dp.warehouse_id
+                LEFT JOIN users ru ON ru.id=dp.reported_by
+                LEFT JOIN users au ON au.id=dp.approved_by
+                WHERE $whereSql
+                ORDER BY $sortColumn $direction, dp.id DESC
+                LIMIT ? OFFSET ?
+            """.trimIndent(), (args + pageSize.toString() + offset.toString()).toTypedArray()).use { cursorToJsonArray(it) }
+            val stats = db.rawQuery("SELECT COUNT(*) AS total_count, COALESCE(SUM(dp.quantity),0) AS total_quantity, COALESCE(SUM(CASE WHEN dp.status='pending' THEN 1 ELSE 0 END),0) AS pending_count, COALESCE(SUM(CASE WHEN dp.status='approved' THEN 1 ELSE 0 END),0) AS approved_count, COALESCE(SUM(CASE WHEN dp.status='rejected' THEN 1 ELSE 0 END),0) AS rejected_count, COALESCE(SUM(dp.quantity * COALESCE(p.purchase_price,0)),0) AS total_value FROM damaged_products dp LEFT JOIN products p ON p.id=dp.product_id LEFT JOIN warehouses w ON w.id=dp.warehouse_id WHERE $whereSql", args.toTypedArray()).use { if (it.moveToFirst()) cursorToJsonObject(it) else JSONObject() }
+            val page = (offset / pageSize) + 1
+            val totalPages = if (totalCount == 0) 0 else (totalCount + pageSize - 1) / pageSize
+            JSONObject().apply { put("rows", rows); put("count", rows.length()); put("total_count", totalCount); put("page", page); put("page_size", pageSize); put("total_pages", totalPages); put("has_next", page < totalPages); put("has_previous", page > 1); put("stats", stats) }
+        } finally { dbLock.unlock() }
     }
 
     fun getDamagedProducts(data: JSONObject, stationScopeId: Int): JSONArray {

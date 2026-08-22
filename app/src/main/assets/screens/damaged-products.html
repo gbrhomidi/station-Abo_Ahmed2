@@ -1747,19 +1747,17 @@
                 <span class="subtitle">إدارة المنتجات التالفة والمستهلكة في المحطة</span>
             </div>
             <div class="header-actions">
-                <button class="icon-btn has-badge" onclick="showNotifications()" title="التنبيهات">
-                    <i class="fas fa-bell"></i>
-                </button>
                 <button class="icon-btn" id="themeToggle" title="تبديل الوضع">
                     <i class="fas fa-moon" id="themeIcon"></i>
-                </button>
-                <button class="icon-btn" onclick="openAIAdvisor()" style="border-color:rgba(16,185,129,0.3);" title="المستشار الذكي">
-                    <i class="fas fa-robot" style="color:var(--emerald-primary);"></i>
                 </button>
             </div>
         </div>
         <!-- الفلاتر -->
         <div class="filter-bar">
+            <div class="filter-group" style="min-width:220px;">
+                <i class="fas fa-search"></i>
+                <input id="filterSearch" placeholder="بحث في المنتج أو السبب أو المستودع" type="search" autocomplete="off">
+            </div>
             <div class="filter-group">
                 <i class="fas fa-calendar-alt"></i>
                 <input id="filterDateFrom" placeholder="من" type="date">
@@ -1872,38 +1870,6 @@
     <!-- ===================================================================
     التنبيهات
     =================================================================== -->
-    <div class="alerts-container" id="alertsContainer"></div>
-
-    <!-- ===================================================================
-    الرسوم البيانية
-    =================================================================== -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title">
-                    <i class="fas fa-chart-bar"></i>
-                    التوزيع حسب الحالة
-                </span>
-                <span class="chart-badge">آخر 30 يوم</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-header">
-                <span class="chart-title">
-                    <i class="fas fa-chart-line"></i>
-                    اتجاه التالف
-                </span>
-                <span class="chart-badge">آخر 7 أيام</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="trendChart"></canvas>
-            </div>
-        </div>
-    </div>
-
     <!-- ===================================================================
     جدول المنتجات التالفة
     =================================================================== -->
@@ -1953,6 +1919,12 @@
                 </span>
             </div>
         </div>
+    </div>
+
+    <div class="pagination-bar" id="paginationBar" aria-label="تصفح صفحات المنتجات التالفة" style="display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;">
+        <button class="btn-filter" id="prevPage" type="button" onclick="changePage(-1)">السابق</button>
+        <span id="paginationInfo" style="color:var(--text-muted);">صفحة 1 من 1</span>
+        <button class="btn-filter" id="nextPage" type="button" onclick="changePage(1)">التالي</button>
     </div>
 
     <!-- ===================================================================
@@ -2128,29 +2100,6 @@
             <!-- يتم تعبئتها عبر JS -->
         </div>
     </div>
-
-    <!-- ===================================================================
-    مودال AI Advisor
-    =================================================================== -->
-    <div class="ai-modal">
-        <div class="modal-overlay" id="aiModal" onclick="closeAIModal()">
-            <div class="modal" onclick="event.stopPropagation()">
-                <div class="modal-header">
-                    <h3 class="modal-title">🤖 المستشار الذكي – التالف</h3>
-                    <button class="modal-close" onclick="closeAIModal()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div id="aiContent">
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i>
-                        <p>جاري تحليل بيانات المنتجات التالفة...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- ===================================================================
     مودالات القائمة السفلية (جديدة وحقيقية)
     =================================================================== -->
@@ -2272,7 +2221,6 @@
 
         const BridgeContracts = {
             getDashboardStats: p => window.AndroidInterface.getDashboardStats(JSON.stringify(p || {})),
-            getDamagedProducts: p => window.AndroidInterface.getDamagedProducts(JSON.stringify(p || {})),
             addDamagedProduct: p => window.AndroidInterface.addDamagedProduct(JSON.stringify(p || {})),
             updateDamagedProduct: p => window.AndroidInterface.updateDamagedProduct(Number(p.id), JSON.stringify(p || {})),
             updateDamagedProductStatus: p => window.AndroidInterface.updateDamagedProductStatus(Number(p.id), String(p.status || '')),
@@ -2309,8 +2257,6 @@
         }
 
         // هذه الحالة مؤقتة للعرض داخل الجلسة فقط وليست مخزناً تجارياً.
-        let currentAlerts = [];
-        let currentAIInsights = [];
 
         // ===================================================================
         // 3. دوال مساعدة
@@ -2413,6 +2359,7 @@
         // 5. تحميل المنتجات التالفة (الصفحة الرئيسية)
         // ===================================================================
         let damagedData = [];
+        let damagedMeta = { page: 1, page_size: 20, total_count: 0, total_pages: 0, stats: {} };
         let loadedProducts = [];
         let statusChart = null;
         let trendChart = null;
@@ -2423,42 +2370,39 @@
             const productId = document.getElementById('filterProduct').value;
             const warehouseId = document.getElementById('filterWarehouse').value;
             const status = document.getElementById('filterStatus').value;
-
+            if (from && to && from > to) { showToast('تاريخ البداية يجب أن يسبق تاريخ النهاية', 'error'); return; }
             showLoading(true);
             try {
-                const params = {
-                    start_date: from,
-                    end_date: to,
-                    product_id: productId || null,
-                    warehouse_id: warehouseId || null,
-                    status: status || null,
-                };
-                const result = await apiCall('getDamagedProducts', params);
-                if (result.success && result.data) {
-                    damagedData = result.data;
-                    renderTable(damagedData);
-                    updateKPIs(damagedData);
-                    updateCharts(damagedData);
-                    updateFooter(damagedData);
-                    generateAlerts(damagedData);
-                    generateAIInsights(damagedData);
-                    showToast('✅ تم تحميل البيانات بنجاح', 'success');
-                } else {
-                    damagedData = [];
-                    renderTable([]);
-                    resetKPIs();
-                    updateCharts([]);
-                    updateFooter([]);
-                    generateAlerts([]);
-                    generateAIInsights([]);
-                    showToast(result.message || result.error || 'لا توجد بيانات مطابقة', 'warning');
-                }
-            } catch (e) {
-                showToast(e.error || e.message || '❌ فشل تحميل البيانات من قاعدة البيانات', 'error');
-                console.error(e);
-            } finally {
-                showLoading(false);
-            }
+                const result = await apiCall('getDamagedProductPage', {
+                    from_date: from, to_date: to, product_id: productId ? Number(productId) : 0,
+                    warehouse_id: warehouseId ? Number(warehouseId) : 0, status: status || '',
+                    search: document.getElementById('filterSearch').value.trim(),
+                    sort_by: 'report_date', sort_dir: 'desc', limit: damagedMeta.page_size, offset: (damagedMeta.page - 1) * damagedMeta.page_size,
+                    include_archived: false
+                });
+                if (!result.success) throw new Error(result.message || result.error || 'فشل تحميل بيانات التالف');
+                const payload = result.data || {};
+                damagedData = Array.isArray(payload.rows) ? payload.rows : [];
+                damagedMeta = { page: Number(payload.page || damagedMeta.page), page_size: Number(payload.page_size || damagedMeta.page_size), total_count: Number(payload.total_count || 0), total_pages: Number(payload.total_pages || 0), stats: payload.stats || {} };
+                renderTable(damagedData); updateKPIs(damagedMeta.stats); updateFooter(damagedMeta.stats); renderPagination();
+                showToast(damagedData.length ? 'تم تحميل الصفحة من SQLite' : 'لا توجد سجلات مطابقة', damagedData.length ? 'success' : 'info');
+            } catch (e) { damagedData = []; damagedMeta.total_count = 0; damagedMeta.total_pages = 0; renderTable([]); updateKPIs({}); updateFooter({}); renderPagination(); showToast(e.error || e.message || 'فشل تحميل البيانات من قاعدة البيانات', 'error'); console.error(e); }
+            finally { showLoading(false); }
+        }
+
+        function changePage(delta) {
+            const next = damagedMeta.page + delta;
+            if (next < 1 || next > damagedMeta.total_pages) return;
+            damagedMeta.page = next;
+            loadDamagedProducts();
+        }
+
+        function renderPagination() {
+            const total = damagedMeta.total_pages || 0;
+            const page = damagedMeta.page || 1;
+            document.getElementById('paginationInfo').textContent = total ? `صفحة ${page} من ${total} · ${Number(damagedMeta.total_count || 0).toLocaleString('ar')} سجل` : 'لا توجد صفحات';
+            document.getElementById('prevPage').disabled = page <= 1 || !total;
+            document.getElementById('nextPage').disabled = !total || page >= total;
         }
 
         // ===================================================================
@@ -2521,270 +2465,36 @@
         // ===================================================================
         // 7. تحديث بطاقات الإحصائيات
         // ===================================================================
-        function updateKPIs(data) {
-            let totalQty = 0,
-                totalValue = 0,
-                pending = 0,
-                approved = 0,
-                rejected = 0;
-            data.forEach(item => {
-                const qty = parseFloat(item.quantity || 0);
-                const val = parseFloat(item.total_value || item.value || 0);
-                totalQty += qty;
-                totalValue += val;
-                if (item.status === 'pending') pending++;
-                else if (item.status === 'approved') approved++;
-                else if (item.status === 'rejected') rejected++;
-            });
-
-            document.getElementById('kpiTotalDamaged').textContent = formatNumber(totalQty);
-            document.getElementById('kpiPending').textContent = pending;
-            document.getElementById('kpiApproved').textContent = approved;
-            document.getElementById('kpiRejected').textContent = rejected;
-            document.getElementById('kpiTotalValue').textContent = formatCurrency(totalValue);
-
-            // لا تُعرض اتجاهات وهمية؛ تُملأ من مقارنة البيانات الحالية إذا توفرت.
-            const total = data.length;
-            const previousTotal = Number(window.previousDamagedCount || 0);
-            const trend = previousTotal > 0 ? ((total - previousTotal) / previousTotal * 100) : 0;
-            const trendText = (trend >= 0 ? '+' : '') + trend.toFixed(1) + '%';
-            document.getElementById('trendTotal').textContent = trendText;
-            document.getElementById('trendPending').textContent = pending + ' سجل';
-            document.getElementById('trendApproved').textContent = approved + ' سجل';
-            document.getElementById('trendRejected').textContent = rejected + ' سجل';
-            document.getElementById('trendValue').textContent = formatCurrency(totalValue);
-            window.previousDamagedCount = total;
+        function updateKPIs(stats) {
+            const s = stats || {};
+            const qty = Number(s.total_quantity || 0), value = Number(s.total_value || 0);
+            document.getElementById('kpiTotalDamaged').textContent = formatNumber(qty);
+            document.getElementById('kpiPending').textContent = Number(s.pending_count || 0).toLocaleString('ar');
+            document.getElementById('kpiApproved').textContent = Number(s.approved_count || 0).toLocaleString('ar');
+            document.getElementById('kpiRejected').textContent = Number(s.rejected_count || 0).toLocaleString('ar');
+            document.getElementById('kpiTotalValue').textContent = formatCurrency(value);
+            document.getElementById('trendTotal').textContent = 'ضمن الفلاتر';
+            document.getElementById('trendPending').textContent = 'من SQLite';
+            document.getElementById('trendApproved').textContent = 'من SQLite';
+            document.getElementById('trendRejected').textContent = 'من SQLite';
+            document.getElementById('trendValue').textContent = 'من SQLite';
         }
 
-        function resetKPIs() {
-            document.getElementById('kpiTotalDamaged').textContent = '0';
-            document.getElementById('kpiPending').textContent = '0';
-            document.getElementById('kpiApproved').textContent = '0';
-            document.getElementById('kpiRejected').textContent = '0';
-            document.getElementById('kpiTotalValue').textContent = '0.00';
-        }
+        function resetKPIs() { updateKPIs({}); }
 
         // ===================================================================
         // 8. فوتر الجدول
         // ===================================================================
-        function updateFooter(data) {
-            let totalQty = 0,
-                totalValue = 0;
-            data.forEach(item => {
-                totalQty += parseFloat(item.quantity || 0);
-                totalValue += parseFloat(item.total_value || item.value || 0);
-            });
-            document.getElementById('footerTotalQty').textContent = formatNumber(totalQty);
-            document.getElementById('footerTotalValue').textContent = formatCurrency(totalValue);
-            document.getElementById('footerCount').textContent = data.length;
+        function updateFooter(stats) {
+            const s = stats || {};
+            document.getElementById('footerTotalQty').textContent = formatNumber(Number(s.total_quantity || 0));
+            document.getElementById('footerTotalValue').textContent = formatCurrency(Number(s.total_value || 0));
+            document.getElementById('footerCount').textContent = Number(s.total_count || 0).toLocaleString('ar');
         }
 
         // ===================================================================
-        // 9. الرسوم البيانية
-        // ===================================================================
-        function updateCharts(data) {
-            let pending = 0,
-                approved = 0,
-                rejected = 0;
-            data.forEach(item => {
-                if (item.status === 'pending') pending++;
-                else if (item.status === 'approved') approved++;
-                else if (item.status === 'rejected') rejected++;
-            });
-
-            const ctx1 = document.getElementById('statusChart').getContext('2d');
-            if (statusChart) statusChart.destroy();
-            statusChart = new Chart(ctx1, {
-                type: 'doughnut',
-                data: {
-                    labels: ['قيد الانتظار', 'معتمد', 'مرفوض'],
-                    datasets: [{
-                        data: [pending, approved, rejected],
-                        backgroundColor: ['#f59e0b', '#10b981', '#ef4444'],
-                        borderColor: 'transparent',
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'left',
-                            labels: { font: { family: 'Cairo' }, boxWidth: 12, padding: 10, color: '#8fc4a8' }
-                        }
-                    },
-                    cutout: '65%'
-                }
-            });
-
-            const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            const trendData = days.map((_, dayIndex) => data.reduce((sum, item) => {
-                const rawDate = item.report_date || item.created_at || '';
-                const date = rawDate.slice(0, 10);
-                const target = new Date();
-                target.setHours(0, 0, 0, 0);
-                target.setDate(target.getDate() - (6 - dayIndex));
-                const targetDate = target.toISOString().slice(0, 10);
-                return sum + (date === targetDate ? Number(item.quantity || 0) : 0);
-            }, 0));
-            const ctx2 = document.getElementById('trendChart').getContext('2d');
-            if (trendChart) trendChart.destroy();
-            trendChart = new Chart(ctx2, {
-                type: 'line',
-                data: {
-                    labels: days,
-                    datasets: [{
-                        label: 'الكمية التالفة',
-                        data: trendData,
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239,68,68,0.08)',
-                        tension: 0.3,
-                        fill: true,
-                        borderWidth: 2.5,
-                        pointBackgroundColor: '#ef4444',
-                        pointBorderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        }
-
-        // ===================================================================
-        // 10. التنبيهات
-        // ===================================================================
-        function generateAlerts(data) {
-            const alerts = [];
-            const pendingItems = data.filter(item => item.status === 'pending');
-            if (pendingItems.length > 0) {
-                alerts.push({
-                    type: 'warning',
-                    icon: 'fa-clock',
-                    title: '⏳ طلبات تلف معلقة',
-                    desc: pendingItems.length + ' منتج في انتظار الاعتماد',
-                    time: 'الآن'
-                });
-            }
-            const totalQty = data.reduce((s, item) => s + parseFloat(item.quantity || 0), 0);
-            if (totalQty > 100) {
-                alerts.push({
-                    type: 'danger',
-                    icon: 'fa-exclamation-triangle',
-                    title: '⚠️ كميات تالفة كبيرة',
-                    desc: 'إجمالي التالف: ' + formatNumber(totalQty) + ' وحدة',
-                    time: 'الآن'
-                });
-            }
-            const highValue = data.filter(item => parseFloat(item.total_value || item.value || 0) > 100000);
-            if (highValue.length > 0) {
-                alerts.push({
-                    type: 'info',
-                    icon: 'fa-flag',
-                    title: '💰 تالف عالي القيمة',
-                    desc: highValue.length + ' منتج بقيمة تتجاوز 100,000',
-                    time: 'الآن'
-                });
-            }
-            currentAlerts = alerts;
-            renderAlerts(currentAlerts);
-        }
-
-        function renderAlerts(alerts) {
-            const container = document.getElementById('alertsContainer');
-            if (!container) return;
-            if (!alerts || alerts.length === 0) { container.innerHTML = ''; return; }
-            container.innerHTML = alerts.slice(0, 3).map((a, i) => `
-                    <div class="alert-item ${a.type}" style="animation-delay:${i*0.1}s">
-                        <div class="alert-icon"><i class="fas ${a.icon}"></i></div>
-                        <div class="alert-content">
-                            <div class="alert-title">${a.title}</div>
-                            <div class="alert-desc">${a.desc}</div>
-                        </div>
-                        <div class="alert-time">${a.time}</div>
-                    </div>
-                `).join('');
-        }
-
-        function showNotifications() {
-            if (currentAlerts.length === 0) { showToast('🔔 لا توجد تنبيهات حالية', 'info'); return; }
-            showToast('🔔 لديك ' + currentAlerts.length + ' تنبيهات حالية', 'success');
-        }
-
-        // ===================================================================
-        // 11. AI Advisor
-        // ===================================================================
-        function generateAIInsights(data) {
-            if (!data || data.length === 0) {
-                currentAIInsights = [];
-                return;
-            }
-            const insights = [];
-            const totalQty = data.reduce((s, item) => s + parseFloat(item.quantity || 0), 0);
-            const totalValue = data.reduce((s, item) => s + parseFloat(item.total_value || item.value || 0), 0);
-            const pending = data.filter(i => i.status === 'pending').length;
-            const approved = data.filter(i => i.status === 'approved').length;
-            const rejected = data.filter(i => i.status === 'rejected').length;
-
-            insights.push({
-                title: '📊 نظرة عامة',
-                desc: 'إجمالي التالف: ' + formatNumber(totalQty) + ' وحدة - القيمة: ' + formatCurrency(totalValue) +
-                    ' - معلق: ' + pending + ' - معتمد: ' + approved + ' - مرفوض: ' + rejected
-            });
-
-            const reasons = {};
-            data.forEach(item => {
-                const r = getDamageTypeLabel(item.reason);
-                reasons[r] = (reasons[r] || 0) + 1;
-            });
-            let maxReason = '',
-                maxCount = 0;
-            Object.entries(reasons).forEach(([k, v]) => { if (v > maxCount) { maxCount = v;
-                    maxReason = k; } });
-            if (maxReason) {
-                insights.push({ title: '🔍 أكثر سبب تلف', desc: maxReason + ' (' + maxCount + ' مرات)' });
-            }
-            if (pending > 5) {
-                insights.push({
-                    title: '💡 توصية',
-                    desc: 'يوجد ' + pending + ' طلب تلف معلق، يُرجى مراجعتها واتخاذ القرار المناسب.'
-                });
-            }
-            currentAIInsights = insights;
-        }
-
-        function openAIAdvisor() {
-            document.getElementById('aiModal').classList.add('show');
-            document.body.style.overflow = 'hidden';
-            const insights = currentAIInsights;
-            const container = document.getElementById('aiContent');
-            if (!insights || insights.length === 0) {
-                container.innerHTML =
-                    `<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-robot" style="font-size:3rem;display:block;margin-bottom:12px;"></i><p>لا توجد بيانات كافية للتحليل</p></div>`;
-                return;
-            }
-            container.innerHTML = insights.map(i => `
-                    <div class="ai-insight-card">
-                        <div class="insight-title">${i.title}</div>
-                        <div class="insight-desc">${i.desc}</div>
-                    </div>
-                `).join('');
-        }
-
-        function closeAIModal() {
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
-
-        // ===================================================================
-        // 12. عمليات CRUD (نفس السابق)
+        // عمليات CRUD
+        // =================================================================== (نفس السابق)
         // ===================================================================
         let mutatingOperation = false;
 
@@ -2978,6 +2688,7 @@
             document.getElementById('formModal').classList.add('show');
             document.body.style.overflow = 'hidden';
             loadDropdowns({});
+            document.getElementById('filterSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { damagedMeta.page = 1; loadDamagedProducts(); } });
         }
 
         function openEditModal(id) {
@@ -3193,6 +2904,8 @@
             document.getElementById('filterProduct').value = '';
             document.getElementById('filterWarehouse').value = '';
             document.getElementById('filterStatus').value = '';
+            document.getElementById('filterSearch').value = '';
+            damagedMeta.page = 1;
             showToast('🔄 تم إعادة تعيين الفلاتر', 'success');
             loadDamagedProducts();
         }
@@ -3302,52 +3015,14 @@
         async function openDamagedModal() {
             const modal = document.getElementById('damagedModal');
             const body = document.getElementById('damagedModalBody');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-
-            body.innerHTML = `
-                    <div style="text-align:center;padding:20px;">
-                        <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
-                        <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل البيانات...</p>
-                    </div>
-                `;
-
+            modal.classList.add('show'); document.body.style.overflow = 'hidden';
+            body.innerHTML = '<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse"></i><p>جاري تحميل البيانات من SQLite...</p></div>';
             try {
-                const today = new Date().toISOString().split('T')[0];
-                const monthAgo = new Date();
-                monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
-                const params = { start_date: from, end_date: today, limit: 5 };
-                const result = await apiCall('getDamagedProducts', params);
-                if (result.success && result.data) {
-                    const items = result.data.slice(0, 5);
-                    if (items.length === 0) {
-                        body.innerHTML =
-                            `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:12px;"></i>لا توجد منتجات تالفة حديثة</div>`;
-                        return;
-                    }
-                    let html = `<table class="mini-table"><thead><tr><th>المنتج</th><th>الكمية</th><th>السبب</th><th>الحالة</th></tr></thead><tbody>`;
-                    items.forEach(item => {
-                        html += `
-                                <tr>
-                                    <td>${escapeHtml(item.product_name || '---')}</td>
-                                    <td>${formatNumber(item.quantity || 0)}</td>
-                                    <td style="font-size:0.75rem;">${escapeHtml((item.reason || '---').substring(0,20))}</td>
-                                    <td>${getStatusBadge(item.status)}</td>
-                                </tr>
-                            `;
-                    });
-                    html += `</tbody></table>`;
-                    body.innerHTML = html;
-                } else {
-                    body.innerHTML =
-                        `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-exclamation-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${result.message || result.error || 'لا توجد بيانات'}</div>`;
-                }
-            } catch (e) {
-                body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
-                console.error(e);
-            }
+                const result = await apiCall('getDamagedProductPage', { from_date: '', to_date: '', limit: 5, offset: 0, sort_by: 'report_date', sort_dir: 'desc', include_archived: false });
+                if (!result.success) throw new Error(result.message || result.error || 'فشل تحميل بيانات التالف');
+                const payload=result.data || {}; const items=Array.isArray(payload.rows) ? payload.rows : [];
+                body.innerHTML = items.length ? '<table class="mini-table"><thead><tr><th>المنتج</th><th>الكمية</th><th>السبب</th><th>الحالة</th></tr></thead><tbody>' + items.map(item => '<tr><td>'+escapeHtml(item.product_name || item.product_name_ar || '—')+'</td><td>'+formatNumber(item.quantity || 0)+'</td><td>'+escapeHtml(item.reason || '—')+'</td><td>'+getStatusBadge(item.status)+'</td></tr>').join('') + '</tbody></table>' : '<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="fas fa-inbox"></i> لا توجد منتجات تالفة حديثة</div>';
+            } catch (e) { body.innerHTML='<div style="text-align:center;padding:30px;color:var(--danger);">'+escapeHtml(e.error || e.message || 'حدث خطأ في تنفيذ العملية')+'</div>'; console.error(e); }
         }
 
         // 18.3 مودال المخزون (منخفض المخزون)
@@ -3400,81 +3075,15 @@
 
         // 18.4 مودال التقارير
         async function openReportsModal() {
-            const modal = document.getElementById('reportsModal');
-            const body = document.getElementById('reportsBody');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-
-            body.innerHTML = `
-                    <div style="text-align:center;padding:20px;">
-                        <i class="fas fa-spinner fa-pulse" style="font-size:2rem;color:var(--emerald-primary);"></i>
-                        <p style="color:var(--text-muted);margin-top:10px;">جاري تحميل التقارير...</p>
-                    </div>
-                `;
-
+            const modal=document.getElementById('reportsModal'); const body=document.getElementById('reportsBody');
+            modal.classList.add('show'); document.body.style.overflow='hidden';
+            body.innerHTML='<div style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-pulse"></i><p>جاري قراءة ملخص التالف من SQLite...</p></div>';
             try {
-                // جلب عدد السجلات الكلي للتالف
-                const today = new Date().toISOString().split('T')[0];
-                const monthAgo = new Date();
-                monthAgo.setDate(monthAgo.getDate() - 30);
-                const from = monthAgo.toISOString().split('T')[0];
-                const countResult = await apiCall('getDamagedProducts', { start_date: from, end_date: today });
-                const reportItems = countResult.success && Array.isArray(countResult.data) ? countResult.data : [];
-                const totalCount = reportItems.length;
-                const groupBy = (items, key, fallback) => {
-                    const counts = {};
-                    items.forEach(item => {
-                        const label = item[key] || fallback;
-                        counts[label] = (counts[label] || 0) + 1;
-                    });
-                    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                };
-                const reasonRows = groupBy(reportItems, 'reason', 'other').map(([key, count]) => `<tr><td>${escapeHtml(getDamageTypeLabel(key))}</td><td>${count}</td></tr>`).join('');
-                const productRows = groupBy(reportItems, 'product_name', 'غير محدد').map(([key, count]) => `<tr><td>${escapeHtml(key)}</td><td>${count}</td></tr>`).join('');
-                const warehouseRows = groupBy(reportItems, 'warehouse_name', 'غير محدد').map(([key, count]) => `<tr><td>${escapeHtml(key)}</td><td>${count}</td></tr>`).join('');
-
-                body.innerHTML = `
-                        <div style="background:var(--bg-glass);padding:16px;border-radius:var(--radius-small);border:1px solid var(--border-color);margin-bottom:16px;">
-                            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                <span style="color:var(--text-muted);">📊 إجمالي المنتجات التالفة (آخر 30 يوم)</span>
-                                <span style="font-size:1.5rem;font-weight:900;color:var(--gold-primary);">${totalCount}</span>
-                            </div>
-                        </div>
-                        <div class="modal-stats-grid" style="margin-bottom:16px;">
-                            <div class="modal-stat-card"><div class="stat-value">${formatNumber(reportItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0))}</div><div class="stat-label">إجمالي الكمية</div></div>
-                            <div class="modal-stat-card"><div class="stat-value">${formatCurrency(reportItems.reduce((sum, item) => sum + Number(item.total_value || 0), 0))}</div><div class="stat-label">إجمالي القيمة</div></div>
-                        </div>
-                        <div class="mini-table-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
-                            <div><h4>أسباب التلف الأكثر تكراراً</h4><table class="mini-table"><thead><tr><th>السبب</th><th>العدد</th></tr></thead><tbody>${reasonRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
-                            <div><h4>أكثر المنتجات تالفاً</h4><table class="mini-table"><thead><tr><th>المنتج</th><th>العدد</th></tr></thead><tbody>${productRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
-                            <div><h4>التحليل حسب المستودع</h4><table class="mini-table"><thead><tr><th>المستودع</th><th>العدد</th></tr></thead><tbody>${warehouseRows || '<tr><td colspan="2">لا توجد بيانات</td></tr>'}</tbody></table></div>
-                        </div>
-                        <div class="report-actions">
-                            <button class="btn-report primary" onclick="exportCSV(); closeModalById('reportsModal');">
-                                <i class="fas fa-file-csv"></i> تصدير CSV
-                            </button>
-                            <button class="btn-report" onclick="exportJSON(); closeModalById('reportsModal');">
-                                <i class="fas fa-file-code"></i> تصدير JSON
-                            </button>
-                            <button class="btn-report primary" onclick="exportPDF(); closeModalById('reportsModal');">
-                                <i class="fas fa-file-pdf"></i> تصدير PDF
-                            </button>
-                            <button class="btn-report" onclick="window.print(); closeModalById('reportsModal');">
-                                <i class="fas fa-print"></i> طباعة
-                            </button>
-                            <button class="btn-report" onclick="loadDamagedProducts(); closeModalById('reportsModal'); showToast('🔄 تم التحديث', 'success');">
-                                <i class="fas fa-sync-alt"></i> تحديث البيانات
-                            </button>
-                        </div>
-                        <div style="margin-top:14px;font-size:0.8rem;color:var(--text-muted);text-align:center;">
-                            يمكنك تصدير التقرير الحالي بصيغة CSV أو PDF، أو طباعته مباشرة.
-                        </div>
-                    `;
-            } catch (e) {
-                body.innerHTML =
-                    `<div style="text-align:center;padding:30px;color:var(--danger);"><i class="fas fa-times-circle" style="font-size:2rem;display:block;margin-bottom:12px;"></i>${e.error || e.message || 'حدث خطأ في تنفيذ العملية'}</div>`;
-                console.error(e);
-            }
+                const result=await apiCall('getDamagedProductPage',{from_date:document.getElementById('filterDateFrom').value||'',to_date:document.getElementById('filterDateTo').value||'',product_id:Number(document.getElementById('filterProduct').value||0),warehouse_id:Number(document.getElementById('filterWarehouse').value||0),status:document.getElementById('filterStatus').value||'',search:document.getElementById('filterSearch').value.trim(),limit:damagedMeta.page_size,offset:0,sort_by:'report_date',sort_dir:'desc',include_archived:false});
+                if(!result.success) throw new Error(result.message||result.error||'فشل تحميل ملخص التالف');
+                const s=(result.data&&result.data.stats)||{};
+                body.innerHTML=`<div class="modal-stats-grid"><div class="modal-stat-card"><div class="stat-value">'+formatNumber(Number(s.total_quantity||0))+'</div><div class="stat-label">إجمالي الكمية</div></div><div class="modal-stat-card"><div class="stat-value">'+formatCurrency(Number(s.total_value||0))+'</div><div class="stat-label">إجمالي القيمة</div></div><div class="modal-stat-card"><div class="stat-value">'+Number(s.total_count||0).toLocaleString('ar')+'</div><div class="stat-label">إجمالي السجلات</div></div></div><p style="margin-top:14px;color:var(--text-muted);">هذه المؤشرات محسوبة من نفس الفلاتر في استعلام SQLite، ويمكن تصدير الصفحة الحالية أو طباعتها.</p><div class="report-actions"><button class="btn-report primary" onclick="exportCSV();closeModalById('reportsModal');"><i class="fas fa-file-csv"></i> تصدير الصفحة</button><button class="btn-report" onclick="window.print();closeModalById('reportsModal');"><i class="fas fa-print"></i> طباعة</button></div>`;
+            } catch(e) { body.innerHTML='<div style="text-align:center;padding:30px;color:var(--danger);">'+escapeHtml(e.error||e.message||'حدث خطأ في تنفيذ العملية')+'</div>'; console.error(e); }
         }
 
         // 18.5 مودال الإعدادات
@@ -3609,7 +3218,7 @@
                     window.print();
                     break;
                 case 'ai':
-                    openAIAdvisor();
+                    showToast('لا توجد تحليلات محلية؛ استخدم بيانات SQLite والعمليات المسجلة.', 'info');
                     break;
                 case 'home':
                     window.location.href = '../main.html';

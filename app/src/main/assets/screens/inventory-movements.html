@@ -886,23 +886,14 @@
          <option value="out">
           📤 خروج مخزني
          </option>
-         <option value="return_customer">
+         <option value="return">
           🔄 إرجاع من عميل
-         </option>
-         <option value="return_supplier">
-          🔄 إرجاع لمورد
-         </option>
-         <option value="waste">
-          🗑️ هالك
          </option>
          <option value="transfer">
           🔄 تحويل بين مستودعات
          </option>
          <option value="adjustment">
           ⚖️ تسوية مخزنية
-         </option>
-         <option value="stocktake">
-          📋 جرد
          </option>
         </select>
        </div>
@@ -950,28 +941,14 @@
           ❌ ملغى
          </option>
         </select>
-       </div>
-      </div>
-      <div class="form-row-compact">
-       <div class="form-group-half">
-        <label class="form-label">
-         🏭 المورد
-        </label>
-        <select class="form-control" id="filter-supplier">
-         <option value="">
-          جميع الموردين
-         </option>
-        </select>
-       </div>
-       <div class="form-group-half">
-        <label class="form-label">
-         👥 العميل
-        </label>
-        <select class="form-control" id="filter-customer">
-         <option value="">
-          جميع العملاء
-         </option>
-        </select>
+       <label class="form-label" for="filter-sort">الفرز</label>
+       <select class="form-control" id="filter-sort">
+        <option value="date">الأحدث</option>
+        <option value="quantity">الكمية</option>
+        <option value="value">القيمة</option>
+        <option value="type">النوع</option>
+        <option value="warehouse">المستودع</option>
+       </select>
        </div>
       </div>
       <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center;">
@@ -1299,23 +1276,14 @@
            <option value="out">
             📤 خروج مخزني (بيع)
            </option>
-           <option value="return_customer">
+           <option value="return">
             🔄 إرجاع من عميل
-           </option>
-           <option value="return_supplier">
-            🔄 إرجاع لمورد
-           </option>
-           <option value="waste">
-            🗑️ هالك
            </option>
            <option value="transfer">
             🔄 تحويل بين مستودعات
            </option>
            <option value="adjustment">
             ⚖️ تسوية مخزنية
-           </option>
-           <option value="stocktake">
-            📋 جرد
            </option>
           </select>
          </div>
@@ -1748,11 +1716,13 @@ function movementQueryParams() {
         page: currentPage,
         limit: pageSize,
         query: document.getElementById('search-product').value.trim(),
-        movement_type: ({ return_customer: 'return', return_supplier: 'out', waste: 'damage', stocktake: 'adjustment' })[selectedType] || selectedType,
+        movement_type: selectedType,
         start_date: document.getElementById('filter-from').value,
         end_date: document.getElementById('filter-to').value,
         warehouse_id: Number(document.getElementById('filter-warehouse').value || 0),
-        status: document.getElementById('filter-status').value
+        status: document.getElementById('filter-status').value,
+        sort_by: document.getElementById('filter-sort').value,
+        sort_dir: 'desc'
     };
 }
 
@@ -1832,7 +1802,7 @@ function selectRow(row) {
 function getMovementTypeLabel(type, subtype = '') {
     const labels = {
         in: '<span class="badge badge-success status-indicator">دخول مخزني</span>',
-        out: `<span class="badge badge-danger status-indicator">${subtype === 'return_supplier' ? 'إرجاع لمورد' : 'خروج مخزني'}</span>`,
+        out: '<span class="badge badge-danger status-indicator">خروج مخزني</span>',
         return: '<span class="badge badge-pink status-indicator">إرجاع من عميل</span>',
         damage: '<span class="badge badge-cyan status-indicator">هالك / تلف</span>',
         transfer: '<span class="badge badge-info status-indicator">تحويل بين مستودعات</span>',
@@ -1929,12 +1899,11 @@ function toggleMovementFields() {
     ['source-warehouse-group', 'target-warehouse-group', 'supplier-group', 'customer-group', 'adjustment-direction-group']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     if (type === 'in') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
-    else if (type === 'return_customer') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
+    else if (type === 'return') { document.getElementById('target-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
     else if (type === 'out') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('customer-group').style.display = 'block'; }
-    else if (type === 'return_supplier') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('supplier-group').style.display = 'block'; }
-    else if (type === 'waste') { document.getElementById('source-warehouse-group').style.display = 'block'; }
+    else if (type === 'damage') { document.getElementById('source-warehouse-group').style.display = 'block'; }
     else if (type === 'transfer') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('target-warehouse-group').style.display = 'block'; }
-    else if (type === 'adjustment' || type === 'stocktake') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('adjustment-direction-group').style.display = 'block'; }
+    else if (type === 'adjustment') { document.getElementById('source-warehouse-group').style.display = 'block'; document.getElementById('adjustment-direction-group').style.display = 'block'; }
 }
 
 async function loadProductInfo() {
@@ -1966,11 +1935,10 @@ async function saveMovement() {
     const notes = document.getElementById('movement-notes').value.trim();
     if (!type || !productId || !Number.isFinite(quantity) || quantity <= 0 || !date) { showToast('يرجى ملء الحقول المطلوبة بقيم صحيحة', 'error'); return; }
     if (type === 'transfer' && (!sourceWarehouse || !targetWarehouse || sourceWarehouse === targetWarehouse)) { showToast('اختر مستودعين مختلفين للتحويل', 'error'); return; }
-    if (['in', 'return_customer'].includes(type) && !targetWarehouse) { showToast('اختر المستودع الهدف', 'error'); return; }
-    if (['out', 'return_supplier', 'waste', 'adjustment', 'stocktake'].includes(type) && !sourceWarehouse) { showToast('اختر المستودع المصدر', 'error'); return; }
-    const backendType = type === 'return_customer' ? 'return' : type === 'return_supplier' ? 'out' : type === 'waste' ? 'damage' : type === 'stocktake' ? 'adjustment' : type;
-    const signedQuantity = ['adjustment', 'stocktake'].includes(type) && document.getElementById('adjustment-direction').value === 'decrease' ? -quantity : quantity;
-    const data = { movement_type: backendType, movement_subtype: type, product_id: productId, quantity, signed_quantity: signedQuantity, movement_date: date, unit_cost: unitPrice, warehouse_id: ['in', 'return_customer'].includes(type) ? targetWarehouse : sourceWarehouse, source_warehouse_id: sourceWarehouse || null, target_warehouse_id: targetWarehouse || null, supplier_id: supplierId || null, customer_id: customerId || null, reference_code: reference, reference_type: type, notes };
+    if (['in', 'return'].includes(type) && !targetWarehouse) { showToast('اختر المستودع الهدف', 'error'); return; }
+    if (['out', 'damage', 'adjustment'].includes(type) && !sourceWarehouse) { showToast('اختر المستودع المصدر', 'error'); return; }
+    const signedQuantity = type === 'adjustment' && document.getElementById('adjustment-direction').value === 'decrease' ? -quantity : quantity;
+    const data = { movement_type: type, movement_subtype: type, product_id: productId, quantity, signed_quantity: signedQuantity, movement_date: date, unit_cost: unitPrice, warehouse_id: ['in', 'return'].includes(type) ? targetWarehouse : sourceWarehouse, source_warehouse_id: sourceWarehouse || null, target_warehouse_id: targetWarehouse || null, supplier_id: supplierId || null, customer_id: customerId || null, reference_code: reference, reference_type: type, notes };
     showLoading(true);
     try {
         const result = await apiCall('saveMovement', data);
@@ -1985,7 +1953,7 @@ async function viewMovement(id) {
     showLoading(true);
     try {
         const result = await apiCall('getMovement', { movement_id: Number(id) });
-        const m = (result.data || [])[0];
+        const page = result.data || {}; const m = (page.rows || [])[0];
         if (!m) throw { error: 'الحركة غير موجودة أو تمت أرشفتها' };
         document.getElementById('movement-details').innerHTML = `<div class="info-grid">
             <div class="info-item"><span>رقم الحركة:</span><span>${escapeHtml(String(m.movement_id || m.id || '---'))}</span></div>
