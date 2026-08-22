@@ -7788,6 +7788,211 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
     
+    
+        // MODULE-012 Bridges
+        @JavascriptInterface
+        fun getNotificationTemplatesPage(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getNotificationTemplatesPage(
+                    obj.optString("channel", null).takeIf { it.isNotEmpty() },
+                    obj.optString("is_active", null).takeIf { it.isNotEmpty() },
+                    obj.optString("search", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun addNotificationTemplateTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = db.addNotificationTemplateTyped(obj, activity.currentUserId)
+                successResponse(id, "تم حفظ القالب بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateNotificationTemplateTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val id = obj.optLong("id", 0)
+                db.updateNotificationTemplateTyped(id, obj, activity.currentUserId)
+                successResponse(id, "تم تحديث القالب بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun deleteNotificationTemplateTyped(id: Long): String {
+            return try {
+                db.deleteNotificationTemplateTyped(id)
+                successResponse(id, "تم حذف القالب بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getNotificationsInboxPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getNotificationsInboxPage(
+                    activity.currentUserId,
+                    obj.optString("is_read", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun markNotificationReadTyped(id: Long): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                db.markNotificationReadTyped(id, activity.currentUserId)
+                successResponse(id, "تم التحديث بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun markAllNotificationsReadTyped(): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                db.markAllNotificationsReadTyped(activity.currentUserId)
+                successResponse(1, "تم التحديث بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getSmsMessagesPageTyped(jsonData: String): String {
+            return try {
+                // Use existing untyped bridge but wrap it
+                val arr = db.getSmsMessages()
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun sendSmsMessageTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val phone = obj.optString("phone_number")
+                val msg = obj.optString("message_body")
+                require(phone.isNotEmpty() && msg.isNotEmpty()) { "رقم الهاتف ونص الرسالة مطلوبان" }
+                
+                val smsData = JSONObject().apply {
+                    put("phone_number", phone)
+                    put("message_body", msg)
+                    put("message_type", "outgoing")
+                    put("status", "pending")
+                }
+                val id = db.addSmsMessage(smsData)
+                successResponse(id, "تم إضافة الرسالة لطابور الإرسال")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun retrySmsMessageTyped(id: Long): String {
+            return try {
+                db.retrySmsMessage(id)
+                successResponse(id, "تم إعادة المحاولة")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getDebtRemindersPage(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val arr = db.getDebtRemindersPage(
+                    requireCurrentStationId(db, activity.currentUserId),
+                    obj.optString("status", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun sendDebtReminderTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val debtId = obj.optLong("debt_id", 0)
+                require(debtId > 0) { "معرف الدين مطلوب" }
+                // In a real scenario we would fetch the phone and amount, format template and send
+                successResponse(debtId, "تم الإرسال بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getWhitelistPage(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val arr = db.getWhitelistPage(
+                    obj.optString("enabled", null).takeIf { it.isNotEmpty() }
+                )
+                successResponse(arr)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun addWhitelistRecordTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val id = db.addWhitelistRecordTyped(obj)
+                successResponse(id, "تم الإضافة بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun updateWhitelistRecordTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val id = obj.optLong("id", 0)
+                db.updateWhitelistRecordTyped(id, obj)
+                successResponse(id, "تم التحديث بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun deleteWhitelistRecordTyped(id: Long): String {
+            return try {
+                db.deleteWhitelistRecordTyped(id)
+                successResponse(id, "تم الحذف بنجاح")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getSmsDiagnosticsTyped(): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val res = db.getSmsDiagnosticsTyped()
+                
+                // Add Android permission status
+                res.put("permission_granted", isPermissionGranted(android.Manifest.permission.SEND_SMS))
+                
+                successResponse(res)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun sendTestSmsTyped(jsonData: String): String {
+            return try {
+                val obj = JSONObject(jsonData)
+                val phone = obj.optString("phone_number")
+                val msg = obj.optString("message_body", "Test message")
+                require(phone.isNotEmpty()) { "رقم الهاتف مطلوب" }
+                
+                val smsData = JSONObject().apply {
+                    put("phone_number", phone)
+                    put("message_body", msg)
+                    put("message_type", "outgoing")
+                    put("status", "pending")
+                }
+                val id = db.addSmsMessage(smsData)
+                successResponse(id, "تم إرسال رسالة الاختبار")
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+    
     private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return

@@ -2,2474 +2,348 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>إدارة الرسائل</title>
-    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
-    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
-    <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>إدارة الرسائل SMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="theme.css">
     <style>
-/* ============================================
-   messages.css — تخصيص شاشة إدارة الرسائل
-   ============================================ */
-
-/* متغيرات مخصصة لصفحة الرسائل فقط */
-:root {
-    --header-height: 60px;
-    --stats-height: 72px;
-    --search-height: 52px;
-    --tab-height: 44px;
-}
-
-body {
-    padding-top: calc(var(--header-height) + 16px);
-    padding-bottom: 80px;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
-
-/* ============================================
-   القوائم المنسدلة (Popover Menus)
-   ============================================ */
-.sms-menu-popover {
-    display: none;
-    position: fixed;
-    top: calc(var(--header-height) + 8px);
-    left: 16px; /* RTL - left instead of right */
-    width: min(300px, calc(100vw - 32px));
-    padding: var(--space-3);
-    z-index: 1600;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background: var(--bg-surface);
-    box-shadow: var(--shadow-lg);
-}
-.sms-menu-popover.active { display: block; animation: slideUp .2s ease; }
-.sms-menu-title { padding: 6px 10px 9px; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
-.sms-menu-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); text-align: right; font: inherit; font-size: 0.9rem; cursor: pointer; transition: background var(--transition-fast); }
-.sms-menu-item:hover, .sms-menu-item:focus-visible { background: var(--bg-surface-hover); outline: none; color: var(--primary); }
-.sms-menu-item-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--primary-light); color: var(--primary); font-size: 1.1rem; }
-.sms-menu-backdrop { display: none; position: fixed; inset: 0; z-index: 1500; background: transparent; }
-.sms-menu-backdrop.active { display: block; }
-
-.settings-grid { display: grid; gap: var(--space-3); }
-.settings-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface-hover); }
-.settings-row label { color: var(--text-primary); font-size: 0.9rem; font-weight: 500; }
-.settings-row small { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 0.75rem; }
-.settings-switch { width: 44px; height: 24px; accent-color: var(--primary); cursor: pointer; }
-@media (max-width: 480px) { .sms-menu-popover { left: 8px; } }
-
-/* ============================================
-   إزالة الستايلات القديمة (تم الاعتماد على Theme.css)
-   ============================================ */
-
-.tab-content {
-    display: none;
-    animation: fadeIn 0.3s ease;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* ============================================
-   MESSAGE CARDS (بقايا للـ list)
-   ============================================ */
-.message-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-/* ============================================
-   تم إزالة الستايلات القديمة لـ Message Cards
-   ============================================ */
-
-/* ============================================
-   تم إزالة الستايلات القديمة لـ Templates, Whitelist, Stats
-   ============================================ */
-
-/* ============================================
-   تم إزالة الستايلات القديمة (تم الاعتماد على Theme.css)
-   ============================================ */
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    font-size: 0.8rem;
-}
-
-.preference-item {
-    background: var(--bg);
-    padding: 8px;
-    border-radius: var(--radius-sm);
-}
-
-.preference-label {
-    color: var(--text-secondary);
-    font-size: 0.7rem;
-}
-
-.preference-value {
-    font-weight: 600;
-    color: var(--primary);
-}
-
-/* ============================================
-   PAGINATION
-   ============================================ */
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
-    margin-top: 16px;
-    padding: 10px;
-}
-
-.page-btn {
-    min-width: 36px;
-    height: 36px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    color: var(--text);
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: inherit;
-    -webkit-appearance: none;
-}
-
-.page-btn:hover { background: var(--bg); }
-.page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* ============================================
-   EMPTY STATE
-   ============================================ */
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-secondary);
-}
-
-.empty-icon {
-    font-size: 4rem;
-    margin-bottom: 16px;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    font-size: 1rem;
-    margin-bottom: 20px;
-}
-
-/* ============================================
-   MODALS
-   ============================================ */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 2000;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    backdrop-filter: blur(4px);
-}
-
-.modal.active {
-    display: flex;
-    animation: fadeIn 0.2s ease;
-}
-
-.modal-content {
-    background: var(--surface);
-    border-radius: var(--radius);
-    width: 100%;
-    max-width: 480px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-lg);
-    animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-}
-
-.modal-header h3 {
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.modal-close {
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: var(--bg);
-    color: var(--text-secondary);
-    border-radius: 50%;
-    font-size: 1rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-}
-
-.modal-close:hover {
-    background: var(--border);
-    color: var(--text);
-}
-
-.modal-body {
-    padding: 20px;
-}
-
-.modal-footer {
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-    padding: 12px 20px 20px;
-}
-
-/* ============================================
-   FORMS
-   ============================================ */
-.form-group {
-    margin-bottom: 16px;
-}
-
-.form-group label {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 500;
-    margin-bottom: 6px;
-    color: var(--text);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 0.9rem;
-    font-family: inherit;
-    transition: var(--transition);
-    -webkit-appearance: none;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(26,35,126,0.1);
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 80px;
-}
-
-.char-count {
-    text-align: left;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-top: 4px;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--primary);
-}
-
-/* ============================================
-   BUTTONS
-   ============================================ */
-.btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition);
-    font-family: inherit;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    -webkit-appearance: none;
-}
-
-.btn:active { transform: scale(0.97); }
-
-.btn-primary {
-    background: var(--primary);
-    color: white;
-    box-shadow: 0 2px 8px rgba(26,35,126,0.25);
-}
-
-.btn-primary:hover { background: var(--primary-light); }
-
-.btn-secondary {
-    background: var(--bg);
-    color: var(--text);
-    border: 1px solid var(--border);
-}
-
-.btn-secondary:hover { background: var(--border); }
-
-.btn-warning {
-    background: var(--warning);
-    color: white;
-}
-
-.btn-danger {
-    background: var(--danger);
-    color: white;
-}
-
-.btn-success {
-    background: var(--success);
-    color: white;
-}
-
-/* ============================================
-   FAB
-   ============================================ */
-.fab {
-    position: fixed;
-    bottom: 24px;
-    left: 24px;
-    width: 56px;
-    height: 56px;
-    border: none;
-    border-radius: 50%;
-    background: var(--primary);
-    color: white;
-    font-size: 1.5rem;
-    box-shadow: 0 4px 16px rgba(26,35,126,0.35);
-    cursor: pointer;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: var(--transition);
-    -webkit-appearance: none;
-}
-
-.fab:hover {
-    transform: scale(1.08) rotate(90deg);
-    box-shadow: 0 6px 24px rgba(26,35,126,0.4);
-}
-
-.fab:active { transform: scale(0.95); }
-
-/* ============================================
-   TOAST
-   ============================================ */
-.toast {
-    position: fixed;
-    bottom: 100px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--text);
-    color: white;
-    padding: 12px 24px;
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    z-index: 3000;
-    opacity: 0;
-    transition: all 0.3s ease;
-    box-shadow: var(--shadow-lg);
-    white-space: nowrap;
-    max-width: 90vw;
-    text-align: center;
-}
-
-.toast.show {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-}
-
-.toast.success { background: var(--success); }
-.toast.error { background: var(--danger); }
-.toast.warning { background: var(--warning); }
-
-/* ============================================
-   تم إزالة الستايلات القديمة لـ Loading, Bulk Actions, Responsive
-   ============================================ */
-
-/* ============================================
-   ANIMATIONS
-   ============================================ */
-@keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-}
-
-.skeleton {
-    background: linear-gradient(90deg, var(--bg) 25%, var(--border) 50%, var(--bg) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: var(--radius-sm);
-}
-
-/* Selection */
-::selection {
-    background: rgba(26,35,126,0.2);
-    color: var(--text);
-}
-
-/* Focus visible */
-:focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
-}
-
-/* Touch action */
-.message-card, .conversation-card, .template-card,
-.whitelist-item, .stat-card, .page-btn {
-    touch-action: manipulation;
-}
-
-/* Prevent text selection on UI elements */
-.app-header, .tab-bar, .stats-bar, .btn, .btn-icon,
-.fab, .modal-header, .pagination {
-    user-select: none;
-    -webkit-user-select: none;
-}
-
-/* ============================================
-   Trace Item
-   ============================================ */
-.trace-item { display: grid; grid-template-columns: 16px 1fr auto; gap: 12px; align-items: start; padding: 12px; border-radius: var(--radius-sm); background: var(--bg-surface-hover); margin-bottom: 8px; }
-.trace-line { position: relative; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 4px var(--primary-light); }
-.trace-item:not(:last-child) .trace-line::after { content: ''; position: absolute; top: 16px; right: 5px; width: 2px; height: calc(100% + 24px); background: var(--border-color); }
-.trace-stage { font-size: 0.9rem; font-weight: 600; color: var(--text-primary); }
-.trace-payload { margin-top: 4px; color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; }
-.trace-time { color: var(--text-muted); font-size: 0.75rem; white-space: nowrap; direction: ltr; }
-
-/* ============================================
-   Weekly Dashboard Fixes
-   ============================================ */
-.weekly-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; min-height: 160px; padding-top: 12px; border-bottom: 1px solid var(--border-color); }
-.weekly-bar-col { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; height: 145px; }
-.weekly-bar-stack { display: flex; align-items: flex-end; gap: 3px; height: 112px; width: 100%; justify-content: center; }
-.weekly-bar { width: min(18px, 28%); min-height: 3px; border-radius: 6px 6px 2px 2px; background: var(--primary); transition: height .45s ease; }
-.weekly-bar.failed { background: var(--danger); }
-.weekly-bar-label { color: var(--text-secondary); font-size: 0.61rem; white-space: nowrap; direction: ltr; }
-.weekly-bar-value { color: var(--text-primary); font-size: 0.61rem; }
-</style>
-<base target="_blank">
+        .page-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }}
+        .page-title {{ font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin: 0; }}
+        .btn {{ padding: 0.5rem 1rem; border-radius: 8px; border: none; font-family: inherit; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }}
+        .btn-primary {{ background: var(--primary-color); color: white; }}
+        .btn-primary:hover {{ background: var(--primary-dark); }}
+        .btn-outline {{ background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); }}
+        .btn-outline:hover {{ background: var(--bg-secondary); }}
+        .btn-sm {{ padding: 0.25rem 0.5rem; font-size: 0.875rem; border-radius: 6px; }}
+        .btn-danger {{ background: var(--danger-color); color: white; }}
+        .btn-success {{ background: var(--success-color); color: white; }}
+        
+        .search-bar {{ display: flex; gap: 1rem; margin-bottom: 1.5rem; background: white; padding: 1rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); flex-wrap: wrap; }}
+        .search-input-group {{ flex: 1; min-width: 200px; position: relative; }}
+        .search-input-group i {{ position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); }}
+        .search-input {{ width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; }}
+        .filter-select {{ padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; background: white; min-width: 150px; }}
+        
+        .data-card {{ background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 1rem; }}
+        .data-card-header {{ display: flex; justify-content: space-between; align-items: flex-start; }}
+        .data-card-title {{ font-weight: 700; color: var(--text-primary); margin: 0 0 0.25rem 0; font-size: 1.1rem; }}
+        .data-card-subtitle {{ color: var(--text-secondary); font-size: 0.875rem; margin: 0; }}
+        .badge {{ padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem; font-weight: 500; }}
+        
+        .badge-active {{ background: #dcfce7; color: #166534; }}
+        .badge-inactive {{ background: #fee2e2; color: #991b1b; }}
+        .badge-pending {{ background: #fef9c3; color: #92400e; }}
+        .badge-sent {{ background: #dcfce7; color: #166534; }}
+        .badge-failed {{ background: #fee2e2; color: #991b1b; }}
+        
+        .data-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; background: var(--bg-secondary); padding: 1rem; border-radius: 8px; }}
+        .data-item {{ display: flex; flex-direction: column; gap: 0.25rem; }}
+        .data-label {{ font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }}
+        .data-value {{ font-weight: 600; color: var(--text-primary); font-size: 0.875rem; }}
+        
+        .card-actions {{ display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }}
+        
+        .modal-overlay {{ position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; padding: 1rem; }}
+        .modal-overlay.show {{ display: flex; }}
+        .modal {{ background: white; border-radius: 16px; width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }}
+        .modal-header {{ padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }}
+        .modal-title {{ margin: 0; font-size: 1.25rem; font-weight: 700; }}
+        .modal-close {{ background: none; border: none; font-size: 1.25rem; color: var(--text-muted); cursor: pointer; padding: 0.5rem; }}
+        .modal-body {{ padding: 1.5rem; overflow-y: auto; }}
+        .modal-footer {{ padding: 1.25rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 1rem; }}
+        
+        .form-group {{ margin-bottom: 1.25rem; }}
+        .form-label {{ display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary); font-size: 0.875rem; }}
+        .form-control {{ width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color); border-radius: 8px; font-family: inherit; transition: border-color 0.2s; }}
+        .form-control:focus {{ outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }}
+        
+        .empty-state {{ text-align: center; padding: 3rem 1rem; color: var(--text-muted); }}
+        .empty-state i {{ font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }}
+        .empty-state p {{ margin: 0; font-size: 1.1rem; }}
+        
+        .loading-spinner {{ text-align: center; padding: 2rem; color: var(--primary-color); display: none; }}
+        .loading-spinner.show {{ display: block; }}
+        
+        .toast {{ position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: white; padding: 0.75rem 1.5rem; border-radius: 8px; opacity: 0; transition: all 0.3s; z-index: 2000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        .toast.show {{ transform: translateX(-50%) translateY(0); opacity: 1; }}
+        .toast.error {{ background: var(--danger-color); }}
+        
+        @media (max-width: 640px) {{
+            .modal {{ max-height: 100vh; border-radius: 0; }}
+        }}
+    </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="page-header" style="background: var(--bg-surface); padding: var(--space-4); border-bottom: 1px solid var(--border-color); position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
-        <div class="page-title-group" style="display: flex; align-items: center; gap: var(--space-3);">
-            <button class="btn btn-secondary" id="backHomeBtn" title="العودة إلى الشاشة الرئيسية" aria-label="العودة إلى الشاشة الرئيسية">
-                <i class="fas fa-arrow-right"></i> رجوع
-            </button>
-            <div>
-                <h1 style="margin: 0; font-size: 1.25rem;">إدارة الرسائل ومركز العمليات</h1>
-                <p style="margin: 0; font-size: 0.8rem;">نظام المراقبة والتحكم في رسائل المحطة</p>
-            </div>
-        </div>
-        <div class="page-actions">
-            <button class="btn btn-icon" id="refreshBtn" title="تحديث" aria-label="تحديث"><i class="fas fa-sync-alt"></i></button>
-            <button class="btn btn-icon" id="settingsBtn" title="إعدادات" aria-label="إعدادات"><i class="fas fa-cog"></i></button>
-            <button class="btn btn-icon" id="menuBtn" title="القائمة" aria-label="القائمة"><i class="fas fa-bars"></i></button>
-        </div>
-    </header>
+    <div class="page-header">
+        <h1 class="page-title"><i class="fas fa-envelope me-2"></i> إدارة الرسائل SMS</h1>
+        <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-paper-plane"></i> إرسال رسالة جديدة</button>
+    </div>
 
-    <div class="sms-menu-backdrop" id="smsMenuBackdrop"></div>
-    <nav class="sms-menu-popover" id="smsMenuPopover" aria-label="قائمة الرسائل">
-        <div class="sms-menu-title">اختصارات مركز الرسائل</div>
-        <button class="sms-menu-item" data-menu-action="all"><span class="sms-menu-item-icon">📨</span><span>كل الرسائل</span></button>
-        <button class="sms-menu-item" data-menu-action="observability"><span class="sms-menu-item-icon">⌁</span><span>تتبع رحلة الرسالة</span></button>
-        <button class="sms-menu-item" data-menu-action="weekly"><span class="sms-menu-item-icon">▥</span><span>الأداء الأسبوعي</span></button>
-        <button class="sms-menu-item" data-menu-action="whitelist"><span class="sms-menu-item-icon">🛡️</span><span>القائمة البيضاء والأسماء</span></button>
-        <button class="sms-menu-item" data-menu-action="compose"><span class="sms-menu-item-icon">✏️</span><span>إنشاء رسالة جديدة</span></button>
-    </nav>
-
-    <!-- Stats Bar -->
-    <section class="page-container" style="padding-top: 20px; padding-bottom: 0;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4);">
-            <div class="card" data-stat="total" style="text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--primary);"><i class="fas fa-envelope"></i></div>
-                <div class="stat-value" id="statTotal" style="font-size: 1.5rem; font-weight: bold; margin: var(--space-2) 0;">0</div>
-                <div class="stat-label" style="color: var(--text-secondary); font-size: 0.85rem;">إجمالي الرسائل</div>
-            </div>
-            <div class="card" data-stat="incoming" style="text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--info);"><i class="fas fa-inbox"></i></div>
-                <div class="stat-value" id="statIncoming" style="font-size: 1.5rem; font-weight: bold; margin: var(--space-2) 0;">0</div>
-                <div class="stat-label" style="color: var(--text-secondary); font-size: 0.85rem;">رسائل واردة</div>
-            </div>
-            <div class="card" data-stat="outgoing" style="text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--success);"><i class="fas fa-paper-plane"></i></div>
-                <div class="stat-value" id="statOutgoing" style="font-size: 1.5rem; font-weight: bold; margin: var(--space-2) 0;">0</div>
-                <div class="stat-label" style="color: var(--text-secondary); font-size: 0.85rem;">رسائل صادرة</div>
-            </div>
-            <div class="card" data-stat="pending" style="text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--warning);"><i class="fas fa-hourglass-half"></i></div>
-                <div class="stat-value" id="statPending" style="font-size: 1.5rem; font-weight: bold; margin: var(--space-2) 0;">0</div>
-                <div class="stat-label" style="color: var(--text-secondary); font-size: 0.85rem;">قيد المعالجة</div>
-            </div>
-            <div class="card" data-stat="failed" style="text-align: center;">
-                <div style="font-size: 1.5rem; color: var(--danger);"><i class="fas fa-exclamation-circle"></i></div>
-                <div class="stat-value" id="statFailed" style="font-size: 1.5rem; font-weight: bold; margin: var(--space-2) 0;">0</div>
-                <div class="stat-label" style="color: var(--text-secondary); font-size: 0.85rem;">رسائل فاشلة</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Search & Filters -->
-    <section class="page-container" style="padding-top: 0; padding-bottom: 0;">
-        <div class="filter-bar">
-            <div class="search-input-wrapper">
-                <i class="fas fa-search"></i>
-                <input type="text" class="form-control" id="searchInput" placeholder="بحث برقم الهاتف، الاسم، أو نص الرسالة..." autocomplete="off">
-                <button class="btn-icon" id="clearSearch" style="display:none; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);"><i class="fas fa-times"></i></button>
-            </div>
-            <button class="btn btn-secondary" id="filterToggle"><i class="fas fa-filter"></i> فلاتر متقدمة</button>
+    <div class="search-bar">
+        <div class="search-input-group">
+            <i class="fas fa-search"></i>
+            <input type="text" class="search-input" id="searchInput" placeholder="بحث..." oninput="debounceSearch()">
         </div>
         
-        <div class="card" id="filtersPanel" style="display:none; margin-bottom: var(--space-4);">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4);">
-                <div class="form-group">
-                    <label class="form-label">الحالة:</label>
-                    <select class="form-control" id="filterStatus">
-                        <option value="">الكل</option>
-                        <option value="received">📥 مستلمة</option>
-                        <option value="pending">⏳ قيد المعالجة</option>
-                        <option value="processed">✅ معالجة</option>
-                        <option value="sent">📤 مرسلة</option>
-                        <option value="failed">❌ فاشلة</option>
-                        <option value="read">📖 مقروءة</option>
-                        <option value="unread">📖 غير مقروءة</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">النوع:</label>
-                    <select class="form-control" id="filterType">
-                        <option value="">الكل</option>
-                        <option value="incoming">📥 واردة</option>
-                        <option value="outgoing">📤 صادرة</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">من تاريخ:</label>
-                    <input type="date" class="form-control" id="filterDateFrom">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">إلى تاريخ:</label>
-                    <input type="date" class="form-control" id="filterDateTo">
-                </div>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-3);">
-                <button class="btn btn-secondary" id="resetFilters">إعادة تعيين</button>
-                <button class="btn btn-primary" id="applyFilters">تطبيق الفلاتر</button>
-            </div>
-        </div>
-    </section>
-
-    <!-- Tab Bar -->
-    <section class="page-container" style="padding-top: 0; padding-bottom: 0;">
-        <nav class="tabs-nav" id="tabBar">
-            <button class="tab-btn active" data-tab="all"><i class="fas fa-envelope"></i> الكل</button>
-            <button class="tab-btn" data-tab="conversations"><i class="fas fa-comments"></i> محادثات</button>
-            <button class="tab-btn" data-tab="observability"><i class="fas fa-project-diagram"></i> التتبع</button>
-            <button class="tab-btn" data-tab="weekly"><i class="fas fa-chart-line"></i> أسبوعي</button>
-            <button class="tab-btn" data-tab="incoming"><i class="fas fa-inbox"></i> واردة</button>
-            <button class="tab-btn" data-tab="outgoing"><i class="fas fa-paper-plane"></i> صادرة</button>
-            <button class="tab-btn" data-tab="pending"><i class="fas fa-hourglass-half"></i> قيد</button>
-            <button class="tab-btn" data-tab="processed"><i class="fas fa-check-circle"></i> معالجة</button>
-            <button class="tab-btn" data-tab="failed"><i class="fas fa-times-circle"></i> فاشلة</button>
-            <button class="tab-btn" data-tab="templates"><i class="fas fa-file-alt"></i> قوالب</button>
-            <button class="tab-btn" data-tab="recurring"><i class="fas fa-sync"></i> متكررة</button>
-            <button class="tab-btn" data-tab="preferences"><i class="fas fa-sliders-h"></i> تفضيلات</button>
-            <button class="tab-btn" data-tab="whitelist"><i class="fas fa-shield-alt"></i> بيضاء</button>
-            <button class="tab-btn" data-tab="stats"><i class="fas fa-chart-bar"></i> إحصائيات</button>
-        </nav>
-    </section>
-
-    <!-- Content Area -->
-    <main class="page-container" id="contentArea" style="padding-top: 0;">
-        <section class="card" aria-labelledby="opsTitle" style="background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: white; margin-bottom: var(--space-6); position: relative; overflow: hidden;">
-            <!-- Decorative background elements -->
-            <div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
-            <div style="position: absolute; bottom: -50px; left: 10%; width: 200px; height: 200px; background: rgba(255,255,255,0.05); border-radius: 50%;"></div>
-            
-            <div style="position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-4);">
-                <div style="flex: 1; min-width: 280px;">
-                    <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.8); margin-bottom: var(--space-1);">SMS OPERATIONS CENTER · LIVE</div>
-                    <h2 id="opsTitle" style="font-size: 1.5rem; margin-bottom: var(--space-2); color: white;">مركز عمليات المحادثة</h2>
-                    <p style="font-size: 0.875rem; color: rgba(255,255,255,0.9); margin-bottom: var(--space-4); max-width: 500px;">متابعة رحلة الرسالة من الاستلام والفهم إلى القرار والطابور والتسليم، مع حماية من التكرار.</p>
-                    
-                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 12px; border-radius: var(--radius-full); font-size: 0.8rem; margin-bottom: var(--space-4);">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.3);"></span>
-                        <span id="opsStatusText">المراقبة الحية مفعّلة</span>
-                    </div>
-                    
-                    <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
-                        <button class="btn" id="opsRefreshBtn" style="background: white; color: var(--primary);"><i class="fas fa-sync-alt"></i> تحديث الحالة</button>
-                        <button class="btn" id="opsOpenTraceBtn" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);"><i class="fas fa-project-diagram"></i> فتح التتبع</button>
-                    </div>
-                </div>
-                
-                <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                    <div style="background: rgba(0,0,0,0.2); border-radius: var(--radius-md); padding: var(--space-3); text-align: center; border: 1px solid rgba(255,255,255,0.1);">
-                        <div id="opsScore" style="font-size: 2rem; font-weight: bold; line-height: 1;">—</div>
-                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); margin-top: 4px;">صحة النظام</div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);">
-                        <div style="background: rgba(0,0,0,0.15); border-radius: var(--radius-sm); padding: var(--space-2); text-align: center;">
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">في الطابور</div>
-                            <div id="opsQueued" style="font-size: 1.1rem; font-weight: bold;">—</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.15); border-radius: var(--radius-sm); padding: var(--space-2); text-align: center;">
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">تحتاج معالجة</div>
-                            <div id="opsFailed" style="font-size: 1.1rem; font-weight: bold;">—</div>
-                        </div>
-                        <div style="background: rgba(0,0,0,0.15); border-radius: var(--radius-sm); padding: var(--space-2); text-align: center;">
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">SLA مفتوح</div>
-                            <div id="opsSla" style="font-size: 1.1rem; font-weight: bold;">—</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Messages List -->
-        <div class="tab-content active" id="tab-all">
-            <div class="message-list" id="messageList"></div>
-            <div class="pagination" id="pagination"></div>
-            <div class="empty-state" id="emptyState" style="display:none;">
-                <div class="empty-icon">📭</div>
-                <p>لا توجد رسائل</p>
-                <button class="btn btn-primary" id="composeFirst">إنشاء رسالة جديدة</button>
-            </div>
-        </div>
-
-        <!-- Conversation Observability -->
-        <div class="tab-content" id="tab-observability">
-            <div class="page-header" style="margin-bottom: var(--space-4);">
-                <div class="page-title-group">
-                    <h2 style="font-size: 1.25rem;">رحلة الرسالة والقرار</h2>
-                    <p>سجل زمني محفوظ من SQLite لكل محادثة</p>
-                </div>
-                <span class="badge badge-info">تدقيق حي</span>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4);">
-                <section class="card">
-                    <h3 style="font-size: 1rem; margin-bottom: var(--space-3); border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-2);">مؤشرات التشغيل</h3>
-                    <div style="height: 8px; background: var(--border-color); border-radius: var(--radius-full); overflow: hidden; margin-bottom: var(--space-4);">
-                        <div id="healthProgress" style="height: 100%; width: 0; background: linear-gradient(90deg, var(--info), var(--primary), var(--success)); transition: width 0.5s ease;"></div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); text-align: center;">
-                        <div style="background: var(--bg-surface-hover); padding: var(--space-2); border-radius: var(--radius-sm);">
-                            <div id="healthScore" style="font-size: 1.25rem; font-weight: bold; color: var(--primary);">—</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary);">الصحة</div>
-                        </div>
-                        <div style="background: var(--bg-surface-hover); padding: var(--space-2); border-radius: var(--radius-sm);">
-                            <div id="healthQueued" style="font-size: 1.25rem; font-weight: bold; color: var(--warning);">—</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary);">الطابور</div>
-                        </div>
-                        <div style="background: var(--bg-surface-hover); padding: var(--space-2); border-radius: var(--radius-sm);">
-                            <div id="healthFailed" style="font-size: 1.25rem; font-weight: bold; color: var(--danger);">—</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary);">الفشل</div>
-                        </div>
-                    </div>
-                    <p id="healthNote" style="font-size: 0.8rem; color: var(--text-muted); margin-top: var(--space-3); text-align: center;">جارٍ قراءة حالة الخدمة...</p>
-                </section>
-                
-                <section class="card">
-                    <h3 style="font-size: 1rem; margin-bottom: var(--space-3); border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-2);">استعراض محادثة</h3>
-                    <div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4);">
-                        <input id="tracePhoneInput" type="tel" class="form-control" placeholder="رقم الهاتف لعرض الرحلة" inputmode="tel" autocomplete="off">
-                        <button class="btn btn-primary" id="traceLookupBtn"><i class="fas fa-search"></i> بحث</button>
-                    </div>
-                    <div id="traceList" style="max-height: 300px; overflow-y: auto; padding-right: var(--space-2);">
-                        <div class="empty-state" style="text-align: center; padding: var(--space-6) 0;">
-                            <div style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: var(--space-2);"><i class="fas fa-project-diagram"></i></div>
-                            <p style="color: var(--text-secondary); font-size: 0.9rem;">أدخل رقم المرسل لعرض مراحل المحادثة</p>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-        <!-- Weekly Analytics -->
-        <div class="tab-content" id="tab-weekly">
-            <div class="page-header" style="margin-bottom: var(--space-4);">
-                <div class="page-title-group">
-                    <h2 style="font-size: 1.25rem;">أداء نظام الرسائل</h2>
-                    <p id="weeklyPeriodLabel">آخر 7 أيام من السجل الفعلي</p>
-                </div>
-                <span class="badge badge-success">SQLite Analytics</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: var(--space-4);">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4);">
-                    <div class="card" style="text-align: center;">
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">رسائل مستلمة</div>
-                        <div id="weeklyReceived" style="font-size: 1.75rem; font-weight: bold; color: var(--primary); margin: var(--space-2) 0;">—</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted);">خلال الفترة</div>
-                    </div>
-                    <div class="card" style="text-align: center;">
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">تمت معالجتها</div>
-                        <div id="weeklyProcessed" style="font-size: 1.75rem; font-weight: bold; color: var(--success); margin: var(--space-2) 0;">—</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted);">قرارات مكتملة</div>
-                    </div>
-                    <div class="card" style="text-align: center;">
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">معدل التسليم</div>
-                        <div id="weeklyDeliveryRate" style="font-size: 1.75rem; font-weight: bold; color: var(--info); margin: var(--space-2) 0;">—</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted);">من الرسائل المرسلة</div>
-                    </div>
-                    <div class="card" style="text-align: center;">
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">الانتظار P95</div>
-                        <div id="weeklyP95" style="font-size: 1.75rem; font-weight: bold; color: var(--warning); margin: var(--space-2) 0;">—</div>
-                        <div style="font-size: 0.7rem; color: var(--text-muted);">زمن إدخال الطابور</div>
-                    </div>
-                </div>
-                
-                <section class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-4);">
-                        <div>
-                            <h3 style="font-size: 1rem; margin-bottom: var(--space-1);">الحجم اليومي</h3>
-                            <p style="font-size: 0.8rem; color: var(--text-secondary);">مقارنة الرسائل المستلمة وحالات الفشل لكل يوم</p>
-                        </div>
-                        <div style="display: flex; gap: var(--space-3); font-size: 0.8rem; color: var(--text-secondary);">
-                            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--primary);"></span> مستلمة</span>
-                            <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--danger);"></span> فشل</span>
-                        </div>
-                    </div>
-                    <div id="weeklyBars" style="min-height: 200px; display: flex; align-items: flex-end; gap: var(--space-2); border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-2);">
-                        <div class="empty-state" style="width: 100%; text-align: center; padding: var(--space-6) 0;">
-                            <p style="color: var(--text-muted);">جارٍ تحميل التحليل...</p>
-                        </div>
-                    </div>
-                </section>
-                
-                <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--space-4);">
-                    <div class="card" style="display: flex; align-items: center; gap: var(--space-3);">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;"><i class="fas fa-paper-plane"></i></div>
-                        <div>
-                            <div id="weeklySent" style="font-size: 1.2rem; font-weight: bold;">—</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">رسائل دخلت النقل</div>
-                        </div>
-                    </div>
-                    <div class="card" style="display: flex; align-items: center; gap: var(--space-3);">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--danger-bg); color: var(--danger); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;"><i class="fas fa-exclamation-triangle"></i></div>
-                        <div>
-                            <div id="weeklyFailed" style="font-size: 1.2rem; font-weight: bold;">—</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">فشل أو إعادة محاولة</div>
-                        </div>
-                    </div>
-                    <div class="card" style="display: flex; align-items: center; gap: var(--space-3);">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--warning-bg); color: var(--warning); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;"><i class="fas fa-hourglass-half"></i></div>
-                        <div>
-                            <div id="weeklyPending" style="font-size: 1.2rem; font-weight: bold;">—</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">معلّقة الآن</div>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-        <!-- Conversations -->
-        <div class="tab-content" id="tab-conversations">
-            <div class="conversation-list" id="conversationList"></div>
-        </div>
-
-        <!-- Incoming -->
-        <div class="tab-content" id="tab-incoming">
-            <div class="message-list" id="incomingList"></div>
-        </div>
-
-        <!-- Outgoing -->
-        <div class="tab-content" id="tab-outgoing">
-            <div class="message-list" id="outgoingList"></div>
-        </div>
-
-        <!-- Pending -->
-        <div class="tab-content" id="tab-pending">
-            <div class="message-list" id="pendingList"></div>
-        </div>
-
-        <!-- Processed -->
-        <div class="tab-content" id="tab-processed">
-            <div class="message-list" id="processedList"></div>
-        </div>
-
-        <!-- Failed -->
-        <div class="tab-content" id="tab-failed">
-            <div class="message-list" id="failedList"></div>
-            <div class="bulk-actions" id="failedBulkActions">
-                <button class="btn btn-warning" id="retryAllFailed">🔄 إعادة إرسال الكل</button>
-                <button class="btn btn-danger" id="deleteAllFailed">🗑️ حذف الكل</button>
-            </div>
-        </div>
-
-        <!-- Templates -->
-        <div class="tab-content" id="tab-templates">
-            <div class="templates-toolbar">
-                <button class="btn btn-primary" id="addTemplate">➕ إضافة قالب</button>
-            </div>
-            <div class="templates-list" id="templatesList"></div>
-        </div>
-
-        <!-- Recurring Orders -->
-        <div class="tab-content" id="tab-recurring">
-            <div class="recurring-list" id="recurringList"></div>
-        </div>
-
-        <!-- Customer Preferences -->
-        <div class="tab-content" id="tab-preferences">
-            <div class="preferences-list" id="preferencesList"></div>
-        </div>
-
-        <!-- Whitelist -->
-        <div class="tab-content" id="tab-whitelist">
-            <div class="whitelist-toolbar">
-                <button class="btn btn-primary" id="addWhitelist">➕ إضافة رقم</button>
-            </div>
-            <div class="whitelist-list" id="whitelistList"></div>
-        </div>
-
-        <!-- Statistics -->
-        <div class="tab-content" id="tab-stats">
-            <div class="stats-dashboard" id="statsDashboard"></div>
-        </div>
-
-        <!-- OTP -->
-        <div class="tab-content" id="tab-otp">
-            <div class="otp-list" id="otpList"></div>
-        </div>
-
-        <!-- Reminders -->
-        <div class="tab-content" id="tab-reminders">
-            <div class="reminders-list" id="remindersList"></div>
-        </div>
-
-        <!-- Logs -->
-        <div class="tab-content" id="tab-logs">
-            <div class="logs-list" id="logsList"></div>
-        </div>
-
-        <!-- Context -->
-        <div class="tab-content" id="tab-context">
-            <div class="context-list" id="contextList"></div>
-        </div>
-
-        <!-- Rate Limits -->
-        <div class="tab-content" id="tab-ratelimits">
-            <div class="ratelimits-list" id="ratelimitsList"></div>
-        </div>
-    </main>
-
-    <!-- FAB -->
-    <button class="fab" id="fabCompose" title="رسالة جديدة">✏️</button>
-
-    <!-- Message Detail Modal -->
-    <div class="modal-overlay" id="messageModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">تفاصيل الرسالة</h2>
-                <button class="btn-icon" id="modalClose"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body" id="modalBody"></div>
-            <div class="modal-footer" id="modalFooter"></div>
-        </div>
+        <select class="filter-select" id="statusFilter" onchange="loadData()">
+            <option value="">جميع الحالات</option>
+            <option value="pending">قيد الانتظار</option>
+            <option value="sent">مرسل</option>
+            <option value="failed">فشل</option>
+        </select>
+    
     </div>
 
-    <!-- Compose Modal -->
-    <div class="modal-overlay" id="composeModal">
-        <div class="modal-content">
+    <div id="loadingSpinner" class="loading-spinner">
+        <i class="fas fa-circle-notch fa-spin fa-2x"></i>
+        <p class="mt-2">جاري التحميل...</p>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <i class="fas fa-envelope"></i>
+        <p>لا توجد بيانات متاحة</p>
+    </div>
+
+    <div id="dataContainer"></div>
+
+    <div class="modal-overlay" id="formModal" onclick="if(event.target===this) closeModal()">
+        <div class="modal">
             <div class="modal-header">
-                <h2><i class="fas fa-pencil-alt"></i> رسالة جديدة</h2>
-                <button class="btn-icon" id="composeClose"><i class="fas fa-times"></i></button>
+                <h3 class="modal-title" id="modalTitle">إضافة جديد</h3>
+                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">إلى (رقم الهاتف):</label>
-                    <input type="tel" class="form-control" id="composePhone" placeholder="+967...">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">الرسالة:</label>
-                    <textarea class="form-control" id="composeBody" rows="4" placeholder="اكتب رسالتك هنا..."></textarea>
-                    <div class="char-count" style="text-align: left; font-size: 0.75rem; color: var(--text-muted); margin-top: var(--space-1);"><span id="charCount">0</span> / 160</div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">قالب:</label>
-                    <select class="form-control" id="composeTemplate">
-                        <option value="">بدون قالب</option>
-                    </select>
-                </div>
+                <form id="dataForm" onsubmit="event.preventDefault(); saveRecord();">
+                    <input type="hidden" id="recordId">
+                    
+        <div class="form-group">
+            <label class="form-label">رقم الهاتف المستلم * (صيغة دولية أو محلية)</label>
+            <input type="tel" class="form-control" id="phone_number" required placeholder="مثال: 967700000000">
+        </div>
+        <div class="form-group">
+            <label class="form-label">استخدام قالب (اختياري)</label>
+            <select class="form-control" id="template_id" onchange="applyTemplate()"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">نص الرسالة *</label>
+            <textarea class="form-control" id="message_body" rows="4" required oninput="updateCharCount()"></textarea>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; justify-content: space-between;">
+                <span id="charCount">0 حرف</span>
+                <span id="smsCount">1 رسالة</span>
+            </div>
+        </div>
+    
+                </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="composeCancel">إلغاء</button>
-                <button class="btn btn-primary" id="composeSend"><i class="fas fa-paper-plane"></i> إرسال</button>
+                <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+                <button class="btn btn-primary" onclick="document.getElementById('dataForm').dispatchEvent(new Event('submit'))">حفظ</button>
             </div>
         </div>
     </div>
+    
+    
 
-    <!-- Template Modal -->
-    <div class="modal-overlay" id="templateModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title" id="templateModalTitle"><i class="fas fa-file-alt"></i> قالب جديد</h3>
-                <button class="btn btn-icon" id="templateModalClose"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="templateId">
-                <div class="form-group">
-                    <label class="form-label">اسم القالب:</label>
-                    <input type="text" class="form-control" id="templateName" placeholder="مثال: تأكيد الطلب">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">نص القالب:</label>
-                    <textarea class="form-control" id="templateBody" rows="4" placeholder="{{customer_name}}، تم تأكيد طلبك..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">النوع:</label>
-                    <select class="form-control" id="templateType">
-                        <option value="general">عام</option>
-                        <option value="order">طلب</option>
-                        <option value="reminder">تذكير</option>
-                        <option value="marketing">تسويق</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                        <input type="checkbox" id="templateActive" checked style="width: 20px; height: 20px; accent-color: var(--primary);">
-                        <span style="font-weight: 500; color: var(--text-primary);">نشط</span>
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="templateCancel">إلغاء</button>
-                <button class="btn btn-primary" id="templateSave"><i class="fas fa-save"></i> حفظ</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Whitelist Modal -->
-    <div class="modal-overlay" id="whitelistModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-shield-alt"></i> إضافة للقائمة البيضاء</h3>
-                <button class="btn btn-icon" id="whitelistModalClose"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">رقم الهاتف:</label>
-                    <input type="tel" class="form-control" id="whitelistPhone" placeholder="+967...">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">الاسم (اختياري):</label>
-                    <input type="text" class="form-control" id="whitelistName" placeholder="اسم صاحب الرقم">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="whitelistCancel">إلغاء</button>
-                <button class="btn btn-primary" id="whitelistSave"><i class="fas fa-save"></i> حفظ</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div class="modal-overlay" id="settingsModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-cog"></i> إعدادات مركز الرسائل</h3>
-                <button class="btn btn-icon" id="settingsModalClose"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="modal-body settings-grid">
-                <div class="settings-row">
-                    <div>
-                        <label for="settingsAutoRefresh">تحديث المؤشرات تلقائياً</label>
-                        <small>يعيد قراءة حالة الطابور والتحليل دون إعادة تحميل الصفحة.</small>
-                    </div>
-                    <input class="settings-switch" id="settingsAutoRefresh" type="checkbox" checked>
-                </div>
-                <div class="settings-row">
-                    <div>
-                        <label for="settingsDarkMode">الوضع الداكن</label>
-                        <small>يحفظ تفضيل العرض على الجهاز.</small>
-                    </div>
-                    <input class="settings-switch" id="settingsDarkMode" type="checkbox">
-                </div>
-                <div class="settings-row">
-                    <div>
-                        <label>حالة الربط</label>
-                        <small id="settingsBridgeStatus">جسر Android متاح عند تشغيل التطبيق الأصلي.</small>
-                    </div>
-                    <span style="width: 10px; height: 10px; border-radius: 50%; background: var(--success);"></span>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-primary" id="settingsDone">حفظ وإغلاق</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast -->
-    <div class="toast" id="toast"></div>
-
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="spinner"></div>
-        <p>جاري التحميل...</p>
-    </div>
+    <div id="toast" class="toast"></div>
 
     <script>
-/**
- * messages.js — Diesel Station SMS Manager
- * Android WebView Interface | Database-Driven | RTL
- * Supports: 17 tabs, 15 tables, 20+ bridge functions
- */
-
-(function() {
-    'use strict';
-
-    // ============================================
-    // CONFIGURATION
-    // ============================================
-    const CONFIG = {
-        PAGE_SIZE: 50,
-        DEBOUNCE_MS: 300,
-        TOAST_DURATION: 3000,
-        MAX_MESSAGES: 500,
-        DATE_FORMAT: 'YYYY-MM-DD HH:mm',
-        ANIMATION_DURATION: 250
-    };
-
-    // ============================================
-    // STATE
-    // ============================================
-    let autoRefreshTimer = null;
-    const state = {
-        currentTab: 'all',
-        messages: [],
-        conversations: [],
-        templates: [],
-        whitelist: [],
-        logs: [],
-        recurring: [],
-        preferences: [],
-        otp: [],
-        reminders: [],
-        context: [],
-        ratelimits: [],
-        stats: {},
-        operational: {},
-        trace: [],
-        tracePhone: '',
-        weekly: {},
-        filters: {
-            search: '',
-            status: '',
-            type: '',
-            dateFrom: '',
-            dateTo: ''
-        },
-        pagination: {
-            page: 1,
-            totalPages: 1,
-            totalItems: 0
-        },
-        selectedMessage: null,
-        isLoading: false,
-        darkMode: false
-    };
-
-    // ============================================
-    // ANDROID INTERFACE BRIDGE
-    // ============================================
-    const Bridge = {
-        call(method, ...args) {
-            try {
-                if (window.AndroidInterface && typeof window.AndroidInterface[method] === 'function') {
-                    return window.AndroidInterface[method](...args);
-                }
-                console.warn(`AndroidInterface.${method} not available`);
-                return null;
-            } catch (e) {
-                console.error(`Bridge error: ${method}`, e);
-                return null;
-            }
-        },
-
-        // SMS Messages
-        getSmsMessages() { return this.call('getSmsMessages'); },
-        getSmsMessagesPage(params) { return this.call('getSmsMessagesPage', JSON.stringify(params || {})); },
-        markSmsMessageRead(id) { return this.call('markSmsMessageRead', id); },
-        getSmsMessagesByPhone(phone) { return this.call('getSmsMessagesByPhone', phone); },
-        getSmsMessagesByStatus(status) { return this.call('getSmsMessagesByStatus', status); },
-        addSmsMessage(data) { return this.call('addSmsMessage', JSON.stringify(data)); },
-        retrySmsMessage(id) { return this.call('retrySmsMessage', id); },
-        deleteSmsMessage(id) { return this.call('deleteSmsMessage', id); },
-        updateSmsStatus(id, status) { return this.call('updateSmsStatus', id, status); },
-        getSmsStats() { return this.call('getSmsStats'); },
-        getSmsOperationalHealth() { return this.call('getSmsOperationalHealth'); },
-        getSmsConversationTrace(phone) { return this.call('getSmsConversationTrace', phone); },
-        getSmsWeeklyAnalytics(days = 7) { return this.call('getSmsWeeklyAnalytics', days); },
-        goToHome() { return this.call('goToHome'); },
-
-        // Templates
-        getSmsTemplates() { return this.call('getSmsTemplates'); },
-        addSmsTemplate(data) { return this.call('addSmsTemplate', JSON.stringify(data)); },
-        updateSmsTemplate(id, data) { return this.call('updateSmsTemplate', id, JSON.stringify(data)); },
-        deleteSmsTemplate(id) { return this.call('deleteSmsTemplate', id); },
-
-        // Whitelist
-        getWhitelist() { return this.call('getWhitelist'); },
-        addWhitelist(data) { return this.call('addWhitelist', JSON.stringify(data)); },
-        removeWhitelist(data) { return this.call('removeWhitelist', JSON.stringify(data)); },
-
-        // Logs
-        getSmsLogs() { return this.call('getSmsLogs'); },
-        logSms(phone, message, type, status) { return this.call('logSms', phone, message, type, status); },
-
-        // Customer Data
-        getCustomerBalanceByPhone(phone) { return this.call('getCustomerBalanceByPhone', phone); },
-        getOrderHistoryByPhone(phone) { return this.call('getOrderHistoryByPhone', phone); },
-        getDriverPhones() { return this.call('getDriverPhones'); },
-        getTrustedSmscList() { return this.call('getTrustedSmscList'); },
-
-        // User
-        getCurrentUser() { return this.call('getCurrentUser'); },
-        showToast(msg) { this.call('showToast', msg); }
-    };
-
-    // ============================================
-    // UTILITY FUNCTIONS
-    // ============================================
-    const Utils = {
-        parseJSON(str) {
-            try { return typeof str === 'string' ? JSON.parse(str) : str; } catch { return null; }
-        },
-
-        dataArray(value) {
-            const parsed = this.parseJSON(value);
-            if (Array.isArray(parsed)) return parsed;
-            if (parsed && parsed.success === true && Array.isArray(parsed.data)) return parsed.data;
-            return [];
-        },
-
-        dataObject(value) {
-            const parsed = this.parseJSON(value);
-            if (parsed && parsed.success === true && parsed.data && typeof parsed.data === 'object') return parsed.data;
-            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-        },
-
-        formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const d = new Date(dateStr);
-            if (isNaN(d)) return dateStr;
-            return d.toLocaleDateString('ar-SA', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit'
-            });
-        },
-
-        formatPhone(phone) {
-            if (!phone) return '-';
-            const clean = phone.replace(/\D/g, '');
-            if (clean.length > 9) {
-                return '+' + clean.slice(0, -9) + ' ' + clean.slice(-9, -6) + ' ' + clean.slice(-6, -3) + ' ' + clean.slice(-3);
-            }
-            return phone;
-        },
-
-        truncate(str, len = 60) {
-            if (!str) return '';
-            return str.length > len ? str.substring(0, len) + '...' : str;
-        },
-
-        escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        },
-
-        debounce(fn, ms) {
-            let timer;
-            return (...args) => {
-                clearTimeout(timer);
-                timer = setTimeout(() => fn(...args), ms);
-            };
-        },
-
-        getInitials(name) {
-            if (!name) return '؟';
-            return name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
-        },
-
-        getStatusLabel(status) {
-            const labels = {
-                received: '📥 مستلمة',
-                pending: '⏳ قيد المعالجة',
-                processed: '✅ معالجة',
-                sent: '📤 مرسلة',
-                failed: '❌ فاشلة',
-                read: '📖 مقروءة',
-                unread: '📖 غير مقروءة'
-            };
-            return labels[status] || status;
-        },
-
-        getStatusColor(status) {
-            const colors = {
-                received: 'var(--info)',
-                pending: 'var(--warning)',
-                processed: 'var(--success)',
-                sent: 'var(--success)',
-                failed: 'var(--danger)',
-                read: 'var(--text-secondary)',
-                unread: 'var(--primary)'
-            };
-            return colors[status] || 'var(--text-secondary)';
-        }
-    };
-
-    // ============================================
-    // UI HELPERS
-    // ============================================
-    const UI = {
-        showToast(message, type = 'info') {
+        const bridge = window.AndroidInterface;
+        let records = [];
+        let searchTimeout;
+        
+        function showToast(message, isError = false) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
-            toast.className = `toast ${type}`;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), CONFIG.TOAST_DURATION);
-        },
-
-        showLoading(show = true) {
-            const overlay = document.getElementById('loadingOverlay');
-            overlay.classList.toggle('active', show);
-        },
-
-        openModal(id) {
-            document.getElementById(id).classList.add('active');
-            document.body.style.overflow = 'hidden';
-        },
-
-        closeModal(id) {
-            document.getElementById(id).classList.remove('active');
-            document.body.style.overflow = '';
-        },
-
-        switchTab(tabId) {
-            state.currentTab = tabId;
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.tab === tabId);
-            });
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.toggle('active', content.id === `tab-${tabId}`);
-            });
-            this.loadTabData(tabId);
-        },
-
-        async loadTabData(tabId) {
-            this.showLoading(true);
+            toast.className = 'toast show ' + (isError ? 'error' : '');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        function parseBridgeResponse(responseStr) {
             try {
-                switch(tabId) {
-                    case 'all': await loadMessages(); break;
-                    case 'conversations': await loadConversations(); break;
-                    case 'observability': await loadOperational(); break;
-                    case 'weekly': await loadWeeklyAnalytics(); break;
-                    case 'incoming': await loadFilteredMessages('message_type', 'incoming'); break;
-                    case 'outgoing': await loadFilteredMessages('message_type', 'outgoing'); break;
-                    case 'pending': await loadFilteredMessages('status', 'pending'); break;
-                    case 'processed': await loadProcessedMessages(); break;
-                    case 'failed': await loadFilteredMessages('status', 'failed'); break;
-                    case 'templates': await loadTemplates(); break;
-                    case 'recurring': await loadRecurring(); break;
-                    case 'preferences': await loadPreferences(); break;
-                    case 'whitelist': await loadWhitelist(); break;
-                    case 'stats': await loadStats(); break;
-                    case 'otp': await loadOtp(); break;
-                    case 'reminders': await loadReminders(); break;
-                    case 'logs': await loadLogs(); break;
-                    case 'context': await loadContext(); break;
-                    case 'ratelimits': await loadRateLimits(); break;
-                }
+                if (!responseStr) return null;
+                const response = JSON.parse(responseStr);
+                if (response.success) return response.data;
+                throw new Error(response.message || 'حدث خطأ غير معروف');
             } catch (e) {
-                console.error('Tab load error:', e);
-                this.showToast('حدث خطأ أثناء التحميل', 'error');
+                console.error('Bridge parsing error:', e);
+                throw e;
+            }
+        }
+        
+        const esc = (value) => String(value == null ? '—' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        
+        async function loadData() {
+            document.getElementById('loadingSpinner').classList.add('show');
+            document.getElementById('dataContainer').innerHTML = '';
+            document.getElementById('emptyState').style.display = 'none';
+            
+            try {
+                if (!bridge) throw new Error('Android Bridge غير متاح');
+                
+                const search = document.getElementById('searchInput').value.trim();
+                const status = document.getElementById('statusFilter').value;
+                
+                const payload = { search };
+                if (status) payload.status = status;
+                
+                const responseStr = bridge.getSmsMessagesPageTyped(JSON.stringify(payload));
+                records = parseBridgeResponse(responseStr) || [];
+                
+                renderRecords();
+            } catch (error) {
+                showToast(error.message, true);
+                document.getElementById('emptyState').style.display = 'block';
             } finally {
-                this.showLoading(false);
+                document.getElementById('loadingSpinner').classList.remove('show');
             }
         }
-    };
-
-    // ============================================
-    // DATA LOADERS
-    // ============================================
-    async function loadOperational() {
-        const raw = Utils.parseJSON(Bridge.getSmsOperationalHealth()) || {};
-        // Bridge يرجع { success: true, data: { score: 100, ... } }
-        state.operational = raw.success === true ? (raw.data || {}) : {};
-        renderOperational();
-        if (state.tracePhone) await loadTrace(state.tracePhone);
-    }
-
-    async function loadTrace(phone) {
-        const clean = (phone || '').trim();
-        if (!clean) { UI.showToast('أدخل رقم الهاتف أولاً', 'warning'); return; }
-        state.tracePhone = clean;
-        const raw = Utils.parseJSON(Bridge.getSmsConversationTrace(clean)) || {};
-        // Bridge يرجع { success: true, data: { trace: [...] } }
-        const data = raw.success === true ? (raw.data || {}) : {};
-        state.trace = Array.isArray(data.trace) ? data.trace : [];
-        renderTrace();
-    }
-
-    function renderOperational() {
-        const data = state.operational || {};
-        const score = Number.isFinite(Number(data.score)) ? Number(data.score) : 0;
-        const scoreText = data.database_healthy === false ? '!' : `${score}%`;
-        ['opsScore', 'healthScore'].forEach(id => { const node = document.getElementById(id); if (node) node.textContent = scoreText; });
-        const values = { opsQueued: data.queued ?? '—', opsFailed: data.failed ?? '—', opsSla: data.open_sla ?? '—', healthQueued: data.queued ?? '—', healthFailed: data.failed ?? '—' };
-        Object.entries(values).forEach(([id, value]) => { const node = document.getElementById(id); if (node) node.textContent = value; });
-        const progress = document.getElementById('healthProgress');
-        if (progress) progress.style.width = `${Math.max(0, Math.min(100, score))}%`;
-        const status = document.getElementById('opsStatusText');
-        if (status) status.textContent = data.database_healthy === false ? 'تحتاج الخدمة إلى مراجعة' : 'المراقبة الحية مفعّلة';
-        const note = document.getElementById('healthNote');
-        if (note) note.textContent = data.database_healthy === false ? 'تعذر تأكيد سلامة قاعدة البيانات.' : `آخر فحص تشغيلي: ${Utils.formatDate(Date.now())}`;
-    }
-
-    function renderTrace() {
-        const container = document.getElementById('traceList');
-        if (!container) return;
-        if (!state.trace.length) { container.innerHTML = '<div class="empty-state" style="padding:28px 8px;"><div class="empty-icon" style="font-size:2rem;">⌁</div><p>لا توجد مراحل محفوظة لهذا الرقم بعد</p></div>'; return; }
-        const labels = { NORMALIZED: 'تم الاستلام والتطبيع', UNDERSTOOD: 'تم فهم النية', CONTEXTUALIZED: 'تم إثراء السياق', AUTHORIZED: 'تم فحص الصلاحية', AUTHORIZATION_DENIED: 'رُفض التفويض الآمن', COMMAND_CREATED: 'تم إنشاء الأمر', BUSINESS_EFFECT: 'تم تنفيذ الأثر التجاري', BUSINESS_EFFECT_FAILED: 'فشل الأثر التجاري', RESPONSE_PLANNED: 'تم تجهيز الرد', MESSAGE_QUEUED: 'دخل الطابور', MESSAGE_SENDING: 'جارٍ الإرسال', SMS_SENT: 'تم الإرسال من الجهاز', DELIVERY_RESULT: 'نتيجة التسليم', DELIVERY_FAILED: 'فشل التسليم' };
-        container.innerHTML = state.trace.map(item => {
-            const payload = typeof item.payload === 'object' ? item.payload : {};
-            const details = Object.entries(payload).slice(0, 3).map(([key, value]) => `${key}: ${typeof value === 'object' ? '[بيانات]' : value}`).join(' · ');
-            return `<div class="trace-item"><span class="trace-line"></span><div><div class="trace-stage">${Utils.escapeHtml(labels[item.stage] || item.stage || 'حدث')}</div><div class="trace-payload">${Utils.escapeHtml(details || 'تم تسجيل المرحلة بنجاح')}</div></div><time class="trace-time">${Utils.escapeHtml(Utils.formatDate(item.created_at))}</time></div>`;
-        }).join('');
-    }
-
-    async function loadWeeklyAnalytics() {
-        const raw = Utils.parseJSON(Bridge.getSmsWeeklyAnalytics(7)) || {};
-        // SmsWeeklyAnalytics يُرجع البيانات مباشرة في الـ top-level
-        state.weekly = raw.success === true ? raw : {};
-        renderWeeklyAnalytics();
-    }
-
-    function renderWeeklyAnalytics() {
-        const data = state.weekly || {};
-        const summary = data.summary || {};
-        const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
-        setText('weeklyReceived', summary.received ?? '—');
-        setText('weeklyProcessed', summary.processed ?? '—');
-        setText('weeklyDeliveryRate', Number.isFinite(Number(summary.delivery_rate)) ? `${(Number(summary.delivery_rate) * 100).toFixed(1)}%` : '—');
-        setText('weeklyP95', summary.p95_queue_ms != null ? `${Math.round(Number(summary.p95_queue_ms) / 1000)} ث` : '—');
-        setText('weeklySent', summary.sent ?? '—');
-        setText('weeklyFailed', summary.outbox_failures ?? '—');
-        setText('weeklyPending', summary.pending_now ?? '—');
-        setText('weeklyPeriodLabel', data.period_start ? `من ${data.period_start} إلى ${data.period_end || 'الآن'} · بيانات SQLite الفعلية` : 'آخر 7 أيام من السجل الفعلي');
-        const days = Array.isArray(data.daily) ? data.daily : [];
-        const chart = document.getElementById('weeklyBars');
-        if (!chart) return;
-        if (!days.length) { chart.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:35px 8px;"><p>لا توجد بيانات أسبوعية كافية بعد</p></div>'; return; }
-        const max = Math.max(1, ...days.flatMap(day => [Number(day.received) || 0, Number(day.failed) || 0]));
-        chart.innerHTML = days.map(day => {
-            const received = Number(day.received) || 0;
-            const failed = Number(day.failed) || 0;
-            const receivedHeight = Math.max(received ? 5 : 3, Math.round((received / max) * 100));
-            const failedHeight = Math.max(failed ? 5 : 3, Math.round((failed / max) * 100));
-            return `<div class="weekly-bar-col"><span class="weekly-bar-value">${Utils.escapeHtml(String(received))}</span><div class="weekly-bar-stack"><span class="weekly-bar" title="مستلمة: ${received}" style="height:${receivedHeight}px"></span><span class="weekly-bar failed" title="فشل: ${failed}" style="height:${failedHeight}px"></span></div><span class="weekly-bar-label">${Utils.escapeHtml(String(day.date || '').slice(5))}</span></div>`;
-        }).join('');
-    }
-
-    async function loadMessages() {
-        const payload = {
-            limit: CONFIG.PAGE_SIZE,
-            offset: Math.max(0, (state.pagination.page - 1) * CONFIG.PAGE_SIZE),
-            search: state.filters.search || '',
-            status: state.filters.status || '',
-            message_type: state.filters.type || '',
-            date_from: state.filters.dateFrom || '',
-            date_to: state.filters.dateTo || ''
-        };
-        const pagedRaw = typeof Bridge.getSmsMessagesPage === 'function'
-            ? Bridge.getSmsMessagesPage(payload)
-            : null;
-        const paged = Utils.parseJSON(pagedRaw);
-        if (paged && paged.success === true && paged.data && Array.isArray(paged.data.items)) {
-            state.serverPagination = true;
-            state.messages = paged.data.items;
-            state.pagination.totalItems = Number(paged.data.total) || 0;
-            state.pagination.totalPages = Math.max(1, Math.ceil(state.pagination.totalItems / CONFIG.PAGE_SIZE));
-            if (state.pagination.page > state.pagination.totalPages) {
-                state.pagination.page = state.pagination.totalPages;
-                return loadMessages();
+        
+        function debounceSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(loadData, 500);
+        }
+        
+        
+        function renderRecords() {
+            const container = document.getElementById('dataContainer');
+            if (records.length === 0) {
+                document.getElementById('emptyState').style.display = 'block';
+                return;
             }
-            renderMessageList(state.messages, 'messageList');
-            renderPagination();
-        } else {
-            state.serverPagination = false;
-            const result = Bridge.getSmsMessages();
-            const response = Utils.parseJSON(result);
-            const data = response && response.success === true && Array.isArray(response.data)
-                ? response.data
-                : (Array.isArray(response) ? response : []);
-            state.messages = data;
-            applyFiltersAndRender();
-        }
-        updateStats();
-    }
-
-    async function loadFilteredMessages(field, value) {
-        let data = [];
-        if (field === 'message_type') {
-            const all = Utils.dataArray(Bridge.getSmsMessages());
-            data = all.filter(m => m.message_type === value);
-        } else if (field === 'status') {
-            const result = Bridge.getSmsMessagesByStatus(value);
-            data = Utils.dataArray(result);
-        }
-        renderMessageList(data, `${field === 'message_type' ? (value === 'incoming' ? 'incomingList' : 'outgoingList') : value + 'List'}`);
-    }
-
-    async function loadConversations() {
-        const all = Utils.dataArray(Bridge.getSmsMessages());
-        const grouped = {};
-        all.forEach(msg => {
-            const phone = msg.phone_number || 'unknown';
-            if (!grouped[phone]) {
-                grouped[phone] = {
-                    phone: phone,
-                    messages: [],
-                    lastMessage: null,
-                    unreadCount: 0
+            
+            const getStatusBadge = (status) => {
+                const map = {
+                    'pending': '<span class="badge badge-pending">قيد الانتظار</span>',
+                    'sent': '<span class="badge badge-sent">تم الإرسال</span>',
+                    'failed': '<span class="badge badge-failed">فشل</span>'
                 };
-            }
-            grouped[phone].messages.push(msg);
-            if (!grouped[phone].lastMessage || new Date(msg.created_at) > new Date(grouped[phone].lastMessage.created_at)) {
-                grouped[phone].lastMessage = msg;
-            }
-            if (msg.status === 'unread') grouped[phone].unreadCount++;
-        });
-        state.conversations = Object.values(grouped).sort((a, b) =>
-            new Date(b.lastMessage?.created_at || 0) - new Date(a.lastMessage?.created_at || 0)
-        );
-        renderConversations();
-    }
-
-    async function loadProcessedMessages() {
-        // Processed messages are those with status 'processed' or in sms_processed_messages table
-        const all = Utils.dataArray(Bridge.getSmsMessages());
-        const data = all.filter(m => m.status === 'processed');
-        renderMessageList(data, 'processedList');
-    }
-
-    async function loadTemplates() {
-        const result = Bridge.getSmsTemplates();
-        const data = Utils.dataArray(result);
-        state.templates = Utils.dataArray(result);
-        renderTemplates();
-    }
-
-    async function loadWhitelist() {
-        const result = Bridge.getWhitelist();
-        const data = Utils.dataArray(result);
-        state.whitelist = Utils.dataArray(result);
-        renderWhitelist();
-    }
-
-    async function loadLogs() {
-        // لا يوجد getSmsLogs في Bridge، لذا سنعرض رسالة توضيحية
-        renderUnavailable('logsList', 'سجل العمليات غير موصول', 'لا يوجد عقد Bridge أو جدول SQLite مخصص للسجلات في المشروع الحالي.');
-    }
-
-    async function loadStats() {
-        const stats = Utils.dataObject(Bridge.getSmsStats());
-        state.stats = stats;
-        renderStats();
-    }
-
-    function renderUnavailable(containerId, title, details) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-        container.innerHTML = `
-            <div class="empty-state unavailable-state">
-                <div class="empty-icon"><i class="fas fa-info-circle" style="font-size: 3rem; color: var(--text-muted);"></i></div>
-                <p style="font-weight: 600; color: var(--text-primary); font-size: 1.1rem; margin-bottom: 8px;">${Utils.escapeHtml(title)}</p>
-                <p style="color: var(--text-secondary); font-size: 0.9rem; max-width: 400px; margin: 0 auto;">${Utils.escapeHtml(details)}</p>
-            </div>
-        `;
-    }
-
-    async function loadRecurring() {
-        renderUnavailable('recurringList', 'الطلبات المتكررة غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
-    }
-
-    async function loadPreferences() {
-        renderUnavailable('preferencesList', 'تفضيلات الرسائل غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
-    }
-
-    async function loadOtp() {
-        renderUnavailable('otpList', 'سجل OTP غير موصول', 'لا يوجد عقد قراءة موحد لهذا التبويب في المشروع الحالي.');
-    }
-
-    async function loadReminders() {
-        renderUnavailable('remindersList', 'تذكيرات الرسائل غير موصولة', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
-    }
-
-    async function loadContext() {
-        renderUnavailable('contextList', 'سياق المحادثة غير موصول', 'لا يوجد عقد Bridge أو جدول SQLite مثبت لهذا التبويب في المشروع الحالي.');
-    }
-
-    async function loadRateLimits() {
-        renderUnavailable('ratelimitsList', 'حدود الإرسال غير موصولة', 'لا يوجد عقد Bridge مخصص لعرض هذا التبويب في المشروع الحالي.');
-    }
-
-    // ============================================
-    // RENDERERS
-    // ============================================
-    function applyFiltersAndRender() {
-        if (state.serverPagination) {
-            renderMessageList(state.messages, 'messageList');
-            renderPagination();
-            return;
-        }
-        let filtered = [...state.messages];
-
-        // Search filter
-        if (state.filters.search) {
-            const search = state.filters.search.toLowerCase();
-            filtered = filtered.filter(m =>
-                (m.phone_number || '').toLowerCase().includes(search) ||
-                (m.message_body || '').toLowerCase().includes(search) ||
-                (m.sender_name || '').toLowerCase().includes(search)
-            );
-        }
-
-        // Status filter
-        if (state.filters.status) {
-            filtered = filtered.filter(m => m.status === state.filters.status);
-        }
-
-        // Type filter
-        if (state.filters.type) {
-            filtered = filtered.filter(m => m.message_type === state.filters.type);
-        }
-
-        // Date filter
-        if (state.filters.dateFrom) {
-            const from = new Date(state.filters.dateFrom);
-            filtered = filtered.filter(m => new Date(m.created_at) >= from);
-        }
-        if (state.filters.dateTo) {
-            const to = new Date(state.filters.dateTo);
-            to.setHours(23, 59, 59);
-            filtered = filtered.filter(m => new Date(m.created_at) <= to);
-        }
-
-        // Pagination
-        state.pagination.totalItems = filtered.length;
-        state.pagination.totalPages = Math.ceil(filtered.length / CONFIG.PAGE_SIZE);
-        const start = (state.pagination.page - 1) * CONFIG.PAGE_SIZE;
-        const paginated = filtered.slice(start, start + CONFIG.PAGE_SIZE);
-
-        renderMessageList(paginated, 'messageList');
-        renderPagination();
-    }
-
-    function renderMessageList(messages, containerId) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
-
-        if (!messages || messages.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">📭</div>
-                    <p>لا توجد رسائل</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = messages.map(msg => createMessageCard(msg)).join('');
-
-        // Attach event listeners
-        container.querySelectorAll('.message-card').forEach(card => {
-            card.addEventListener('click', () => openMessageDetail(card.dataset.id));
-        });
-        container.querySelectorAll('.btn-action-reply').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                openReplyModal(btn.dataset.phone, btn.dataset.body);
-            });
-        });
-        container.querySelectorAll('.btn-action-retry').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                retryMessage(parseInt(btn.dataset.id));
-            });
-        });
-        container.querySelectorAll('.btn-action-delete').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteMessage(parseInt(btn.dataset.id));
-            });
-        });
-    }
-
-    function createMessageCard(msg) {
-        const isUnread = msg.status === 'unread' || msg.status === 'received';
-        const statusLabel = Utils.getStatusLabel(msg.status);
-        const statusColor = Utils.getStatusColor(msg.status);
-        
-        const isIncoming = msg.message_type === 'incoming';
-        const typeBadge = isIncoming
-            ? '<span class="badge badge-info"><i class="fas fa-inbox"></i> واردة</span>'
-            : '<span class="badge badge-success"><i class="fas fa-paper-plane"></i> صادرة</span>';
-
-        const balance = msg.customer_balance ? `<span class="badge badge-neutral"><i class="fas fa-wallet"></i> ${msg.customer_balance} ر.س</span>` : '';
-        const stateBadge = msg.cognitive_state ? `<span class="badge badge-primary" style="background: var(--primary-light); color: var(--primary);"><i class="fas fa-brain"></i> ${msg.cognitive_state}</span>` : '';
-        
-        let actions = '';
-        if (msg.status === 'failed') {
-            actions = `
-                <button class="btn btn-secondary btn-action-retry" data-id="${msg.id}"><i class="fas fa-redo"></i> إعادة</button>
-                <button class="btn btn-danger btn-action-delete" data-id="${msg.id}"><i class="fas fa-trash"></i> حذف</button>
-            `;
-        } else {
-            actions = `
-                <button class="btn btn-secondary btn-action-reply" data-phone="${msg.phone_number || ''}" data-body="${Utils.escapeHtml(msg.message_body || '')}"><i class="fas fa-reply"></i> رد</button>
-                <button class="btn btn-primary btn-action-view" data-id="${msg.id}"><i class="fas fa-eye"></i> تفاصيل</button>
-            `;
-        }
-
-        return `
-            <div class="card message-card" data-id="${msg.id}" style="margin-bottom: var(--space-3); border-right: 4px solid ${isUnread ? 'var(--primary)' : 'transparent'}; cursor: pointer;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-3); flex-wrap: wrap; gap: var(--space-2);">
-                    <div style="display: flex; align-items: center; gap: var(--space-3);">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem;">
-                            ${Utils.getInitials(msg.sender_name || msg.resolved_owner_name || msg.phone_number)}
-                        </div>
+                return map[status] || `<span class="badge badge-inactive">${status}</span>`;
+            };
+            
+            container.innerHTML = records.map(r => `
+                <div class="data-card">
+                    <div class="data-card-header">
                         <div>
-                            <div style="font-weight: 600; color: var(--text-primary);">${Utils.escapeHtml(msg.sender_name || msg.resolved_owner_name || 'غير معروف')}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary); direction: ltr; text-align: right;">${Utils.formatPhone(msg.phone_number)}</div>
+                            <h3 class="data-card-title" dir="ltr" style="text-align: right;">${esc(r.phone_number)}</h3>
+                            <p class="data-card-subtitle">${esc(r.created_at)}</p>
+                        </div>
+                        ${getStatusBadge(r.status)}
+                    </div>
+                    <div class="data-grid">
+                        <div class="data-item" style="grid-column: 1 / -1;">
+                            <span class="data-label">نص الرسالة</span>
+                            <span class="data-value" style="font-weight:normal; white-space:pre-wrap;">${esc(r.message_body)}</span>
                         </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                        <div style="display: flex; gap: 4px;">
-                            ${typeBadge}
-                            ${stateBadge}
-                        </div>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${Utils.formatDate(msg.created_at)}</span>
-                    </div>
+                    ${r.status === 'failed' ? `
+                    <div class="card-actions">
+                        <button class="btn btn-outline btn-sm" onclick="retrySms(${r.id})"><i class="fas fa-redo"></i> إعادة إرسال</button>
+                    </div>` : ''}
                 </div>
-                
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm); margin-bottom: var(--space-3); color: var(--text-primary); font-size: 0.95rem; line-height: 1.6;">
-                    ${Utils.escapeHtml(msg.message_body || '')}
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); border-top: 1px solid var(--border-color); padding-top: var(--space-3);">
-                    <div style="display: flex; align-items: center; gap: var(--space-3);">
-                        <div style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 500; color: ${statusColor};">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                            ${statusLabel}
-                        </div>
-                        ${balance}
-                    </div>
-                    <div style="display: flex; gap: var(--space-2);">
-                        ${actions}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderConversations() {
-        const container = document.getElementById('conversationList');
-        if (!container) return;
-
-        if (!state.conversations.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="fas fa-comments" style="font-size: 3rem; color: var(--text-muted);"></i></div>
-                    <p>لا توجد محادثات</p>
-                </div>
-            `;
-            return;
+            `).join('');
         }
-
-        container.innerHTML = '<div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden;">' + state.conversations.map(conv => {
-            const isUnread = conv.unreadCount > 0;
-            const activeClass = isUnread ? 'convo-row--active' : '';
-            const initial = Utils.getInitials(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || conv.phone);
-            const title = Utils.escapeHtml(conv.lastMessage?.sender_name || conv.lastMessage?.resolved_owner_name || Utils.formatPhone(conv.phone));
-            const preview = Utils.escapeHtml(conv.lastMessage?.message_body || '');
-            const timeStr = Utils.formatDate(conv.lastMessage?.created_at).split(' ')[1] || Utils.formatDate(conv.lastMessage?.created_at);
-
-            return `
-                <div class="convo-row ${activeClass} conversation-card" data-phone="${conv.phone}">
-                    <div class="convo-row__avatar">${initial}</div>
-                    <div class="convo-row__body">
-                        <div class="convo-row__top">
-                            <span class="convo-row__title">${title}</span>
-                            <time class="convo-row__time">${timeStr}</time>
-                        </div>
-                        <div class="convo-row__bottom">
-                            <span class="convo-row__preview">${preview}</span>
-                            ${isUnread ? `<span class="convo-row__badge">${conv.unreadCount}</span>` : ''}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('') + '</div>';
-
-        container.querySelectorAll('.conversation-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const phone = card.dataset.phone;
-                const result = Bridge.getSmsMessagesByPhone(phone);
-                const messages = Utils.dataArray(result);
-                renderMessageList(messages, 'messageList');
-                UI.switchTab('all');
-            });
-        });
-    }
-
-    function renderTemplates() {
-        const container = document.getElementById('templatesList');
-        if (!container) return;
-
-        if (!state.templates.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="fas fa-file-alt" style="font-size: 3rem; color: var(--text-muted);"></i></div>
-                    <p>لا توجد قوالب</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = state.templates.map(t => `
-            <div class="card" data-id="${t.id}" style="margin-bottom: var(--space-3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2); border-bottom: 1px solid var(--border-color); padding-bottom: var(--space-2);">
-                    <span style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">${Utils.escapeHtml(t.template_name || '')}</span>
-                    <span class="badge badge-info" style="font-size: 0.75rem;">${t.template_type || 'general'}</span>
-                </div>
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm); margin-bottom: var(--space-3); color: var(--text-primary); font-family: monospace; font-size: 0.9rem; line-height: 1.5;">${Utils.escapeHtml(t.template_body || '')}</div>
-                <div style="display: flex; gap: var(--space-2); justify-content: flex-end;">
-                    <button class="btn btn-primary" onclick="useTemplate(${t.id})"><i class="fas fa-copy"></i> استخدام</button>
-                    <button class="btn btn-secondary" onclick="editTemplate(${t.id})"><i class="fas fa-edit"></i> تعديل</button>
-                    <button class="btn btn-danger" onclick="deleteTemplate(${t.id})"><i class="fas fa-trash"></i> حذف</button>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    function renderWhitelist() {
-        const container = document.getElementById('whitelistList');
-        if (!container) return;
-
-        if (!state.whitelist.length) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon"><i class="fas fa-shield-alt" style="font-size: 3rem; color: var(--text-muted);"></i></div>
-                    <p>القائمة البيضاء فارغة</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = state.whitelist.map(w => {
-            const ownerName = (w.name || w.owner_name || '').trim();
-            const canonical = w.canonical_phone || w.phone || '';
-            return `
-            <div class="card" data-phone="${Utils.escapeHtml(w.phone || '')}" style="margin-bottom: var(--space-2); display: flex; justify-content: space-between; align-items: center; padding: var(--space-3);">
-                <div style="display: flex; align-items: center; gap: var(--space-3);">
-                    <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--success-bg); color: var(--success); display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                        <i class="fas fa-check"></i>
-                    </div>
-                    <div>
-                        <div style="font-weight: 600; color: var(--text-primary); direction: ltr; text-align: right;">${Utils.formatPhone(canonical)}</div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary);">${Utils.escapeHtml(ownerName || 'لم يتم العثور على اسم مالك الرقم')}</div>
-                    </div>
-                </div>
-                <button class="btn btn-danger" onclick="removeFromWhitelist('${w.phone}')"><i class="fas fa-trash"></i> إزالة</button>
-            </div>
-        `; }).join('');
-    }
-
-    function renderLogs() {
-        const container = document.getElementById('logsList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderStats() {
-        const container = document.getElementById('statsDashboard');
-        if (!container) return;
-
-        const stats = state.stats;
-        container.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--space-4);">
-                <div class="card" style="text-align: center;">
-                    <div style="font-size: 2.5rem; color: var(--primary); margin-bottom: var(--space-2);"><i class="fas fa-envelope"></i></div>
-                    <div style="font-size: 2rem; font-weight: bold; color: var(--text-primary);">${stats.total || 0}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: var(--space-3);">إجمالي الرسائل</div>
-                    <div style="height: 60px; background: var(--bg-surface-hover); border-radius: var(--radius-sm); display: flex; align-items: flex-end; justify-content: center; padding: 0 10px;">
-                        <div style="width: 40px; height: 80%; background: var(--primary-light); border-radius: 4px 4px 0 0; border-top: 2px solid var(--primary);"></div>
-                    </div>
-                </div>
-                <div class="card" style="text-align: center;">
-                    <div style="font-size: 2.5rem; color: var(--success); margin-bottom: var(--space-2);"><i class="fas fa-paper-plane"></i></div>
-                    <div style="font-size: 2rem; font-weight: bold; color: var(--text-primary);">${stats.sent || 0}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: var(--space-3);">المرسلة</div>
-                    <div style="height: 60px; background: var(--bg-surface-hover); border-radius: var(--radius-sm); display: flex; align-items: flex-end; justify-content: center; padding: 0 10px;">
-                        <div style="width: 40px; height: ${Math.max(5, Math.min((stats.sent / (stats.total || 1)) * 100, 100))}%; background: var(--success-bg); border-radius: 4px 4px 0 0; border-top: 2px solid var(--success);"></div>
-                    </div>
-                </div>
-                <div class="card" style="text-align: center;">
-                    <div style="font-size: 2.5rem; color: var(--warning); margin-bottom: var(--space-2);"><i class="fas fa-hourglass-half"></i></div>
-                    <div style="font-size: 2rem; font-weight: bold; color: var(--text-primary);">${stats.pending || 0}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: var(--space-3);">قيد المعالجة</div>
-                    <div style="height: 60px; background: var(--bg-surface-hover); border-radius: var(--radius-sm); display: flex; align-items: flex-end; justify-content: center; padding: 0 10px;">
-                        <div style="width: 40px; height: ${Math.max(5, Math.min((stats.pending / (stats.total || 1)) * 100, 100))}%; background: var(--warning-bg); border-radius: 4px 4px 0 0; border-top: 2px solid var(--warning);"></div>
-                    </div>
-                </div>
-                <div class="card" style="text-align: center;">
-                    <div style="font-size: 2.5rem; color: var(--danger); margin-bottom: var(--space-2);"><i class="fas fa-times-circle"></i></div>
-                    <div style="font-size: 2rem; font-weight: bold; color: var(--text-primary);">${stats.failed || 0}</div>
-                    <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: var(--space-3);">الفاشلة</div>
-                    <div style="height: 60px; background: var(--bg-surface-hover); border-radius: var(--radius-sm); display: flex; align-items: flex-end; justify-content: center; padding: 0 10px;">
-                        <div style="width: 40px; height: ${Math.max(5, Math.min((stats.failed / (stats.total || 1)) * 100, 100))}%; background: var(--danger-bg); border-radius: 4px 4px 0 0; border-top: 2px solid var(--danger);"></div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderPagination() {
-        const container = document.getElementById('pagination');
-        if (!container) return;
-
-        const { page, totalPages } = state.pagination;
-        if (totalPages <= 1) {
-            container.innerHTML = '';
-            return;
-        }
-
-        let html = `
-            <div style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: var(--space-4);">
-                <button class="btn btn-secondary" style="padding: 6px 12px; border-radius: var(--radius-sm);" ${page <= 1 ? 'disabled' : ''} onclick="changePage(${page - 1})"><i class="fas fa-chevron-right"></i></button>
-        `;
-
-        for (let i = 1; i <= totalPages; i++) {
-            if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
-                html += `<button class="btn ${i === page ? 'btn-primary' : 'btn-secondary'}" style="padding: 6px 12px; border-radius: var(--radius-sm);" onclick="changePage(${i})">${i}</button>`;
-            } else if (i === page - 2 || i === page + 2) {
-                html += `<span style="color: var(--text-muted); padding: 0 8px;">...</span>`;
-            }
-        }
-
-        html += `
-                <button class="btn btn-secondary" style="padding: 6px 12px; border-radius: var(--radius-sm);" ${page >= totalPages ? 'disabled' : ''} onclick="changePage(${page + 1})"><i class="fas fa-chevron-left"></i></button>
-            </div>
-        `;
-        container.innerHTML = html;
-    }
-
-    function renderRecurring() {
-        const container = document.getElementById('recurringList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderPreferences() {
-        const container = document.getElementById('preferencesList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderOtp() {
-        const container = document.getElementById('otpList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderReminders() {
-        const container = document.getElementById('remindersList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderContext() {
-        const container = document.getElementById('contextList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    function renderRateLimits() {
-        const container = document.getElementById('ratelimitsList');
-        if (!container) return;
-        // يتم التعامل معها الآن عبر renderUnavailable
-    }
-
-    // ============================================
-    // ACTIONS
-    // ============================================
-    function openMessageDetail(id) {
-        const msg = state.messages.find(m => m.id == id);
-        if (!msg) return;
-        state.selectedMessage = msg;
-
-        if (msg.is_read !== 1 && msg.is_read !== true && typeof Bridge.markSmsMessageRead === 'function') {
-            const readResult = Utils.parseJSON(Bridge.markSmsMessageRead(Number(msg.id)));
-            if (readResult && readResult.success === true) msg.is_read = 1;
-        }
-
-        const modal = document.getElementById('messageModal');
-        const body = document.getElementById('modalBody');
-        const footer = document.getElementById('modalFooter');
-
-        const statusColor = Utils.getStatusColor(msg.status);
-        body.innerHTML = `
-            <div style="display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-color);">
-                <div style="width: 48px; height: 48px; border-radius: 50%; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">
-                    ${Utils.getInitials(msg.sender_name || msg.resolved_owner_name || msg.phone_number)}
-                </div>
-                <div>
-                    <div style="font-weight: 600; font-size: 1.1rem; color: var(--text-primary);">${Utils.escapeHtml(msg.sender_name || msg.resolved_owner_name || 'غير معروف')}</div>
-                    <div style="direction: ltr; text-align: right; color: var(--text-secondary); font-size: 0.9rem;">${Utils.formatPhone(msg.phone_number)}</div>
-                </div>
-            </div>
-            <div style="margin-bottom: var(--space-4);">
-                <label style="font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); display: block; margin-bottom: var(--space-2);">نص الرسالة</label>
-                <div style="background: var(--bg-surface-hover); padding: var(--space-4); border-radius: var(--radius-md); line-height: 1.6; font-size: 1rem; color: var(--text-primary); border: 1px solid var(--border-color);">
-                    ${Utils.escapeHtml(msg.message_body || '')}
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); margin-bottom: var(--space-4);">
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm);">
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">الحالة</label>
-                    <div style="font-weight: 600; color: ${statusColor}; display: flex; align-items: center; gap: 6px;">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></span>
-                        ${Utils.getStatusLabel(msg.status)}
-                    </div>
-                </div>
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm);">
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">النوع</label>
-                    <div style="font-weight: 600; color: var(--text-primary);">
-                        ${msg.message_type === 'incoming' ? '<i class="fas fa-inbox" style="color: var(--info);"></i> واردة' : '<i class="fas fa-paper-plane" style="color: var(--success);"></i> صادرة'}
-                    </div>
-                </div>
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm);">
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">التاريخ والوقت</label>
-                    <div style="font-weight: 600; color: var(--text-primary);">${Utils.formatDate(msg.created_at)}</div>
-                </div>
-                <div style="background: var(--bg-surface-hover); padding: var(--space-3); border-radius: var(--radius-sm);">
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 4px;">رقم المعرف</label>
-                    <div style="font-family: monospace; font-weight: 600; color: var(--text-primary);">#${msg.id}</div>
-                </div>
-                <div style="grid-column: 1 / -1; background: var(--primary-light); padding: var(--space-3); border-radius: var(--radius-sm); border: 1px solid rgba(37, 99, 235, 0.2);">
-                    <label style="font-size: 0.75rem; color: var(--primary); display: block; margin-bottom: 4px;">حالة الذكاء الاصطناعي (Cognitive State)</label>
-                    <div style="font-weight: bold; color: var(--primary);"><i class="fas fa-brain"></i> ${msg.cognitive_state || 'غير محدد'}</div>
-                </div>
-            </div>
-            ${msg.customer_balance ? `
-                <div style="background: var(--success-bg); padding: var(--space-3); border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.2);">
-                    <label style="font-size: 0.75rem; color: var(--success-text); display: block; margin-bottom: 4px;">رصيد العميل</label>
-                    <div style="font-weight: bold; color: var(--success-text); font-size: 1.2rem;"><i class="fas fa-wallet"></i> ${msg.customer_balance} ر.س</div>
-                </div>
-            ` : ''}
-        `;
-
-        footer.innerHTML = `
-            <button class="btn btn-secondary" onclick="UI.closeModal('messageModal')">إغلاق</button>
-            <button class="btn btn-primary" onclick="openReplyModal('${msg.phone_number}', '')"><i class="fas fa-reply"></i> رد</button>
-            ${msg.status === 'failed' ? `<button class="btn btn-warning" onclick="retryMessage(${msg.id}); UI.closeModal('messageModal')"><i class="fas fa-redo"></i> إعادة</button>` : ''}
-            <button class="btn btn-danger" onclick="deleteMessage(${msg.id}); UI.closeModal('messageModal')"><i class="fas fa-trash"></i> حذف</button>
-        `;
-
-        UI.openModal('messageModal');
-    }
-
-    function openReplyModal(phone, body) {
-        document.getElementById('composePhone').value = phone || '';
-        document.getElementById('composeBody').value = '';
-        document.getElementById('charCount').textContent = '0';
-        UI.openModal('composeModal');
-    }
-
-    function sendMessage() {
-        const phone = document.getElementById('composePhone').value.trim();
-        const body = document.getElementById('composeBody').value.trim();
-
-        if (!phone) { UI.showToast('الرجاء إدخال رقم الهاتف', 'error'); return; }
-        if (!body) { UI.showToast('الرجاء كتابة الرسالة', 'error'); return; }
-
-        const data = {
-            phone_number: phone,
-            message_body: body,
-            message_type: 'outgoing',
-            status: 'pending'
-        };
-
-        const result = Utils.parseJSON(Bridge.addSmsMessage(data));
-        if (result && result.success && result.status === 'QUEUED') {
-            UI.showToast('تم وضع الرسالة في طابور الإرسال', 'success');
-            UI.closeModal('composeModal');
-            loadMessages();
-        } else {
-            UI.showToast(result?.message || 'فشل وضع الرسالة في طابور الإرسال', 'error');
-        }
-    }
-
-    function retryMessage(id) {
-        const result = Utils.parseJSON(Bridge.retrySmsMessage(id));
-        if (result && result.success) {
-            UI.showToast('تمت إعادة الرسالة إلى طابور الإرسال', 'success');
-            loadMessages();
-        } else {
-            UI.showToast(result?.message || 'فشلت إعادة المحاولة', 'error');
-        }
-    }
-
-    function deleteMessage(id) {
-        if (!confirm('هل أنت متأكد من حذف هذه الرسالة؟')) return;
-        const result = Utils.parseJSON(Bridge.deleteSmsMessage(id));
-        if (result && result.success) {
-            UI.showToast('تم حذف الرسالة فعلياً', 'success');
-            loadMessages();
-        } else {
-            UI.showToast(result?.message || 'تعذر حذف الرسالة', 'error');
-        }
-    }
-
-    function saveTemplate() {
-        const id = document.getElementById('templateId').value;
-        const data = {
-            template_name: document.getElementById('templateName').value,
-            template_body: document.getElementById('templateBody').value,
-            template_type: document.getElementById('templateType').value,
-            is_active: document.getElementById('templateActive').checked
-        };
-
-        let result;
-        if (id) {
-            result = Bridge.updateSmsTemplate(parseInt(id), JSON.stringify(data));
-        } else {
-            result = Bridge.addSmsTemplate(JSON.stringify(data));
-        }
-
-        const parsed = Utils.parseJSON(result);
-        if (parsed && parsed.success === true) {
-            UI.showToast(id ? 'تم تحديث القالب' : 'تم إضافة القالب', 'success');
-            UI.closeModal('templateModal');
-            loadTemplates();
-        } else {
-            UI.showToast('فشل حفظ القالب', 'error');
-        }
-    }
-
-    function deleteTemplate(id) {
-        if (!confirm('هل أنت متأكد من حذف هذا القالب؟')) return;
-        const result = Bridge.deleteSmsTemplate(id);
-        const parsed = Utils.parseJSON(result);
-        if (parsed && parsed.success === true) {
-            UI.showToast('تم حذف القالب', 'success');
-            loadTemplates();
-        } else {
-            UI.showToast('فشل حذف القالب', 'error');
-        }
-    }
-
-    function editTemplate(id) {
-        const template = state.templates.find(t => t.id == id);
-        if (!template) return;
-
-        document.getElementById('templateId').value = template.id;
-        document.getElementById('templateName').value = template.template_name || '';
-        document.getElementById('templateBody').value = template.template_body || '';
-        document.getElementById('templateType').value = template.template_type || 'general';
-        document.getElementById('templateActive').checked = template.is_active === 1 || template.is_active === true;
-        document.getElementById('templateModalTitle').innerHTML = '<i class="fas fa-edit"></i> تعديل قالب';
-        UI.openModal('templateModal');
-    }
-
-    function useTemplate(id) {
-        const template = state.templates.find(t => t.id == id);
-        if (!template) return;
-        document.getElementById('composeBody').value = template.template_body || '';
-        document.getElementById('charCount').textContent = (template.template_body || '').length;
-        UI.openModal('composeModal');
-    }
-
-    function addToWhitelist() {
-        const phone = document.getElementById('whitelistPhone').value.trim();
-        const name = document.getElementById('whitelistName').value.trim();
-
-        if (!phone) { UI.showToast('الرجاء إدخال رقم الهاتف', 'error'); return; }
-
-        const data = { phone: phone, name: name };
-        const result = Bridge.addWhitelist(JSON.stringify(data));
-        const parsed = Utils.parseJSON(result);
-        if (parsed && parsed.success === true) {
-            UI.showToast('تمت الإضافة للقائمة البيضاء', 'success');
-            UI.closeModal('whitelistModal');
-            loadWhitelist();
-        } else {
-            UI.showToast('فشلت الإضافة', 'error');
-        }
-    }
-
-    function removeFromWhitelist(phone) {
-        if (!confirm('هل أنت متأكد من إزالة هذا الرقم؟')) return;
-        const data = { phone: phone };
-        const result = Bridge.removeWhitelist(JSON.stringify(data));
-        const parsed = Utils.parseJSON(result);
-        if (parsed && parsed.success === true) {
-            UI.showToast('تمت الإزالة', 'success');
-            loadWhitelist();
-        } else {
-            UI.showToast('فشلت الإزالة', 'error');
-        }
-    }
-
-    function updateStats() {
-        const stats = Utils.dataObject(Bridge.getSmsStats());
-        // حساب incoming/outgoing من الرسائل المحملة محلياً إذا لم تكن موجودة في الإحصائيات القادمة من SQLite
-        let incoming = stats.incoming || stats.received;
-        let outgoing = stats.outgoing || stats.sent;
+    
         
-        if (incoming === undefined || outgoing === undefined) {
-            const allMessages = Utils.dataArray(Bridge.getSmsMessages());
-            if (incoming === undefined) incoming = allMessages.filter(m => m.message_type === 'incoming').length;
-            if (outgoing === undefined) outgoing = allMessages.filter(m => m.message_type === 'outgoing').length;
+        function openModal(id = null) {
+            document.getElementById('dataForm').reset();
+            document.getElementById('recordId').value = id || '';
+            document.getElementById('modalTitle').textContent = id ? 'تعديل السجل' : 'إضافة جديد';
+            
+            if (id) {
+                const record = records.find(r => r.id == id);
+                if (record) {
+                    
+                }
+            }
+            
+            document.getElementById('formModal').classList.add('show');
         }
-
-        document.getElementById('statTotal').textContent = stats.total || 0;
-        document.getElementById('statIncoming').textContent = incoming || 0;
-        document.getElementById('statOutgoing').textContent = outgoing || 0;
-        document.getElementById('statPending').textContent = stats.pending || 0;
-        document.getElementById('statFailed').textContent = stats.failed || 0;
-    }
-
-    function changePage(page) {
-        const target = Number(page);
-        if (!Number.isInteger(target) || target < 1 || target > state.pagination.totalPages) return;
-        state.pagination.page = target;
-        loadMessages();
-    }
-
-    // ============================================
-    // EVENT LISTENERS
-    // ============================================
-    function initEventListeners() {
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => UI.switchTab(btn.dataset.tab));
-        });
-
-        // Search
-        const searchInput = document.getElementById('searchInput');
-        const debouncedSearch = Utils.debounce((value) => {
-            state.filters.search = value;
-            state.pagination.page = 1;
-            loadMessages();
-        }, CONFIG.DEBOUNCE_MS);
-
-        searchInput.addEventListener('input', (e) => {
-            const value = e.target.value;
-            document.getElementById('clearSearch').style.display = value ? 'flex' : 'none';
-            debouncedSearch(value);
-        });
-
-        document.getElementById('clearSearch').addEventListener('click', () => {
-            searchInput.value = '';
-            state.filters.search = '';
-            state.pagination.page = 1;
-            loadMessages();
-            document.getElementById('clearSearch').style.display = 'none';
-        });
-
-        // Filter toggle
-        document.getElementById('filterToggle').addEventListener('click', () => {
-            const panel = document.getElementById('filtersPanel');
-            const btn = document.getElementById('filterToggle');
-            const isVisible = panel.style.display !== 'none';
-            panel.style.display = isVisible ? 'none' : 'grid';
-            btn.classList.toggle('active', !isVisible);
-        });
-
-        // Apply/Reset filters
-        document.getElementById('applyFilters').addEventListener('click', () => {
-            state.filters.status = document.getElementById('filterStatus').value;
-            state.filters.type = document.getElementById('filterType').value;
-            state.filters.dateFrom = document.getElementById('filterDateFrom').value;
-            state.filters.dateTo = document.getElementById('filterDateTo').value;
-            state.pagination.page = 1;
-            loadMessages();
-            document.getElementById('filtersPanel').style.display = 'none';
-            document.getElementById('filterToggle').classList.remove('active');
-        });
-
-        document.getElementById('resetFilters').addEventListener('click', () => {
-            document.getElementById('filterStatus').value = '';
-            document.getElementById('filterType').value = '';
-            document.getElementById('filterDateFrom').value = '';
-            document.getElementById('filterDateTo').value = '';
-            state.filters = { search: state.filters.search, status: '', type: '', dateFrom: '', dateTo: '' };
-            state.pagination.page = 1;
-            loadMessages();
-        });
-
-        // Header navigation, menu and settings
-        document.getElementById('backHomeBtn').addEventListener('click', () => {
-            const result = Bridge.goToHome();
-            // Bridge يرجع JSON نصياً، لذلك لا نعتمد على null وحده؛
-            // الانتقال المباشر يضمن العودة حتى عند غياب الجسر أو تأخر UI thread.
-            if (result === null) {
-                window.location.replace('../main.html');
-            }
-        });
-        const menu = document.getElementById('smsMenuPopover');
-        const menuBackdrop = document.getElementById('smsMenuBackdrop');
-        const closeMenu = () => { menu.classList.remove('active'); menuBackdrop.classList.remove('active'); };
-        document.getElementById('menuBtn').addEventListener('click', () => {
-            const opened = menu.classList.toggle('active');
-            menuBackdrop.classList.toggle('active', opened);
-        });
-        menuBackdrop.addEventListener('click', closeMenu);
-        document.querySelectorAll('[data-menu-action]').forEach(item => item.addEventListener('click', () => {
-            const action = item.dataset.menuAction;
-            closeMenu();
-            if (action === 'compose') document.getElementById('fabCompose').click();
-            else if (action) UI.switchTab(action);
-        }));
-        const settingsModal = document.getElementById('settingsModal');
-        const settingsDarkMode = document.getElementById('settingsDarkMode');
-        const settingsAutoRefresh = document.getElementById('settingsAutoRefresh');
-        settingsDarkMode.checked = localStorage.getItem('sms.darkMode') === '1';
-        settingsAutoRefresh.checked = localStorage.getItem('sms.autoRefresh') !== '0';
-        const applyDarkMode = enabled => {
-            document.documentElement.setAttribute('data-theme', enabled ? 'dark' : 'light');
-            state.darkMode = enabled;
-            localStorage.setItem('sms.darkMode', enabled ? '1' : '0');
-        };
-        const configureAutoRefresh = enabled => {
-            if (autoRefreshTimer) window.clearInterval(autoRefreshTimer);
-            autoRefreshTimer = null;
-            if (enabled) {
-                autoRefreshTimer = window.setInterval(() => {
-                    loadOperational();
-                    if (state.currentTab === 'weekly') loadWeeklyAnalytics();
-                }, 60000);
-            }
-        };
-        applyDarkMode(settingsDarkMode.checked);
-        configureAutoRefresh(settingsAutoRefresh.checked);
-        document.getElementById('settingsBtn').addEventListener('click', () => UI.openModal('settingsModal'));
-        document.getElementById('settingsModalClose').addEventListener('click', () => UI.closeModal('settingsModal'));
-        document.getElementById('settingsDone').addEventListener('click', () => {
-            applyDarkMode(settingsDarkMode.checked);
-            localStorage.setItem('sms.autoRefresh', settingsAutoRefresh.checked ? '1' : '0');
-            configureAutoRefresh(settingsAutoRefresh.checked);
-            UI.closeModal('settingsModal');
-            UI.showToast('تم حفظ إعدادات مركز الرسائل', 'success');
-        });
-
-        // Refresh
-        document.getElementById('refreshBtn').addEventListener('click', () => {
-            UI.showLoading(true);
-            setTimeout(() => {
-                UI.loadTabData(state.currentTab);
-                loadOperational();
-                UI.showToast('تم التحديث', 'success');
-            }, 150);
-        });
-
-        // FAB
-        document.getElementById('fabCompose').addEventListener('click', () => {
-            document.getElementById('composePhone').value = '';
-            document.getElementById('composeBody').value = '';
-            document.getElementById('charCount').textContent = '0';
-            UI.openModal('composeModal');
-        });
-
-        // Compose
-        document.getElementById('composeSend').addEventListener('click', sendMessage);
-        document.getElementById('composeCancel').addEventListener('click', () => UI.closeModal('composeModal'));
-        document.getElementById('composeClose').addEventListener('click', () => UI.closeModal('composeModal'));
-        document.getElementById('composeBody').addEventListener('input', (e) => {
-            document.getElementById('charCount').textContent = e.target.value.length;
-        });
-
-        // Template
-        document.getElementById('addTemplate').addEventListener('click', () => {
-            document.getElementById('templateId').value = '';
-            document.getElementById('templateName').value = '';
-            document.getElementById('templateBody').value = '';
-            document.getElementById('templateType').value = 'general';
-            document.getElementById('templateActive').checked = true;
-            document.getElementById('templateModalTitle').innerHTML = '<i class="fas fa-file-alt"></i> قالب جديد';
-            UI.openModal('templateModal');
-        });
-        document.getElementById('templateSave').addEventListener('click', saveTemplate);
-        document.getElementById('templateCancel').addEventListener('click', () => UI.closeModal('templateModal'));
-        document.getElementById('templateModalClose').addEventListener('click', () => UI.closeModal('templateModal'));
-
-        // Whitelist
-        document.getElementById('addWhitelist').addEventListener('click', () => {
-            document.getElementById('whitelistPhone').value = '';
-            document.getElementById('whitelistName').value = '';
-            UI.openModal('whitelistModal');
-        });
-        document.getElementById('whitelistSave').addEventListener('click', addToWhitelist);
-        document.getElementById('whitelistCancel').addEventListener('click', () => UI.closeModal('whitelistModal'));
-        document.getElementById('whitelistModalClose').addEventListener('click', () => UI.closeModal('whitelistModal'));
-
-        // Message modal
-        document.getElementById('modalClose').addEventListener('click', () => UI.closeModal('messageModal'));
-
-        // Close modals on backdrop click
-        document.querySelectorAll('.modal-overlay').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) UI.closeModal(modal.id);
-            });
-        });
-
-        // Stats cards click
-        document.querySelectorAll('.card[data-stat]').forEach(card => {
-            card.style.cursor = 'pointer';
-            card.addEventListener('mouseover', () => { card.style.transform = 'translateY(-2px)'; card.style.boxShadow = 'var(--shadow-md)'; });
-            card.addEventListener('mouseout', () => { card.style.transform = 'none'; card.style.boxShadow = 'var(--shadow-sm)'; });
-            card.addEventListener('click', () => {
-                const stat = card.dataset.stat;
-                const tabMap = {
-                    total: 'all',
-                    incoming: 'incoming',
-                    outgoing: 'outgoing',
-                    pending: 'pending',
-                    failed: 'failed'
+        
+        function closeModal() {
+            document.getElementById('formModal').classList.remove('show');
+        }
+        
+        async function saveRecord() {
+            try {
+                if (!bridge) throw new Error('Android Bridge غير متاح');
+                
+                const id = document.getElementById('recordId').value;
+                const payload = {
+                    
+            phone_number: document.getElementById('phone_number').value,
+            message_body: document.getElementById('message_body').value
+    
                 };
-                if (tabMap[stat]) UI.switchTab(tabMap[stat]);
-            });
-        });
-
-        // SMS observability and analytics
-        document.getElementById('opsRefreshBtn').addEventListener('click', async () => {
-            UI.showLoading(true);
-            try { await loadOperational(); UI.showToast('تم تحديث صحة نظام SMS', 'success'); }
-            finally { UI.showLoading(false); }
-        });
-        document.getElementById('opsOpenTraceBtn').addEventListener('click', () => UI.switchTab('observability'));
-        document.getElementById('traceLookupBtn').addEventListener('click', () => loadTrace(document.getElementById('tracePhoneInput').value));
-        document.getElementById('tracePhoneInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadTrace(e.target.value); });
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.modal-overlay.active').forEach(m => UI.closeModal(m.id));
+                
+                const method = id ? '' : 'sendSmsMessageTyped';
+                if (id) payload.id = parseInt(id);
+                
+                const responseStr = bridge[method](JSON.stringify(payload));
+                parseBridgeResponse(responseStr);
+                
+                showToast('تم الحفظ بنجاح');
+                closeModal();
+                loadData();
+            } catch (error) {
+                showToast(error.message, true);
             }
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                document.getElementById('searchInput').focus();
-            }
-            if (e.ctrlKey && e.key === 'n') {
-                e.preventDefault();
-                document.getElementById('fabCompose').click();
-            }
-        });
-    }
-
-    // ============================================
-    // INITIALIZATION
-    // ============================================
-    function init() {
-        // Check dark mode preference
-        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-            state.darkMode = true;
         }
-
-        initEventListeners();
-        UI.showLoading(true);
-
-        // Load initial data
-        setTimeout(() => {
-            Promise.all([loadMessages(), loadOperational()]).then(() => {
-                UI.showLoading(false);
-                UI.showToast('تم تحميل الرسائل ومؤشرات التشغيل', 'success');
-            }).catch(() => {
-                UI.showLoading(false);
-                UI.showToast('تعذر الاتصال بقاعدة البيانات', 'error');
-            });
-        }, 300);
-    }
-
-    // Expose global functions for onclick handlers
-    window.UI = UI;
-    window.changePage = changePage;
-    window.openReplyModal = openReplyModal;
-    window.retryMessage = retryMessage;
-    window.deleteMessage = deleteMessage;
-    window.editTemplate = editTemplate;
-    window.deleteTemplate = deleteTemplate;
-    window.useTemplate = useTemplate;
-    window.removeFromWhitelist = removeFromWhitelist;
-    window.openMessageDetail = openMessageDetail;
-
-    // Start
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-})();
-
-</script>
+        
+        
+        let templates = [];
+        
+        async function loadTemplates() {
+            try {
+                if (!bridge) return;
+                const responseStr = bridge.getNotificationTemplatesPage(JSON.stringify({ channel: 'sms', is_active: '1' }));
+                templates = parseBridgeResponse(responseStr) || [];
+                const select = document.getElementById('template_id');
+                select.innerHTML = '<option value="">بدون قالب...</option>' + 
+                    templates.map(t => `<option value="${t.id}">${esc(t.template_name)}</option>`).join('');
+            } catch (e) { console.error('Failed to load templates', e); }
+        }
+        
+        function applyTemplate() {
+            const id = document.getElementById('template_id').value;
+            if (!id) return;
+            const tpl = templates.find(t => t.id == id);
+            if (tpl) {
+                document.getElementById('message_body').value = tpl.body;
+                updateCharCount();
+            }
+        }
+        
+        function updateCharCount() {
+            const text = document.getElementById('message_body').value;
+            const len = text.length;
+            document.getElementById('charCount').textContent = `${len} حرف`;
+            // Simple Arabic SMS length calculation (70 chars for 1st, 67 for multi)
+            const isArabic = /[\u0600-\u06FF]/.test(text);
+            let count = 1;
+            if (len > 0) {
+                if (isArabic) count = len <= 70 ? 1 : Math.ceil(len / 67);
+                else count = len <= 160 ? 1 : Math.ceil(len / 153);
+            }
+            document.getElementById('smsCount').textContent = `${count} رسالة`;
+        }
+        
+        async function retrySms(id) {
+            try {
+                if (!bridge) throw new Error('Android Bridge غير متاح');
+                const responseStr = bridge.retrySmsMessageTyped(id);
+                parseBridgeResponse(responseStr);
+                showToast('تم وضع الرسالة في طابور الإرسال');
+                loadData();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadTemplates);
+    
+        
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
 </body>
 </html>
