@@ -1371,7 +1371,7 @@
             .bottom-nav .nav-item span { font-size: 0.45rem; }
             .modal { padding: 16px; }
         }
-    
+
 /* ============================================================
    ACCOUNTING UI/UX ENHANCEMENT V2
    طبقة تصميم محلية لا تضيف أي اعتماد خارجي ولا تغيّر عقود البيانات.
@@ -2077,25 +2077,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         function apiCall(action, params) { return invokeTypedBridge(action, params); }
 
         // حالة واجهة مؤقتة فقط؛ لا تُستخدم لتخزين بيانات تجارية أو محاسبية.
-        const RuntimeState = {
-            values: Object.create(null),
-            set(key, value) { this.values[key] = value; return true; },
-            get(key, defaultValue) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : defaultValue; },
-            getEntries() { return this.get('entries', []); },
-            setEntries(value) { return this.set('entries', value); },
-            getItems() { return this.get('items', []); },
-            setItems(value) { return this.set('items', value); },
-            getAccounts() { return this.get('accounts', []); },
-            setAccounts(value) { return this.set('accounts', value); },
-            getCurrencies() { return this.get('currencies', []); },
-            setCurrencies(value) { return this.set('currencies', value); },
-            getStats() { return this.get('stats', {}); },
-            setStats(value) { return this.set('stats', value); },
-            getNotifications() { return this.get('notifications', []); },
-            setNotifications(value) { return this.set('notifications', value); },
-            getAIInsights() { return this.get('aiInsights', []); },
-            setAIInsights(value) { return this.set('aiInsights', value); }
-        };
+
 
         // 3. حالة الجسر/الشبكة؛ SQLite داخل التطبيق هو مصدر البيانات الوحيد.
         // 3. حالة الجسر/الشبكة؛ لا توجد طوابير محلية للعمليات التجارية.
@@ -2313,132 +2295,13 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         // 9. AI Advisor - تحليل القيود المحاسبية
         // ============================================================
-        function analyzeJournalEntries() {
-            const insights = [];
-            const totalEntries = allEntries.length;
-            const posted = allEntries.filter(e => e.status === 'posted').length;
-            const draft = allEntries.filter(e => e.status === 'draft').length;
-            const totalValue = allEntries.reduce((sum, e) => sum + parseFloat(e.total_debit || 0), 0);
 
-            insights.push({
-                type: 'info',
-                title: '📊 نظرة عامة',
-                suggestion: totalEntries + ' قيد محاسبي',
-                reason: 'مرتلة: ' + posted + ' | مسودة: ' + draft,
-                priority: 'low'
-            });
 
-            if (draft > 10) {
-                insights.push({
-                    type: 'warning',
-                    title: '⚠️ مسودات كثيرة',
-                    suggestion: draft + ' قيد في حالة مسودة، يُنصح بترحيلها',
-                    reason: 'قد تؤثر على دقة التقارير المالية',
-                    priority: 'medium'
-                });
-            }
 
-            if (totalValue > 10000000) {
-                insights.push({
-                    type: 'info',
-                    title: '💰 قيمة عالية',
-                    suggestion: 'إجمالي قيم القيود: ' + formatCurrency(totalValue),
-                    reason: 'يُنصح بمراجعة القيود عالية القيمة',
-                    priority: 'medium'
-                });
-            }
 
-            // تحليل توزيع أنواع القيود
-            const types = {};
-            allEntries.forEach(e => {
-                types[e.entry_type] = (types[e.entry_type] || 0) + 1;
-            });
-            let maxType = '';
-            let maxCount = 0;
-            for (const [type, count] of Object.entries(types)) {
-                if (count > maxCount) { maxCount = count;
-                    maxType = type; }
-            }
-            if (maxType) {
-                insights.push({
-                    type: 'info',
-                    title: '📋 النوع الأكثر استخداماً',
-                    suggestion: getEntryTypeLabel(maxType) + ' (' + maxCount + ' قيد)',
-                    reason: 'أكثر أنواع القيود شيوعاً في النظام',
-                    priority: 'low'
-                });
-            }
 
-            RuntimeState.setAIInsights(insights);
-            return insights;
-        }
 
-        function getTopAIInsight() {
-            const insights = RuntimeState.getAIInsights();
-            if (insights.length === 0) return null;
-            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
-            return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
-        }
 
-        function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('aiContent');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-
-            const insights = analyzeJournalEntries();
-
-            if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
-                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
-                        <p style="font-size:0.8rem;">أضف قيوداً محاسبية أولاً للحصول على توصيات</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const top = getTopAIInsight();
-            const allSuggestions = insights.slice(0, 5);
-
-            let html = `
-                <div style="background:var(--primary-dim);border-radius:16px;padding:16px;margin-bottom:16px;border:2px dashed var(--primary-color);">
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <i class="fas fa-star" style="color:var(--accent-color);"></i>
-                        <span style="font-weight:700;font-size:1rem;color:var(--data-text-color);">التوصية الأولى</span>
-                        ${top && top.priority === 'high' ? '<span style="background:var(--error);color:white;padding:0 8px;border-radius:4px;font-size:0.6rem;">عاجل</span>' : ''}
-                    </div>
-                    <div style="font-size:0.95rem;font-weight:600;color:var(--primary-color);">${top ? top.suggestion : ''}</div>
-                    <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${top ? top.reason : ''}</div>
-                </div>
-                <div style="font-weight:700;font-size:0.9rem;margin-bottom:12px;color:var(--data-text-color);">📋 توصيات أخرى</div>
-            `;
-
-            allSuggestions.forEach((insight, idx) => {
-                const borderColor = insight.priority === 'high' ? 'var(--error)' : insight.priority === 'medium' ?
-                    'var(--warning)' : 'var(--success)';
-                html += `
-                    <div style="background:var(--surface-color);border-radius:12px;padding:12px;margin-bottom:8px;border:2px dashed ${borderColor};border-right:4px solid ${borderColor};">
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-weight:600;color:var(--data-text-color);">${insight.title}</span>
-                            <span style="font-size:0.7rem;color:var(--text-muted);">${insight.priority === 'high' ? 'عاجل' : insight.priority === 'medium' ? 'مهم' : 'عادي'}</span>
-                        </div>
-                        <div style="font-size:0.85rem;color:var(--data-text-color);">${insight.suggestion}</div>
-                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">${insight.reason}</div>
-                    </div>
-                `;
-            });
-
-            content.innerHTML = html;
-            hapticFeedback('light');
-        }
-
-        function closeAIModal(e) {
-            if (e && e.target !== e.currentTarget && e.type === 'click') return;
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
 
         // ============================================================
         // 10. نظام التقارير
@@ -2614,9 +2477,9 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         let currentEditId = 0;
         let currentFilter = 'all';
-        let allEntries = [];
+        const state = { entries: [], accounts: [], page: 0, size: 50, total: 0, pages: 0, items: [] };
         let allItems = [];
-        let allAccounts = [];
+
         let allCurrencies = [];
         let selectedEntryId = null;
         let isInitialLoad = true;
@@ -2678,25 +2541,25 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 if (!accountsRes.success) throw new Error(accountsRes.error || accountsRes.message || 'فشل تحميل الحسابات');
                 if (!currenciesRes.success) throw new Error(currenciesRes.error || currenciesRes.message || 'فشل تحميل العملات');
 
-                allEntries = Array.isArray(entriesRes.data) ? entriesRes.data : [];
+                state.entries = Array.isArray(entriesRes.data?.entries) ? entriesRes.data.entries : (Array.isArray(entriesRes.data) ? entriesRes.data : []);
                 allItems = Array.isArray(itemsRes.data) ? itemsRes.data : [];
-                allAccounts = Array.isArray(accountsRes.data) ? accountsRes.data : [];
+                state.accounts = Array.isArray(accountsRes.data) ? accountsRes.data : [];
                 allCurrencies = Array.isArray(currenciesRes.data) ? currenciesRes.data : [];
-                totalEntries = Number(entriesRes.total || allEntries.length);
+                totalEntries = Number(entriesRes.data?.total || entriesRes.total || state.entries.length);
                 totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
                 if (currentPage > totalPages) {
                     currentPage = totalPages;
                     return await loadEntries(currentPage);
                 }
-                RuntimeState.setEntries(allEntries);
-                RuntimeState.setItems(allItems);
-                RuntimeState.setAccounts(allAccounts);
-                RuntimeState.setCurrencies(allCurrencies);
-                RuntimeState.setStats(entriesRes.stats || {});
-                if (allEntries.length === 0 && totalEntries === 0) showToast('لا توجد قيود محاسبية مطابقة', 'warning');
+                // RuntimeState removed
+                if (entriesRes.data?.stats) {
+                    document.getElementById('statTotalEntries').textContent = formatNumber(entriesRes.data.stats.total);
+                    document.getElementById('statTotalValue').textContent = formatCurrency(entriesRes.data.stats.total_value);
+                }
+                if (state.entries.length === 0 && totalEntries === 0) showToast('لا توجد قيود محاسبية مطابقة', 'warning');
                 await loadNextEntryNumber();
             } catch (e) {
-                allEntries = [];
+                state.entries = [];
                 allItems = [];
                 totalEntries = 0;
                 totalPages = 1;
@@ -2739,7 +2602,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 if (!sel) return;
                 const currentVal = sel.value;
                 sel.innerHTML = '<option value="">اختر الحساب</option>';
-                allAccounts.forEach(a => {
+                state.accounts.forEach(a => {
                     const opt = document.createElement('option');
                     opt.value = a.id;
                     const code = a.account_code || '';
@@ -2825,7 +2688,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         function renderCards() {
             const container = document.getElementById('cardsContainer');
-            let filtered = [...allEntries];
+            let filtered = [...state.entries];
 
             if (currentFilter === 'posted') {
                 filtered = filtered.filter(e => e.status === 'posted');
@@ -2943,10 +2806,10 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 15. تحديث الإحصائيات
         // ============================================================
         function updateStats() {
-            const total = allEntries.length;
-            const posted = allEntries.filter(e => e.status === 'posted').length;
-            const draft = allEntries.filter(e => e.status === 'draft').length;
-            const totalValue = allEntries.reduce((sum, e) => sum + parseFloat(e.total_debit || 0), 0);
+            const total = state.entries.length;
+            const posted = state.entries.filter(e => e.status === 'posted').length;
+            const draft = state.entries.filter(e => e.status === 'draft').length;
+            const totalValue = state.entries.reduce((sum, e) => sum + parseFloat(e.total_debit || 0), 0);
 
             document.getElementById('statTotal').textContent = total;
             document.getElementById('statPosted').textContent = posted;
@@ -2983,7 +2846,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         function generateAlerts() {
             const alerts = [];
 
-            allEntries.forEach(e => {
+            state.entries.forEach(e => {
                 if (e.status === 'draft' && e.entry_date) {
                     const days = Math.floor((new Date() - new Date(e.entry_date)) / (1000 * 60 * 60 * 24));
                     if (days > 7) {
@@ -2998,7 +2861,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 }
             });
 
-            const unbalanced = allEntries.filter(e => parseFloat(e.total_debit || 0) !== parseFloat(e.total_credit || 0));
+            const unbalanced = state.entries.filter(e => parseFloat(e.total_debit || 0) !== parseFloat(e.total_credit || 0));
             if (unbalanced.length > 0) {
                 alerts.push({
                     type: 'danger',
@@ -3063,7 +2926,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 return;
             }
 
-            const account = allAccounts.find(a => a.id == parseInt(accountId));
+            const account = state.accounts.find(a => a.id == parseInt(accountId));
             const currency = allCurrencies.find(c => (c.id || c.currency_id) == parseInt(currencyId));
 
             const item = {
@@ -3272,7 +3135,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 21. تعديل قيد
         // ============================================================
         async function editEntry(id) {
-            const entry = allEntries.find(e => e.id == id);
+            const entry = state.entries.find(e => e.id == id);
             if (!entry) {
                 showToast('❌ القيد غير موجود', 'error');
                 return;
@@ -3285,8 +3148,8 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
             currentEditId = id;
             tempItems = [];
-            const entryItems = allItems.filter(i => i.journal_entry_id == id);
-            entryItems.forEach((item, idx) => {
+            const state.items = allItems.filter(i => i.journal_entry_id == id);
+            state.items.forEach((item, idx) => {
                 tempItems.push({
                     id: ++itemCounter,
                     account_id: item.account_id,
@@ -3328,7 +3191,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 22. حذف قيد
         // ============================================================
         async function deleteEntry(id) {
-            const entry = allEntries.find(e => e.id == id);
+            const entry = state.entries.find(e => e.id == id);
             const name = entry ? (entry.entry_number || 'هذا القيد') : 'هذا القيد';
 
             if (entry && entry.status === 'posted') {
@@ -3357,9 +3220,9 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 const result = await apiCall('deleteJournalEntry', { id: id });
                 if (result.success) {
                     showToast('✅ تم الحذف بنجاح', 'success');
-                    allEntries = allEntries.filter(e => e.id != id);
+                    state.entries = state.entries.filter(e => e.id != id);
                     allItems = allItems.filter(i => i.journal_entry_id != id);
-                    RuntimeState.setEntries(allEntries);
+                    RuntimeState.setEntries(state.entries);
                     RuntimeState.setItems(allItems);
                     renderCards();
                     updateStats();
@@ -3378,7 +3241,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 23. ترحيل قيد
         // ============================================================
         async function postEntry(id) {
-            const entry = allEntries.find(e => e.id == id);
+            const entry = state.entries.find(e => e.id == id);
             if (!entry) {
                 showToast('❌ القيد غير موجود', 'error');
                 return;
@@ -3426,7 +3289,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 24. إلغاء قيد (عكس القيد)
         // ============================================================
         async function reverseEntry(id) {
-            const entry = allEntries.find(e => e.id == id);
+            const entry = state.entries.find(e => e.id == id);
             if (!entry) {
                 showToast('❌ القيد غير موجود', 'error');
                 return;
@@ -3474,7 +3337,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 25. عرض تفاصيل القيد
         // ============================================================
         async function viewEntry(id) {
-            const entry = allEntries.find(e => e.id == id);
+            const entry = state.entries.find(e => e.id == id);
             if (!entry) {
                 showToast('❌ القيد غير موجود', 'error');
                 return;
@@ -3577,7 +3440,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
 
         function getExportRows() {
-            return allEntries.map(entry => ({
+            return state.entries.map(entry => ({
                 number: entry.entry_number || '', date: entry.entry_date || '', description: entry.description || '',
                 type: getEntryTypeLabel(entry.entry_type), debit: Number(entry.total_debit || 0),
                 credit: Number(entry.total_credit || 0), status: getEntryStatusLabel(entry.status)
@@ -3641,7 +3504,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         }
 
         function printEntries() {
-            if (!allEntries.length) { showToast('لا توجد بيانات حقيقية للطباعة', 'warning'); return; }
+            if (!state.entries.length) { showToast('لا توجد بيانات حقيقية للطباعة', 'warning'); return; }
             if (window.AndroidInterface && typeof window.AndroidInterface.printCurrentPage === 'function') {
                 const response = parseBridgeResult(window.AndroidInterface.printCurrentPage());
                 if (response && response.success === false) showToast(response.message || response.error || 'تعذر فتح الطباعة', 'error');
@@ -3772,7 +3635,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             });
 
             setTimeout(() => {
-                if (allEntries.length > 0) {
+                if (state.entries.length > 0) {
                     const insights = RuntimeState.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');

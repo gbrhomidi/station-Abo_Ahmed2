@@ -1517,7 +1517,7 @@ function parseBridgeResult(result) {
         }
 
         function showBalanceContractBlocked() {
-            balanceSheetData = null;
+            state.data = null;
             const empty = '<div class="empty-state"><i class="fas fa-database" aria-hidden="true"></i><p>' + BALANCE_CONTRACT_BLOCKED_MESSAGE + '</p></div>';
             document.getElementById('assetsList').innerHTML = empty;
             document.getElementById('liabilitiesList').innerHTML = empty;
@@ -1683,23 +1683,7 @@ function parseBridgeResult(result) {
         // ============================================================
         // 9. AI Advisor - تحليل الميزانية العمومية
         // ============================================================
-        function analyzeBalanceSheet(data) {
-            const insights = [];
-            if (!data) return insights;
-
-            const assets = toFiniteNumber(data.total_assets, 0);
-            const liabilities = toFiniteNumber(data.total_liabilities, 0);
-            const equity = toFiniteNumber(data.total_equity, 0);
-            const difference = assets - liabilities;
-
-            insights.push({
-                type: 'info',
-                title: '📊 نظرة عامة',
-                suggestion: 'إجمالي الأصول: ' + formatCurrency(assets) + ' | الخصوم: ' + formatCurrency(liabilities) +
-                    ' | حقوق الملكية: ' + formatCurrency(equity),
-                reason: 'المعادلة المحاسبية: الأصول = الخصوم + حقوق الملكية',
-                priority: 'low'
-            });
+        );
 
             // تحليل النسب المالية
             if (liabilities > 0 && assets > 0) {
@@ -1757,25 +1741,13 @@ function parseBridgeResult(result) {
             return insights;
         }
 
-        function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
-            if (insights.length === 0) return null;
-            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+        ;
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
         }
 
-        function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('aiContent');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
 
-            if (!balanceSheetData) {
-                content.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;"><i class="fas fa-database" aria-hidden="true" style="font-size:3rem;margin-bottom:12px;display:block;"></i><p>لا توجد بيانات ميزانية متاحة للتحليل</p><p style="font-size:0.8rem;">حمّل الميزانية من قاعدة البيانات أولاً</p></div>';
-                return;
-            }
 
-            const balanceData = normalizeBalanceData(balanceSheetData);
+            const balanceData = normalizeBalanceData(state.data);
             const insights = analyzeBalanceSheet(balanceData);
 
             if (insights.length === 0) {
@@ -1824,11 +1796,7 @@ function parseBridgeResult(result) {
             hapticFeedback('light');
         }
 
-        function closeAIModal(e) {
-            if (e && e.target !== e.currentTarget && e.type === 'click') return;
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
+
 
         // ============================================================
         // 10. نظام التقارير
@@ -1912,7 +1880,7 @@ function parseBridgeResult(result) {
                     throw new Error(result.error || result.message || 'فشل توليد التقرير');
                 }
                 const data = normalizeBalanceData(result.data || result);
-                balanceSheetData = data;
+                state.data = data;
                 LocalDB.setBalanceSheet(data);
                 reportData = data;
                 renderReportResults(data);
@@ -2010,7 +1978,7 @@ function parseBridgeResult(result) {
         // 11. متغيرات الحالة
         // ============================================================
         let allAccounts = [];
-        let balanceSheetData = null;
+        const state = { data: null, stats: {} };
         let isInitialLoad = true;
         let isLoadingBalance = false;
         let isSavingReport = false;
@@ -2055,26 +2023,25 @@ function parseBridgeResult(result) {
                 if (!Number.isInteger(currencyId) || currencyId < 0) {
                     throw new Error('معرف العملة غير صالح');
                 }
-                const result = await apiCall('getBalanceSheet', { reportDate: date, currencyId });
+                const result = await apiCall('getBalanceSheet', { reportDate: date, currencyId: currencyId });
                 if (!result.success) {
                     throw new Error(result.error || result.message || 'فشل قراءة الميزانية من قاعدة البيانات');
                 }
-                balanceSheetData = normalizeBalanceData(result.data || result);
-                LocalDB.setBalanceSheet(balanceSheetData);
-                renderBalanceSheet(balanceSheetData);
-                updateStats(balanceSheetData);
-                updateAccountingEquation(balanceSheetData);
-                analyzeBalanceSheet(balanceSheetData);
+                state.data = normalizeBalanceData(result.data || result);
+                LocalDB.setBalanceSheet(state.data);
+                renderBalanceSheet(state.data);
+                updateStats(state.data);
+                updateAccountingEquation(state.data);
+                analyzeBalanceSheet(state.data);
                 showToast('✅ تم تحميل الميزانية من قاعدة البيانات الفعلية', 'success');
             } catch (e) {
                 console.error('Balance load error:', e);
                 const cached = LocalDB.getBalanceSheet();
                 if (cached) {
-                    balanceSheetData = normalizeBalanceData(cached);
-                    renderBalanceSheet(balanceSheetData);
-                    updateStats(balanceSheetData);
-                    updateAccountingEquation(balanceSheetData);
-                    analyzeBalanceSheet(balanceSheetData);
+                    state.data = normalizeBalanceData(cached);
+                    renderBalanceSheet(state.data);
+                    updateStats(state.data);
+                    updateAccountingEquation(state.data);
                     showToast('⚠️ تعذر المصدر الحالي؛ عُرضت آخر نسخة محلية', 'warning');
                 } else {
                     showBalanceContractBlocked();
@@ -2270,11 +2237,11 @@ function parseBridgeResult(result) {
 
         function showStatDetail(type) {
             const values = {
-                assets: ['إجمالي الأصول', balanceSheetData?.total_assets],
-                liabilities: ['إجمالي الخصوم', balanceSheetData?.total_liabilities],
-                equity: ['حقوق الملكية', balanceSheetData?.total_equity],
-                difference: ['الفارق المحاسبي', balanceSheetData?.difference ??
-                    (toFiniteNumber(balanceSheetData?.total_assets, 0) - toFiniteNumber(balanceSheetData?.total_liabilities, 0) - toFiniteNumber(balanceSheetData?.total_equity, 0))]
+                assets: ['إجمالي الأصول', state.data?.total_assets],
+                liabilities: ['إجمالي الخصوم', state.data?.total_liabilities],
+                equity: ['حقوق الملكية', state.data?.total_equity],
+                difference: ['الفارق المحاسبي', state.data?.difference ??
+                    (toFiniteNumber(state.data?.total_assets, 0) - toFiniteNumber(state.data?.total_liabilities, 0) - toFiniteNumber(state.data?.total_equity, 0))]
             };
             const item = values[type];
             if (!item) return;
@@ -2291,10 +2258,10 @@ function parseBridgeResult(result) {
         // ============================================================
         function generateAlerts() {
             const alerts = [];
-            if (balanceSheetData) {
-                const assets = toFiniteNumber(balanceSheetData.total_assets, 0);
-                const liabilities = toFiniteNumber(balanceSheetData.total_liabilities, 0);
-                const equity = toFiniteNumber(balanceSheetData.total_equity, 0);
+            if (state.data) {
+                const assets = toFiniteNumber(state.data.total_assets, 0);
+                const liabilities = toFiniteNumber(state.data.total_liabilities, 0);
+                const equity = toFiniteNumber(state.data.total_equity, 0);
                 const diff = assets - liabilities - equity;
 
                 if (Math.abs(diff) > 0.01) {
@@ -2360,7 +2327,7 @@ function parseBridgeResult(result) {
 
         function exportBalanceSheet() {
             const date = document.getElementById('balanceDate').value;
-            if (!isValidDateInput(date) || !balanceSheetData) {
+            if (!isValidDateInput(date) || !state.data) {
                 showToast('❌ يرجى تحميل الميزانية أولاً', 'error');
                 return;
             }
@@ -2413,11 +2380,11 @@ function parseBridgeResult(result) {
         async function saveReport() {
             if (isSavingReport) return;
             const date = document.getElementById('balanceDate').value;
-            if (!isValidDateInput(date) || !balanceSheetData) {
+            if (!isValidDateInput(date) || !state.data) {
                 showToast('❌ يرجى تحميل ميزانية صالحة أولاً', 'error');
                 return;
             }
-            if (balanceSheetData.is_balanced === false) {
+            if (state.data.is_balanced === false) {
                 showToast('❌ لا يمكن حفظ ميزانية غير متوازنة؛ راجع الفارق المحاسبي أولاً', 'error');
                 return;
             }
@@ -2548,7 +2515,7 @@ function parseBridgeResult(result) {
             setTimeout(generateAlerts, 1500);
 
             setTimeout(() => {
-                if (balanceSheetData) {
+                if (state.data) {
                     const insights = LocalDB.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');

@@ -1969,28 +1969,11 @@
         // ============================================================
         // 9. AI Advisor - تحليل البنوك والحسابات
         // ============================================================
-        function analyzeAccounts() {
-            const insights = [];
-            const totalBalance = allAccounts.reduce((sum, a) => sum + toFiniteNumber(a.current_balance, 0), 0);
-
-            allBanks.forEach(b => {
-                const bankAccounts = allAccounts.filter(a => a.bank_id == b.id);
-                const total = bankAccounts.reduce((sum, a) => sum + toFiniteNumber(a.current_balance, 0), 0);
-                const count = bankAccounts.length;
-
-                if (count > 0) {
-                    insights.push({
-                        type: 'bank',
-                        id: b.id,
-                        name: b.bank_name_ar || b.bank_name || 'بنك',
-                        suggestion: count + ' حسابات بإجمالي ' + formatCurrency(total),
-                        reason: 'أكبر بنك من حيث عدد الحسابات',
-                        priority: count > 3 ? 'high' : 'medium'
-                    });
+        );
                 }
             });
 
-            allAccounts.forEach(a => {
+            state.accounts.forEach(a => {
                 const balance = toFiniteNumber(a.current_balance, 0);
                 const overdraft = toFiniteNumber(a.overdraft_limit, 0);
                 if (balance < 0 && overdraft > 0) {
@@ -2009,31 +1992,11 @@
             return insights;
         }
 
-        function getTopAIInsight() {
-            const insights = LocalDB.getAIInsights();
-            if (insights.length === 0) return null;
-            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+        ;
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
         }
 
-        function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('aiContent');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
 
-            const insights = analyzeAccounts();
-
-            if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
-                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
-                        <p style="font-size:0.8rem;">أضف بنوكاً وحسابات أولاً للحصول على توصيات</p>
-                    </div>
-                `;
-                return;
-            }
 
             const top = getTopAIInsight();
             const allSuggestions = insights.slice(0, 5);
@@ -2069,11 +2032,7 @@
             hapticFeedback('light');
         }
 
-        function closeAIModal(e) {
-            if (e && e.target !== e.currentTarget && e.type === 'click') return;
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
+
 
         // ============================================================
         // 10. نظام التقارير
@@ -2198,8 +2157,8 @@
         let currentEditId = 0;
         let currentAccountEditId = 0;
         let currentFilter = 'all';
-        let allBanks = [];
-        let allAccounts = [];
+        const state = { banks: [], accounts: [], transactions: [], balances: {} };
+
         let allCurrencies = [];
         let selectedBankId = null;
         let selectedAccountId = null;
@@ -2249,22 +2208,22 @@
                 ]);
                 const [banksRes, accountsRes, currenciesRes] = results.map(item => item.status === 'fulfilled' ? item.value : ({ success: false, error: item.reason?.error || item.reason?.message || 'فشل الطلب' }));
 
-                allBanks = banksRes.success && Array.isArray(banksRes.data) ? banksRes.data : LocalDB.getBanks();
-                allAccounts = accountsRes.success && Array.isArray(accountsRes.data) ? accountsRes.data : LocalDB.getAccounts();
+                state.banks = banksRes.success && Array.isArray(banksRes.data) ? banksRes.data : LocalDB.getBanks();
+                state.accounts = accountsRes.success && Array.isArray(accountsRes.data) ? accountsRes.data : LocalDB.getAccounts();
                 allCurrencies = currenciesRes.success && Array.isArray(currenciesRes.data) ? currenciesRes.data : LocalDB.getCurrencies();
-                if (banksRes.success) LocalDB.setBanks(allBanks);
-                if (accountsRes.success) LocalDB.setAccounts(allAccounts);
+                if (banksRes.success) LocalDB.setBanks(state.banks);
+                if (accountsRes.success) LocalDB.setAccounts(state.accounts);
                 if (currenciesRes.success) LocalDB.setCurrencies(allCurrencies);
 
                 const errors = [banksRes, accountsRes, currenciesRes].filter(item => !item.success);
-                if (errors.length && allBanks.length === 0 && allAccounts.length === 0) {
+                if (errors.length && state.banks.length === 0 && state.accounts.length === 0) {
                     showToast('⚠️ تعذر تحميل بيانات البنوك والحسابات من قاعدة البيانات', 'warning');
-                } else if (!errors.length && allBanks.length === 0 && allAccounts.length === 0) {
+                } else if (!errors.length && state.banks.length === 0 && state.accounts.length === 0) {
                     showToast('ℹ️ لا توجد بنوك أو حسابات مسجلة', 'info');
                 }
             } catch (e) {
-                allBanks = LocalDB.getBanks();
-                allAccounts = LocalDB.getAccounts();
+                state.banks = LocalDB.getBanks();
+                state.accounts = LocalDB.getAccounts();
                 allCurrencies = LocalDB.getCurrencies();
                 showToast('❌ تعذر تحميل بيانات البنوك والحسابات', 'error');
             } finally {
@@ -2287,7 +2246,7 @@
                 if (!sel) return;
                 const currentVal = sel.value;
                 sel.innerHTML = '<option value="">اختر البنك</option>';
-                allBanks.forEach(b => {
+                state.banks.forEach(b => {
                     const name = b.bank_name_ar || b.bank_name || 'بنك';
                     const opt = document.createElement('option');
                     opt.value = b.id;
@@ -2319,8 +2278,8 @@
         function renderCards() {
             const container = document.getElementById('cardsContainer');
 
-            let filteredBanks = [...allBanks];
-            let filteredAccounts = [...allAccounts];
+            let filteredBanks = [...state.banks];
+            let filteredAccounts = [...state.accounts];
 
             if (currentFilter === 'bank') {
                 filteredAccounts = [];
@@ -2486,10 +2445,10 @@
         // 14. تحديث الإحصائيات
         // ============================================================
         function updateStats() {
-            const totalBanks = allBanks.length;
-            const totalAccounts = allAccounts.length;
-            const totalBalance = allAccounts.reduce((sum, a) => sum + toFiniteNumber(a.current_balance, 0), 0);
-            const activeAccounts = allAccounts.filter(a => a.status === 'active').length;
+            const totalBanks = state.banks.length;
+            const totalAccounts = state.accounts.length;
+            const totalBalance = state.accounts.reduce((sum, a) => sum + toFiniteNumber(a.current_balance, 0), 0);
+            const activeAccounts = state.accounts.filter(a => a.status === 'active').length;
 
             document.getElementById('statTotalBanks').textContent = totalBanks;
             document.getElementById('statTotalAccounts').textContent = totalAccounts;
@@ -2501,10 +2460,10 @@
 
         function showStatDetail(type) {
             const values = {
-                total: ['إجمالي البنوك', allBanks.length],
-                accounts: ['إجمالي الحسابات', allAccounts.length],
-                balance: ['إجمالي الأرصدة', formatCurrency(allAccounts.reduce((sum, item) => sum + toFiniteNumber(item.current_balance, 0), 0))],
-                active: ['الحسابات النشطة', allAccounts.filter(item => item.status === 'active').length]
+                total: ['إجمالي البنوك', state.banks.length],
+                accounts: ['إجمالي الحسابات', state.accounts.length],
+                balance: ['إجمالي الأرصدة', formatCurrency(state.accounts.reduce((sum, item) => sum + toFiniteNumber(item.current_balance, 0), 0))],
+                active: ['الحسابات النشطة', state.accounts.filter(item => item.status === 'active').length]
             };
             const item = values[type];
             if (!item) return;
@@ -2538,7 +2497,7 @@
         function generateAlerts() {
             const alerts = [];
 
-            allAccounts.forEach(a => {
+            state.accounts.forEach(a => {
                 const balance = toFiniteNumber(a.current_balance, 0);
                 const overdraft = toFiniteNumber(a.overdraft_limit, 0);
 
@@ -2561,7 +2520,7 @@
                 }
             });
 
-            allBanks.forEach(b => {
+            state.banks.forEach(b => {
                 if (b.is_active == 0 || b.isActive == 0) {
                     alerts.push({
                         type: 'info',
@@ -2668,7 +2627,7 @@
         // 19. تعديل بنك
         // ============================================================
         async function editBank(id) {
-            const item = allBanks.find(s => s.id == id);
+            const item = state.banks.find(s => s.id == id);
             if (!item) {
                 showToast('❌ البنك غير موجود', 'error');
                 return;
@@ -2703,7 +2662,7 @@
         // 20. حذف بنك
         // ============================================================
         async function deleteBank(id) {
-            const item = allBanks.find(s => s.id == id);
+            const item = state.banks.find(s => s.id == id);
             const name = item ? (item.bank_name_ar || item.bank_name || 'هذا البنك') : 'هذا البنك';
             const confirmed = await Swal.fire({ title: '⚠️ هل أنت متأكد؟', text: 'سيتم حذف البنك "' + name + '" - لا يمكن التراجع!', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', background: '#1a2236', color: '#f1f5f9' });
             if (!confirmed.isConfirmed || isSaving) return;
@@ -2791,7 +2750,7 @@
         // 23. تعديل حساب
         // ============================================================
         async function editAccount(id) {
-            const item = allAccounts.find(s => s.id == id);
+            const item = state.accounts.find(s => s.id == id);
             if (!item) {
                 showToast('❌ الحساب غير موجود', 'error');
                 return;
@@ -2829,7 +2788,7 @@
         // 24. حذف حساب
         // ============================================================
         async function deleteAccount(id) {
-            const item = allAccounts.find(s => s.id == id);
+            const item = state.accounts.find(s => s.id == id);
             const name = item ? (item.account_name_ar || item.account_name || 'هذا الحساب') : 'هذا الحساب';
             const confirmed = await Swal.fire({ title: '⚠️ هل أنت متأكد؟', text: 'سيتم حذف الحساب "' + name + '" - لا يمكن التراجع!', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b', confirmButtonText: 'نعم، احذف', cancelButtonText: 'إلغاء', background: '#1a2236', color: '#f1f5f9' });
             if (!confirmed.isConfirmed || isSaving) return;
@@ -2850,13 +2809,13 @@
         // 25. عرض تفاصيل البنك
         // ============================================================
         async function viewBank(id) {
-            const bank = allBanks.find(s => s.id == id);
+            const bank = state.banks.find(s => s.id == id);
             if (!bank) {
                 showToast('❌ البنك غير موجود', 'error');
                 return;
             }
 
-            const accounts = allAccounts.filter(a => a.bank_id == id);
+            const accounts = state.accounts.filter(a => a.bank_id == id);
 
             const content = document.getElementById('detailsContent');
             const isActive = bank.is_active == 1 || bank.isActive == 1;
@@ -2930,13 +2889,13 @@
         // 26. عرض تفاصيل الحساب
         // ============================================================
         async function viewAccount(id) {
-            const account = allAccounts.find(s => s.id == id);
+            const account = state.accounts.find(s => s.id == id);
             if (!account) {
                 showToast('❌ الحساب غير موجود', 'error');
                 return;
             }
 
-            const bank = allBanks.find(b => b.id == account.bank_id);
+            const bank = state.banks.find(b => b.id == account.bank_id);
             const currency = allCurrencies.find(c => (c.id || c.currency_id) == account.currency_id);
 
             const content = document.getElementById('detailsContent');
@@ -3151,7 +3110,7 @@
             });
 
             setTimeout(() => {
-                if (allBanks.length > 0 || allAccounts.length > 0) {
+                if (state.banks.length > 0 || state.accounts.length > 0) {
                     const insights = LocalDB.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');

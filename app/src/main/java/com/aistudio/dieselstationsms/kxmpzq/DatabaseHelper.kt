@@ -682,11 +682,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS cash_deposits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE,
+                deposit_code TEXT UNIQUE,
+                station_id INTEGER,
+                cash_box_id INTEGER,
+                bank_account_id INTEGER,
                 customer_id INTEGER REFERENCES parties(id),
                 amount REAL DEFAULT 0,
                 balance_after REAL DEFAULT 0,
+                description TEXT,
                 notes TEXT,
+                status TEXT DEFAULT 'completed',
                 operator TEXT DEFAULT 'System',
+                created_by INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 date TEXT DEFAULT CURRENT_TIMESTAMP,
                 is_deleted INTEGER DEFAULT 0
             )
@@ -5341,11 +5350,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS cash_deposits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE,
+                deposit_code TEXT UNIQUE,
+                station_id INTEGER,
+                cash_box_id INTEGER,
+                bank_account_id INTEGER,
                 customer_id INTEGER,
                 amount REAL DEFAULT 0,
                 balance_after REAL DEFAULT 0,
+                description TEXT,
                 notes TEXT,
+                status TEXT DEFAULT 'completed',
                 operator TEXT DEFAULT 'System',
+                created_by INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 date TEXT DEFAULT CURRENT_TIMESTAMP,
                 is_deleted INTEGER DEFAULT 0
             )
@@ -14133,6 +14151,348 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     // ========================================================================
+    // ========================================================================
+    // دوال MODULE-009 (المالية والحسابات)
+    // ========================================================================
+
+    fun getPaymentsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("s.station_id = ?", "p.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(p.payment_code LIKE ? OR COALESCE(cp.commercial_name,'') LIKE ? OR COALESCE(sp.commercial_name,'') LIKE ?)"; repeat(3) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "p.status = ?"; args += it }
+        data.optString("payment_type").trim().takeIf { it.isNotEmpty() }?.let { where += "p.payment_type = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(p.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(p.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM payments p LEFT JOIN sales_transactions s ON s.id = p.sale_id LEFT JOIN parties cp ON cp.id = p.customer_party_id LEFT JOIN parties sp ON sp.id = p.supplier_party_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "amount" -> "p.amount"; "status" -> "p.status"; "created_at" -> "p.created_at"; else -> "p.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT p.*, s.invoice_number, COALESCE(cp.commercial_name, cp.commercial_name_ar, '') AS customer_name, COALESCE(sp.commercial_name, sp.commercial_name_ar, '') AS supplier_name FROM payments p LEFT JOIN sales_transactions s ON s.id = p.sale_id LEFT JOIN parties cp ON cp.id = p.customer_party_id LEFT JOIN parties sp ON sp.id = p.supplier_party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getReceiptsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("p.station_id = ?", "r.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(r.receipt_number LIKE ? OR r.received_from LIKE ? OR COALESCE(p.commercial_name,'') LIKE ?)"; repeat(3) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "r.status = ?"; args += it }
+        data.optString("receipt_type").trim().takeIf { it.isNotEmpty() }?.let { where += "r.receipt_type = ?"; args += it }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(r.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(r.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM receipts r LEFT JOIN parties p ON p.id = r.customer_party_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "amount" -> "r.amount"; "status" -> "r.status"; "created_at" -> "r.created_at"; else -> "r.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT r.*, COALESCE(p.commercial_name, p.commercial_name_ar, '') AS customer_name FROM receipts r LEFT JOIN parties p ON p.id = r.customer_party_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getExpensesPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("e.station_id = ?", "e.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(e.expense_code LIKE ? OR e.payee_name LIKE ? OR COALESCE(c.category_name,'') LIKE ?)"; repeat(3) { args += like } }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "e.status = ?"; args += it }
+        data.optLong("category_id", 0L).takeIf { it > 0L }?.let { where += "e.expense_category_id = ?"; args += it.toString() }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(e.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(e.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM expenses e LEFT JOIN expense_categories c ON c.id = e.expense_category_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "total_amount" -> "e.total_amount"; "status" -> "e.status"; "created_at" -> "e.created_at"; else -> "e.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT e.*, COALESCE(c.category_name, c.category_name_ar, '') AS category_name FROM expenses e LEFT JOIN expense_categories c ON c.id = e.expense_category_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getBudgetsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("b.station_id = ?")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(b.budget_name LIKE ?)"; args += like }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "b.status = ?"; args += it }
+        data.optString("period").trim().takeIf { it.isNotEmpty() }?.let { where += "b.budget_period = ?"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM budgets b WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "total_amount" -> "b.total_amount"; "start_date" -> "b.start_date"; "status" -> "b.status"; else -> "b.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT b.* FROM budgets b WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+
+    fun getCashMovementsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("cb.station_id = ?", "cm.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(cm.description LIKE ? OR cm.reference_type LIKE ?)"; args += like; args += like }
+        data.optString("movement_type").trim().takeIf { it.isNotEmpty() }?.let { where += "cm.movement_type = ?"; args += it }
+        data.optLong("cash_box_id", 0L).takeIf { it > 0L }?.let { where += "cm.cash_box_id = ?"; args += it.toString() }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(cm.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(cm.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM cash_movements cm JOIN cash_boxes cb ON cb.id = cm.cash_box_id WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "amount" -> "cm.amount"; "created_at" -> "cm.created_at"; else -> "cm.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT cm.*, cb.box_name FROM cash_movements cm JOIN cash_boxes cb ON cb.id = cm.cash_box_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+    fun getCashDepositsPage(data: JSONObject, stationScopeId: Int): JSONObject {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب" }
+        val limit = data.optInt("limit", 50).coerceIn(1, 100)
+        val offset = data.optInt("offset", 0).coerceAtLeast(0)
+        val where = mutableListOf("d.station_id = ?", "d.is_deleted = 0")
+        val args = mutableListOf(stationScopeId.toString())
+        data.optString("search").trim().takeIf { it.isNotEmpty() }?.let { q -> val like = "%$q%"; where += "(d.deposit_code LIKE ? OR d.description LIKE ?)"; args += like; args += like }
+        data.optString("status").trim().takeIf { it.isNotEmpty() }?.let { where += "d.status = ?"; args += it }
+        data.optLong("cash_box_id", 0L).takeIf { it > 0L }?.let { where += "d.cash_box_id = ?"; args += it.toString() }
+        data.optLong("bank_account_id", 0L).takeIf { it > 0L }?.let { where += "d.bank_account_id = ?"; args += it.toString() }
+        data.optString("from_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(d.created_at) >= date(?)"; args += it }
+        data.optString("to_date").trim().takeIf { it.isNotEmpty() }?.let { where += "date(d.created_at) <= date(?)"; args += it }
+        val whereSql = where.joinToString(" AND ")
+        val db = readableDatabase
+        val total = db.rawQuery("SELECT COUNT(*) FROM cash_deposits d WHERE $whereSql", args.toTypedArray()).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+        val sortColumn = when (data.optString("sort_by")) { "amount" -> "d.amount"; "status" -> "d.status"; "created_at" -> "d.created_at"; else -> "d.id" }
+        val direction = if (data.optString("sort_dir", "desc").equals("asc", true)) "ASC" else "DESC"
+        val rows = db.rawQuery("""SELECT d.*, cb.box_name, ba.account_name AS bank_account_name FROM cash_deposits d LEFT JOIN cash_boxes cb ON cb.id = d.cash_box_id LEFT JOIN bank_accounts ba ON ba.id = d.bank_account_id WHERE $whereSql ORDER BY $sortColumn $direction LIMIT $limit OFFSET $offset""", args.toTypedArray()).use { cursorToJsonArray(it) }
+        return module008Page(rows, total, limit, offset)
+    }
+
+
+    fun addPayment(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للمدفوعات" }
+        val amount = data.optDouble("amount", Double.NaN)
+        val customerId = data.optLong("customer_party_id", 0L)
+        val supplierId = data.optLong("supplier_party_id", 0L)
+        val cashBoxId = data.optLong("cash_box_id", 0L)
+        val bankAccountId = data.optLong("bank_account_id", 0L)
+        require(amount.isFinite() && amount > 0.0) { "قيمة الدفع غير صالحة" }
+        require(cashBoxId > 0 || bankAccountId > 0) { "يجب تحديد صندوق أو حساب بنكي" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                if (customerId > 0) requirePartyInStation(db, customerId, stationScopeId)
+                if (supplierId > 0) requirePartyInStation(db, supplierId, stationScopeId)
+                if (cashBoxId > 0) {
+                    val cb = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(cashBoxId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الصندوق غير متاح أو خارج المحطة") }
+                    require(cb >= amount) { "رصيد الصندوق غير كافٍ" }
+                    val updated = db.update("cash_boxes", ContentValues().apply { put("current_balance", cb - amount) }, "id=?", arrayOf(cashBoxId.toString()))
+                    require(updated == 1) { "فشل تحديث الصندوق" }
+                    val cvMove = ContentValues().apply {
+                        put("uuid", UUID.randomUUID().toString())
+                        put("cash_box_id", cashBoxId)
+                        put("movement_type", "out")
+                        put("amount", amount)
+                        put("balance_before", cb)
+                        put("balance_after", cb - amount)
+                        put("description", "سداد مدفوعات")
+                        put("created_by", actorId)
+                        put("created_at", getCurrentDateTime())
+                    }
+                    db.insertOrThrow("cash_movements", null, cvMove)
+                }
+                if (bankAccountId > 0) {
+                    val ba = db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(bankAccountId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الحساب البنكي غير متاح أو خارج المحطة") }
+                    require(ba >= amount) { "رصيد الحساب البنكي غير كافٍ" }
+                    val updated = db.update("bank_accounts", ContentValues().apply { put("current_balance", ba - amount) }, "id=?", arrayOf(bankAccountId.toString()))
+                    require(updated == 1) { "فشل تحديث الحساب البنكي" }
+                }
+                val paymentCode = "PAY-" + System.currentTimeMillis()
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("payment_code", paymentCode)
+                    put("amount", amount)
+                    if (customerId > 0) put("customer_party_id", customerId)
+                    if (supplierId > 0) put("supplier_party_id", supplierId)
+                    put("payment_type", data.optString("payment_type", "cash"))
+                    put("payment_method", data.optString("payment_method", "cash"))
+                    if (cashBoxId > 0) put("cash_box_id", cashBoxId)
+                    if (bankAccountId > 0) put("bank_account_id", bankAccountId)
+                    put("notes", data.optString("notes", ""))
+                    put("status", "completed")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                val id = db.insertOrThrow("payments", null, cv)
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addReceipt(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للإيصالات" }
+        val amount = data.optDouble("amount", Double.NaN)
+        val customerId = data.optLong("customer_party_id", 0L)
+        val cashBoxId = data.optLong("cash_box_id", 0L)
+        require(amount.isFinite() && amount > 0.0) { "قيمة الإيصال غير صالحة" }
+        require(cashBoxId > 0) { "يجب تحديد صندوق" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                if (customerId > 0) requirePartyInStation(db, customerId, stationScopeId)
+                val cb = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(cashBoxId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الصندوق غير متاح أو خارج المحطة") }
+                val updated = db.update("cash_boxes", ContentValues().apply { put("current_balance", cb + amount) }, "id=?", arrayOf(cashBoxId.toString()))
+                require(updated == 1) { "فشل تحديث الصندوق" }
+                val cvMove = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("cash_box_id", cashBoxId)
+                    put("movement_type", "in")
+                    put("amount", amount)
+                    put("balance_before", cb)
+                    put("balance_after", cb + amount)
+                    put("description", "مقبوضات إيصال")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("cash_movements", null, cvMove)
+                val receiptNum = "REC-" + System.currentTimeMillis()
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("receipt_number", receiptNum)
+                    put("amount", amount)
+                    if (customerId > 0) put("customer_party_id", customerId)
+                    put("receipt_type", data.optString("receipt_type", "cash"))
+                    put("received_from", data.optString("received_from", ""))
+                    put("received_by", actorId)
+                    put("cash_box_id", cashBoxId)
+                    put("purpose", data.optString("purpose", ""))
+                    put("status", "active")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                val id = db.insertOrThrow("receipts", null, cv)
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addExpense(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للمصروفات" }
+        val amount = data.optDouble("amount", Double.NaN)
+        val categoryId = data.optLong("expense_category_id", 0L)
+        val cashBoxId = data.optLong("cash_box_id", 0L)
+        require(amount.isFinite() && amount > 0.0) { "قيمة المصروف غير صالحة" }
+        require(categoryId > 0) { "فئة المصروف مطلوبة" }
+        require(cashBoxId > 0) { "الصندوق مطلوب لدفع المصروف" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val cb = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(cashBoxId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الصندوق غير متاح أو خارج المحطة") }
+                require(cb >= amount) { "رصيد الصندوق غير كافٍ" }
+                val updated = db.update("cash_boxes", ContentValues().apply { put("current_balance", cb - amount) }, "id=?", arrayOf(cashBoxId.toString()))
+                require(updated == 1) { "فشل تحديث الصندوق" }
+                val cvMove = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("cash_box_id", cashBoxId)
+                    put("movement_type", "out")
+                    put("amount", amount)
+                    put("balance_before", cb)
+                    put("balance_after", cb - amount)
+                    put("description", "دفع مصروف")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("cash_movements", null, cvMove)
+                val expCode = "EXP-" + System.currentTimeMillis()
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("expense_code", expCode)
+                    put("expense_category_id", categoryId)
+                    put("station_id", stationScopeId)
+                    put("payee_name", data.optString("payee_name", ""))
+                    put("amount", amount)
+                    put("total_amount", amount)
+                    put("description", data.optString("description", ""))
+                    put("payment_method", "cash")
+                    put("payment_status", "paid")
+                    put("paid_amount", amount)
+                    put("status", "paid")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                val id = db.insertOrThrow("expenses", null, cv)
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
+    fun addCashDeposit(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0) { "معرف المحطة مطلوب للإيداعات" }
+        val amount = data.optDouble("amount", Double.NaN)
+        val cashBoxId = data.optLong("cash_box_id", 0L)
+        val bankAccountId = data.optLong("bank_account_id", 0L)
+        require(amount.isFinite() && amount > 0.0) { "قيمة الإيداع غير صالحة" }
+        require(cashBoxId > 0 && bankAccountId > 0) { "يجب تحديد صندوق للإيداع منه وحساب بنكي للإيداع فيه" }
+        dbLock.lock()
+        return try {
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                val cb = db.rawQuery("SELECT current_balance FROM cash_boxes WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(cashBoxId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الصندوق غير متاح أو خارج المحطة") }
+                require(cb >= amount) { "رصيد الصندوق غير كافٍ" }
+                val ba = db.rawQuery("SELECT current_balance FROM bank_accounts WHERE id=? AND station_id=? AND is_deleted=0 AND status='active'", arrayOf(bankAccountId.toString(), stationScopeId.toString())).use { if (it.moveToFirst()) it.getDouble(0) else throw IllegalArgumentException("الحساب البنكي غير متاح أو خارج المحطة") }
+                val updatedCb = db.update("cash_boxes", ContentValues().apply { put("current_balance", cb - amount) }, "id=?", arrayOf(cashBoxId.toString()))
+                require(updatedCb == 1) { "فشل تحديث الصندوق" }
+                val updatedBa = db.update("bank_accounts", ContentValues().apply { put("current_balance", ba + amount) }, "id=?", arrayOf(bankAccountId.toString()))
+                require(updatedBa == 1) { "فشل تحديث الحساب البنكي" }
+                val cvMove = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("cash_box_id", cashBoxId)
+                    put("movement_type", "out")
+                    put("amount", amount)
+                    put("balance_before", cb)
+                    put("balance_after", cb - amount)
+                    put("description", "إيداع في البنك")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                db.insertOrThrow("cash_movements", null, cvMove)
+                val depCode = "DEP-" + System.currentTimeMillis()
+                val cv = ContentValues().apply {
+                    put("uuid", UUID.randomUUID().toString())
+                    put("deposit_code", depCode)
+                    put("station_id", stationScopeId)
+                    put("cash_box_id", cashBoxId)
+                    put("bank_account_id", bankAccountId)
+                    put("amount", amount)
+                    put("description", data.optString("description", ""))
+                    put("status", "completed")
+                    put("created_by", actorId)
+                    put("created_at", getCurrentDateTime())
+                }
+                val id = db.insertOrThrow("cash_deposits", null, cv)
+                db.setTransactionSuccessful()
+                id
+            } finally { db.endTransaction() }
+        } finally { dbLock.unlock() }
+    }
+
     // دوال حركات النقدية (V12)
     // ========================================================================
 

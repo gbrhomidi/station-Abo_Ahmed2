@@ -1121,7 +1121,7 @@
             .bottom-nav .nav-item i { font-size: 13px; }
             .bottom-nav .nav-item span { font-size: 0.45rem; }
         }
-    
+
 /* ============================================================
    ACCOUNTING UI/UX ENHANCEMENT V2
    طبقة تصميم محلية لا تضيف أي اعتماد خارجي ولا تغيّر عقود البيانات.
@@ -1727,21 +1727,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         function apiCall(action, params) { return invokeTypedBridge(action, params); }
 
         // حالة واجهة مؤقتة فقط؛ لا تُستخدم لتخزين بيانات الأستاذ أو التقارير.
-        const RuntimeState = {
-            values: Object.create(null),
-            set(key, value) { this.values[key] = value; return true; },
-            get(key, defaultValue) { return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : defaultValue; },
-            getAccounts() { return this.get('accounts', []); },
-            setAccounts(value) { return this.set('accounts', value); },
-            getLedgerEntries() { return this.get('ledgerEntries', []); },
-            setLedgerEntries(value) { return this.set('ledgerEntries', value); },
-            getStats() { return this.get('stats', {}); },
-            setStats(value) { return this.set('stats', value); },
-            getNotifications() { return this.get('notifications', []); },
-            setNotifications(value) { return this.set('notifications', value); },
-            getAIInsights() { return this.get('aiInsights', []); },
-            setAIInsights(value) { return this.set('aiInsights', value); }
-        };
+
 
         // 3. حالة الجسر/الشبكة؛ SQLite داخل التطبيق هو مصدر البيانات الوحيد.
         // 3. حالة الجسر/الشبكة؛ لا توجد طوابير محلية للعمليات التجارية.
@@ -1936,17 +1922,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         // 9. AI Advisor - تحليل دفتر الأستاذ
         // ============================================================
-        function analyzeLedger() {
-            const insights = [];
-            const totalAccounts = allAccounts.length;
-            const totalEntries = ledgerEntries ? ledgerEntries.length : 0;
-            let totalDebit = 0,
-                totalCredit = 0;
-            if (ledgerEntries) {
-                ledgerEntries.forEach(e => {
-                    totalDebit += parseFloat(e.debit || 0);
-                    totalCredit += parseFloat(e.credit || 0);
-                });
+        );
             }
 
             insights.push({
@@ -1968,9 +1944,9 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             }
 
             // تحليل أكثر الحسابات حركة
-            if (ledgerEntries && ledgerEntries.length > 0) {
+            if (state.entries && state.entries.length > 0) {
                 const accountMap = {};
-                ledgerEntries.forEach(e => {
+                state.entries.forEach(e => {
                     const key = e.account_id;
                     if (!accountMap[key]) accountMap[key] = { count: 0, total: 0 };
                     accountMap[key].count++;
@@ -1981,7 +1957,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 for (const [id, data] of Object.entries(accountMap)) {
                     if (data.count > maxCount) {
                         maxCount = data.count;
-                        const acc = allAccounts.find(a => a.id == id);
+                        const acc = state.accounts.find(a => a.id == id);
                         maxAccount = acc ? (acc.account_name_ar || acc.account_name || 'حساب') : 'حساب';
                     }
                 }
@@ -2000,31 +1976,11 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             return insights;
         }
 
-        function getTopAIInsight() {
-            const insights = RuntimeState.getAIInsights();
-            if (insights.length === 0) return null;
-            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+        ;
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
         }
 
-        function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('aiContent');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
 
-            const insights = analyzeLedger();
-
-            if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
-                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
-                        <p style="font-size:0.8rem;">اعرض دفتر الأستاذ أولاً للحصول على توصيات</p>
-                    </div>
-                `;
-                return;
-            }
 
             const top = getTopAIInsight();
             const allSuggestions = insights.slice(0, 5);
@@ -2061,11 +2017,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             hapticFeedback('light');
         }
 
-        function closeAIModal(e) {
-            if (e && e.target !== e.currentTarget && e.type === 'click') return;
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
+
 
         // ============================================================
         // 10. نظام التقارير
@@ -2236,8 +2188,8 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         // 11. متغيرات الحالة
         // ============================================================
-        let allAccounts = [];
-        let ledgerEntries = [];
+        const state = { accounts: [], entries: [], stats: {} };
+
         let currentFilter = 'all';
         let selectedAccountId = null;
         let isInitialLoad = true;
@@ -2270,21 +2222,21 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             try {
                 const result = await apiCall('getChartAccounts', {});
                 if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الحسابات');
-                allAccounts = Array.isArray(result.data) ? result.data : [];
-                RuntimeState.setAccounts(allAccounts);
-                if (allAccounts.length === 0) showToast('لا توجد حسابات في SQLite', 'warning');
+                state.accounts = Array.isArray(result.data) ? result.data : [];
+                RuntimeState.setAccounts(state.accounts);
+                if (state.accounts.length === 0) showToast('لا توجد حسابات في SQLite', 'warning');
                 populateAccountDropdown();
                 const today = new Date();
                 const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30);
                 document.getElementById('ledgerDateFrom').value = monthAgo.toISOString().split('T')[0];
                 document.getElementById('ledgerDateTo').value = today.toISOString().split('T')[0];
                 await loadStats();
-                if (allAccounts.length > 0) {
-                    document.getElementById('ledgerAccount').value = allAccounts[0].id;
+                if (state.accounts.length > 0) {
+                    document.getElementById('ledgerAccount').value = state.accounts[0].id;
                     await loadLedger();
                 }
             } catch (e) {
-                allAccounts = [];
+                state.accounts = [];
                 populateAccountDropdown();
                 showToast('❌ تعذر تحميل الحسابات من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
             } finally {
@@ -2297,7 +2249,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             const select = document.getElementById('ledgerAccount');
             const currentVal = select.value;
             select.innerHTML = '<option value="">-- اختر حساباً --</option>';
-            allAccounts.forEach(a => {
+            state.accounts.forEach(a => {
                 const opt = document.createElement('option');
                 opt.value = a.id;
                 const code = a.account_code || '';
@@ -2316,7 +2268,6 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
                 const result = await apiCall('getLedgerStats', {});
                 if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل الإحصائيات');
                 const s = result.data || {};
-                RuntimeState.setStats(s);
                 document.getElementById('statTotalAccounts').textContent = s.total_accounts || 0;
                 document.getElementById('statTotalEntries').textContent = s.total_entries || 0;
                 document.getElementById('statTotalDebit').textContent = formatNumber(Number(s.total_debit || 0));
@@ -2347,13 +2298,11 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             try {
                 const result = await apiCall('getLedgerEntries', { account_id: Number(accountId), start_date: from, end_date: to });
                 if (!result.success) throw new Error(result.error || result.message || 'فشل تحميل دفتر الأستاذ');
-                ledgerEntries = Array.isArray(result.data) ? result.data : [];
-                RuntimeState.setLedgerEntries(ledgerEntries);
-                renderLedger(ledgerEntries);
-                updateAccountSummary(ledgerEntries);
-                analyzeLedger();
+                state.entries = Array.isArray(result.data) ? result.data : [];
+                renderLedger(state.entries);
+                updateAccountSummary(state.entries);
             } catch (e) {
-                ledgerEntries = [];
+                state.entries = [];
                 renderLedger([]);
                 document.getElementById('accountSummary').style.display = 'none';
                 showToast('❌ تعذر تحميل دفتر الأستاذ من SQLite: ' + (e.error || e.message || 'خطأ غير معروف'), 'error');
@@ -2380,7 +2329,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             let runningBalance = 0;
             // نحتاج إلى الرصيد الافتتاحي من المعلومات الأساسية للحساب
             // سنحصل عليه من حساب الملخص
-            const account = allAccounts.find(a => a.id == parseInt(document.getElementById('ledgerAccount').value));
+            const account = state.accounts.find(a => a.id == parseInt(document.getElementById('ledgerAccount').value));
             const openingBalance = account ? parseFloat(account.current_balance || 0) : 0;
             runningBalance = openingBalance;
 
@@ -2427,7 +2376,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // ============================================================
         function updateAccountSummary(entries) {
             const accountId = document.getElementById('ledgerAccount').value;
-            const account = allAccounts.find(a => a.id == parseInt(accountId));
+            const account = state.accounts.find(a => a.id == parseInt(accountId));
             if (!account) {
                 document.getElementById('accountSummary').style.display = 'none';
                 return;
@@ -2562,7 +2511,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         // 18. تصدير دفتر الأستاذ إلى Excel وPDF
         // ============================================================
         function getLedgerExportRows() {
-            return ledgerEntries.map(entry => ({
+            return state.entries.map(entry => ({
                 date: entry.entry_date || '', number: entry.entry_number || '',
                 description: entry.description || entry.entry_description || '',
                 debit: Number(entry.debit || 0), credit: Number(entry.credit || 0),
@@ -2572,7 +2521,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
 
         function getSelectedLedgerAccountName() {
             const id = document.getElementById('ledgerAccount').value;
-            const account = allAccounts.find(a => a.id == Number(id));
+            const account = state.accounts.find(a => a.id == Number(id));
             return account ? (account.account_name_ar || account.account_name || 'حساب') : 'حساب';
         }
 
@@ -2647,7 +2596,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
             btn.classList.add('active');
             // تطبيق الفلتر على قائمة الحسابات (تغيير الحساب المحدد)
-            const filteredAccounts = allAccounts.filter(a => filter === 'all' || a.account_type === filter);
+            const filteredAccounts = state.accounts.filter(a => filter === 'all' || a.account_type === filter);
             const select = document.getElementById('ledgerAccount');
             const currentVal = select.value;
             select.innerHTML = '<option value="">-- اختر حساباً --</option>';
@@ -2678,7 +2627,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
         function generateAlerts() {
             const alerts = [];
             // تنبيهات حول الحسابات ذات الرصيد المنخفض أو المرتفع
-            allAccounts.forEach(a => {
+            state.accounts.forEach(a => {
                 const balance = parseFloat(a.current_balance || 0);
                 if (Math.abs(balance) > 1000000) {
                     alerts.push({
@@ -2808,7 +2757,7 @@ button:disabled, .btn:disabled, .submit-btn:disabled { cursor: not-allowed; opac
             setTimeout(generateAlerts, 1000);
 
             setTimeout(() => {
-                if (allAccounts.length > 0) {
+                if (state.accounts.length > 0) {
                     const insights = RuntimeState.getAIInsights();
                     if (insights.length > 0) {
                         showToast('🤖 المستشار الذكي جاهز - انقر على أيقونة الروبوت 🧠', 'info');

@@ -7422,11 +7422,77 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveFuelSaleRecord(id: Long, note: String = "") = operationalResolve("sales", "fuel_sales", id, note)
 
         @JavascriptInterface
+        fun getPaymentsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getPaymentsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("PaymentsPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getReceiptsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getReceiptsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("ReceiptsPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getExpensesPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getExpensesPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("ExpensesPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getBudgetsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getBudgetsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("BudgetsPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
         fun getPaymentRecords(jsonData: String = "{}") = operationalList("finance", "payments", jsonData)
         @JavascriptInterface
         fun generatePaymentReport(jsonData: String = "{}") = operationalReport("finance", "payments", jsonData)
+
+        private fun enqueueFinanceSms(db: DatabaseHelper, partyId: Long, message: String, reference: String) {
+            try {
+                val party = db.getPartyById(partyId) ?: return
+                val contacts = db.getPartyContacts(partyId)
+                var phone: String? = null
+                for (i in 0 until contacts.length()) {
+                    val c = contacts.optJSONObject(i) ?: continue
+                    if (c.optInt("is_primary", 0) == 1 && !c.optString("phone").isNullOrBlank()) {
+                        phone = c.optString("phone")
+                        break
+                    }
+                }
+                if (phone.isNullOrBlank()) {
+                    for (i in 0 until contacts.length()) {
+                        val c = contacts.optJSONObject(i) ?: continue
+                        if (!c.optString("phone").isNullOrBlank()) { phone = c.optString("phone"); break }
+                    }
+                }
+                if (phone.isNullOrBlank()) return
+                val act = getActivity() as? MainActivity ?: return
+                val dedupe = "fin-$reference"
+                kotlinx.coroutines.GlobalScope.launch {
+                    com.aistudio.dieselstationsms.kxmpzq.sms.SmsReplyManager.sendReplyOnce(
+                        phone = phone,
+                        message = message,
+                        dedupeKey = dedupe
+                    )
+                }
+            } catch (e: Exception) {
+                DebugLogger.logException("FinanceSms", e)
+            }
+        }
+
         @JavascriptInterface
-        fun savePaymentRecord(jsonData: String) = operationalSave("finance", "payments", jsonData)
+        fun savePaymentRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addPayment(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل سداد بمبلغ ${obj.optString("amount")} بتاريخ ${db.getCurrentDate()}.", "pay-$id"); successResponse(id, "تم حفظ الدفعة بنجاح") }
+            catch (e: Exception) { DebugLogger.logException("Payment", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun updatePaymentRecord(id: Long, jsonData: String) = operationalUpdate("finance", "payments", id, jsonData)
         @JavascriptInterface
@@ -7439,7 +7505,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generateReceiptReport(jsonData: String = "{}") = operationalReport("finance", "receipts", jsonData)
         @JavascriptInterface
-        fun saveReceiptRecord(jsonData: String) = operationalSave("finance", "receipts", jsonData)
+        fun saveReceiptRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val obj = JSONObject(jsonData); val id = db.addReceipt(obj, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); val cid = obj.optLong("customer_party_id", 0L); if (cid > 0) enqueueFinanceSms(db, cid, "تم تسجيل مقبوضات بمبلغ ${obj.optString("amount")} بتاريخ ${db.getCurrentDate()}.", "rec-$id"); successResponse(id, "تم حفظ الإيصال بنجاح") }
+            catch (e: Exception) { DebugLogger.logException("Receipt", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun updateReceiptRecord(id: Long, jsonData: String) = operationalUpdate("finance", "receipts", id, jsonData)
         @JavascriptInterface
@@ -7459,6 +7529,20 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun deleteCashBoxRecord(id: Long) = operationalDelete("finance", "cash_boxes", id)
         @JavascriptInterface
         fun resolveCashBoxRecord(id: Long, note: String = "") = operationalResolve("finance", "cash_boxes", id, note)
+
+        @JavascriptInterface
+        fun getCashMovementsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getCashMovementsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("CashMovementsPage", e); errorResponse(e.message) }
+        }
+
+        @JavascriptInterface
+        fun getCashDepositsPage(jsonData: String = "{}"): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); dataResponse(db.getCashDepositsPage(JSONObject(jsonData.ifBlank { "{}" }), requireCurrentStationId(db, activity.currentUserId))) }
+            catch (e: Exception) { DebugLogger.logException("CashDepositsPage", e); errorResponse(e.message) }
+        }
 
         @JavascriptInterface
         fun getCashMovementRecords(jsonData: String = "{}") = operationalList("finance", "cash_movements", jsonData)
@@ -7491,7 +7575,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generateExpenseReport(jsonData: String = "{}") = operationalReport("finance", "expenses", jsonData)
         @JavascriptInterface
-        fun saveExpenseRecord(jsonData: String) = operationalSave("finance", "expenses", jsonData)
+        fun saveExpenseRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.addExpense(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); successResponse(id, "تم حفظ المصروف بنجاح") }
+            catch (e: Exception) { DebugLogger.logException("Expense", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun updateExpenseRecord(id: Long, jsonData: String) = operationalUpdate("finance", "expenses", id, jsonData)
         @JavascriptInterface
@@ -7517,7 +7605,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun generateCashDepositReport(jsonData: String = "{}") = operationalReport("finance", "cash_deposits", jsonData)
         @JavascriptInterface
-        fun saveCashDepositRecord(jsonData: String) = operationalSave("finance", "cash_deposits", jsonData)
+        fun saveCashDepositRecord(jsonData: String): String {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            return try { val activity = getActivity() ?: return errorResponse("النشاط غير متاح"); val id = db.addCashDeposit(JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId); successResponse(id, "تم حفظ الإيداع بنجاح") }
+            catch (e: Exception) { DebugLogger.logException("Deposit", e); errorResponse(e.message) }
+        }
         @JavascriptInterface
         fun updateCashDepositRecord(id: Long, jsonData: String) = operationalUpdate("finance", "cash_deposits", id, jsonData)
         @JavascriptInterface

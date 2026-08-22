@@ -2024,20 +2024,7 @@
         // ============================================================
         // 12. AI Advisor - تحليل شجرة الحسابات
         // ============================================================
-        function analyzeChartOfAccounts() {
-            const insights = [];
-            const totalAccounts = allAccounts.length;
-            const rootAccounts = allAccounts.filter(a => !a.parent_account_id);
-            const maxLevel = Math.max(...allAccounts.map(a => parseInt(a.level || 0)), 0);
-            const totalBalance = allAccounts.reduce((sum, a) => sum + parseFloat(a.current_balance || 0), 0);
-
-            insights.push({
-                type: 'info',
-                title: '📊 نظرة عامة',
-                suggestion: totalAccounts + ' حساب في ' + rootAccounts.length + ' فروع رئيسية',
-                reason: 'أقصى مستوى: ' + maxLevel,
-                priority: 'low'
-            });
+        );
 
             if (maxLevel > 5) {
                 insights.push({
@@ -2064,31 +2051,11 @@
             return insights;
         }
 
-        function getTopAIInsight() {
-            const insights = aiInsightsCache;
-            if (insights.length === 0) return null;
-            const priority = { 'high': 3, 'medium': 2, 'low': 1 };
+        ;
             return insights.reduce((a, b) => (priority[a.priority] > priority[b.priority] ? a : b));
         }
 
-        function openAIAdvisor() {
-            const modal = document.getElementById('aiModal');
-            const content = document.getElementById('aiContent');
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
 
-            const insights = analyzeChartOfAccounts();
-
-            if (insights.length === 0) {
-                content.innerHTML = `
-                    <div style="text-align:center;color:var(--text-muted);padding:30px;">
-                        <i class="fas fa-robot" style="font-size:3rem;margin-bottom:12px;display:block;"></i>
-                        <p>لا توجد بيانات كافية للتحليل الذكي</p>
-                        <p style="font-size:0.8rem;">أضف حسابات أولاً للحصول على توصيات</p>
-                    </div>
-                `;
-                return;
-            }
 
             const top = getTopAIInsight();
             const allSuggestions = insights.slice(0, 5);
@@ -2125,11 +2092,7 @@
             hapticFeedback('light');
         }
 
-        function closeAIModal(e) {
-            if (e && e.target !== e.currentTarget && e.type === 'click') return;
-            document.getElementById('aiModal').classList.remove('show');
-            document.body.style.overflow = '';
-        }
+
 
         // ============================================================
         // 13. نظام التقارير
