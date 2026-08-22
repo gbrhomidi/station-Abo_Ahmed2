@@ -959,10 +959,7 @@
                     case 'getCategories': raw = AndroidInterface.getCategories(); break;
                     case 'getUnits': raw = AndroidInterface.getUnits(); break;
                     case 'getProducts': raw = AndroidInterface.getProducts(); break;
-                    case 'getProduct': {
-                        const item = (window.__productsCache || []).find(x => Number(x.product_id || x.id) === Number(p.product_id));
-                        return Promise.resolve(item ? { success: true, data: item } : { success: false, message: 'المنتج غير موجود' });
-                    }
+                    case 'getProduct': raw = AndroidInterface.getProductById(Number(p.product_id)); break;
                     case 'saveProduct': {
                         const payload = {
                             product_code: String(p.product_code || '').trim(), product_name: String(p.product_name || '').trim(),

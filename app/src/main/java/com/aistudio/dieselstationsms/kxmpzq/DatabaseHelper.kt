@@ -7709,18 +7709,18 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال POS والمخزون (جزء منها)
     // ========================================================================
 
-    fun getProductByBarcode(barcode: String): JSONObject? {
+    fun getProductByBarcode(barcode: String): JSONObject? = getProductByBarcode(barcode, null)
+
+    fun getProductByBarcode(barcode: String, stationScopeId: Int?): JSONObject? {
         val db = readableDatabase
-        db.rawQuery(
-            """
-            SELECT *
-            FROM products
-            WHERE barcode = ?
-            AND is_deleted = 0
-            LIMIT 1
-            """,
-            arrayOf(barcode)
-        ).use { cursor ->
+        val scoped = stationScopeId != null && stationScopeId > 0
+        val sql = if (scoped) {
+            "SELECT * FROM products WHERE barcode = ? AND station_id = ? AND is_deleted = 0 LIMIT 1"
+        } else {
+            "SELECT * FROM products WHERE barcode = ? AND is_deleted = 0 LIMIT 1"
+        }
+        val args = if (scoped) arrayOf(barcode, stationScopeId.toString()) else arrayOf(barcode)
+        db.rawQuery(sql, args).use { cursor ->
             if (cursor.moveToFirst()) {
                 return JSONObject().apply {
                     put("product_id", cursor.getInt(cursor.getColumnIndexOrThrow("id")))
@@ -12437,6 +12437,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
             } else if (stationId > 0 && screenKey == "stocktake_details") {
                 where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+            } else if (stationId > 0 && screenKey == "price_history") {
+                where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "price_list_items") {
+                where += "EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12511,6 +12515,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 where += "EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
             } else if (stationId > 0 && screenKey == "stocktake_details") {
                 where += "EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+            } else if (stationId > 0 && screenKey == "price_history") {
+                where += "EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
+            } else if (stationId > 0 && screenKey == "price_list_items") {
+                where += "EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
             }
             val includeArchived = params.optBoolean("include_archived", false)
             if (!includeArchived && screenKey in setOf("price_history", "stocktakes", "stocktake_details", "depreciation")) where += "archived = 0"
@@ -12647,7 +12655,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             if (spec.hasUpdatedAt && !data.has("updated_at")) values.put("updated_at", getCurrentDateTime())
             val writeDb = writableDatabase
             val stationId = data.optInt("station_id", 0)
+            if (screenKey in setOf("price_lists", "price_history", "price_list_items")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writeDb, data.optLong("customer_id", 0L), stationId)
+            if (screenKey == "price_history" && stationId > 0) writeDb.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
+            if (screenKey == "price_list_items" && stationId > 0) writeDb.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
             if (screenKey == "stocktakes" && stationId > 0) writeDb.rawQuery("SELECT id FROM warehouses WHERE id = ? AND station_id = ? AND is_active = 1", arrayOf(data.optLong("warehouse_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المستودع خارج نطاق المحطة أو غير نشط" } }
             if (screenKey == "stocktake_details" && stationId > 0) writeDb.rawQuery("SELECT st.id FROM stocktakes st JOIN warehouses w ON w.id = st.warehouse_id WHERE st.id = ? AND w.station_id = ? AND w.is_active = 1 AND st.archived = 0", arrayOf(data.optLong("stocktake_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "الجرد خارج نطاق المحطة" } }
             val id = writeDb.insertOrThrow(spec.table, null, values)
@@ -12671,14 +12682,19 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
             val stationId = data.optInt("station_id", 0)
+            if (screenKey in setOf("price_lists", "price_history", "price_list_items")) require(stationId > 0) { "معرف المحطة مطلوب لهذا المسار" }
             if (screenKey == "bad_debts" && stationId > 0) requirePartyInStation(writableDatabase, data.optLong("customer_id", 0L), stationId)
+            if (screenKey == "price_history" && stationId > 0 && data.has("product_id")) writableDatabase.rawQuery("SELECT id FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("product_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
+            if (screenKey == "price_list_items" && stationId > 0 && data.has("price_list_id")) writableDatabase.rawQuery("SELECT id FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(data.optLong("price_list_id", 0L).toString(), stationId.toString())).use { cursor -> require(cursor.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
             val directScope = spec.columns.contains("station_id") && stationId > 0
-            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
+            val relationalScope = stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
             val scope = when {
                 directScope -> " AND station_id = ?"
                 screenKey == "bad_debts" && relationalScope -> " AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationalScope -> " AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationalScope -> " AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "price_history" && relationalScope -> " AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
+                screenKey == "price_list_items" && relationalScope -> " AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 else -> ""
             }
             val where = (if (spec.softDeleted) "id = ? AND is_deleted = 0" else "id = ?") + scope
@@ -12700,12 +12716,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val db = writableDatabase
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
+                screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -12727,12 +12745,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id")
-            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details")
+            val relationallyScoped = stationId != null && stationId > 0 && screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items")
             val where = when {
                 scoped -> "id = ? AND station_id = ?"
                 screenKey == "bad_debts" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM parties party WHERE party.id = bad_debts.customer_id AND party.station_id = ${stationId} AND party.is_deleted = 0)"
                 screenKey == "stocktakes" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM warehouses scope_w WHERE scope_w.id = stocktakes.warehouse_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1)"
                 screenKey == "stocktake_details" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM stocktakes scope_st JOIN warehouses scope_w ON scope_w.id = scope_st.warehouse_id WHERE scope_st.id = stocktake_details.stocktake_id AND scope_w.station_id = ${stationId} AND scope_w.is_active = 1 AND scope_st.archived = 0)"
+                screenKey == "price_history" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM products scope_p WHERE scope_p.id = price_history.product_id AND scope_p.station_id = ${stationId} AND scope_p.is_deleted = 0)"
+                screenKey == "price_list_items" && relationallyScoped -> "id = ? AND EXISTS (SELECT 1 FROM price_lists scope_pl WHERE scope_pl.id = price_list_items.price_list_id AND scope_pl.station_id = ${stationId} AND scope_pl.is_deleted = 0)"
                 else -> "id = ?"
             }
             val whereArgs = if (scoped) arrayOf(id.toString(), stationId.toString()) else arrayOf(id.toString())
@@ -14374,6 +14394,20 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    fun getProductById(productId: Long, stationScopeId: Int): JSONObject? {
+        dbLock.lock()
+        return try {
+            require(productId > 0L) { "معرف المنتج غير صالح" }
+            require(stationScopeId > 0) { "معرف المحطة غير صالح" }
+            readableDatabase.rawQuery("SELECT p.*, c.category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.id = ? AND p.station_id = ? AND p.is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { cursor ->
+                if (!cursor.moveToFirst()) return null
+                cursorToJsonObject(cursor).apply { put("product_id", optLong("id", productId)); put("id", optLong("id", productId)); put("current_stock", optDouble("quantity", 0.0)); put("min_stock_level", optDouble("minimum_stock", 0.0)) }
+            }
+        } finally {
+            dbLock.unlock()
+        }
+    }
+
     // ========================================================================
     // دوال أنواع الوقود
     // ========================================================================
@@ -14408,9 +14442,13 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال إدارة المنتجات (CRUD)
     // ========================================================================
 
-    fun insertProduct(data: JSONObject): Long {
+    fun insertProduct(data: JSONObject): Long = insertProduct(data, data.optInt("station_id", 0), data.optLong("created_by", 0L))
+
+    fun insertProduct(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
         dbLock.lock()
         return try {
+            require(stationScopeId > 0) { "معرف المحطة مطلوب لإضافة المنتج" }
+            require(actorId > 0L) { "المستخدم المنشئ مطلوب" }
             val db = writableDatabase
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
@@ -14419,64 +14457,98 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 put("product_name_ar", data.optString("product_name_ar", ""))
                 put("category_id", data.optInt("category_id", 0))
                 put("fuel_type_id", data.optInt("fuel_type_id", 0))
-                put("station_id", data.optInt("station_id", 1))
+                put("station_id", stationScopeId)
                 put("unit_id", data.optInt("unit_id", 1))
                 put("sale_price", data.optDouble("sale_price", 0.0))
                 put("purchase_price", data.optDouble("purchase_price", 0.0))
                 put("quantity", data.optDouble("quantity", 0.0))
                 put("minimum_stock", data.optDouble("minimum_stock", 10.0))
                 put("status", "active")
+                put("created_by", actorId)
                 put("created_at", getCurrentDateTime())
                 put("updated_at", getCurrentDateTime())
             }
-            db.insert("products", null, cv)
+            db.insertOrThrow("products", null, cv)
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun updateProduct(id: Long, data: JSONObject): Int {
+    fun updateProduct(id: Long, data: JSONObject): Int = updateProduct(id, data, data.optInt("station_id", 0), data.optLong("updated_by", 0L))
+
+    fun updateProduct(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
         dbLock.lock()
         return try {
+            require(stationScopeId > 0) { "معرف المحطة مطلوب لتحديث المنتج" }
+            require(actorId > 0L) { "المستخدم المعدل مطلوب" }
             val db = writableDatabase
-            val cv = ContentValues().apply {
-                data.optString("product_code")?.let { put("product_code", it) }
-                data.optString("product_name")?.let { put("product_name", it) }
-                data.optString("product_name_ar")?.let { put("product_name_ar", it) }
-                data.optInt("category_id")?.let { put("category_id", it) }
-                data.optInt("fuel_type_id")?.let { put("fuel_type_id", it) }
-                data.optDouble("sale_price")?.let { put("sale_price", it) }
-                data.optDouble("purchase_price")?.let { put("purchase_price", it) }
-                data.optDouble("quantity")?.let { put("quantity", it) }
-                data.optDouble("minimum_stock")?.let { put("minimum_stock", it) }
-                if (data.has("unit_id")) put("unit_id", data.optInt("unit_id", 1))
-                if (data.has("barcode")) put("barcode", data.optString("barcode"))
-                if (data.has("description")) put("description", data.optString("description"))
-                if (data.has("has_expiry")) put("has_expiry", data.optInt("has_expiry", 0))
-                if (data.has("expiry_date")) {
-                    if (data.isNull("expiry_date")) putNull("expiry_date") else put("expiry_date", data.optString("expiry_date"))
-                }
-                if (data.has("is_service")) put("is_service", data.optInt("is_service", 0))
-                if (data.has("is_batch_tracked")) put("is_batch_tracked", data.optInt("is_batch_tracked", 0))
-                if (data.has("is_serialized")) put("is_serialized", data.optInt("is_serialized", 0))
-                if (data.has("status")) put("status", data.optString("status", "active"))
-                put("updated_at", getCurrentDateTime())
+            var oldSalePrice = 0.0
+            var oldProductName = ""
+            db.rawQuery("SELECT sale_price, product_name FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { cursor ->
+                require(cursor.moveToFirst()) { "المنتج غير موجود في نطاق المحطة" }
+                oldSalePrice = cursor.getDouble(0)
+                oldProductName = cursor.getString(1) ?: ""
             }
-            val rows = db.update("products", cv, "id=?", arrayOf(id.toString()))
-            if (rows > 0) logActivity("system", "update_product", "تحديث منتج $id")
-            rows
+            val newSalePrice = if (data.has("sale_price")) data.optDouble("sale_price", oldSalePrice) else oldSalePrice
+            require(newSalePrice >= 0.0) { "سعر البيع غير صالح" }
+            db.beginTransaction()
+            try {
+                val cv = ContentValues().apply {
+                    if (data.has("product_code")) put("product_code", data.optString("product_code"))
+                    if (data.has("product_name")) put("product_name", data.optString("product_name"))
+                    if (data.has("product_name_ar")) put("product_name_ar", data.optString("product_name_ar"))
+                    if (data.has("category_id")) put("category_id", data.optInt("category_id"))
+                    if (data.has("fuel_type_id")) put("fuel_type_id", data.optInt("fuel_type_id"))
+                    if (data.has("sale_price")) put("sale_price", newSalePrice)
+                    if (data.has("purchase_price")) put("purchase_price", data.optDouble("purchase_price", 0.0))
+                    if (data.has("quantity")) put("quantity", data.optDouble("quantity", 0.0))
+                    if (data.has("minimum_stock")) put("minimum_stock", data.optDouble("minimum_stock", 10.0))
+                    if (data.has("unit_id")) put("unit_id", data.optInt("unit_id", 1))
+                    if (data.has("barcode")) put("barcode", data.optString("barcode"))
+                    if (data.has("description")) put("description", data.optString("description"))
+                    if (data.has("has_expiry")) put("has_expiry", data.optInt("has_expiry", 0))
+                    if (data.has("expiry_date")) { if (data.isNull("expiry_date")) putNull("expiry_date") else put("expiry_date", data.optString("expiry_date")) }
+                    if (data.has("is_service")) put("is_service", data.optInt("is_service", 0))
+                    if (data.has("is_batch_tracked")) put("is_batch_tracked", data.optInt("is_batch_tracked", 0))
+                    if (data.has("is_serialized")) put("is_serialized", data.optInt("is_serialized", 0))
+                    if (data.has("status")) put("status", data.optString("status", "active"))
+                    put("updated_by", actorId)
+                    put("updated_at", getCurrentDateTime())
+                }
+                val rows = db.update("products", cv, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
+                require(rows == 1) { "تعذر تحديث المنتج داخل نطاق المحطة" }
+                if (data.has("sale_price") && newSalePrice != oldSalePrice) {
+                    val history = ContentValues().apply {
+                        put("product_id", id)
+                        put("old_price", oldSalePrice)
+                        put("new_price", newSalePrice)
+                        put("change_date", getCurrentDateTime())
+                        put("change_reason", data.optString("change_reason", "تغيير سعر المنتج: $oldProductName"))
+                        put("created_by", actorId)
+                        put("archived", 0)
+                    }
+                    db.insertOrThrow("price_history", null, history)
+                }
+                logActivity("system", "update_product", "تحديث منتج $id في المحطة $stationScopeId")
+                db.setTransactionSuccessful()
+                rows
+            } finally {
+                db.endTransaction()
+            }
         } finally {
             dbLock.unlock()
         }
     }
 
-    fun deleteProduct(id: Long): Int {
+    fun deleteProduct(id: Long): Int = deleteProduct(id, null)
+
+    fun deleteProduct(id: Long, stationScopeId: Int?): Int {
         dbLock.lock()
         return try {
+            require(stationScopeId != null && stationScopeId > 0) { "معرف المحطة مطلوب لحذف المنتج" }
             val db = writableDatabase
-            val cv = ContentValues().apply { put("is_deleted", 1) }
-            val rows = db.update("products", cv, "id=?", arrayOf(id.toString()))
-            if (rows > 0) logActivity("system", "delete_product", "حذف منتج $id")
+            val rows = db.update("products", ContentValues().apply { put("is_deleted", 1); put("deleted_at", getCurrentDateTime()) }, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString()))
+            if (rows > 0) logActivity("system", "delete_product", "حذف منتج $id من المحطة $stationScopeId")
             rows
         } finally {
             dbLock.unlock()
