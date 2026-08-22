@@ -7993,6 +7993,38 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
     
+    
+        // MODULE-013 Bridges
+        @JavascriptInterface
+        fun getSalesAnalyticsTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val res = db.getSalesAnalyticsTyped(obj, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(res)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getInventoryAnalyticsTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val res = db.getInventoryAnalyticsTyped(obj, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(res)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+        
+        @JavascriptInterface
+        fun getAccountingAnalyticsTyped(jsonData: String): String {
+            return try {
+                val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+                val obj = JSONObject(jsonData)
+                val res = db.getAccountingAnalyticsTyped(obj, requireCurrentStationId(db, activity.currentUserId))
+                successResponse(res)
+            } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
+        }
+    
     private fun enqueueEmployeeSms(db: DatabaseHelper, employeeId: Long, stationId: Int, message: String, reference: String) {
             try {
                 val employee = db.getEmployeeById(employeeId, stationId) ?: return
