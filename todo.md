@@ -1,0 +1,70 @@
+# Project TODO
+
+- [x] Diagnose and fix the Android runtime freeze when opening the supplier creation modal and entering text.
+- [x] Audit and correct shared theme.css interaction rules that can block modal touch, focus, keyboard, or scrolling in Android WebView.
+- [x] Audit remaining modal-overlay show contracts and input paths for residual WebView interaction risks.
+- [x] Convert customer-debt detail modal reads to an async party bundle with callback cancellation and timeout protection.
+- [x] Resolve pointer-events conflicts in inventory and supplier modal layers for Android WebView.
+- [x] Fix Smart Assistant null innerHTML initialization failure.
+- [x] Fix customer creation and SQLite save workflow with automatic SQLite-issued party codes.
+- [x] Fix product creation, SQLite save workflow, and local barcode scanner loading.
+- [ ] Normalize user-facing field labels to Arabic and center statistical-card data without altering real values.
+- [x] Apply automatic SQLite-issued party codes to CRM creation while preserving existing codes on edit.
+- [x] Fix employees CHECK constraint failure and automatic employee numbering.
+- [x] Fix fixed-assets save failure and automatic asset numbering.
+- [x] Translate and make employee and fixed-asset creation fields responsive in two-column rows.
+- [x] Verify employee and fixed-asset creation forms on Android WebView: Arabic labels, two-column layout, automatic codes, and SQLite save.
+- [x] Align employee-payment type options and payload normalization with the employee_payments SQLite CHECK contract.
+- [ ] Audit remaining generic operational forms for CHECK-constrained fields, Arabic labels, and automatic internal codes.
+- [x] Verify and normalize confirmed generic CHECK contracts for attendance, payroll, maintenance requests, schedules, and logs.
+- [x] Apply Arabic labels and automatic internal codes to payroll, maintenance-request, and maintenance-schedule forms.
+- [ ] Verify automatic internal-code handling only for confirmed non-business identifier fields in audited forms.
+- [x] Fix payroll creation foreign-key failure observed on Android runtime.
+- [x] Fix maintenance-schedule edit record-ID resolution and surface save feedback inside the active modal.
+- [ ] Verify payroll creation and maintenance-schedule edit/inline feedback on Android with the corrective APK.
+- [x] Audit current save/edit contracts across the updated payroll and maintenance schedule paths after the GitHub rebase.
+- [x] Run regression and security review before any additional corrective push.
+- [x] Scope maintenance schedules to the authenticated station in SQLite, bridge, and operational CRUD paths.
+- [x] Run Kotlin unit tests in GitHub Actions before the signed APK build.
+- [x] Trace and fix the Android runtime failure when creating and saving a new product from products.html.
+- [ ] Verify product creation with the new SQLite references in CI and on Android runtime.
+- [x] Verify product creation on Android runtime after SQLite reference migration.
+- [x] Bind product statistical cards to SQLite-backed product data and apply a two-card mobile layout.
+- [x] Make current stock safely editable through a real SQLite inventory-adjustment workflow.
+- [x] Verify POS sale confirmation decrements product stock and posts the invoice atomically.
+- [x] Repair POS camera-flash, invoice-posting failure handling, and print workflow.
+- [x] Repair credit POS sales: load authenticated-station customers and persist the customer balance and accounting effects atomically.
+- [x] Replace simulated inventory-level screen data and bottom actions with SQLite-backed records and authorized bridge operations.
+- [x] Replace simulated inventory-movement screen data and fix target-warehouse selection and movement persistence.
+- [x] Rebuild stock-count-and-adjustment workflows around actual SQLite stock records and reconciliation movements.
+- [x] Replace simulated stock-alert data with real low-stock alerts and working alert actions.
+- [x] Add SQLite, WebView-bridge, regression, and CI verification for credit sales and inventory workflows.
+- [ ] Extract a factual inventory-and-customer-balance report from the available SQLite database data.
+- [ ] Review available database synchronization logs for hidden errors and document only evidenced findings.
+- [x] Restore an accessible, SQLite-backed customer-selection modal for POS credit sales.
+- [x] Bind POS barcode scanning exclusively to the bundled html5-qrcode.min.js library and improve its scan configuration.
+- [x] Improve POS torch behavior so unavailable hardware does not break the scanner workflow and supported hardware is retried correctly.
+- [x] Add regression coverage for credit-customer modal visibility and local barcode-library scanner initialization.
+- [x] Remove the broken top navigation arrow from customer management and move its top actions to a functional bottom action bar.
+- [x] Center customer-management content and update theme, back, and home controls without removing workflows.
+- [x] Redesign customer creation tabs and replace browser prompt/alert dialogs with accessible in-page modals.
+- [x] Enable authorized SQLite-backed customer editing and verify the complete WebView bridge flow.
+- [x] Compare the supplier screen and open-source customer-management patterns, then present a verified customer-screen preview before push.
+- [x] Exercise every customer tab and in-page modal against its authorized bridge contract and SQLite workflow.
+- [x] Enforce centered statistical-card content and centered modal fields throughout customer management without disrupting RTL inputs.
+- [x] Run regression and CI verification for the customer-screen changes before final delivery.
+- [x] Inspect available Crashlytics/crash records for the current APK and distinguish absent telemetry from clean runtime evidence.
+- [x] Profile SQLite query plans and resource lifetime risks in POS flows without using production customer data as test fixtures.
+- [ ] Audit local WebView bridge APIs and sensitive customer-data storage protections, then remediate verified gaps.
+- [x] Add targeted regression/security tests and push only verified corrective changes.
+- [x] Prevent overlapping POS scanner start-stop sessions, release camera resources on reset/pagehide, and exercise start-stop-start plus stop-during-start behavior in jsdom.
+- [x] Harden the local WebView policy by blocking content URIs, enabling Safe Browsing, and retaining asset-only navigation, mixed-content, and universal-file restrictions.
+- [x] Mask customer phone numbers in newly audited whitelist and durable SMS-draft error logs, with source-level security regression coverage.
+- [ ] Plan and approve a separate SQLCipher/Keystore migration before claiming at-rest encryption for SQLite customer tables.
+- [x] Verify Kotlin/Robolectric tests and signed APK build in GitHub Actions run 33096810630 for commit a6942a9.
+- [x] Trace trips.html through AndroidInterface, MainActivity, DatabaseHelper, and SQLite; rebuild its UI only around verified trip, vehicle, driver, and persisted-location data.
+- [x] Compare the attached trips design with the implemented SQLite workspace and trace getVehicles, getDrivers, trip details, timeline, status update, and statistics contracts before adding supported APIs.
+- [x] Commit and push the V31 vehicle-trip lifecycle, secured bridge contracts, and regenerated trips workspace to feature/ai-health-sqlite; verify CI for the resulting SHA.
+- [x] Verify vehicle-tracking map rendering and AndroidInterface tracking/route contracts against persisted GPS data, empty/error states, and station isolation.
+- [x] Profile and optimize vehicle_locations route queries for long persisted GPS paths, then verify GPS-disconnect and stale-response handling through AndroidInterface.
+- [x] Rebuild vehicle expenses around SQLite-backed vehicle, expense-type, trip, financial-report, and safe invoice-opening contracts with full WebView regression coverage.

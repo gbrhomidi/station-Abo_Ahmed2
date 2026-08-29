@@ -1,0 +1,6669 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+
+<title>إدارة الورديات</title>
+
+<link rel="stylesheet"
+      href="file:///android_asset/assets-local/css/all.min.css">
+
+<style>
+:root{
+    --bg:#f4f7fb;
+    --surface:#ffffff;
+    --surface-2:#f8fafc;
+    --surface-3:#eef4f9;
+
+    --primary:#087ea4;
+    --primary-2:#2563eb;
+    --primary-soft:rgba(37,99,235,.10);
+
+    --success:#16a34a;
+    --warning:#d97706;
+    --danger:#dc2626;
+
+    --text:#172033;
+    --muted:#64748b;
+
+    --border:#d7dee8;
+    --border-strong:#c4cfdd;
+
+    --accent:#c58a18;
+
+    --shadow:0 12px 35px rgba(15,23,42,.08);
+    --shadow-lg:0 25px 70px rgba(15,23,42,.16);
+
+    --radius:20px;
+    --radius-sm:13px;
+}
+
+[data-theme="dark"]{
+    --bg:#06111f;
+    --surface:#0c1b2d;
+    --surface-2:#102238;
+    --surface-3:#132941;
+
+    --primary:#55c7f5;
+    --primary-2:#6ea8ff;
+    --primary-soft:rgba(85,199,245,.12);
+
+    --success:#42e39a;
+    --warning:#ffd166;
+    --danger:#ff7184;
+
+    --text:#eef7ff;
+    --muted:#aabbd0;
+
+    /* أزرق فاتح لجميع الإطارات */
+    --border:#49a9ee;
+    --border-strong:#76c8ff;
+
+    --accent:#f1cf7a;
+
+    --shadow:0 14px 40px rgba(0,0,0,.38);
+    --shadow-lg:0 25px 75px rgba(0,0,0,.55);
+}
+
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+    -webkit-tap-highlight-color:transparent;
+}
+
+html,
+body{
+    min-height:100%;
+}
+
+body{
+    background:
+        radial-gradient(
+            circle at 8% 0%,
+            rgba(37,99,235,.09),
+            transparent 32%
+        ),
+        var(--bg);
+
+    color:var(--text);
+
+    font-family:
+        "Cairo",
+        "Noto Sans Arabic",
+        Arial,
+        sans-serif;
+
+    padding-bottom:
+        calc(88px + env(safe-area-inset-bottom));
+
+    transition:
+        background .25s,
+        color .25s;
+}
+
+button,
+input,
+select,
+textarea{
+    font:inherit;
+}
+
+button{
+    cursor:pointer;
+}
+
+button:disabled{
+    cursor:not-allowed;
+    opacity:.55;
+}
+
+.hidden{
+    display:none!important;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.topbar{
+    position:sticky;
+    top:0;
+    z-index:1000;
+
+    padding:
+        13px
+        16px
+        12px;
+
+    background:
+        color-mix(
+            in srgb,
+            var(--surface) 94%,
+            transparent
+        );
+
+    backdrop-filter:blur(20px);
+
+    border-bottom:
+        1px solid var(--border);
+}
+
+.header-row{
+    width:min(1320px,100%);
+    margin:auto;
+
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+
+    gap:12px;
+}
+
+.brand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+
+    min-width:0;
+}
+
+.brand-icon{
+    width:48px;
+    height:48px;
+
+    flex:none;
+
+    display:grid;
+    place-items:center;
+
+    border-radius:16px;
+
+    color:#fff;
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--primary-2),
+            var(--primary)
+        );
+
+    box-shadow:
+        0 10px 26px
+        rgba(37,99,235,.22);
+}
+
+.brand-content{
+    min-width:0;
+}
+
+.brand h1{
+    font-size:1.08rem;
+    font-weight:950;
+    white-space:nowrap;
+}
+
+.brand p{
+    margin-top:2px;
+
+    color:var(--muted);
+
+    font-size:.69rem;
+
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.header-actions{
+    display:flex;
+    align-items:center;
+    gap:7px;
+}
+
+.icon-btn{
+    width:42px;
+    height:42px;
+
+    display:grid;
+    place-items:center;
+
+    border-radius:13px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+
+    color:var(--text);
+
+    transition:.2s;
+}
+
+.icon-btn:hover{
+    color:var(--primary);
+
+    border-color:
+        var(--border-strong);
+
+    transform:translateY(-1px);
+}
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+.search-row{
+    width:min(1320px,100%);
+
+    margin:
+        12px auto 0;
+
+    display:flex;
+    gap:8px;
+}
+
+.search-box{
+    position:relative;
+    flex:1;
+}
+
+.search-box i{
+    position:absolute;
+
+    right:15px;
+    top:50%;
+
+    transform:translateY(-50%);
+
+    color:var(--muted);
+}
+
+.search{
+    width:100%;
+    height:46px;
+
+    padding:
+        0
+        44px
+        0
+        14px;
+
+    border-radius:14px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+
+    color:var(--text);
+
+    outline:none;
+
+    text-align:right;
+
+    transition:.2s;
+}
+
+.search:focus{
+    border-color:
+        var(--primary);
+
+    box-shadow:
+        0 0 0 3px
+        color-mix(
+            in srgb,
+            var(--primary) 14%,
+            transparent
+        );
+}
+
+/* =========================================================
+   MAIN
+========================================================= */
+
+.container{
+    width:min(1320px,100%);
+    margin:auto;
+
+    padding:
+        18px
+        16px
+        20px;
+}
+
+/* =========================================================
+   KPI
+========================================================= */
+
+.kpis{
+    display:grid;
+
+    grid-template-columns:
+        repeat(4,minmax(0,1fr));
+
+    gap:12px;
+
+    margin-bottom:16px;
+}
+
+.kpi{
+    min-height:132px;
+
+    padding:16px;
+
+    display:flex;
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    text-align:center;
+
+    border-radius:
+        var(--radius);
+
+    border:
+        1px solid var(--border);
+
+    background:
+        linear-gradient(
+            145deg,
+            var(--surface),
+            var(--surface-2)
+        );
+
+    box-shadow:
+        var(--shadow);
+
+    transition:.2s;
+}
+
+.kpi:hover{
+    transform:translateY(-2px);
+
+    box-shadow:
+        var(--shadow-lg);
+}
+
+.kpi-icon{
+    width:42px;
+    height:42px;
+
+    display:grid;
+    place-items:center;
+
+    margin-bottom:8px;
+
+    border-radius:13px;
+
+    background:
+        var(--primary-soft);
+
+    color:
+        var(--primary);
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--border) 75%,
+            transparent
+        );
+}
+
+.kpi-value{
+    font-size:1.35rem;
+    font-weight:950;
+
+    line-height:1.2;
+}
+
+.kpi-label{
+    margin-top:4px;
+
+    color:var(--muted);
+
+    font-size:.68rem;
+}
+
+/* =========================================================
+   FILTER TABS
+========================================================= */
+
+.tabs{
+    display:flex;
+
+    gap:8px;
+
+    overflow-x:auto;
+
+    scrollbar-width:none;
+
+    margin-bottom:15px;
+}
+
+.tabs::-webkit-scrollbar{
+    display:none;
+}
+
+.tab{
+    flex:none;
+
+    min-height:40px;
+
+    padding:
+        8px
+        16px;
+
+    border-radius:22px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface);
+
+    color:
+        var(--muted);
+
+    font-size:.72rem;
+
+    font-weight:750;
+
+    transition:.2s;
+}
+
+[data-theme="dark"] .tab{
+    color:
+        #e9dfce;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(218,208,190,.08),
+            rgba(245,231,202,.05)
+        );
+
+    text-shadow:
+        0 0 8px
+        rgba(240,225,195,.22);
+}
+
+.tab:hover{
+    border-color:
+        var(--primary);
+
+    color:
+        var(--primary);
+}
+
+.tab.active{
+    background:
+        linear-gradient(
+            135deg,
+            var(--primary-2),
+            var(--primary)
+        );
+
+    color:#fff;
+
+    border-color:
+        transparent;
+
+    box-shadow:
+        0 7px 18px
+        rgba(37,99,235,.20);
+}
+
+/* =========================================================
+   DATA PANEL
+========================================================= */
+
+.panel{
+    overflow:hidden;
+
+    border-radius:
+        23px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface);
+
+    box-shadow:
+        var(--shadow);
+}
+
+.panel-head{
+    min-height:64px;
+
+    padding:
+        13px
+        16px;
+
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+
+    gap:10px;
+
+    border-bottom:
+        1px solid var(--border);
+}
+
+.panel-title{
+    display:flex;
+    align-items:center;
+
+    gap:9px;
+
+    font-size:.95rem;
+    font-weight:950;
+}
+
+.panel-title i{
+    color:var(--primary);
+}
+
+.count{
+    min-width:30px;
+
+    padding:
+        4px
+        9px;
+
+    border-radius:14px;
+
+    text-align:center;
+
+    color:
+        var(--primary);
+
+    background:
+        var(--primary-soft);
+
+    border:
+        1px solid var(--border);
+
+    font-size:.68rem;
+    font-weight:900;
+}
+
+.records{
+    padding:14px;
+}
+
+/* =========================================================
+   SHIFT CARD
+========================================================= */
+
+.shift-card{
+    position:relative;
+
+    padding:17px;
+
+    margin-bottom:11px;
+
+    border-radius:19px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        linear-gradient(
+            145deg,
+            var(--surface-2),
+            var(--surface)
+        );
+
+    transition:.2s;
+}
+
+.shift-card:hover{
+    border-color:
+        var(--border-strong);
+
+    box-shadow:
+        var(--shadow);
+}
+
+.shift-head{
+    display:flex;
+
+    align-items:flex-start;
+    justify-content:space-between;
+
+    gap:14px;
+}
+
+.shift-main{
+    min-width:0;
+}
+
+.shift-code{
+    font-size:.98rem;
+    font-weight:950;
+
+    overflow-wrap:anywhere;
+}
+
+.shift-meta{
+    display:flex;
+    flex-wrap:wrap;
+
+    gap:6px;
+
+    margin-top:6px;
+}
+
+.meta-pill{
+    display:inline-flex;
+
+    align-items:center;
+    gap:5px;
+
+    padding:
+        4px
+        9px;
+
+    border-radius:20px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid var(--border);
+
+    color:
+        var(--muted);
+
+    font-size:.62rem;
+}
+
+.status{
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:5px;
+
+    padding:
+        5px
+        10px;
+
+    margin-top:8px;
+
+    border-radius:20px;
+
+    font-size:.63rem;
+
+    font-weight:900;
+
+    border:
+        1px solid var(--border);
+}
+
+.status.open{
+    color:
+        var(--success);
+
+    background:
+        color-mix(
+            in srgb,
+            var(--success) 10%,
+            transparent
+        );
+}
+
+.status.closed{
+    color:
+        var(--muted);
+
+    background:
+        color-mix(
+            in srgb,
+            var(--muted) 10%,
+            transparent
+        );
+}
+
+.shift-total{
+    flex:none;
+
+    min-width:120px;
+
+    padding:10px;
+
+    text-align:center;
+
+    border-radius:14px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid var(--border);
+}
+
+.shift-total strong{
+    display:block;
+
+    color:
+        var(--accent);
+
+    font-size:1.02rem;
+    font-weight:950;
+}
+
+.shift-total span{
+    display:block;
+
+    margin-top:3px;
+
+    color:
+        var(--muted);
+
+    font-size:.61rem;
+}
+
+/* =========================================================
+   INFO GRID
+========================================================= */
+
+.shift-grid{
+    display:grid;
+
+    grid-template-columns:
+        repeat(4,minmax(0,1fr));
+
+    gap:8px;
+
+    margin-top:14px;
+}
+
+.info{
+    min-width:0;
+
+    padding:10px;
+
+    text-align:center;
+
+    border-radius:13px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid
+        color-mix(
+            in srgb,
+            var(--border) 85%,
+            transparent
+        );
+}
+
+.info label{
+    display:block;
+
+    color:
+        var(--muted);
+
+    font-size:.61rem;
+}
+
+.info strong{
+    display:block;
+
+    margin-top:4px;
+
+    font-size:.74rem;
+
+    overflow-wrap:anywhere;
+}
+
+/* =========================================================
+   ACTIONS
+========================================================= */
+
+.actions{
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:7px;
+
+    margin-top:14px;
+}
+
+.btn{
+    min-height:39px;
+
+    padding:
+        7px
+        13px;
+
+    display:inline-flex;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:6px;
+
+    border-radius:12px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface);
+
+    color:
+        var(--text);
+
+    font-size:.69rem;
+    font-weight:750;
+
+    transition:.2s;
+}
+
+.btn:hover{
+    color:
+        var(--primary);
+
+    border-color:
+        var(--primary);
+}
+
+.btn.primary{
+    color:#fff;
+
+    border-color:
+        transparent;
+
+    background:
+        linear-gradient(
+            135deg,
+            var(--primary-2),
+            var(--primary)
+        );
+}
+
+.btn.warning{
+    color:
+        var(--warning);
+}
+
+.btn.danger{
+    color:
+        var(--danger);
+}
+
+.btn.success{
+    color:
+        var(--success);
+}
+
+/* =========================================================
+   EMPTY
+========================================================= */
+
+.empty{
+    min-height:220px;
+
+    padding:50px 20px;
+
+    display:flex;
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    text-align:center;
+
+    color:
+        var(--muted);
+}
+
+.empty i{
+    font-size:2.5rem;
+
+    margin-bottom:12px;
+
+    color:
+        var(--primary);
+
+    opacity:.65;
+}
+
+.empty strong{
+    color:
+        var(--text);
+
+    font-size:.85rem;
+}
+
+.empty small{
+    margin-top:5px;
+
+    font-size:.67rem;
+}
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.error-state{
+    margin:14px;
+
+    padding:15px;
+
+    display:flex;
+    align-items:center;
+
+    gap:10px;
+
+    border-radius:15px;
+
+    border:
+        1px solid
+        var(--danger);
+
+    background:
+        color-mix(
+            in srgb,
+            var(--danger) 8%,
+            var(--surface)
+        );
+
+    color:
+        var(--danger);
+
+    font-size:.72rem;
+}
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading{
+    position:fixed;
+
+    inset:0;
+
+    z-index:5000;
+
+    display:none;
+
+    align-items:center;
+    justify-content:center;
+
+    background:
+        rgba(0,0,0,.56);
+
+    backdrop-filter:
+        blur(7px);
+}
+
+.loading.show{
+    display:flex;
+}
+
+.loading-card{
+    width:170px;
+
+    padding:22px;
+
+    display:flex;
+    flex-direction:column;
+
+    align-items:center;
+
+    gap:12px;
+
+    border-radius:20px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid var(--border);
+
+    box-shadow:
+        var(--shadow-lg);
+
+    text-align:center;
+}
+
+.spinner{
+    width:42px;
+    height:42px;
+
+    border:
+        4px solid
+        color-mix(
+            in srgb,
+            var(--primary) 18%,
+            transparent
+        );
+
+    border-top-color:
+        var(--primary);
+
+    border-radius:50%;
+
+    animation:
+        spin .8s linear infinite;
+}
+
+@keyframes spin{
+    to{
+        transform:rotate(360deg);
+    }
+}
+
+.loading-text{
+    color:
+        var(--muted);
+
+    font-size:.7rem;
+}
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.overlay{
+    position:fixed;
+
+    inset:0;
+
+    z-index:3000;
+
+    display:none;
+
+    align-items:flex-end;
+    justify-content:center;
+
+    padding:0;
+
+    background:
+        rgba(0,0,0,.62);
+
+    backdrop-filter:
+        blur(8px);
+}
+
+.overlay.show{
+    display:flex;
+}
+
+.modal{
+    width:min(980px,100%);
+
+    max-height:
+        95vh;
+
+    overflow:auto;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid var(--border);
+
+    border-bottom:none;
+
+    border-radius:
+        25px
+        25px
+        0
+        0;
+
+    box-shadow:
+        0 -25px 70px
+        rgba(0,0,0,.30);
+
+    animation:
+        modalUp .25s ease;
+}
+
+@keyframes modalUp{
+    from{
+        transform:translateY(50px);
+        opacity:.3;
+    }
+
+    to{
+        transform:none;
+        opacity:1;
+    }
+}
+
+.modal-head{
+    position:sticky;
+
+    top:0;
+
+    z-index:5;
+
+    min-height:64px;
+
+    padding:
+        13px
+        17px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:space-between;
+
+    gap:10px;
+
+    background:
+        var(--surface);
+
+    border-bottom:
+        1px solid var(--border);
+}
+
+.modal-title{
+    font-size:.98rem;
+    font-weight:950;
+}
+
+.modal-subtitle{
+    margin-top:3px;
+
+    color:
+        var(--muted);
+
+    font-size:.63rem;
+}
+
+.close{
+    width:37px;
+    height:37px;
+
+    display:grid;
+    place-items:center;
+
+    border-radius:11px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+
+    color:
+        var(--text);
+}
+
+.modal-body{
+    padding:18px;
+}
+
+.modal-footer{
+    position:sticky;
+
+    bottom:0;
+
+    z-index:5;
+
+    padding:
+        13px
+        18px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:flex-end;
+
+    gap:8px;
+
+    background:
+        var(--surface);
+
+    border-top:
+        1px solid var(--border);
+}
+
+/* =========================================================
+   FORM
+========================================================= */
+
+.form-grid{
+    display:grid;
+
+    grid-template-columns:
+        repeat(2,minmax(0,1fr));
+
+    gap:13px;
+}
+
+.form-group{
+    min-width:0;
+
+    display:flex;
+    flex-direction:column;
+
+    gap:6px;
+}
+
+.form-group.full{
+    grid-column:
+        1/-1;
+}
+
+.form-label{
+    color:
+        var(--muted);
+
+    font-size:.71rem;
+
+    font-weight:850;
+
+    text-align:center;
+}
+
+.form-input{
+    width:100%;
+
+    min-height:45px;
+
+    padding:
+        9px
+        12px;
+
+    border-radius:13px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+
+    color:
+        var(--text);
+
+    outline:none;
+
+    text-align:center;
+
+    direction:rtl;
+
+    transition:.2s;
+}
+
+.form-input:focus{
+    border-color:
+        var(--primary);
+
+    box-shadow:
+        0 0 0 3px
+        color-mix(
+            in srgb,
+            var(--primary) 13%,
+            transparent
+        );
+}
+
+.form-input[readonly],
+.form-input.auto{
+    background:
+        color-mix(
+            in srgb,
+            var(--muted) 8%,
+            var(--surface-2)
+        );
+
+    color:
+        var(--muted);
+
+    opacity:.78;
+
+    cursor:not-allowed;
+
+    font-weight:900;
+}
+
+.form-input.invalid{
+    border-color:
+        var(--danger);
+
+    box-shadow:
+        0 0 0 3px
+        color-mix(
+            in srgb,
+            var(--danger) 10%,
+            transparent
+        );
+}
+
+.form-hint{
+    color:
+        var(--muted);
+
+    text-align:center;
+
+    font-size:.59rem;
+}
+
+textarea.form-input{
+    min-height:100px;
+
+    resize:vertical;
+
+    text-align:right;
+
+    line-height:1.8;
+}
+
+.required{
+    color:
+        var(--danger);
+}
+
+/* =========================================================
+   MULTI SELECT
+========================================================= */
+
+.multi-select{
+    min-height:45px;
+
+    padding:7px;
+
+    display:flex;
+    flex-wrap:wrap;
+
+    gap:6px;
+
+    align-items:center;
+
+    border:
+        1px solid var(--border);
+
+    border-radius:13px;
+
+    background:
+        var(--surface-2);
+}
+
+.multi-select select{
+    flex:1;
+
+    min-width:120px;
+
+    border:0;
+
+    outline:0;
+
+    background:transparent;
+
+    color:var(--text);
+
+    text-align:center;
+}
+
+.selected-person{
+    padding:
+        5px
+        8px;
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:5px;
+
+    border-radius:18px;
+
+    background:
+        var(--primary-soft);
+
+    color:
+        var(--primary);
+
+    border:
+        1px solid var(--border);
+
+    font-size:.62rem;
+}
+
+/* =========================================================
+   VALIDATION
+========================================================= */
+
+.validation-box{
+    display:none;
+
+    margin-bottom:15px;
+
+    padding:12px 14px;
+
+    border-radius:14px;
+
+    border:
+        1px solid var(--danger);
+
+    background:
+        color-mix(
+            in srgb,
+            var(--danger) 7%,
+            var(--surface)
+        );
+
+    color:
+        var(--danger);
+
+    font-size:.68rem;
+
+    line-height:1.8;
+}
+
+.validation-box.show{
+    display:block;
+}
+
+.validation-box ul{
+    padding-right:20px;
+}
+
+/* =========================================================
+   FINANCIAL SECTION
+========================================================= */
+
+.section-title{
+    grid-column:1/-1;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    margin-top:4px;
+
+    padding-bottom:7px;
+
+    border-bottom:
+        1px dashed var(--border);
+
+    color:
+        var(--primary);
+
+    font-size:.76rem;
+
+    font-weight:950;
+}
+
+/* =========================================================
+   REPORT
+========================================================= */
+
+.report-summary{
+    display:grid;
+
+    grid-template-columns:
+        repeat(4,minmax(0,1fr));
+
+    gap:8px;
+
+    margin-bottom:15px;
+}
+
+.report-box{
+    padding:13px;
+
+    text-align:center;
+
+    border-radius:14px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+}
+
+.report-box strong{
+    display:block;
+
+    font-size:1rem;
+    font-weight:950;
+}
+
+.report-box span{
+    display:block;
+
+    margin-top:3px;
+
+    color:
+        var(--muted);
+
+    font-size:.61rem;
+}
+
+.report-list{
+    display:grid;
+
+    gap:8px;
+}
+
+.report-row{
+    padding:11px;
+
+    border-radius:13px;
+
+    border:
+        1px solid var(--border);
+
+    background:
+        var(--surface-2);
+
+    font-size:.69rem;
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+.toast{
+    position:fixed;
+
+    left:50%;
+
+    bottom:
+        calc(
+            100px +
+            env(safe-area-inset-bottom)
+        );
+
+    z-index:6000;
+
+    max-width:90%;
+
+    min-width:250px;
+
+    padding:
+        12px
+        16px;
+
+    text-align:center;
+
+    border-radius:14px;
+
+    background:
+        #111827;
+
+    color:#fff;
+
+    border:
+        1px solid
+        rgba(255,255,255,.15);
+
+    transform:
+        translateX(-50%)
+        translateY(20px);
+
+    opacity:0;
+
+    pointer-events:none;
+
+    transition:.25s;
+
+    font-size:.71rem;
+}
+
+.toast.show{
+    opacity:1;
+
+    transform:
+        translateX(-50%);
+}
+
+.toast.success{
+    background:#14532d;
+}
+
+.toast.error{
+    background:#991b1b;
+}
+
+.toast.warning{
+    background:#92400e;
+}
+
+/* =========================================================
+   BOTTOM NAV
+========================================================= */
+
+.bottom-nav{
+    position:fixed;
+
+    left:0;
+    right:0;
+    bottom:0;
+
+    z-index:1500;
+
+    display:grid;
+
+    grid-template-columns:
+        repeat(5,1fr);
+
+    padding:
+        7px
+        7px
+        calc(
+            7px +
+            env(safe-area-inset-bottom)
+        );
+
+    background:
+        color-mix(
+            in srgb,
+            var(--surface) 95%,
+            transparent
+        );
+
+    backdrop-filter:
+        blur(20px);
+
+    border-top:
+        1px solid var(--border);
+}
+
+.nav-item{
+    min-height:55px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+    justify-content:center;
+
+    gap:4px;
+
+    border:0;
+
+    background:transparent;
+
+    color:
+        var(--muted);
+
+    font-size:.58rem;
+
+    transition:.2s;
+}
+
+.nav-item i{
+    font-size:17px;
+}
+
+.nav-item.active{
+    color:
+        var(--primary);
+
+    font-weight:950;
+}
+
+.nav-item:hover{
+    color:
+        var(--primary);
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media(max-width:950px){
+
+    .kpis{
+        grid-template-columns:
+            repeat(2,1fr);
+    }
+
+    .shift-grid{
+        grid-template-columns:
+            repeat(2,1fr);
+    }
+
+    .report-summary{
+        grid-template-columns:
+            repeat(2,1fr);
+    }
+}
+
+@media(max-width:650px){
+
+    .container{
+        padding:
+            12px
+            10px
+            18px;
+    }
+
+    .brand-icon{
+        width:42px;
+        height:42px;
+    }
+
+    .brand h1{
+        font-size:.94rem;
+    }
+
+    .brand p{
+        display:none;
+    }
+
+    .header-actions{
+        gap:5px;
+    }
+
+    .icon-btn{
+        width:39px;
+        height:39px;
+    }
+
+    .kpis{
+        gap:8px;
+    }
+
+    .kpi{
+        min-height:112px;
+        padding:10px;
+    }
+
+    .kpi-value{
+        font-size:1.08rem;
+    }
+
+    .shift-head{
+        flex-direction:column;
+    }
+
+    .shift-total{
+        width:100%;
+    }
+
+    .form-grid{
+        grid-template-columns:
+            1fr 1fr;
+
+        gap:9px;
+    }
+
+    .modal-body{
+        padding:13px;
+    }
+}
+
+@media(max-width:430px){
+
+    .form-grid{
+        grid-template-columns:
+            1fr;
+    }
+
+    .form-group.full{
+        grid-column:auto;
+    }
+
+    .shift-grid{
+        grid-template-columns:
+            1fr 1fr;
+    }
+
+    .actions .btn{
+        flex:1;
+    }
+
+    .report-summary{
+        grid-template-columns:
+            1fr 1fr;
+    }
+}
+
+/* =========================================================
+   PRINT
+========================================================= */
+
+@media print{
+
+    .topbar,
+    .bottom-nav,
+    .actions,
+    .modal-footer,
+    .toast,
+    .loading{
+        display:none!important;
+    }
+
+    body{
+        background:#fff!important;
+        color:#111!important;
+        padding:0!important;
+    }
+
+    .panel,
+    .shift-card,
+    .kpi,
+    .info{
+        box-shadow:none!important;
+
+        border:
+            1px solid #aaa!important;
+    }
+}
+
+/* === Dark mode: blue outer frames === */
+[data-theme="dark"] .panel,
+[data-theme="dark"] .shift-card,
+[data-theme="dark"] .kpi,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .multi-select,
+[data-theme="dark"] .info,
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .icon-btn,
+[data-theme="dark"] .btn,
+[data-theme="dark"] .section-title {
+    border-color: #63c7ff !important;
+    box-shadow: 0 0 0 1px rgba(99,199,255,.16), 0 0 18px rgba(99,199,255,.07);
+}
+[data-theme="dark"] .tab.active,
+[data-theme="dark"] .nav-item.active {
+    border-color: #63c7ff !important;
+}
+</style>
+</head>
+
+<body>
+
+<!-- =======================================================
+     LOADING
+======================================================= -->
+
+<div class="loading" id="loading">
+    <div class="loading-card">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">
+            جارٍ تنفيذ العملية...
+        </div>
+    </div>
+</div>
+
+
+<!-- =======================================================
+     HEADER
+======================================================= -->
+
+<header class="topbar">
+
+    <div class="header-row">
+
+        <div class="brand">
+
+            <div class="brand-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+
+            <div class="brand-content">
+                <h1>إدارة الورديات</h1>
+                <p>
+                    التشغيل · المبيعات · النقدية · الإغلاق المالي
+                </p>
+            </div>
+
+        </div>
+
+        <div class="header-actions">
+
+            <!-- 🌙 في الفاتح / 🌞 في المظلم -->
+            <button
+                class="icon-btn"
+                id="themeToggle"
+                type="button"
+                title="تبديل الوضع">
+
+                <i
+                    id="themeIcon"
+                    class="fas fa-moon">
+                </i>
+
+            </button>
+
+            <button
+                class="icon-btn"
+                type="button"
+                onclick="goHome()"
+                title="الصفحة الرئيسية">
+
+                <i class="fas fa-arrow-right"></i>
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <div class="search-row">
+
+        <div class="search-box">
+
+            <i class="fas fa-search"></i>
+
+            <input
+                id="searchInput"
+                class="search"
+                type="search"
+                inputmode="search"
+                autocomplete="off"
+                placeholder="ابحث برمز الوردية أو المحطة أو التاريخ أو الموظف...">
+
+        </div>
+
+        <button
+            class="icon-btn"
+            type="button"
+            onclick="reloadData()"
+            title="تحديث البيانات">
+
+            <i class="fas fa-sync"></i>
+
+        </button>
+
+    </div>
+
+</header>
+
+
+<!-- =======================================================
+     MAIN
+======================================================= -->
+
+<main class="container">
+
+
+    <!-- KPIs -->
+
+    <section class="kpis">
+
+        <article class="kpi">
+
+            <div class="kpi-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+
+            <div
+                class="kpi-value"
+                id="statCount">
+                —
+            </div>
+
+            <div class="kpi-label">
+                إجمالي الورديات
+            </div>
+
+        </article>
+
+
+        <article class="kpi">
+
+            <div class="kpi-icon">
+                <i class="fas fa-lock-open"></i>
+            </div>
+
+            <div
+                class="kpi-value"
+                id="statOpen">
+                —
+            </div>
+
+            <div class="kpi-label">
+                الورديات المفتوحة
+            </div>
+
+        </article>
+
+
+        <article class="kpi">
+
+            <div class="kpi-icon">
+                <i class="fas fa-coins"></i>
+            </div>
+
+            <div
+                class="kpi-value"
+                id="statSales">
+                —
+            </div>
+
+            <div class="kpi-label">
+                إجمالي المبيعات
+            </div>
+
+        </article>
+
+
+        <article class="kpi">
+
+            <div class="kpi-icon">
+                <i class="fas fa-scale-balanced"></i>
+            </div>
+
+            <div
+                class="kpi-value"
+                id="statVariance">
+                —
+            </div>
+
+            <div class="kpi-label">
+                صافي الانحراف النقدي
+            </div>
+
+        </article>
+
+    </section>
+
+
+    <!-- FILTERS -->
+
+    <div class="tabs" id="tabs">
+
+        <button
+            class="tab active"
+            data-filter="all">
+            الكل
+        </button>
+
+        <button
+            class="tab"
+            data-filter="open">
+            المفتوحة
+        </button>
+
+        <button
+            class="tab"
+            data-filter="closed">
+            المغلقة
+        </button>
+
+        <button
+            class="tab"
+            data-filter="today">
+            اليوم
+        </button>
+
+        <button
+            class="tab"
+            data-filter="high">
+            أعلى المبيعات
+        </button>
+
+    </div>
+
+
+    <!-- RECORDS -->
+
+    <section class="panel">
+
+        <div class="panel-head">
+
+            <div class="panel-title">
+
+                <i class="fas fa-list-check"></i>
+
+                <span>
+                    سجل الورديات
+                </span>
+
+            </div>
+
+            <span
+                class="count"
+                id="itemCount">
+                0
+            </span>
+
+        </div>
+
+        <div
+            class="records"
+            id="records">
+        </div>
+
+    </section>
+
+</main>
+
+
+<!-- =======================================================
+     ADD / EDIT MODAL
+======================================================= -->
+
+<div
+    class="overlay"
+    id="formOverlay">
+
+    <div class="modal">
+
+        <div class="modal-head">
+
+            <div>
+
+                <div
+                    class="modal-title"
+                    id="formTitle">
+                    إضافة وردية جديدة
+                </div>
+
+                <div class="modal-subtitle">
+                    بيانات تشغيلية ومالية للوردية
+                </div>
+
+            </div>
+
+            <button
+                class="close"
+                type="button"
+                onclick="closeModal('formOverlay')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+
+        <div class="modal-body">
+
+            <div
+                class="validation-box"
+                id="validationBox">
+            </div>
+
+
+            <form
+                id="shiftForm"
+                class="form-grid"
+                novalidate>
+
+
+                <!-- رمز الوردية -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        رمز الوردية
+                    </label>
+
+                    <input
+                        id="shift_code"
+                        class="form-input auto"
+                        type="text"
+                        readonly
+                        tabindex="-1">
+
+                    <div class="form-hint">
+                        يتم توليده تلقائياً
+                    </div>
+
+                </div>
+
+
+                <!-- المحطة -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        المحطة
+                        <span class="required">*</span>
+                    </label>
+
+                    <select
+                        id="station_id"
+                        class="form-input"
+                        required>
+
+                        <option value="">
+                            جارٍ تحميل المحطات...
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- تاريخ الوردية -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        تاريخ الوردية
+                        <span class="required">*</span>
+                    </label>
+
+                    <input
+                        id="shift_date"
+                        class="form-input auto"
+                        type="date"
+                        readonly
+                        required>
+
+                </div>
+
+
+                <!-- نوع الوردية -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        نوع الوردية
+                        <span class="required">*</span>
+                    </label>
+
+                    <select
+                        id="shift_type"
+                        class="form-input auto"
+                        required>
+
+                        <option value="">
+                            تحديد تلقائي
+                        </option>
+
+                        <option value="morning">
+                            صباحية
+                        </option>
+
+                        <option value="evening">
+                            مسائية
+                        </option>
+
+                        <option value="night">
+                            ليلية
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- البداية -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        وقت بداية الوردية
+                        <span class="required">*</span>
+                    </label>
+
+                    <input
+                        id="start_time"
+                        class="form-input auto"
+                        type="datetime-local"
+                        readonly
+                        required>
+
+                </div>
+
+
+                <!-- النهاية -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        وقت نهاية الوردية
+                    </label>
+
+                    <input
+                        id="end_time"
+                        class="form-input"
+                        type="datetime-local">
+
+                </div>
+
+
+                <!-- المدة -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مدة الوردية بالدقائق
+                    </label>
+
+                    <input
+                        id="duration_minutes"
+                        class="form-input auto"
+                        type="number"
+                        min="0"
+                        inputmode="numeric"
+                        readonly>
+
+                    <div class="form-hint">
+                        تُحتسب تلقائياً من وقت البداية والنهاية
+                    </div>
+
+                </div>
+
+
+                <!-- المدير -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مدير الوردية
+                    </label>
+
+                    <select
+                        id="manager_id"
+                        class="form-input">
+
+                        <option value="">
+                            جارٍ تحميل المدير الحالي...
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- أمين الصندوق -->
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        أمين الصندوق
+                    </label>
+
+                    <select
+                        id="cashier_id"
+                        class="form-input">
+
+                        <option value="">
+                            جارٍ تحميل أمناء الصندوق...
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- العاملون -->
+
+                <div class="form-group full">
+
+                    <label class="form-label">
+                        العاملون في الوردية
+                    </label>
+
+                    <div
+                        class="multi-select"
+                        id="attendantsBox">
+
+                        <select
+                            id="attendantPicker">
+
+                            <option value="">
+                                اختر العامل لإضافته
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                    <input
+                        id="attendant_ids"
+                        type="hidden"
+                        value="">
+
+                    <div class="form-hint">
+                        يمكن اختيار أكثر من عامل
+                    </div>
+
+                </div>
+
+
+                <!-- FINANCIAL -->
+
+                <div class="section-title">
+
+                    <i class="fas fa-wallet"></i>
+
+                    <span>
+                        الأرصدة المالية
+                    </span>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        النقدية الافتتاحية
+                    </label>
+
+                    <input
+                        id="opening_cash"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الرصيد البنكي الافتتاحي
+                    </label>
+
+                    <input
+                        id="opening_bank"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الائتمان الافتتاحي
+                    </label>
+
+                    <input
+                        id="opening_credit"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        النقدية الختامية
+                    </label>
+
+                    <input
+                        id="closing_cash"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الرصيد البنكي الختامي
+                    </label>
+
+                    <input
+                        id="closing_bank"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الائتمان الختامي
+                    </label>
+
+                    <input
+                        id="closing_credit"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <!-- SALES -->
+
+                <div class="section-title">
+
+                    <i class="fas fa-chart-line"></i>
+
+                    <span>
+                        المبيعات والتحصيل
+                    </span>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إجمالي المبيعات
+                    </label>
+
+                    <input
+                        id="total_sales"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مبيعات الوقود
+                    </label>
+
+                    <input
+                        id="total_fuel_sales"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مبيعات المنتجات
+                    </label>
+
+                    <input
+                        id="total_product_sales"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مبيعات الخدمات
+                    </label>
+
+                    <input
+                        id="total_service_sales"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إجمالي الخصومات
+                    </label>
+
+                    <input
+                        id="total_discounts"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إجمالي الضريبة
+                    </label>
+
+                    <input
+                        id="total_tax"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        ضريبة القيمة المضافة
+                    </label>
+
+                    <input
+                        id="total_vat"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <!-- PAYMENT -->
+
+                <div class="section-title">
+
+                    <i class="fas fa-credit-card"></i>
+
+                    <span>
+                        وسائل الدفع
+                    </span>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        المبيعات النقدية
+                    </label>
+
+                    <input
+                        id="total_cash"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        مبيعات البطاقات
+                    </label>
+
+                    <input
+                        id="total_credit_card"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        التحويلات البنكية
+                    </label>
+
+                    <input
+                        id="total_bank_transfer"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        المبيعات الآجلة
+                    </label>
+
+                    <input
+                        id="total_credit_sales"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الشيكات
+                    </label>
+
+                    <input
+                        id="total_cheque"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        وسائل الدفع الأخرى
+                    </label>
+
+                    <input
+                        id="total_other"
+                        class="form-input"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إجمالي لترات الوقود
+                    </label>
+
+                    <input
+                        id="total_fuel_liters"
+                        class="form-input"
+                        type="number"
+                        step="0.001"
+                        inputmode="decimal">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        الانحراف النقدي
+                    </label>
+
+                    <input
+                        id="cash_variance"
+                        class="form-input auto"
+                        type="number"
+                        step="0.01"
+                        inputmode="decimal"
+                        readonly>
+
+                </div>
+
+
+                <div class="form-group full">
+
+                    <label class="form-label">
+                        سبب الانحراف النقدي
+                    </label>
+
+                    <textarea
+                        id="variance_reason"
+                        class="form-input"
+                        rows="4"
+                        placeholder="أدخل السبب عند وجود انحراف...">
+                    </textarea>
+
+                </div>
+
+            </form>
+
+        </div>
+
+
+        <div class="modal-footer">
+
+            <button
+                class="btn"
+                type="button"
+                onclick="closeModal('formOverlay')">
+
+                إلغاء
+
+            </button>
+
+            <button
+                class="btn primary"
+                id="saveButton"
+                type="button"
+                onclick="saveForm()">
+
+                <i class="fas fa-save"></i>
+
+                حفظ الوردية
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+     DETAILS MODAL
+======================================================= -->
+
+<div
+    class="overlay"
+    id="detailsOverlay">
+
+    <div class="modal">
+
+        <div class="modal-head">
+
+            <div>
+                <div class="modal-title">
+                    تفاصيل الوردية
+                </div>
+
+                <div class="modal-subtitle">
+                    البيانات الفعلية للسجل المحدد
+                </div>
+            </div>
+
+            <button
+                class="close"
+                type="button"
+                onclick="closeModal('detailsOverlay')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+        <div
+            class="modal-body"
+            id="detailsBody">
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+     REPORT MODAL
+======================================================= -->
+
+<div
+    class="overlay"
+    id="reportOverlay">
+
+    <div class="modal">
+
+        <div class="modal-head">
+
+            <div>
+                <div class="modal-title">
+                    التقرير المالي والتشغيلي
+                </div>
+
+                <div class="modal-subtitle">
+                    التقرير يعتمد على المصدر الفعلي للبيانات
+                </div>
+            </div>
+
+            <button
+                class="close"
+                type="button"
+                onclick="closeModal('reportOverlay')">
+
+                <i class="fas fa-times"></i>
+
+            </button>
+
+        </div>
+
+
+        <div class="modal-body">
+
+            <div class="form-grid">
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        من تاريخ
+                    </label>
+
+                    <input
+                        id="reportFrom"
+                        class="form-input"
+                        type="date">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إلى تاريخ
+                    </label>
+
+                    <input
+                        id="reportTo"
+                        class="form-input"
+                        type="date">
+
+                </div>
+
+            </div>
+
+
+            <div class="actions">
+
+                <button
+                    class="btn primary"
+                    type="button"
+                    onclick="generateReport()">
+
+                    <i class="fas fa-chart-column"></i>
+
+                    توليد التقرير
+
+                </button>
+
+
+                <button
+                    class="btn"
+                    type="button"
+                    onclick="exportData()">
+
+                    <i class="fas fa-file-export"></i>
+
+                    تصدير CSV
+
+                </button>
+
+
+                <button
+                    class="btn"
+                    type="button"
+                    onclick="window.print()">
+
+                    <i class="fas fa-print"></i>
+
+                    طباعة
+
+                </button>
+
+            </div>
+
+
+            <div
+                id="reportResults"
+                style="margin-top:15px">
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =======================================================
+     BOTTOM NAV
+======================================================= -->
+
+<nav class="bottom-nav">
+
+    <button
+        class="nav-item active"
+        type="button"
+        onclick="setFilter('all',this)">
+
+        <i class="fas fa-list"></i>
+
+        <span>
+            الكل
+        </span>
+
+    </button>
+
+
+    <button
+        class="nav-item"
+        type="button"
+        onclick="setFilter('open',this)">
+
+        <i class="fas fa-lock-open"></i>
+
+        <span>
+            المفتوحة
+        </span>
+
+    </button>
+
+
+    <button
+        class="nav-item"
+        type="button"
+        onclick="openForm()">
+
+        <i class="fas fa-plus-circle"></i>
+
+        <span>
+            إضافة وردية
+        </span>
+
+    </button>
+
+
+    <button
+        class="nav-item"
+        type="button"
+        onclick="openReport()">
+
+        <i class="fas fa-chart-pie"></i>
+
+        <span>
+            التقارير
+        </span>
+
+    </button>
+
+
+    <button
+        class="nav-item"
+        type="button"
+        onclick="reloadData()">
+
+        <i class="fas fa-rotate"></i>
+
+        <span>
+            تحديث
+        </span>
+
+    </button>
+
+</nav>
+
+
+<div
+    class="toast"
+    id="toast">
+</div>
+
+
+<script>
+(() => {
+
+"use strict";
+
+/* =========================================================
+   ANDROID CONTRACTS
+========================================================= */
+
+const bridge = window.AndroidInterface;
+
+const CURRENT_CONTRACTS = Object.freeze({
+
+    list:
+        "getShiftRecordsTyped",
+
+    save:
+        "saveShiftRecordTyped",
+
+    update:
+        "updateShiftRecord",
+
+    remove:
+        "deleteShiftRecord",
+
+    report:
+        "generateShiftReport"
+
+});
+
+
+/*
+ * Contract جديد للبيانات المرجعية.
+ *
+ * يجب أن يعيده Android كـ JSON يحتوي مثلاً على:
+ *
+ * {
+ *   "stations":[
+ *      {"id":1,"name":"..."}
+ *   ],
+ *
+ *   "current_manager":{
+ *      "id":10,
+ *      "name":"..."
+ *   },
+ *
+ *   "cashiers":[
+ *      {"id":20,"name":"..."}
+ *   ],
+ *
+ *   "attendants":[
+ *      {"id":30,"name":"..."}
+ *   ]
+ * }
+ *
+ * لا يتم إنشاء أي قيم بديلة أو وهمية إذا لم يكن العقد موجوداً.
+ */
+
+const OPTIONS_CONTRACT =
+    "getShiftFormContext";
+
+
+/* =========================================================
+   STATE
+========================================================= */
+
+const state = {
+
+    rows: [],
+
+    filtered: [],
+
+    filter: "all",
+
+    editing: null,
+
+    loadedAt: null,
+
+    selectedAttendants: [],
+
+    options: {
+
+        stations: [],
+
+        cashiers: [],
+
+        attendants: [],
+
+        currentManager: null
+
+    }
+
+};
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const $ =
+    id =>
+        document.getElementById(id);
+
+
+function esc(value){
+
+    return String(value ?? "—")
+        .replace(
+            /[&<>"']/g,
+            c => ({
+                "&":"&amp;",
+                "<":"&lt;",
+                ">":"&gt;",
+                '"':"&quot;",
+                "'":"&#39;"
+            }[c])
+        );
+
+}
+
+
+function number(value){
+
+    const n =
+        Number(value);
+
+    return Number.isFinite(n)
+        ? n
+        : 0;
+
+}
+
+
+function today(){
+
+    const d =
+        new Date();
+
+    const year =
+        d.getFullYear();
+
+    const month =
+        String(
+            d.getMonth()+1
+        ).padStart(2,"0");
+
+    const day =
+        String(
+            d.getDate()
+        ).padStart(2,"0");
+
+    return `${year}-${month}-${day}`;
+
+}
+
+
+function nowLocal(){
+
+    const d =
+        new Date();
+
+    const year =
+        d.getFullYear();
+
+    const month =
+        String(
+            d.getMonth()+1
+        ).padStart(2,"0");
+
+    const day =
+        String(
+            d.getDate()
+        ).padStart(2,"0");
+
+    const hours =
+        String(
+            d.getHours()
+        ).padStart(2,"0");
+
+    const minutes =
+        String(
+            d.getMinutes()
+        ).padStart(2,"0");
+
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+
+}
+
+
+function toast(
+    message,
+    type="success"
+){
+
+    const node =
+        $("toast");
+
+    node.textContent =
+        message;
+
+    node.className =
+        `toast show ${type}`;
+
+    clearTimeout(
+        node._timer
+    );
+
+    node._timer =
+        setTimeout(
+            () =>
+                node.classList.remove(
+                    "show"
+                ),
+            3600
+        );
+
+}
+
+
+function loading(
+    visible,
+    message="جارٍ تنفيذ العملية..."
+){
+
+    $("loadingText")
+        .textContent =
+        message;
+
+    $("loading")
+        .classList
+        .toggle(
+            "show",
+            Boolean(visible)
+        );
+
+}
+
+
+/* =========================================================
+   BRIDGE
+========================================================= */
+
+function hasContract(
+    method
+){
+
+    return Boolean(
+        bridge &&
+        typeof bridge[method] === "function"
+    );
+
+}
+
+
+async function invoke(
+    method,
+    args=[]
+){
+
+    if(!hasContract(method)){
+
+        throw new Error(
+            `عقد Android غير متاح: ${method}`
+        );
+
+    }
+
+    let result;
+
+    try{
+
+        result =
+            bridge[method](...args);
+
+    }catch(error){
+
+        throw error;
+
+    }
+
+
+    if(
+        result &&
+        typeof result.then === "function"
+    ){
+
+        result =
+            await result;
+
+    }
+
+    return result;
+
+}
+
+
+function parseBridge(
+    result
+){
+
+    if(
+        result === null ||
+        result === undefined ||
+        result === ""
+    ){
+
+        return null;
+
+    }
+
+    if(
+        typeof result === "object"
+    ){
+
+        return result;
+
+    }
+
+    try{
+
+        return JSON.parse(result);
+
+    }catch(_){
+
+        return {
+            success:true,
+            value:result
+        };
+
+    }
+
+}
+
+
+function rowsFrom(
+    result
+){
+
+    const parsed =
+        parseBridge(result);
+
+    if(Array.isArray(parsed)){
+
+        return parsed;
+
+    }
+
+    if(
+        Array.isArray(
+            parsed?.rows
+        )
+    ){
+
+        return parsed.rows;
+
+    }
+
+    if(
+        Array.isArray(
+            parsed?.data
+        )
+    ){
+
+        return parsed.data;
+
+    }
+
+    if(
+        Array.isArray(
+            parsed?.items
+        )
+    ){
+
+        return parsed.items;
+
+    }
+
+    return [];
+
+}
+
+
+/* =========================================================
+   ID
+========================================================= */
+
+function idOf(row){
+
+    return (
+        row?.id ??
+        row?.shift_id ??
+        row?.shiftId ??
+        ""
+    );
+
+}
+
+
+function findRow(id){
+
+    return state.rows.find(
+        row =>
+            String(
+                idOf(row)
+            ) === String(id)
+    );
+
+}
+
+
+/* =========================================================
+   SHIFT CODE
+========================================================= */
+
+function generateShiftCode(){
+
+    let max = 0;
+
+    state.rows.forEach(
+        row => {
+
+            const code =
+                String(
+                    row?.shift_code ?? ""
+                );
+
+            const match =
+                code.match(
+                    /(\d+)$/
+                );
+
+            if(match){
+
+                max =
+                    Math.max(
+                        max,
+                        Number(match[1])
+                    );
+
+            }
+
+        }
+    );
+
+    return (
+        "SH-" +
+        String(
+            max + 1
+        ).padStart(
+            6,
+            "0"
+        )
+    );
+
+}
+
+
+/* =========================================================
+   SHIFT TYPE
+========================================================= */
+
+function translateShiftType(
+    value
+){
+
+    const map = {
+
+        morning:
+            "صباحية",
+
+        evening:
+            "مسائية",
+
+        night:
+            "ليلية",
+
+        صباحية:
+            "صباحية",
+
+        مسائية:
+            "مسائية",
+
+        ليلية:
+            "ليلية"
+
+    };
+
+    return (
+        map[value] ||
+        value ||
+        "—"
+    );
+
+}
+
+
+function detectShiftType(){
+
+    const hour =
+        new Date()
+            .getHours();
+
+    if(
+        hour >= 6 &&
+        hour < 14
+    ){
+
+        return "morning";
+
+    }
+
+    if(
+        hour >= 14 &&
+        hour < 22
+    ){
+
+        return "evening";
+
+    }
+
+    return "night";
+
+}
+
+
+/* =========================================================
+   OPTIONS
+========================================================= */
+
+async function loadFormOptions(){
+
+    if(!hasContract(OPTIONS_CONTRACT)){
+        showOptionError("عقد بيانات نموذج الوردية غير متاح في Android.");
+        return;
+    }
+
+    try{
+        const result = await invoke(OPTIONS_CONTRACT);
+        const data = parseBridge(result) || {};
+
+        const station = data.station || null;
+        const currentUser = data.current_user || data.currentUser || null;
+
+        state.options = {
+            stations: station ? [station] : [],
+            cashiers: Array.isArray(data.cashiers) ? data.cashiers : [],
+            attendants: Array.isArray(data.attendants) ? data.attendants : [],
+            managers: Array.isArray(data.managers) ? data.managers : [],
+            currentManager: Array.isArray(data.managers)
+                ? (data.managers.find(x => String(x.id) === String(currentUser?.id)) || data.managers[0] || null)
+                : null
+        };
+
+        renderStationOptions();
+        renderCashierOptions();
+        renderManagerOption();
+        renderAttendantOptions();
+
+        // المحطة والمستخدم الحالي يحددهما Android/SQLite؛ لا نستخدم قيم HTML ثابتة.
+        if(station?.id){
+            $("station_id").value = String(station.id);
+            $("station_id").disabled = true;
+        }
+
+        if(currentUser?.id && !state.options.currentManager){
+            const possibleManager = state.options.managers.find(x => String(x.id) === String(currentUser.id));
+            if(possibleManager){
+                state.options.currentManager = possibleManager;
+                renderManagerOption();
+            }
+        }
+
+    }catch(error){
+        showOptionError(error.message);
+    }
+}
+
+function showOptionError(
+    message
+){
+
+    const text =
+        message ||
+        "تعذر تحميل البيانات المرجعية من قاعدة البيانات.";
+
+    toast(
+        text,
+        "warning"
+    );
+
+}
+
+
+function renderStationOptions(){
+
+    const select =
+        $("station_id");
+
+    select.innerHTML =
+        `<option value="">
+            اختر المحطة
+         </option>`;
+
+    state.options.stations
+        .forEach(
+            station => {
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+                option.value =
+                    station.id ??
+                    station.station_id ??
+                    "";
+
+                option.textContent =
+                    station.name ??
+                    station.station_name ??
+                    `محطة ${option.value}`;
+
+                select.appendChild(
+                    option
+                );
+
+            }
+        );
+
+}
+
+
+function renderCashierOptions(){
+
+    const select =
+        $("cashier_id");
+
+    select.innerHTML =
+        `<option value="">
+            اختر أمين الصندوق
+         </option>`;
+
+    state.options.cashiers
+        .forEach(
+            person => {
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+                option.value =
+                    person.id ??
+                    person.employee_id ??
+                    "";
+
+                option.textContent =
+                    person.name ??
+                    person.employee_name ??
+                    `موظف ${option.value}`;
+
+                select.appendChild(
+                    option
+                );
+
+            }
+        );
+
+}
+
+
+function renderManagerOption(){
+
+    const select =
+        $("manager_id");
+
+    select.innerHTML =
+        `<option value="">
+            لا يوجد مدير محدد
+         </option>`;
+
+    const manager =
+        state.options.currentManager;
+
+    if(!manager){
+
+        return;
+
+    }
+
+    const option =
+        document.createElement(
+            "option"
+        );
+
+    option.value =
+        manager.id ??
+        manager.employee_id ??
+        "";
+
+    option.textContent =
+        manager.name ??
+        manager.employee_name ??
+        `مدير ${option.value}`;
+
+    option.selected =
+        true;
+
+    select.appendChild(
+        option
+    );
+
+}
+
+
+function renderAttendantOptions(){
+
+    const select =
+        $("attendantPicker");
+
+    select.innerHTML =
+        `<option value="">
+            اختر العامل لإضافته
+         </option>`;
+
+    state.options.attendants
+        .forEach(
+            person => {
+
+                const id =
+                    person.id ??
+                    person.employee_id;
+
+                if(
+                    state.selectedAttendants
+                        .some(
+                            x =>
+                                String(x.id) ===
+                                String(id)
+                        )
+                ){
+
+                    return;
+
+                }
+
+                const option =
+                    document.createElement(
+                        "option"
+                    );
+
+                option.value =
+                    id;
+
+                option.textContent =
+                    person.name ??
+                    person.employee_name ??
+                    `عامل ${id}`;
+
+                select.appendChild(
+                    option
+                );
+
+            }
+        );
+
+}
+
+
+/* =========================================================
+   ATTENDANTS
+========================================================= */
+
+$("attendantPicker")
+    .addEventListener(
+        "change",
+        event => {
+
+            const id =
+                event.target.value;
+
+            if(!id){
+
+                return;
+
+            }
+
+            const person =
+                state.options.attendants
+                    .find(
+                        x =>
+                            String(
+                                x.id ??
+                                x.employee_id
+                            ) ===
+                            String(id)
+                    );
+
+            if(!person){
+
+                return;
+
+            }
+
+            state.selectedAttendants
+                .push({
+
+                    id:
+                        person.id ??
+                        person.employee_id,
+
+                    name:
+                        person.name ??
+                        person.employee_name ??
+                        `عامل ${id}`
+
+                });
+
+            syncAttendants();
+
+            renderAttendantOptions();
+
+            event.target.value =
+                "";
+
+        }
+    );
+
+
+function syncAttendants(){
+
+    $("attendant_ids")
+        .value =
+        state.selectedAttendants
+            .map(
+                x =>
+                    x.id
+            )
+            .join(",");
+
+    const box =
+        $("attendantsBox");
+
+    box.querySelectorAll(
+        ".selected-person"
+    )
+    .forEach(
+        node =>
+            node.remove()
+    );
+
+    state.selectedAttendants
+        .forEach(
+            person => {
+
+                const chip =
+                    document.createElement(
+                        "span"
+                    );
+
+                chip.className =
+                    "selected-person";
+
+                chip.innerHTML =
+                    `${esc(person.name)}
+                     <button
+                        type="button"
+                        aria-label="إزالة"
+                        style="
+                            border:0;
+                            background:none;
+                            color:inherit;
+                            padding:0;
+                        "
+                     >
+                        ×
+                     </button>`;
+
+                chip.querySelector(
+                    "button"
+                ).onclick =
+                    () => {
+
+                        state.selectedAttendants =
+                            state.selectedAttendants
+                                .filter(
+                                    x =>
+                                        String(x.id) !==
+                                        String(person.id)
+                                );
+
+                        syncAttendants();
+
+                        renderAttendantOptions();
+
+                    };
+
+                box.insertBefore(
+                    chip,
+                    $("attendantPicker")
+                );
+
+            }
+        );
+
+}
+
+
+/* =========================================================
+   FORM DEFAULTS
+========================================================= */
+
+function resetForm(){
+
+    $("shiftForm")
+        .reset();
+
+    state.selectedAttendants =
+        [];
+
+    $("shift_code")
+        .value =
+        "سيتم التوليد تلقائياً عند الحفظ";
+
+    $("shift_date")
+        .value =
+        today();
+
+    $("start_time")
+        .value =
+        nowLocal();
+
+    $("shift_type")
+        .value =
+        detectShiftType();
+
+    $("duration_minutes")
+        .value =
+        "";
+
+    $("cash_variance")
+        .value =
+        "";
+
+    $("validationBox")
+        .classList
+        .remove("show");
+
+    syncAttendants();
+
+    renderAttendantOptions();
+
+    renderManagerOption();
+
+}
+
+
+function openForm(
+    row=null
+){
+
+    state.editing =
+        row;
+
+    resetForm();
+
+    $("formTitle")
+        .textContent =
+        row
+            ? "تعديل بيانات الوردية"
+            : "إضافة وردية جديدة";
+
+
+    if(row){
+
+        Object.keys(row)
+            .forEach(
+                key => {
+
+                    const element =
+                        $(key);
+
+                    if(!element){
+
+                        return;
+
+                    }
+
+                    element.value =
+                        row[key] ??
+                        "";
+
+                }
+            );
+
+
+        state.selectedAttendants =
+            parseAttendantIds(
+                row.attendant_ids
+            );
+
+        syncAttendants();
+
+        $("shift_code")
+            .readOnly =
+            true;
+
+    }
+
+
+    $("formOverlay")
+        .classList
+        .add("show");
+
+}
+
+
+function parseAttendantIds(
+    value
+){
+
+    if(
+        Array.isArray(value)
+    ){
+
+        return value.map(
+            id => ({
+                id,
+                name:
+                    resolveEmployeeName(
+                        id
+                    )
+            })
+        );
+
+    }
+
+    if(
+        typeof value === "string" &&
+        value.trim()
+    ){
+
+        return value
+            .split(",")
+            .map(
+                x =>
+                    x.trim()
+            )
+            .filter(Boolean)
+            .map(
+                id => ({
+                    id,
+                    name:
+                        resolveEmployeeName(
+                            id
+                        )
+                })
+            );
+
+    }
+
+    return [];
+
+}
+
+
+function resolveEmployeeName(
+    id
+){
+
+    const person =
+        state.options.attendants
+            .find(
+                x =>
+                    String(
+                        x.id ??
+                        x.employee_id
+                    ) ===
+                    String(id)
+            );
+
+    return (
+        person?.full_name_ar ??
+        person?.full_name ??
+        person?.display_name ??
+        person?.username ??
+        "—"
+    );
+
+}
+
+
+/* =========================================================
+   AUTOMATIC CALCULATIONS
+========================================================= */
+
+function calculateDuration(){
+
+    const start =
+        $("start_time").value;
+
+    const end =
+        $("end_time").value;
+
+    if(
+        !start ||
+        !end
+    ){
+
+        $("duration_minutes")
+            .value =
+            "";
+
+        return;
+
+    }
+
+    const startDate =
+        new Date(start);
+
+    const endDate =
+        new Date(end);
+
+    const diff =
+        Math.round(
+            (
+                endDate -
+                startDate
+            ) / 60000
+        );
+
+    $("duration_minutes")
+        .value =
+        diff >= 0
+            ? diff
+            : "";
+
+}
+
+
+function calculateVariance(){
+
+    const opening =
+        number(
+            $("opening_cash").value
+        );
+
+    const closing =
+        number(
+            $("closing_cash").value
+        );
+
+    const cashSales =
+        number(
+            $("total_cash").value
+        );
+
+    if(
+        !(
+            $("closing_cash").value ||
+            $("opening_cash").value ||
+            $("total_cash").value
+        )
+    ){
+
+        $("cash_variance")
+            .value =
+            "";
+
+        return;
+
+    }
+
+    /*
+     * الانحراف النقدي:
+     *
+     * النقدية الختامية
+     * -
+     * (النقدية الافتتاحية + المبيعات النقدية)
+     */
+
+    const variance =
+        closing -
+        (
+            opening +
+            cashSales
+        );
+
+    $("cash_variance")
+        .value =
+        variance.toFixed(2);
+
+}
+
+
+$("end_time")
+    .addEventListener(
+        "change",
+        calculateDuration
+    );
+
+$("start_time")
+    .addEventListener(
+        "change",
+        calculateDuration
+    );
+
+
+[
+    "opening_cash",
+    "closing_cash",
+    "total_cash"
+]
+.forEach(
+    id => {
+
+        $(id)
+            .addEventListener(
+                "input",
+                calculateVariance
+            );
+
+    }
+);
+
+
+/* =========================================================
+   VALIDATION
+========================================================= */
+
+function validateForm(){
+
+    const errors =
+        [];
+
+    if(
+        !$("station_id").value
+    ){
+
+        errors.push(
+            "يجب تحديد المحطة."
+        );
+
+    }
+
+    if(
+        !$("shift_date").value
+    ){
+
+        errors.push(
+            "تاريخ الوردية مطلوب."
+        );
+
+    }
+
+    if(
+        !$("shift_type").value
+    ){
+
+        errors.push(
+            "نوع الوردية مطلوب."
+        );
+
+    }
+
+    if(
+        !$("start_time").value
+    ){
+
+        errors.push(
+            "وقت بداية الوردية مطلوب."
+        );
+
+    }
+
+    const end =
+        $("end_time").value;
+
+    const start =
+        $("start_time").value;
+
+    if(
+        start &&
+        end &&
+        new Date(end) <
+        new Date(start)
+    ){
+
+        errors.push(
+            "وقت نهاية الوردية لا يمكن أن يسبق وقت البداية."
+        );
+
+    }
+
+    const cashier =
+        $("cashier_id").value;
+
+    if(
+        !cashier
+    ){
+
+        errors.push(
+            "يجب تحديد أمين الصندوق عند إنشاء الوردية."
+        );
+
+    }
+
+    const variance =
+        number(
+            $("cash_variance").value
+        );
+
+    if(
+        Math.abs(variance) > 0.009 &&
+        !$("variance_reason").value.trim()
+    ){
+
+        errors.push(
+            "يوجد انحراف نقدي؛ يجب إدخال سبب الانحراف."
+        );
+
+    }
+
+    showValidation(
+        errors
+    );
+
+    return errors.length === 0;
+
+}
+
+
+function showValidation(
+    errors
+){
+
+    const box =
+        $("validationBox");
+
+    if(
+        !errors.length
+    ){
+
+        box.innerHTML =
+            "";
+
+        box.classList
+            .remove(
+                "show"
+            );
+
+        return;
+
+    }
+
+    box.innerHTML =
+        `
+        <strong>
+            يرجى معالجة الملاحظات التالية:
+        </strong>
+
+        <ul>
+            ${errors
+                .map(
+                    error =>
+                        `<li>${esc(error)}</li>`
+                )
+                .join("")}
+        </ul>
+        `;
+
+    box.classList
+        .add(
+            "show"
+        );
+
+}
+
+
+/* =========================================================
+   COLLECT FORM
+========================================================= */
+
+function collectForm(){
+
+    const payload =
+        {};
+
+    $("shiftForm")
+        .querySelectorAll(
+            "[id]"
+        )
+        .forEach(
+            element => {
+
+                const key =
+                    element.id;
+
+                let value =
+                    element.value;
+
+                if(
+                    element.type ===
+                    "number"
+                ){
+
+                    value =
+                        value === ""
+                            ? 0
+                            : Number(value);
+
+                }
+
+                payload[key] =
+                    value;
+
+            }
+        );
+
+
+    payload.shift_code =
+        state.editing?.shift_code ||
+        $("shift_code").value;
+
+
+    payload.attendant_ids =
+        $("attendant_ids").value;
+
+
+    /*
+     * التأكد من إرسال القيم الثلاث
+     * ضمن payload نفسه:
+     */
+
+    payload.cashier_id =
+        $("cashier_id").value
+            ? Number(
+                $("cashier_id").value
+            )
+            : null;
+
+
+    payload.manager_id =
+        $("manager_id").value
+            ? Number(
+                $("manager_id").value
+            )
+            : null;
+
+
+    payload.attendant_ids =
+        state.selectedAttendants
+            .map(
+                person =>
+                    person.id
+            )
+            .join(",");
+
+
+    return payload;
+
+}
+
+
+/* =========================================================
+   SAVE
+========================================================= */
+
+async function saveForm(){
+
+    if(
+        !validateForm()
+    ){
+
+        toast(
+            "يرجى معالجة أخطاء الإدخال أولاً.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    const payload =
+        collectForm();
+
+
+    loading(
+        true,
+        state.editing
+            ? "جارٍ تحديث الوردية..."
+            : "جارٍ حفظ الوردية..."
+    );
+
+
+    try{
+
+        let result;
+
+
+        if(
+            state.editing
+        ){
+
+            const id =
+                idOf(
+                    state.editing
+                );
+
+            if(!id){
+
+                throw new Error(
+                    "معرف الوردية غير صالح."
+                );
+
+            }
+
+            result =
+                await invoke(
+                    CURRENT_CONTRACTS.update,
+                    [
+                        Number(id),
+                        JSON.stringify(
+                            payload
+                        )
+                    ]
+                );
+
+        }else{
+
+            result =
+                await invoke(
+                    CURRENT_CONTRACTS.save,
+                    [
+                        Number(payload.station_id || 0),
+                        String(payload.shift_type || ""),
+                        String(payload.start_time || ""),
+                        Number(payload.manager_id || 0),
+                        Number(payload.cashier_id || 0),
+                        String(payload.attendant_ids || ""),
+                        Number(payload.opening_cash || 0),
+                        Number(payload.opening_bank || 0),
+                        Number(payload.opening_credit || 0),
+                        String(payload.remarks || payload.variance_reason || "")
+                    ]
+                );
+
+        }
+
+
+        parseBridge(
+            result
+        );
+
+
+        toast(
+            state.editing
+                ? "تم تحديث الوردية بنجاح."
+                : "تم حفظ الوردية في قاعدة البيانات.",
+            "success"
+        );
+
+
+        closeModal(
+            "formOverlay"
+        );
+
+
+        await reloadData();
+
+
+    }catch(error){
+
+        toast(
+            error.message ||
+            "فشلت عملية حفظ الوردية.",
+            "error"
+        );
+
+    }finally{
+
+        loading(
+            false
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   FILTERS
+========================================================= */
+
+function setFilter(
+    filter,
+    button
+){
+
+    state.filter =
+        filter;
+
+
+    document
+        .querySelectorAll(
+            ".tab,.nav-item"
+        )
+        .forEach(
+            element =>
+                element.classList
+                    .remove(
+                        "active"
+                    )
+        );
+
+
+    if(button){
+
+        button.classList
+            .add(
+                "active"
+            );
+
+    }
+
+
+    document
+        .querySelectorAll(
+            `.tab[data-filter="${filter}"]`
+        )
+        .forEach(
+            element =>
+                element.classList
+                    .add(
+                        "active"
+                    )
+        );
+
+
+    applyFilter();
+
+}
+
+
+document
+    .querySelectorAll(
+        ".tab"
+    )
+    .forEach(
+        button => {
+
+            button.addEventListener(
+                "click",
+                () =>
+                    setFilter(
+                        button.dataset.filter,
+                        button
+                    )
+            );
+
+        }
+    );
+
+
+function applyFilter(){
+
+    const query =
+        (
+            $("searchInput")
+                .value ||
+            ""
+        )
+        .trim()
+        .toLowerCase();
+
+
+    let rows =
+        [
+            ...state.rows
+        ];
+
+
+    if(
+        state.filter ===
+        "open"
+    ){
+
+        rows =
+            rows.filter(
+                row =>
+                    !row?.end_time
+            );
+
+    }
+
+
+    if(
+        state.filter ===
+        "closed"
+    ){
+
+        rows =
+            rows.filter(
+                row =>
+                    Boolean(
+                        row?.end_time
+                    )
+            );
+
+    }
+
+
+    if(
+        state.filter ===
+        "today"
+    ){
+
+        rows =
+            rows.filter(
+                row =>
+                    String(
+                        row?.shift_date ??
+                        ""
+                    )
+                    .slice(0,10) ===
+                    today()
+            );
+
+    }
+
+
+    if(
+        state.filter ===
+        "high"
+    ){
+
+        rows.sort(
+            (a,b) =>
+                number(
+                    b?.total_sales
+                ) -
+                number(
+                    a?.total_sales
+                )
+        );
+
+    }
+
+
+    if(query){
+
+        rows =
+            rows.filter(
+                row =>
+                    JSON.stringify(
+                        row
+                    )
+                    .toLowerCase()
+                    .includes(
+                        query
+                    )
+            );
+
+    }
+
+
+    state.filtered =
+        rows;
+
+
+    render();
+
+}
+
+
+/* =========================================================
+   STATS
+========================================================= */
+
+function renderStats(){
+
+    const rows =
+        state.filtered;
+
+
+    $("statCount")
+        .textContent =
+        rows.length
+            .toLocaleString("ar");
+
+
+    $("itemCount")
+        .textContent =
+        rows.length
+            .toLocaleString("ar");
+
+
+    const open =
+        rows.filter(
+            row =>
+                !row?.end_time
+        ).length;
+
+
+    $("statOpen")
+        .textContent =
+        open.toLocaleString("ar");
+
+
+    const sales =
+        rows.reduce(
+            (
+                sum,
+                row
+            ) =>
+                sum +
+                number(
+                    row?.total_sales
+                ),
+            0
+        );
+
+
+    $("statSales")
+        .textContent =
+        sales.toLocaleString(
+            "ar",
+            {
+                maximumFractionDigits:2
+            }
+        );
+
+
+    const variance =
+        rows.reduce(
+            (
+                sum,
+                row
+            ) =>
+                sum +
+                number(
+                    row?.cash_variance
+                ),
+            0
+        );
+
+
+    $("statVariance")
+        .textContent =
+        variance.toLocaleString(
+            "ar",
+            {
+                maximumFractionDigits:2
+            }
+        );
+
+}
+
+
+/* =========================================================
+   RENDER
+========================================================= */
+
+function render(){
+
+    renderStats();
+
+
+    const box =
+        $("records");
+
+
+    if(
+        !state.filtered.length
+    ){
+
+        box.innerHTML =
+            `
+            <div class="empty">
+
+                <i class="fas fa-clock"></i>
+
+                <strong>
+                    لا توجد ورديات مطابقة
+                </strong>
+
+                <small>
+                    لا توجد سجلات أعادتها قاعدة البيانات ضمن الفلتر الحالي.
+                </small>
+
+            </div>
+            `;
+
+        return;
+
+    }
+
+
+    box.innerHTML =
+        state.filtered
+            .map(
+                (
+                    row,
+                    index
+                ) => {
+
+                    const id =
+                        esc(
+                            idOf(row) ||
+                            index
+                        );
+
+                    const code =
+                        esc(
+                            row?.shift_code ||
+                            "بدون رمز"
+                        );
+
+                    const station =
+                        resolveStationName(
+                            row?.station_id
+                        );
+
+                    const open =
+                        !row?.end_time;
+
+                    const sales =
+                        number(
+                            row?.total_sales
+                        );
+
+                    const variance =
+                        number(
+                            row?.cash_variance
+                        );
+
+
+                    return `
+                    <article class="shift-card">
+
+                        <div class="shift-head">
+
+                            <div class="shift-main">
+
+                                <div class="shift-code">
+                                    ${code}
+                                </div>
+
+                                <div class="shift-meta">
+
+                                    <span class="meta-pill">
+                                        <i class="fas fa-gas-pump"></i>
+                                        ${esc(station)}
+                                    </span>
+
+                                    <span class="meta-pill">
+                                        <i class="fas fa-calendar"></i>
+                                        ${esc(row?.shift_date)}
+                                    </span>
+
+                                    <span class="meta-pill">
+                                        <i class="fas fa-clock"></i>
+                                        ${esc(
+                                            translateShiftType(
+                                                row?.shift_type
+                                            )
+                                        )}
+                                    </span>
+
+                                </div>
+
+                                <span
+                                    class="status ${
+                                        open
+                                            ? "open"
+                                            : "closed"
+                                    }">
+
+                                    <i class="fas ${
+                                        open
+                                            ? "fa-lock-open"
+                                            : "fa-lock"
+                                    }"></i>
+
+                                    ${
+                                        open
+                                            ? "وردية مفتوحة"
+                                            : "وردية مغلقة"
+                                    }
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="shift-total">
+
+                                <strong>
+                                    ${
+                                        sales.toLocaleString(
+                                            "ar",
+                                            {
+                                                maximumFractionDigits:2
+                                            }
+                                        )
+                                    }
+                                </strong>
+
+                                <span>
+                                    إجمالي المبيعات
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="shift-grid">
+
+                            ${info(
+                                "البداية",
+                                row?.start_time
+                            )}
+
+                            ${info(
+                                "النهاية",
+                                row?.end_time ||
+                                "مفتوحة"
+                            )}
+
+                            ${info(
+                                "المدة",
+                                row?.duration_minutes != null
+                                    ? `${row.duration_minutes} دقيقة`
+                                    : "—"
+                            )}
+
+                            ${info(
+                                "مدير الوردية",
+                                row?.manager_name_ar || row?.manager_name || resolveEmployeeName(row?.manager_id)
+                            )}
+
+                            ${info(
+                                "أمين الصندوق",
+                                row?.cashier_name_ar || row?.cashier_name || resolveCashierName(row?.cashier_id)
+                            )}
+
+                            ${info(
+                                "العاملون",
+                                row?.attendant_names_ar || row?.attendant_names || "—"
+                            )}
+
+                            ${info(
+                                "مبيعات الوقود",
+                                money(
+                                    row?.total_fuel_sales
+                                )
+                            )}
+
+                            ${info(
+                                "مبيعات المنتجات",
+                                money(
+                                    row?.total_product_sales
+                                )
+                            )}
+
+                            ${info(
+                                "الانحراف",
+                                money(
+                                    variance
+                                )
+                            )}
+
+                        </div>
+
+
+                        <div class="actions">
+
+                            <button
+                                class="btn"
+                                data-view="${id}">
+
+                                <i class="fas fa-eye"></i>
+
+                                التفاصيل
+
+                            </button>
+
+
+                            <button
+                                class="btn warning"
+                                data-edit="${id}">
+
+                                <i class="fas fa-pen"></i>
+
+                                تعديل
+
+                            </button>
+
+
+                            ${
+                                open
+                                    ? `
+                                    <button
+                                        class="btn success"
+                                        data-close="${id}">
+
+                                        <i class="fas fa-lock"></i>
+
+                                        إنهاء الوردية
+
+                                    </button>
+                                    `
+                                    : ""
+                            }
+
+
+                            <button
+                                class="btn danger"
+                                data-delete="${id}">
+
+                                <i class="fas fa-trash"></i>
+
+                                حذف
+
+                            </button>
+
+                        </div>
+
+                    </article>
+                    `;
+
+                }
+            )
+            .join("");
+
+
+    box.querySelectorAll(
+        "[data-view]"
+    )
+    .forEach(
+        button => {
+
+            button.onclick =
+                () =>
+                    openDetails(
+                        findRow(
+                            button.dataset.view
+                        )
+                    );
+
+        }
+    );
+
+
+    box.querySelectorAll(
+        "[data-edit]"
+    )
+    .forEach(
+        button => {
+
+            button.onclick =
+                () =>
+                    openForm(
+                        findRow(
+                            button.dataset.edit
+                        )
+                    );
+
+        }
+    );
+
+
+    box.querySelectorAll(
+        "[data-delete]"
+    )
+    .forEach(
+        button => {
+
+            button.onclick =
+                () =>
+                    deleteRow(
+                        findRow(
+                            button.dataset.delete
+                        )
+                    );
+
+        }
+    );
+
+
+    box.querySelectorAll(
+        "[data-close]"
+    )
+    .forEach(
+        button => {
+
+            button.onclick =
+                () =>
+                    closeShift(
+                        findRow(
+                            button.dataset.close
+                        )
+                    );
+
+        }
+    );
+
+}
+
+
+function info(
+    label,
+    value
+){
+
+    return `
+        <div class="info">
+
+            <label>
+                ${esc(label)}
+            </label>
+
+            <strong>
+                ${esc(value)}
+            </strong>
+
+        </div>
+    `;
+
+}
+
+
+function money(
+    value
+){
+
+    return number(value)
+        .toLocaleString(
+            "ar",
+            {
+                maximumFractionDigits:2
+            }
+        );
+
+}
+
+
+/* =========================================================
+   RESOLVERS
+========================================================= */
+
+function resolveStationName(
+    id
+){
+
+    const station =
+        state.options.stations
+            .find(
+                x =>
+                    String(
+                        x.id ??
+                        x.station_id
+                    ) ===
+                    String(id)
+            );
+
+    return (
+        station?.station_name_ar ??
+        station?.station_name ??
+        "—"
+    );
+
+}
+
+
+function resolveCashierName(
+    id
+){
+
+    const cashier =
+        state.options.cashiers
+            .find(
+                x =>
+                    String(
+                        x.id ??
+                        x.employee_id
+                    ) ===
+                    String(id)
+            );
+
+    return (
+        cashier?.full_name_ar ??
+        cashier?.full_name ??
+        cashier?.display_name ??
+        cashier?.username ??
+        "—"
+    );
+
+}
+
+
+/* =========================================================
+   DETAILS
+========================================================= */
+
+function openDetails(
+    row
+){
+
+    if(!row){
+
+        return;
+
+    }
+
+
+    const labels = {
+
+        shift_code:
+            "رمز الوردية",
+
+        station_id:
+            "المحطة",
+
+        shift_date:
+            "تاريخ الوردية",
+
+        shift_type:
+            "نوع الوردية",
+
+        start_time:
+            "وقت البداية",
+
+        end_time:
+            "وقت النهاية",
+
+        duration_minutes:
+            "مدة الوردية",
+
+        manager_id:
+            "مدير الوردية",
+
+        cashier_id:
+            "أمين الصندوق",
+
+        attendant_ids:
+            "العاملون",
+
+        opening_cash:
+            "النقدية الافتتاحية",
+
+        opening_bank:
+            "الرصيد البنكي الافتتاحي",
+
+        opening_credit:
+            "الائتمان الافتتاحي",
+
+        closing_cash:
+            "النقدية الختامية",
+
+        closing_bank:
+            "الرصيد البنكي الختامي",
+
+        closing_credit:
+            "الائتمان الختامي",
+
+        total_sales:
+            "إجمالي المبيعات",
+
+        total_fuel_sales:
+            "مبيعات الوقود",
+
+        total_product_sales:
+            "مبيعات المنتجات",
+
+        total_service_sales:
+            "مبيعات الخدمات",
+
+        total_discounts:
+            "الخصومات",
+
+        total_tax:
+            "الضريبة",
+
+        total_vat:
+            "ضريبة القيمة المضافة",
+
+        total_cash:
+            "المبيعات النقدية",
+
+        total_credit_card:
+            "مبيعات البطاقات",
+
+        total_bank_transfer:
+            "التحويلات البنكية",
+
+        total_credit_sales:
+            "المبيعات الآجلة",
+
+        total_cheque:
+            "الشيكات",
+
+        total_other:
+            "وسائل الدفع الأخرى",
+
+        total_fuel_liters:
+            "لترات الوقود",
+
+        cash_variance:
+            "الانحراف النقدي",
+
+        variance_reason:
+            "سبب الانحراف"
+
+    };
+
+
+    $("detailsBody")
+        .innerHTML =
+        `
+        <div class="shift-grid">
+
+            ${Object.entries(row)
+                .map(
+                    (
+                        [
+                            key,
+                            value
+                        ]
+                    ) => {
+
+                        let display =
+                            value;
+
+                        if(
+                            key ===
+                            "station_id"
+                        ){
+                            display =
+                                row.station_name_ar ||
+                                row.station_name ||
+                                resolveStationName(value);
+                        }
+
+                        if(key === "station_name" || key === "station_name_ar") return "";
+
+                        if(key === "manager_id"){
+                            display =
+                                row.manager_name_ar ||
+                                row.manager_name ||
+                                resolveEmployeeName(value);
+                        }
+
+                        if(key === "manager_name" || key === "manager_name_ar") return "";
+
+                        if(key === "cashier_id"){
+                            display =
+                                row.cashier_name_ar ||
+                                row.cashier_name ||
+                                resolveCashierName(value);
+                        }
+
+                        if(key === "cashier_name" || key === "cashier_name_ar") return "";
+
+                        if(
+                            key ===
+                            "manager_id"
+                        ){
+
+                            display =
+                                resolveEmployeeName(
+                                    value
+                                );
+
+                        }
+
+                        if(
+                            key ===
+                            "cashier_id"
+                        ){
+
+                            display =
+                                resolveCashierName(
+                                    value
+                                );
+
+                        }
+
+                        if(
+                            key ===
+                            "shift_type"
+                        ){
+
+                            display =
+                                translateShiftType(
+                                    value
+                                );
+
+                        }
+
+                        if(key === "attendant_ids"){
+                            display =
+                                row.attendant_names_ar ||
+                                row.attendant_names ||
+                                String(value ?? "") || "—";
+                        }
+
+                        if(key === "attendant_names" || key === "attendant_names_ar") return "";
+
+                        return `
+                            <div class="info">
+
+                                <label>
+                                    ${esc(
+                                        labels[key] ||
+                                        key
+                                    )}
+                                </label>
+
+                                <strong>
+                                    ${esc(
+                                        typeof display ===
+                                        "object"
+                                            ? JSON.stringify(display)
+                                            : display
+                                    )}
+                                </strong>
+
+                            </div>
+                        `;
+
+                    }
+                )
+                .join("")}
+
+        </div>
+        `;
+
+
+    $("detailsOverlay")
+        .classList
+        .add("show");
+
+}
+
+
+/* =========================================================
+   DELETE
+========================================================= */
+
+async function deleteRow(
+    row
+){
+
+    if(!row){
+
+        return;
+
+    }
+
+
+    const id =
+        idOf(row);
+
+
+    if(!id){
+
+        toast(
+            "معرف الوردية غير صالح.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if(
+        !confirm(
+            "هل تريد حذف سجل الوردية فعلياً؟"
+        )
+    ){
+
+        return;
+
+    }
+
+
+    loading(
+        true,
+        "جارٍ حذف الوردية..."
+    );
+
+
+    try{
+
+        const result =
+            await invoke(
+                CURRENT_CONTRACTS.remove,
+                [
+                    Number(id)
+                ]
+            );
+
+
+        parseBridge(
+            result
+        );
+
+
+        toast(
+            "تم حذف الوردية بنجاح.",
+            "success"
+        );
+
+
+        await reloadData();
+
+
+    }catch(error){
+
+        toast(
+            error.message ||
+            "فشل حذف الوردية.",
+            "error"
+        );
+
+    }finally{
+
+        loading(false);
+
+    }
+
+}
+
+
+/* =========================================================
+   CLOSE SHIFT
+========================================================= */
+
+async function closeShift(
+    row
+){
+
+    if(!row){
+
+        return;
+
+    }
+
+
+    const id =
+        idOf(row);
+
+
+    if(!id){
+
+        toast(
+            "معرف الوردية غير صالح.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if(
+        !confirm(
+            "هل تريد إنهاء هذه الوردية الآن؟"
+        )
+    ){
+
+        return;
+
+    }
+
+
+    const payload = {
+
+        ...row,
+
+        end_time:
+            row.end_time ||
+            nowLocal()
+
+    };
+
+
+    /*
+     * إعادة احتساب مدة الوردية
+     */
+
+    if(
+        payload.start_time &&
+        payload.end_time
+    ){
+
+        const minutes =
+            Math.round(
+                (
+                    new Date(
+                        payload.end_time
+                    ) -
+                    new Date(
+                        payload.start_time
+                    )
+                ) /
+                60000
+            );
+
+        if(
+            minutes >= 0
+        ){
+
+            payload.duration_minutes =
+                minutes;
+
+        }
+
+    }
+
+
+    loading(
+        true,
+        "جارٍ إنهاء الوردية..."
+    );
+
+
+    try{
+
+        const result =
+            await invoke(
+                CURRENT_CONTRACTS.update,
+                [
+                    Number(id),
+                    JSON.stringify(
+                        payload
+                    )
+                ]
+            );
+
+
+        parseBridge(
+            result
+        );
+
+
+        toast(
+            "تم إنهاء الوردية بنجاح.",
+            "success"
+        );
+
+
+        await reloadData();
+
+
+    }catch(error){
+
+        toast(
+            error.message ||
+            "فشل إنهاء الوردية.",
+            "error"
+        );
+
+    }finally{
+
+        loading(false);
+
+    }
+
+}
+
+
+/* =========================================================
+   LOAD
+========================================================= */
+
+async function reloadData(){
+
+    if(
+        !hasContract(
+            CURRENT_CONTRACTS.list
+        )
+    ){
+
+        $("records")
+            .innerHTML =
+            `
+            <div class="error-state">
+
+                <i class="fas fa-triangle-exclamation"></i>
+
+                <span>
+                    عقد تحميل الورديات غير متاح في Android.
+                </span>
+
+            </div>
+            `;
+
+        return;
+
+    }
+
+
+    loading(
+        true,
+        "جارٍ تحميل الورديات..."
+    );
+
+
+    try{
+
+        const result =
+            await invoke(
+                CURRENT_CONTRACTS.list,
+                [
+                    JSON.stringify({
+
+                        limit:
+                            200,
+
+                        search:
+                            $("searchInput")
+                                .value ||
+                            ""
+
+                    })
+                ]
+            );
+
+
+        state.rows =
+            rowsFrom(
+                result
+            );
+
+
+        state.loadedAt =
+            new Date();
+
+
+        applyFilter();
+
+
+    }catch(error){
+
+        state.rows =
+            [];
+
+        state.filtered =
+            [];
+
+        render();
+
+
+        toast(
+            error.message ||
+            "فشل تحميل الورديات.",
+            "error"
+        );
+
+    }finally{
+
+        loading(false);
+
+    }
+
+}
+
+
+/* =========================================================
+   REPORT
+========================================================= */
+
+function openReport(){
+
+    $("reportFrom")
+        .value =
+        $("reportFrom")
+            .value ||
+        today();
+
+
+    $("reportTo")
+        .value =
+        $("reportTo")
+            .value ||
+        today();
+
+
+    $("reportResults")
+        .innerHTML =
+        `
+        <div class="empty">
+
+            <i class="fas fa-chart-column"></i>
+
+            <strong>
+                التقرير جاهز
+            </strong>
+
+            <small>
+                حدد الفترة ثم اضغط توليد التقرير.
+            </small>
+
+        </div>
+        `;
+
+
+    $("reportOverlay")
+        .classList
+        .add(
+            "show"
+        );
+
+}
+
+
+async function generateReport(){
+
+    const from =
+        $("reportFrom")
+            .value;
+
+    const to =
+        $("reportTo")
+            .value;
+
+
+    if(
+        from &&
+        to &&
+        from > to
+    ){
+
+        toast(
+            "تاريخ البداية يجب ألا يكون بعد تاريخ النهاية.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    loading(
+        true,
+        "جارٍ توليد التقرير..."
+    );
+
+
+    try{
+
+        const payload = {
+
+            from_date:
+                from || "",
+
+            to_date:
+                to || "",
+
+            search:
+                $("searchInput")
+                    .value ||
+                "",
+
+            include_archived:
+                true,
+
+            limit:
+                1000
+
+        };
+
+
+        const result =
+            await invoke(
+                CURRENT_CONTRACTS.report,
+                [
+                    JSON.stringify(
+                        payload
+                    )
+                ]
+            );
+
+
+        const rows =
+            rowsFrom(
+                result
+            );
+
+
+        renderReport(
+            rows
+        );
+
+
+        toast(
+            "تم توليد التقرير من المصدر الفعلي.",
+            "success"
+        );
+
+
+    }catch(error){
+
+        toast(
+            error.message ||
+            "فشل توليد التقرير.",
+            "error"
+        );
+
+    }finally{
+
+        loading(false);
+
+    }
+
+}
+
+
+function renderReport(
+    rows
+){
+
+    if(
+        !rows.length
+    ){
+
+        $("reportResults")
+            .innerHTML =
+            `
+            <div class="empty">
+
+                <i class="fas fa-chart-column"></i>
+
+                <strong>
+                    لا توجد بيانات
+                </strong>
+
+                <small>
+                    لم تُرجع قاعدة البيانات سجلات للفترة المحددة.
+                </small>
+
+            </div>
+            `;
+
+        return;
+
+    }
+
+
+    const sales =
+        rows.reduce(
+            (
+                sum,
+                row
+            ) =>
+                sum +
+                number(
+                    row.total_sales
+                ),
+            0
+        );
+
+
+    const fuel =
+        rows.reduce(
+            (
+                sum,
+                row
+            ) =>
+                sum +
+                number(
+                    row.total_fuel_sales
+                ),
+            0
+        );
+
+
+    const variance =
+        rows.reduce(
+            (
+                sum,
+                row
+            ) =>
+                sum +
+                number(
+                    row.cash_variance
+                ),
+            0
+        );
+
+
+    const open =
+        rows.filter(
+            row =>
+                !row.end_time
+        ).length;
+
+
+    $("reportResults")
+        .innerHTML =
+        `
+
+        <div class="report-summary">
+
+            <div class="report-box">
+
+                <strong>
+                    ${rows.length.toLocaleString("ar")}
+                </strong>
+
+                <span>
+                    عدد الورديات
+                </span>
+
+            </div>
+
+
+            <div class="report-box">
+
+                <strong>
+                    ${money(sales)}
+                </strong>
+
+                <span>
+                    إجمالي المبيعات
+                </span>
+
+            </div>
+
+
+            <div class="report-box">
+
+                <strong>
+                    ${money(fuel)}
+                </strong>
+
+                <span>
+                    مبيعات الوقود
+                </span>
+
+            </div>
+
+
+            <div class="report-box">
+
+                <strong>
+                    ${open.toLocaleString("ar")}
+                </strong>
+
+                <span>
+                    الورديات المفتوحة
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="report-row">
+
+            <strong>
+                صافي الانحراف النقدي:
+            </strong>
+
+            ${money(variance)}
+
+        </div>
+
+
+        <div class="report-list">
+
+            ${rows
+                .slice(0,100)
+                .map(
+                    row =>
+                        `
+                        <div class="report-row">
+
+                            <strong>
+                                ${esc(
+                                    row.shift_code ||
+                                    "وردية"
+                                )}
+                            </strong>
+
+                            <br>
+
+                            ${esc(
+                                [
+                                    row.shift_date,
+
+                                    resolveStationName(
+                                        row.station_id
+                                    ),
+
+                                    translateShiftType(
+                                        row.shift_type
+                                    ),
+
+                                    row.total_sales != null
+                                        ? "المبيعات: " +
+                                          money(
+                                              row.total_sales
+                                          )
+                                        : ""
+
+                                ]
+                                .filter(Boolean)
+                                .join(" · ")
+                            )}
+
+                        </div>
+                        `
+                )
+                .join("")}
+
+        </div>
+
+        `;
+
+}
+
+
+/* =========================================================
+   EXPORT
+========================================================= */
+
+function exportData(){
+
+    const rows =
+        state.filtered;
+
+
+    if(
+        !rows.length
+    ){
+
+        toast(
+            "لا توجد بيانات حقيقية للتصدير.",
+            "warning"
+        );
+
+        return;
+
+    }
+
+
+    const keys =
+        [
+            ...new Set(
+                rows.flatMap(
+                    row =>
+                        Object.keys(
+                            row || {}
+                        )
+                )
+            )
+        ];
+
+
+    const csv =
+        "\ufeff" +
+
+        [
+
+            keys,
+
+            ...rows.map(
+                row =>
+                    keys.map(
+                        key =>
+                            String(
+                                row[key] ??
+                                ""
+                            )
+                            .replace(
+                                /"/g,
+                                '""'
+                            )
+                    )
+            )
+
+        ]
+        .map(
+            row =>
+                row
+                    .map(
+                        value =>
+                            `"${value}"`
+                    )
+                    .join(",")
+        )
+        .join("\n");
+
+
+    const blob =
+        new Blob(
+            [csv],
+            {
+                type:
+                    "text/csv;charset=utf-8"
+            }
+        );
+
+
+    const url =
+        URL.createObjectURL(
+            blob
+        );
+
+
+    const link =
+        document.createElement(
+            "a"
+        );
+
+
+    link.href =
+        url;
+
+    link.download =
+        "vehicle_shifts.csv";
+
+
+    document.body
+        .appendChild(
+            link
+        );
+
+    link.click();
+
+    link.remove();
+
+
+    setTimeout(
+        () =>
+            URL.revokeObjectURL(
+                url
+            ),
+        1000
+    );
+
+
+    toast(
+        "تم تصدير البيانات الفعلية.",
+        "success"
+    );
+
+}
+
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+function closeModal(
+    id
+){
+
+    const node =
+        $(id);
+
+    if(node){
+
+        node.classList
+            .remove(
+                "show"
+            );
+
+    }
+
+}
+
+
+document.addEventListener(
+    "keydown",
+    event => {
+
+        if(
+            event.key ===
+            "Escape"
+        ){
+
+            document
+                .querySelectorAll(
+                    ".overlay"
+                )
+                .forEach(
+                    overlay =>
+                        overlay.classList
+                            .remove(
+                                "show"
+                            )
+                );
+
+        }
+
+    }
+);
+
+
+/* =========================================================
+   THEME
+========================================================= */
+
+function applyTheme(){
+
+    const theme =
+        localStorage.getItem(
+            "theme"
+        ) ||
+        "light";
+
+
+    if(
+        theme ===
+        "dark"
+    ){
+
+        document.documentElement
+            .dataset.theme =
+            "dark";
+
+    }else{
+
+        delete document
+            .documentElement
+            .dataset
+            .theme;
+
+    }
+
+
+    /*
+     * الوضع الفاتح = 🌙
+     * الوضع المظلم = 🌞
+     */
+
+    $("themeIcon")
+        .className =
+        theme === "dark"
+            ? "fas fa-sun"
+            : "fas fa-moon";
+
+}
+
+
+function toggleTheme(){
+
+    const dark =
+        document.documentElement
+            .dataset
+            .theme ===
+        "dark";
+
+
+    localStorage.setItem(
+        "theme",
+        dark
+            ? "light"
+            : "dark"
+    );
+
+
+    applyTheme();
+
+}
+
+
+/* =========================================================
+   HOME
+========================================================= */
+
+function goHome(){
+
+    window.location.href =
+        "../main.html";
+
+}
+
+
+/* =========================================================
+   SEARCH
+========================================================= */
+
+$("searchInput")
+    .addEventListener(
+        "input",
+        applyFilter
+    );
+
+
+
+function updateThemeIcon(){
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    const icon = $("themeIcon");
+    if(icon){
+        icon.className = dark ? "fas fa-sun" : "fas fa-moon";
+        icon.setAttribute("aria-label", dark ? "الوضع المظلم - التبديل إلى الفاتح" : "الوضع الفاتح - التبديل إلى المظلم");
+    }
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+
+$("themeToggle")
+    .addEventListener(
+        "click",
+        toggleTheme
+    );
+
+
+applyTheme();
+
+loadFormOptions();
+
+reloadData();
+
+
+/* =========================================================
+   PUBLIC API
+========================================================= */
+
+window.openForm =
+    openForm;
+
+window.saveForm =
+    saveForm;
+
+window.reloadData =
+    reloadData;
+
+window.openReport =
+    openReport;
+
+window.generateReport =
+    generateReport;
+
+window.exportData =
+    exportData;
+
+window.goHome =
+    goHome;
+
+window.closeModal =
+    closeModal;
+
+window.setFilter =
+    setFilter;
+
+})();
+</script>
+
+</body>
+</html>

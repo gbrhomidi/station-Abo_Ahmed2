@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+<title>إدارة الطلبات – المتكاملة</title>
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+<style>
+/* ============================================================
+   نظام الألوان – من orders1.html (المطلوب)
+   ============================================================ */
+:root {
+    --bg-color: #f4f7fb;
+    --surface-color: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-2: #f8fafc;
+    --surface-3: #eef4f9;
+    --primary-color: #087ea4;
+    --primary-2: #2563eb;
+    --primary-dim: rgba(37, 99, 235, 0.10);
+    --accent-color: #c58a18;
+    --accent-dim: rgba(197, 138, 24, 0.12);
+    --success: #16a34a;
+    --error: #dc2626;
+    --warning: #d97706;
+    --text-color: #172033;
+    --text-muted: #64748b;
+    --data-text-color: #172033;
+    --data-text-muted: #64748b;
+    --border-color: #d7dee8;
+    --border-strong: #c4cfdd;
+    --border-style: solid;
+    --border-width: 1px;
+    --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.08);
+    --glass-bg: rgba(255, 255, 255, 0.94);
+    --header-bg: rgba(255, 255, 255, 0.94);
+    --card-hover-bg: rgba(37, 99, 235, 0.04);
+    --primary-hover: #075f7d;
+    --fab-shadow: rgba(37, 99, 235, 0.25);
+    --toast-bg: #ffffff;
+    --scrollbar-track: #f4f7fb;
+    --scrollbar-thumb: rgba(15, 23, 42, 0.16);
+    --skeleton-bg: #eef4f9;
+    --skeleton-shine: #f8fafc;
+    --modal-border-color: #d7dee8;
+    --modal-border-style: solid;
+    --input-bg: #ffffff;
+    --input-border: #d7dee8;
+    --input-border-style: solid;
+    --badge-bg: #eef2f6;
+    --badge-text: #172033;
+}
+[data-theme="dark"] {
+    --bg-color: #06111f;
+    --surface-color: #0c1b2d;
+    --surface-elevated: #0c1b2d;
+    --surface-2: #102238;
+    --surface-3: #132941;
+    --primary-color: #55c7f5;
+    --primary-2: #6ea8ff;
+    --primary-dim: rgba(85, 199, 245, 0.12);
+    --accent-color: #f1cf7a;
+    --accent-dim: rgba(241, 207, 122, 0.12);
+    --success: #42e39a;
+    --error: #ff7184;
+    --warning: #ffd166;
+    --text-color: #eef7ff;
+    --text-muted: #aabbd0;
+    --data-text-color: #eef7ff;
+    --data-text-muted: #aabbd0;
+    --border-color: #49a9ee;
+    --border-strong: #76c8ff;
+    --border-style: solid;
+    --border-width: 1px;
+    --shadow-glow: 0 0 20px rgba(85, 199, 245, 0.10);
+    --glass-bg: rgba(12, 27, 45, 0.94);
+    --header-bg: rgba(12, 27, 45, 0.94);
+    --card-hover-bg: rgba(85, 199, 245, 0.05);
+    --primary-hover: #38acd9;
+    --fab-shadow: rgba(85, 199, 245, 0.25);
+    --toast-bg: #0c1b2d;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+    --skeleton-bg: #132941;
+    --skeleton-shine: #102238;
+    --modal-border-color: #49a9ee;
+    --modal-border-style: solid;
+    --input-bg: #102238;
+    --input-border: #49a9ee;
+    --input-border-style: solid;
+    --badge-bg: #132941;
+    --badge-text: #eef7ff;
+}
+[data-theme="dark"] .top-bar,
+[data-theme="dark"] .data-panel,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .modal,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .search input,
+[data-theme="dark"] .icon-btn,
+[data-theme="dark"] .btn,
+[data-theme="dark"] .chip,
+[data-theme="dark"] .order-card,
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .toggle-group,
+[data-theme="dark"] .section-title .count-badge,
+[data-theme="dark"] .report-card,
+[data-theme="dark"] .report-table-wrap {
+    border-color: #76c8ff !important;
+    box-shadow: 0 0 0 1px rgba(118, 200, 255, 0.12), 0 0 18px rgba(73, 169, 238, 0.06);
+}
+
+/* ============================================================
+   إعادة ضبط عامة
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;font-family:'Cairo','Segoe UI',Arial,sans-serif;background:var(--bg-color);color:var(--text-color);direction:rtl;overflow-x:hidden;transition:background .3s,color .3s;touch-action:pan-y}
+body{padding-bottom:100px}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:2px}
+
+/* ============================================================
+   الإشعار بانقطاع الاتصال
+   ============================================================ */
+.offline-banner{position:fixed;top:0;left:0;right:0;background:var(--warning);color:#000;padding:6px;text-align:center;font-weight:700;z-index:3000;transform:translateY(-100%);transition:.3s}
+.offline-banner.show{transform:translateY(0)}
+
+/* ============================================================
+   مؤشر السحب للتحديث
+   ============================================================ */
+.pull-indicator{position:fixed;top:-60px;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.8rem;transition:.2s;background:var(--surface-elevated);border-bottom:var(--border-width) var(--border-style) var(--border-color);z-index:50;pointer-events:none}
+.pull-indicator.active{top:0}
+.pull-indicator i{transition:.3s}
+.pull-indicator.loading i{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ============================================================
+   مؤشر التحميل
+   ============================================================ */
+.loading-indicator{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:none;place-items:center;backdrop-filter:blur(8px)}
+.loading-indicator.show{display:grid}
+.spinner{width:52px;height:52px;border:5px solid rgba(85,199,245,.2);border-top-color:var(--primary-color);border-radius:50%;animation:spin 1s linear infinite}
+
+/* ============================================================
+   الشريط العلوي – مع عنصر "بحث" من orderss.html
+   ============================================================ */
+.top-bar{position:sticky;top:0;z-index:100;background:var(--header-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:var(--border-width) var(--border-style) var(--border-color);padding:14px 16px}
+.header-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.top-title h1{margin:0;font-size:1.2rem;font-weight:800;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,var(--primary-color),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.top-title h1 i{-webkit-text-fill-color:var(--primary-color)}
+.top-title .sub{margin:2px 0 0;font-size:.65rem;color:var(--text-muted);-webkit-text-fill-color:var(--text-muted);font-weight:400;display:block}
+.header-actions{display:flex;gap:6px}
+.icon-btn{width:38px;height:38px;border-radius:12px;border:var(--border-width) var(--border-style) var(--border-color);background:var(--surface-elevated);color:var(--text-muted);display:grid;place-items:center;cursor:pointer;transition:all .3s;font-size:.95rem}
+.icon-btn:hover{background:var(--primary-dim);color:var(--primary-color);border-color:var(--primary-color);transform:translateY(-2px)}
+
+/* ===== عنصر "بحث" من orderss.html ===== */
+.search{position:relative;margin-top:12px}
+.search i{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.9rem}
+.search input{width:100%;padding:12px 42px 12px 12px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;background:var(--input-bg);color:var(--text-color);outline:none;text-align:center;font-family:'Cairo',sans-serif;font-size:.85rem}
+.search input:focus{border-color:var(--primary-color);box-shadow:0 0 0 3px var(--primary-dim)}
+
+/* ===== التبويبات (chips) من orderss.html ===== */
+.chips{display:flex;gap:7px;overflow:auto;margin-top:10px;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;padding:7px 13px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:999px;background:var(--surface-color);color:var(--text-muted);font-size:.7rem;font-family:'Cairo',sans-serif;cursor:pointer;transition:all .3s;touch-action:manipulation}
+.chip.active{background:var(--primary-dim);color:var(--primary-color);border-color:var(--primary-color)}
+.chip:hover:not(.active){border-color:var(--text-muted);color:var(--text-color)}
+
+/* ============================================================
+   بطاقات الإحصائيات
+   ============================================================ */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 0}
+.stat-card{background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:14px;padding:14px;text-align:center;transition:all .3s;box-shadow:var(--shadow-glow)}
+.stat-card:hover{border-color:var(--primary-color);transform:translateY(-3px)}
+.stat-card .stat-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;margin:0 auto 8px}
+.stat-icon.blue{background:var(--primary-dim);color:var(--primary-color)}
+.stat-icon.green{background:rgba(16,185,129,.15);color:var(--success)}
+.stat-icon.orange{background:var(--accent-dim);color:var(--accent-color)}
+.stat-icon.purple{background:rgba(155,89,182,.15);color:#9b59b6}
+.stat-value{font-size:1.2rem;font-weight:800;color:var(--data-text-color)}
+.stat-label{font-size:.7rem;color:var(--text-muted);margin-top:2px}
+
+/* ============================================================
+   اللوحة الرئيسية
+   ============================================================ */
+.page-container{max-width:1280px;margin:0 auto;padding:14px 16px 20px}
+.data-panel{margin:0 0 16px;padding:16px;border-radius:18px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);box-shadow:var(--shadow-glow)}
+.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.panel-head h2{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:6px;margin:0}
+.panel-head .count-badge{background:var(--primary-dim);color:var(--primary-color);padding:2px 12px;border-radius:999px;font-size:.7rem;font-weight:700;border:var(--border-width) var(--border-style) var(--border-color)}
+
+/* ============================================================
+   بطاقات الطلبات
+   ============================================================ */
+.cards-container{display:flex;flex-direction:column;gap:10px}
+.order-card{background:var(--surface-color);border:var(--border-width) var(--border-style) var(--border-color);border-radius:16px;padding:14px 16px;transition:all .3s;text-align:center;animation:fadeUp .3s ease}
+.order-card:hover{border-color:var(--primary-color);box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-2px)}
+[data-theme="dark"] .order-card:hover{box-shadow:0 4px 20px rgba(85,199,245,.08)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+.order-card .card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.order-card .card-head .left{display:flex;flex-direction:column;gap:4px;flex:1;align-items:center}
+.order-card .card-head .left .code{font-weight:800;font-size:1rem;color:var(--data-text-color)}
+.order-card .card-head .left .sub{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.75rem;color:var(--text-muted);justify-content:center}
+.order-card .card-head .left .sub span{display:flex;align-items:center;gap:4px}
+.order-card .card-head .left .sub i{font-size:.7rem;opacity:.6}
+.order-card .card-head .left .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 12px;border-radius:999px;font-size:.65rem;font-weight:700;border:var(--border-width) var(--border-style) var(--border-color);margin-top:4px}
+.badge.ok{color:var(--success);background:rgba(16,185,129,.15)}
+.badge.warn{color:var(--warning);background:rgba(217,119,6,.15)}
+.order-card .card-head .right{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
+.order-card .card-head .right .amount{font-size:1.1rem;font-weight:800;color:var(--accent-color)}
+.order-card .card-head .right .sub{font-size:.7rem;color:var(--text-muted)}
+.order-card .card-body{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px 16px;padding-top:10px;border-top:var(--border-width) var(--border-style) var(--border-color);text-align:center}
+.order-card .card-body .field{font-size:.72rem;color:var(--text-muted)}
+.order-card .card-body .field strong{display:block;color:var(--data-text-color);font-weight:600;font-size:.8rem;margin-top:1px}
+.order-card .card-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:var(--border-width) var(--border-style) var(--border-color);justify-content:center}
+.order-card .card-actions .btn{padding:6px 14px;border-radius:10px;border:var(--border-width) var(--border-style) var(--border-color);background:var(--surface-color);color:var(--text-muted);font-family:'Cairo',sans-serif;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .3s;display:inline-flex;align-items:center;gap:4px}
+.order-card .card-actions .btn:hover{background:var(--primary-dim);color:var(--primary-color);border-color:var(--primary-color)}
+.order-card .card-actions .btn.warn{color:var(--warning)}
+.order-card .card-actions .btn.danger{color:var(--error)}
+.order-card .card-actions .btn.primary{background:var(--primary-color);color:#fff;border-color:var(--primary-color)}
+.order-card .card-actions .btn.primary:hover{background:var(--primary-hover)}
+
+/* ============================================================
+   الحالة الفارغة
+   ============================================================ */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-state i{font-size:2.8rem;margin-bottom:12px;opacity:.5;color:var(--primary-color)}
+.empty-state p{font-size:.9rem}
+
+/* ============================================================
+   القائمة السفلية (طلب جديد + تقارير فقط)
+   ============================================================ */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:500;display:flex;background:var(--glass-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:var(--border-width) var(--border-style) var(--border-color);padding:6px 0 env(safe-area-inset-bottom,6px) 0}
+.bottom-nav .nav-item{flex:1;border:none;background:none;color:var(--text-muted);font-family:'Cairo',sans-serif;font-size:1.2rem;font-weight:600;cursor:pointer;transition:all .3s;padding:4px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px}
+.bottom-nav .nav-item i{font-size:1.4rem;transition:all .3s}
+.bottom-nav .nav-item span{font-weight:600}
+.bottom-nav .nav-item.active{color:var(--primary-color)}
+.bottom-nav .nav-item.active i{transform:translateY(-2px);text-shadow:0 0 20px var(--primary-dim)}
+
+/* ============================================================
+   النوافذ المنبثقة (Modals)
+   ============================================================ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:800;display:none;align-items:flex-end;justify-content:center;opacity:0;transition:opacity .3s}
+.modal-overlay.show{display:flex;opacity:1}
+.modal{background:var(--surface-elevated);border-radius:24px 24px 0 0;width:100%;max-width:720px;max-height:94vh;overflow-y:auto;padding:20px 18px 24px;transform:translateY(100%);transition:transform .4s cubic-bezier(.16,1,.3,1);border:var(--border-width) var(--border-style) var(--border-color);border-bottom:none}
+.modal-overlay.show .modal{transform:translateY(0)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:var(--border-width) var(--border-style) var(--border-color)}
+.modal-title{font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:8px}
+.modal-close{width:34px;height:34px;border-radius:10px;border:var(--border-width) var(--border-style) var(--border-color);background:var(--surface-color);color:var(--text-muted);cursor:pointer;display:grid;place-items:center;transition:all .2s}
+.modal-close:hover{background:var(--error);color:#fff;border-color:var(--error)}
+.modal-body{padding:0}
+.modal-footer{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:18px;padding-top:14px;border-top:var(--border-width) var(--border-style) var(--border-color)}
+.modal-footer .btn{padding:10px 20px;border-radius:12px;border:var(--border-width) var(--border-style) var(--border-color);background:var(--surface-color);color:var(--text-color);font-family:'Cairo',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;transition:all .3s;display:inline-flex;align-items:center;gap:6px}
+.modal-footer .btn.primary{background:linear-gradient(135deg,var(--primary-color),#6366f1);color:#fff;border-color:var(--primary-color)}
+.modal-footer .btn.primary:hover{transform:translateY(-2px);box-shadow:0 4px 20px var(--primary-dim)}
+.modal-footer .btn:hover:not(.primary){background:var(--primary-dim);color:var(--primary-color);border-color:var(--primary-color)}
+
+/* ============================================================
+   نموذج الإدخال
+   ============================================================ */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.form-group{display:flex;flex-direction:column;gap:4px;text-align:center}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:.75rem;font-weight:600;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:4px}
+.form-label .required{color:var(--error)}
+.form-label .hint{font-weight:400;font-size:.65rem;color:var(--text-muted)}
+.form-input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border-radius:10px;border:var(--border-width) var(--border-style) var(--border-color);background:var(--input-bg);color:var(--text-color);font-family:'Cairo',sans-serif;font-size:.85rem;outline:none;text-align:center;transition:border-color .3s,box-shadow .3s}
+.form-input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--primary-color);box-shadow:0 0 0 3px var(--primary-dim)}
+.form-input:disabled,.form-group select:disabled{opacity:.6;cursor:not-allowed;background:var(--surface-3)}
+.form-group select{appearance:auto;-webkit-appearance:auto;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 12px center;padding-left:36px}
+
+/* ============================================================
+   أزرار التبديل بين الوقود والمنتجات
+   ============================================================ */
+.toggle-group{display:flex;gap:10px;grid-column:1/-1;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;padding:6px;background:var(--surface-2);justify-content:center}
+.toggle-group .toggle-btn{flex:1;padding:8px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);font-family:'Cairo',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;transition:all .3s;text-align:center}
+.toggle-group .toggle-btn.active{background:var(--primary-color);color:#fff;box-shadow:0 2px 12px var(--primary-dim)}
+.toggle-group .toggle-btn i{margin-left:4px}
+
+/* ============================================================
+   الأقسام الفرعية (الوقود / المنتجات)
+   ============================================================ */
+.section-fields{grid-column:1/-1;display:none;gap:12px 16px;grid-template-columns:1fr 1fr;padding:12px 0 4px;border-top:var(--border-width) var(--border-style) var(--border-color)}
+.section-fields.open{display:grid}
+.section-fields .section-label{grid-column:1/-1;font-size:.8rem;font-weight:700;color:var(--primary-color);text-align:center;margin-bottom:2px}
+
+/* ============================================================
+   رسالة التحقق من صحة النموذج
+   ============================================================ */
+.validation-msg{grid-column:1/-1;padding:8px 14px;border-radius:10px;font-size:.8rem;font-weight:600;display:none;align-items:center;justify-content:center;gap:8px;background:rgba(239,68,68,.1);color:var(--error);border:1px solid var(--error)}
+.validation-msg.show{display:flex}
+.validation-msg.success{background:rgba(16,185,129,.1);color:var(--success);border-color:var(--success)}
+
+/* ============================================================
+   تفاصيل الطلب
+   ============================================================ */
+.detail-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.detail-item{padding:10px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;background:var(--surface-color);text-align:center}
+.detail-item small{display:block;font-size:.65rem;color:var(--text-muted)}
+.detail-item b{display:block;margin-top:3px;font-size:.78rem;font-weight:600;color:var(--data-text-color);overflow-wrap:anywhere}
+
+/* ============================================================
+   تقارير – مقتبس بالكامل من orderss.html
+   ============================================================ */
+.report-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.report-card{border:var(--border-width) var(--border-style) var(--border-color);border-radius:13px;padding:11px;text-align:center;background:var(--surface-color)}
+.report-card b{display:block;font-size:1rem;font-weight:800;color:var(--data-text-color)}
+.report-card span{font-size:.65rem;color:var(--text-muted)}
+.report-table-wrap{max-height:320px;overflow:auto;border:var(--border-width) var(--border-style) var(--border-color);border-radius:12px;margin-top:12px}
+.report-table{width:100%;border-collapse:collapse;font-size:.7rem;text-align:center}
+.report-table th{background:var(--primary-dim);color:var(--primary-color);padding:8px;position:sticky;top:0;z-index:2;font-weight:700;border-bottom:var(--border-width) var(--border-style) var(--border-color)}
+.report-table td{padding:6px;border-bottom:1px solid var(--border-color);color:var(--data-text-color)}
+.report-table tr:hover{background:var(--card-hover-bg)}
+
+/* ============================================================
+   رسائل التنبيه (Toast)
+   ============================================================ */
+.toast{position:fixed;top:70px;left:50%;transform:translate(-50%,-20px);opacity:0;pointer-events:none;z-index:2500;padding:12px 18px;border:var(--border-width) var(--border-style) var(--border-color);border-radius:13px;background:var(--toast-bg);color:var(--text-color);box-shadow:var(--shadow-glow);transition:all .25s;text-align:center;max-width:92%;font-weight:600;font-size:.85rem}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast .toast-icon{display:inline-block;margin-left:6px}
+
+/* ============================================================
+   التوافق مع الشاشات الصغيرة
+   ============================================================ */
+@media(max-width:800px){.stats-grid{grid-template-columns:repeat(2,1fr)}.report-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.stats-grid{grid-template-columns:repeat(2,1fr);gap:8px;padding:10px 12px}.form-grid,.section-fields{grid-template-columns:1fr}.modal{padding:16px 14px 20px;max-height:92vh}.bottom-nav .nav-item i{font-size:26px}.bottom-nav .nav-item{font-size:.9rem}.report-grid{grid-template-columns:1fr 1fr}.detail-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.form-grid{grid-template-columns:1fr}.form-group.full{grid-column:auto}.detail-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- ==================== HTML ==================== -->
+
+<!-- إشعار انقطاع الاتصال -->
+<div class="offline-banner" id="offlineBanner"><i class="fas fa-triangle-exclamation"></i> غير متصل بالإنترنت – البيانات من التخزين المحلي</div>
+
+<!-- مؤشر السحب للتحديث -->
+<div class="pull-indicator" id="pullIndicator"><i class="fas fa-arrow-down"></i> اسحب للتحديث</div>
+
+<!-- مؤشر التحميل -->
+<div class="loading-indicator" id="loadingIndicator"><div class="spinner"></div></div>
+
+<!-- ===== الشريط العلوي ===== -->
+<header class="top-bar">
+    <div class="header-top">
+        <div class="top-title">
+            <h1><i class="fas fa-clipboard-list"></i> إدارة الطلبات</h1>
+            <span class="sub" id="subtitle">متكاملة مع الحسابات الضريبية والآجلة</span>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" id="themeToggle" title="الوضع"><i class="fas fa-moon" id="themeIcon"></i></button>
+            <button class="icon-btn" onclick="goHome()" title="رجوع"><i class="fas fa-home"></i></button>
+            <!-- تم حذف أيقونة التقارير من الأعلى -->
+        </div>
+    </div>
+
+    <!-- عنصر "بحث" من orderss.html -->
+    <div class="search">
+        <i class="fas fa-search"></i>
+        <input id="searchInput" type="search" placeholder="ابحث برقم الطلب، العميل، المركبة، الفاتورة..." autocomplete="off">
+    </div>
+
+    <!-- التبويبات (chips) من orderss.html -->
+    <div class="chips" id="filterChips"></div>
+</header>
+
+<!-- ===== المحتوى الرئيسي ===== -->
+<main class="page-container">
+
+    <!-- بطاقات الإحصائيات -->
+    <section class="stats-grid" id="statsGrid">
+        <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-shopping-basket"></i></div><div class="stat-value" id="statCount">—</div><div class="stat-label">إجمالي الطلبات</div></div>
+        <div class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="statActive">—</div><div class="stat-label">مكتملة / نشطة</div></div>
+        <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-coins"></i></div><div class="stat-value" id="statTotal">—</div><div class="stat-label">إجمالي المبيعات</div></div>
+        <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-clock"></i></div><div class="stat-value" id="statUpdated">—</div><div class="stat-label">آخر تحديث</div></div>
+    </section>
+
+    <!-- لوحة الطلبات -->
+    <section class="data-panel">
+        <div class="panel-head">
+            <h2><i class="fas fa-list-ul"></i> قائمة الطلبات</h2>
+            <span class="count-badge" id="itemCount">0</span>
+        </div>
+        <div class="cards-container" id="cardsContainer">
+            <!-- سيتم ملؤها بواسطة JavaScript -->
+        </div>
+    </section>
+
+</main>
+
+<!-- ===== القائمة السفلية (طلب جديد + تقارير) ===== -->
+<nav class="bottom-nav" id="bottomNav">
+    <button class="nav-item active" onclick="openForm()"><i class="fas fa-plus-circle"></i> طلب جديد</button>
+    <button class="nav-item" onclick="openReport()"><i class="fas fa-chart-pie"></i> تقارير</button>
+</nav>
+
+<!-- ===== نافذة إضافة / تعديل طلب ===== -->
+<div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title" id="formTitle"><i class="fas fa-plus-circle"></i> طلب جديد</h3>
+            <button class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="validation-msg" id="validationMsg"><i class="fas fa-exclamation-circle"></i> <span id="validationText"></span></div>
+            <form id="recordForm" class="form-grid" novalidate>
+                <!-- سيتم ملؤها بواسطة JavaScript -->
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ</button>
+            <button class="btn" onclick="closeModal(null,'formModal')">إلغاء</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== نافذة تفاصيل الطلب ===== -->
+<div class="modal-overlay" id="detailsModal" onclick="closeModal(event,'detailsModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-file-invoice"></i> تفاصيل الطلب</h3>
+            <button class="modal-close" onclick="closeModal(null,'detailsModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="detailsBody">
+            <!-- سيتم ملؤها بواسطة JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- ===== نافذة التقارير – مقتبسة بالكامل من orderss.html ===== -->
+<div class="modal-overlay" id="reportModal" onclick="closeModal(event,'reportModal')">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title"><i class="fas fa-chart-bar"></i> تقرير الطلبات</h3>
+            <button class="modal-close" onclick="closeModal(null,'reportModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid" style="margin-bottom:12px;">
+                <div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" type="date" id="reportFrom"></div>
+                <div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" type="date" id="reportTo"></div>
+            </div>
+            <div class="modal-footer" style="border-top:none;padding:0 0 12px;">
+                <button class="btn primary" onclick="generateReport()"><i class="fas fa-cog"></i> توليد التقرير</button>
+                <button class="btn" onclick="exportData()"><i class="fas fa-file-export"></i> تصدير CSV</button>
+                <button class="btn" onclick="window.print()"><i class="fas fa-print"></i> طباعة</button>
+            </div>
+            <div id="reportResults">
+                <div class="empty-state"><i class="fas fa-file-alt"></i><p>اختر الفترة ثم اضغط توليد التقرير.</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== رسائل التنبيه ===== -->
+<div class="toast" id="toast"><span class="toast-icon"><i class="fas fa-info-circle"></i></span> <span id="toastMessage"></span></div>
+
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+(function() {
+    'use strict';
+
+    // ============================================================
+    // 1. الإعدادات والمراجع
+    // ============================================================
+    const bridge = window.AndroidInterface;
+    const state = {
+        rows: [],
+        filtered: [],
+        editing: null,
+        mode: 'all',        // all, cash, credit, fuel, product
+        loadedAt: null,
+        ctx: null,
+        refs: {
+            station: [],
+            shift: [],
+            customer: [],
+            vehicle: [],
+            driver: [],
+            fuel: [],
+            pump: [],
+            nozzle: [],
+            employee: [],
+            product: []
+        },
+        autoCounter: 1
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (v) => String(v == null ? '—' : v).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const money = (v) => num(v).toLocaleString('ar', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const today = () => new Date().toISOString().slice(0, 10);
+    const nowLocal = () => {
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, '0');
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+    };
+
+    // ============================================================
+    // 2. دوال الاتصال مع Bridge
+    // ============================================================
+    function toast(message, type) {
+        type = type || 'info';
+        const el = $('toast');
+        const icon = el.querySelector('.toast-icon i');
+        el.className = 'toast show ' + type;
+        if (type === 'success') icon.className = 'fas fa-check-circle';
+        else if (type === 'error') icon.className = 'fas fa-times-circle';
+        else if (type === 'warning') icon.className = 'fas fa-exclamation-triangle';
+        else icon.className = 'fas fa-info-circle';
+        $('toastMessage').textContent = message;
+        clearTimeout(el._timer);
+        el._timer = setTimeout(function() { el.classList.remove('show'); }, 4000);
+    }
+
+    function setLoading(show) {
+        $('loadingIndicator').classList.toggle('show', Boolean(show));
+    }
+
+    function parseResponse(raw) {
+        if (raw == null) throw new Error('لم يرجع Android Bridge نتيجة');
+        const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (value && value.success === false) {
+            throw new Error(value.error || value.message || 'فشلت العملية');
+        }
+        return value;
+    }
+
+    function dataOf(value) {
+        return value && Object.prototype.hasOwnProperty.call(value, 'data') ? value.data : value;
+    }
+
+    function rowsOf(value) {
+        const d = dataOf(parseResponse(value));
+        if (Array.isArray(d)) return d;
+        if (Array.isArray(d && d.rows)) return d.rows;
+        if (Array.isArray(d && d.items)) return d.items;
+        return [];
+    }
+
+    function callBridge(method, args) {
+        if (!bridge || typeof bridge[method] !== 'function') {
+            return Promise.reject(new Error('العقد "' + method + '" غير متاح في Android Bridge'));
+        }
+        try {
+            return Promise.resolve(parseResponse(bridge[method].apply(bridge, args || [])));
+        } catch (e) {
+            return Promise.reject(e);
+        }
+    }
+
+    function firstAvailable(methods, args) {
+        for (var i = 0; i < methods.length; i++) {
+            var m = methods[i];
+            if (bridge && typeof bridge[m] === 'function') {
+                return callBridge(m, args || []);
+            }
+        }
+        return Promise.reject(new Error('لا يوجد عقد متاح للبيانات المطلوبة'));
+    }
+
+    function idOf(row) {
+        return row && (row.id || row.sale_id || row.transaction_id || '');
+    }
+
+    function findRow(id) {
+        return state.rows.find(function(r) {
+            return String(idOf(r)) === String(id);
+        });
+    }
+
+    function labelKey(key) {
+        var map = {
+            'sale_code': 'رمز الطلب',
+            'station_id': 'المحطة',
+            'station_name_ar': 'اسم المحطة',
+            'shift_id': 'الوردية',
+            'customer_party_id': 'معرف العميل',
+            'customer_name_ar': 'اسم العميل',
+            'vehicle_id': 'المركبة',
+            'vehicle_name_ar': 'اسم المركبة',
+            'driver_id': 'السائق',
+            'driver_name_ar': 'اسم السائق',
+            'invoice_number': 'رقم الفاتورة',
+            'invoice_series': 'سلسلة الفاتورة',
+            'receipt_number': 'رقم الإيصال',
+            'sale_type': 'نوع البيع',
+            'fuel_type_id': 'نوع الوقود',
+            'pump_id': 'المضخة',
+            'nozzle_id': 'الفوهة',
+            'liters': 'اللترات',
+            'price_per_liter': 'السعر/لتر',
+            'fuel_subtotal': 'إجمالي الوقود',
+            'product_id': 'المنتج',
+            'quantity': 'الكمية',
+            'unit_price': 'سعر الوحدة',
+            'product_subtotal': 'إجمالي المنتجات',
+            'subtotal': 'الإجمالي قبل الخصم',
+            'discount_amount': 'الخصم',
+            'discount_percent': 'نسبة الخصم',
+            'tax_rate': 'نسبة الضريبة',
+            'tax_amount': 'قيمة الضريبة',
+            'vat_rate': 'نسبة القيمة المضافة',
+            'vat_amount': 'قيمة القيمة المضافة',
+            'service_fee': 'رسوم الخدمة',
+            'commission': 'العمولة',
+            'gross_amount': 'الإجمالي الإجمالي',
+            'net_amount': 'الصافي',
+            'cashier_id': 'أمين الصندوق',
+            'cashier_name_ar': 'اسم أمين الصندوق',
+            'payment_method': 'طريقة الدفع',
+            'sale_date': 'تاريخ ووقت الطلب'
+        };
+        return map[key] || key;
+    }
+
+    function label(value) {
+        var map = {
+            'cash': 'نقداً',
+            'credit': 'آجل',
+            'pending': 'معلق',
+            'completed': 'مكتمل',
+            'paid': 'مدفوع',
+            'cancelled': 'ملغى',
+            'fuel': 'وقود',
+            'product': 'منتجات'
+        };
+        return map[String(value).toLowerCase()] || value || '—';
+    }
+
+    function nameOf(row, keys) {
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            if (row && row[k] != null && String(row[k]).trim() !== '') {
+                return row[k];
+            }
+        }
+        return '—';
+    }
+
+    // ============================================================
+    // 3. جلب البيانات المساعدة والسياق
+    // ============================================================
+    var refsConfig = {
+        station: ['getStationList', 'getStations', 'getOperationalStations'],
+        shift: ['getShiftRecordsTyped', 'getShiftRecords', 'getShiftList'],
+        customer: ['getCustomers', 'getCustomerRecords', 'getPartyRecords'],
+        vehicle: ['getVehicles', 'getVehicleRecords'],
+        driver: ['getDrivers', 'getDriverRecords'],
+        fuel: ['getFuelTypes', 'getFuelTypeRecords'],
+        pump: ['getPumps', 'getPumpRecords'],
+        nozzle: ['getNozzles', 'getNozzleRecords'],
+        employee: ['getEmployees', 'getEmployeeRecords'],
+        product: ['getProducts', 'getProductRecords']
+    };
+
+    async function loadRefs() {
+        for (var key in refsConfig) {
+            if (refsConfig.hasOwnProperty(key)) {
+                try {
+                    var raw = await firstAvailable(refsConfig[key], [JSON.stringify({ limit: 500 })]);
+                    state.refs[key] = rowsOf(raw);
+                } catch (_) {
+                    state.refs[key] = [];
+                }
+            }
+        }
+    }
+
+    async function loadContext() {
+        try {
+            var raw = await callBridge('getSalesTransactionFormContext', []);
+            state.ctx = dataOf(raw);
+        } catch (_) {
+            state.ctx = null;
+        }
+        await loadRefs();
+        if (state.ctx && state.ctx.station) {
+            state.refs.station = [state.ctx.station];
+        }
+        if (state.ctx && state.ctx.cashier) {
+            state.refs.employee = (state.refs.employee || []).concat([state.ctx.cashier]);
+        }
+    }
+
+    function optionRows(key) {
+        return state.refs[key] || [];
+    }
+
+    function staticOptions(key) {
+        var map = {
+            saleType: [ ['cash','نقداً'], ['credit','آجل'] ],
+            invoiceType: [ ['invoice','فاتورة'], ['receipt','إيصال'] ],
+            payment: [ ['cash','نقداً'], ['card','بطاقة'], ['transfer','تحويل'], ['credit','آجل'] ]
+        };
+        return map[key] || [];
+    }
+
+    function optionHtml(key, selected) {
+        selected = selected || '';
+        if (['saleType', 'invoiceType', 'payment'].indexOf(key) !== -1) {
+            return staticOptions(key).map(function(item) {
+                var id = item[0], name = item[1];
+                return '<option value="' + esc(id) + '" ' + (String(id) === String(selected) ? 'selected' : '') + '>' + esc(name) + '</option>';
+            }).join('');
+        }
+        return optionRows(key).map(function(x) {
+            var id = x.id || x[key + '_id'];
+            var nm = nameOf(x, ['name_ar','full_name_ar','display_name_ar','station_name_ar','product_name_ar','name','full_name','display_name','station_name','product_name','username']);
+            return id ? '<option value="' + esc(id) + '" ' + (String(id) === String(selected) ? 'selected' : '') + '>' + esc(nm) + '</option>' : '';
+        }).join('');
+    }
+
+    // ============================================================
+    // 4. تعريفات حقول النموذج (المتقدمة)
+    // ============================================================
+    var fieldDefs = [
+        { label: 'رمز الطلب', key: 'sale_code', type: 'text', auto: true },
+        { label: 'المحطة', key: 'station_id', select: 'station', required: true, auto: true },
+        { label: 'الوردية', key: 'shift_id', select: 'shift', required: true },
+        { label: 'العميل', key: 'customer_party_id', select: 'customer' },
+        { label: 'المركبة', key: 'vehicle_id', select: 'vehicle' },
+        { label: 'السائق', key: 'driver_id', select: 'driver', auto: true },
+        { label: 'رقم الفاتورة', key: 'invoice_number', type: 'text', auto: true },
+        { label: 'سلسلة الفاتورة', key: 'invoice_series', type: 'text', auto: true },
+        { label: 'نوع الفاتورة', key: 'invoice_type', select: 'invoiceType' },
+        { label: 'رقم الإيصال', key: 'receipt_number', type: 'text', auto: true },
+        { label: 'نوع البيع', key: 'sale_type', select: 'saleType', required: true },
+        { kind: 'mode', label: 'نوع تفاصيل الطلب' },
+        { label: 'نوع الوقود', key: 'fuel_type_id', select: 'fuel', area: 'fuel' },
+        { label: 'المضخة', key: 'pump_id', select: 'pump', area: 'fuel' },
+        { label: 'الفوهة', key: 'nozzle_id', select: 'nozzle', area: 'fuel' },
+        { label: 'اللترات', key: 'liters', type: 'number', inputmode: 'decimal', area: 'fuel' },
+        { label: 'السعر / لتر', key: 'price_per_liter', type: 'number', inputmode: 'decimal', auto: true, area: 'fuel' },
+        { label: 'إجمالي الوقود', key: 'fuel_subtotal', type: 'number', inputmode: 'decimal', auto: true, area: 'fuel' },
+        { label: 'المنتج', key: 'product_id', select: 'product', area: 'product' },
+        { label: 'الكمية', key: 'quantity', type: 'number', inputmode: 'decimal', area: 'product' },
+        { label: 'سعر الوحدة', key: 'unit_price', type: 'number', inputmode: 'decimal', auto: true, area: 'product' },
+        { label: 'إجمالي المنتجات', key: 'product_subtotal', type: 'number', inputmode: 'decimal', auto: true, area: 'product' },
+        { label: 'الإجمالي قبل الخصم', key: 'subtotal', type: 'number', inputmode: 'decimal', auto: true },
+        { label: 'قيمة الخصم', key: 'discount_amount', type: 'number', inputmode: 'decimal' },
+        { label: 'نسبة الخصم %', key: 'discount_percent', type: 'number', inputmode: 'decimal' },
+        { label: 'نسبة الضريبة %', key: 'tax_rate', type: 'number', inputmode: 'decimal' },
+        { label: 'قيمة الضريبة', key: 'tax_amount', type: 'number', inputmode: 'decimal', auto: true },
+        { label: 'نسبة القيمة المضافة %', key: 'vat_rate', type: 'number', inputmode: 'decimal' },
+        { label: 'قيمة القيمة المضافة', key: 'vat_amount', type: 'number', inputmode: 'decimal', auto: true },
+        { label: 'رسوم الخدمة', key: 'service_fee', type: 'number', inputmode: 'decimal' },
+        { label: 'العمولة', key: 'commission', type: 'number', inputmode: 'decimal' },
+        { label: 'الإجمالي الإجمالي', key: 'gross_amount', type: 'number', inputmode: 'decimal', auto: true },
+        { label: 'الصافي', key: 'net_amount', type: 'number', inputmode: 'decimal', auto: true },
+        { label: 'أمين الصندوق', key: 'cashier_id', select: 'employee', required: true, auto: true },
+        { label: 'العاملون', key: 'attendant_ids', select: 'employee' },
+        { label: 'طريقة الدفع', key: 'payment_method', select: 'payment', required: true },
+        { label: 'تاريخ ووقت الطلب', key: 'sale_date', type: 'datetime-local', auto: true }
+    ];
+
+    function renderField(def, row) {
+        row = row || {};
+        var value = row[def.key] || '';
+        var readonlyAttr = def.auto ? 'readonly disabled' : '';
+        if (def.kind === 'section') {
+            return '<div class="section"><h4>' + esc(def.label) + '</h4></div>';
+        }
+        if (def.kind === 'mode') {
+            return '<div class="toggle-group" id="toggleGroup"><button type="button" class="toggle-btn active" data-toggle="fuel"><i class="fas fa-gas-pump"></i> وقود</button><button type="button" class="toggle-btn" data-toggle="products"><i class="fas fa-boxes"></i> منتجات</button></div>';
+        }
+        if (def.select) {
+            var requiredAttr = def.required ? 'required' : '';
+            var areaAttr = def.area ? 'data-area="' + def.area + '"' : '';
+            return '<div class="form-group ' + (def.full ? 'full' : '') + '" ' + areaAttr + '>' +
+                '<label class="form-label">' + esc(def.label) + (def.required ? ' <span class="required">*</span>' : '') + '</label>' +
+                '<select class="form-input" data-key="' + def.key + '" ' + requiredAttr + ' ' + readonlyAttr + '><option value="">اختر...</option>' + optionHtml(def.select, value) + '</select>' +
+                '</div>';
+        }
+        var typeAttr = def.type || 'text';
+        var inputmodeAttr = def.inputmode ? 'inputmode="' + def.inputmode + '"' : '';
+        var requiredAttr = def.required ? 'required' : '';
+        var areaAttr = def.area ? 'data-area="' + def.area + '"' : '';
+        return '<div class="form-group ' + (def.full ? 'full' : '') + '" ' + areaAttr + '>' +
+            '<label class="form-label">' + esc(def.label) + (def.required ? ' <span class="required">*</span>' : '') + '</label>' +
+            '<input class="form-input" data-key="' + def.key + '" type="' + typeAttr + '" value="' + esc(value) + '" ' + requiredAttr + ' ' + readonlyAttr + ' ' + inputmodeAttr + '>' +
+            '</div>';
+    }
+
+    // ============================================================
+    // 5. منطق النموذج والحسابات المتقدمة
+    // ============================================================
+    function applyArea(area) {
+        var els = document.querySelectorAll('[data-area]');
+        for (var i = 0; i < els.length; i++) {
+            var el = els[i];
+            el.style.display = (el.dataset.area === area) ? 'flex' : 'none';
+        }
+    }
+
+    function customerRule() {
+        var saleType = document.querySelector('[data-key="sale_type"]');
+        var customer = document.querySelector('[data-key="customer_party_id"]');
+        if (!saleType || !customer) return;
+        if (saleType.value === 'cash') {
+            var general = optionRows('customer').find(function(x) {
+                return x.is_general === 1 || x.is_general === true || String(nameOf(x, ['name_ar','name'])).includes('عام');
+            });
+            if (general) customer.value = String(general.id);
+            customer.disabled = true;
+        } else {
+            customer.disabled = false;
+        }
+    }
+
+    function updateDriver() {
+        var vehicleEl = document.querySelector('[data-key="vehicle_id"]');
+        var driverEl = document.querySelector('[data-key="driver_id"]');
+        if (!vehicleEl || !driverEl) return;
+        var vehicleId = vehicleEl.value;
+        if (!vehicleId) {
+            driverEl.value = '';
+            driverEl.disabled = true;
+            return;
+        }
+        var vehicle = optionRows('vehicle').find(function(x) {
+            return String(x.id || x.vehicle_id) === String(vehicleId);
+        });
+        var driverId = vehicle ? (vehicle.driver_id || '') : '';
+        var driver = optionRows('driver').find(function(x) {
+            return String(x.id || x.driver_id) === String(driverId);
+        });
+        driverEl.value = driver ? String(driver.id || driver.driver_id) : '';
+        driverEl.disabled = true;
+    }
+
+    function calculateTotals() {
+        var liters = num(document.querySelector('[data-key="liters"]')?.value);
+        var pricePerLiter = num(document.querySelector('[data-key="price_per_liter"]')?.value);
+        var quantity = num(document.querySelector('[data-key="quantity"]')?.value);
+        var unitPrice = num(document.querySelector('[data-key="unit_price"]')?.value);
+
+        var fuelSub = liters * pricePerLiter;
+        var productSub = quantity * unitPrice;
+        var subtotal = fuelSub + productSub;
+
+        var discountAmount = num(document.querySelector('[data-key="discount_amount"]')?.value);
+        var discountPercent = num(document.querySelector('[data-key="discount_percent"]')?.value);
+        var discount = discountAmount;
+        if (discountPercent > 0 && subtotal > 0) {
+            discount = subtotal * (discountPercent / 100);
+        }
+        if (discount < 0) discount = 0;
+        var afterDiscount = subtotal - discount;
+
+        var taxRate = num(document.querySelector('[data-key="tax_rate"]')?.value);
+        var vatRate = num(document.querySelector('[data-key="vat_rate"]')?.value);
+        var taxAmount = afterDiscount * (taxRate / 100);
+        var vatAmount = afterDiscount * (vatRate / 100);
+
+        var serviceFee = num(document.querySelector('[data-key="service_fee"]')?.value);
+        var commission = num(document.querySelector('[data-key="commission"]')?.value);
+
+        var gross = afterDiscount + serviceFee + taxAmount + vatAmount;
+        var net = gross - commission;
+
+        setCalcValue('fuel_subtotal', fuelSub);
+        setCalcValue('product_subtotal', productSub);
+        setCalcValue('subtotal', subtotal);
+        if (discountPercent > 0) setCalcValue('discount_amount', discount);
+        setCalcValue('tax_amount', taxAmount);
+        setCalcValue('vat_amount', vatAmount);
+        setCalcValue('gross_amount', gross);
+        setCalcValue('net_amount', net);
+    }
+
+    function setCalcValue(key, value) {
+        var el = document.querySelector('[data-key="' + key + '"]');
+        if (el) el.value = value.toFixed(2);
+    }
+
+    function wireFormEvents() {
+        var allInputs = document.querySelectorAll('[data-key]');
+        for (var i = 0; i < allInputs.length; i++) {
+            var el = allInputs[i];
+            el.addEventListener('input', function(e) {
+                if (this.dataset.key === 'vehicle_id') updateDriver();
+                calculateTotals();
+            });
+        }
+
+        var vehicleSelects = document.querySelectorAll('[data-key="vehicle_id"]');
+        for (var j = 0; j < vehicleSelects.length; j++) {
+            vehicleSelects[j].addEventListener('change', updateDriver);
+        }
+
+        var customerSelects = document.querySelectorAll('[data-key="customer_party_id"]');
+        for (var k = 0; k < customerSelects.length; k++) {
+            customerSelects[k].addEventListener('change', customerRule);
+        }
+
+        var toggleBtns = document.querySelectorAll('.toggle-btn');
+        for (var m = 0; m < toggleBtns.length; m++) {
+            toggleBtns[m].addEventListener('click', function() {
+                var all = document.querySelectorAll('.toggle-btn');
+                for (var n = 0; n < all.length; n++) {
+                    all[n].classList.toggle('active', all[n] === this);
+                }
+                var showFuel = this.dataset.toggle === 'fuel';
+                applyArea(showFuel ? 'fuel' : 'product');
+            });
+        }
+
+        var saleType = document.querySelector('[data-key="sale_type"]');
+        if (saleType) {
+            saleType.addEventListener('change', customerRule);
+        }
+
+        var calcKeys = ['liters','price_per_liter','quantity','unit_price','discount_amount','discount_percent','tax_rate','vat_rate','service_fee','commission'];
+        for (var p = 0; p < calcKeys.length; p++) {
+            var el = document.querySelector('[data-key="' + calcKeys[p] + '"]');
+            if (el) {
+                el.addEventListener('input', calculateTotals);
+            }
+        }
+    }
+
+    function setAutoFields(row) {
+        row = row || {};
+        var setter = function(key, value) {
+            var el = document.querySelector('[data-key="' + key + '"]');
+            if (el && (!row[key] || el.disabled)) {
+                el.value = value || '';
+            }
+        };
+        setter('sale_code', row.sale_code || 'سيتم توليده تلقائياً');
+        setter('station_id', row.station_id || (state.ctx && state.ctx.station ? state.ctx.station.id : ''));
+        setter('invoice_number', row.invoice_number || 'يُولّد عند الحفظ');
+        setter('invoice_series', row.invoice_series || 'يُحدّد آلياً');
+        setter('receipt_number', row.receipt_number || 'يُولّد عند الحفظ');
+        setter('sale_date', row.sale_date || nowLocal());
+        setter('cashier_id', row.cashier_id || (state.ctx && state.ctx.cashier ? state.ctx.cashier.id : ''));
+        if (!row.sale_type) {
+            var st = document.querySelector('[data-key="sale_type"]');
+            if (st) st.value = 'cash';
+        }
+        if (!row.payment_method) {
+            var pm = document.querySelector('[data-key="payment_method"]');
+            if (pm) pm.value = 'cash';
+        }
+        updateDriver();
+        calculateTotals();
+    }
+
+    // ============================================================
+    // 6. فتح / حفظ / حذف الطلبات
+    // ============================================================
+    function openForm(row) {
+        row = row || null;
+        state.editing = row;
+        var form = $('recordForm');
+        var title = $('formTitle');
+        if (row) {
+            title.innerHTML = '<i class="fas fa-edit"></i> تعديل الطلب';
+        } else {
+            title.innerHTML = '<i class="fas fa-plus-circle"></i> طلب جديد';
+        }
+
+        form.innerHTML = fieldDefs.map(function(def) {
+            return renderField(def, row);
+        }).join('');
+
+        var msg = $('validationMsg');
+        msg.classList.remove('show');
+        $('validationText').textContent = '';
+
+        $('formModal').classList.add('show');
+
+        var defaultArea = (row && row.fuel_type_id) ? 'fuel' : (row && row.product_id) ? 'product' : 'fuel';
+        applyArea(defaultArea);
+        var btns = document.querySelectorAll('.toggle-btn');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].classList.toggle('active', btns[i].dataset.toggle === defaultArea);
+        }
+
+        wireFormEvents();
+        setAutoFields(row);
+    }
+
+    function collectFormData() {
+        var payload = {};
+        var inputs = document.querySelectorAll('#recordForm [data-key]');
+        for (var i = 0; i < inputs.length; i++) {
+            var el = inputs[i];
+            var val = el.value;
+            var key = el.dataset.key;
+            if (el.type === 'number' || ['liters','price_per_liter','quantity','unit_price','discount_amount','discount_percent','tax_rate','vat_rate','service_fee','commission','fuel_subtotal','product_subtotal','subtotal','tax_amount','vat_amount','gross_amount','net_amount'].indexOf(key) !== -1) {
+                val = val === '' ? 0 : Number(val);
+            }
+            payload[key] = val;
+        }
+
+        if (payload.sale_type === 'cash') {
+            var general = optionRows('customer').find(function(x) {
+                return x.is_general === 1 || x.is_general === true || String(nameOf(x, ['name_ar','name'])).includes('عام');
+            });
+            if (general) payload.customer_party_id = Number(general.id);
+        }
+
+        calculateTotals();
+        var calcFields = ['fuel_subtotal','product_subtotal','subtotal','discount_amount','tax_amount','vat_amount','gross_amount','net_amount'];
+        for (var j = 0; j < calcFields.length; j++) {
+            var el = document.querySelector('[data-key="' + calcFields[j] + '"]');
+            if (el) {
+                payload[calcFields[j]] = el.value === '' ? 0 : Number(el.value);
+            }
+        }
+        return payload;
+    }
+
+    function validateForm(payload) {
+        var errors = [];
+        if (!payload.station_id) errors.push('المحطة مطلوبة');
+        if (!payload.shift_id) errors.push('الوردية مطلوبة');
+        if (!payload.sale_type) errors.push('نوع البيع مطلوب');
+        if (payload.sale_type === 'credit' && !payload.customer_party_id) {
+            errors.push('يجب اختيار العميل عند البيع الآجل');
+        }
+        if (!payload.cashier_id) errors.push('أمين الصندوق غير محدد');
+        if (payload.sale_type === 'cash' && !payload.payment_method) {
+            errors.push('طريقة الدفع مطلوبة');
+        }
+        return errors;
+    }
+
+    async function saveForm() {
+        var payload = collectFormData();
+        var errors = validateForm(payload);
+        var msg = $('validationMsg');
+        var txt = $('validationText');
+        if (errors.length) {
+            txt.innerHTML = errors.map(function(e) { return '• ' + esc(e); }).join('<br>');
+            msg.classList.add('show');
+            return;
+        }
+        msg.classList.remove('show');
+
+        setLoading(true);
+        try {
+            var method = state.editing ? 'updateSalesTransactionRecord' : 'saveSalesTransactionRecord';
+            if (!bridge || typeof bridge[method] !== 'function') {
+                throw new Error('عقد حفظ الطلب غير متاح');
+            }
+            var args = state.editing ? [Number(idOf(state.editing)), JSON.stringify(payload)] : [JSON.stringify(payload)];
+            await callBridge(method, args);
+            toast(state.editing ? 'تم تعديل الطلب بنجاح' : 'تم حفظ الطلب بنجاح', 'success');
+            closeModal(null, 'formModal');
+            await reloadData();
+        } catch (e) {
+            txt.textContent = e.message || 'فشل حفظ الطلب';
+            msg.classList.add('show');
+            toast(e.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function deleteRow(row) {
+        if (!row) return;
+        if (!confirm('هل تريد حذف هذا الطلب نهائياً؟')) return;
+        setLoading(true);
+        try {
+            await callBridge('deleteSalesTransactionRecord', [Number(idOf(row))]);
+            toast('تم حذف الطلب', 'success');
+            await reloadData();
+        } catch (e) {
+            toast(e.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function openDetails(row) {
+        if (!row) return;
+        var body = $('detailsBody');
+        var entries = Object.entries(row).filter(function(entry) {
+            return entry[0] !== 'id';
+        });
+        body.innerHTML = '<div class="detail-grid">' + entries.map(function(entry) {
+            var key = entry[0], value = entry[1];
+            return '<div class="detail-item"><small>' + esc(labelKey(key)) + '</small><b>' + esc(typeof value === 'object' ? JSON.stringify(value) : value) + '</b></div>';
+        }).join('') + '</div>';
+        $('detailsModal').classList.add('show');
+    }
+
+    // ============================================================
+    // 7. عرض البطاقات والإحصائيات
+    // ============================================================
+    function renderStats() {
+        var rows = state.filtered;
+        $('statCount').textContent = rows.length.toLocaleString('ar');
+        $('itemCount').textContent = rows.length.toLocaleString('ar');
+
+        var active = 0, total = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            var status = String(r.status || r.state || '').toLowerCase();
+            if (['completed','مكتمل','active','نشط'].indexOf(status) !== -1 || status === '') {
+                active++;
+            }
+            total += num(r.gross_amount || r.net_amount || r.total || 0);
+        }
+        $('statActive').textContent = active.toLocaleString('ar');
+        $('statTotal').textContent = total.toLocaleString('ar', { maximumFractionDigits: 2 });
+        $('statUpdated').textContent = state.loadedAt ? state.loadedAt.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' }) : '—';
+    }
+
+    function renderCards() {
+        var container = $('cardsContainer');
+        var rows = state.filtered;
+        renderStats();
+
+        if (!rows.length) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد طلبات مطابقة للبحث أو الفلتر الحالي.</p></div>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var id = esc(idOf(row));
+            var code = esc(nameOf(row, ['sale_code','invoice_number','receipt_number']));
+            var customer = esc(nameOf(row, ['customer_name_ar','customer_name','party_name_ar','party_name']));
+            var vehicle = esc(nameOf(row, ['vehicle_name_ar','vehicle_name']));
+            var driver = esc(nameOf(row, ['driver_name_ar','driver_name']));
+            var station = esc(nameOf(row, ['station_name_ar','station_name']));
+            var cashier = esc(nameOf(row, ['cashier_name_ar','cashier_name','cashier_display_name']));
+            var total = num(row.net_amount || row.gross_amount);
+            var type = label(row.sale_type);
+            var isCredit = String(row.sale_type).toLowerCase() === 'credit';
+
+            html += '<article class="order-card">';
+            html += '<div class="card-head">';
+            html += '<div class="left">';
+            html += '<div class="code">' + code + '</div>';
+            html += '<div class="sub">';
+            html += '<span><i class="fas fa-map-marker-alt"></i> ' + station + '</span>';
+            html += '<span><i class="fas fa-calendar-alt"></i> ' + esc(row.sale_date || row.created_at || '—') + '</span>';
+            html += '</div>';
+            html += '<span class="badge ' + (isCredit ? 'warn' : 'ok') + '">' + esc(type) + '</span>';
+            html += '</div>';
+            html += '<div class="right">';
+            html += '<div class="amount">' + money(total) + '</div>';
+            html += '<div class="sub">صافي الطلب</div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="card-body">';
+            html += '<div class="field"><small>العميل</small><strong>' + customer + '</strong></div>';
+            html += '<div class="field"><small>المركبة</small><strong>' + vehicle + '</strong></div>';
+            html += '<div class="field"><small>السائق</small><strong>' + driver + '</strong></div>';
+            html += '<div class="field"><small>أمين الصندوق</small><strong>' + cashier + '</strong></div>';
+            html += '<div class="field"><small>رقم الفاتورة</small><strong>' + esc(row.invoice_number) + '</strong></div>';
+            html += '<div class="field"><small>طريقة الدفع</small><strong>' + esc(label(row.payment_method)) + '</strong></div>';
+            html += '</div>';
+
+            html += '<div class="card-actions">';
+            html += '<button class="btn" data-view="' + id + '"><i class="fas fa-eye"></i> التفاصيل</button>';
+            html += '<button class="btn warn" data-edit="' + id + '"><i class="fas fa-pen"></i> تعديل</button>';
+            html += '<button class="btn danger" data-delete="' + id + '"><i class="fas fa-trash"></i> حذف</button>';
+            html += '</div>';
+            html += '</article>';
+        }
+
+        container.innerHTML = html;
+
+        // ربط الأحداث
+        var viewBtns = container.querySelectorAll('[data-view]');
+        for (var v = 0; v < viewBtns.length; v++) {
+            viewBtns[v].addEventListener('click', function() {
+                var row = findRow(this.dataset.view);
+                if (row) openDetails(row);
+            });
+        }
+
+        var editBtns = container.querySelectorAll('[data-edit]');
+        for (var e = 0; e < editBtns.length; e++) {
+            editBtns[e].addEventListener('click', function() {
+                var row = findRow(this.dataset.edit);
+                if (row) openForm(row);
+            });
+        }
+
+        var delBtns = container.querySelectorAll('[data-delete]');
+        for (var d = 0; d < delBtns.length; d++) {
+            delBtns[d].addEventListener('click', function() {
+                var row = findRow(this.dataset.delete);
+                if (row) deleteRow(row);
+            });
+        }
+    }
+
+    // ============================================================
+    // 8. التبويبات والتصفية – منطق من orderss.html
+    // ============================================================
+    function buildFilters() {
+        var labels = [
+            ['all', 'الكل'],
+            ['cash', 'نقداً'],
+            ['credit', 'آجل'],
+            ['fuel', 'وقود'],
+            ['product', 'منتجات']
+        ];
+        var container = $('filterChips');
+        container.innerHTML = labels.map(function(item, index) {
+            var v = item[0], t = item[1];
+            var activeClass = index === 0 ? 'active' : '';
+            return '<button class="chip ' + activeClass + '" data-v="' + v + '">' + t + '</button>';
+        }).join('');
+
+        // ربط الأحداث
+        var chips = container.querySelectorAll('.chip');
+        for (var i = 0; i < chips.length; i++) {
+            chips[i].addEventListener('click', function() {
+                var mode = this.dataset.v;
+                state.mode = mode;
+                // تحديث التفعيل
+                var allChips = container.querySelectorAll('.chip');
+                for (var j = 0; j < allChips.length; j++) {
+                    allChips[j].classList.toggle('active', allChips[j] === this);
+                }
+                // تطبيق التصفية
+                applyFilter();
+            });
+        }
+    }
+
+    function applyFilter() {
+        var query = $('searchInput').value.trim().toLowerCase();
+        var mode = state.mode;
+
+        state.filtered = state.rows.filter(function(row) {
+            var text = JSON.stringify(row).toLowerCase();
+            var matchSearch = !query || text.indexOf(query) !== -1;
+            if (!matchSearch) return false;
+
+            var saleType = String(row.sale_type || row.order_type || '').toLowerCase();
+            var hasFuel = row.fuel_type_id ? true : false;
+            var hasProduct = row.product_id ? true : false;
+            var kind = hasFuel ? 'fuel' : (hasProduct ? 'product' : '');
+
+            if (mode === 'all') return true;
+            if (mode === 'cash') return saleType === 'cash';
+            if (mode === 'credit') return saleType === 'credit';
+            if (mode === 'fuel') return kind === 'fuel';
+            if (mode === 'product') return kind === 'product';
+            return true;
+        });
+
+        renderCards();
+    }
+
+    function applySearch() {
+        applyFilter();
+    }
+
+    // ============================================================
+    // 9. تحميل البيانات من SQLite
+    // ============================================================
+    async function reloadData() {
+        if (!bridge) {
+            $('offlineBanner').classList.add('show');
+            state.rows = [];
+            state.filtered = [];
+            renderCards();
+            return;
+        }
+        $('offlineBanner').classList.remove('show');
+        setLoading(true);
+        try {
+            var result = await callBridge('getSalesTransactionRecords', [JSON.stringify({ limit: 500 })]);
+            state.rows = rowsOf(result);
+            state.loadedAt = new Date();
+            applyFilter();
+        } catch (e) {
+            state.rows = [];
+            state.filtered = [];
+            renderCards();
+            toast(e.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    // ============================================================
+    // 10. التقارير – مقتبسة من orderss.html
+    // ============================================================
+    function openReport() {
+        $('reportFrom').value = today();
+        $('reportTo').value = today();
+        $('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><p>اختر الفترة ثم اضغط توليد التقرير.</p></div>';
+        $('reportModal').classList.add('show');
+    }
+
+    function generateReport() {
+        var from = $('reportFrom').value || today();
+        var to = $('reportTo').value || today();
+        var filtered = state.rows.filter(function(row) {
+            var date = row.sale_date || row.created_at || '';
+            return date >= from && date <= to;
+        });
+
+        if (!filtered.length) {
+            $('reportResults').innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد طلبات في هذه الفترة.</p></div>';
+            return;
+        }
+
+        var gross = 0, net = 0, discount = 0, fuel = 0, product = 0, tax = 0, vat = 0;
+        for (var i = 0; i < filtered.length; i++) {
+            var r = filtered[i];
+            gross += num(r.gross_amount);
+            net += num(r.net_amount);
+            discount += num(r.discount_amount);
+            fuel += num(r.fuel_subtotal);
+            product += num(r.product_subtotal);
+            tax += num(r.tax_amount);
+            vat += num(r.vat_amount);
+        }
+
+        var html = '<div class="report-grid">';
+        html += '<div class="report-card"><b>' + filtered.length + '</b><span>عدد الطلبات</span></div>';
+        html += '<div class="report-card"><b>' + money(gross) + '</b><span>الإجمالي الإجمالي</span></div>';
+        html += '<div class="report-card"><b>' + money(net) + '</b><span>الصافي</span></div>';
+        html += '<div class="report-card"><b>' + money(discount) + '</b><span>الخصميات</span></div>';
+        html += '<div class="report-card"><b>' + money(fuel) + '</b><span>مبيعات الوقود</span></div>';
+        html += '<div class="report-card"><b>' + money(product) + '</b><span>مبيعات المنتجات</span></div>';
+        html += '<div class="report-card"><b>' + money(tax) + '</b><span>قيمة الضريبة</span></div>';
+        html += '<div class="report-card"><b>' + money(vat) + '</b><span>القيمة المضافة</span></div>';
+        html += '</div>';
+
+        // جدول تفصيلي
+        html += '<div class="report-table-wrap"><table class="report-table">';
+        html += '<thead><tr><th>#</th><th>الرمز</th><th>العميل</th><th>الإجمالي</th><th>الصافي</th><th>الحالة</th><th>التاريخ</th></tr></thead>';
+        html += '<tbody>';
+        var maxShow = Math.min(filtered.length, 100);
+        for (var j = 0; j < maxShow; j++) {
+            var r = filtered[j];
+            html += '<tr>';
+            html += '<td>' + (j + 1) + '</td>';
+            html += '<td>' + esc(r.sale_code || r.id) + '</td>';
+            html += '<td>' + esc(nameOf(r, ['customer_name_ar','customer_name'])) + '</td>';
+            html += '<td>' + money(r.gross_amount) + '</td>';
+            html += '<td>' + money(r.net_amount) + '</td>';
+            html += '<td>' + esc(label(r.sale_type)) + '</td>';
+            html += '<td>' + esc((r.sale_date || r.created_at || '').slice(0, 10)) + '</td>';
+            html += '</tr>';
+        }
+        html += '</tbody></table>';
+        if (filtered.length > 100) {
+            html += '<div class="empty-state" style="padding:10px;">يعرض 100 من ' + filtered.length + '</div>';
+        }
+        html += '</div>';
+
+        $('reportResults').innerHTML = html;
+        toast('تم توليد التقرير بنجاح', 'success');
+    }
+
+    function exportData() {
+        var rows = state.filtered;
+        if (!rows.length) {
+            toast('لا توجد بيانات للتصدير', 'warning');
+            return;
+        }
+        var keys = [];
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            for (var k in r) {
+                if (r.hasOwnProperty(k) && keys.indexOf(k) === -1) {
+                    keys.push(k);
+                }
+            }
+        }
+        var csv = '\ufeff' + keys.join(',') + '\n';
+        for (var j = 0; j < rows.length; j++) {
+            var row = rows[j];
+            var line = [];
+            for (var k2 = 0; k2 < keys.length; k2++) {
+                var val = row[keys[k2]] !== undefined ? String(row[keys[k2]]) : '';
+                line.push('"' + val.replace(/"/g, '""') + '"');
+            }
+            csv += line.join(',') + '\n';
+        }
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'orders_export.csv';
+        a.click();
+        toast('تم تصدير البيانات', 'success');
+    }
+
+    // ============================================================
+    // 11. دوال مساعدة للواجهة
+    // ============================================================
+    function closeModal(event, modalId) {
+        if (event && event.target !== event.currentTarget) return;
+        var el = $(modalId);
+        if (el) el.classList.remove('show');
+        var msg = $('validationMsg');
+        if (msg) msg.classList.remove('show');
+    }
+
+    function goHome() {
+        window.location.href = '../main.html';
+    }
+
+    function toggleTheme() {
+        var dark = document.documentElement.dataset.theme === 'dark';
+        if (dark) {
+            delete document.documentElement.dataset.theme;
+        } else {
+            document.documentElement.dataset.theme = 'dark';
+        }
+        localStorage.setItem('theme', dark ? 'light' : 'dark');
+        var icon = $('themeIcon');
+        if (icon) icon.className = dark ? 'fas fa-moon' : 'fas fa-sun';
+    }
+
+    function initTheme() {
+        var saved = localStorage.getItem('theme');
+        if (saved === 'dark') {
+            document.documentElement.dataset.theme = 'dark';
+            var icon = $('themeIcon');
+            if (icon) icon.className = 'fas fa-sun';
+        } else {
+            var icon2 = $('themeIcon');
+            if (icon2) icon2.className = 'fas fa-moon';
+        }
+    }
+
+    // ============================================================
+    // 12. السحب للتحديث (Pull-to-Refresh)
+    // ============================================================
+    var pullStartY = 0;
+    var pullIndicator = $('pullIndicator');
+
+    document.addEventListener('touchstart', function(e) {
+        if (window.scrollY === 0) {
+            pullStartY = e.touches[0].pageY;
+        }
+    });
+
+    document.addEventListener('touchmove', function(e) {
+        if (window.scrollY === 0 && pullStartY > 0) {
+            var delta = e.touches[0].pageY - pullStartY;
+            if (delta > 80) {
+                pullIndicator.classList.add('active');
+                pullIndicator.classList.add('loading');
+            }
+        }
+    });
+
+    document.addEventListener('touchend', function() {
+        if (pullIndicator.classList.contains('loading')) {
+            pullIndicator.classList.remove('loading');
+            reloadData();
+            setTimeout(function() {
+                pullIndicator.classList.remove('active');
+            }, 500);
+        }
+        pullStartY = 0;
+    });
+
+    // ============================================================
+    // 13. التهيئة
+    // ============================================================
+    async function init() {
+        initTheme();
+
+        $('themeToggle').addEventListener('click', toggleTheme);
+        $('searchInput').addEventListener('input', applySearch);
+        $('saveBtn').addEventListener('click', saveForm);
+
+        // بناء التبويبات
+        buildFilters();
+
+        // تحميل السياق والمراجع
+        await loadContext();
+        await reloadData();
+
+        window.addEventListener('online', function() {
+            $('offlineBanner').classList.remove('show');
+            toast('تم استعادة الاتصال', 'success');
+        });
+        window.addEventListener('offline', function() {
+            $('offlineBanner').classList.add('show');
+        });
+    }
+
+    // تعريف الدوال العامة
+    window.openForm = openForm;
+    window.openReport = openReport;
+    window.closeModal = closeModal;
+    window.goHome = goHome;
+    window.generateReport = generateReport;
+    window.exportData = exportData;
+    window.deleteRow = deleteRow;
+    window.openDetails = openDetails;
+    window.reloadData = reloadData;
+    window.applySearch = applySearch;
+
+    init().catch(function(err) {
+        console.error('خطأ في التهيئة:', err);
+        toast('حدث خطأ أثناء التهيئة', 'error');
+    });
+
+})();
+</script>
+</body>
+</html>

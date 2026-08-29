@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="color-scheme" content="light dark">
+  <title>رحلات المركبات | محطة أبو أحمد</title>
+  <link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+  <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+  <style>
+    :root {
+      --trip-bg: #f5f7fb;
+      --trip-surface: #ffffff;
+      --trip-surface-alt: #f0f4f9;
+      --trip-text: #172033;
+      --trip-muted: #64748b;
+      --trip-border: #dbe4ef;
+      --trip-primary: #087e8b;
+      --trip-primary-dark: #05656f;
+      --trip-primary-soft: #e1f4f5;
+      --trip-blue: #2764d8;
+      --trip-blue-soft: #e9efff;
+      --trip-green: #11845b;
+      --trip-green-soft: #e3f7ed;
+      --trip-amber: #b76508;
+      --trip-amber-soft: #fff3df;
+      --trip-danger: #c53a4b;
+      --trip-danger-soft: #fce9ec;
+      --trip-shadow: 0 12px 28px rgba(15, 33, 56, .08);
+      --trip-radius: 18px;
+    }
+    [data-theme="dark"] {
+      --trip-bg: #101722;
+      --trip-surface: #182231;
+      --trip-surface-alt: #202c3d;
+      --trip-text: #f2f6fb;
+      --trip-muted: #a6b6c9;
+      --trip-border: #324359;
+      --trip-primary: #36bec7;
+      --trip-primary-dark: #6bdbe2;
+      --trip-primary-soft: rgba(54, 190, 199, .14);
+      --trip-blue: #8eadff;
+      --trip-blue-soft: rgba(142, 173, 255, .14);
+      --trip-green: #55d799;
+      --trip-green-soft: rgba(85, 215, 153, .14);
+      --trip-amber: #ffbf66;
+      --trip-amber-soft: rgba(255, 191, 102, .14);
+      --trip-danger: #ff8b9a;
+      --trip-danger-soft: rgba(255, 139, 154, .14);
+      --trip-shadow: 0 14px 32px rgba(0, 0, 0, .26);
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--trip-bg); }
+    body {
+      min-height: 100vh; margin: 0; padding: 0 0 calc(88px + env(safe-area-inset-bottom, 0px));
+      background: var(--trip-bg); color: var(--trip-text); font-family: Cairo, Tahoma, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent; text-align: right;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(8, 126, 139, .32); outline-offset: 2px; }
+    .screen-header {
+      position: sticky; top: 0; z-index: 30; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 14px;
+      background: var(--trip-bg); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--trip-border);
+    }
+    .header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1140px; margin: 0 auto; }
+    .header-title { min-width: 0; display: flex; align-items: center; gap: 11px; }
+    .title-mark { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, var(--trip-primary), #1e9bab); box-shadow: 0 8px 18px rgba(8, 126, 139, .25); flex: 0 0 auto; }
+    h1 { margin: 0; font-size: clamp(1.05rem, 3.6vw, 1.42rem); line-height: 1.35; }
+    .header-subtitle { margin: 1px 0 0; color: var(--trip-muted); font-size: .72rem; }
+    .header-actions { display: flex; gap: 7px; flex: 0 0 auto; }
+    .icon-button { width: 40px; height: 40px; border: 1px solid var(--trip-border); border-radius: 13px; color: var(--trip-text); background: var(--trip-surface); display: grid; place-items: center; font-size: 1rem; box-shadow: 0 2px 7px rgba(15, 33, 56, .04); }
+    .icon-button:active { transform: scale(.94); }
+    main { max-width: 1140px; margin: 0 auto; padding: 16px; }
+    .source-notice { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; padding: 11px 12px; border: 1px solid var(--trip-border); border-radius: 14px; background: var(--trip-surface); color: var(--trip-muted); font-size: .77rem; line-height: 1.7; }
+    .source-notice i { color: var(--trip-primary); margin-top: 4px; }
+    .filter-panel { margin-bottom: 16px; padding: 13px; border: 1px solid var(--trip-border); border-radius: var(--trip-radius); background: var(--trip-surface); box-shadow: var(--trip-shadow); }
+    .search-row { display: flex; gap: 8px; align-items: stretch; }
+    .search-box { min-width: 0; flex: 1; position: relative; }
+    .search-box i { position: absolute; top: 50%; right: 13px; transform: translateY(-50%); color: var(--trip-muted); font-size: .82rem; pointer-events: none; }
+    .input, .select, .textarea { width: 100%; border: 1px solid var(--trip-border); border-radius: 12px; background: var(--trip-surface-alt); color: var(--trip-text); padding: 11px 12px; min-height: 43px; font-size: .84rem; }
+    .search-box .input { padding-right: 36px; }
+    .field-label { display: block; margin: 0 0 6px; color: var(--trip-muted); font-size: .74rem; font-weight: 700; }
+    .filters-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 11px; }
+    .filters-grid .wide { grid-column: 1 / -1; }
+    .filter-action { width: 43px; border: 1px solid var(--trip-border); border-radius: 12px; background: var(--trip-surface-alt); color: var(--trip-primary); font-size: .9rem; }
+    .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .metric { min-height: 112px; position: relative; overflow: hidden; padding: 13px; text-align: center; border: 1px solid var(--trip-border); border-radius: var(--trip-radius); background: var(--trip-surface); box-shadow: var(--trip-shadow); }
+    .metric::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--metric-color, var(--trip-primary)); }
+    .metric-icon { width: 30px; height: 30px; margin: 0 auto 5px; border-radius: 10px; display: grid; place-items: center; color: var(--metric-color, var(--trip-primary)); background: var(--metric-soft, var(--trip-primary-soft)); font-size: .83rem; }
+    .metric-value { display: block; min-height: 25px; font-size: 1.2rem; font-weight: 800; line-height: 1.35; direction: ltr; unicode-bidi: plaintext; }
+    .metric-label { display: block; color: var(--trip-muted); font-size: .7rem; font-weight: 700; }
+    .section-card { overflow: hidden; border: 1px solid var(--trip-border); border-radius: 22px; background: var(--trip-surface); box-shadow: var(--trip-shadow); }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 14px 11px; border-bottom: 1px solid var(--trip-border); }
+    .section-head h2 { margin: 0; font-size: .98rem; }
+    .section-meta { color: var(--trip-muted); font-size: .72rem; white-space: nowrap; }
+    .status-summary { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin: -5px 0 16px; }
+    .status-chip, .status-pill { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid currentColor; border-radius: 999px; padding: 4px 8px; font-size: .64rem; font-weight: 800; white-space: nowrap; }
+    .status-scheduled { color: var(--trip-amber); background: var(--trip-amber-soft); }
+    .status-active { color: var(--trip-blue); background: var(--trip-blue-soft); }
+    .status-completed { color: var(--trip-green); background: var(--trip-green-soft); }
+    .status-cancelled { color: var(--trip-danger); background: var(--trip-danger-soft); }
+    .trip-list { display: grid; gap: 0; }
+    .trip-card { padding: 14px; border-bottom: 1px solid var(--trip-border); }
+    .trip-card:last-child { border-bottom: 0; }
+    .trip-top { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; }
+    .trip-identity { min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+    .vehicle-glyph { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--trip-blue); background: var(--trip-blue-soft); flex: 0 0 auto; }
+    .trip-title { margin: 0; color: var(--trip-text); font-size: .92rem; font-weight: 800; overflow-wrap: anywhere; }
+    .trip-secondary { margin-top: 2px; color: var(--trip-muted); font-size: .72rem; overflow-wrap: anywhere; }
+    .date-pill { padding: 5px 7px; border-radius: 9px; background: var(--trip-surface-alt); color: var(--trip-muted); font-size: .68rem; white-space: nowrap; direction: ltr; }
+    .route-line { display: grid; grid-template-columns: minmax(0, 1fr) 19px minmax(0, 1fr); gap: 5px; align-items: center; margin: 13px 0 12px; color: var(--trip-text); font-size: .76rem; }
+    .route-stop { min-width: 0; padding: 8px; border-radius: 10px; background: var(--trip-surface-alt); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-stop i { margin-left: 4px; color: var(--trip-primary); }
+    .route-arrow { color: var(--trip-muted); text-align: center; font-size: .78rem; }
+    .trip-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+    .trip-fact { padding: 8px 5px; text-align: center; border-radius: 10px; background: var(--trip-surface-alt); }
+    .trip-fact strong { display: block; color: var(--trip-text); font-size: .77rem; direction: ltr; unicode-bidi: plaintext; overflow-wrap: anywhere; }
+    .trip-fact span { display: block; margin-top: 2px; color: var(--trip-muted); font-size: .62rem; }
+    .trip-foot { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-top: 11px; }
+    .location-fact { min-width: 0; color: var(--trip-muted); font-size: .67rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .location-fact i { color: var(--trip-green); margin-left: 4px; }
+    .action-cluster { display: flex; flex: 0 0 auto; gap: 6px; }
+    .card-action { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--trip-border); border-radius: 10px; background: var(--trip-surface); color: var(--trip-muted); }
+    .card-action.primary { color: var(--trip-primary); }
+    .card-action.danger { color: var(--trip-danger); }
+    .card-action:active { transform: scale(.93); }
+    .empty-state { padding: 46px 20px; color: var(--trip-muted); text-align: center; }
+    .empty-state i { display: block; margin-bottom: 12px; font-size: 2.25rem; color: var(--trip-primary); opacity: .7; }
+    .empty-state h3 { margin: 0 0 5px; color: var(--trip-text); font-size: .96rem; }
+    .empty-state p { margin: 0; font-size: .76rem; line-height: 1.75; }
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 13px; border-top: 1px solid var(--trip-border); }
+    .page-button { min-width: 78px; min-height: 37px; padding: 7px 10px; border: 1px solid var(--trip-border); border-radius: 10px; color: var(--trip-primary); background: var(--trip-surface); font-weight: 700; font-size: .76rem; }
+    .page-button:disabled { color: var(--trip-muted); background: var(--trip-surface-alt); opacity: .62; cursor: not-allowed; }
+    .page-info { min-width: 75px; text-align: center; color: var(--trip-muted); font-size: .72rem; direction: rtl; }
+    .bottom-actions { position: fixed; z-index: 40; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(5, 1fr); padding: 7px 6px calc(7px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--trip-border); background: var(--trip-surface); backdrop-filter: blur(16px); }
+    .nav-button { min-height: 52px; border: 0; background: transparent; color: var(--trip-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 11px; font-size: .62rem; }
+    .nav-button i { font-size: 1rem; }
+    .nav-button.primary { color: #fff; background: var(--trip-primary); box-shadow: 0 5px 13px rgba(8, 126, 139, .24); }
+    .nav-button:active { transform: scale(.95); }
+    .modal-backdrop { position: fixed; z-index: 90; inset: 0; display: none; align-items: flex-end; background: rgba(9, 18, 30, .56); backdrop-filter: blur(4px); }
+    .modal-backdrop.show { display: flex; }
+    .modal { width: 100%; max-height: min(88vh, 760px); overflow: auto; padding: 14px 16px calc(20px + env(safe-area-inset-bottom, 0px)); border: 1px solid var(--trip-border); border-bottom: 0; border-radius: 24px 24px 0 0; background: var(--trip-surface); box-shadow: 0 -14px 35px rgba(0, 0, 0, .18); animation: modal-in .2s ease-out; }
+    @keyframes modal-in { from { transform: translateY(24px); opacity: .4; } to { transform: translateY(0); opacity: 1; } }
+    .modal-handle { width: 42px; height: 4px; margin: 0 auto 13px; border-radius: 99px; background: var(--trip-border); }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 9px; margin-bottom: 16px; }
+    .modal-head h2 { margin: 0; font-size: 1.04rem; }
+    .modal-close { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--trip-border); border-radius: 11px; color: var(--trip-muted); background: var(--trip-surface-alt); }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .form-field { min-width: 0; }
+    .form-field.wide { grid-column: 1 / -1; }
+    .textarea { min-height: 88px; resize: vertical; }
+    .form-hint { margin: 7px 0 0; color: var(--trip-muted); font-size: .68rem; line-height: 1.65; }
+    .modal-actions { position: sticky; bottom: -20px; display: flex; gap: 8px; padding: 14px 0 0; background: var(--trip-surface); }
+    .button { min-height: 45px; padding: 10px 13px; border: 1px solid transparent; border-radius: 12px; font-weight: 800; font-size: .8rem; }
+    .button.primary { flex: 1; color: #fff; background: var(--trip-primary); }
+    .button.secondary { color: var(--trip-text); border-color: var(--trip-border); background: var(--trip-surface-alt); }
+    .button.danger { color: #fff; background: var(--trip-danger); }
+    .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .detail { min-width: 0; padding: 10px; border: 1px solid var(--trip-border); border-radius: 12px; background: var(--trip-surface-alt); }
+    .detail.wide { grid-column: 1 / -1; }
+    .detail span { display: block; margin-bottom: 3px; color: var(--trip-muted); font-size: .66rem; }
+    .detail strong { display: block; color: var(--trip-text); font-size: .78rem; overflow-wrap: anywhere; direction: ltr; unicode-bidi: plaintext; }
+    .detail.text strong { direction: rtl; }
+    .telemetry-note { margin: 13px 0 0; padding: 11px; border: 1px solid var(--trip-border); border-radius: 12px; background: var(--trip-primary-soft); color: var(--trip-text); font-size: .73rem; line-height: 1.8; }
+    .telemetry-note i { color: var(--trip-primary); margin-left: 5px; }
+    .report-table-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--trip-border); border-radius: 12px; }
+    .report-table { width: 100%; border-collapse: collapse; min-width: 560px; font-size: .72rem; }
+    .report-table th, .report-table td { padding: 10px 9px; border-bottom: 1px solid var(--trip-border); text-align: right; vertical-align: top; }
+    .report-table th { position: sticky; top: 0; background: var(--trip-surface-alt); color: var(--trip-muted); font-weight: 800; }
+    .report-table td { color: var(--trip-text); }
+    .toast { position: fixed; z-index: 120; right: 16px; bottom: calc(85px + env(safe-area-inset-bottom, 0px)); width: min(360px, calc(100vw - 32px)); display: none; gap: 9px; align-items: flex-start; padding: 12px; border-radius: 14px; color: #fff; background: #1f2a38; box-shadow: 0 12px 28px rgba(0,0,0,.25); font-size: .78rem; line-height: 1.65; }
+    .toast.show { display: flex; animation: toast-in .18s ease-out; }
+    .toast.error { background: #9d2637; }
+    .toast.success { background: #087459; }
+    @keyframes toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .loading { position: fixed; z-index: 110; inset: 0; display: none; place-items: center; background: rgba(8, 17, 28, .28); }
+    .loading.show { display: grid; }
+    .loading-box { display: flex; align-items: center; gap: 9px; padding: 13px 15px; border: 1px solid var(--trip-border); border-radius: 14px; background: var(--trip-surface); color: var(--trip-text); box-shadow: var(--trip-shadow); font-size: .8rem; }
+    .spinner { width: 19px; height: 19px; border: 3px solid var(--trip-primary-soft); border-top-color: var(--trip-primary); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (min-width: 700px) { .filters-grid { grid-template-columns: 2fr 1fr 1fr 1fr; } .filters-grid .wide { grid-column: auto; } .stats-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } .trip-card { padding: 16px 18px; } .modal { width: min(700px, 100%); margin: 0 auto; border-radius: 24px 24px 0 0; } }
+    @media (max-width: 360px) { main { padding: 12px; } .filters-grid, .form-grid, .details-grid { grid-template-columns: 1fr; } .form-field.wide, .detail.wide { grid-column: auto; } .trip-facts { gap: 5px; } .trip-fact { padding-right: 3px; padding-left: 3px; } }
+  </style>
+</head>
+<body>
+  <header class="screen-header">
+    <div class="header-row">
+      <div class="header-title">
+        <div class="title-mark" aria-hidden="true"><i class="fas fa-route"></i></div>
+        <div><h1>رحلات المركبات</h1><p class="header-subtitle">سجل التشغيل والمسافات والوقود من قاعدة بيانات المحطة</p></div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-button" type="button" id="themeButton" aria-label="تبديل الوضع"><i id="themeIcon" class="fas fa-moon"></i></button>
+        <button class="icon-button" type="button" id="homeButton" aria-label="الصفحة الرئيسية"><i class="fas fa-home"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="source-notice"><i class="fas fa-shield-alt"></i><span>تعرض هذه الشاشة سجلات <strong>vehicle_trips</strong> والمركبات والسائقين وآخر موقع محفوظ للمركبة من SQLite. لا تعرض خريطة أو موقعاً حياً ما لم يتوفر له سجل فعلي.</span></div>
+    <section class="filter-panel" aria-label="بحث وتصفية الرحلات">
+      <div class="search-row">
+        <div class="search-box"><i class="fas fa-search"></i><label class="visually-hidden" for="searchInput">بحث في الرحلات</label><input class="input" id="searchInput" type="search" autocomplete="off" placeholder="ابحث بالمركبة أو السائق أو خط السير أو الغرض"></div>
+        <button class="filter-action" type="button" id="clearFiltersButton" aria-label="مسح الفلاتر"><i class="fas fa-filter-circle-xmark"></i></button>
+      </div>
+      <div class="filters-grid">
+        <div><label class="field-label" for="vehicleFilter">المركبة</label><select class="select" id="vehicleFilter"><option value="">كل المركبات</option></select></div>
+        <div><label class="field-label" for="driverFilter">السائق</label><select class="select" id="driverFilter"><option value="">كل السائقين</option></select></div>
+        <div><label class="field-label" for="tripStatusFilter">حالة الرحلة</label><select class="select" id="tripStatusFilter"><option value="">كل الحالات</option><option value="scheduled">مجدولة</option><option value="active">جارية</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select></div>
+        <div><label class="field-label" for="fromDate">من تاريخ</label><input class="input" id="fromDate" type="date"></div>
+        <div><label class="field-label" for="toDate">إلى تاريخ</label><input class="input" id="toDate" type="date"></div>
+        <div class="wide"><label class="field-label" for="sortBy">ترتيب النتائج</label><select class="select" id="sortBy"><option value="trip_date:desc">الأحدث أولاً</option><option value="trip_date:asc">الأقدم أولاً</option><option value="distance_km:desc">الأطول مسافة</option><option value="fuel_consumed:desc">الأعلى استهلاكاً</option><option value="fuel_cost:desc">الأعلى تكلفة</option></select></div>
+      </div>
+    </section>
+
+    <section class="stats-grid" aria-label="ملخص الرحلات الحقيقي">
+      <article class="metric" style="--metric-color:var(--trip-primary);--metric-soft:var(--trip-primary-soft)"><div class="metric-icon"><i class="fas fa-route"></i></div><strong class="metric-value" id="statTrips">—</strong><span class="metric-label">إجمالي الرحلات</span></article>
+      <article class="metric" style="--metric-color:var(--trip-blue);--metric-soft:var(--trip-blue-soft)"><div class="metric-icon"><i class="fas fa-road"></i></div><strong class="metric-value" id="statDistance">—</strong><span class="metric-label">المسافة المسجلة</span></article>
+      <article class="metric" style="--metric-color:var(--trip-green);--metric-soft:var(--trip-green-soft)"><div class="metric-icon"><i class="fas fa-gas-pump"></i></div><strong class="metric-value" id="statFuel">—</strong><span class="metric-label">الوقود المستهلك</span></article>
+      <article class="metric" style="--metric-color:var(--trip-amber);--metric-soft:var(--trip-amber-soft)"><div class="metric-icon"><i class="fas fa-coins"></i></div><strong class="metric-value" id="statCost">—</strong><span class="metric-label">تكلفة الوقود</span></article>
+      <article class="metric" style="--metric-color:var(--trip-danger);--metric-soft:var(--trip-danger-soft)"><div class="metric-icon"><i class="fas fa-gauge-high"></i></div><strong class="metric-value" id="statEfficiency">—</strong><span class="metric-label">متوسط كم/لتر</span></article>
+    </section>
+    <div class="status-summary" id="statusSummary" aria-label="حالات الرحلات"><span class="status-chip">لم تُحمّل الحالات بعد</span></div>
+
+    <section class="section-card" aria-label="قائمة رحلات المركبات">
+      <div class="section-head"><h2><i class="fas fa-list" aria-hidden="true"></i> سجل الرحلات</h2><span class="section-meta" id="resultsMeta">لم تُحمّل البيانات بعد</span></div>
+      <div class="trip-list" id="tripList" aria-live="polite"><div class="empty-state"><i class="fas fa-database"></i><h3>بانتظار تحميل السجلات</h3><p>سيتم عرض البيانات المعادة من SQLite للمحطة الحالية فقط.</p></div></div>
+      <div class="pagination" id="pagination" hidden><button class="page-button" id="nextButton" type="button"><i class="fas fa-chevron-right"></i> التالية</button><span class="page-info" id="pageInfo"></span><button class="page-button" id="previousButton" type="button">السابقة <i class="fas fa-chevron-left"></i></button></div>
+    </section>
+  </main>
+
+  <nav class="bottom-actions" aria-label="إجراءات الرحلات">
+    <button class="nav-button" type="button" id="refreshButton"><i class="fas fa-rotate"></i><span>تحديث</span></button>
+    <button class="nav-button" type="button" id="reportButton"><i class="fas fa-chart-column"></i><span>تقرير</span></button>
+    <button class="nav-button" type="button" id="exportButton"><i class="fas fa-file-csv"></i><span>CSV</span></button>
+    <button class="nav-button" type="button" id="filtersButton"><i class="fas fa-sliders"></i><span>الفلاتر</span></button>
+    <button class="nav-button primary" type="button" id="newTripButton"><i class="fas fa-plus"></i><span>رحلة جديدة</span></button>
+  </nav>
+
+  <div class="modal-backdrop" id="tripModal" role="dialog" aria-modal="true" aria-labelledby="tripModalTitle">
+    <div class="modal"><div class="modal-handle"></div><div class="modal-head"><h2 id="tripModalTitle">إضافة رحلة جديدة</h2><button class="modal-close" type="button" data-close="tripModal" aria-label="إغلاق"><i class="fas fa-times"></i></button></div>
+      <form id="tripForm" novalidate>
+        <input type="hidden" id="tripId">
+        <div class="form-grid">
+          <div class="form-field"><label class="field-label" for="tripVehicleId">المركبة <span aria-hidden="true">*</span></label><select class="select" id="tripVehicleId" required><option value="">اختر المركبة</option></select></div>
+          <div class="form-field"><label class="field-label" for="tripDriverId">السائق</label><select class="select" id="tripDriverId"><option value="">بدون تعيين سائق</option></select></div>
+          <div class="form-field"><label class="field-label" for="tripDate">تاريخ الرحلة <span aria-hidden="true">*</span></label><input class="input" id="tripDate" type="date" required></div>
+          <div class="form-field"><label class="field-label" for="distanceKm">المسافة بالكيلومتر</label><input class="input" id="distanceKm" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+          <div class="form-field"><label class="field-label" for="startOdometer">عداد البداية</label><input class="input" id="startOdometer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="قراءة العداد عند الانطلاق"></div>
+          <div class="form-field"><label class="field-label" for="endOdometer">عداد النهاية</label><input class="input" id="endOdometer" type="number" min="0" step="0.01" inputmode="decimal" placeholder="قراءة العداد عند الوصول"></div>
+          <div class="form-field"><label class="field-label" for="fuelConsumed">الوقود المستهلك (لتر)</label><input class="input" id="fuelConsumed" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+          <div class="form-field"><label class="field-label" for="fuelCost">تكلفة الوقود</label><input class="input" id="fuelCost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+          <div class="form-field"><label class="field-label" for="startLocation">نقطة الانطلاق</label><input class="input" id="startLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: المحطة الرئيسية"></div>
+          <div class="form-field"><label class="field-label" for="endLocation">نقطة الوصول</label><input class="input" id="endLocation" type="text" maxlength="255" autocomplete="off" placeholder="مثال: موقع العميل"></div>
+          <div class="form-field wide"><label class="field-label" for="tripPurpose">غرض الرحلة</label><textarea class="textarea" id="tripPurpose" maxlength="2000" placeholder="اشرح الغرض التشغيلي للرحلة"></textarea></div>
+          <div class="form-field wide"><label class="field-label" for="tripNotes">ملاحظات</label><textarea class="textarea" id="tripNotes" maxlength="2000" placeholder="ملاحظات تشغيلية اختيارية"></textarea></div>
+        </div>
+        <p class="form-hint">رمز الرحلة وUUID يصدران من SQLite. لا يرسل النموذج معرف المحطة أو هوية المستخدم؛ يفرضهما Android من الجلسة الحالية.</p>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close="tripModal">إلغاء</button><button class="button primary" type="submit" id="saveTripButton">حفظ الرحلة</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="detailsModal" role="dialog" aria-modal="true" aria-labelledby="detailsModalTitle"><div class="modal"><div class="modal-handle"></div><div class="modal-head"><h2 id="detailsModalTitle">تفاصيل الرحلة</h2><button class="modal-close" type="button" data-close="detailsModal" aria-label="إغلاق"><i class="fas fa-times"></i></button></div><div id="detailsContent"></div></div></div>
+  <div class="modal-backdrop" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle"><div class="modal"><div class="modal-handle"></div><div class="modal-head"><h2 id="reportModalTitle">تقرير رحلات المركبات</h2><button class="modal-close" type="button" data-close="reportModal" aria-label="إغلاق"><i class="fas fa-times"></i></button></div><p class="form-hint">يقرأ التقرير سجلات SQLite حسب الفلاتر الحالية؛ لا يستبدل البيانات بمؤشرات محلية.</p><div id="reportContent" class="empty-state"><i class="fas fa-chart-column"></i><p>اضغط «توليد التقرير» لقراءة النتائج.</p></div><div class="modal-actions"><button class="button secondary" type="button" data-close="reportModal">إغلاق</button><button class="button primary" type="button" id="generateReportButton">توليد التقرير</button></div></div></div>
+  <div class="modal-backdrop" id="confirmModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle"><div class="modal"><div class="modal-handle"></div><div class="modal-head"><h2 id="confirmTitle">تأكيد الحذف</h2><button class="modal-close" type="button" data-close="confirmModal" aria-label="إغلاق"><i class="fas fa-times"></i></button></div><p id="confirmMessage" class="form-hint" style="font-size:.82rem"></p><div class="modal-actions"><button class="button secondary" type="button" data-close="confirmModal">إلغاء</button><button class="button danger" type="button" id="confirmDeleteButton">حذف السجل</button></div></div></div>
+  <div class="modal-backdrop" id="statusModal" role="dialog" aria-modal="true" aria-labelledby="statusModalTitle"><div class="modal"><div class="modal-handle"></div><div class="modal-head"><h2 id="statusModalTitle">تحديث حالة الرحلة</h2><button class="modal-close" type="button" data-close="statusModal" aria-label="إغلاق"><i class="fas fa-times"></i></button></div><form id="statusForm"><input type="hidden" id="statusTripId"><div class="form-grid"><div class="form-field wide"><label class="field-label" for="statusTarget">الحالة الجديدة</label><select class="select" id="statusTarget" required></select></div><div class="form-field wide"><label class="field-label" for="statusNote">ملاحظة تغيير الحالة</label><textarea class="textarea" id="statusNote" maxlength="2000" placeholder="اختياري؛ تحفظ الملاحظة مع حدث الخط الزمني"></textarea></div></div><p class="form-hint">لا يقبل هذا النموذج إلا الانتقالات المسموحة في SQLite؛ يسجل كل انتقال فعلي ضمن الخط الزمني.</p><div class="modal-actions"><button class="button secondary" type="button" data-close="statusModal">إلغاء</button><button class="button primary" type="submit">تحديث الحالة</button></div></form></div></div>
+  <div class="loading" id="loading" aria-live="polite"><div class="loading-box"><span class="spinner"></span><span>جاري التعامل مع بيانات المحطة…</span></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"><i id="toastIcon" class="fas fa-circle-info"></i><span id="toastText"></span></div>
+
+  <script>
+  (function () {
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const state = { rows: [], vehicles: [], drivers: [], totalCount: 0, page: 1, pageSize: 20, totalPages: 0, pendingDeleteId: 0, searchTimer: null };
+    const bridge = () => window.AndroidInterface;
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[char]);
+    const number = value => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
+    const optionalNumber = value => String(value ?? '').trim() === '' ? null : number(value);
+    const formatNumber = (value, digits = 2) => number(value).toLocaleString('ar-YE', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+    const formatDate = value => { const text = String(value || '').trim(); return text ? escapeHtml(text.slice(0, 10)) : 'غير مسجل'; };
+    const asResult = raw => {
+      let parsed = raw;
+      if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch (_) { throw new Error('استجابة غير صالحة من Android'); } }
+      if (!parsed || typeof parsed !== 'object') throw new Error('لم تصل استجابة بيانات صالحة');
+      if (parsed.success === false) throw new Error(parsed.error || parsed.message || 'فشلت العملية في قاعدة البيانات');
+      return Object.prototype.hasOwnProperty.call(parsed, 'data') ? parsed.data : parsed;
+    };
+    const callBridge = (method, payload) => {
+      const api = bridge();
+      if (!api || typeof api[method] !== 'function') throw new Error('عقد Android غير متاح: ' + method);
+      return asResult(api[method](JSON.stringify(payload || {})));
+    };
+    const callUpdate = (method, id, payload) => {
+      const api = bridge();
+      if (!api || typeof api[method] !== 'function') throw new Error('عقد Android غير متاح: ' + method);
+      return asResult(api[method](Number(id), JSON.stringify(payload || {})));
+    };
+    const callDelete = (method, id) => {
+      const api = bridge();
+      if (!api || typeof api[method] !== 'function') throw new Error('عقد Android غير متاح: ' + method);
+      return asResult(api[method](Number(id)));
+    };
+    const callId = (method, id) => {
+      const api = bridge();
+      if (!api || typeof api[method] !== 'function') throw new Error('عقد Android غير متاح: ' + method);
+      return asResult(api[method](Number(id)));
+    };
+    const callStatus = (id, status, note) => {
+      const api = bridge();
+      if (!api || typeof api.updateVehicleTripStatus !== 'function') throw new Error('عقد تحديث حالة الرحلة غير متاح');
+      return asResult(api.updateVehicleTripStatus(Number(id), String(status), String(note || '')));
+    };
+    const setLoading = visible => $('loading').classList.toggle('show', !!visible);
+    let toastTimer;
+    function toast(message, isError) {
+      const box = $('toast'); clearTimeout(toastTimer); box.className = 'toast show ' + (isError ? 'error' : 'success');
+      $('toastIcon').className = isError ? 'fas fa-circle-exclamation' : 'fas fa-circle-check'; $('toastText').textContent = String(message || '');
+      toastTimer = setTimeout(() => box.classList.remove('show'), 4200);
+    }
+    function setModal(id, open) { $(id).classList.toggle('show', !!open); if (open) $(id).querySelector('button, input, select, textarea')?.focus(); }
+    function payloadForLoad(offset) {
+      const [sort_by, sort_dir] = $('sortBy').value.split(':');
+      return { search: $('searchInput').value.trim(), vehicle_id: number($('vehicleFilter').value), driver_id: number($('driverFilter').value), trip_status: $('tripStatusFilter').value || '', from_date: $('fromDate').value || '', to_date: $('toDate').value || '', sort_by, sort_dir, limit: state.pageSize, offset: Math.max(0, offset) };
+    }
+    function updateSelect(selectId, rows, selectedValue, label) {
+      const select = $(selectId), selected = String(selectedValue || '');
+      const options = rows.map(row => `<option value="${number(row.id)}">${escapeHtml(label(row))}</option>`).join('');
+      const emptyLabel = selectId === 'tripVehicleId' ? 'اختر المركبة' : selectId === 'vehicleFilter' ? 'كل المركبات' : 'كل السائقين';
+      select.innerHTML = '<option value="">' + emptyLabel + '</option>' + options;
+      if (selected && [...select.options].some(option => option.value === selected)) select.value = selected;
+    }
+    function fillLookups(workspace) {
+      const vehicleValue = $('vehicleFilter').value, driverValue = $('driverFilter').value, formVehicle = $('tripVehicleId').value, formDriver = $('tripDriverId').value;
+      state.vehicles = Array.isArray(workspace.vehicles) ? workspace.vehicles : [];
+      state.drivers = Array.isArray(workspace.drivers) ? workspace.drivers : [];
+      updateSelect('vehicleFilter', state.vehicles, vehicleValue, row => [row.vehicle_code, row.plate_number].filter(Boolean).join(' — ') || 'مركبة #' + row.id);
+      updateSelect('driverFilter', state.drivers, driverValue, row => [row.driver_name, row.driver_code].filter(Boolean).join(' — ') || 'سائق #' + row.id);
+      updateSelect('tripVehicleId', state.vehicles, formVehicle, row => [row.vehicle_code, row.plate_number].filter(Boolean).join(' — ') || 'مركبة #' + row.id);
+      const tripDriver = $('tripDriverId'); tripDriver.innerHTML = '<option value="">بدون تعيين سائق</option>' + state.drivers.map(row => `<option value="${number(row.id)}">${escapeHtml([row.driver_name, row.driver_code].filter(Boolean).join(' — ') || 'سائق #' + row.id)}</option>`).join('');
+      if (formDriver && [...tripDriver.options].some(option => option.value === formDriver)) tripDriver.value = formDriver;
+    }
+    function setStats(stats) {
+      if (!stats || typeof stats !== 'object') {
+        ['statTrips', 'statDistance', 'statFuel', 'statCost', 'statEfficiency'].forEach(id => $(id).textContent = '—');
+        $('statusSummary').innerHTML = '<span class="status-chip">تعذر تحميل حالات الرحلات</span>';
+        return;
+      }
+      const source = stats;
+      $('statTrips').textContent = formatNumber(source.total_trips, 0);
+      $('statDistance').textContent = formatNumber(source.total_distance_km) + ' كم';
+      $('statFuel').textContent = formatNumber(source.total_fuel_consumed) + ' ل';
+      $('statCost').textContent = formatNumber(source.total_fuel_cost);
+      $('statEfficiency').textContent = number(source.average_efficiency) > 0 ? formatNumber(source.average_efficiency) : '—';
+      const labels = [['scheduled', 'مجدولة', 'fa-calendar-day'], ['active', 'جارية', 'fa-person-running'], ['completed', 'مكتملة', 'fa-circle-check'], ['cancelled', 'ملغاة', 'fa-ban']];
+      $('statusSummary').innerHTML = labels.map(([key, label, icon]) => '<span class="status-chip status-' + key + '"><i class="fas ' + icon + '"></i>' + escapeHtml(label) + ': ' + formatNumber(source[key + '_count'], 0) + '</span>').join('');
+    }
+    function vehicleName(row) { return [row.vehicle_code, row.plate_number].filter(Boolean).join(' — ') || 'مركبة #' + number(row.vehicle_id); }
+    function locationText(row) { const lat = row.last_latitude, lng = row.last_longitude; return lat === null || lat === undefined || lng === null || lng === undefined ? '' : formatNumber(lat, 5) + '، ' + formatNumber(lng, 5); }
+    function statusLabel(status) { return ({ scheduled: 'مجدولة', active: 'جارية', completed: 'مكتملة', cancelled: 'ملغاة' })[String(status || '').toLowerCase()] || 'غير محددة'; }
+    function normalizedStatus(row) { const value = String(row?.trip_status || 'scheduled').toLowerCase(); return ['scheduled', 'active', 'completed', 'cancelled'].includes(value) ? value : 'scheduled'; }
+    function renderRows() {
+      const list = $('tripList');
+      if (!state.rows.length) {
+        list.innerHTML = '<div class="empty-state"><i class="fas fa-route"></i><h3>لا توجد رحلات مطابقة</h3><p>غيّر الفلاتر أو أضف رحلة جديدة؛ لن تُعرض أي بيانات بديلة.</p></div>';
+      } else {
+        list.innerHTML = state.rows.map(row => {
+          const savedLocation = locationText(row);
+          const location = savedLocation ? '<span class="location-fact" title="آخر قراءة موقع محفوظة للمركبة"><i class="fas fa-location-dot"></i>آخر موقع مسجل: ' + escapeHtml(savedLocation) + (row.last_location_time ? ' · ' + formatDate(row.last_location_time) : '') + '</span>' : '<span class="location-fact"><i class="fas fa-location-crosshairs"></i>لا توجد إحداثيات محفوظة للمركبة</span>';
+          const distance = number(row.distance_km) > 0 ? formatNumber(row.distance_km) + ' كم' : '—';
+          const fuel = number(row.fuel_consumed) > 0 ? formatNumber(row.fuel_consumed) + ' ل' : '—';
+          const efficiency = number(row.efficiency_km_per_liter) > 0 ? formatNumber(row.efficiency_km_per_liter) + ' كم/ل' : '—';
+          const status = normalizedStatus(row);
+          return '<article class="trip-card" data-trip-id="' + number(row.id) + '"><div class="trip-top"><div class="trip-identity"><div class="vehicle-glyph"><i class="fas fa-truck"></i></div><div><h3 class="trip-title">' + escapeHtml(vehicleName(row)) + '</h3><div class="trip-secondary">' + escapeHtml(row.driver_name || 'لم يعيّن سائق') + (row.trip_purpose ? ' · ' + escapeHtml(row.trip_purpose) : '') + '</div></div></div><div><span class="status-pill status-' + status + '">' + escapeHtml(statusLabel(status)) + '</span><span class="date-pill">' + formatDate(row.trip_date) + '</span></div></div><div class="route-line"><span class="route-stop"><i class="fas fa-circle-dot"></i>' + escapeHtml(row.start_location || 'نقطة الانطلاق غير مسجلة') + '</span><i class="fas fa-arrow-left route-arrow"></i><span class="route-stop"><i class="fas fa-location-dot"></i>' + escapeHtml(row.end_location || 'نقطة الوصول غير مسجلة') + '</span></div><div class="trip-facts"><div class="trip-fact"><strong>' + distance + '</strong><span>المسافة</span></div><div class="trip-fact"><strong>' + fuel + '</strong><span>الاستهلاك</span></div><div class="trip-fact"><strong>' + efficiency + '</strong><span>الكفاءة</span></div></div><div class="trip-foot">' + location + '<div class="action-cluster"><button class="card-action primary" type="button" data-action="details" data-id="' + number(row.id) + '" aria-label="عرض تفاصيل الرحلة"><i class="fas fa-eye"></i></button><button class="card-action primary" type="button" data-action="status" data-id="' + number(row.id) + '" aria-label="تحديث حالة الرحلة"><i class="fas fa-arrows-rotate"></i></button><button class="card-action primary" type="button" data-action="edit" data-id="' + number(row.id) + '" aria-label="تعديل الرحلة"><i class="fas fa-pen"></i></button><button class="card-action danger" type="button" data-action="delete" data-id="' + number(row.id) + '" aria-label="حذف الرحلة"><i class="fas fa-trash"></i></button></div></div></article>';
+        }).join('');
+      }
+      const start = state.totalCount ? ((state.page - 1) * state.pageSize) + 1 : 0, end = Math.min(state.page * state.pageSize, state.totalCount);
+      $('resultsMeta').textContent = state.totalCount ? 'عرض ' + start + '–' + end + ' من ' + state.totalCount : 'لا توجد سجلات';
+      $('pagination').hidden = state.totalPages <= 1;
+      $('pageInfo').textContent = state.totalPages ? 'صفحة ' + state.page + ' من ' + state.totalPages : '';
+      $('nextButton').disabled = state.page >= state.totalPages; $('previousButton').disabled = state.page <= 1;
+    }
+    async function loadWorkspace(page) {
+      const intendedPage = Math.max(1, page || 1); setLoading(true);
+      try {
+        const workspace = callBridge('getVehicleTripWorkspace', payloadForLoad((intendedPage - 1) * state.pageSize));
+        state.rows = Array.isArray(workspace.rows) ? workspace.rows : [];
+        state.totalCount = number(workspace.total_count); state.page = number(workspace.page) || intendedPage; state.totalPages = number(workspace.total_pages);
+        fillLookups(workspace); setStats(workspace.statistics); renderRows();
+      } catch (error) {
+        state.rows = []; state.totalCount = 0; state.page = 1; state.totalPages = 0; setStats(null); renderRows(); toast(error.message || 'تعذر تحميل الرحلات', true);
+      } finally { setLoading(false); }
+    }
+    function openTrip(row) {
+      $('tripForm').reset(); $('tripId').value = row ? number(row.id) : '';
+      $('tripModalTitle').textContent = row ? 'تعديل رحلة المركبة' : 'إضافة رحلة جديدة'; $('saveTripButton').textContent = row ? 'حفظ التعديل' : 'حفظ الرحلة';
+      if (row) {
+        $('tripVehicleId').value = number(row.vehicle_id) || ''; $('tripDriverId').value = number(row.driver_id) || ''; $('tripDate').value = String(row.trip_date || '').slice(0, 10);
+        $('distanceKm').value = row.distance_km ?? ''; $('fuelConsumed').value = row.fuel_consumed ?? ''; $('fuelCost').value = row.fuel_cost ?? '';
+        $('startOdometer').value = row.start_odometer ?? ''; $('endOdometer').value = row.end_odometer ?? '';
+        $('startLocation').value = row.start_location || ''; $('endLocation').value = row.end_location || ''; $('tripPurpose').value = row.trip_purpose || ''; $('tripNotes').value = row.notes || '';
+      } else { $('tripDate').value = new Date().toISOString().slice(0, 10); }
+      setModal('tripModal', true);
+    }
+    function findRow(id) { return state.rows.find(row => number(row.id) === number(id)); }
+    function detail(label, value, extraClass) { return '<div class="detail ' + (extraClass || '') + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value === null || value === undefined || value === '' ? 'غير مسجل' : value) + '</strong></div>'; }
+    function openDetails(row) {
+      if (!row) return;
+      const tripId = number(row.id);
+      if (tripId) {
+        try { row = Object.assign({}, row, callId('getVehicleTripDetails', tripId)); }
+        catch (error) { toast(error.message || 'تعذر تحميل التفاصيل الكاملة للرحلة', true); }
+      }
+      const savedLocation = locationText(row);
+      $('detailsContent').innerHTML = '<div class="details-grid">' + detail('المركبة', vehicleName(row), 'text') + detail('السائق', row.driver_name || row.driver_code, 'text') + detail('تاريخ الرحلة', row.trip_date) + detail('غرض الرحلة', row.trip_purpose, 'text') + detail('نقطة الانطلاق', row.start_location, 'text') + detail('نقطة الوصول', row.end_location, 'text') + detail('المسافة', number(row.distance_km) > 0 ? formatNumber(row.distance_km) + ' كم' : '') + detail('الوقود المستهلك', number(row.fuel_consumed) > 0 ? formatNumber(row.fuel_consumed) + ' لتر' : '') + detail('تكلفة الوقود', number(row.fuel_cost) > 0 ? formatNumber(row.fuel_cost) : '') + detail('الكفاءة', number(row.efficiency_km_per_liter) > 0 ? formatNumber(row.efficiency_km_per_liter) + ' كم/لتر' : '') + detail('عداد البداية', row.start_odometer) + detail('عداد النهاية', row.end_odometer) + detail('فرق العداد', row.odometer_delta) + detail('العداد الحالي للمركبة', row.vehicle_current_odometer) + detail('ملاحظات', row.notes, 'wide text') + '</div><div class="telemetry-note"><i class="fas fa-satellite-dish"></i>' + (savedLocation ? 'آخر قراءة موقع <strong>محفوظة</strong> للمركبة: ' + escapeHtml(savedLocation) + (row.last_location_time ? ' في ' + formatDate(row.last_location_time) : '') + (number(row.last_speed) > 0 ? '؛ السرعة المسجلة ' + formatNumber(row.last_speed) : '') + '. هذه القراءة لا تُعرض كموقع حي أو مسار رحلة لأنها لا تحمل رابط رحلة في جدول المواقع.' : 'لا توجد قراءة موقع محفوظة لهذه المركبة في البيانات المعادة. لا تعرض الشاشة خريطة أو موقعاً افتراضياً.') + '</div>';
+      const timeline = document.createElement('section'); timeline.className = 'telemetry-note'; timeline.innerHTML = '<i class="fas fa-timeline"></i><strong> الخط الزمني للرحلة</strong><div id="tripTimeline" class="timeline-list">جاري قراءة أحداث الرحلة…</div>'; $('detailsContent').appendChild(timeline);
+      if (tripId) {
+        try {
+          const events = callId('getVehicleTripTimeline', tripId);
+          $('tripTimeline').innerHTML = Array.isArray(events) && events.length ? events.map(item => '<div class="timeline-row"><strong>' + escapeHtml(({ created: 'تم الإنشاء', scheduled: 'تمت الجدولة', started: 'بدأت الرحلة', completed: 'اكتملت الرحلة', cancelled: 'أُلغيت الرحلة' })[item.event_type] || item.event_type || 'حدث رحلة') + '</strong><span>' + escapeHtml(item.occurred_at || '') + (item.event_note ? ' · ' + escapeHtml(item.event_note) : '') + '</span></div>').join('') : '<span>لا توجد أحداث مسجلة لهذه الرحلة.</span>';
+        } catch (error) { $('tripTimeline').textContent = error.message || 'تعذر تحميل الخط الزمني'; }
+      }
+      setModal('detailsModal', true);
+    }
+    function collectTrip() {
+      const start = optionalNumber($('startOdometer').value), end = optionalNumber($('endOdometer').value);
+      if (!number($('tripVehicleId').value)) throw new Error('اختر المركبة');
+      if (!$('tripDate').value) throw new Error('أدخل تاريخ الرحلة');
+      if (start !== null && end !== null && end < start) throw new Error('عداد نهاية الرحلة لا يمكن أن يسبق عداد بدايتها');
+      return { vehicle_id: number($('tripVehicleId').value), driver_id: optionalNumber($('tripDriverId').value), trip_date: $('tripDate').value, distance_km: optionalNumber($('distanceKm').value), fuel_consumed: optionalNumber($('fuelConsumed').value), fuel_cost: optionalNumber($('fuelCost').value), start_odometer: start, end_odometer: end, start_location: $('startLocation').value.trim(), end_location: $('endLocation').value.trim(), trip_purpose: $('tripPurpose').value.trim(), notes: $('tripNotes').value.trim() };
+    }
+    async function saveTrip(event) {
+      event.preventDefault();
+      try {
+        const payload = collectTrip(), id = number($('tripId').value); setLoading(true);
+        if (id) callUpdate('updateVehicleTripRecord', id, payload); else callBridge('saveVehicleTripRecord', payload);
+        setModal('tripModal', false); toast(id ? 'تم تعديل الرحلة من SQLite' : 'تم حفظ الرحلة في SQLite'); await loadWorkspace(id ? state.page : 1);
+      } catch (error) { toast(error.message || 'فشل حفظ الرحلة', true); } finally { setLoading(false); }
+    }
+    function askDelete(row) { if (!row) return; state.pendingDeleteId = number(row.id); $('confirmMessage').textContent = 'سيُحذف سجل الرحلة للمركبة «' + vehicleName(row) + '» بتاريخ ' + String(row.trip_date || '') + ' من قاعدة بيانات المحطة. لا يمكن استعادته من هذه الشاشة.'; setModal('confirmModal', true); }
+    function openStatus(row) {
+      if (!row) return; const current = normalizedStatus(row); const transitions = { scheduled: [['active', 'بدء الرحلة'], ['cancelled', 'إلغاء الرحلة']], active: [['completed', 'إكمال الرحلة'], ['cancelled', 'إلغاء الرحلة']], completed: [], cancelled: [['scheduled', 'إعادة الجدولة']] };
+      $('statusTripId').value = number(row.id); $('statusNote').value = ''; $('statusTarget').innerHTML = (transitions[current] || []).map(([value, label]) => '<option value="' + value + '">' + escapeHtml(label) + '</option>').join('');
+      if (!$('statusTarget').options.length) { toast('لا توجد حالة انتقال مسموحة لهذه الرحلة', true); return; }
+      $('statusModalTitle').textContent = 'تحديث حالة الرحلة — ' + statusLabel(current); setModal('statusModal', true);
+    }
+    async function saveStatus(event) {
+      event.preventDefault(); const id = number($('statusTripId').value), status = $('statusTarget').value;
+      if (!id || !status) { toast('تعذر تحديد الرحلة أو الحالة الجديدة', true); return; }
+      try { setLoading(true); callStatus(id, status, $('statusNote').value.trim()); setModal('statusModal', false); toast('تم تحديث حالة الرحلة وتسجيل الحدث'); await loadWorkspace(state.page); }
+      catch (error) { toast(error.message || 'فشل تحديث حالة الرحلة', true); }
+      finally { setLoading(false); }
+    }
+    async function deleteTrip() {
+      const id = state.pendingDeleteId; if (!id) return;
+      try { setLoading(true); callDelete('deleteVehicleTripRecord', id); }
+      catch (error) { toast(error.message || 'فشل حذف الرحلة', true); return; }
+      finally { setLoading(false); }
+      setModal('confirmModal', false); state.pendingDeleteId = 0; toast('تم حذف سجل الرحلة من SQLite'); await loadWorkspace(Math.min(state.page, Math.max(1, state.totalPages)));
+    }
+    function reportRows(result) { if (Array.isArray(result)) return result; if (Array.isArray(result.rows)) return result.rows; if (Array.isArray(result.records)) return result.records; return []; }
+    async function generateReport() {
+      try {
+        setLoading(true); const result = callBridge('generateVehicleTripReport', { ...payloadForLoad(0), limit: 1000, offset: 0 }); const rows = reportRows(result);
+        $('reportContent').innerHTML = rows.length ? '<div class="report-table-wrap"><table class="report-table"><thead><tr><th>التاريخ</th><th>المركبة</th><th>السائق</th><th>من</th><th>إلى</th><th>كم</th><th>لتر</th><th>التكلفة</th></tr></thead><tbody>' + rows.map(row => '<tr><td>' + formatDate(row.trip_date) + '</td><td>' + escapeHtml(row.vehicle_id ?? '') + '</td><td>' + escapeHtml(row.driver_id ?? '') + '</td><td>' + escapeHtml(row.start_location || '') + '</td><td>' + escapeHtml(row.end_location || '') + '</td><td>' + escapeHtml(formatNumber(row.distance_km)) + '</td><td>' + escapeHtml(formatNumber(row.fuel_consumed)) + '</td><td>' + escapeHtml(formatNumber(row.fuel_cost)) + '</td></tr>').join('') + '</tbody></table></div>' : '<div class="empty-state"><i class="fas fa-file-circle-xmark"></i><p>لا توجد سجلات مطابقة للتقرير.</p></div>';
+      } catch (error) { $('reportContent').textContent = error.message || 'فشل توليد التقرير'; toast(error.message || 'فشل توليد التقرير', true); } finally { setLoading(false); }
+    }
+    async function exportCsv() {
+      try {
+        setLoading(true); const result = callBridge('generateVehicleTripReport', { ...payloadForLoad(0), limit: 1000, offset: 0 }); const rows = reportRows(result);
+        if (!rows.length) throw new Error('لا توجد سجلات فعلية لتصديرها');
+        const columns = [['trip_date','تاريخ الرحلة'],['vehicle_id','معرف المركبة'],['driver_id','معرف السائق'],['start_location','نقطة الانطلاق'],['end_location','نقطة الوصول'],['distance_km','المسافة كم'],['fuel_consumed','الوقود لتر'],['fuel_cost','تكلفة الوقود'],['trip_purpose','غرض الرحلة'],['notes','ملاحظات']];
+        const quote = value => '"' + String(value ?? '').replace(/"/g, '""') + '"'; const csv = '\ufeff' + [columns.map(column => quote(column[1])).join(','), ...rows.map(row => columns.map(column => quote(row[column[0]])).join(','))].join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = 'vehicle-trips.csv'; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 500); toast('تم إنشاء CSV من نتائج التقرير الفعلية');
+      } catch (error) { toast(error.message || 'فشل تصدير CSV', true); } finally { setLoading(false); }
+    }
+    function applyTheme() { const dark = localStorage.getItem('theme') === 'dark'; if (dark) document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme'); $('themeIcon').className = dark ? 'fas fa-sun' : 'fas fa-moon'; }
+    function toggleTheme() { localStorage.setItem('theme', document.documentElement.hasAttribute('data-theme') ? 'light' : 'dark'); applyTheme(); }
+    function vehicleChange() { const vehicle = state.vehicles.find(row => number(row.id) === number($('tripVehicleId').value)); if (vehicle && !$('tripId').value && !$('startOdometer').value) $('startOdometer').value = number(vehicle.current_odometer) > 0 ? number(vehicle.current_odometer) : ''; const selectedVehicle = number($('tripVehicleId').value); const drivers = state.drivers.filter(driver => !number(driver.vehicle_id) || number(driver.vehicle_id) === selectedVehicle); const selected = $('tripDriverId').value; $('tripDriverId').innerHTML = '<option value="">بدون تعيين سائق</option>' + drivers.map(driver => '<option value="' + number(driver.id) + '">' + escapeHtml([driver.driver_name, driver.driver_code].filter(Boolean).join(' — ') || 'سائق #' + driver.id) + '</option>').join(''); if ([...$('tripDriverId').options].some(option => option.value === selected)) $('tripDriverId').value = selected; }
+    function closeByBackdrop(event) { if (event.target.classList.contains('modal-backdrop')) event.target.classList.remove('show'); }
+    $('tripList').addEventListener('click', event => { const target = event.target.closest('[data-action]'); if (!target) return; const row = findRow(target.dataset.id); if (target.dataset.action === 'details') openDetails(row); if (target.dataset.action === 'status') openStatus(row); if (target.dataset.action === 'edit') openTrip(row); if (target.dataset.action === 'delete') askDelete(row); });
+    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => setModal(button.dataset.close, false)));
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', closeByBackdrop));
+    $('tripForm').addEventListener('submit', saveTrip); $('statusForm').addEventListener('submit', saveStatus); $('tripVehicleId').addEventListener('change', vehicleChange); $('confirmDeleteButton').addEventListener('click', deleteTrip);
+    $('themeButton').addEventListener('click', toggleTheme); $('homeButton').addEventListener('click', () => { window.location.href = 'file:///android_asset/main.html'; });
+    $('newTripButton').addEventListener('click', () => openTrip(null)); $('refreshButton').addEventListener('click', () => loadWorkspace(state.page)); $('reportButton').addEventListener('click', () => setModal('reportModal', true)); $('generateReportButton').addEventListener('click', generateReport); $('exportButton').addEventListener('click', exportCsv); $('filtersButton').addEventListener('click', () => $('searchInput').focus());
+    $('nextButton').addEventListener('click', () => loadWorkspace(state.page + 1)); $('previousButton').addEventListener('click', () => loadWorkspace(state.page - 1));
+    [$('vehicleFilter'), $('driverFilter'), $('tripStatusFilter'), $('fromDate'), $('toDate'), $('sortBy')].forEach(control => control.addEventListener('change', () => loadWorkspace(1)));
+    $('searchInput').addEventListener('input', () => { clearTimeout(state.searchTimer); state.searchTimer = setTimeout(() => loadWorkspace(1), 280); });
+    $('clearFiltersButton').addEventListener('click', () => { $('searchInput').value = ''; $('vehicleFilter').value = ''; $('driverFilter').value = ''; $('tripStatusFilter').value = ''; $('fromDate').value = ''; $('toDate').value = ''; $('sortBy').value = 'trip_date:desc'; loadWorkspace(1); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') document.querySelectorAll('.modal-backdrop.show').forEach(modal => modal.classList.remove('show')); });
+    Object.assign(window, { loadVehicleTripWorkspace: loadWorkspace, openTrip, openTripDetails: openDetails, generateVehicleTripReport: generateReport, exportVehicleTripsCsv: exportCsv });
+    applyTheme(); loadWorkspace(1);
+  })();
+  </script>
+  <script src="file:///android_asset/assets-local/js/modal-interaction.js"></script>
+</body>
+</html>
