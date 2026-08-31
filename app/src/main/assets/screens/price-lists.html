@@ -97,5 +97,5 @@ $('search').oninput=apply;$('newBtn').onclick=()=>form();$('reportBtn').onclick=
 function theme(){const dark=document.documentElement.dataset.theme==='dark';$('themeBtn').textContent=dark?'🌙':'🌞'}$('themeBtn').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';if(dark)delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme='dark';localStorage.setItem('priceListsTheme',dark?'light':'dark');theme()};if(localStorage.getItem('priceListsTheme')==='dark')document.documentElement.dataset.theme='dark';theme();renderTabs();load();
 })();
 </script>
-</body>
+<script src="file:///android_asset/assets-local/js/modal-interaction.js"></script></body>
 </html>
