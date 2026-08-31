@@ -1964,31 +1964,36 @@ const job =
 const jobArabic =
     $('[data-key="job_title_ar"]');
 
-function updateJobs(){
+function updateJobs({preserve=false} = {}){
 
     if(!job)
         return;
 
-    const selected =
+    const department =
         dep?.value || '';
 
+    const previous =
+        preserve ? (job.value || '') : '';
+
     const jobs =
-        departments[selected] || [];
+        departments[department] || [];
 
     job.innerHTML =
-        '<option value="">اختر...</option>' +
+        `<option value="">${department ? 'اختر المسمى الوظيفي...' : 'اختر القسم أولاً...'}</option>` +
         jobs
             .map(
                 x =>
-                `<option value="${esc(x)}">
+                `<option value="${esc(x)}" ${x===previous?'selected':''}>
                     ${esc(x)}
                 </option>`
             )
             .join('');
 
-    job.value = '';
+    job.disabled = !department;
 
-    if(jobArabic)
+    if(previous && jobs.includes(previous))
+        job.value = previous;
+    else if(jobArabic && !preserve)
         jobArabic.value = '';
 }
 
@@ -1996,8 +2001,11 @@ if(dep){
 
     dep.addEventListener(
         'change',
-        updateJobs
+        () => updateJobs({preserve:false})
     );
+
+    /* تهيئة القائمة فور إنشاء النموذج، وليس بعد أول تغيير فقط. */
+    updateJobs({preserve:Boolean(row)});
 }
 
 if(job){
@@ -2019,11 +2027,11 @@ if(row && dep){
     dep.value =
         row.department || '';
 
-    updateJobs();
-
     if(job)
         job.value =
             row.job_title || '';
+
+    updateJobs({preserve:true});
 
     if(jobArabic)
         jobArabic.value =
