@@ -1927,17 +1927,16 @@ textarea.form-input{
 
         <div class="header-actions">
 
-            <!-- 🌙 في الفاتح / 🌞 في المظلم -->
+            <!-- 🌞 للوضع الفاتح / 🌙 للوضع المظلم -->
             <button
                 class="icon-btn"
                 id="themeToggle"
                 type="button"
                 title="تبديل الوضع">
 
-                <i
+                <span
                     id="themeIcon"
-                    class="fas fa-moon">
-                </i>
+                    aria-hidden="true">🌞</span>
 
             </button>
 
@@ -1947,7 +1946,7 @@ textarea.form-input{
                 onclick="goHome()"
                 title="الصفحة الرئيسية">
 
-                <i class="fas fa-arrow-right"></i>
+                <span aria-hidden="true">🏠</span>
 
             </button>
 
@@ -3763,6 +3762,8 @@ function renderCashierOptions(){
                     "";
 
                 option.textContent =
+                    person.full_name_ar ??
+                    person.full_name ??
                     person.name ??
                     person.employee_name ??
                     `موظف ${option.value}`;
@@ -3782,41 +3783,59 @@ function renderManagerOption(){
     const select =
         $("manager_id");
 
-    select.innerHTML =
-        `<option value="">
-            لا يوجد مدير محدد
-         </option>`;
-
-    const manager =
-        state.options.currentManager;
-
-    if(!manager){
-
+    if(!select){
         return;
-
     }
 
-    const option =
-        document.createElement(
-            "option"
-        );
+    select.innerHTML =
+        `<option value="">اختر مدير الوردية</option>`;
 
-    option.value =
-        manager.id ??
-        manager.employee_id ??
-        "";
+    const managers =
+        Array.isArray(state.options.managers)
+            ? state.options.managers
+            : [];
 
-    option.textContent =
-        manager.name ??
-        manager.employee_name ??
-        `مدير ${option.value}`;
+    managers.forEach(
+        manager => {
 
-    option.selected =
-        true;
+            const id =
+                manager.id ??
+                manager.employee_id ??
+                "";
 
-    select.appendChild(
-        option
+            if(!id){
+                return;
+            }
+
+            const name =
+                manager.full_name_ar ??
+                manager.full_name ??
+                manager.name ??
+                manager.employee_name ??
+                "موظف";
+
+            const option =
+                document.createElement("option");
+
+            option.value = id;
+            option.textContent = name;
+
+            const currentId =
+                state.options.currentManager?.id ??
+                state.options.currentManager?.employee_id;
+
+            if(currentId != null && String(currentId) === String(id)){
+                option.selected = true;
+            }
+
+            select.appendChild(option);
+        }
     );
+
+    if(!managers.length){
+        select.innerHTML =
+            `<option value="">لا يوجد مدير وردية متاح</option>`;
+    }
 
 }
 
@@ -3861,6 +3880,8 @@ function renderAttendantOptions(){
                     id;
 
                 option.textContent =
+                    person.full_name_ar ??
+                    person.full_name ??
                     person.name ??
                     person.employee_name ??
                     `عامل ${id}`;
@@ -3918,6 +3939,8 @@ $("attendantPicker")
                         person.employee_id,
 
                     name:
+                        person.full_name_ar ??
+                        person.full_name ??
                         person.name ??
                         person.employee_name ??
                         `عامل ${id}`
@@ -6544,16 +6567,18 @@ function applyTheme(){
     }
 
 
-    /*
-     * الوضع الفاتح = 🌙
-     * الوضع المظلم = 🌞
-     */
-
-    $("themeIcon")
-        .className =
-        theme === "dark"
-            ? "fas fa-sun"
-            : "fas fa-moon";
+    /* الوضع الفاتح = 🌞 / الوضع المظلم = 🌙 */
+    const icon = $("themeIcon");
+    if(icon){
+        icon.textContent =
+            theme === "dark" ? "🌙" : "🌞";
+        icon.setAttribute(
+            "aria-label",
+            theme === "dark"
+                ? "الوضع المظلم"
+                : "الوضع الفاتح"
+        );
+    }
 
 }
 
@@ -6608,59 +6633,36 @@ function updateThemeIcon(){
     const dark = document.documentElement.getAttribute("data-theme") === "dark";
     const icon = $("themeIcon");
     if(icon){
-        icon.className = dark ? "fas fa-sun" : "fas fa-moon";
+        icon.textContent = dark ? "🌙" : "🌞";
         icon.setAttribute("aria-label", dark ? "الوضع المظلم - التبديل إلى الفاتح" : "الوضع الفاتح - التبديل إلى المظلم");
     }
 }
 
 /* =========================================================
+   PUBLIC API
+   يجب تسجيل الدوال العامة قبل تشغيل التهيئة حتى تعمل أزرار
+   HTML ذات onclick حتى لو فشل تحميل بيانات Android.
+========================================================= */
+
+window.openForm = openForm;
+window.saveForm = saveForm;
+window.reloadData = reloadData;
+window.openReport = openReport;
+window.generateReport = generateReport;
+window.exportData = exportData;
+window.goHome = goHome;
+window.closeModal = closeModal;
+window.setFilter = setFilter;
+
+/* =========================================================
    INIT
 ========================================================= */
 
-$("themeToggle")
-    .addEventListener(
-        "click",
-        toggleTheme
-    );
-
+$("themeToggle")?.addEventListener("click", toggleTheme);
 
 applyTheme();
-
 loadFormOptions();
-
 reloadData();
-
-
-/* =========================================================
-   PUBLIC API
-========================================================= */
-
-window.openForm =
-    openForm;
-
-window.saveForm =
-    saveForm;
-
-window.reloadData =
-    reloadData;
-
-window.openReport =
-    openReport;
-
-window.generateReport =
-    generateReport;
-
-window.exportData =
-    exportData;
-
-window.goHome =
-    goHome;
-
-window.closeModal =
-    closeModal;
-
-window.setFilter =
-    setFilter;
 
 })();
 </script>

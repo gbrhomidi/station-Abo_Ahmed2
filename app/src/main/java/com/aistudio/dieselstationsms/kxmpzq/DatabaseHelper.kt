@@ -7372,87 +7372,110 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = readableDatabase
-
             val currentUser = getUserById(currentUserId)
                 ?: throw IllegalStateException("المستخدم الحالي غير موجود في قاعدة البيانات")
-
             val stationId = currentUser.optLong("station_id", 0L)
             require(stationId > 0L) { "لا توجد محطة مرتبطة بالمستخدم الحالي" }
 
             val station = JSONObject()
-
             db.rawQuery(
                 """
-                SELECT id,
-                       station_code,
-                       station_name,
-                       station_name_ar
-                FROM stations
-                WHERE id = ?
-                LIMIT 1
+                SELECT id, station_code, station_name, station_name_ar
+                FROM stations WHERE id = ? LIMIT 1
                 """.trimIndent(),
                 arrayOf(stationId.toString())
             ).use { cursor ->
                 if (cursor.moveToFirst()) {
                     station.put("id", cursor.getLong(cursor.getColumnIndexOrThrow("id")))
-                    station.put(
-                        "station_code",
-                        cursor.getString(cursor.getColumnIndexOrThrow("station_code"))
-                    )
-                    station.put(
-                        "station_name",
-                        cursor.getString(cursor.getColumnIndexOrThrow("station_name"))
-                    )
-                    station.put(
-                        "station_name_ar",
-                        cursor.getString(cursor.getColumnIndexOrThrow("station_name_ar"))
-                    )
+                    station.put("station_code", cursor.getString(cursor.getColumnIndexOrThrow("station_code")))
+                    station.put("station_name", cursor.getString(cursor.getColumnIndexOrThrow("station_name")))
+                    station.put("station_name_ar", cursor.getString(cursor.getColumnIndexOrThrow("station_name_ar")))
                 }
             }
 
-            fun usersByRole(roleCode: String): JSONArray {
-                return db.rawQuery(
-                    """
-                    SELECT u.id,
-                           u.username,
-                           u.full_name,
-                           u.full_name_ar,
-                           u.display_name,
-                           u.employee_id,
-                           u.station_id,
-                           r.role_code,
-                           r.role_name_ar
-                    FROM users u
-                    LEFT JOIN roles r ON r.id = u.role_id
-                    WHERE r.role_code = ?
-                      AND u.is_deleted = 0
-                      AND u.status = 'active'
-                      AND (u.station_id = ? OR u.station_id IS NULL)
-                    ORDER BY COALESCE(u.full_name_ar, u.full_name, u.username)
-                    """.trimIndent(),
-                    arrayOf(roleCode, stationId.toString())
-                ).use { cursorToJsonArray(it) }
+            fun employeesByTitles(titles: List<String>, includeAllActive: Boolean = false): JSONArray {
+                val titlePlaceholders = titles.joinToString(",") { "?" }
+                val predicate = if (includeAllActive) "1=1" else """
+                    (
+                        UPPER(TRIM(COALESCE(e.job_title, ''))) IN ($titlePlaceholders)
+                        OR TRIM(COALESCE(e.job_title_ar, '')) IN ($titlePlaceholders)
+                    )
+                """.trimIndent()
+                val args = if (includeAllActive) {
+                    arrayOf(stationId.toString())
+                } else {
+                    titles.map { it.uppercase(Locale.US) } + titles + listOf(stationId.toString())
+                }
+                val sql = """
+                    SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
+                           e.job_title, e.job_title_ar, e.department, e.station_id,
+                           e.user_id, e.status
+                    FROM employees e
+                    WHERE e.station_id = ?
+                      AND e.is_deleted = 0
+                      AND e.status = 'active'
+                      AND $predicate
+                    ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
+                """.trimIndent()
+                return db.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
             }
+
+            val managers = employeesByTitles(
+                listOf("STATION_MANAGER", "SHIFT_SUPERVISOR", "DEPUTY_STATION_MANAGER", "OPERATIONS_ASSISTANT"),
+                false
+            )
+            // دعم البيانات العربية الحالية، مع الرموز الإنجليزية القياسية أعلاه.
+            val managerTitlesAr = listOf("مدير المحطة", "نائب مدير المحطة", "مشرف وردية", "مساعد مدير العمليات")
+            val managersAr = db.rawQuery(
+                """
+                SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
+                       e.job_title, e.job_title_ar, e.department, e.station_id,
+                       e.user_id, e.status
+                FROM employees e
+                WHERE e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                  AND (TRIM(COALESCE(e.job_title_ar,'')) IN (${managerTitlesAr.joinToString(",") { "?" }}))
+                ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
+                """.trimIndent(),
+                arrayOf(stationId.toString(), *managerTitlesAr.toTypedArray())
+            ).use { cursorToJsonArray(it) }
+            val allManagers = JSONArray()
+            val seenManagers = HashSet<Long>()
+            for (i in 0 until managers.length()) { val o = managers.optJSONObject(i); if (o != null && seenManagers.add(o.optLong("id"))) allManagers.put(o) }
+            for (i in 0 until managersAr.length()) { val o = managersAr.optJSONObject(i); if (o != null && seenManagers.add(o.optLong("id"))) allManagers.put(o) }
+
+            val cashiers = db.rawQuery(
+                """
+                SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
+                       e.job_title, e.job_title_ar, e.department, e.station_id,
+                       e.user_id, e.status
+                FROM employees e
+                WHERE e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                  AND (
+                      UPPER(TRIM(COALESCE(e.job_title,''))) = 'CASHIER'
+                      OR TRIM(COALESCE(e.job_title_ar,'')) IN ('أمين صندوق','أمين الصندوق')
+                  )
+                ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
+                """.trimIndent(), arrayOf(stationId.toString())
+            ).use { cursorToJsonArray(it) }
+
+            val attendants = db.rawQuery(
+                """
+                SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
+                       e.job_title, e.job_title_ar, e.department, e.station_id,
+                       e.user_id, e.status
+                FROM employees e
+                WHERE e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
+                """.trimIndent(), arrayOf(stationId.toString())
+            ).use { cursorToJsonArray(it) }
 
             JSONObject().apply {
                 put("success", true)
                 put("current_user", currentUser)
                 put("station", station)
-
-                put(
-                    "managers",
-                    usersByRole("STATION_MANAGER")
-                )
-
-                put(
-                    "cashiers",
-                    usersByRole("CASHIER")
-                )
-
-                put(
-                    "attendants",
-                    usersByRole("ATTENDANT")
-                )
+                put("managers", allManagers)
+                put("cashiers", cashiers)
+                put("attendants", attendants)
             }
         } finally {
             dbLock.unlock()
@@ -8143,48 +8166,41 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     require(!cursor.moveToFirst()) { "توجد وردية مفتوحة بالفعل لهذه المحطة" }
                 }
 
-                // التحقق من المدير.
-                db.rawQuery(
-                    """ 
-                    SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ? AND u.is_deleted = 0 AND u.status = 'active' AND r.role_code IN ( 'STATION_MANAGER', 'SUPERVISOR', 'ADMIN', 'SUPER_ADMIN' ) AND (u.station_id = ? OR u.station_id IS NULL) LIMIT 1 
-                    """.trimIndent(),
-                    arrayOf(
-                        managerId.toString(),
-                        stationId.toString()
-                    )
-                ).use { cursor ->
-                    require(cursor.moveToFirst()) { "مدير الوردية غير صالح أو لا يتبع المحطة" }
-                }
+                // التحقق من مدير الوردية: الاختيار من employees، مع الحفاظ على manager_id كـ users.id في مخطط shifts الحالي.
+                val managerUserId = db.rawQuery(
+                    """
+                    SELECT COALESCE(e.user_id, u.id)
+                    FROM employees e
+                    LEFT JOIN users u ON u.id = e.user_id OR u.employee_id = e.id
+                    WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                      AND TRIM(COALESCE(e.job_title_ar,'')) IN ('مدير المحطة','نائب مدير المحطة','مشرف وردية','مساعد مدير العمليات')
+                    LIMIT 1
+                    """.trimIndent(), arrayOf(managerId.toString(), stationId.toString())
+                ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
+                require(managerUserId > 0L) { "مدير الوردية غير صالح أو لا يملك حساب مستخدم مرتبطاً" }
 
-                // التحقق من أمين الصندوق.
-                db.rawQuery(
-                    """ 
-                    SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ? AND u.is_deleted = 0 AND u.status = 'active' AND r.role_code = 'CASHIER' AND (u.station_id = ? OR u.station_id IS NULL) LIMIT 1 
-                    """.trimIndent(),
-                    arrayOf(
-                        cashierId.toString(),
-                        stationId.toString()
-                    )
-                ).use { cursor ->
-                    require(cursor.moveToFirst()) { "أمين الصندوق غير صالح أو لا يتبع المحطة" }
-                }
+                // التحقق من أمين الصندوق: المصدر employees، مع تحويل employee.id إلى user.id للحقل cashier_id الحالي.
+                val cashierUserId = db.rawQuery(
+                    """
+                    SELECT COALESCE(e.user_id, u.id)
+                    FROM employees e
+                    LEFT JOIN users u ON u.id = e.user_id OR u.employee_id = e.id
+                    WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
+                      AND (UPPER(TRIM(COALESCE(e.job_title,''))) = 'CASHIER' OR TRIM(COALESCE(e.job_title_ar,'')) IN ('أمين صندوق','أمين الصندوق'))
+                    LIMIT 1
+                    """.trimIndent(), arrayOf(cashierId.toString(), stationId.toString())
+                ).use { c -> if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L }
+                require(cashierUserId > 0L) { "أمين الصندوق غير صالح أو لا يملك حساب مستخدم مرتبطاً" }
 
-                // التحقق من العاملين.
+                // التحقق من العاملين: المصدر employees وتُحفظ معرفاتهم في JSON attendant_ids.
                 val attendants = JSONArray(normalizedAttendants)
                 for (i in 0 until attendants.length()) {
                     val attendantId = attendants.optLong(i, 0L)
                     require(attendantId > 0L) { "معرف أحد العاملين غير صالح" }
                     db.rawQuery(
-                        """ 
-                        SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ? AND u.is_deleted = 0 AND u.status = 'active' AND r.role_code = 'ATTENDANT' AND (u.station_id = ? OR u.station_id IS NULL) LIMIT 1 
-                        """.trimIndent(),
-                        arrayOf(
-                            attendantId.toString(),
-                            stationId.toString()
-                        )
-                    ).use { cursor ->
-                        require(cursor.moveToFirst()) { "أحد العاملين غير صالح أو لا يتبع المحطة" }
-                    }
+                        "SELECT e.id FROM employees e WHERE e.id = ? AND e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active' LIMIT 1",
+                        arrayOf(attendantId.toString(), stationId.toString())
+                    ).use { cursor -> require(cursor.moveToFirst()) { "أحد العاملين غير صالح أو لا يتبع المحطة" } }
                 }
 
                 val shiftCode = "SHF-${System.currentTimeMillis()}-${UUID.randomUUID().toString().take(8)}"
@@ -8208,10 +8224,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         "start_time", startTime
                     )
                     put(
-                        "manager_id", managerId
+                        "manager_id", managerUserId
                     )
                     put(
-                        "cashier_id", cashierId
+                        "cashier_id", cashierUserId
                     )
                     put(
                         "attendant_ids", normalizedAttendants
@@ -14869,39 +14885,23 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val idArgs = attendantIds.map { it.toString() }.toTypedArray()
                 db.rawQuery(
                     """
-                    SELECT id, username, full_name, full_name_ar, display_name FROM users WHERE id IN ($placeholders)
+                    SELECT id, employee_code, full_name, full_name_ar, job_title, job_title_ar FROM employees WHERE id IN ($placeholders) AND is_deleted = 0
                     """.trimIndent(),
                     idArgs
                 ).use { cursor ->
                     val idIndex = cursor.getColumnIndexOrThrow("id")
-                    val usernameIndex = cursor.getColumnIndexOrThrow("username")
+                    val employeeCodeIndex = cursor.getColumnIndexOrThrow("employee_code")
                     val fullNameIndex = cursor.getColumnIndexOrThrow("full_name")
                     val fullNameArIndex = cursor.getColumnIndexOrThrow("full_name_ar")
-                    val displayNameIndex = cursor.getColumnIndexOrThrow("display_name")
+                    val jobTitleArIndex = cursor.getColumnIndexOrThrow("job_title_ar")
                     while (cursor.moveToNext()) {
                         val id = cursor.getLong(idIndex)
-                        val username = cursor.getString(usernameIndex)
-                        val fullName = if (cursor.isNull(fullNameIndex)) {
-                            ""
-                        } else {
-                            cursor.getString(fullNameIndex)
-                        }
-                        val fullNameAr = if (cursor.isNull(fullNameArIndex)) {
-                            ""
-                        } else {
-                            cursor.getString(fullNameArIndex)
-                        }
-                        val displayName = if (cursor.isNull(displayNameIndex)) {
-                            ""
-                        } else {
-                            cursor.getString(displayNameIndex)
-                        }
-                        attendantNames[id] = listOf(
-                            fullName, displayName, username
-                        ).firstOrNull { it.isNotBlank() }?: ""
-                        attendantNamesAr[id] = listOf(
-                            fullNameAr, fullName, displayName, username
-                        ).firstOrNull { it.isNotBlank() }?: ""
+                        val employeeCode = if (cursor.isNull(employeeCodeIndex)) "" else cursor.getString(employeeCodeIndex)
+                        val fullName = if (cursor.isNull(fullNameIndex)) "" else cursor.getString(fullNameIndex)
+                        val fullNameAr = if (cursor.isNull(fullNameArIndex)) "" else cursor.getString(fullNameArIndex)
+                        val jobTitleAr = if (cursor.isNull(jobTitleArIndex)) "" else cursor.getString(jobTitleArIndex)
+                        attendantNames[id] = listOf(fullName, fullNameAr, employeeCode).firstOrNull { it.isNotBlank() } ?: ""
+                        attendantNamesAr[id] = listOf(fullNameAr, fullName, employeeCode).firstOrNull { it.isNotBlank() } ?: ""
                     }
                 }
             }
