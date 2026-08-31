@@ -7401,10 +7401,10 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                         OR TRIM(COALESCE(e.job_title_ar, '')) IN ($titlePlaceholders)
                     )
                 """.trimIndent()
-                val args = if (includeAllActive) {
+                val args: Array<String> = if (includeAllActive) {
                     arrayOf(stationId.toString())
                 } else {
-                    titles.map { it.uppercase(Locale.US) } + titles + listOf(stationId.toString())
+                    (titles.map { it.uppercase(Locale.US) } + titles + listOf(stationId.toString())).toTypedArray()
                 }
                 val sql = """
                     SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
