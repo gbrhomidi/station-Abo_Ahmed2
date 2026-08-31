@@ -1318,6 +1318,7 @@ const labels = {
     total_salary:'إجمالي الراتب',
     insurance_deduction:'خصم التأمين',
     status:'الحالة',
+    remarks:'ملاحظات',
     notes:'ملاحظات'
 };
 
@@ -1451,7 +1452,8 @@ const defs = [
 
     ['employee_code','text',0,0,1,0,null,1],
 
-    ['party_id','number',0,0,1,0,null,1],
+    // party_id is optional in the employees operational contract.
+    ['party_id','number',0,0,1,1,null,1],
 
     ['full_name','text',1,1,0,0,null,0],
 
@@ -1517,7 +1519,7 @@ const defs = [
 
     ['other_allowances','number',0,0,0,0,null,0,0,1],
 
-    ['notes','textarea',0,1,0]
+    ['remarks','textarea',0,1,0]
 
 ];
 
@@ -2093,7 +2095,11 @@ if(statusField){
 
 calcSalary();
 
-loadEmployeePartyId();
+/*
+ * party_id is optional. The database does not seed a canonical party named
+ * "الموظفين - EMPLOYEES", so opening the add-employee modal must not fetch
+ * or warn about a synthetic party.
+ */
 
 /* تركيز الاسم عند إنشاء موظف */
 if(!row){
@@ -2167,72 +2173,7 @@ total.value =
 
 }
 
-/* =========================================================
-EMPLOYEE PARTY
-========================================================= */
 
-async function loadEmployeePartyId(){
-
-if(state.editing)
-    return;
-
-if(
-    !bridge ||
-    typeof bridge.getParties !== 'function'
-){
-    return;
-}
-
-try{
-
-    if(!state.parties.length){
-
-        state.parties =
-            rowsOf(
-                await invoke(
-                    'getParties',
-                    ['']
-                )
-            );
-    }
-
-    const party =
-        state.parties.find(
-            x =>
-                String(
-                    x.legal_name || ''
-                ).trim() ===
-                'الموظفين - EMPLOYEES'
-        );
-
-    const field =
-        $('[data-key="party_id"]');
-
-    if(party && field){
-
-        field.value =
-            party.id ??
-            party.party_id ??
-            '';
-    }
-    else{
-
-        toast(
-            'لم يتم العثور على الطرف "الموظفين - EMPLOYEES"',
-            'warn'
-        );
-    }
-
-}catch(e){
-
-    toast(
-        'تعذر استرجاع الطرف المرتبط: ' +
-        e.message,
-        'bad'
-    );
-}
-
-}
 
 /* =========================================================
 TERMINATION
@@ -2377,13 +2318,7 @@ payload.full_name_ar =
 payload.job_title_ar =
     payload.job_title || '';
 
-if(!payload.party_id){
-
-    throw Error(
-        'الطرف المرتبط "الموظفين - EMPLOYEES" غير موجود في قاعدة البيانات'
-    );
-}
-
+/* party_id is optional; do not block saving a valid employee without it. */
 return payload;
 
 }
@@ -3566,31 +3501,6 @@ applyTheme();
 renderTabs();
 
 loadUser();
-
-window.loadParties =
-async () => {
-
-    if(
-        bridge &&
-        typeof bridge.getParties ===
-        'function'
-    ){
-
-        try{
-
-            state.parties =
-                rowsOf(
-                    await invoke(
-                        'getParties',
-                        ['']
-                    )
-                );
-
-        }catch(e){}
-    }
-};
-
-loadParties();
 
 reload();
 
