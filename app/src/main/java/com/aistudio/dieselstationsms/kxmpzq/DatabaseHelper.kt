@@ -7418,7 +7418,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                       AND $predicate
                     ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
                 """.trimIndent()
-                return db.rawQuery(sql, args.toTypedArray()).use { cursorToJsonArray(it) }
+                return db.rawQuery(sql, args).use { cursorToJsonArray(it) }
             }
 
             val managers = employeesByTitles(
@@ -21478,7 +21478,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     }
 
     private fun updateAccountTreeLevels(db: SQLiteDatabase, rootId: Long) {
-        val queue: ArrayDeque<Pair<Long, Int>> = ArrayDeque()
+        val queue: java.util.ArrayDeque<Pair<Long, Int>> = java.util.ArrayDeque()
         val rootLevel = db.rawQuery(
             "SELECT level FROM accounts WHERE id = ? AND is_deleted = 0 LIMIT 1",
             arrayOf(rootId.toString())
