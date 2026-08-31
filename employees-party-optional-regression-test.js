@@ -5,8 +5,8 @@ const source = fs.readFileSync('app/src/main/assets/screens/employees.html', 'ut
 
 assert.equal(
   source.includes("['party_id','number',0,0,1,1,null,1]"),
-  true,
-  'party_id must remain an optional hidden field'
+  false,
+  'employees.html must not depend on party_id'
 );
 assert.equal(
   source.includes('loadEmployeePartyId();'),

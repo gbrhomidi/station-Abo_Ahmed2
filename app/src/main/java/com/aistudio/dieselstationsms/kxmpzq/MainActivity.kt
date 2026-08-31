@@ -7250,7 +7250,7 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 if (!SecurityValidator.isTableAllowedForGeneralCrud(key)) return errorResponse("الجدول محمي ويحتاج إلى مسار نطاقي مخصص")
                 val sanitizedJson = SecurityValidator.sanitizeOperationalJson(jsonData)
                 val rows = db.updateOperationalRecord(key, id, operationalScopedJson(sanitizedJson), activity.currentUserId)
-                successResponse(rows > 0, if (rows > 0) "تم التعديل فعلياً" else "لم يتم العثور على السجل")
+                if (rows > 0) dataResponseObject(JSONObject().apply { put("success", true); put("message", "تم التعديل فعلياً"); put("record", db.getOperationalRecord(key, id) ?: JSONObject()) }).toString() else successResponse(false, "لم يتم العثور على السجل")
             }
             catch (e: Exception) { DebugLogger.logException("OperationalUpdate-$key", e); errorResponse(e.message) }
         }
@@ -8892,6 +8892,10 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun updateEmployeeRecord(id: Long, jsonData: String) = operationalUpdate("hr", "employees", id, jsonData)
         @JavascriptInterface
         fun deleteEmployeeRecord(id: Long) = operationalDelete("hr", "employees", id)
+        @JavascriptInterface
+        fun saveEmployeePerformance(jsonData: String): String { val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val a=getActivity() ?: return errorResponse("النشاط غير متاح"); val id=db.saveEmployeePerformance(JSONObject(jsonData), a.currentUserId); successResponse(id, "تم حفظ تقييم الأداء") } catch(e: Exception) { errorResponse(e.message) } }
+        @JavascriptInterface
+        fun getEmployeePerformance(jsonData: String = "{}"): String { val db=getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة"); return try { val p=JSONObject(jsonData); dataResponse(db.getEmployeePerformance(p.optLong("employee_id",0), p.optString("review_month"))) } catch(e: Exception) { errorResponse(e.message) } }
         @JavascriptInterface
         fun resolveEmployeeRecord(id: Long, note: String = "") = operationalResolve("hr", "employees", id, note)
 

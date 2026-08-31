@@ -951,7 +951,7 @@ button{
    ========================================================= */
 .performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}.performance-toolbar .form-group{margin-bottom:0}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
 @media(max-width:640px){.performance-toolbar,.performance-summary,.performance-form-grid{grid-template-columns:1fr}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
-</style></head><body><div class="offline" id="offline">
+.segmented-control{display:flex;gap:6px;overflow-x:auto;padding:8px 2px;scrollbar-width:none;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:16px}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;border:0;border-radius:11px;padding:9px 14px;background:transparent;color:var(--muted);font-weight:900}.segment.active{background:var(--primary);color:#fff}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:right}</style></head><body><div class="offline" id="offline">
     اتصال Android Bridge غير متاح — لا توجد بيانات بديلة.
 </div><div class="loading" id="loading">
     <div class="spinner"></div>
@@ -998,6 +998,7 @@ button{
 </div>
 
 </header><main class="page"><!-- البحث -->
+<div class="segmented-control" id="hrSegments" role="tablist"><button type="button" data-screen="employees.html" class="segment active">الموظفون</button><button type="button" data-screen="attendance.html" class="segment">الحضور والانصراف</button><button type="button" data-screen="leave.html" class="segment">الإجازات</button><button type="button" data-screen="payroll.html" class="segment">الرواتب</button><button type="button" data-screen="employees.html#performancePanel" class="segment">التقييمات</button><button type="button" data-screen="documents.html" class="segment">المستندات</button><button type="button" data-screen="contracts.html" class="segment">العقود</button><button type="button" data-screen="training.html" class="segment">التدريب</button></div>
 <div class="search-box">
     <i class="fas fa-search"></i>
     <input
@@ -1206,18 +1207,12 @@ button{
     <div class="modal-body">
 
         <div class="form-grid">
-
-            <div class="field">
-                <label>من تاريخ</label>
-                <input id="reportFrom" type="date">
-            </div>
-
-            <div class="field">
-                <label>إلى تاريخ</label>
-                <input id="reportTo" type="date">
-            </div>
-
+            <div class="field"><label>من تاريخ</label><input id="reportFrom" type="date"></div>
+            <div class="field"><label>إلى تاريخ</label><input id="reportTo" type="date"></div>
+            <div class="field"><label>عدد النتائج في الصفحة</label><input id="reportLimit" type="number" min="1" max="5000" value="100"></div>
+            <div class="field"><label>التجميع</label><select id="reportGroup"><option value="">دون تجميع</option><option value="department">حسب القسم</option><option value="status">حسب الحالة</option><option value="employment_type">حسب نوع التوظيف</option></select></div>
         </div>
+        <div class="report-columns" id="reportColumns"><label><input type="checkbox" value="employee_code" checked> رقم الموظف</label><label><input type="checkbox" value="full_name" checked> الاسم</label><label><input type="checkbox" value="department" checked> القسم</label><label><input type="checkbox" value="job_title" checked> المسمى</label><label><input type="checkbox" value="employment_type" checked> نوع التوظيف</label><label><input type="checkbox" value="total_salary" checked> إجمالي الراتب</label><label><input type="checkbox" value="status" checked> الحالة</label></div>
 
         <div class="actions">
 
@@ -1286,7 +1281,6 @@ const state = {
 const labels = {
 
     employee_code:'رقم الموظف',
-    party_id:'الطرف المرتبط',
     full_name:'الاسم الكامل',
     full_name_ar:'الاسم الكامل بالعربية',
     national_id:'رقم الهوية',
@@ -1319,7 +1313,8 @@ const labels = {
     insurance_deduction:'خصم التأمين',
     status:'الحالة',
     remarks:'ملاحظات',
-    notes:'ملاحظات'
+    notes:'ملاحظات',
+    bank_name:'اسم البنك', bank_account:'رقم الحساب البنكي', tax_deduction:'الخصم الضريبي', other_deductions:'خصومات أخرى', extra_data:'بيانات إضافية', contract_path:'مسار العقد', id_doc_path:'مسار وثيقة الهوية', photo_path:'مسار الصورة'
 };
 
 /* =========================================================
@@ -1354,6 +1349,8 @@ const departments = {
     ],
 
     'المبيعات':[
+        'عامل',
+        'كاشير',
         'عامل/كاشير',
         'مشرف مضخات',
         'مسؤول مخزن الوقود',
@@ -1370,14 +1367,14 @@ const departments = {
         'مسؤول ولاء العملاء وبطاقات الخصم'
     ],
 
-    'الصيانة و المرافق':[
+    'الصيانة والمرافق':[
         'فني صيانة مضخات',
         'مهندس المركبات',
         'عامل صيانة عامة',
         'مشرف صيانة'
     ],
 
-    'الامن و السلامة':[
+    'الأمن والسلامة':[
         'حارس',
         'مشرف أمن',
         'مراقب كاميرات مراقبة',
@@ -1386,15 +1383,14 @@ const departments = {
         'مسؤول إطفاء وحرائق'
     ],
 
-    'البيئة و الجودة':[
+    'البيئة والجودة':[
         'مسؤول بيئة',
         'مراقب جودة الوقود',
         'ممثل قانوني'
     ],
 
-    'النقل و اللوجستيات':[
-        'سائق توريد',
-        'سائق توصيل',
+    'النقل واللوجستيات':[
+        'سائق',
         'عامل تحميل وتنزيل',
         'منسق لوجستي'
     ],
@@ -1406,7 +1402,7 @@ const departments = {
         'مسؤول عقود توريد'
     ],
 
-    'النظافة و الخدمات العامة':[
+    'النظافة والخدمات العامة':[
         'عامل نظافة داخلية',
         'عامل نظافة خارجية',
         'عامل عام'
@@ -1450,16 +1446,13 @@ const status = [
 
 const defs = [
 
-    ['employee_code','text',0,0,1,0,null,1],
-
-    // party_id is optional in the employees operational contract.
-    ['party_id','number',0,0,1,1,null,1],
+    ['employee_code','text',0,0,1,1,null,1],
 
     ['full_name','text',1,1,0,0,null,0],
 
     ['full_name_ar','text',0,0,0,1],
 
-    ['national_id','number',0,0,0],
+    ['national_id','text',0,0,0],
 
     ['passport_number','text',0,0,0],
 
@@ -1493,7 +1486,7 @@ const defs = [
 
     ['employment_type','select',1,0,0,0,employment],
 
-    ['hire_date','date',1,0,1],
+    ['hire_date','date',1,0,0],
 
     ['station_id','number',0,0,1,1,null,1],
 
@@ -1519,6 +1512,14 @@ const defs = [
 
     ['other_allowances','number',0,0,0,0,null,0,0,1],
 
+    ['bank_name','text',0,0,0],
+    ['bank_account','text',0,0,0],
+    ['tax_deduction','number',0,0,0],
+    ['other_deductions','number',0,0,0],
+    ['extra_data','textarea',0,1,0],
+    ['contract_path','text',0,1,0],
+    ['id_doc_path','text',0,1,0],
+    ['photo_path','text',0,1,0],
     ['remarks','textarea',0,1,0]
 
 ];
@@ -1856,6 +1857,7 @@ function buildForm(row=null){
                 value="${esc(val)}"
                 ${req?'required':''}
                 ${readonly||auto?'readonly':''}
+                ${t==='tel'?'pattern="[+0-9 ()-]{7,}" title="أدخل رقم هاتف صحيحاً"':''}
                 ${k==='basic_salary' ||
                   k.includes('allowance') ||
                   k==='insurance_deduction'
@@ -1882,9 +1884,6 @@ function configureForm(row){
 const code =
     $('[data-key="employee_code"]');
 
-const party =
-    $('[data-key="party_id"]');
-
 const station =
     $('[data-key="station_id"]');
 
@@ -1898,15 +1897,6 @@ if(code){
         row?.employee_code || '';
 
     code.readOnly = true;
-}
-
-/* الطرف المرتبط */
-if(party){
-
-    party.value =
-        row?.party_id || '';
-
-    party.readOnly = true;
 }
 
 /* المحطة */
@@ -2096,9 +2086,7 @@ if(statusField){
 calcSalary();
 
 /*
- * party_id is optional. The database does not seed a canonical party named
- * "الموظفين - EMPLOYEES", so opening the add-employee modal must not fetch
- * or warn about a synthetic party.
+ * لا يعتمد نموذج الموظفين على طرف اصطناعي أو party_id.
  */
 
 /* تركيز الاسم عند إنشاء موظف */
@@ -2166,7 +2154,7 @@ const result =
     num(
         $('[data-key="insurance_deduction"]')
             ?.value
-    );
+    ) - num($('[data-key="tax_deduction"]')?.value) - num($('[data-key="other_deductions"]')?.value);
 
 total.value =
     result.toFixed(2);
@@ -2310,6 +2298,8 @@ document
         }
     );
 
+if(state.terminationVisible){ payload.status='terminated'; if(!payload.termination_date) { toast('تاريخ انتهاء الخدمة مطلوب عند التسريح','bad'); throw Error('تاريخ انتهاء الخدمة مطلوب'); } }
+
 /* الاسم العربي */
 payload.full_name_ar =
     payload.full_name || '';
@@ -2318,7 +2308,7 @@ payload.full_name_ar =
 payload.job_title_ar =
     payload.job_title || '';
 
-/* party_id is optional; do not block saving a valid employee without it. */
+/* لا توجد تبعية للطرف الاصطناعي في حفظ الموظف. */
 return payload;
 
 }
@@ -2880,7 +2870,7 @@ async function deleteRow(id){
 
 if(
     !confirm(
-        'هل تريد تنفيذ الحذف الفعلي لهذا الموظف؟'
+        'هل تريد أرشفة هذا الموظف؟ لن يتم حذف البيانات نهائيًا.'
     )
 ){
     return;
@@ -2896,7 +2886,7 @@ try{
     );
 
     toast(
-        'تم الحذف فعلياً'
+        'تمت أرشفة الموظف'
     );
 
     await reload();
@@ -3018,7 +3008,10 @@ try{
                                 $('reportTo')
                                     .value,
 
-                            limit:500
+                            limit:Math.min(5000, Math.max(1, Number($('reportLimit')?.value || 100))),
+                            offset:0,
+                            group_by:$('reportGroup')?.value || '',
+                            columns:Array.from(document.querySelectorAll('#reportColumns input:checked')).map(x=>x.value)
                         })
                     ]
                 )
@@ -3026,17 +3019,7 @@ try{
 
             : state.filtered;
 
-    const columns = [
-        'employee_code',
-        'full_name',
-        'department',
-        'job_title',
-        'employment_type',
-        'basic_salary',
-        'insurance_deduction',
-        'total_salary',
-        'status'
-    ];
+        const columns = Array.from(document.querySelectorAll('#reportColumns input:checked')).map(x=>x.value);
 
     $('reportResults').innerHTML =
         rows.length
@@ -3310,7 +3293,7 @@ function openPerformanceModal(id){populatePerformanceEmployees();const month=$('
 
 function renderPerformanceHistory(){const row=state.rows.find((x,i)=>String(idOf(x)||i)===String($('reviewEmployee')?.value||''));const reviews=reviewsFor(row).slice().sort((a,b)=>String(b.month).localeCompare(String(a.month)));$('performanceHistory').innerHTML=reviews.length?'<h4><i class="fas fa-clock-rotate-left"></i> السجل السابق</h4>'+reviews.slice(0,6).map(x=>'<div class="performance-history-item"><strong>'+esc(x.month)+'</strong><span>'+num(x.score).toFixed(1)+'/5</span></div>').join(''):''}
 
-async function savePerformanceReview(){const id=$('reviewEmployee').value;const month=$('reviewMonth').value;const score=Number($('reviewScore').value);if(!id||!month||!Number.isFinite(score)||score<1||score>5){toast('اختر الموظف والشهر وأدخل تقييمًا من 1 إلى 5','bad');return}const row=state.rows.find((x,i)=>String(idOf(x)||i)===String(id));if(!row){toast('لم يتم العثور على الموظف في البيانات الحالية','bad');return}const data=employeeExtra(row);const reviews=reviewsFor(row);const review={month,score,discipline:$('reviewDiscipline').value?Number($('reviewDiscipline').value):null,productivity:$('reviewProductivity').value?Number($('reviewProductivity').value):null,teamwork:$('reviewTeamwork').value?Number($('reviewTeamwork').value):null,goals:$('reviewGoals').value.trim(),notes:$('reviewNotes').value.trim(),updated_at:new Date().toISOString()};const index=reviews.findIndex(x=>x.month===month);if(index>=0)reviews[index]=review;else reviews.push(review);data.performance_reviews=reviews.sort((a,b)=>String(a.month).localeCompare(String(b.month)));loading(true);try{const result=await invoke('updateEmployeeRecord',[Number(id),JSON.stringify({extra_data:JSON.stringify(data)})]);parse(result);toast('تم حفظ التقييم الشهري في SQLite');closeModal('performanceModal');await reload()}catch(e){toast(e.message||'فشل حفظ التقييم في قاعدة البيانات','bad')}finally{loading(false)}}
+async function savePerformanceReview(){const id=$('reviewEmployee').value;const month=$('reviewMonth').value;const score=Number($('reviewScore').value);if(!id||!month||!Number.isFinite(score)||score<1||score>5){toast('اختر الموظف والشهر وأدخل تقييمًا من 1 إلى 5','bad');return}const row=state.rows.find((x,i)=>String(idOf(x)||i)===String(id));if(!row){toast('لم يتم العثور على الموظف في البيانات الحالية','bad');return}const data=employeeExtra(row);const reviews=reviewsFor(row);const review={month,score,discipline:$('reviewDiscipline').value?Number($('reviewDiscipline').value):null,productivity:$('reviewProductivity').value?Number($('reviewProductivity').value):null,teamwork:$('reviewTeamwork').value?Number($('reviewTeamwork').value):null,goals:$('reviewGoals').value.trim(),notes:$('reviewNotes').value.trim(),updated_at:new Date().toISOString()};const index=reviews.findIndex(x=>x.month===month);if(index>=0)reviews[index]=review;else reviews.push(review);data.performance_reviews=reviews.sort((a,b)=>String(a.month).localeCompare(String(b.month)));loading(true);try{const result=await invoke('saveEmployeePerformance',[JSON.stringify({employee_id:Number(id),review_month:month,score,discipline:review.discipline,productivity:review.productivity,teamwork:review.teamwork,goals:review.goals,notes:review.notes,status:'draft'})]);parse(result);toast('تم حفظ التقييم الشهري في SQLite');closeModal('performanceModal');await reload()}catch(e){toast(e.message||'فشل حفظ التقييم في قاعدة البيانات','bad')}finally{loading(false)}}
 
 /* =========================================================
    PERFORMANCE EVENT BINDING

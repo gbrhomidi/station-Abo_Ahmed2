@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 32
+        const val VERSION = 33
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -206,6 +206,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     29 -> migrateV29ToV30(db)
                     30 -> migrateV30ToV31(db)
                     31 -> migrateV31ToV32(db)
+                    32 -> migrateV32ToV33(db)
                 }
             }
             ensureModule006Schema(db)
@@ -343,6 +344,14 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         fun addColumn(table: String, column: String, definition: String) {
             try { db.execSQL("ALTER TABLE $table ADD COLUMN $column $definition") } catch (_: Exception) { }
         }
+        addColumn("employees", "national_id", "TEXT")
+        addColumn("employees", "remarks", "TEXT")
+        addColumn("employees", "extra_data", "TEXT")
+        addColumn("employees", "bank_name", "TEXT")
+        addColumn("employees", "bank_account", "TEXT")
+        addColumn("employees", "tax_deduction", "REAL DEFAULT 0")
+        addColumn("employees", "other_deductions", "REAL DEFAULT 0")
+        ensureEmployeeHrSchema(db)
         addColumn("payroll", "station_id", "INTEGER")
         addColumn("employee_payments", "uuid", "TEXT")
         addColumn("employee_payments", "station_id", "INTEGER")
@@ -361,6 +370,41 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_station_period ON payroll(station_id, period_start, period_end, status, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_items_employee ON payroll_items(employee_id, payroll_id, payment_status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_station_date ON employee_payments(station_id, date, is_deleted, employee_id)")
+    }
+
+    private fun migrateV32ToV33(db: SQLiteDatabase) {
+        ensureEmployeeHrSchema(db)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_code ON employees(employee_code)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department)")
+        Log.d(TAG, "Migrated employee HR schema to V33 successfully")
+    }
+
+    private fun ensureEmployeeHrSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS employee_performance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE NOT NULL, employee_id INTEGER NOT NULL,
+                review_month TEXT NOT NULL, score REAL NOT NULL CHECK(score >= 1 AND score <= 5),
+                discipline REAL, productivity REAL, teamwork REAL, goals TEXT, notes TEXT,
+                status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','approved','final')),
+                approved_by INTEGER, approved_at DATETIME, created_by INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE, FOREIGN KEY(approved_by) REFERENCES users(id), FOREIGN KEY(created_by) REFERENCES users(id),
+                UNIQUE(employee_id, review_month)
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS employee_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE NOT NULL, employee_id INTEGER NOT NULL, action TEXT NOT NULL,
+                reason TEXT, old_row_json TEXT, new_row_json TEXT, performed_by INTEGER, performed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE, FOREIGN KEY(performed_by) REFERENCES users(id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_performance_employee_month ON employee_performance(employee_id, review_month)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_performance_status ON employee_performance(status, review_month)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_audit_employee_time ON employee_audit_log(employee_id, performed_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_code ON employees(employee_code)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_station ON employees(station_id)")
     }
 
     private fun ensurePartyTypePermissions(db: SQLiteDatabase) {
@@ -2117,7 +2161,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 full_name_ar VARCHAR(200),
                 display_name VARCHAR(100),
                 avatar_path VARCHAR(500),
-                national_id VARCHAR(50),
+                national_id TEXT,
                 passport_number VARCHAR(50),
                 nationality VARCHAR(100),
                 birth_date DATE,
@@ -2472,7 +2516,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 vehicle_id INTEGER,
                 full_name VARCHAR(200) NOT NULL,
                 full_name_ar VARCHAR(200),
-                national_id VARCHAR(50),
+                national_id TEXT,
                 passport_number VARCHAR(50),
                 nationality VARCHAR(100),
                 birth_date DATE,
@@ -3931,7 +3975,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 party_id INTEGER,
                 full_name VARCHAR(200) NOT NULL,
                 full_name_ar VARCHAR(200),
-                national_id VARCHAR(50),
+                national_id TEXT,
                 passport_number VARCHAR(50),
                 nationality VARCHAR(100),
                 birth_date DATE,
@@ -14109,7 +14153,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             "employees" -> OperationalTableSpec(
                 table = "employees",
-                columns = listOf("employee_code", "party_id", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "marital_status", "phone", "phone2", "email", "address", "emergency_contact", "emergency_phone", "department", "job_title", "job_title_ar", "employment_type", "hire_date", "termination_date", "termination_reason", "station_id", "branch_id", "basic_salary", "housing_allowance", "transport_allowance", "food_allowance", "other_allowances", "total_salary", "insurance_deduction", "tax_deduction", "other_deductions", "bank_name", "bank_account", "status", "remarks", "extra_data"),
+                columns = listOf("employee_code", "full_name", "full_name_ar", "national_id", "passport_number", "nationality", "birth_date", "gender", "marital_status", "phone", "phone2", "email", "address", "emergency_contact", "emergency_phone", "department", "job_title", "job_title_ar", "employment_type", "hire_date", "termination_date", "termination_reason", "station_id", "branch_id", "basic_salary", "housing_allowance", "transport_allowance", "food_allowance", "other_allowances", "total_salary", "insurance_deduction", "tax_deduction", "other_deductions", "bank_name", "bank_account", "contract_path", "id_doc_path", "photo_path", "status", "remarks", "extra_data"),
                 required = listOf("employee_code", "full_name", "job_title", "hire_date"),
                 searchColumns = listOf("employee_code", "full_name", "full_name_ar", "phone", "department", "job_title"),
                 softDeleted = true,
@@ -14343,6 +14387,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val exclusion = if (existingId != null) { args += existingId.toString(); " AND id <> ?" } else ""
         readableDatabase.rawQuery("SELECT id FROM attendance WHERE employee_id = ? AND attendance_date = ?$shiftClause AND is_deleted = 0$exclusion LIMIT 1", args.toTypedArray()).use { cursor -> require(!cursor.moveToFirst()) { "يوجد سجل حضور مكرر للموظف والوردية والتاريخ نفسه" } }
     }
+
+    private fun logEmployeeAudit(employeeId: Long, action: String, actorId: Long, oldJson: String?, newJson: String?, reason: String) {
+        writableDatabase.insert("employee_audit_log", null, ContentValues().apply { put("uuid", UUID.randomUUID().toString()); put("employee_id", employeeId); put("action", action); put("reason", reason); put("old_row_json", oldJson); put("new_row_json", newJson); if (actorId > 0) put("performed_by", actorId) })
+    }
+
+    fun getOperationalRecord(screenKey: String, id: Long): JSONObject? = operationalRowJson(screenKey, id)?.let { JSONObject(it) }
 
     private fun operationalRowJson(screenKey: String, id: Long): String? {
         val spec = operationalSpec(screenKey) ?: return null
@@ -15819,11 +15869,41 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         }
     }
 
+    private fun validateEmployeeRecord(data: JSONObject) {
+        val email = data.optString("email", "").trim()
+        require(email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) { "البريد الإلكتروني غير صالح" }
+        val status = data.optString("status", "active").trim()
+        require(status in setOf("active", "on_leave", "suspended", "terminated")) { "حالة الموظف غير صالحة" }
+        if (status == "terminated") require(data.optString("termination_date", "").isNotBlank()) { "تاريخ انتهاء الخدمة مطلوب للموظف المسرح" }
+        val department = data.optString("department", "").trim()
+        val job = data.optString("job_title", "").trim()
+        require(department.isNotBlank() && job.isNotBlank()) { "القسم والمسمى الوظيفي مطلوبان" }
+    }
+
+    fun saveEmployeePerformance(input: JSONObject, actorId: Long): Long {
+        val employeeId = input.optLong("employee_id", 0L); require(employeeId > 0L) { "معرف الموظف مطلوب" }
+        val month = input.optString("review_month", "").trim(); require(month.matches(Regex("\\d{4}-\\d{2}"))) { "شهر التقييم غير صالح" }
+        val score = input.optDouble("score", -1.0); require(score in 1.0..5.0) { "التقييم يجب أن يكون بين 1 و5" }
+        dbLock.lock(); return try {
+            val values = ContentValues().apply { put("uuid", UUID.randomUUID().toString()); put("employee_id", employeeId); put("review_month", month); put("score", score);
+                if (input.has("discipline")) put("discipline", input.optDouble("discipline")); if (input.has("productivity")) put("productivity", input.optDouble("productivity")); if (input.has("teamwork")) put("teamwork", input.optDouble("teamwork"));
+                put("goals", input.optString("goals")); put("notes", input.optString("notes")); put("status", input.optString("status", "draft")); if (actorId > 0) put("created_by", actorId); put("updated_at", getCurrentDateTime()) }
+            val id = writableDatabase.insertWithOnConflict("employee_performance", null, values, SQLiteDatabase.CONFLICT_REPLACE); require(id > 0) { "تعذر حفظ تقييم الأداء" }; id
+        } finally { dbLock.unlock() }
+    }
+
+    fun getEmployeePerformance(employeeId: Long = 0L, month: String = ""): JSONArray {
+        dbLock.lock(); return try { val where = mutableListOf("1=1"); val args = mutableListOf<String>(); if (employeeId > 0) { where += "employee_id=?"; args += employeeId.toString() }; if (month.isNotBlank()) { where += "review_month=?"; args += month };
+            readableDatabase.rawQuery("SELECT * FROM employee_performance WHERE ${where.joinToString(" AND ")} ORDER BY review_month DESC, id DESC", args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
     fun saveOperationalRecord(screenKey: String, input: JSONObject, actorId: Long = 0L): Long {
         if (screenKey == "tank_refills") return saveTankRefillRecord(input, input.optInt("station_id", 0), actorId)
         val spec = operationalSpec(screenKey) ?: error("مسار الشاشة غير مسجل: $screenKey")
         val data = operationalPreparedData(screenKey, input, actorId)
         if (screenKey == "attendance") validateAttendanceRecord(data)
+        if (screenKey == "employees") validateEmployeeRecord(data)
         requireOperationalData(spec, data)
         validateFleetRecord(screenKey, data)
         if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests", "calibration_records")) validateModule006Record(screenKey, data)
@@ -15867,7 +15947,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     })
                 }
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "create", id, actorId, null, operationalRowJson(screenKey, id))
-                else logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id")
+                else { logActivity("system", "add_${spec.table}", "إضافة سجل في ${spec.table}: $id"); if (screenKey == "employees") logEmployeeAudit(id, "create", actorId, null, operationalRowJson(screenKey, id), "") }
             }
             id
         } finally { dbLock.unlock() }
@@ -15886,11 +15966,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             existing.keys().forEach { key -> if (!data.has(key)) data.put(key, existing.opt(key)) }
         }
         if (screenKey == "attendance") validateAttendanceRecord(data, id)
+        if (screenKey == "employees") validateEmployeeRecord(data)
         validateFleetRecord(screenKey, data)
         if (screenKey in setOf("tanks", "pumps", "meter_readings", "tank_level_log", "fuel_quality_tests", "calibration_records")) validateModule006Record(screenKey, data)
         dbLock.lock()
         return try {
-            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
+            val oldRow = if (screenKey in setOf("attendance", "employees")) operationalRowJson(screenKey, id) else null
             val values = ContentValues()
             for (key in spec.columns) if (data.has(key) && key != "created_by") putOperationalValue(values, key, data.opt(key))
             if (spec.hasUpdatedAt) values.put("updated_at", getCurrentDateTime())
@@ -15929,7 +16010,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val rows = writableDatabase.update(spec.table, values, where, whereArgs)
             if (rows > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "update", id, actorId, oldRow, operationalRowJson(screenKey, id))
-                else logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id")
+                else { logActivity("system", "update_${spec.table}", "تحديث سجل ${spec.table}: $id"); if (screenKey == "employees") logEmployeeAudit(id, "update", actorId, oldRow, operationalRowJson(screenKey, id), "") }
             }
             rows
         } finally { dbLock.unlock() }
@@ -15942,7 +16023,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
-            val oldRow = if (screenKey == "attendance") operationalRowJson(screenKey, id) else null
+            val oldRow = if (screenKey in setOf("attendance", "employees")) operationalRowJson(screenKey, id) else null
             val fleetScope = if (stationId != null && stationId > 0) fleetStationPredicate(screenKey, stationId) else null
             val scoped = stationId != null && stationId > 0 && spec.columns.contains("station_id") && screenKey != "calibration_records" && fleetScope == null
             val relationallyScoped = stationId != null && stationId > 0 && (screenKey in setOf("bad_debts", "stocktakes", "stocktake_details", "price_history", "price_list_items", "tank_level_log", "fuel_quality_tests", "calibration_records") || fleetScope != null)
@@ -15970,7 +16051,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             }, where, whereArgs) else db.delete(spec.table, where, whereArgs)
             if (rows > 0) {
                 if (screenKey == "attendance") logOperationalAudit(screenKey, "delete", id, actorId, oldRow, operationalRowJson(screenKey, id))
-                else logActivity("system", "delete_${spec.table}", "حذف سجل ${spec.table}: $id")
+                else { logActivity("system", "archive_${spec.table}", "أرشفة سجل ${spec.table}: $id"); if (screenKey == "employees") logEmployeeAudit(id, "archive", actorId, oldRow, operationalRowJson(screenKey, id), "أرشفة من شاشة الموظفين") }
             }
             rows
         } finally { dbLock.unlock() }
