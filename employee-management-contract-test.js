@@ -12,6 +12,8 @@ assert.match(html, /type="date"/);
 assert.match(html, /pattern="\[\+0-9 \(\)-\]\{7,\}"/);
 assert.match(html, /data-screen="attendance\.html"/);
 assert.match(html, /data-screen="payroll\.html"/);
+assert.match(html, /data-screen="employee-payments\.html" class="segment">الدفعات<\/button>/);
+assert.doesNotMatch(html, /data-screen="training\.html"[^>]*>التدريب<\/button>/);
 assert.match(html, /role="tablist"/);
 assert.match(html, /role="tab"/);
 assert.match(html, /aria-selected="true"/);
@@ -22,6 +24,11 @@ assert.match(html, /function updateJobs\(\{preserve=false\}/);
 assert.match(html, /job\.disabled = !department/);
 assert.match(html, /updateJobs\(\{preserve:Boolean\(row\)\}\)/);
 assert.match(html, /dep\.addEventListener/);
+for (const [department, job] of [['المبيعات','كاشير'], ['الشؤون المالية','محاسب عام'], ['الصيانة والمرافق','فني صيانة مضخات']]) {
+    assert.match(html, new RegExp(`'${department}':\\s*\\[[\\s\\S]*?'${job}'`));
+}
+assert.match(html, /const jobs =\s*departments\[department\] \|\| \[\]/);
+assert.match(html, /job\.disabled = !department/);
 assert.match(html, /saveEmployeePerformance/);
 assert.match(html, /status='terminated'/);
 assert.match(html, /أرشفة هذا الموظف/);
