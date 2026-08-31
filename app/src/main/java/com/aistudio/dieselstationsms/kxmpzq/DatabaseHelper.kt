@@ -7426,18 +7426,12 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
             // دعم البيانات العربية الحالية، مع الرموز الإنجليزية القياسية أعلاه.
             val managerTitlesAr = listOf("مدير المحطة", "نائب مدير المحطة", "مشرف وردية", "مساعد مدير العمليات")
+            val args = (listOf(stationId.toString()) + managerTitlesAr).toTypedArray()
             val managersAr = db.rawQuery(
                 """
-                SELECT e.id, e.employee_code, e.full_name, e.full_name_ar,
-                       e.job_title, e.job_title_ar, e.department, e.station_id,
-                       e.user_id, e.status
-                FROM employees e
-                WHERE e.station_id = ? AND e.is_deleted = 0 AND e.status = 'active'
-                  AND (TRIM(COALESCE(e.job_title_ar,'')) IN (${managerTitlesAr.joinToString(",") { "?" }}))
-                ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
-                """.trimIndent(),
-                arrayOf(stationId.toString(), *managerTitlesAr.toTypedArray())
-            ).use { cursorToJsonArray(it) }
+                    SELECT e.id, e.employee_code, e.full_name, e.full_name_ar, e.job_title, e.job_title_ar, e.department, e.station_id, e.user_id, e.status FROM employees e WHERE e.station_id =? AND e.is_deleted = 0 AND e.status ='active' AND (TRIM(COALESCE(e.job_title_ar,'')) IN (${managerTitlesAr.joinToString(",") { "?" }})) ORDER BY COALESCE(e.full_name_ar, e.full_name, e.employee_code)
+                """.trimIndent(), args
+            ).use { cursorToJsonArray(it) }                                    
             val allManagers = JSONArray()
             val seenManagers = HashSet<Long>()
             for (i in 0 until managers.length()) { val o = managers.optJSONObject(i); if (o != null && seenManagers.add(o.optLong("id"))) allManagers.put(o) }
