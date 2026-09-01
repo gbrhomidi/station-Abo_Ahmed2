@@ -34,7 +34,7 @@ def setup():
       CREATE TABLE cash_boxes(id INTEGER PRIMARY KEY, station_id INTEGER, current_balance REAL, status TEXT, is_deleted INTEGER DEFAULT 0);
       CREATE TABLE employee_payments(
         id INTEGER PRIMARY KEY AUTOINCREMENT, employee_id INTEGER, station_id INTEGER, payroll_id INTEGER,
-        amount REAL, type TEXT, status TEXT, is_deleted INTEGER DEFAULT 0
+        amount REAL, type TEXT CHECK(type IN ('salary','advance','penalty','bonus','other','deduction','allowance')), status TEXT, is_deleted INTEGER DEFAULT 0
       );
     ''')
     db.executemany('INSERT INTO stations VALUES (?,?)', [(1, 'A'), (2, 'B')])
@@ -99,6 +99,26 @@ def pay(db, station, employee, payroll, amount):
         db.rollback(); raise
 
 
+def test_employee_payment_edge_cases(db, station, employee):
+    db.execute('INSERT INTO employee_payments(employee_id,station_id,amount,type,status) VALUES (?,?,?,?,?)', (employee, station, 25.0, 'deduction', 'pending'))
+    db.execute('INSERT INTO employee_payments(employee_id,station_id,amount,type,status) VALUES (?,?,?,?,?)', (employee, station, 10.0, 'allowance', 'paid'))
+    db.commit()
+    rows = db.execute('SELECT type,amount FROM employee_payments WHERE station_id=? AND is_deleted=0', (station,)).fetchall()
+    assert ('deduction', 25.0) in rows
+    assert ('allowance', 10.0) in rows
+    try:
+        db.execute('INSERT INTO employee_payments(employee_id,station_id,amount,type,status) VALUES (?,?,?,?,?)', (employee, station, 1.0, 'invalid', 'pending'))
+    except sqlite3.IntegrityError:
+        db.rollback()
+    else:
+        raise AssertionError('invalid employee payment type accepted')
+    db.execute('UPDATE employee_payments SET is_deleted=1 WHERE employee_id=? AND station_id=? AND type=?', (employee, station, 'deduction'))
+    db.commit()
+    assert db.execute('SELECT COUNT(*) FROM employee_payments WHERE type=? AND station_id=? AND is_deleted=0', ('deduction', station)).fetchone()[0] == 0
+    assert db.execute('SELECT COUNT(*) FROM employee_payments WHERE type=? AND station_id=? AND is_deleted=0', ('allowance', station)).fetchone()[0] == 1
+    assert db.execute('SELECT COUNT(*) FROM employee_payments WHERE type=? AND station_id=? AND is_deleted=0', ('allowance', 2)).fetchone()[0] == 0
+
+
 def test_module010_hr():
     db=setup()
     a1=db.execute('SELECT id FROM employees WHERE employee_code="A-001"').fetchone()[0]
@@ -126,6 +146,7 @@ def test_module010_hr():
     assert db.execute('SELECT COUNT(*) FROM attendance WHERE station_id=2').fetchone()[0]==0
     assert db.execute('SELECT COUNT(*) FROM payroll WHERE station_id=2').fetchone()[0]==0
     assert db.execute('SELECT current_balance FROM cash_boxes WHERE id=1').fetchone()[0] == 950.0
-    print('MODULE-010 SQLite HR test passed')
+    test_employee_payment_edge_cases(db, 1, a1)
+    print('MODULE-010 SQLite HR test passed with employee-payment edge cases')
 
 if __name__=='__main__': test_module010_hr()

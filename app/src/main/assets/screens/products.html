@@ -1167,7 +1167,7 @@
                     <td>${product.sale_price || product.unit_price || 0}</td>
                     <td>${product.min_stock_level || product.minimum_stock || 0}</td>
                     <td>${product.current_stock || product.quantity || 0}</td>
-                    <td>${product.is_active ? 'نشط' : 'غير نشط'}</td>
+                    <td>${product.status === 'active' ? 'نشط' : 'غير نشط'}</td>
                     <td>${product.is_service ? 'نعم' : 'لا'}</td>
                     <td>${product.is_batch_tracked ? 'نعم' : 'لا'}</td>
                     <td>${product.is_serialized ? 'نعم' : 'لا'}</td>
@@ -1304,7 +1304,7 @@
                     currentEditingStock = Number(p.current_stock ?? p.quantity ?? 0);
                     document.getElementById('current_stock').value = currentEditingStock;
                     document.getElementById('description').value = p.description || '';
-                    document.getElementById('is_active').value = p.is_active ? '1' : '0';
+                    document.getElementById('is_active').value = p.status === 'active' ? '1' : '0';
                     document.getElementById('is_service').value = p.is_service ? '1' : '0';
                     document.getElementById('is_batch_tracked').value = p.is_batch_tracked ? '1' : '0';
                     document.getElementById('is_serialized').value = p.is_serialized ? '1' : '0';
