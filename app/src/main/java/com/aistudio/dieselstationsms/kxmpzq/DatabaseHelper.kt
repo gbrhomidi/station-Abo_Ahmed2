@@ -22907,4 +22907,107 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         } finally { dbLock.unlock() }
         return arr
     }
+
+    // ========================================================================
+    // Dedicated price-list APIs. These complement the generic CRUD layer and
+    // provide the joins, item counts, and history shape required by the UI.
+    // ========================================================================
+    fun getPriceListsWithItemCount(stationScopeId: Int? = null): JSONArray {
+        dbLock.lock()
+        return try {
+            val args = mutableListOf<String>()
+            val scope = if (stationScopeId != null) { require(stationScopeId > 0); args += stationScopeId.toString(); " AND pl.station_id = ?" } else ""
+            readableDatabase.rawQuery("""
+                SELECT pl.*, COUNT(pli.id) AS items_count,
+                       pt.type_name_ar AS party_type_name_ar,
+                       p.commercial_name_ar AS party_name_ar
+                FROM price_lists pl
+                LEFT JOIN price_list_items pli ON pli.price_list_id = pl.id
+                LEFT JOIN party_types pt ON pl.party_type_id = pt.id
+                LEFT JOIN parties p ON pl.party_id = p.id
+                WHERE pl.is_deleted = 0$scope
+                GROUP BY pl.id
+                ORDER BY pl.is_default DESC, pl.valid_from DESC, pl.id DESC
+            """, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getPriceListItems(priceListId: Long, stationScopeId: Int? = null): JSONArray {
+        require(priceListId > 0)
+        dbLock.lock()
+        return try {
+            val args = mutableListOf(priceListId.toString())
+            val scope = if (stationScopeId != null) { require(stationScopeId > 0); args += stationScopeId.toString(); " AND EXISTS (SELECT 1 FROM price_lists pl WHERE pl.id = pli.price_list_id AND pl.station_id = ? AND pl.is_deleted = 0)" } else ""
+            readableDatabase.rawQuery("""
+                SELECT pli.*, p.name_ar AS product_name_ar, p.name_en AS product_name, p.product_code
+                FROM price_list_items pli
+                LEFT JOIN products p ON pli.product_id = p.id
+                WHERE pli.price_list_id = ?$scope
+                ORDER BY p.name_ar ASC, pli.id ASC
+            """, args.toTypedArray()).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun getPriceHistory(productId: Long, limit: Int = 50, stationScopeId: Int? = null): JSONArray {
+        require(productId > 0)
+        val safeLimit = limit.coerceIn(1, 500)
+        dbLock.lock()
+        return try {
+            val args = mutableListOf(productId.toString(), safeLimit.toString())
+            val scope = if (stationScopeId != null) { require(stationScopeId > 0); args.add(1, stationScopeId.toString()); " AND EXISTS (SELECT 1 FROM products sp WHERE sp.id = ph.product_id AND sp.station_id = ? AND sp.is_deleted = 0)" } else ""
+            val query = """SELECT ph.*, u.name AS created_by_name FROM price_history ph
+                LEFT JOIN users u ON ph.created_by = u.id
+                WHERE ph.product_id = ? AND ph.archived = 0$scope
+                ORDER BY ph.change_date DESC LIMIT ?"""
+            val orderedArgs = if (stationScopeId != null) arrayOf(productId.toString(), stationScopeId.toString(), safeLimit.toString()) else arrayOf(productId.toString(), safeLimit.toString())
+            readableDatabase.rawQuery(query, orderedArgs).use { cursorToJsonArray(it) }
+        } finally { dbLock.unlock() }
+    }
+
+    fun insertPriceListItem(data: JSONObject, actorId: Long = 0L, stationScopeId: Int? = null): Long {
+        val listId = data.optLong("price_list_id").also { require(it > 0) }
+        val productId = data.optLong("product_id").also { require(it > 0) }
+        val unitPrice = data.optDouble("unit_price", -1.0).also { require(it >= 0) }
+        dbLock.lock()
+        return try {
+            if (stationScopeId != null) {
+                require(stationScopeId > 0)
+                writableDatabase.rawQuery("SELECT 1 FROM price_lists WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(listId.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "قائمة الأسعار خارج نطاق المحطة" } }
+                writableDatabase.rawQuery("SELECT 1 FROM products WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(productId.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "المنتج خارج نطاق المحطة" } }
+            }
+            val values = ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("price_list_id", listId); put("product_id", productId)
+                put("unit_price", unitPrice); put("min_quantity", data.optDouble("min_quantity", 1.0)); put("max_quantity", data.optDouble("max_quantity", 0.0).takeIf { it > 0 })
+                put("discount_percent", data.optDouble("discount_percent", 0.0)); put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1))
+            }
+            writableDatabase.insertOrThrow("price_list_items", null, values)
+        } finally { dbLock.unlock() }
+    }
+
+    fun updatePriceListItem(id: Long, data: JSONObject, stationScopeId: Int? = null): Int {
+        require(id > 0)
+        dbLock.lock()
+        return try {
+            if (stationScopeId != null) {
+                require(stationScopeId > 0)
+                writableDatabase.rawQuery("SELECT 1 FROM price_list_items pli JOIN price_lists pl ON pl.id = pli.price_list_id WHERE pli.id = ? AND pl.station_id = ? AND pl.is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "عنصر قائمة الأسعار خارج نطاق المحطة" } }
+            }
+            val values = ContentValues().apply { put("unit_price", data.optDouble("unit_price", -1.0)); put("min_quantity", data.optDouble("min_quantity", 1.0)); put("max_quantity", data.optDouble("max_quantity", 0.0).takeIf { it > 0 }); put("discount_percent", data.optDouble("discount_percent", 0.0)); put("valid_from", data.optString("valid_from").takeIf { it.isNotBlank() }); put("valid_to", data.optString("valid_to").takeIf { it.isNotBlank() }); put("is_active", data.optInt("is_active", 1)) }
+            writableDatabase.update("price_list_items", values, "id = ?", arrayOf(id.toString()))
+        } finally { dbLock.unlock() }
+    }
+
+    fun deletePriceListItem(id: Long, stationScopeId: Int? = null): Int {
+        require(id > 0)
+        dbLock.lock()
+        return try {
+            val where = if (stationScopeId != null) {
+                require(stationScopeId > 0)
+                "id = ? AND EXISTS (SELECT 1 FROM price_lists pl WHERE pl.id = price_list_items.price_list_id AND pl.station_id = ? AND pl.is_deleted = 0)"
+            } else "id = ?"
+            val args = if (stationScopeId != null) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
+            writableDatabase.delete("price_list_items", where, args)
+        } finally { dbLock.unlock() }
+    }
+
     }

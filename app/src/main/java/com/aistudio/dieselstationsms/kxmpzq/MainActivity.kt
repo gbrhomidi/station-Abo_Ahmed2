@@ -7645,7 +7645,11 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolveFuelTypeRecord(id: Long, note: String = "") = operationalResolve("products", "fuel_types", id, note)
 
         @JavascriptInterface
-        fun getPriceListRecords(jsonData: String = "{}") = operationalList("products", "price_lists", jsonData)
+        fun getPriceListRecords(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            dataResponse(db.getPriceListsWithItemCount(stationId))
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
         fun generatePriceListReport(jsonData: String = "{}") = operationalReport("products", "price_lists", jsonData)
         @JavascriptInterface
@@ -7657,6 +7661,37 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun resolvePriceListRecord(id: Long, note: String = "") = operationalResolve("products", "price_lists", id, note)
 
+        @JavascriptInterface
+        fun getPriceListItems(priceListId: Long): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            dataResponse(db.getPriceListItems(priceListId, stationId))
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun addPriceListItem(jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            val id = db.insertPriceListItem(JSONObject(jsonData), getActivity()?.currentUserId ?: 0L, stationId)
+            successResponse(id, "تمت إضافة عنصر قائمة الأسعار")
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun updatePriceListItem(id: Long, jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            successResponse(db.updatePriceListItem(id, JSONObject(jsonData), stationId) > 0, "تم تحديث عنصر قائمة الأسعار")
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun deletePriceListItem(id: Long): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            successResponse(db.deletePriceListItem(id, stationId) > 0, "تم حذف عنصر قائمة الأسعار")
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun getProductPriceHistory(productId: Long, limit: Int = 50): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val stationId = requireCurrentStationId(db, getActivity()?.currentUserId ?: 0L)
+            dataResponse(db.getPriceHistory(productId, limit, stationId))
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
         fun getPriceListItemRecords(jsonData: String = "{}") = operationalList("products", "price_list_items", jsonData)
         @JavascriptInterface
