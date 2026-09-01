@@ -66,15 +66,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .search-area{max-width:1200px;margin:12px auto 0}
 .search-box{position:relative}
 .search-box input{
- width:100%;height:50px;padding:0 48px 0 45px;border:1px solid var(--border);border-radius:16px;
+ width:100%;height:50px;padding:0 48px 0 90px;border:1px solid var(--border);border-radius:16px;
  background:var(--surface-2);color:var(--text);text-align:center;font-size:.92rem;box-shadow:var(--shadow)
 }
 .search-box i{position:absolute;right:17px;top:50%;transform:translateY(-50%);color:var(--primary)}
 .clear-search{
- position:absolute;left:10px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+ position:absolute;left:45px;top:50%;transform:translateY(-50%);width:30px;height:30px;
  border:0;border-radius:9px;background:var(--surface-3);color:var(--muted);display:none
 }
 .clear-search.show{display:grid;place-items:center}
+.search-btn{position:absolute;left:10px;top:50%;transform:translateY(-50%);height:32px;padding:0 14px;border:1px solid var(--primary);border-radius:10px;background:var(--primary-soft);color:var(--primary);font-weight:900;font-size:.7rem;cursor:pointer;transition:.2s}
+.search-btn:hover{background:var(--primary);color:#fff}
 .tabs{
  display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:10px 1px 2px
 }
@@ -216,6 +218,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .modal-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border)}
 .modal-foot .btn{min-height:46px}
 .report-filter{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.report-filter .form-group.full{grid-column:1/-1}
 .report-table{overflow:auto;border:1px solid var(--border);border-radius:14px;margin-top:12px}
 table{width:100%;border-collapse:collapse;min-width:680px;font-size:.7rem}
 th,td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:center}
@@ -263,25 +266,20 @@ td{color:var(--text)}
 <header class="topbar">
  <div class="header-row">
   <div class="title-box">
-   <h1>سجل تغيير الأسعار</h1>
-   <p>تتبع تاريخ الأسعار الفعلي للمنتجات في قاعدة بيانات SQLite</p>
+   <h1>📊 سجل تغيير الأسعار</h1>
+   <p>إدارة وتتبع تغييرات أسعار المنتجات</p>
   </div>
   <div class="header-actions">
    <button class="icon-btn" id="themeToggle" type="button" aria-label="تبديل الوضع">🌞</button>
    <button class="icon-btn" id="homeBtn" type="button" aria-label="رجوع">🏠</button>
   </div>
  </div>
- <div class="context-strip">
-  <div class="context-item">المحطة<strong id="stationContext">—</strong></div>
-  <div class="context-item">الفرع<strong id="branchContext">—</strong></div>
-  <div class="context-item">آخر تحديث<strong id="updatedContext">—</strong></div>
-  <div class="context-item">المصدر<strong>SQLite / Android</strong></div>
- </div>
  <div class="search-area">
   <div class="search-box">
    <i class="fas fa-search"></i>
    <input id="searchInput" type="search" autocomplete="off" inputmode="search" placeholder="بحث فوري في المنتج، السعر، التاريخ، السبب، رقم السجل...">
    <button class="clear-search" id="clearSearch" type="button">×</button>
+   <button class="search-btn" id="searchBtn" type="button">بحث</button>
   </div>
   <div class="tabs" id="tabs"></div>
  </div>
@@ -316,19 +314,19 @@ td{color:var(--text)}
    <div class="notice">رقم السجل والسعر القديم يتم التعامل معهما آلياً. عند اختيار المنتج يُحفظ رقم المنتج، ويُقرأ السعر القديم من بيانات المنتج الفعلية.</div>
    <form id="recordForm" novalidate>
     <div class="form-grid">
-     <div class="form-group"><label class="form-label">رقم السجل</label><input class="form-input readonly" id="recordId" type="number" readonly tabindex="-1"></div>
-     <div class="form-group"><label class="form-label">تاريخ التغيير</label><input class="form-input" id="changeDate" type="date" inputmode="none"></div>
+     <div class="form-group" style="display:none"><label class="form-label">رقم السجل</label><input class="form-input readonly" id="recordId" type="number" readonly tabindex="-1"></div>
      <div class="form-group full">
       <label class="form-label">المنتج *</label>
-      <input class="form-input product-search" id="productSearch" type="search" placeholder="اكتب اسم المنتج أو الباركود للبحث..." autocomplete="off">
+      <input class="form-input product-search" id="productSearch" type="search" placeholder="اكتب اسم المنتج للبحث..." autocomplete="off">
       <select class="form-input product-select" id="productSelect" required><option value="">جاري تحميل المنتجات...</option></select>
       <div class="help">القيمة المحفوظة في سجل الأسعار هي رقم المنتج فقط، بينما اسم المنتج معروض للمستخدم.</div>
      </div>
      <div class="form-group"><label class="form-label">السعر القديم</label><input class="form-input readonly" id="oldPrice" type="number" step="0.0001" readonly tabindex="-1"></div>
      <div class="form-group"><label class="form-label">السعر الجديد *</label><input class="form-input" id="newPrice" type="number" step="0.0001" min="0" inputmode="decimal" required></div>
-     <div class="form-group"><label class="form-label">المحطة</label><input class="form-input readonly" id="stationField" type="text" readonly tabindex="-1"></div>
-     <div class="form-group"><label class="form-label">الفرع</label><input class="form-input readonly" id="branchField" type="text" readonly tabindex="-1"></div>
+     <div class="form-group" style="display:none"><label class="form-label">المحطة</label><input class="form-input readonly" id="stationField" type="text" readonly tabindex="-1"></div>
+     <div class="form-group" style="display:none"><label class="form-label">الفرع</label><input class="form-input readonly" id="branchField" type="text" readonly tabindex="-1"></div>
      <div class="form-group"><label class="form-label">حالة الأرشفة</label><select class="form-input" id="archived"><option value="0">غير مؤرشف</option><option value="1">مؤرشف</option></select></div>
+     <div class="form-group"><label class="form-label">تاريخ التغيير</label><input class="form-input" id="changeDate" type="date" inputmode="none"></div>
      <div class="form-group full"><label class="form-label">سبب تغيير السعر</label><textarea class="form-input" id="changeReason" rows="4" placeholder="اكتب سبب تغيير السعر..."></textarea></div>
      <div class="validation" id="validation"></div>
     </div>
@@ -355,6 +353,11 @@ td{color:var(--text)}
    <div class="report-filter">
     <div class="form-group"><label class="form-label">من تاريخ</label><input class="form-input" id="reportFrom" type="date"></div>
     <div class="form-group"><label class="form-label">إلى تاريخ</label><input class="form-input" id="reportTo" type="date"></div>
+    <div class="form-group full">
+     <label class="form-label">المنتج</label>
+     <input class="form-input product-search" id="reportProductSearch" type="search" placeholder="اكتب اسم المنتج للبحث..." autocomplete="off">
+     <select class="form-input product-select" id="reportProductSelect"><option value="">جميع المنتجات</option></select>
+    </div>
    </div>
    <div class="actions">
     <button class="btn primary" id="generateReportBtn" type="button">توليد من SQLite</button>
@@ -551,8 +554,6 @@ function populateStationContext(){
  const station=state.stations.find(s=>String(s.id)===String(state.currentStationId));
  const stationName=station?.station_name_ar||station?.name_ar||station?.station_name||station?.name||'—';
  const branchName=station?.branch_name_ar||station?.branch_name||station?.branch||station?.branch_name||'—';
- $('stationContext').textContent=stationName;
- $('branchContext').textContent=branchName;
  $('stationField').value=stationName;
  $('branchField').value=branchName
 }
@@ -566,8 +567,17 @@ function renderProductOptions(selected=''){
   const text=[productLabel(p),p.product_code,p.barcode,p.short_name_ar,p.short_name].join(' ').toLowerCase();
   return !q||text.includes(q)
  });
- $('productSelect').innerHTML='<option value="">اختر المنتج...</option>'+list.map(p=>`<option value="${esc(p.id)}">${esc(productLabel(p))}${p.product_code?' · '+esc(p.product_code):''}${p.barcode?' · '+esc(p.barcode):''}</option>`).join('');
+ $('productSelect').innerHTML='<option value="">اختر المنتج...</option>'+list.map(p=>`<option value="${esc(p.id)}">${esc(productLabel(p))}</option>`).join('');
  if(selected) $('productSelect').value=String(selected)
+}
+function renderReportProductOptions(selected=''){
+ const q=$('reportProductSearch').value.trim().toLowerCase();
+ const list=state.products.filter(p=>{
+  const text=[productLabel(p),p.product_code,p.barcode,p.short_name_ar,p.short_name].join(' ').toLowerCase();
+  return !q||text.includes(q)
+ });
+ $('reportProductSelect').innerHTML='<option value="">جميع المنتجات</option>'+list.map(p=>`<option value="${esc(p.id)}">${esc(productLabel(p))}</option>`).join('');
+ if(selected) $('reportProductSelect').value=String(selected)
 }
 function applyProduct(rowId){
  const p=state.products.find(x=>String(x.id)===String(rowId));
@@ -596,17 +606,18 @@ function formErrors(){
  if(!np||!Number.isFinite(Number(np)))errors.push('السعر الجديد مطلوب ويجب أن يكون رقماً.');
  if(np&&Number(np)<0)errors.push('السعر الجديد لا يمكن أن يكون سالباً.');
  if(op!==''&&np!==''&&Number(np)===Number(op))errors.push('السعر الجديد يجب أن يختلف عن السعر القديم.');
- if($('changeDate').value && !/^\\d{4}-\\d{2}-\\d{2}$/.test($('changeDate').value))errors.push('تاريخ التغيير غير صالح.');
  return errors
 }
 async function saveForm(){
  const errors=formErrors(),box=$('validation');
  if(errors.length){box.innerHTML=errors.map(e=>'• '+esc(e)).join('<br>');box.classList.add('show');toast('يرجى تصحيح أخطاء الإدخال','error');return}
+ const rawDate=$('changeDate').value.trim();
+ const finalDate=rawDate?rawDate:today();
  const payload={
   product_id:Number($('productSelect').value),
   old_price:$('oldPrice').value===''?0:Number($('oldPrice').value),
   new_price:Number($('newPrice').value),
-  change_date:$('changeDate').value||today(),
+  change_date:finalDate,
   change_reason:$('changeReason').value.trim(),
   archived:Number($('archived').value||0)
  };
@@ -654,7 +665,6 @@ async function loadRows(includeArchived=false){
  try{
   const result=await invoke(CFG.listMethod,[JSON.stringify(queryParams(includeArchived||state.tab==='archived'))]);
   state.rows=rowsOf(result);state.loadedAt=new Date();setOffline(false);
-  $('updatedContext').textContent=state.loadedAt.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});
   applyFilter()
  }catch(e){
   setOffline(true);state.rows=[];applyFilter();toast(e.message||'فشل تحميل سجل تغيير الأسعار','error')
@@ -677,10 +687,13 @@ async function generateReport(){
  if(from&&to&&from>to){toast('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية','error');return}
  setLoading(true);
  try{
+  const productId=$('reportProductSelect').value;
   const params={limit:1000,offset:0,from_date:from||'',to_date:to||'',search:'',include_archived:true,sort_by:'change_date',sort_dir:'desc'};
+  if(productId) params.product_id=Number(productId);
   const result=await invoke(CFG.reportMethod,[JSON.stringify(params)]);
   const rows=rowsOf(result);
-  $('reportSummary').textContent=`التقرير الفعلي: ${rows.length.toLocaleString('ar-EG')} سجل من جدول price_history ضمن الفترة المحددة.`;
+  const productName=productId?rowProductName({product_id:productId}):'جميع المنتجات';
+  $('reportSummary').textContent=`التقرير الفعلي: ${rows.length.toLocaleString('ar-EG')} سجل من جدول price_history ضمن الفترة المحددة${productId?' للمنتج: '+productName:''}.`;
   $('reportTable').innerHTML=reportRowsTable(rows);
   $('reportTable').dataset.rows=JSON.stringify(rows)
  }catch(e){$('reportSummary').textContent=e.message||'فشل التقرير';$('reportTable').innerHTML='';toast(e.message||'فشل التقرير','error')}
@@ -691,7 +704,7 @@ function exportRows(rows){
  const keys=['id','product_id','old_price','new_price','change_date','change_reason','created_by','archived'];
  const labels=['رقم السجل','رقم المنتج','السعر القديم','السعر الجديد','تاريخ التغيير','سبب تغيير السعر','أنشأه','مؤرشف؟'];
  const lines=[labels,...rows.map(r=>keys.map(k=>String(r[k]??'').replace(/"/g,'""')))];
- const csv='\\ufeff'+lines.map(row=>row.map(v=>`"${v}"`).join(',')).join('\\n');
+ const csv='\ufeff'+lines.map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=url;a.download='price-change-log.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
  toast('تم إنشاء CSV من البيانات الفعلية')
@@ -710,15 +723,17 @@ function bind(){
  $('themeToggle').onclick=toggleTheme;
  $('homeBtn').onclick=()=>{window.location.href='../main.html'};
  $('newRecordBtn').onclick=()=>openForm();
- $('reportsBtn').onclick=()=>openModal('reportModal');
+ $('reportsBtn').onclick=()=>{openModal('reportModal');renderReportProductOptions()};
  $('saveBtn').onclick=saveForm;
  $('generateReportBtn').onclick=generateReport;
  $('exportBtn').onclick=exportCurrentReport;
  $('printBtn').onclick=()=>window.print();
  $('searchInput').addEventListener('input',()=>{ $('clearSearch').classList.toggle('show',Boolean($('searchInput').value)); applyFilter()});
  $('clearSearch').onclick=()=>{$('searchInput').value='';$('clearSearch').classList.remove('show');applyFilter();setFocusLater($('searchInput'))};
+ $('searchBtn').onclick=()=>applyFilter();
  $('productSearch').addEventListener('input',()=>renderProductOptions($('productSelect').value));
  $('productSelect').addEventListener('change',()=>{applyProduct($('productSelect').value);setFocusLater($('newPrice'))});
+ $('reportProductSearch').addEventListener('input',()=>renderReportProductOptions($('reportProductSelect').value));
  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
  document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModal(o.id)}));
  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAll()});
