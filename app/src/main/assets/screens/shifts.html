@@ -7,7 +7,8 @@
 
 <title>إدارة الورديات</title>
 
-<link rel="stylesheet" href="file:///android_asset/assets-local/css/theme.css">
+<link rel="stylesheet"
+      href="file:///android_asset/assets-local/css/theme.css">
 <link rel="stylesheet"
       href="file:///android_asset/assets-local/css/all.min.css">
 
@@ -58,7 +59,6 @@
     --text:#eef7ff;
     --muted:#aabbd0;
 
-    /* أزرق فاتح لجميع الإطارات */
     --border:#49a9ee;
     --border-strong:#76c8ff;
 
@@ -1236,7 +1236,7 @@ button:disabled{
 }
 
 /* =========================================================
-   FORM
+   FORM (ترتيب الحقول: كل اثنين في سطر، الكبيرة عرض كامل)
 ========================================================= */
 
 .form-grid{
@@ -1290,8 +1290,7 @@ button:disabled{
     background:
         var(--surface-2);
 
-    color:
-        var(--text);
+    color:var(--text);
 
     outline:none;
 
@@ -1795,10 +1794,10 @@ textarea.form-input{
         width:100%;
     }
 
+    /* الحفاظ على عمودين حتى على الشاشات الصغيرة */
     .form-grid{
         grid-template-columns:
-            1fr 1fr;
-
+            repeat(2,minmax(0,1fr));
         gap:9px;
     }
 
@@ -1928,7 +1927,6 @@ textarea.form-input{
 
         <div class="header-actions">
 
-            <!-- 🌞 للوضع الفاتح / 🌙 للوضع المظلم -->
             <button
                 class="icon-btn"
                 id="themeToggle"
@@ -2199,9 +2197,8 @@ textarea.form-input{
                 novalidate>
 
 
-                <!-- رمز الوردية -->
-
-                <div class="form-group">
+                <!-- رمز الوردية - مخفي -->
+                <div class="form-group hidden" id="shiftCodeGroup">
 
                     <label class="form-label">
                         رمز الوردية
@@ -2221,8 +2218,7 @@ textarea.form-input{
                 </div>
 
 
-                <!-- المحطة -->
-
+                <!-- المحطة + نوع الوردية (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2243,28 +2239,6 @@ textarea.form-input{
 
                 </div>
 
-
-                <!-- تاريخ الوردية -->
-
-                <div class="form-group">
-
-                    <label class="form-label">
-                        تاريخ الوردية
-                        <span class="required">*</span>
-                    </label>
-
-                    <input
-                        id="shift_date"
-                        class="form-input auto"
-                        type="date"
-                        readonly
-                        required>
-
-                </div>
-
-
-                <!-- نوع الوردية -->
-
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2274,7 +2248,7 @@ textarea.form-input{
 
                     <select
                         id="shift_type"
-                        class="form-input auto"
+                        class="form-input"
                         required>
 
                         <option value="">
@@ -2298,7 +2272,21 @@ textarea.form-input{
                 </div>
 
 
-                <!-- البداية -->
+                <!-- تاريخ الوردية + وقت البداية (سطر واحد) -->
+                <div class="form-group">
+
+                    <label class="form-label">
+                        تاريخ الوردية
+                        <span class="required">*</span>
+                    </label>
+
+                    <input
+                        id="shift_date"
+                        class="form-input"
+                        type="date"
+                        required>
+
+                </div>
 
                 <div class="form-group">
 
@@ -2309,16 +2297,14 @@ textarea.form-input{
 
                     <input
                         id="start_time"
-                        class="form-input auto"
+                        class="form-input"
                         type="datetime-local"
-                        readonly
                         required>
 
                 </div>
 
 
-                <!-- النهاية -->
-
+                <!-- وقت النهاية + المدة (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2331,9 +2317,6 @@ textarea.form-input{
                         type="datetime-local">
 
                 </div>
-
-
-                <!-- المدة -->
 
                 <div class="form-group">
 
@@ -2356,8 +2339,7 @@ textarea.form-input{
                 </div>
 
 
-                <!-- المدير -->
-
+                <!-- المدير + أمين الصندوق (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2376,18 +2358,17 @@ textarea.form-input{
 
                 </div>
 
-
-                <!-- أمين الصندوق -->
-
                 <div class="form-group">
 
                     <label class="form-label">
                         أمين الصندوق
+                        <span class="required">*</span>
                     </label>
 
                     <select
                         id="cashier_id"
-                        class="form-input">
+                        class="form-input"
+                        required>
 
                         <option value="">
                             جارٍ تحميل أمناء الصندوق...
@@ -2398,8 +2379,7 @@ textarea.form-input{
                 </div>
 
 
-                <!-- العاملون -->
-
+                <!-- العاملون (عرض كامل) -->
                 <div class="form-group full">
 
                     <label class="form-label">
@@ -2446,6 +2426,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- النقدية الافتتاحية + الرصيد البنكي الافتتاحي (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2460,7 +2441,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2478,6 +2458,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- الائتمان الافتتاحي + النقدية الختامية (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2492,7 +2473,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2510,6 +2490,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- الرصيد البنكي الختامي + الائتمان الختامي (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2524,7 +2505,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2555,6 +2535,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- إجمالي المبيعات + مبيعات الوقود (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2569,7 +2550,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2587,6 +2567,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- مبيعات المنتجات + مبيعات الخدمات (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2601,7 +2582,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2619,6 +2599,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- إجمالي الخصومات + إجمالي الضريبة (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2633,7 +2614,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2651,6 +2631,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- ضريبة القيمة المضافة + لترات الوقود (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2662,6 +2643,21 @@ textarea.form-input{
                         class="form-input"
                         type="number"
                         step="0.01"
+                        inputmode="decimal">
+
+                </div>
+
+                <div class="form-group">
+
+                    <label class="form-label">
+                        إجمالي لترات الوقود
+                    </label>
+
+                    <input
+                        id="total_fuel_liters"
+                        class="form-input"
+                        type="number"
+                        step="0.001"
                         inputmode="decimal">
 
                 </div>
@@ -2680,6 +2676,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- المبيعات النقدية + مبيعات البطاقات (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2694,7 +2691,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2712,6 +2708,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- التحويلات البنكية + المبيعات الآجلة (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2726,7 +2723,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2744,6 +2740,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- الشيكات + وسائل الدفع الأخرى (سطر واحد) -->
                 <div class="form-group">
 
                     <label class="form-label">
@@ -2758,7 +2755,6 @@ textarea.form-input{
                         inputmode="decimal">
 
                 </div>
-
 
                 <div class="form-group">
 
@@ -2776,23 +2772,8 @@ textarea.form-input{
                 </div>
 
 
-                <div class="form-group">
-
-                    <label class="form-label">
-                        إجمالي لترات الوقود
-                    </label>
-
-                    <input
-                        id="total_fuel_liters"
-                        class="form-input"
-                        type="number"
-                        step="0.001"
-                        inputmode="decimal">
-
-                </div>
-
-
-                <div class="form-group">
+                <!-- الانحراف النقدي (عرض كامل) -->
+                <div class="form-group full">
 
                     <label class="form-label">
                         الانحراف النقدي
@@ -2809,6 +2790,7 @@ textarea.form-input{
                 </div>
 
 
+                <!-- سبب الانحراف (عرض كامل) -->
                 <div class="form-group full">
 
                     <label class="form-label">
@@ -3194,9 +3176,13 @@ const state = {
 
         attendants: [],
 
+        managers: [],
+
         currentManager: null
 
-    }
+    },
+
+    optionsLoaded: false
 
 };
 
@@ -3635,7 +3621,11 @@ function detectShiftType(){
    OPTIONS
 ========================================================= */
 
-async function loadFormOptions(){
+async function loadFormOptions(force = false){
+
+    if(state.optionsLoaded && !force){
+        return;
+    }
 
     if(!hasContract(OPTIONS_CONTRACT)){
         showOptionError("عقد بيانات نموذج الوردية غير متاح في Android.");
@@ -3659,12 +3649,14 @@ async function loadFormOptions(){
                 : null
         };
 
+        state.optionsLoaded = true;
+
         renderStationOptions();
         renderCashierOptions();
         renderManagerOption();
         renderAttendantOptions();
 
-        // المحطة والمستخدم الحالي يحددهما Android/SQLite؛ لا نستخدم قيم HTML ثابتة.
+        // تعبئة المحطة وأمين الصندوق تلقائياً من البيانات
         if(station?.id){
             $("station_id").value = String(station.id);
             $("station_id").disabled = true;
@@ -3678,7 +3670,13 @@ async function loadFormOptions(){
             }
         }
 
+        // تعيين أمين الصندوق إذا كان هناك مستخدم واحد فقط
+        if(state.options.cashiers.length === 1){
+            $("cashier_id").value = String(state.options.cashiers[0].id || state.options.cashiers[0].employee_id || "");
+        }
+
     }catch(error){
+        state.optionsLoaded = false;
         showOptionError(error.message);
     }
 }
@@ -4052,7 +4050,7 @@ function resetForm(){
 
     $("shift_code")
         .value =
-        "سيتم التوليد تلقائياً عند الحفظ";
+        generateShiftCode();
 
     $("shift_date")
         .value =
@@ -4101,6 +4099,12 @@ function openForm(
         row
             ? "تعديل بيانات الوردية"
             : "إضافة وردية جديدة";
+
+
+    // محاولة تحميل الخيارات إذا لم تكن محملة
+    if(!state.optionsLoaded){
+        loadFormOptions(true);
+    }
 
 
     if(row){
@@ -4302,14 +4306,6 @@ function calculateVariance(){
         return;
 
     }
-
-    /*
-     * الانحراف النقدي:
-     *
-     * النقدية الختامية
-     * -
-     * (النقدية الافتتاحية + المبيعات النقدية)
-     */
 
     const variance =
         closing -
@@ -4559,11 +4555,6 @@ function collectForm(){
         $("attendant_ids").value;
 
 
-    /*
-     * التأكد من إرسال القيم الثلاث
-     * ضمن payload نفسه:
-     */
-
     payload.cashier_id =
         $("cashier_id").value
             ? Number(
@@ -4588,6 +4579,8 @@ function collectForm(){
             )
             .join(",");
 
+    // إزالة shift_code من payload لأنه يُرسل بشكل منفصل في saveShiftRecordTyped
+    delete payload.shift_code;
 
     return payload;
 
@@ -4599,6 +4592,11 @@ function collectForm(){
 ========================================================= */
 
 async function saveForm(){
+
+    // التأكد من تحميل الخيارات قبل التحقق
+    if(!state.optionsLoaded){
+        await loadFormOptions(true);
+    }
 
     if(
         !validateForm()
@@ -4661,20 +4659,32 @@ async function saveForm(){
 
         }else{
 
+            // استخدام saveShiftRecordTyped مع المعاملات المطلوبة
+            const stationId = Number(payload.station_id || 0);
+            const shiftType = String(payload.shift_type || detectShiftType());
+            const startTime = String(payload.start_time || nowLocal());
+            const managerId = Number(payload.manager_id || 0);
+            const cashierId = Number(payload.cashier_id || 0);
+            const attendantIds = String(payload.attendant_ids || "");
+            const openingCash = Number(payload.opening_cash || 0);
+            const openingBank = Number(payload.opening_bank || 0);
+            const openingCredit = Number(payload.opening_credit || 0);
+            const remarks = String(payload.variance_reason || "");
+
             result =
                 await invoke(
                     CURRENT_CONTRACTS.save,
                     [
-                        Number(payload.station_id || 0),
-                        String(payload.shift_type || ""),
-                        String(payload.start_time || ""),
-                        Number(payload.manager_id || 0),
-                        Number(payload.cashier_id || 0),
-                        String(payload.attendant_ids || ""),
-                        Number(payload.opening_cash || 0),
-                        Number(payload.opening_bank || 0),
-                        Number(payload.opening_credit || 0),
-                        String(payload.remarks || payload.variance_reason || "")
+                        stationId,
+                        shiftType,
+                        startTime,
+                        managerId,
+                        cashierId,
+                        attendantIds,
+                        openingCash,
+                        openingBank,
+                        openingCredit,
+                        remarks
                     ]
                 );
 
@@ -5821,10 +5831,6 @@ async function closeShift(
     };
 
 
-    /*
-     * إعادة احتساب مدة الوردية
-     */
-
     if(
         payload.start_time &&
         payload.end_time
@@ -6568,7 +6574,6 @@ function applyTheme(){
     }
 
 
-    /* الوضع الفاتح = 🌞 / الوضع المظلم = 🌙 */
     const icon = $("themeIcon");
     if(icon){
         icon.textContent =
@@ -6629,20 +6634,8 @@ $("searchInput")
     );
 
 
-
-function updateThemeIcon(){
-    const dark = document.documentElement.getAttribute("data-theme") === "dark";
-    const icon = $("themeIcon");
-    if(icon){
-        icon.textContent = dark ? "🌙" : "🌞";
-        icon.setAttribute("aria-label", dark ? "الوضع المظلم - التبديل إلى الفاتح" : "الوضع الفاتح - التبديل إلى المظلم");
-    }
-}
-
 /* =========================================================
    PUBLIC API
-   يجب تسجيل الدوال العامة قبل تشغيل التهيئة حتى تعمل أزرار
-   HTML ذات onclick حتى لو فشل تحميل بيانات Android.
 ========================================================= */
 
 window.openForm = openForm;
@@ -6655,11 +6648,15 @@ window.goHome = goHome;
 window.closeModal = closeModal;
 window.setFilter = setFilter;
 
+
 /* =========================================================
    INIT
 ========================================================= */
 
 $("themeToggle")?.addEventListener("click", toggleTheme);
+
+// تعيين رمز الوردية المخفي تلقائياً
+$("shift_code").value = generateShiftCode();
 
 applyTheme();
 loadFormOptions();
