@@ -8961,15 +8961,50 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun resolvePayrollRecord(id: Long, note: String = "") = operationalResolve("hr", "payroll", id, note)
 
         @JavascriptInterface
-        fun getEmployeePaymentRecords(jsonData: String = "{}") = operationalList("hr", "employee_payments", jsonData)
+        fun getEmployeePaymentRecords(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(db.getEmployeePaymentRecords(jsonData, requireCurrentStationId(db, activity.currentUserId)))
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
         fun generateEmployeePaymentReport(jsonData: String = "{}") = operationalReport("hr", "employee_payments", jsonData)
         @JavascriptInterface
-        fun saveEmployeePaymentRecord(jsonData: String) = operationalSave("hr", "employee_payments", jsonData)
+        fun saveEmployeePaymentRecord(jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            val stationId = requireCurrentStationId(db, activity.currentUserId)
+            successResponse(db.insertEmployeePayment(JSONObject(jsonData), stationId, activity.currentUserId), "تم حفظ دفعة الموظف")
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
-        fun updateEmployeePaymentRecord(id: Long, jsonData: String) = operationalUpdate("hr", "employee_payments", id, jsonData)
+        fun updateEmployeePaymentRecord(id: Long, jsonData: String): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            successResponse(db.updateEmployeePayment(id, JSONObject(jsonData), requireCurrentStationId(db, activity.currentUserId), activity.currentUserId) > 0, "تم تحديث دفعة الموظف")
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
-        fun deleteEmployeePaymentRecord(id: Long) = operationalDelete("hr", "employee_payments", id)
+        fun deleteEmployeePaymentRecord(id: Long): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            successResponse(db.softDeleteEmployeePayment(id, requireCurrentStationId(db, activity.currentUserId), activity.currentUserId) > 0, "تم حذف دفعة الموظف")
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun getEmployeePaymentSummary(fromDate: String? = null, toDate: String? = null): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            JSONObject(db.getEmployeePaymentSummary(fromDate.orEmpty(), toDate.orEmpty(), requireCurrentStationId(db, activity.currentUserId))).toString()
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun getEmployeeById(id: Int): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            JSONObject(db.getEmployeeById(id, requireCurrentStationId(db, activity.currentUserId)) ?: emptyMap<String, Any>()).put("success", true).toString()
+        } catch (e: Exception) { errorResponse(e.message) }
+        @JavascriptInterface
+        fun getEmployeePaymentReport(jsonData: String = "{}"): String = try {
+            val db = getDbHelper() ?: return errorResponse("قاعدة البيانات غير متاحة")
+            val activity = getActivity() ?: return errorResponse("النشاط غير متاح")
+            dataResponse(db.getEmployeePaymentReport(jsonData, requireCurrentStationId(db, activity.currentUserId)))
+        } catch (e: Exception) { errorResponse(e.message) }
         @JavascriptInterface
         fun resolveEmployeePaymentRecord(id: Long, note: String = "") = operationalResolve("hr", "employee_payments", id, note)
 

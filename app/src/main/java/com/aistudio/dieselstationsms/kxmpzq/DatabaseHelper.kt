@@ -359,17 +359,26 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         addColumn("employee_payments", "payment_method", "TEXT DEFAULT 'cash'")
         addColumn("employee_payments", "cash_box_id", "INTEGER")
         addColumn("employee_payments", "bank_account_id", "INTEGER")
-        addColumn("employee_payments", "status", "TEXT DEFAULT 'completed'")
+        addColumn("employee_payments", "status", "TEXT DEFAULT 'pending'")
         addColumn("employee_payments", "reference", "TEXT")
         addColumn("employee_payments", "notes", "TEXT")
+        addColumn("employee_payments", "period_from", "TEXT")
+        addColumn("employee_payments", "period_to", "TEXT")
         addColumn("employee_payments", "created_at", "TEXT")
         addColumn("employee_payments", "updated_at", "TEXT")
         addColumn("employee_payments", "is_deleted", "INTEGER DEFAULT 0")
+        addColumn("employee_payments", "deleted_at", "TEXT")
+        addColumn("employee_payments", "created_by", "INTEGER")
+        addColumn("employee_payments", "updated_by", "INTEGER")
+        addColumn("employee_payments", "deleted_by", "INTEGER")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employees_station_status ON employees(station_id, status, is_deleted, id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_attendance_station_date ON attendance(station_id, attendance_date, is_deleted, employee_id)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_station_period ON payroll(station_id, period_start, period_end, status, is_deleted)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_payroll_items_employee ON payroll_items(employee_id, payroll_id, payment_status)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_station_date ON employee_payments(station_id, date, is_deleted, employee_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_employee_id ON employee_payments(employee_id, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_status ON employee_payments(status, is_deleted)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_employee_payments_type ON employee_payments(type, is_deleted)")
     }
 
     private fun migrateV32ToV33(db: SQLiteDatabase) {
@@ -5670,13 +5679,30 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS employee_payments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT UNIQUE,
                 employee_id INTEGER,
+                station_id INTEGER,
+                payroll_id INTEGER,
                 amount REAL DEFAULT 0,
-                type TEXT CHECK(type IN ('salary', 'advance', 'penalty', 'bonus', 'other')),
+                type TEXT CHECK(type IN ('salary', 'advance', 'penalty', 'bonus', 'other', 'deduction', 'allowance')),
                 description TEXT,
                 date TEXT DEFAULT CURRENT_TIMESTAMP,
-                operator TEXT DEFAULT 'System'
-            )
+                operator TEXT DEFAULT 'System',
+                payment_method TEXT DEFAULT 'cash',
+                cash_box_id INTEGER,
+                bank_account_id INTEGER,
+                status TEXT DEFAULT 'pending',
+                reference TEXT,
+                notes TEXT,
+                period_from TEXT,
+                period_to TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
+                deleted_by INTEGER            )
         """)
     }
 
@@ -23008,6 +23034,96 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             val args = if (stationScopeId != null) arrayOf(id.toString(), stationScopeId.toString()) else arrayOf(id.toString())
             writableDatabase.delete("price_list_items", where, args)
         } finally { dbLock.unlock() }
+    }
+
+
+    private fun employeePaymentRows(query: String, args: Array<String>): List<Map<String, Any>> {
+        val result = mutableListOf<Map<String, Any>>()
+        readableDatabase.rawQuery(query, args).use { cursor ->
+            while (cursor.moveToNext()) {
+                val row = mutableMapOf<String, Any>()
+                for (i in 0 until cursor.columnCount) {
+                    row[cursor.getColumnName(i)] = when (cursor.getType(i)) {
+                        Cursor.FIELD_TYPE_NULL -> ""
+                        Cursor.FIELD_TYPE_INTEGER -> cursor.getLong(i)
+                        Cursor.FIELD_TYPE_FLOAT -> cursor.getDouble(i)
+                        Cursor.FIELD_TYPE_STRING -> cursor.getString(i) ?: ""
+                        else -> cursor.getString(i) ?: ""
+                    }
+                }
+                result += row
+            }
+        }
+        return result
+    }
+
+    fun getEmployees(includeInactive: Boolean = false): List<Map<String, Any>> = employeePaymentRows(
+        "SELECT id, uuid, employee_code, full_name, full_name_ar, national_id, phone, department, job_title, job_title_ar, employment_type, hire_date, basic_salary, total_salary, status, station_id, branch_id, user_id FROM employees WHERE is_deleted = 0${if (!includeInactive) " AND status = 'active'" else ""} ORDER BY full_name_ar ASC",
+        emptyArray()
+    )
+
+    fun getEmployeeById(employeeId: Int, stationScopeId: Int? = null): Map<String, Any>? {
+        val args = if (stationScopeId != null) arrayOf(employeeId.toString(), stationScopeId.toString()) else arrayOf(employeeId.toString())
+        val scope = if (stationScopeId != null) " AND station_id = ?" else ""
+        return employeePaymentRows("SELECT id, uuid, employee_code, full_name, full_name_ar, department, job_title, total_salary, status FROM employees WHERE id = ? AND is_deleted = 0$scope", args).firstOrNull()
+    }
+
+    fun getEmployeePaymentRecords(options: String = "{}", stationScopeId: Int? = null): List<Map<String, Any>> {
+        val params = try { JSONObject(options) } catch (_: Exception) { JSONObject() }
+        val conditions = mutableListOf("ep.is_deleted = 0")
+        val args = mutableListOf<String>()
+        if (stationScopeId != null) { require(stationScopeId > 0); conditions += "ep.station_id = ?"; args += stationScopeId.toString() }
+        params.optInt("employee_id", 0).takeIf { it > 0 }?.let { conditions += "ep.employee_id = ?"; args += it.toString() }
+        params.optString("type").takeIf { it.isNotBlank() }?.let { conditions += "ep.type = ?"; args += it }
+        params.optString("status").takeIf { it.isNotBlank() }?.let { conditions += "ep.status = ?"; args += it }
+        params.optString("from_date").takeIf { it.isNotBlank() }?.let { conditions += "ep.date >= ?"; args += it }
+        params.optString("to_date").takeIf { it.isNotBlank() }?.let { conditions += "ep.date <= ?"; args += it }
+        params.optString("search").takeIf { it.isNotBlank() }?.let { conditions += "(e.full_name LIKE ? OR e.full_name_ar LIKE ? OR ep.description LIKE ?)"; repeat(3) { args += "%$it%" } }
+        val limit = params.optInt("limit", 500).coerceIn(1, 1000)
+        args += limit.toString()
+        return employeePaymentRows("SELECT ep.*, e.full_name AS employee_name, e.full_name_ar AS employee_name_ar, e.employee_code, e.department, e.job_title, e.total_salary AS employee_base_salary FROM employee_payments ep LEFT JOIN employees e ON ep.employee_id = e.id WHERE ${conditions.joinToString(" AND ")} ORDER BY ep.date DESC, ep.id DESC LIMIT ?", args.toTypedArray())
+    }
+
+    fun insertEmployeePayment(data: JSONObject, stationScopeId: Int, actorId: Long): Long {
+        require(stationScopeId > 0 && actorId > 0)
+        val employeeId = data.optLong("employee_id").also { require(it > 0) }
+        dbLock.lock()
+        return try {
+            writableDatabase.rawQuery("SELECT 1 FROM employees WHERE id = ? AND station_id = ? AND is_deleted = 0", arrayOf(employeeId.toString(), stationScopeId.toString())).use { require(it.moveToFirst()) { "الموظف خارج نطاق المحطة" } }
+            writableDatabase.insertOrThrow("employee_payments", null, ContentValues().apply {
+                put("uuid", UUID.randomUUID().toString()); put("employee_id", employeeId); put("station_id", stationScopeId); put("payroll_id", data.optLong("payroll_id").takeIf { it > 0 }); put("amount", data.optDouble("amount", 0.0)); put("type", data.optString("type", "salary")); put("description", data.optString("description")); put("date", data.optString("date", getCurrentDate())); put("operator", data.optString("operator", actorId.toString())); put("payment_method", data.optString("payment_method", "cash")); put("cash_box_id", data.optLong("cash_box_id").takeIf { it > 0 }); put("bank_account_id", data.optLong("bank_account_id").takeIf { it > 0 }); put("status", data.optString("status", "pending")); put("reference", data.optString("reference")); put("notes", data.optString("notes")); put("period_from", data.optString("period_from")); put("period_to", data.optString("period_to")); put("created_at", getCurrentDateTime()); put("updated_at", getCurrentDateTime()); put("created_by", actorId); put("is_deleted", 0)
+            })
+        } finally { dbLock.unlock() }
+    }
+
+    fun updateEmployeePayment(id: Long, data: JSONObject, stationScopeId: Int, actorId: Long): Int {
+        require(id > 0 && stationScopeId > 0 && actorId > 0)
+        dbLock.lock()
+        return try { writableDatabase.update("employee_payments", ContentValues().apply { put("amount", data.optDouble("amount", 0.0)); put("type", data.optString("type", "salary")); put("description", data.optString("description")); put("date", data.optString("date", getCurrentDate())); put("operator", data.optString("operator", actorId.toString())); put("status", data.optString("status", "pending")); put("notes", data.optString("notes")); put("period_from", data.optString("period_from")); put("period_to", data.optString("period_to")); put("updated_at", getCurrentDateTime()); put("updated_by", actorId) }, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())) } finally { dbLock.unlock() }
+    }
+
+    fun softDeleteEmployeePayment(id: Long, stationScopeId: Int, actorId: Long): Int {
+        require(id > 0 && stationScopeId > 0 && actorId > 0)
+        dbLock.lock()
+        return try { writableDatabase.update("employee_payments", ContentValues().apply { put("is_deleted", 1); put("deleted_at", getCurrentDateTime()); put("deleted_by", actorId) }, "id = ? AND station_id = ? AND is_deleted = 0", arrayOf(id.toString(), stationScopeId.toString())) } finally { dbLock.unlock() }
+    }
+
+    fun deleteEmployeePayment(id: Long, stationScopeId: Int, actorId: Long): Int {
+        require(id > 0 && stationScopeId > 0 && actorId > 0)
+        dbLock.lock()
+        return try { writableDatabase.delete("employee_payments", "id = ? AND station_id = ?", arrayOf(id.toString(), stationScopeId.toString())) } finally { dbLock.unlock() }
+    }
+
+    fun getEmployeePaymentReport(options: String = "{}", stationScopeId: Int? = null): List<Map<String, Any>> = getEmployeePaymentRecords(options, stationScopeId)
+
+    fun getEmployeePaymentSummary(fromDate: String = "", toDate: String = "", stationScopeId: Int? = null): Map<String, Any> {
+        val conditions = mutableListOf("is_deleted = 0"); val args = mutableListOf<String>()
+        if (stationScopeId != null) { require(stationScopeId > 0); conditions += "station_id = ?"; args += stationScopeId.toString() }
+        if (fromDate.isNotBlank()) { conditions += "date >= ?"; args += fromDate }
+        if (toDate.isNotBlank()) { conditions += "date <= ?"; args += toDate }
+        val result = mutableMapOf<String, Any>()
+        readableDatabase.rawQuery("SELECT COUNT(*) total_count, COALESCE(SUM(amount),0) total_amount, COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END),0) paid_amount, COALESCE(SUM(CASE WHEN type='salary' THEN amount ELSE 0 END),0) salary_total FROM employee_payments WHERE ${conditions.joinToString(" AND ")}", args.toTypedArray()).use { c -> if (c.moveToFirst()) for (i in 0 until c.columnCount) result[c.getColumnName(i)] = if (c.getType(i) == Cursor.FIELD_TYPE_INTEGER) c.getLong(i) else c.getDouble(i) }
+        return result
     }
 
     }
