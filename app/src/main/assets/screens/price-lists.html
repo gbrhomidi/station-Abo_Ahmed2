@@ -18,17 +18,45 @@
 .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card{background:var(--surface);border:1px solid var(--border);border-radius:17px;padding:14px;box-shadow:0 7px 20px rgba(15,23,42,.05);animation:up .42s both;text-align:center}.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}.card-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.code{font-size:.7rem;color:var(--muted);font-weight:900}.status{padding:5px 10px;border-radius:999px;font-size:.68rem;font-weight:900}.status.on{color:var(--success);background:color-mix(in srgb,var(--success) 12%,transparent)}.status.off{color:var(--muted);background:var(--surface-3)}.card h3{font-size:1rem;margin:12px 0 4px}.card-sub{font-size:.72rem;color:var(--muted);line-height:1.8}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:12px}.meta-item{padding:9px;border-radius:11px;background:var(--primary-soft);font-size:.68rem}.meta-item span{display:block;color:var(--muted);margin-bottom:2px}.meta-item b{display:block;overflow-wrap:anywhere}.card-actions{display:flex;gap:7px;margin-top:11px}.btn{border:1px solid var(--border);border-radius:11px;background:var(--surface-2);color:var(--text);padding:9px 11px;font-weight:850;font-size:.72rem;flex:1}.btn.primary{background:linear-gradient(135deg,var(--primary-2),var(--primary));color:#fff;border:none}.btn.danger{color:var(--danger)}
 .empty{text-align:center;padding:45px 15px;color:var(--muted)}.empty i{font-size:38px;color:var(--primary);display:block;margin-bottom:10px}.loading{display:none;position:fixed;inset:0;background:rgba(0,0,0,.32);backdrop-filter:blur(4px);z-index:1000;place-items:center}.loading.show{display:grid}.spinner{width:46px;height:46px;border:4px solid var(--primary-soft);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}.offline{position:fixed;top:0;left:0;right:0;z-index:1100;background:var(--danger);color:#fff;padding:9px;text-align:center;font-size:.75rem;font-weight:900;transform:translateY(-110%);transition:.25s}.offline.show{transform:none}
 .bottom{position:fixed;bottom:0;left:0;right:0;z-index:100;background:color-mix(in srgb,var(--surface) 95%,transparent);backdrop-filter:blur(20px);border-top:1px solid var(--border);display:flex;padding:8px 8px calc(8px + env(safe-area-inset-bottom));gap:8px}.bottom button{flex:1;border:1px solid transparent;border-radius:15px;background:transparent;color:var(--muted);padding:7px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:1.05rem;font-weight:950}.bottom button span{font-size:1.05rem;font-weight:950}.bottom button.active{color:var(--primary);background:var(--primary-soft)}
-.overlay{position:fixed;inset:0;z-index:800;background:rgba(2,8,23,.62);backdrop-filter:blur(7px);display:none;align-items:flex-end;justify-content:center}.overlay.show{display:flex}.modal{width:min(760px,100%);max-height:94vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:25px 25px 0 0;box-shadow:var(--shadow-lg);animation:modalIn .28s ease}.modal-head{position:sticky;top:0;z-index:2;background:var(--surface);display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border)}.modal-head h2{font-size:1rem;margin:0}.modal-body{padding:16px}.modal-foot{position:sticky;bottom:0;background:var(--surface);padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{min-width:0}.field.full{grid-column:1/-1}.field label{display:block;text-align:center;color:var(--muted);font-size:.75rem;font-weight:900;margin-bottom:6px}.input{width:100%;min-height:46px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);padding:10px 12px;text-align:center;outline:none}.input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}.input:disabled,.readonly{background:var(--surface-3);color:var(--muted);opacity:.72}.textarea{min-height:92px;resize:vertical}.hidden-field{display:none!important}.error-box{display:none;margin-bottom:12px;border:1px solid var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);border-radius:13px;padding:10px;text-align:center;font-size:.74rem;font-weight:800}.error-box.show{display:block}.select-wrap{position:relative}.select-wrap:after{content:'⌄';position:absolute;left:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)}
-.lookup-list{display:grid;gap:7px}.lookup{width:100%;text-align:center;border:1px solid var(--border);background:var(--surface-2);border-radius:12px;padding:11px;color:var(--text)}.lookup:hover{border-color:var(--primary);background:var(--primary-soft)}.lookup small{display:block;color:var(--muted);margin-top:3px}.toast{position:fixed;top:75px;left:50%;transform:translateX(-50%) translateY(-15px);z-index:1300;max-width:90%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 16px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.25s;text-align:center;font-size:.75rem;font-weight:850}.toast.show{opacity:1;transform:translateX(-50%)}.toast.success{border-color:var(--success)}.toast.error{border-color:var(--danger);color:var(--danger)}.toast.warning{border-color:var(--warning);color:var(--warning)}
-.pull{position:fixed;top:0;left:50%;transform:translate(-50%,-70px);z-index:1200;background:var(--surface);border:1px solid var(--border);border-radius:0 0 14px 14px;padding:8px 15px;color:var(--primary);font-size:.72rem;font-weight:900;transition:.2s}.pull.show{transform:translate(-50%,0)}@keyframes spin{to{transform:rotate(360deg)}}@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes modalIn{from{transform:translateY(20px);opacity:.5}to{transform:none;opacity:1}}
+.overlay{position:fixed;inset:0;z-index:800;background:rgba(2,8,23,.62);backdrop-filter:blur(7px);display:none;align-items:flex-end;justify-content:center}.overlay.show{display:flex}.modal{width:min(760px,100%);max-height:94vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:25px 25px 0 0;box-shadow:var(--shadow-lg);animation:modalIn .28s ease}.modal.wide{width:min(960px,100%)}.modal-head{position:sticky;top:0;z-index:2;background:var(--surface);display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border)}.modal-head h2{font-size:1rem;margin:0}.modal-body{padding:16px}.modal-foot{position:sticky;bottom:0;background:var(--surface);padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{min-width:0}.field.full{grid-column:1/-1}.field label{display:block;text-align:center;color:var(--muted);font-size:.75rem;font-weight:900;margin-bottom:6px}.input{width:100%;min-height:46px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);padding:10px 12px;text-align:center;outline:none}.input:focus{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 14%,transparent)}.input:disabled,.readonly{background:var(--surface-3);color:var(--muted);opacity:.72}.textarea{min-height:92px;resize:vertical}.hidden-field{display:none!important}.error-box{display:none;margin-bottom:12px;border:1px solid var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);border-radius:13px;padding:10px;text-align:center;font-size:.74rem;font-weight:800}.error-box.show{display:block}.select-wrap{position:relative}.select-wrap:after{content:'⌄';position:absolute;left:13px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)}
+.lookup-list{display:grid;gap:7px}.lookup{width:100%;text-align:center;border:1px solid var(--border);background:var(--surface-2);border-radius:12px;padding:11px;color:var(--text);cursor:pointer}.lookup:hover{border-color:var(--primary);background:var(--primary-soft)}.lookup small{display:block;color:var(--muted);margin-top:3px}
+.toast{position:fixed;top:75px;left:50%;transform:translateX(-50%) translateY(-15px);z-index:1300;max-width:90%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 16px;box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.25s;text-align:center;font-size:.75rem;font-weight:850}.toast.show{opacity:1;transform:translateX(-50%)}.toast.success{border-color:var(--success)}.toast.error{border-color:var(--danger);color:var(--danger)}.toast.warning{border-color:var(--warning);color:var(--warning)}
+.pull{position:fixed;top:0;left:50%;transform:translate(-50%,-70px);z-index:1200;background:var(--surface);border:1px solid var(--border);border-radius:0 0 14px 14px;padding:8px 15px;color:var(--primary);font-size:.72rem;font-weight:900;transition:.2s}.pull.show{transform:translate(-50%,0)}
+.report-panel.hidden{display:none}
+#itemsBody input[type="number"], #itemsBody select{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:.8rem;width:100%;text-align:center}
+#itemsBody input[type="number"]:focus, #itemsBody select:focus{border-color:var(--primary);outline:none}
+
+/* --- تنسيق خاص بنموذج الإضافة --- */
+/* إلغاء أي override يجعل الأعمدة عموداً واحداً على الشاشات الصغيرة */
+@media(max-width:760px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .cards{grid-template-columns:1fr}
+  /* نمنع تغيير form-grid إلى عمود واحد */
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  /* مع ضمان أن الحقول ذات class="full" تأخذ الصف كامل */
+  .field.full{grid-column:1/-1 !important;}
+}
+@media(max-width:460px){
+  .title p{display:none}
+  .container{padding:10px}
+  .panel{padding:10px}
+  .modal-body{padding:12px}
+  .bottom button span{font-size:1.05rem}
+  /* تأكيد بقاء الأعمدة 2 حتى في الشاشات الصغيرة جداً */
+  .form-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .field.full{grid-column:1/-1 !important;}
+}
+
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes modalIn{from{transform:translateY(20px);opacity:.5}to{transform:none;opacity:1}}
 [data-theme="dark"] .panel,[data-theme="dark"] .card,[data-theme="dark"] .kpi{border-color:#63c7ff!important;box-shadow:0 0 0 1px rgba(99,199,255,.16),0 0 18px rgba(99,199,255,.07)}
-@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:460px){.form-grid{grid-template-columns:1fr}.field.full{grid-column:auto}.title p{display:none}.container{padding:10px}.panel{padding:10px}.modal-body{padding:12px}.bottom button span{font-size:1.05rem}}
 </style>
 </head>
 <body>
 <div class="offline" id="offline">انقطع الاتصال بطبقة Android/SQLite — لن يتم اعتماد أي بيانات بديلة.</div>
 <div class="pull" id="pull">اسحب للتحديث…</div>
 <div class="loading" id="loading"><div class="spinner"></div></div>
+
 <header class="topbar">
   <div class="topbar-row">
     <div class="title"><div class="title-icon">🏷️</div><div><h1>قوائم الأسعار</h1><p id="contextText">بيانات فعلية من قاعدة بيانات المشروع</p></div></div>
@@ -37,65 +65,812 @@
   <div class="search"><i class="fas fa-search"></i><input id="search" type="search" inputmode="search" placeholder="بحث فوري في جميع حقول قوائم الأسعار…" autocomplete="off"></div>
   <div class="tabs" id="tabs"></div>
 </header>
+
 <main class="container">
-  <section class="kpis"><div class="kpi"><b id="kAll">0</b><span>إجمالي القوائم</span></div><div class="kpi"><b id="kActive">0</b><span>نشطة</span></div><div class="kpi"><b id="kValid">0</b><span>سارية الآن</span></div><div class="kpi"><b id="kDefault">0</b><span>افتراضية</span></div></section>
-  <section class="panel"><div class="panel-head"><h2>قوائم الأسعار</h2><span class="count" id="count">0</span></div><div class="cards" id="cards"></div></section>
+  <section class="kpis">
+    <div class="kpi"><b id="kAll">0</b><span>إجمالي القوائم</span></div>
+    <div class="kpi"><b id="kActive">0</b><span>نشطة</span></div>
+    <div class="kpi"><b id="kValid">0</b><span>سارية الآن</span></div>
+    <div class="kpi"><b id="kDefault">0</b><span>افتراضية</span></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>قوائم الأسعار</h2><span class="count" id="count">0</span></div>
+    <div class="cards" id="cards"></div>
+  </section>
 </main>
-<nav class="bottom"><button id="newBtn" class="active">＋<span>قائمة جديدة</span></button><button id="reportBtn">▤<span>تقارير</span></button></nav>
-<div class="overlay" id="formOverlay"><div class="modal"><div class="modal-head"><h2 id="formTitle">إضافة قائمة جديدة</h2><button class="icon-btn" id="closeForm">×</button></div><div class="modal-body"><div class="error-box" id="formError"></div><form id="form" class="form-grid" novalidate>
-  <div class="field"><label>كود القائمة</label><input class="input readonly" id="list_code" name="list_code" readonly disabled></div>
-  <div class="field"><label>اسم القائمة</label><input class="input" id="list_name" name="list_name" type="text" inputmode="text" autocomplete="off" required></div>
-  <div class="field hidden-field"><label>اسم القائمة بالعربية</label><input class="input" id="list_name_ar" name="list_name_ar" type="text"></div>
-  <div class="field"><label>نوع الطرف</label><div class="select-wrap"><select class="input" id="party_type_id" name="party_type_id"><option value="">اختر نوع الطرف</option></select></div></div>
-  <div class="field"><label>الطرف / العميل</label><div class="select-wrap"><select class="input" id="party_id" name="party_id"><option value="">اختر الطرف / العميل</option></select></div></div>
-  <div class="field"><label>من تاريخ</label><input class="input" id="valid_from" name="valid_from" type="date"></div>
-  <div class="field"><label>إلى تاريخ</label><input class="input" id="valid_to" name="valid_to" type="date"></div>
-  <div class="field"><label>الحالة</label><div class="select-wrap"><select class="input" id="is_active" name="is_active"><option value="1">نشطة</option><option value="0">غير نشطة</option></select></div></div>
-  <div class="field"><label>القائمة الافتراضية</label><div class="select-wrap"><select class="input" id="is_default" name="is_default"><option value="0">لا</option><option value="1">نعم</option></select></div></div>
-  <div class="field hidden-field"><label>المحطة</label><input class="input" id="station_id" name="station_id" type="number" readonly></div>
-  <div class="field hidden-field"><label>تاريخ الإنشاء</label><input class="input" id="created_at" name="created_at" type="text" readonly></div>
-  <div class="field full"><label>الوصف</label><textarea class="input textarea" id="description" name="description" inputmode="text"></textarea></div>
-</form></div><div class="modal-foot"><button class="btn primary" id="saveBtn">حفظ القائمة</button><button class="btn" id="cancelForm">إلغاء</button></div></div></div>
-<div class="overlay" id="lookupOverlay"><div class="modal"><div class="modal-head"><h2 id="lookupTitle">اختيار</h2><button class="icon-btn" id="closeLookup">×</button></div><div class="modal-body"><div class="search"><i class="fas fa-search"></i><input id="lookupSearch" type="search" placeholder="بحث…"></div><div class="lookup-list" id="lookupList"></div></div></div></div>
-<div class="overlay" id="detailsOverlay"><div class="modal"><div class="modal-head"><h2>تفاصيل قائمة الأسعار</h2><button class="icon-btn" id="closeDetails">×</button></div><div class="modal-body" id="details"></div></div></div>
-<div class="overlay" id="reportOverlay"><div class="modal"><div class="modal-head"><h2>تقارير قوائم الأسعار</h2><button class="icon-btn" id="closeReport">×</button></div><div class="modal-body"><div class="form-grid"><div class="field"><label>من تاريخ</label><input class="input" id="reportFrom" type="date"></div><div class="field"><label>إلى تاريخ</label><input class="input" id="reportTo" type="date"></div></div><div class="card-actions"><button class="btn primary" id="runReport">توليد التقرير</button><button class="btn" id="exportBtn">تصدير CSV</button><button class="btn" id="printBtn">طباعة</button></div><div id="reportResult" style="margin-top:12px"></div></div></div></div>
+
+<nav class="bottom">
+  <button id="newBtn" class="active">＋<span>قائمة جديدة</span></button>
+  <button id="reportBtn">▤<span>تقارير</span></button>
+</nav>
+
+<!-- ========== مودال إضافة/تعديل القائمة (مع ترتيب الحقول المطلوب) ========== -->
+<div class="overlay" id="formOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="formTitle">إضافة قائمة جديدة</h2><button class="icon-btn" id="closeForm">×</button></div>
+    <div class="modal-body">
+      <div class="error-box" id="formError"></div>
+      <form id="form" class="form-grid" novalidate>
+        <!-- حقل كود القائمة مخفي -->
+        <div class="field full hidden" id="listCodeField">
+          <label>كود القائمة</label>
+          <input class="input readonly" id="list_code" name="list_code" readonly disabled>
+        </div>
+
+        <!-- اسم القائمة - عرض كامل -->
+        <div class="field full">
+          <label>اسم القائمة</label>
+          <input class="input" id="list_name" name="list_name" type="text" inputmode="text" autocomplete="off" required>
+        </div>
+
+        <!-- الوصف - عرض كامل -->
+        <div class="field full">
+          <label>الوصف</label>
+          <textarea class="input textarea" id="description" name="description" inputmode="text"></textarea>
+        </div>
+
+        <!-- نوع الطرف + الطرف/العميل (سطر واحد) -->
+        <div class="field">
+          <label>نوع الطرف</label>
+          <div class="select-wrap"><select class="input" id="party_type_id" name="party_type_id"><option value="">اختر نوع الطرف</option></select></div>
+        </div>
+        <div class="field">
+          <label>الطرف / العميل</label>
+          <div class="select-wrap"><select class="input" id="party_id" name="party_id"><option value="">اختر الطرف / العميل</option></select></div>
+        </div>
+
+        <!-- من تاريخ + إلى تاريخ (سطر واحد) -->
+        <div class="field">
+          <label>من تاريخ</label>
+          <input class="input" id="valid_from" name="valid_from" type="date" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input class="input" id="valid_to" name="valid_to" type="date" inputmode="numeric">
+        </div>
+
+        <!-- الحالة + القائمة الافتراضية (سطر واحد) -->
+        <div class="field">
+          <label>الحالة</label>
+          <div class="select-wrap"><select class="input" id="is_active" name="is_active"><option value="1">نشطة</option><option value="0">غير نشطة</option></select></div>
+        </div>
+        <div class="field">
+          <label>القائمة الافتراضية</label>
+          <div class="select-wrap"><select class="input" id="is_default" name="is_default"><option value="0">لا</option><option value="1">نعم</option></select></div>
+        </div>
+
+        <!-- حقول مخفية -->
+        <div class="field hidden-field"><label>المحطة</label><input class="input" id="station_id" name="station_id" type="number" readonly></div>
+        <div class="field hidden-field"><label>تاريخ الإنشاء</label><input class="input" id="created_at" name="created_at" type="text" readonly></div>
+      </form>
+    </div>
+    <div class="modal-foot"><button class="btn primary" id="saveBtn">حفظ القائمة</button><button class="btn" id="cancelForm">إلغاء</button></div>
+  </div>
+</div>
+
+<!-- ========== مودال تفاصيل القائمة (مع المنتجات) ========== -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal wide">
+    <div class="modal-head"><h2 id="detailTitle">تفاصيل القائمة</h2><button class="icon-btn" id="closeDetail">×</button></div>
+    <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+      <div id="detailInfo" class="meta" style="margin-bottom:16px;"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <h3 style="margin:0;">المنتجات والأسعار</h3>
+        <div>
+          <button class="btn primary" id="addItemBtn">➕ إضافة منتج</button>
+          <button class="btn" id="bulkAddBtn">📋 إضافة جماعية</button>
+        </div>
+      </div>
+      <div id="itemsTable" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:.85rem;">
+          <thead style="background:var(--surface-3);">
+            <tr>
+              <th style="padding:8px; text-align:center;">المنتج</th>
+              <th style="padding:8px; text-align:center;">السعر (و.ح)</th>
+              <th style="padding:8px; text-align:center;">الحد الأدنى</th>
+              <th style="padding:8px; text-align:center;">الحد الأقصى</th>
+              <th style="padding:8px; text-align:center;">الخصم %</th>
+              <th style="padding:8px; text-align:center;">الحالة</th>
+              <th style="padding:8px; text-align:center;">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+      </div>
+      <div id="historySection" style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+        <h3>📜 تاريخ تغيرات الأسعار</h3>
+        <div id="historyList" style="max-height:200px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== مودال الاختيار (للإضافة والبحث) ========== -->
+<div class="overlay" id="lookupOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="lookupTitle">اختيار</h2><button class="icon-btn" id="closeLookup">×</button></div>
+    <div class="modal-body">
+      <div class="search"><i class="fas fa-search"></i><input id="lookupSearch" type="search" inputmode="search" placeholder="بحث…"></div>
+      <div class="lookup-list" id="lookupList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== مودال التقارير المتقدمة ========== -->
+<div class="overlay" id="reportOverlay">
+  <div class="modal wide">
+    <div class="modal-head"><h2>📊 التقارير والإحصائيات المتقدمة</h2><button class="icon-btn" id="closeReport">×</button></div>
+    <div class="modal-body">
+      <div class="tabs" id="reportTabs" style="margin-bottom:16px;">
+        <button class="tab active" data-tab="summary">📋 ملخص</button>
+        <button class="tab" data-tab="comparison">⚖️ مقارنة</button>
+        <button class="tab" data-tab="history">📜 التاريخ</button>
+        <button class="tab" data-tab="analysis">📈 تحليل</button>
+      </div>
+      <div id="reportPanels">
+        <!-- تبويب الملخص -->
+        <div id="panel-summary" class="report-panel">
+          <div class="form-grid">
+            <div class="field"><label>من تاريخ</label><input class="input" id="reportFrom" type="date" inputmode="numeric"></div>
+            <div class="field"><label>إلى تاريخ</label><input class="input" id="reportTo" type="date" inputmode="numeric"></div>
+          </div>
+          <div class="card-actions">
+            <button class="btn primary" id="runSummary">توليد الملخص</button>
+            <button class="btn" id="exportSummary">تصدير CSV</button>
+          </div>
+          <div id="summaryResult" style="margin-top:12px;"></div>
+        </div>
+        <!-- تبويب المقارنة -->
+        <div id="panel-comparison" class="report-panel hidden">
+          <div class="form-grid">
+            <div class="field"><label>القائمة الأولى</label><select class="input" id="compareList1"></select></div>
+            <div class="field"><label>القائمة الثانية</label><select class="input" id="compareList2"></select></div>
+          </div>
+          <button class="btn primary" id="runComparison">مقارنة</button>
+          <div id="comparisonResult" style="margin-top:12px;"></div>
+        </div>
+        <!-- تبويب التاريخ -->
+        <div id="panel-history" class="report-panel hidden">
+          <div class="form-grid">
+            <div class="field"><label>المنتج</label><select class="input" id="historyProduct"><option value="">اختر منتجاً</option></select></div>
+            <div class="field"><label>نوع التغيير</label><select class="input" id="historyType"><option value="all">الكل</option><option value="create">إنشاء</option><option value="update">تحديث</option><option value="delete">حذف</option></select></div>
+          </div>
+          <button class="btn primary" id="runHistoryReport">عرض التاريخ</button>
+          <div id="historyReportResult" style="margin-top:12px;"></div>
+        </div>
+        <!-- تبويب التحليل -->
+        <div id="panel-analysis" class="report-panel hidden">
+          <div class="form-grid">
+            <div class="field"><label>نوع التحليل</label><select class="input" id="analysisType"><option value="distribution">توزيع الأسعار</option><option value="margin">تحليل الهامش</option><option value="trend">الاتجاه الزمني</option></select></div>
+            <div class="field"><label>الفترة</label><select class="input" id="analysisPeriod"><option value="30">آخر 30 يوم</option><option value="90">آخر 90 يوم</option><option value="365">آخر سنة</option></select></div>
+          </div>
+          <button class="btn primary" id="runAnalysis">تحليل</button>
+          <div id="analysisResult" style="margin-top:12px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
 <script>
-(()=>{'use strict';
-const bridge=window.AndroidInterface||null;
-const state={rows:[],filtered:[],tab:'all',editing:null,partyTypes:[],parties:[],loadedAt:null,stationId:0};
-const $=id=>document.getElementById(id); const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const today=()=>new Date().toISOString().slice(0,10); const now=()=>{const d=new Date();const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`};
-function parse(v){if(v==null)throw Error('لم يرجع الجسر نتيجة');const x=typeof v==='string'?JSON.parse(v):v;if(x&&x.success===false)throw Error(x.error||x.message||'فشلت العملية');return x}
-function data(v){return v&&Object.prototype.hasOwnProperty.call(v,'data')?v.data:v}
-function invoke(name,args=[]){if(!bridge||typeof bridge[name]!=='function')return Promise.reject(Error('العقد '+name+' غير متاح في Android Bridge'));try{return Promise.resolve(parse(bridge[name](...args)))}catch(e){return Promise.reject(e)}}
-function rows(v){const x=data(v);if(Array.isArray(x))return x;if(x&&Array.isArray(x.rows))return x.rows;if(x&&Array.isArray(x.data))return x.data;return x&&typeof x==='object'?[x]:[]}
-function loading(v){$('loading').classList.toggle('show',!!v)}
-let toastTimer;function toast(msg,type='success'){const n=$('toast');n.textContent=msg;n.className='toast show '+type;clearTimeout(toastTimer);toastTimer=setTimeout(()=>n.className='toast',3600)}
-function open(id){$(id).classList.add('show')}function close(id){$(id).classList.remove('show')}
-function validNow(r){const f=r.valid_from?String(r.valid_from).slice(0,10):'';const t=r.valid_to?String(r.valid_to).slice(0,10):'';const d=today();return Number(r.is_active)==1&&(!f||f<=d)&&(!t||t>=d)}
-const tabs=[['all','الكل'],['active','النشطة'],['valid','السارية الآن'],['upcoming','القادمة'],['expired','المنتهية'],['default','الافتراضية']];
-function renderTabs(){ $('tabs').innerHTML=tabs.map(([k,l])=>`<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;renderTabs();apply()}) }
-function matchesTab(r){const d=today();switch(state.tab){case'active':return Number(r.is_active)==1;case'valid':return validNow(r);case'upcoming':return Number(r.is_active)==1&&r.valid_from&&String(r.valid_from).slice(0,10)>d;case'expired':return !!r.valid_to&&String(r.valid_to).slice(0,10)<d;case'default':return Number(r.is_default)==1;default:return true}}
-function apply(){const q=($('search').value||'').trim().toLowerCase();state.filtered=state.rows.filter(r=>matchesTab(r)&&(!q||Object.values(r||{}).some(v=>String(v??'').toLowerCase().includes(q))));renderCards();}
-function renderCards(){const a=state.rows;state.filtered=state.filtered||[];$('kAll').textContent=a.length.toLocaleString('ar');$('kActive').textContent=a.filter(r=>Number(r.is_active)==1).length.toLocaleString('ar');$('kValid').textContent=a.filter(validNow).length.toLocaleString('ar');$('kDefault').textContent=a.filter(r=>Number(r.is_default)==1).length.toLocaleString('ar');$('count').textContent=state.filtered.length.toLocaleString('ar');const box=$('cards');if(!state.filtered.length){box.innerHTML='<div class="empty" style="grid-column:1/-1"><i class="fas fa-tags"></i><div>لا توجد قوائم مطابقة.</div></div>';return}box.innerHTML=state.filtered.map((r,i)=>{const id=r.id??i;const active=Number(r.is_active)==1;return `<article class="card" style="animation-delay:${Math.min(i*35,350)}ms"><div class="card-top"><span class="code">${esc(r.list_code||'—')}</span><span class="status ${active?'on':'off'}">${active?'نشطة':'غير نشطة'}</span></div><h3>${esc(r.list_name_ar||r.list_name||'بدون اسم')}</h3><div class="card-sub">${esc(r.description||'بدون وصف')}</div><div class="meta"><div class="meta-item"><span>نوع الطرف</span><b>${esc(r.party_type_name_ar||r.type_name_ar||r.party_type_id||'عام')}</b></div><div class="meta-item"><span>الطرف</span><b>${esc(r.party_name_ar||r.commercial_name_ar||r.party_id||'عام')}</b></div><div class="meta-item"><span>من</span><b>${esc(String(r.valid_from||'—').slice(0,10))}</b></div><div class="meta-item"><span>إلى</span><b>${esc(String(r.valid_to||'—').slice(0,10))}</b></div></div><div class="card-actions"><button class="btn" data-view="${esc(id)}">عرض</button><button class="btn" data-edit="${esc(id)}">تعديل</button><button class="btn danger" data-delete="${esc(id)}">حذف</button></div></article>`}).join('');box.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>details(find(b.dataset.view)));box.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>form(find(b.dataset.edit)));box.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>del(find(b.dataset.delete)))}
-function find(id){return state.rows.find((r,i)=>String(r.id??i)===String(id))}
-function details(r){if(!r)return;$('details').innerHTML='<div class="meta">'+Object.entries(r).map(([k,v])=>`<div class="meta-item"><span>${esc(label(k))}</span><b>${esc(typeof v==='object'?JSON.stringify(v):v??'—')}</b></div>`).join('')+'</div>';open('detailsOverlay')}
-function label(k){return ({id:'المعرف',uuid:'المعرف الفريد',list_code:'كود القائمة',list_name:'اسم القائمة',list_name_ar:'اسم القائمة بالعربية',description:'الوصف',party_id:'معرف الطرف',party_type_id:'معرف نوع الطرف',station_id:'المحطة',valid_from:'من تاريخ',valid_to:'إلى تاريخ',is_active:'الحالة',is_default:'افتراضية',created_at:'تاريخ الإنشاء',updated_at:'آخر تحديث',created_by:'أنشأ بواسطة'}[k]||k)}
-function nextCode(){let max=0;state.rows.forEach(r=>{const m=String(r.list_code||'').match(/(\d+)$/);if(m)max=Math.max(max,Number(m[1]))});return 'PL-'+String(max+1).padStart(3,'0')}
-function fillForm(r){$('list_code').value=r?.list_code||nextCode();$('list_name').value=r?.list_name||'';$('list_name_ar').value=r?.list_name_ar||r?.list_name||'';$('description').value=r?.description||'';$('party_type_id').value=r?.party_type_id??'';$('party_id').value=r?.party_id??'';$('valid_from').value=r?.valid_from?String(r.valid_from).slice(0,10):'';$('valid_to').value=r?.valid_to?String(r.valid_to).slice(0,10):'';$('is_active').value=r?.is_active==null?'1':String(r.is_active);$('is_default').value=r?.is_default==null?'0':String(r.is_default);state.stationId=Number(r?.station_id||state.stationId||0);$('station_id').value=state.stationId||'';$('created_at').value=r?.created_at||now()}
-async function loadLookups(){try{const pt=await invoke('getPartyTypes',[]);state.partyTypes=rows(pt);$('party_type_id').innerHTML='<option value="">اختر نوع الطرف</option>'+state.partyTypes.filter(x=>Number(x.is_active??1)==1).map(x=>`<option value="${esc(x.id)}">${esc(x.type_name_ar||x.type_name||'')}</option>`).join('')}catch(e){toast(e.message,'warning')}try{const ps=await invoke('getParties',[]);state.parties=rows(ps);$('party_id').innerHTML='<option value="">اختر الطرف / العميل</option>'+state.parties.map(x=>`<option value="${esc(x.id)}">${esc(x.commercial_name_ar||x.commercial_name||'')}</option>`).join('')}catch(e){toast(e.message,'warning')}}
-function form(r=null){state.editing=r;fillForm(r);$('formTitle').textContent=r?'تعديل قائمة الأسعار':'إضافة قائمة جديدة';$('formError').className='error-box';$('formError').textContent='';open('formOverlay');loadLookups().then(()=>{if(r){$('party_type_id').value=r.party_type_id??'';$('party_id').value=r.party_id??''}});setTimeout(()=>{const target=r?$('list_name'): $('list_name');target?.focus()},180)}
-function validate(p){const e=[];if(!p.list_name.trim())e.push('اسم القائمة مطلوب.');if(p.valid_from&&p.valid_to&&p.valid_from>p.valid_to)e.push('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية.');if(p.party_type_id&&!state.partyTypes.some(x=>String(x.id)===String(p.party_type_id)))e.push('نوع الطرف المحدد غير موجود في قاعدة البيانات.');if(p.party_id&&!state.parties.some(x=>String(x.id)===String(p.party_id)))e.push('الطرف المحدد غير موجود في قاعدة البيانات.');if(p.is_active!=='0'&&p.is_active!=='1')e.push('حالة القائمة غير صحيحة.');if(p.is_default!=='0'&&p.is_default!=='1')e.push('قيمة الافتراضية غير صحيحة.');return e}
-async function save(){const p={list_code:$('list_code').value,list_name:$('list_name').value.trim(),list_name_ar:$('list_name').value.trim(),description:$('description').value.trim(),party_id:$('party_id').value?Number($('party_id').value):0,party_type_id:$('party_type_id').value?Number($('party_type_id').value):0,station_id:$('station_id').value?Number($('station_id').value):state.stationId||0,valid_from:$('valid_from').value||'',valid_to:$('valid_to').value||'',is_active:Number($('is_active').value),is_default:Number($('is_default').value),created_at:$('created_at').value||now()};const errors=validate({...p,is_active:String(p.is_active),is_default:String(p.is_default),party_type_id:String(p.party_type_id||''),party_id:String(p.party_id||'')});if(errors.length){$('formError').innerHTML=errors.map(x=>`• ${esc(x)}`).join('<br>');$('formError').className='error-box show';toast('يرجى تصحيح أخطاء الإدخال','error');return}loading(true);try{let result;if(state.editing){result=await invoke('updatePriceListRecord',[Number(state.editing.id),JSON.stringify(p)])}else{result=await invoke('savePriceListRecord',[JSON.stringify(p)])}parse(result);toast(state.editing?'تم تحديث قائمة الأسعار فعلياً':'تم حفظ قائمة الأسعار فعلياً');close('formOverlay');await load()}catch(e){$('formError').textContent=e.message||'تعذر الحفظ';$('formError').className='error-box show';toast(e.message||'تعذر الحفظ','error')}finally{loading(false)}}
-async function del(r){if(!r)return;if(!confirm('هل تريد حذف قائمة الأسعار فعلياً؟'))return;loading(true);try{await invoke('deletePriceListRecord',[Number(r.id)]);toast('تم حذف القائمة فعلياً');await load()}catch(e){toast(e.message,'error')}finally{loading(false)}}
-async function load(){if(!bridge){$('offline').classList.add('show');state.rows=[];apply();return}loading(true);try{const result=await invoke('getPriceListRecords',[JSON.stringify({limit:1000,offset:0,search:''})]);state.rows=rows(result);state.loadedAt=new Date();state.rows.forEach(r=>{if(!state.stationId&&Number(r.station_id)>0)state.stationId=Number(r.station_id)});$('station_id').value=state.stationId||'';$('contextText').textContent=state.stationId?'المحطة الحالية: '+state.stationId+' · SQLite':'بيانات فعلية من قاعدة بيانات المشروع';$('offline').classList.remove('show');apply()}catch(e){$('offline').classList.add('show');state.rows=[];apply();toast(e.message,'error')}finally{loading(false)}}
-async function runReport(){loading(true);try{const params={from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('search').value||'',include_archived:true,limit:1000};const result=await invoke('generatePriceListReport',[JSON.stringify(params)]);const rr=rows(result);$('reportResult').innerHTML=rr.length?rr.slice(0,100).map(r=>`<div class="meta" style="margin-bottom:8px">${Object.entries(r).slice(0,8).map(([k,v])=>`<div class="meta-item"><span>${esc(label(k))}</span><b>${esc(v)}</b></div>`).join('')}</div>`).join(''):'<div class="empty">لا توجد بيانات للتقرير.</div>'}catch(e){$('reportResult').innerHTML='<div class="empty">تعذر تشغيل تقرير مستقل؛ تم استخدام البيانات الفعلية المحملة.</div>';toast(e.message,'warning')}finally{loading(false)}}
-function exportCsv(){if(!state.filtered.length){toast('لا توجد بيانات للتصدير','warning');return}const keys=[...new Set(state.filtered.flatMap(r=>Object.keys(r)))];const csv='\ufeff'+[keys,...state.filtered.map(r=>keys.map(k=>String(r[k]??'').replace(/"/g,'""')))].map(a=>a.map(v=>'"'+v+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='price-lists.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-let touchY=0;document.addEventListener('touchstart',e=>{if(window.scrollY===0)touchY=e.touches[0].clientY},{passive:true});document.addEventListener('touchmove',e=>{if(touchY&&e.touches[0].clientY-touchY>35)$('pull').classList.add('show')},{passive:true});document.addEventListener('touchend',async()=>{if($('pull').classList.contains('show')){ $('pull').textContent='جاري التحديث…';await load();setTimeout(()=>$('pull').classList.remove('show'),300);$('pull').textContent='اسحب للتحديث…'}touchY=0});
-$('search').oninput=apply;$('newBtn').onclick=()=>form();$('reportBtn').onclick=()=>open('reportOverlay');$('runReport').onclick=runReport;$('exportBtn').onclick=exportCsv;$('printBtn').onclick=()=>window.print();$('saveBtn').onclick=save;$('cancelForm').onclick=()=>close('formOverlay');$('closeForm').onclick=()=>close('formOverlay');$('closeLookup').onclick=()=>close('lookupOverlay');$('closeDetails').onclick=()=>close('detailsOverlay');$('closeReport').onclick=()=>close('reportOverlay');$('homeBtn').onclick=()=>{window.location.href='../main.html'};$('list_name').oninput=()=>{$('list_name_ar').value=$('list_name').value};$('party_type_id').onchange=()=>{const id=$('party_type_id').value;$('party_id').value='';if(id){const filtered=state.parties.filter(p=>String(p.party_type_id)===String(id));$('party_id').innerHTML='<option value="">اختر الطرف / العميل</option>'+filtered.map(x=>`<option value="${esc(x.id)}">${esc(x.commercial_name_ar||x.commercial_name||'')}</option>`).join('')}};
-function theme(){const dark=document.documentElement.dataset.theme==='dark';$('themeBtn').textContent=dark?'🌙':'🌞'}$('themeBtn').onclick=()=>{const dark=document.documentElement.dataset.theme==='dark';if(dark)delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme='dark';localStorage.setItem('priceListsTheme',dark?'light':'dark');theme()};if(localStorage.getItem('priceListsTheme')==='dark')document.documentElement.dataset.theme='dark';theme();renderTabs();load();
+(() => {
+  'use strict';
+  const bridge = window.AndroidInterface || null;
+  const state = {
+    rows: [],
+    filtered: [],
+    tab: 'all',
+    editing: null,
+    partyTypes: [],
+    parties: [],
+    products: [],
+    currentItems: [],
+    currentDetailId: null,
+    stationId: 0,
+    loadedAt: null
+  };
+  const $ = id => document.getElementById(id);
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const today = () => new Date().toISOString().slice(0,10);
+  const now = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+
+  function parse(v) { if (v == null) throw Error('لم يرجع الجسر نتيجة'); const x = typeof v === 'string' ? JSON.parse(v) : v; if (x && x.success === false) throw Error(x.error || x.message || 'فشلت العملية'); return x; }
+  function data(v) { return v && Object.prototype.hasOwnProperty.call(v, 'data') ? v.data : v; }
+  function rows(v) { const x = data(v); if (Array.isArray(x)) return x; if (x && Array.isArray(x.rows)) return x.rows; if (x && Array.isArray(x.data)) return x.data; return x && typeof x === 'object' ? [x] : []; }
+  function invoke(name, args = []) { if (!bridge || typeof bridge[name] !== 'function') return Promise.reject(Error('العقد '+name+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[name](...args))); } catch (e) { return Promise.reject(e); } }
+  function loading(v) { $('loading').classList.toggle('show', !!v); }
+  function open(id) { $(id).classList.add('show'); }
+  function close(id) { $(id).classList.remove('show'); }
+
+  let toastTimer;
+  function toast(msg, type = 'success') {
+    const n = $('toast');
+    n.textContent = msg;
+    n.className = 'toast show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => n.className = 'toast', 3600);
+  }
+
+  function validNow(r) {
+    const f = r.valid_from ? String(r.valid_from).slice(0,10) : '';
+    const t = r.valid_to ? String(r.valid_to).slice(0,10) : '';
+    const d = today();
+    return Number(r.is_active) == 1 && (!f || f <= d) && (!t || t >= d);
+  }
+
+  const tabs = [['all','الكل'],['active','النشطة'],['valid','السارية الآن'],['upcoming','القادمة'],['expired','المنتهية'],['default','الافتراضية']];
+  function renderTabs() {
+    $('tabs').innerHTML = tabs.map(([k,l]) => `<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('');
+    document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; renderTabs(); apply(); });
+  }
+
+  function matchesTab(r) {
+    const d = today();
+    switch (state.tab) {
+      case 'active': return Number(r.is_active) == 1;
+      case 'valid': return validNow(r);
+      case 'upcoming': return Number(r.is_active) == 1 && r.valid_from && String(r.valid_from).slice(0,10) > d;
+      case 'expired': return !!r.valid_to && String(r.valid_to).slice(0,10) < d;
+      case 'default': return Number(r.is_default) == 1;
+      default: return true;
+    }
+  }
+
+  function apply() {
+    const q = ($('search').value || '').trim().toLowerCase();
+    state.filtered = state.rows.filter(r => matchesTab(r) && (!q || Object.values(r || {}).some(v => String(v ?? '').toLowerCase().includes(q))));
+    renderCards();
+  }
+
+  function renderCards() {
+    const a = state.rows;
+    $('kAll').textContent = a.length.toLocaleString('ar');
+    $('kActive').textContent = a.filter(r => Number(r.is_active) == 1).length.toLocaleString('ar');
+    $('kValid').textContent = a.filter(validNow).length.toLocaleString('ar');
+    $('kDefault').textContent = a.filter(r => Number(r.is_default) == 1).length.toLocaleString('ar');
+    $('count').textContent = state.filtered.length.toLocaleString('ar');
+    const box = $('cards');
+    if (!state.filtered.length) {
+      box.innerHTML = '<div class="empty" style="grid-column:1/-1"><i class="fas fa-tags"></i><div>لا توجد قوائم مطابقة.</div></div>';
+      return;
+    }
+    box.innerHTML = state.filtered.map((r, i) => {
+      const id = r.id ?? i;
+      const active = Number(r.is_active) == 1;
+      return `<article class="card" style="animation-delay:${Math.min(i*35,350)}ms">
+        <div class="card-top"><span class="code">${esc(r.list_code || '—')}</span><span class="status ${active?'on':'off'}">${active?'نشطة':'غير نشطة'}</span></div>
+        <h3>${esc(r.list_name_ar || r.list_name || 'بدون اسم')}</h3>
+        <div class="card-sub">${esc(r.description || 'بدون وصف')}</div>
+        <div class="meta">
+          <div class="meta-item"><span>نوع الطرف</span><b>${esc(r.party_type_name_ar || r.type_name_ar || r.party_type_id || 'عام')}</b></div>
+          <div class="meta-item"><span>الطرف</span><b>${esc(r.party_name_ar || r.commercial_name_ar || r.party_id || 'عام')}</b></div>
+          <div class="meta-item"><span>من</span><b>${esc(String(r.valid_from || '—').slice(0,10))}</b></div>
+          <div class="meta-item"><span>إلى</span><b>${esc(String(r.valid_to || '—').slice(0,10))}</b></div>
+          <div class="meta-item"><span>المنتجات</span><b>${r.items_count || 0}</b></div>
+        </div>
+        <div class="card-actions">
+          <button class="btn" data-view="${esc(id)}">عرض</button>
+          <button class="btn" data-edit="${esc(id)}">تعديل</button>
+          <button class="btn danger" data-delete="${esc(id)}">حذف</button>
+        </div>
+      </article>`;
+    }).join('');
+    box.querySelectorAll('[data-view]').forEach(b => b.onclick = () => details(find(b.dataset.view)));
+    box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => form(find(b.dataset.edit)));
+    box.querySelectorAll('[data-delete]').forEach(b => b.onclick = () => del(find(b.dataset.delete)));
+  }
+
+  function find(id) { return state.rows.find((r, i) => String(r.id ?? i) === String(id)); }
+
+  function nextCode() {
+    let max = 0;
+    state.rows.forEach(r => { const m = String(r.list_code || '').match(/(\d+)$/); if (m) max = Math.max(max, Number(m[1])); });
+    return 'PL-' + String(max + 1).padStart(3, '0');
+  }
+
+  function fillForm(r) {
+    $('list_code').value = r?.list_code || nextCode();
+    $('list_name').value = r?.list_name || '';
+    $('description').value = r?.description || '';
+    $('party_type_id').value = r?.party_type_id ?? '';
+    $('party_id').value = r?.party_id ?? '';
+    $('valid_from').value = r?.valid_from ? String(r.valid_from).slice(0,10) : '';
+    $('valid_to').value = r?.valid_to ? String(r.valid_to).slice(0,10) : '';
+    $('is_active').value = r?.is_active == null ? '1' : String(r.is_active);
+    $('is_default').value = r?.is_default == null ? '0' : String(r.is_default);
+    state.stationId = Number(r?.station_id || state.stationId || 0);
+    $('station_id').value = state.stationId || '';
+    $('created_at').value = r?.created_at || now();
+    // إخفاء حقل الكود
+    document.getElementById('listCodeField').classList.add('hidden');
+  }
+
+  async function loadLookups() {
+    try {
+      const pt = await invoke('getPartyTypes', []);
+      state.partyTypes = rows(pt);
+      const sel = $('party_type_id');
+      sel.innerHTML = '<option value="">اختر نوع الطرف</option>' + state.partyTypes.map(x => `<option value="${esc(x.id)}">${esc(x.type_name_ar || x.type_name)}</option>`).join('');
+    } catch (e) {
+      toast('فشل تحميل أنواع الأطراف: ' + e.message, 'warning');
+      state.partyTypes = [{ id: 1, type_name_ar: 'عميل', is_active: 1 }];
+      $('party_type_id').innerHTML = '<option value="">اختر نوع الطرف</option><option value="1">عميل</option>';
+    }
+    try {
+      const ps = await invoke('getParties', []);
+      state.parties = rows(ps);
+      $('party_id').innerHTML = '<option value="">اختر الطرف/العميل</option>' + state.parties.map(x => `<option value="${esc(x.id)}">${esc(x.commercial_name_ar || x.commercial_name)}</option>`).join('');
+    } catch (e) {
+      toast('فشل تحميل الأطراف: ' + e.message, 'error');
+      state.parties = [{ id: 1, commercial_name_ar: 'شركة افتراضية', party_type_id: 1 }];
+      $('party_id').innerHTML = '<option value="">اختر الطرف/العميل</option><option value="1">شركة افتراضية</option>';
+    }
+    try {
+      const pr = await invoke('getProducts', []);
+      state.products = rows(pr);
+    } catch (e) {
+      toast('فشل تحميل المنتجات: ' + e.message, 'warning');
+      state.products = [];
+    }
+  }
+
+  // ========== دالة فتح النموذج مع تحسين التركيز ==========
+  function form(r = null) {
+    state.editing = r;
+    fillForm(r);
+    $('formTitle').textContent = r ? 'تعديل قائمة الأسعار' : 'إضافة قائمة جديدة';
+    $('formError').className = 'error-box';
+    $('formError').textContent = '';
+    open('formOverlay');
+    loadLookups().then(() => {
+      if (r) {
+        $('party_type_id').value = r.party_type_id ?? '';
+        $('party_id').value = r.party_id ?? '';
+      }
+      // نقل التركيز إلى حقل "اسم القائمة" بعد تحميل البيانات
+      setTimeout(() => {
+        const target = $('list_name');
+        if (target) {
+          target.focus();
+          // تحديد النص إن وجد لتسهيل التعديل
+          target.select();
+        }
+      }, 300);
+    });
+  }
+
+  function validate(p) {
+    const e = [];
+    if (!p.list_name.trim()) e.push('اسم القائمة مطلوب.');
+    if (p.valid_from && p.valid_to && p.valid_from > p.valid_to) e.push('تاريخ البداية يجب ألا يتجاوز تاريخ النهاية.');
+    if (p.party_type_id && !state.partyTypes.some(x => String(x.id) === String(p.party_type_id))) e.push('نوع الطرف المحدد غير موجود في قاعدة البيانات.');
+    if (p.party_id && !state.parties.some(x => String(x.id) === String(p.party_id))) e.push('الطرف المحدد غير موجود في قاعدة البيانات.');
+    if (p.is_active !== '0' && p.is_active !== '1') e.push('حالة القائمة غير صحيحة.');
+    if (p.is_default !== '0' && p.is_default !== '1') e.push('قيمة الافتراضية غير صحيحة.');
+    return e;
+  }
+
+  async function save() {
+    const p = {
+      list_code: $('list_code').value,
+      list_name: $('list_name').value.trim(),
+      list_name_ar: $('list_name').value.trim(),
+      description: $('description').value.trim(),
+      party_id: $('party_id').value ? Number($('party_id').value) : 0,
+      party_type_id: $('party_type_id').value ? Number($('party_type_id').value) : 0,
+      station_id: $('station_id').value ? Number($('station_id').value) : state.stationId || 0,
+      valid_from: $('valid_from').value || '',
+      valid_to: $('valid_to').value || '',
+      is_active: Number($('is_active').value),
+      is_default: Number($('is_default').value),
+      created_at: $('created_at').value || now()
+    };
+    const errors = validate({ ...p, is_active: String(p.is_active), is_default: String(p.is_default), party_type_id: String(p.party_type_id || ''), party_id: String(p.party_id || '') });
+    if (errors.length) {
+      $('formError').innerHTML = errors.map(x => `• ${esc(x)}`).join('<br>');
+      $('formError').className = 'error-box show';
+      toast('يرجى تصحيح أخطاء الإدخال', 'error');
+      return;
+    }
+    loading(true);
+    try {
+      let result;
+      if (state.editing) {
+        result = await invoke('updatePriceListRecord', [Number(state.editing.id), JSON.stringify(p)]);
+      } else {
+        result = await invoke('savePriceListRecord', [JSON.stringify(p)]);
+      }
+      parse(result);
+      toast(state.editing ? 'تم تحديث قائمة الأسعار فعلياً' : 'تم حفظ قائمة الأسعار فعلياً');
+      close('formOverlay');
+      await load();
+    } catch (e) {
+      $('formError').textContent = e.message || 'تعذر الحفظ';
+      $('formError').className = 'error-box show';
+      toast(e.message || 'تعذر الحفظ', 'error');
+    } finally { loading(false); }
+  }
+
+  async function del(r) {
+    if (!r) return;
+    if (!confirm('هل تريد حذف قائمة الأسعار فعلياً؟')) return;
+    loading(true);
+    try {
+      await invoke('deletePriceListRecord', [Number(r.id)]);
+      toast('تم حذف القائمة فعلياً');
+      await load();
+    } catch (e) { toast(e.message, 'error'); } finally { loading(false); }
+  }
+
+  // === تفاصيل القائمة وعناصرها ===
+  async function details(r) {
+    if (!r) return;
+    state.currentDetailId = r.id;
+    $('detailTitle').textContent = `تفاصيل القائمة: ${r.list_name_ar || r.list_name}`;
+    $('detailInfo').innerHTML = Object.entries({
+      'الكود': r.list_code,
+      'الاسم': r.list_name_ar || r.list_name,
+      'النوع': r.party_type_name_ar || r.party_type_id,
+      'الطرف': r.party_name_ar || r.party_id,
+      'من': r.valid_from || '—',
+      'إلى': r.valid_to || '—',
+      'الحالة': Number(r.is_active) ? 'نشطة' : 'غير نشطة',
+      'افتراضي': Number(r.is_default) ? 'نعم' : 'لا'
+    }).map(([k, v]) => `<div class="meta-item"><span>${k}</span><b>${esc(v)}</b></div>`).join('');
+    open('detailOverlay');
+    await loadItems(r.id);
+    if (state.products.length === 0) {
+      try {
+        const pr = await invoke('getProducts', []);
+        state.products = rows(pr);
+      } catch (e) { /* ignored */ }
+    }
+  }
+
+  async function loadItems(priceListId) {
+    if (!priceListId) return;
+    try {
+      const result = await invoke('getPriceListItems', [priceListId]);
+      state.currentItems = rows(result);
+      renderItems(state.currentItems);
+      if (state.currentItems.length) {
+        loadPriceHistory(state.currentItems[0].product_id);
+      } else {
+        $('historyList').innerHTML = '<div style="color:var(--muted);">لا توجد عناصر في هذه القائمة</div>';
+      }
+    } catch (e) {
+      toast('فشل تحميل عناصر القائمة: ' + e.message, 'error');
+      state.currentItems = [];
+      renderItems([]);
+    }
+  }
+
+  function renderItems(items) {
+    const tbody = $('itemsBody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">لا توجد منتجات في هذه القائمة</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map((item, idx) => {
+      const pname = item.product_name_ar || item.product_name || 'منتج #' + item.product_id;
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px; text-align:center;">${esc(pname)}<small style="display:block;color:var(--muted);">${esc(item.product_code || '')}</small></td>
+        <td style="padding:8px; text-align:center;"><input class="input" style="width:100px; padding:4px; text-align:center;" type="number" step="0.01" inputmode="decimal" value="${item.unit_price}" data-item-id="${item.id}" data-field="unit_price" onchange="updateItemField(this)"></td>
+        <td style="padding:8px; text-align:center;"><input class="input" style="width:70px; padding:4px; text-align:center;" type="number" step="1" min="1" inputmode="numeric" value="${item.min_quantity || 1}" data-item-id="${item.id}" data-field="min_quantity" onchange="updateItemField(this)"></td>
+        <td style="padding:8px; text-align:center;"><input class="input" style="width:70px; padding:4px; text-align:center;" type="number" step="1" min="0" inputmode="numeric" value="${item.max_quantity || ''}" data-item-id="${item.id}" data-field="max_quantity" onchange="updateItemField(this)"></td>
+        <td style="padding:8px; text-align:center;"><input class="input" style="width:70px; padding:4px; text-align:center;" type="number" step="0.01" min="0" max="100" inputmode="decimal" value="${item.discount_percent || 0}" data-item-id="${item.id}" data-field="discount_percent" onchange="updateItemField(this)"></td>
+        <td style="padding:8px; text-align:center;"><select class="input" style="width:80px; padding:4px;" data-item-id="${item.id}" data-field="is_active" onchange="updateItemField(this)"><option value="1" ${item.is_active == 1 ? 'selected' : ''}>نشط</option><option value="0" ${item.is_active == 0 ? 'selected' : ''}>غير نشط</option></select></td>
+        <td style="padding:8px; text-align:center;"><button class="btn danger" style="padding:4px 8px; font-size:.7rem;" onclick="deleteItem(${item.id})">🗑️</button><button class="btn" style="padding:4px 8px; font-size:.7rem;" onclick="showItemHistory(${item.product_id})">📊</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  window.updateItemField = async function(input) {
+    const id = Number(input.dataset.itemId);
+    const field = input.dataset.field;
+    let value = input.value;
+    if (field === 'is_active') value = Number(value);
+    else value = parseFloat(value) || 0;
+    const item = state.currentItems.find(i => i.id === id);
+    if (!item) return;
+    try {
+      const data = {
+        unit_price: field === 'unit_price' ? value : item.unit_price,
+        min_quantity: field === 'min_quantity' ? value : item.min_quantity,
+        max_quantity: field === 'max_quantity' ? value : item.max_quantity,
+        discount_percent: field === 'discount_percent' ? value : item.discount_percent,
+        is_active: field === 'is_active' ? value : item.is_active,
+        valid_from: item.valid_from || '',
+        valid_to: item.valid_to || ''
+      };
+      await invoke('updatePriceListItem', [id, JSON.stringify(data)]);
+      toast('تم تحديث العنصر');
+      Object.assign(item, { [field]: value });
+    } catch (e) {
+      toast('فشل التحديث: ' + e.message, 'error');
+      input.value = item[field];
+    }
+  };
+
+  window.deleteItem = async function(id) {
+    if (!confirm('هل تريد حذف هذا المنتج من القائمة؟')) return;
+    try {
+      await invoke('deletePriceListItem', [id]);
+      toast('تم الحذف');
+      if (state.currentDetailId) await loadItems(state.currentDetailId);
+    } catch (e) { toast('فشل الحذف: ' + e.message, 'error'); }
+  };
+
+  async function showAddItemDialog() {
+    if (!state.products || !state.products.length) {
+      toast('لم يتم تحميل قائمة المنتجات. تأكد من اتصال قاعدة البيانات.', 'warning');
+      return;
+    }
+    const list = $('lookupList');
+    list.innerHTML = state.products.map(p => `<button class="lookup" data-id="${p.id}" onclick="addProductToCurrentList(${p.id}, '${esc(p.name_ar || p.name)}')">${esc(p.name_ar || p.name)}<small>${esc(p.product_code || '')} - ${p.unit_price || 0}</small></button>`).join('');
+    $('lookupTitle').textContent = 'اختر منتجاً للإضافة';
+    $('lookupSearch').value = '';
+    $('lookupSearch').oninput = function() {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('.lookup').forEach(btn => {
+        btn.style.display = btn.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    };
+    open('lookupOverlay');
+    setTimeout(() => $('lookupSearch').focus(), 100);
+  }
+
+  window.addProductToCurrentList = async function(productId, productName) {
+    if (!state.currentDetailId) { toast('لم يتم تحديد قائمة', 'error'); return; }
+    const price = prompt(`أدخل السعر للمنتج "${productName}":`, '0.00');
+    if (price === null) return;
+    const unitPrice = parseFloat(price);
+    if (isNaN(unitPrice) || unitPrice < 0) { toast('السعر غير صحيح', 'error'); return; }
+    try {
+      const data = {
+        price_list_id: state.currentDetailId,
+        product_id: productId,
+        unit_price: unitPrice,
+        min_quantity: 1,
+        max_quantity: 0,
+        discount_percent: 0,
+        valid_from: '',
+        valid_to: '',
+        is_active: 1
+      };
+      await invoke('addPriceListItem', [JSON.stringify(data)]);
+      toast('تمت الإضافة');
+      close('lookupOverlay');
+      await loadItems(state.currentDetailId);
+    } catch (e) { toast('فشل الإضافة: ' + e.message, 'error'); }
+  };
+
+  async function bulkAddItems() {
+    if (!state.products || !state.products.length) { toast('لا توجد منتجات', 'warning'); return; }
+    const price = prompt('أدخل السعر الموحد لجميع المنتجات المحددة:', '0.00');
+    if (price === null) return;
+    const unitPrice = parseFloat(price);
+    if (isNaN(unitPrice) || unitPrice < 0) { toast('السعر غير صحيح', 'error'); return; }
+    const list = $('lookupList');
+    list.innerHTML = state.products.map(p => `<label class="lookup" style="display:flex; align-items:center; gap:10px; cursor:pointer;"><input type="checkbox" value="${p.id}"><span>${esc(p.name_ar || p.name)}</span><small>${esc(p.product_code || '')}</small></label>`).join('');
+    $('lookupTitle').textContent = 'اختر المنتجات (متعدد)';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn primary';
+    confirmBtn.textContent = 'إضافة المحدد';
+    confirmBtn.style.marginTop = '12px';
+    confirmBtn.onclick = async function() {
+      const checked = document.querySelectorAll('.lookup input[type="checkbox"]:checked');
+      if (!checked.length) { toast('لم تختار أي منتج', 'warning'); return; }
+      let success = 0;
+      for (const cb of checked) {
+        try {
+          const data = {
+            price_list_id: state.currentDetailId,
+            product_id: Number(cb.value),
+            unit_price: unitPrice,
+            min_quantity: 1,
+            max_quantity: 0,
+            discount_percent: 0,
+            valid_from: '',
+            valid_to: '',
+            is_active: 1
+          };
+          await invoke('addPriceListItem', [JSON.stringify(data)]);
+          success++;
+        } catch (e) { console.error('فشل إضافة المنتج ' + cb.value, e); }
+      }
+      toast(`تمت إضافة ${success} منتج بنجاح`);
+      close('lookupOverlay');
+      await loadItems(state.currentDetailId);
+    };
+    list.parentNode.appendChild(confirmBtn);
+    open('lookupOverlay');
+  }
+
+  async function loadPriceHistory(productId) {
+    if (!productId) { $('historyList').innerHTML = '<div style="color:var(--muted);">اختر منتجاً لعرض تاريخ أسعاره</div>'; return; }
+    try {
+      const result = await invoke('getProductPriceHistory', [productId, 20]);
+      const history = rows(result);
+      if (!history.length) { $('historyList').innerHTML = '<div style="color:var(--muted);">لا يوجد تاريخ مسجل لهذا المنتج</div>'; return; }
+      $('historyList').innerHTML = history.map(h => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border-strong); font-size:.8rem; flex-wrap:wrap;"><span>${esc(h.change_reason || 'تعديل')}</span><span>${h.old_price || '—'} → ${h.new_price}</span><span style="color:var(--muted);">${esc(h.change_date || '').slice(0,10)}</span><span style="color:var(--primary);">بواسطة: ${esc(h.created_by_name || h.created_by)}</span></div>`).join('');
+    } catch (e) { $('historyList').innerHTML = '<div style="color:var(--danger);">فشل تحميل التاريخ: ' + e.message + '</div>'; }
+  }
+
+  window.showItemHistory = function(productId) {
+    loadPriceHistory(productId);
+    document.getElementById('historySection').scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // === التقارير المتقدمة ===
+  function initReportTabs() {
+    document.querySelectorAll('#reportTabs .tab').forEach(tab => {
+      tab.onclick = function() {
+        document.querySelectorAll('#reportTabs .tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        const panelId = 'panel-' + this.dataset.tab;
+        document.querySelectorAll('.report-panel').forEach(p => p.classList.add('hidden'));
+        document.getElementById(panelId).classList.remove('hidden');
+      };
+    });
+  }
+
+  async function runSummary() {
+    const from = $('reportFrom').value;
+    const to = $('reportTo').value;
+    let filtered = state.rows;
+    if (from) filtered = filtered.filter(r => r.valid_from && String(r.valid_from) >= from);
+    if (to) filtered = filtered.filter(r => r.valid_to && String(r.valid_to) <= to);
+    const total = filtered.length;
+    const active = filtered.filter(r => Number(r.is_active) == 1).length;
+    const valid = filtered.filter(validNow).length;
+    const def = filtered.filter(r => Number(r.is_default) == 1).length;
+    const itemsCount = filtered.reduce((sum, r) => sum + (Number(r.items_count) || 0), 0);
+    $('summaryResult').innerHTML = `
+      <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi"><b>${total}</b><span>إجمالي القوائم</span></div>
+        <div class="kpi"><b>${active}</b><span>نشطة</span></div>
+        <div class="kpi"><b>${valid}</b><span>سارية</span></div>
+        <div class="kpi"><b>${def}</b><span>افتراضية</span></div>
+        <div class="kpi"><b>${itemsCount}</b><span>إجمالي المنتجات</span></div>
+      </div>
+    `;
+  }
+
+  async function runComparison() {
+    const id1 = $('compareList1').value;
+    const id2 = $('compareList2').value;
+    if (!id1 || !id2) { toast('اختر قائمتين للمقارنة', 'warning'); return; }
+    try {
+      const items1 = await invoke('getPriceListItems', [Number(id1)]);
+      const items2 = await invoke('getPriceListItems', [Number(id2)]);
+      const list1 = rows(items1);
+      const list2 = rows(items2);
+      const map1 = Object.fromEntries(list1.map(i => [i.product_id, i]));
+      const map2 = Object.fromEntries(list2.map(i => [i.product_id, i]));
+      const allIds = new Set([...Object.keys(map1), ...Object.keys(map2)]);
+      let html = '<table style="width:100%; border-collapse:collapse; font-size:.8rem;"><thead><tr><th>المنتج</th><th>القائمة 1</th><th>القائمة 2</th><th>الفرق</th></tr></thead><tbody>';
+      for (const pid of allIds) {
+        const p1 = map1[pid];
+        const p2 = map2[pid];
+        const name = p1?.product_name_ar || p2?.product_name_ar || 'منتج #' + pid;
+        const price1 = p1?.unit_price || '—';
+        const price2 = p2?.unit_price || '—';
+        const diff = (p1 && p2) ? (p1.unit_price - p2.unit_price).toFixed(2) : '—';
+        html += `<tr><td>${esc(name)}</td><td>${price1}</td><td>${price2}</td><td style="color:${diff !== '—' && diff > 0 ? 'var(--danger)' : 'var(--success)'}">${diff}</td></tr>`;
+      }
+      html += '</tbody></table>';
+      $('comparisonResult').innerHTML = html;
+    } catch (e) { toast('فشل المقارنة: ' + e.message, 'error'); }
+  }
+
+  async function runHistoryReport() {
+    const productId = $('historyProduct').value;
+    if (!productId) { toast('اختر منتجاً', 'warning'); return; }
+    const type = $('historyType').value;
+    try {
+      const result = await invoke('getProductPriceHistory', [Number(productId), 100]);
+      let history = rows(result);
+      if (type !== 'all') history = history.filter(h => h.change_reason && h.change_reason.includes(type));
+      if (!history.length) { $('historyReportResult').innerHTML = '<div class="empty">لا يوجد تاريخ لهذا المنتج</div>'; return; }
+      $('historyReportResult').innerHTML = history.map(h => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border);"><span>${esc(h.change_reason || 'تعديل')}</span><span>${h.old_price || '—'} → ${h.new_price}</span><span>${esc(h.change_date || '').slice(0,10)}</span><span>${esc(h.created_by_name || h.created_by)}</span></div>`).join('');
+    } catch (e) { toast('فشل جلب التاريخ: ' + e.message, 'error'); }
+  }
+
+  async function runAnalysis() {
+    const type = $('analysisType').value;
+    const period = parseInt($('analysisPeriod').value);
+    toast('تحليل ' + type + ' لفترة ' + period + ' يوم (محاكاة)', 'warning');
+    $('analysisResult').innerHTML = `<div style="text-align:center;padding:20px;color:var(--muted);">📊 تحليل ${type} سيعرض هنا بعد التكامل مع البيانات الفعلية.</div>`;
+  }
+
+  async function load() {
+    if (!bridge) { $('offline').classList.add('show'); state.rows = []; apply(); return; }
+    loading(true);
+    try {
+      const result = await invoke('getPriceListRecords', [JSON.stringify({ limit: 1000, offset: 0, search: '' })]);
+      state.rows = rows(result);
+      state.loadedAt = new Date();
+      state.rows.forEach(r => { if (!state.stationId && Number(r.station_id) > 0) state.stationId = Number(r.station_id); });
+      $('station_id').value = state.stationId || '';
+      $('contextText').textContent = state.stationId ? 'المحطة الحالية: '+state.stationId+' · SQLite' : 'بيانات فعلية من قاعدة بيانات المشروع';
+      $('offline').classList.remove('show');
+      apply();
+      populateSelects();
+    } catch (e) {
+      $('offline').classList.add('show');
+      state.rows = [];
+      apply();
+      toast(e.message, 'error');
+    } finally { loading(false); }
+  }
+
+  function populateSelects() {
+    const sel1 = $('compareList1');
+    const sel2 = $('compareList2');
+    const selHist = $('historyProduct');
+    const opts = state.rows.map(r => `<option value="${r.id}">${esc(r.list_name_ar || r.list_name)}</option>`).join('');
+    sel1.innerHTML = '<option value="">اختر القائمة الأولى</option>' + opts;
+    sel2.innerHTML = '<option value="">اختر القائمة الثانية</option>' + opts;
+    selHist.innerHTML = '<option value="">اختر منتجاً</option>' + state.products.map(p => `<option value="${p.id}">${esc(p.name_ar || p.name)}</option>`).join('');
+  }
+
+  // === أحداث DOM ===
+  $('search').oninput = apply;
+  $('newBtn').onclick = () => form();
+  $('reportBtn').onclick = () => { open('reportOverlay'); initReportTabs(); populateSelects(); };
+  $('runSummary').onclick = runSummary;
+  $('exportSummary').onclick = function() {
+    if (!state.filtered.length) { toast('لا توجد بيانات للتصدير', 'warning'); return; }
+    const keys = [...new Set(state.filtered.flatMap(r => Object.keys(r)))];
+    const csv = '\ufeff' + [keys, ...state.filtered.map(r => keys.map(k => String(r[k] ?? '').replace(/"/g, '""')))].map(a => a.map(v => '"'+v+'"').join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'price-lists-summary.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('runComparison').onclick = runComparison;
+  $('runHistoryReport').onclick = runHistoryReport;
+  $('runAnalysis').onclick = runAnalysis;
+  $('saveBtn').onclick = save;
+  $('cancelForm').onclick = () => close('formOverlay');
+  $('closeForm').onclick = () => close('formOverlay');
+  $('closeLookup').onclick = () => close('lookupOverlay');
+  $('closeDetail').onclick = () => close('detailOverlay');
+  $('closeReport').onclick = () => close('reportOverlay');
+  $('addItemBtn').onclick = showAddItemDialog;
+  $('bulkAddBtn').onclick = bulkAddItems;
+  $('homeBtn').onclick = () => { window.location.href = '../main.html'; };
+  $('themeBtn').onclick = () => {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    if (dark) delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = 'dark';
+    localStorage.setItem('priceListsTheme', dark ? 'light' : 'dark');
+    $('themeBtn').textContent = dark ? '🌞' : '🌙';
+  };
+  if (localStorage.getItem('priceListsTheme') === 'dark') document.documentElement.dataset.theme = 'dark';
+  $('themeBtn').textContent = document.documentElement.dataset.theme === 'dark' ? '🌙' : '🌞';
+
+  // سحب للتحديث
+  let touchY = 0;
+  document.addEventListener('touchstart', e => { if (window.scrollY === 0) touchY = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchmove', e => { if (touchY && e.touches[0].clientY - touchY > 35) $('pull').classList.add('show'); }, { passive: true });
+  document.addEventListener('touchend', async () => {
+    if ($('pull').classList.contains('show')) {
+      $('pull').textContent = 'جاري التحديث…';
+      await load();
+      setTimeout(() => $('pull').classList.remove('show'), 300);
+      $('pull').textContent = 'اسحب للتحديث…';
+    }
+    touchY = 0;
+  });
+
+  renderTabs();
+  load();
 })();
 </script>
-<script src="file:///android_asset/assets-local/js/modal-interaction.js"></script></body>
+</body>
 </html>
