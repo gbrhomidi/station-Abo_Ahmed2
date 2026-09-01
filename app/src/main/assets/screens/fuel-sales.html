@@ -1408,7 +1408,7 @@
     <div class="modal-overlay" id="formModal" onclick="closeModal(event,'formModal')"><div class="modal" onclick="event.stopPropagation()">
         <div class="modal-header"><h3 class="modal-title" id="formTitle">إضافة سجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'formModal')"><i class="fas fa-times"></i></button></div>
         <div class="modal-body"><form id="recordForm" class="form-grid"></form></div>
-        <div class="modal-footer"><button type="button" class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ فعلي</button><button type="button" class="btn" onclick="closeModal(null,'formModal')">إلغاء</button></div>
+        <div class="modal-footer"><button type="button" class="btn primary" id="saveBtn"><i class="fas fa-save"></i> حفظ فعلي</button><button type="button" class="btn" id="deliveryBtn" disabled title="يتاح بعد حفظ عملية البيع بنجاح"><i class="fas fa-truck"></i> توصيل الطلب</button><button type="button" class="btn" onclick="closeModal(null,'formModal')">إلغاء</button></div>
     </div></div>
     <div class="modal-overlay" id="detailsModal" onclick="closeModal(event,'detailsModal')"><div class="modal" onclick="event.stopPropagation()">
         <div class="modal-header"><h3 class="modal-title">تفاصيل السجل</h3><button type="button" class="modal-close" onclick="closeModal(null,'detailsModal')"><i class="fas fa-times"></i></button></div>
@@ -1425,7 +1425,7 @@
         'use strict';
         const CFG = {
             title:'مبيعات الوقود', icon:'fa-gas-pump', module:'sales',
-            listMethod:'getFuelSaleRecords', listArgs:['{}'],
+            listMethod:'getFuelSalesPage', listArgs:['{}'],
             fields:[
                 {label:'معرف البيع',key:'sale_id',type:'number',required:false,readonly:true},
                 {label:'الوردية',key:'shift_id',type:'number',required:true,readonly:true},
@@ -1435,8 +1435,7 @@
                 {label:'السعر / لتر',key:'price_per_liter',type:'number',required:true,readonly:true},
                 {label:'الإجمالي',key:'total_amount',type:'number',required:true,readonly:true},
                 {label:'طريقة الدفع',key:'payment_method',type:'select',required:true},
-                {label:'العميل',key:'customer_id',type:'number',required:false},
-                {label:'لوحة المركبة',key:'vehicle_plate',type:'text',required:false},
+                {label:'العميل',key:'customer_id',type:'select',required:false},
                 {label:'تاريخ البيع',key:'sale_date',type:'date',required:true,readonly:true},
                 {label:'وقت البيع',key:'sale_time',type:'time',required:true,readonly:true},
                 {label:'ملاحظات',key:'notes',type:'textarea',required:false}
@@ -1445,7 +1444,7 @@
             titleFields:['sale_id'],
             subtitleFields:['shift_id','pump_id','fuel_type_id','quantity','price_per_liter','total_amount','payment_method'],
             createMethod:'saveFuelSaleRecord',updateMethod:'updateFuelSaleRecord',deleteMethod:'deleteFuelSaleRecord',
-            reportKind:'operational:FuelSale',reports:['الكل','مبيعات كاش','مبيعات آجل'],operationKey:'fuel_sales'
+            reportKind:'operational:FuelSale',reports:['الكل','مبيعات كاش','مبيعات آجل'],operationKey:null
         }
         const bridge = window.AndroidInterface;
         const state = { rows: [], filtered: [], editing: null, filter: 'all', loadedAt: null };
@@ -1458,6 +1457,11 @@
         function dataOf(value) { return value && Object.prototype.hasOwnProperty.call(value,'data') ? value.data : value; }
         function invoke(method,args=[]) { if (!bridge || typeof bridge[method] !== 'function') return Promise.reject(new Error('العقد '+method+' غير متاح في Android Bridge')); try { return Promise.resolve(parse(bridge[method](...args))); } catch (error) { return Promise.reject(error); } }
         function argsForLoad() {
+            if (CFG.listMethod === 'getFuelSalesPage') {
+                const params = {limit: 200, offset: 0, search: $('searchInput').value || ''};
+                if (state.filter === 'cash' || state.filter === 'credit') params.payment_method = state.filter;
+                return [JSON.stringify(params)];
+            }
             if (CFG.operationKey) return [JSON.stringify({limit: 200, search: $('searchInput').value || ''})];
             if (CFG.reportKind === 'balanceSheet') return [today(), 0];
             if (CFG.reportKind === 'eod') return [];
@@ -1479,9 +1483,9 @@
         function numeric(v) { const n=Number(v); return Number.isFinite(n)?n:0; }
         function setDateDefaults() { $('reportFrom').value = $('reportFrom').value || today(); $('reportTo').value = $('reportTo').value || today(); }
         function renderFilters() {
-            document.querySelectorAll('#filterChips .filter-chip').forEach(btn=>btn.addEventListener('click',()=>{
+                document.querySelectorAll('#filterChips .filter-chip').forEach(btn=>btn.addEventListener('click',()=>{
                 document.querySelectorAll('#filterChips .filter-chip').forEach(x=>x.classList.remove('active'));
-                btn.classList.add('active'); state.filter=btn.dataset.filter; applyFilter();
+                btn.classList.add('active'); state.filter=btn.dataset.filter; reloadData();
             }));
         }
         function paymentType(row){
@@ -1536,9 +1540,10 @@
             const results=await Promise.all([
                 (bridge&&typeof bridge.getCurrentShift==='function')?invoke('getCurrentShift',[]).catch(()=>null):Promise.resolve(null),
                 (bridge&&typeof bridge.getPumps==='function')?invoke('getPumps',[]).catch(()=>null):Promise.resolve(null),
-                (bridge&&typeof bridge.getFuelTypes==='function')?invoke('getFuelTypes',[]).catch(()=>null):Promise.resolve(null)
+                (bridge&&typeof bridge.getFuelTypes==='function')?invoke('getFuelTypes',[]).catch(()=>null):Promise.resolve(null),
+                (bridge&&typeof bridge.getCustomers==='function')?invoke('getCustomers',[]).catch(()=>null):Promise.resolve(null)
             ]);
-            const shift=dataOf(results[0]); const pumps=rowsFrom(results[1]); const fuels=rowsFrom(results[2]);
+            const shift=dataOf(results[0]); const pumps=rowsFrom(results[1]); const fuels=rowsFrom(results[2]); const customers=rowsFrom(results[3]);
             const shiftId=field(shift,['shift_id','id']);
             const shiftEl=document.querySelector('[data-key="shift_id"]');
             if(shiftEl&&!row) shiftEl.value=shiftId||'';
@@ -1547,17 +1552,18 @@
             const fuelEl=document.querySelector('[data-key="fuel_type_id"]');
             if(fuelEl){fuelEl.innerHTML='<option value="">اختر نوع الوقود...</option>'+fuels.map(x=>`<option value="${esc(field(x,['id','fuel_type_id']))}" data-price="${esc(field(x,['default_sale_price','sale_price','price_per_liter'])||'')}">${esc(field(x,['id','fuel_type_id']))} — ${esc(field(x,['fuel_name_ar','fuel_name','name'])||'وقود')}</option>`).join('');if(row)fuelEl.value=field(row,['fuel_type_id'])||'';}
             const pay=document.querySelector('[data-key="payment_method"]'); if(pay){pay.innerHTML='<option value="cash">نقدي</option><option value="credit">آجل</option>';pay.value=field(row,['payment_method'])||'cash';}
+            const customerEl=document.querySelector('[data-key="customer_id"]'); if(customerEl){customerEl.innerHTML='<option value="0">عميل عام</option>'+customers.map(x=>`<option value="${esc(field(x,['id','party_id','customer_id']))}">${esc(field(x,['commercial_name_ar','commercial_name','legal_name','name'])||'عميل')}</option>`).join('');customerEl.value=field(row,['customer_id','customer_party_id'])||'0';}
             if(!row){const now=new Date();document.querySelector('[data-key="sale_date"]')?.setAttribute('value',localDate(now));const dateEl=document.querySelector('[data-key="sale_date"]');if(dateEl)dateEl.value=localDate(now);const timeEl=document.querySelector('[data-key="sale_time"]');if(timeEl)timeEl.value=localTime(now);}
             bindFuelCalculation();
         }
         function localDate(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
         function localTime(d=new Date()){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
         function bindFuelCalculation(){const q=document.querySelector('[data-key="quantity"]'),p=document.querySelector('[data-key="price_per_liter"]'),t=document.querySelector('[data-key="total_amount"]'),f=document.querySelector('[data-key="fuel_type_id"]');const calc=()=>{if(t)t.value=(numeric(q?.value)*numeric(p?.value)).toFixed(2);};f?.addEventListener('change',()=>{const o=f.options[f.selectedIndex];if(p)p.value=o?.dataset.price||'';calc();});q?.addEventListener('input',calc);}
-        async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
+        async function openForm(row=null) { if(!CFG.createMethod&&!CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة',true);return;}state.editing=row;const deliveryBtn=$('deliveryBtn');if(deliveryBtn){deliveryBtn.disabled=true;delete deliveryBtn.dataset.saleId;deliveryBtn.title='يتاح بعد حفظ عملية البيع بنجاح';}$('formTitle').textContent=row?'تعديل مبيعات الوقود':'إضافة عملية بيع وقود';$('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join('');$('formModal').classList.add('show');try{await loadSaleFormLookups(row);}catch(e){toast(e.message||'تعذر تحميل بيانات النموذج',true);} }
         function collectForm(){const payload={};document.querySelectorAll('#recordForm [data-key]').forEach(el=>{if(el.dataset.key==='sale_id')return;let v=el.value;if(el.type==='number')v=v===''?0:Number(v);payload[el.dataset.key]=v;});payload.created_at=new Date().toISOString();return payload;}
-        async function saveForm(){const form=$('recordForm');if(!form.reportValidity())return;const payload=collectForm();if(!payload.shift_id)return toast('لا توجد وردية مفتوحة حالياً',true);if(!payload.pump_id)return toast('اختر المضخة',true);if(!payload.fuel_type_id)return toast('اختر نوع الوقود',true);if(!(numeric(payload.quantity)>0))return toast('أدخل كمية أكبر من صفر',true);payload.total_amount=(numeric(payload.quantity)*numeric(payload.price_per_liter)).toFixed(2);setLoading(true);try{let result;if(state.editing&&CFG.updateMethod){result=await invoke(CFG.updateMethod,[Number(idOf(state.editing)),JSON.stringify(payload)]);parse(result);toast('تم تحديث عملية البيع فعلياً');}else{result=await invoke('saveFuelSaleRecord',[JSON.stringify(payload)]);const saved=parse(result);const saleId=Number(saved.sale_id||saved.id||0);if(!saleId)throw new Error('لم يتم استلام sale_id الحقيقي من SQLite');state.lastSavedSaleId=saleId;toast('تم حفظ عملية البيع فعلياً — رقم البيع '+saleId);closeModal(null,'formModal');await reloadData();showDeliveryAction(saleId);return;}closeModal(null,'formModal');await reloadData();}catch(e){toast(e.message||'فشل حفظ العملية',true);}finally{setLoading(false);}}
-        function showDeliveryAction(saleId){let box=$('deliveryAction');if(!box){box=document.createElement('div');box.id='deliveryAction';box.className='post-save-action';document.body.appendChild(box);}box.innerHTML=`<button type="button" class="btn primary" onclick="openDelivery(${Number(saleId)})"><i class="fas fa-truck"></i> توصيل الطلب #${esc(saleId)}</button><button type="button" class="btn" onclick="this.parentElement.remove()">إغلاق</button>`;box.classList.add('show');}
-        function openDelivery(saleId){sessionStorage.setItem('delivery_sale_id',String(saleId));window.location.href='deliveries.html?sale_id='+encodeURIComponent(saleId);}
+        async function saveForm(){const form=$('recordForm');if(!form.reportValidity())return;const payload=collectForm();payload.customer_id=Number(payload.customer_id||0);delete payload.vehicle_plate;if(!payload.shift_id)return toast('لا توجد وردية مفتوحة حالياً',true);if(!payload.pump_id)return toast('اختر المضخة',true);if(!payload.fuel_type_id)return toast('اختر نوع الوقود',true);if(!(numeric(payload.quantity)>0))return toast('أدخل كمية أكبر من صفر',true);payload.total_amount=(numeric(payload.quantity)*numeric(payload.price_per_liter)).toFixed(2);setLoading(true);try{let result;if(state.editing&&CFG.updateMethod){result=await invoke(CFG.updateMethod,[Number(idOf(state.editing)),JSON.stringify(payload)]);parse(result);toast('تم تحديث عملية البيع فعلياً');}else{result=await invoke('saveFuelSaleRecord',[JSON.stringify(payload)]);const saved=parse(result);const saleId=Number(saved.sale_id||saved.id||0);if(!saleId)throw new Error('لم يتم استلام sale_id الحقيقي من SQLite');state.lastSavedSaleId=saleId;toast('تم حفظ عملية البيع فعلياً — رقم البيع '+saleId);showDeliveryAction(saleId);await reloadData();return;}closeModal(null,'formModal');await reloadData();}catch(e){toast(e.message||'فشل حفظ العملية',true);}finally{setLoading(false);}}
+        function showDeliveryAction(saleId){const button=$('deliveryBtn');if(!button)return;button.disabled=false;button.dataset.saleId=String(saleId);button.title='تم الحفظ؛ يمكنك الآن إنشاء التوصيل';}
+        function openDelivery(saleId){const id=Number(saleId||$('deliveryBtn')?.dataset.saleId||0);if(!id)return toast('احفظ عملية البيع أولاً',true);sessionStorage.setItem('delivery_sale_id',String(id));window.location.href='deliveries.html?sale_id='+encodeURIComponent(id);}
         async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
         async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
         async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
@@ -1578,7 +1584,7 @@
         function startAsync(method,callbackName){ if(!bridge||typeof bridge[method]!=='function'){toast('العقد '+method+' غير متاح',true);return;} window[callbackName]=(value)=>{const parsed=typeof value==='string'?JSON.parse(value):value; if(parsed.success)toast(parsed.message||'اكتملت العملية فعلياً'); else toast(parsed.error||'فشلت العملية',true);}; try{const result=parse(bridge[method]()); if(result.status==='processing')toast('بدأت العملية؛ انتظار نتيجة Android...');}catch(e){toast(e.message,true);} }
         async function loadDbInfo(){try{const result=await invoke('getDatabaseInfo',[]); $('dbInfo').textContent=JSON.stringify(dataOf(result));}catch(e){$('dbInfo').textContent=e.message;toast(e.message,true);}}
         async function loadBackupHistory(){if(CFG.mode!=='backup'||!bridge||typeof bridge.getBackupHistoryRecords!=='function')return;try{const result=await invoke('getBackupHistoryRecords',[JSON.stringify({limit:100})]);const rows=rowsFrom(result);$('backupHistory').innerHTML=rows.length?rows.map(row=>`<div class="data-card"><strong>${esc(row.file_name||row.backup_type||row.id)}</strong><div class="data-card-subtitle">${esc([row.status,row.started_at,row.completed_at,row.file_size_mb,row.storage_location].filter(Boolean).join(' · '))}</div></div>`).join(''):'<div class="empty-state">لا توجد سجلات نسخ في SQLite.</div>';}catch(e){$('backupHistory').textContent=e.message;toast(e.message,true);}}
-        $('searchInput').addEventListener('input',applyFilter); $('themeToggle').addEventListener('click',toggleTheme); $('newSaleBtn').addEventListener('click',()=>openForm()); $('reportBtn').addEventListener('click',openReport); $('saveBtn').addEventListener('click',saveForm); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
+        $('searchInput').addEventListener('input',()=>CFG.listMethod==='getFuelSalesPage'?reloadData():applyFilter()); $('themeToggle').addEventListener('click',toggleTheme); $('newSaleBtn').addEventListener('click',()=>openForm()); $('reportBtn').addEventListener('click',openReport); $('saveBtn').addEventListener('click',saveForm); $('deliveryBtn').addEventListener('click',()=>openDelivery($('deliveryBtn').dataset.saleId)); document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal-overlay').forEach(x=>x.classList.remove('show'));});
         window.addEventListener('online',()=>toast('عاد اتصال الجسر المحتمل؛ اضغط تحديث للتحقق')); window.addEventListener('offline',()=>$('offlineBanner').classList.add('show'));
         Object.assign(window, {goHome, openReport, exportData, reloadData, openForm, saveForm, openModal, closeModal, startAsync, loadDbInfo, askAI});
         applyTheme(); renderFilters(); initSpecial(); if(CFG.mode!=='unsupported'&&CFG.mode!=='backup'&&CFG.mode!=='ai')reloadData(); else renderCards();
