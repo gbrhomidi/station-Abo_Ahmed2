@@ -1902,6 +1902,24 @@ textarea.form-input{
     body.shifts-screen .form-group.full,
     body.shifts-screen .section-title{grid-column:1/-1;}
 }
+/* Keep all displayed shifts data centered without changing field behavior. */
+body.shifts-screen,
+body.shifts-screen .modal,
+body.shifts-screen .modal-body,
+body.shifts-screen .modal-footer,
+body.shifts-screen .shift-card,
+body.shifts-screen .kpi,
+body.shifts-screen .info,
+body.shifts-screen .section-title{text-align:center;}
+
+/* Mobile form matrix: two-column pairs and three-column groups remain explicit at every phone width. */
+@media (max-width:767px){
+    body.shifts-screen #shiftForm{grid-template-columns:repeat(6,minmax(0,1fr));}
+    body.shifts-screen #shiftForm > .form-group{grid-column:span 3;order:var(--shift-order,0);}
+    body.shifts-screen #shiftForm > .form-group.shift-form-triple{grid-column:span 2;}
+    body.shifts-screen #shiftForm > .form-group.full,
+    body.shifts-screen #shiftForm > .section-title{grid-column:1/-1;order:var(--shift-order,0);}
+}
 </style>
 </head>
 
@@ -3646,6 +3664,40 @@ document.addEventListener('focusin', event => {
     if (!target || !target.matches || !target.matches('#shiftForm input, #shiftForm select, #shiftForm textarea')) return;
     window.setTimeout(() => target.scrollIntoView({block:'nearest', inline:'nearest'}), 120);
 });
+
+function applyShiftMobileFormOrder(){
+    const rows = [
+        ['shift_type','shift_date'],
+        ['start_time','end_time'],
+        ['duration_minutes','station_id'],
+        ['manager_id','cashier_id'],
+        ['attendant_ids'],
+        ['opening_cash','closing_cash'],
+        ['opening_credit','closing_credit'],
+        ['opening_bank','closing_bank'],
+        ['total_fuel_sales','total_product_sales','total_service_sales'],
+        ['total_sales','total_discounts'],
+        ['total_tax','total_vat','total_fuel_liters'],
+        ['total_cash','total_credit_card'],
+        ['total_bank_transfer','total_credit_sales'],
+        ['total_cheque','total_other'],
+        ['cash_variance'],
+        ['variance_reason']
+    ];
+    rows.forEach((ids, rowIndex) => ids.forEach((id, columnIndex) => {
+        const field = document.getElementById(id);
+        const group = field && field.closest('.form-group');
+        if (!group) return;
+        group.style.setProperty('--shift-order', String((rowIndex + 1) * 10 + columnIndex));
+        if (ids.length === 3) group.classList.add('shift-form-triple');
+    }));
+    document.querySelectorAll('#shiftForm > .section-title').forEach(title => {
+        const label = (title.textContent || '').trim();
+        title.style.setProperty('--shift-order', label.includes('الأرصدة') ? '60' : label.includes('المبيعات') ? '100' : '140');
+    });
+}
+
+applyShiftMobileFormOrder();
 
 async function loadFormOptions(force = false){
 
