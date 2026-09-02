@@ -192,7 +192,6 @@ class MainActivity : AppCompatActivity() {
 
     // ====== مكونات النشاط ======
     private var webView: WebView? = null
-    private val smsLiveUpdatesClient = SmsLiveUpdatesClient()
     private val liveUpdateListener: (String) -> Unit = { payload ->
         runOnUiThread { webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('sms-live-update',{detail:$payload}))", null) }
     }
@@ -406,7 +405,6 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
 
         LiveUpdateHub.unsubscribe(liveUpdateListener)
-        smsLiveUpdatesClient.disconnect()
         DebugLogger.detachWebView()
         pendingWebPermissionRequest?.deny()
         pendingWebPermissionRequest = null
@@ -8642,17 +8640,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun startSmsLiveUpdates(url: String): String {
             return try {
-                val safeUrl = url.trim()
-                require(safeUrl.startsWith("wss://")) { "يجب استخدام اتصال WebSocket آمن wss://" }
-                smsLiveUpdatesClient.connect(safeUrl)
-                successResponse("تم تشغيل التحديث الحي")
+                successResponse("تم تشغيل التحديث الحي داخل التطبيق")
             } catch (e: Exception) { errorResponse(e.message ?: "تعذر تشغيل التحديث الحي") }
         }
 
         @JavascriptInterface
         fun stopSmsLiveUpdates(): String {
-            smsLiveUpdatesClient.disconnect()
-            return successResponse("تم إيقاف التحديث الحي")
+            return successResponse("التحديث الحي داخل التطبيق يعمل مع دورة الشاشة")
         }
 
         @JavascriptInterface

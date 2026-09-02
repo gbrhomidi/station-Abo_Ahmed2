@@ -3486,8 +3486,9 @@ body {
                 if (state.currentTab === 'observability') loadOperational();
             }
         });
-        const liveUrl = (localStorage.getItem('sms.liveSocketUrl') || '').trim();
-        if (liveUrl.startsWith('wss://')) Bridge.startSmsLiveUpdates(liveUrl);
+        Bridge.startSmsLiveUpdates('native://in-process');
+        const nativeLiveStatus = document.getElementById('liveSocketStatus');
+        if (nativeLiveStatus) nativeLiveStatus.textContent = 'متصل داخل التطبيق';
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {

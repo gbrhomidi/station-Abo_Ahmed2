@@ -25,22 +25,24 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
             } ?: return@withContext false
             if (order.third !in setOf("AWAITING_DELIVERY", "READY_FOR_DISPATCH", "DELIVERY_FAILED")) return@withContext false
             val candidate = database.rawQuery("""
-                SELECT d.id, d.full_name, COALESCE(d.full_name_ar, d.full_name), d.phone, d.vehicle_id,
+                SELECT d.id, d.full_name, COALESCE(d.full_name_ar, d.full_name), d.phone, d.vehicle_id, d.station_id,
                        (SELECT COUNT(*) FROM sms_delivery_tasks t WHERE t.driver_id = d.id AND t.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')) AS active_tasks
                 FROM drivers d
-                LEFT JOIN vehicles v ON v.id = d.vehicle_id
-                WHERE d.status = 'active' AND d.is_deleted = 0 AND d.phone IS NOT NULL AND d.phone <> ''
-                  AND (d.vehicle_id IS NULL OR (v.status = 'active' AND v.is_deleted = 0))
+                JOIN vehicles v ON v.id = d.vehicle_id
+                LEFT JOIN parties vehicle_owner ON vehicle_owner.id = v.party_id
+                WHERE d.status = 'active' AND d.is_deleted = 0 AND d.station_id IS NOT NULL AND d.phone IS NOT NULL AND d.phone <> ''
+                  AND v.status = 'active' AND v.is_deleted = 0
+                  AND vehicle_owner.station_id = d.station_id
                   AND NOT EXISTS (SELECT 1 FROM sms_delivery_tasks busy WHERE busy.driver_id = d.id AND busy.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') AND busy.scheduled_at IS NOT NULL AND (? IS NULL OR busy.scheduled_at <= ?))
                 ORDER BY active_tasks ASC, d.updated_at ASC, d.id ASC LIMIT 1
             """.trimIndent(), arrayOf(order.second?.toString(), order.second?.toString())).use { c ->
-                if (!c.moveToFirst()) null else arrayOf(c.getLong(0), c.getString(2), c.getString(3), c.getLong(4).takeIf { !c.isNull(4) } ?: 0L)
+                if (!c.moveToFirst()) null else arrayOf(c.getLong(0), c.getString(2), c.getString(3), c.getLong(4), c.getLong(5))
             } ?: return@withContext false
             taskCode = "DT-${UUID.randomUUID().toString().take(8).uppercase()}"
             driverName = candidate[1] as String
             driverPhone = PhoneUtils.normalize(candidate[2] as String) ?: candidate[2] as String
             val inserted = database.insertOrThrow("sms_delivery_tasks", null, ContentValues().apply {
-                put("delivery_id", taskCode); put("order_id", orderId); put("driver_id", candidate[0] as Long); put("vehicle_id", (candidate[3] as Long).takeIf { it > 0 }); put("location", order.first); put("scheduled_at", order.second); put("status", "ASSIGNED"); put("attempt_count", 0); put("created_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis())
+                put("delivery_id", taskCode); put("order_id", orderId); put("driver_id", candidate[0] as Long); put("vehicle_id", (candidate[3] as Long).takeIf { it > 0 }); put("station_id", candidate[4] as Long); put("location", order.first); put("scheduled_at", order.second); put("status", "ASSIGNED"); put("attempt_count", 0); put("created_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis())
             })
             if (inserted <= 0) return@withContext false
             database.update("fuel_orders", ContentValues().apply { put("status", "READY_FOR_DISPATCH") }, "order_id = ? AND status IN ('AWAITING_DELIVERY','DELIVERY_FAILED')", arrayOf(orderId))
