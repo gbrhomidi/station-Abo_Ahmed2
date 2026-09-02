@@ -5926,6 +5926,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         """)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_delivery_status_time ON sms_delivery_tasks(status, scheduled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_delivery_driver ON sms_delivery_tasks(driver_id, status)")
+        ensureColumn(db, "sms_delivery_tasks", "vehicle_id", "INTEGER")
 
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS sms_loyalty_transactions (
@@ -23199,10 +23200,21 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             )
         """.trimIndent())
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_sender_identity_bank ON sms_sender_identities(bank_id, bank_account_id, active)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_payment_matches (
+                match_id TEXT PRIMARY KEY, order_id TEXT, fingerprint TEXT NOT NULL UNIQUE,
+                amount REAL NOT NULL, bank_id TEXT NOT NULL, bank_account_id TEXT NOT NULL,
+                status TEXT NOT NULL, reason TEXT NOT NULL, created_at INTEGER NOT NULL,
+                FOREIGN KEY(order_id) REFERENCES fuel_orders(order_id),
+                CHECK(status IN ('VERIFIED','REVIEW_REQUIRED','REJECTED'))
+            )
+        """.trimIndent())
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_fuel_payment_order_once ON fuel_payment_matches(order_id) WHERE status = 'VERIFIED'")
         ensureColumn(db, "sms_payment_events", "fingerprint", "TEXT")
         ensureColumn(db, "sms_payment_events", "bank_id", "TEXT")
         ensureColumn(db, "sms_payment_events", "bank_account_id", "TEXT")
         ensureColumn(db, "sms_payment_events", "balance", "REAL")
+        ensureColumn(db, "sms_payment_events", "matched_order_key", "TEXT")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_payment_fingerprint ON sms_payment_events(fingerprint) WHERE fingerprint IS NOT NULL")
     }
 

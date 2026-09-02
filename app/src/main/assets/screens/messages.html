@@ -1736,6 +1736,7 @@ body {
         <button class="tab-btn" data-tab="conversations">💬 محادثات</button>
         <button class="tab-btn" data-tab="observability">⌁ التتبع</button>
         <button class="tab-btn" data-tab="weekly">▥ أسبوعي</button>
+        <button class="tab-btn" data-tab="orders">⛽ طلبات الوقود</button>
         <button class="tab-btn" data-tab="incoming">📥 واردة</button>
         <button class="tab-btn" data-tab="outgoing">📤 صادرة</button>
         <button class="tab-btn" data-tab="pending">⏳ قيد</button>
@@ -1818,6 +1819,14 @@ body {
                 <section class="weekly-chart-card"><div class="weekly-chart-head"><div><h3>الحجم اليومي</h3><p>مقارنة الرسائل المستلمة وحالات الفشل لكل يوم</p></div><div class="weekly-legend"><span>مستلمة</span><span>فشل</span></div></div><div class="weekly-bars" id="weeklyBars"><div class="empty-state" style="grid-column:1/-1;padding:35px 8px;"><p>جارٍ تحميل التحليل...</p></div></div></section>
                 <section class="weekly-insight"><div class="weekly-insight-item"><strong id="weeklySent">—</strong><span>رسائل دخلت النقل</span></div><div class="weekly-insight-item"><strong id="weeklyFailed">—</strong><span>فشل أو إعادة محاولة</span></div><div class="weekly-insight-item"><strong id="weeklyPending">—</strong><span>معلّقة الآن</span></div></section>
             </div>
+        </div>
+
+        <!-- Fuel Commerce Orders -->
+        <div class="tab-content" id="tab-orders">
+            <div class="section-heading"><div><h2>طلبات الوقود والتوصيل</h2><p>السعر المثبت، حالة الدفع والحجز، السائق، والمخزون من المصدر المحلي</p></div><span class="message-type-badge badge-outgoing">Fuel Commerce</span></div>
+            <section class="trace-panel" style="margin-bottom:16px;"><div class="trace-search"><input id="orderPhoneInput" type="tel" placeholder="رقم العميل لعرض طلباته" inputmode="tel" autocomplete="off"><button class="btn btn-primary" id="orderLookupBtn">عرض الطلبات</button></div></section>
+            <div id="fuelOrdersList" class="message-list"><div class="empty-state" style="padding:28px 8px;"><div class="empty-icon">⛽</div><p>أدخل رقم العميل لعرض طلبات الوقود</p></div></div>
+            <div id="fuelOrderTimeline" class="trace-list" style="margin-top:16px;"><div class="empty-state" style="padding:20px 8px;"><p>اختر طلبًا لعرض الخط الزمني</p></div></div>
         </div>
 
         <!-- Conversations -->
@@ -2087,6 +2096,9 @@ body {
         trace: [],
         tracePhone: '',
         weekly: {},
+        fuelOrders: [],
+        selectedFuelOrder: null,
+        fuelTimeline: [],
         filters: {
             search: '',
             status: '',
@@ -2135,6 +2147,8 @@ body {
         getSmsOperationalHealth() { return this.call('getSmsOperationalHealth'); },
         getSmsConversationTrace(phone) { return this.call('getSmsConversationTrace', phone); },
         getSmsWeeklyAnalytics(days = 7) { return this.call('getSmsWeeklyAnalytics', days); },
+        getFuelOrdersByPhone(phone) { return this.call('getFuelOrdersByPhoneTyped', phone); },
+        getFuelOrderTimeline(orderId) { return this.call('getFuelOrderTimelineTyped', orderId); },
         goToHome() { return this.call('goToHome'); },
 
         // Templates
@@ -2300,6 +2314,7 @@ body {
                     case 'conversations': await loadConversations(); break;
                     case 'observability': await loadOperational(); break;
                     case 'weekly': await loadWeeklyAnalytics(); break;
+                    case 'orders': await loadFuelOrders(); break;
                     case 'incoming': await loadFilteredMessages('message_type', 'incoming'); break;
                     case 'outgoing': await loadFilteredMessages('message_type', 'outgoing'); break;
                     case 'pending': await loadFilteredMessages('status', 'pending'); break;
@@ -2328,6 +2343,43 @@ body {
     // ============================================
     // DATA LOADERS
     // ============================================
+    async function loadFuelOrders(phone) {
+        const value = (phone || document.getElementById('orderPhoneInput')?.value || '').trim();
+        if (!value) { UI.showToast('أدخل رقم العميل أولاً', 'warning'); return; }
+        const raw = Utils.parseJSON(Bridge.getFuelOrdersByPhone(value)) || {};
+        state.fuelOrders = raw.success === false ? [] : Utils.dataArray(raw);
+        state.selectedFuelOrder = null; state.fuelTimeline = [];
+        renderFuelOrders(); renderFuelTimeline();
+    }
+
+    async function loadFuelTimeline(orderId) {
+        state.selectedFuelOrder = orderId;
+        const raw = Utils.parseJSON(Bridge.getFuelOrderTimeline(orderId)) || {};
+        state.fuelTimeline = raw.success === false ? [] : Utils.dataArray(raw);
+        renderFuelOrders(); renderFuelTimeline();
+    }
+
+    function renderFuelOrders() {
+        const container = document.getElementById('fuelOrdersList');
+        if (!container) return;
+        if (!state.fuelOrders.length) { container.innerHTML = '<div class="empty-state" style="padding:28px 8px;"><div class="empty-icon">⛽</div><p>لا توجد طلبات وقود لهذا الرقم</p></div>'; return; }
+        const labels = { DRAFT:'مسودة', QUOTED:'مسعّر', AWAITING_PAYMENT:'بانتظار الدفع', PAYMENT_VERIFIED:'تم التحقق من الدفع', AWAITING_DELIVERY:'بانتظار التوصيل', READY_FOR_DISPATCH:'جاهز للإسناد', DRIVER_ASSIGNED:'أُسند للسائق', OUT_FOR_DELIVERY:'في الطريق', DELIVERED:'تم التسليم', CANCELLED:'ملغى', EXPIRED:'منتهي', PAYMENT_MISMATCH:'مطابقة تحتاج مراجعة' };
+        const reservation = order => order.reservation_status || (order.status === 'RESERVED' ? 'محجوز' : 'غير متاح');
+        container.innerHTML = state.fuelOrders.map(order => {
+            const active = state.selectedFuelOrder === order.order_id ? ' style="border-color:var(--primary);box-shadow:0 0 0 2px rgba(37,99,235,.15);"' : '';
+            return `<article class="conversation-card" data-order-id="${Utils.escapeHtml(order.order_id || '')}"${active}><div class="conversation-avatar">⛽</div><div class="conversation-body"><div class="conversation-header"><strong>${Utils.escapeHtml(order.order_id || '-')}</strong><span class="conversation-time">${Utils.escapeHtml(Utils.formatDate(order.created_at))}</span></div><div class="conversation-preview">${Utils.escapeHtml(labels[order.status] || order.status || '-')} · ${Utils.escapeHtml(Number(order.total_amount || 0).toLocaleString('ar-YE'))} ريال · ${Utils.escapeHtml(order.liters || 0)} لتر</div><div class="trace-payload">الدفع: ${Utils.escapeHtml(order.payment_status || 'غير مؤكد')} · الحجز: ${Utils.escapeHtml(reservation(order))} · المخزون: ${Utils.escapeHtml(order.stock_status || 'يحتاج فحص')}</div><div class="trace-payload">الموقع: ${Utils.escapeHtml(order.delivery_location || order.delivery_location_original || '-')} · السائق: ${Utils.escapeHtml(order.driver_id || 'لم يُسند')}</div></div></article>`;
+        }).join('');
+        container.querySelectorAll('[data-order-id]').forEach(node => node.addEventListener('click', () => loadFuelTimeline(node.dataset.orderId)));
+    }
+
+    function renderFuelTimeline() {
+        const container = document.getElementById('fuelOrderTimeline');
+        if (!container) return;
+        if (!state.selectedFuelOrder) { container.innerHTML = '<div class="empty-state" style="padding:20px 8px;"><p>اختر طلبًا لعرض الخط الزمني</p></div>'; return; }
+        if (!state.fuelTimeline.length) { container.innerHTML = '<div class="empty-state" style="padding:20px 8px;"><p>لا توجد أحداث محفوظة لهذا الطلب</p></div>'; return; }
+        container.innerHTML = state.fuelTimeline.map(item => `<div class="trace-item"><span class="trace-line"></span><div><div class="trace-stage">${Utils.escapeHtml(item.event_type || 'حدث')}</div><div class="trace-payload">${Utils.escapeHtml(item.payload_json || '')}</div></div><time class="trace-time">${Utils.escapeHtml(Utils.formatDate(item.created_at))}</time></div>`).join('');
+    }
+
     async function loadOperational() {
         const raw = Utils.parseJSON(Bridge.getSmsOperationalHealth()) || {};
         const envelope = raw && raw.data && typeof raw.data === 'object' ? raw.data : raw;
@@ -3387,6 +3439,8 @@ body {
         document.getElementById('opsOpenTraceBtn').addEventListener('click', () => UI.switchTab('observability'));
         document.getElementById('traceLookupBtn').addEventListener('click', () => loadTrace(document.getElementById('tracePhoneInput').value));
         document.getElementById('tracePhoneInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadTrace(e.target.value); });
+        document.getElementById('orderLookupBtn').addEventListener('click', () => loadFuelOrders());
+        document.getElementById('orderPhoneInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFuelOrders(e.target.value); });
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {

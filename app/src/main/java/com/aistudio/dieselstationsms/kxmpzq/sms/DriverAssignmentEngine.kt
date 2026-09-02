@@ -1,0 +1,81 @@
+package com.aistudio.dieselstationsms.kxmpzq.sms
+
+import android.content.ContentValues
+import android.content.Context
+import com.aistudio.dieselstationsms.kxmpzq.DatabaseHelper
+import com.aistudio.dieselstationsms.kxmpzq.utils.PhoneUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.util.UUID
+
+/** اختيار حتمي للسائق؛ لا يعتمد على AI ولا يرسل المهمة قبل تسجيلها ذريًا. */
+class DriverAssignmentEngine(private val context: Context, private val db: DatabaseHelper) {
+    private val replyManager = SmsReplyManager(context, db)
+
+    suspend fun assign(orderId: String): Boolean = withContext(Dispatchers.IO) {
+        val database = db.writableDatabase
+        var driverPhone: String? = null
+        var driverName = ""
+        var taskCode = ""
+        database.beginTransaction()
+        try {
+            val order = database.rawQuery("SELECT delivery_location, requested_delivery_at, status FROM fuel_orders WHERE order_id = ? LIMIT 1", arrayOf(orderId)).use { c ->
+                if (!c.moveToFirst()) null else Triple(c.getString(0).orEmpty(), c.getLong(1).takeIf { !c.isNull(1) }, c.getString(2))
+            } ?: return@withContext false
+            if (order.third !in setOf("AWAITING_DELIVERY", "READY_FOR_DISPATCH", "DELIVERY_FAILED")) return@withContext false
+            val candidate = database.rawQuery("""
+                SELECT d.id, d.full_name, COALESCE(d.full_name_ar, d.full_name), d.phone, d.vehicle_id,
+                       (SELECT COUNT(*) FROM sms_delivery_tasks t WHERE t.driver_id = d.id AND t.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')) AS active_tasks
+                FROM drivers d
+                LEFT JOIN vehicles v ON v.id = d.vehicle_id
+                WHERE d.status = 'active' AND d.is_deleted = 0 AND d.phone IS NOT NULL AND d.phone <> ''
+                  AND (d.vehicle_id IS NULL OR (v.status = 'active' AND v.is_deleted = 0))
+                  AND NOT EXISTS (SELECT 1 FROM sms_delivery_tasks busy WHERE busy.driver_id = d.id AND busy.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') AND busy.scheduled_at IS NOT NULL AND (? IS NULL OR busy.scheduled_at <= ?))
+                ORDER BY active_tasks ASC, d.updated_at ASC, d.id ASC LIMIT 1
+            """.trimIndent(), arrayOf(order.second?.toString(), order.second?.toString())).use { c ->
+                if (!c.moveToFirst()) null else arrayOf(c.getLong(0), c.getString(2), c.getString(3), c.getLong(4).takeIf { !c.isNull(4) } ?: 0L)
+            } ?: return@withContext false
+            taskCode = "DT-${UUID.randomUUID().toString().take(8).uppercase()}"
+            driverName = candidate[1] as String
+            driverPhone = PhoneUtils.normalize(candidate[2] as String) ?: candidate[2] as String
+            val inserted = database.insertOrThrow("sms_delivery_tasks", null, ContentValues().apply {
+                put("delivery_id", taskCode); put("order_id", orderId); put("driver_id", candidate[0] as Long); put("vehicle_id", (candidate[3] as Long).takeIf { it > 0 }); put("location", order.first); put("scheduled_at", order.second); put("status", "ASSIGNED"); put("attempt_count", 0); put("created_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis())
+            })
+            if (inserted <= 0) return@withContext false
+            database.update("fuel_orders", ContentValues().apply { put("status", "READY_FOR_DISPATCH") }, "order_id = ? AND status IN ('AWAITING_DELIVERY','DELIVERY_FAILED')", arrayOf(orderId))
+            database.update("fuel_orders", ContentValues().apply { put("status", "DRIVER_ASSIGNED"); put("driver_id", candidate[0] as Long); put("vehicle_id", (candidate[3] as Long).takeIf { it > 0 }) }, "order_id = ? AND status = 'READY_FOR_DISPATCH'", arrayOf(orderId))
+            appendEvent(database, orderId, "READY_FOR_DISPATCH", JSONObject().put("task_code", taskCode))
+            appendEvent(database, orderId, "DRIVER_ASSIGNED", JSONObject().put("driver_id", candidate[0] as Long).put("vehicle_id", candidate[3] as Long).put("task_code", taskCode))
+            database.setTransactionSuccessful()
+        } finally { database.endTransaction() }
+        val sent = driverPhone?.let { replyManager.sendReplyOnce(it, "لديك مهمة توصيل رقم $taskCode للطلب $orderId إلى $driverName. أرسل 1 للقبول أو 2 للرفض.") } ?: false
+        sent
+    }
+
+    suspend fun handleDriverReply(phone: String, body: String): Boolean = withContext(Dispatchers.IO) {
+        val normalized = PhoneUtils.normalize(phone) ?: phone.trim()
+        val accepted = body.trim() == "1" || body.trim().contains("قبول")
+        val rejected = body.trim() == "2" || body.trim().contains("رفض")
+        if (!accepted && !rejected) return@withContext false
+        val database = db.writableDatabase
+        var orderId: String? = null
+        var taskCode: String? = null
+        database.beginTransaction()
+        try {
+            val task = database.rawQuery("SELECT delivery_id, order_id, driver_id FROM sms_delivery_tasks t JOIN drivers d ON d.id = t.driver_id WHERE (d.phone = ? OR d.phone2 = ?) AND t.status = 'ASSIGNED' ORDER BY t.created_at ASC LIMIT 1", arrayOf(normalized, normalized)).use { c -> if (c.moveToFirst()) Triple(c.getString(0), c.getString(1), c.getLong(2)) else null } ?: return@withContext false
+            taskCode = task.first; orderId = task.second
+            val nextTask = if (accepted) "ACCEPTED" else "CANCELLED"
+            database.update("sms_delivery_tasks", ContentValues().apply { put("status", nextTask); put("assigned_at", if (accepted) System.currentTimeMillis() else null); put("updated_at", System.currentTimeMillis()); if (!accepted) put("failure_reason", "DRIVER_REJECTED") }, "delivery_id = ? AND status = 'ASSIGNED'", arrayOf(task.first))
+            if (!accepted) database.update("fuel_orders", ContentValues().apply { put("status", "READY_FOR_DISPATCH"); put("driver_id", null) }, "order_id = ? AND status = 'DRIVER_ASSIGNED'", arrayOf(task.second))
+            appendEvent(database, task.second, if (accepted) "DRIVER_ACCEPTED" else "DRIVER_REJECTED", JSONObject().put("driver_id", task.third).put("task_code", task.first))
+            database.setTransactionSuccessful()
+        } finally { database.endTransaction() }
+        if (orderId != null && rejected == true) assign(orderId!!)
+        true
+    }
+
+    private fun appendEvent(database: android.database.sqlite.SQLiteDatabase, orderId: String, type: String, payload: JSONObject) {
+        database.insertWithOnConflict("sms_business_events", null, ContentValues().apply { put("event_id", "EV-${UUID.randomUUID()}"); put("conversation_id", orderId); put("event_type", type); put("aggregate_type", "FUEL_ORDER"); put("aggregate_id", orderId); put("payload_json", payload.toString()); put("created_at", System.currentTimeMillis()) }, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE)
+    }
+}

@@ -82,6 +82,9 @@ class SmsProcessor(
     private val replyManager =
         SmsReplyManager(context, db)
 
+    private val driverAssignmentEngine = DriverAssignmentEngine(context, db)
+    private val bankVerificationEngine = BankSmsVerificationEngine(db)
+
     private val paymentService = SmsPaymentService(db)
 
     private val loyaltyService = SmsLoyaltyService(db)
@@ -478,6 +481,14 @@ class SmsProcessor(
                 }
             }
 
+            // Driver replies are handled before customer resolution because a driver
+            // may not exist in the customer directory.
+            if (driverAssignmentEngine.handleDriverReply(sender, msgBody)) {
+                safeLogSms(sender, msgBody, "received", "driver_task_handled")
+                metrics.recordEvent(SmsMetrics.EventType.SMS_RECEIVED, normalizedSender, "Driver task reply")
+                return true
+            }
+
             /*
              * البحث عن العميل.
              *
@@ -847,6 +858,22 @@ class SmsProcessor(
         customer: SmsCustomerResolver.CustomerInfo,
         msgBody: String
     ): Boolean {
+        val bankMatch = bankVerificationEngine.verifyAndMatch(customer.phone, msgBody)
+        if (bankMatch.matched && bankMatch.orderId != null) {
+            val repository = FuelOrderRepository(db)
+            repository.transition(bankMatch.orderId, FuelOrderStatus.AWAITING_DELIVERY, JSONObject().put("source", "BANK_SMS").put("reason", bankMatch.reason))
+            driverAssignmentEngine.assign(bankMatch.orderId)
+            replyManager.sendReplyOnce(customer.phone, "تم التحقق من الدفع وربطه بالطلب ${bankMatch.orderId}. سيتم تنسيق التوصيل وإرسال حالة السائق.")
+            return true
+        }
+        if (bankMatch.reviewRequired) {
+            replyManager.sendReplyOnce(customer.phone, "تم استلام التحويل، لكن توجد بيانات متعارضة. أُحيلت العملية للمراجعة ولن يتم اعتمادها تلقائياً.")
+            return true
+        }
+        if (bankMatch.reason == "duplicate_payment_fingerprint") {
+            replyManager.sendReplyOnce(customer.phone, "تم استلام التحويل نفسه سابقاً، ولن نكرر معالجته.")
+            return true
+        }
         val result = paymentService.recordIncoming(
             phone = customer.phone,
             partyId = customer.partyId,
@@ -1928,18 +1955,20 @@ class SmsProcessor(
         }
         val credit = customerResolver.creditSnapshot(partyId)?.let { CreditEligibilityEngine.decide(it.first, it.second, quote.total) }
         val isCredit = credit?.eligible == true
+        commerce.reserve(fuelOrder.orderId)
         if (isCredit) {
             commerce.transition(fuelOrder.orderId, FuelOrderStatus.PAYMENT_VERIFIED, JSONObject().put("payment_mode", "CREDIT").put("available_credit", credit?.availableCredit ?: 0.0))
             commerce.transition(fuelOrder.orderId, FuelOrderStatus.AWAITING_DELIVERY, JSONObject().put("payment_mode", "CREDIT"))
+            val driverAssigned = driverAssignmentEngine.assign(fuelOrder.orderId)
+            if (!driverAssigned) Log.w(TAG, "No eligible driver found for order=${fuelOrder.orderId}")
         } else {
             commerce.transition(fuelOrder.orderId, FuelOrderStatus.AWAITING_PAYMENT, JSONObject().put("payment_mode", "PREPAID").put("reason", credit?.reason ?: "prepaid_required"))
         }
-        commerce.reserve(fuelOrder.orderId)
         conversationManager.markDraftConfirmed(normalizedPhone)
         ctx.awaitingResponse = false
         ctx.pendingAction = ""
         conversationManager.saveContext(normalizedPhone, ctx)
-        val paymentText = if (isCredit) "تم اعتماد البيع الآجل ضمن الحد المتاح." else "أرسل SMS التحويل البنكي بنفس قيمة العرض ليتم التحقق منه تلقائياً."
+        val paymentText = if (isCredit) "تم اعتماد البيع الآجل ضمن الحد المتاح، وسيتم إرسال المهمة إلى سائق متاح." else "أرسل SMS التحويل البنكي بنفس قيمة العرض ليتم التحقق منه تلقائياً."
         val workflowReply = sendReplyRequired(sender, "✅ $name، تم إنشاء طلب الوقود بنجاح.\nرقم الطلب: ${fuelOrder.orderId}\nنوع الوقود: ديزل\nالكمية: ${order.quantityLiters.toInt()} لتر\nالموقع: ${order.deliveryLocation}\nموعد الطلب: ${order.deliveryTime}\nالسعر المثبت: ${quote.total.toInt()} ريال\n$paymentText")
         if (!workflowReply) Log.e(TAG, "FUEL_ORDER_REPLY_FAILED orderId=${fuelOrder.orderId}")
         return workflowReply
