@@ -60,7 +60,7 @@ class FuelOrderLifecycleIntegrationTest {
         repo.reserve(order.orderId)
         repo.transition(order.orderId, FuelOrderStatus.AWAITING_PAYMENT)
 
-        val payment = BankSmsVerificationEngine(helper).verifyAndMatch("771234567", "الكريمي: مبلغ 500 ريال من: عميل دورة SMS المرجع: ${quote.quoteId}")
+        val payment = BankSmsVerificationEngine(helper).verifyAndMatch("771234567", "الكريمي: مبلغ 5000 ريال من: عميل دورة SMS المرجع: ${quote.quoteId}")
         assertTrue(payment.matched); assertEquals(order.orderId, payment.orderId)
         repo.transition(order.orderId, FuelOrderStatus.AWAITING_DELIVERY)
         assertTrue(DriverAssignmentEngine(context, helper).assign(order.orderId))
