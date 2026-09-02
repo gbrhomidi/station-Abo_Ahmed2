@@ -10429,6 +10429,24 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
     // دوال المستخدمين
     // ========================================================================
 
+    private fun validateUserUniqueFields(db: SQLiteDatabase, data: JSONObject, excludedId: Long = 0L) {
+        val username = data.optString("username").trim()
+        val email = data.optString("email").trim()
+        val phone = data.optString("phone").trim()
+        if (excludedId == 0L) {
+            require(username.isNotBlank()) { "اسم المستخدم مطلوب" }
+        }
+        val whereSuffix = if (excludedId > 0L) " AND id <> ?" else ""
+        fun exists(column: String, value: String): Boolean {
+            if (value.isBlank()) return false
+            val args = if (excludedId > 0L) arrayOf(value, excludedId.toString()) else arrayOf(value)
+            return db.rawQuery("SELECT 1 FROM users WHERE $column = ? AND is_deleted = 0$whereSuffix LIMIT 1", args).use { it.moveToFirst() }
+        }
+        require(!exists("username", username)) { "اسم المستخدم مستخدم مسبقاً" }
+        require(!exists("email", email)) { "البريد الإلكتروني مستخدم مسبقاً" }
+        require(!exists("phone", phone)) { "رقم الهاتف مستخدم مسبقاً" }
+    }
+
     fun addUser(data: JSONObject): Long {
         dbLock.lock()
         return try {
@@ -10439,6 +10457,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             require(username.isNotBlank()) { "اسم المستخدم مطلوب" }
             require(fullName.isNotBlank()) { "الاسم الكامل مطلوب" }
             require(password.length >= 6) { "كلمة المرور يجب أن تكون 6 أحرف على الأقل" }
+            validateUserUniqueFields(db, data)
             val (hash, salt) = hashPassword(password)
             val cv = ContentValues().apply {
                 put("uuid", UUID.randomUUID().toString())
@@ -10557,6 +10576,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         dbLock.lock()
         return try {
             val db = writableDatabase
+            require(id > 0) { "معرف المستخدم غير صالح" }
+            require(data.optString("full_name").trim().isNotBlank()) { "الاسم الكامل مطلوب" }
+            validateUserUniqueFields(db, data, id)
             val cv = ContentValues().apply {
                 val textFields = listOf("full_name", "full_name_ar", "display_name", "avatar_path", "email", "phone", "national_id", "passport_number", "nationality", "gender", "birth_date", "job_title", "department", "hire_date", "preferred_language", "theme", "timezone", "date_format", "two_factor_method", "biometric_type", "status_reason", "device_id", "remarks", "extra_data")
                 textFields.forEach { key ->
