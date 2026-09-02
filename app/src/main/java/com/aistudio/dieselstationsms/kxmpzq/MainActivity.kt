@@ -8636,26 +8636,30 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun sendSmsMessageTyped(jsonData: String): String {
             return try {
                 val obj = JSONObject(jsonData)
-                val phone = obj.optString("phone_number")
-                val msg = obj.optString("message_body")
-                require(phone.isNotEmpty() && msg.isNotEmpty()) { "رقم الهاتف ونص الرسالة مطلوبان" }
-                
-                val smsData = JSONObject().apply {
-                    put("phone_number", phone)
-                    put("message_body", msg)
-                    put("message_type", "outgoing")
-                    put("status", "pending")
-                }
-                val id = db.addSmsMessage(smsData)
-                successResponse(id, "تم إضافة الرسالة لطابور الإرسال")
+                val phone = PhoneUtils.normalize(obj.optString("phone_number"))
+                val msg = SmsMessageNormalizer.normalizeForSms(obj.optString("message_body"))
+                require(phone != null && msg.isNotBlank()) { "رقم الهاتف اليمني ونص الرسالة مطلوبان" }
+                require(db.getSetting("sms_send_enabled") != "0") { "إرسال SMS معطل من إعدادات النظام" }
+                val result = SmsOutboxRepository.enqueue(
+                    db = db,
+                    recipient = phone,
+                    body = msg,
+                    eventId = obj.optString("event_id").takeIf { it.isNotBlank() },
+                    conversationId = obj.optString("conversation_id").takeIf { it.isNotBlank() },
+                    businessEntityId = obj.optString("business_entity_id").takeIf { it.isNotBlank() },
+                    subscriptionId = obj.optInt("subscription_id", -1).takeIf { it >= 0 }
+                ) ?: throw IllegalArgumentException("تعذر إضافة الرسالة إلى طابور الإرسال")
+                SmsOutboxWorker.schedule(this@MainActivity)
+                successResponse(true, "تمت إضافة الرسالة إلى طابور الإرسال (${result.partsCount} أجزاء)")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
         
         @JavascriptInterface
         fun retrySmsMessageTyped(id: Long): String {
             return try {
-                db.retrySmsMessage(id)
-                successResponse(id, "تم إعادة المحاولة")
+                val retried = db.retrySmsMessage(id)
+                if (retried) SmsOutboxWorker.schedule(this@MainActivity)
+                successResponse(retried, if (retried) "تمت إعادة الرسالة إلى طابور الإرسال" else "الرسالة غير قابلة لإعادة المحاولة")
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
         

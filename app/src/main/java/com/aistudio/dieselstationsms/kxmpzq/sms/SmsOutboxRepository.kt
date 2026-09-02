@@ -221,20 +221,27 @@ object SmsOutboxRepository {
                 delivered -> "DELIVERED"
                 else -> "SENT"
             }
-            database.update(
-                "sms_outbox_parts",
-                ContentValues().apply {
-                    put("status", status)
-                    if (status == "SENT") put("sent_at", now)
-                    if (status == "DELIVERED") put("delivered_at", now)
-                    if (!success) {
-                        put("failure_code", resultCode.take(100))
-                        put("failure_reason", reason.take(500))
-                    }
-                },
-                "message_id = ? AND part_index = ?",
+            val previousStatus = database.rawQuery(
+                "SELECT status FROM sms_outbox_parts WHERE message_id = ? AND part_index = ? LIMIT 1",
                 arrayOf(messageId, partIndex.toString())
-            )
+            ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            // Delivery is monotonic: a late SENT/FAILED callback must never downgrade DELIVERED.
+            if (previousStatus != "DELIVERED" || status == "DELIVERED") {
+                database.update(
+                    "sms_outbox_parts",
+                    ContentValues().apply {
+                        put("status", status)
+                        if (status == "SENT") put("sent_at", now)
+                        if (status == "DELIVERED") put("delivered_at", now)
+                        if (!success) {
+                            put("failure_code", resultCode.take(100))
+                            put("failure_reason", reason.take(500))
+                        }
+                    },
+                    "message_id = ? AND part_index = ?",
+                    arrayOf(messageId, partIndex.toString())
+                )
+            }
 
             val failed = database.rawQuery(
                 "SELECT 1 FROM sms_outbox_parts WHERE message_id = ? AND status = 'FAILED' LIMIT 1",
@@ -338,8 +345,8 @@ object SmsOutboxRepository {
         val database = db.writableDatabase
         database.beginTransaction()
         try {
-            database.update("sms_outbox", values, "message_id = ? AND status = ?", arrayOf(messageId, expected))
-            syncLegacyStatus(database, messageId, legacyStatus, now)
+            val changed = database.update("sms_outbox", values, "message_id = ? AND status = ?", arrayOf(messageId, expected))
+            if (changed == 1) syncLegacyStatus(database, messageId, legacyStatus, now)
             database.setTransactionSuccessful()
         } finally {
             database.endTransaction()

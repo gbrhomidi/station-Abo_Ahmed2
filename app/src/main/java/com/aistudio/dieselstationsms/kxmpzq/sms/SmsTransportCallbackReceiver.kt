@@ -15,7 +15,9 @@ class SmsTransportCallbackReceiver : BroadcastReceiver() {
         val partIndex = intent.getIntExtra(SmsTransport.EXTRA_PART_INDEX, -1)
         if (partIndex < 0) return
 
-        val delivered = intent.action == SmsTransport.ACTION_DELIVERED
+        val action = intent.action
+        if (action != SmsTransport.ACTION_SENT && action != SmsTransport.ACTION_DELIVERED) return
+        val delivered = action == SmsTransport.ACTION_DELIVERED
         val success = resultCode == Activity.RESULT_OK
         val code = if (success) "OK" else resultCode.toString()
         val reason = if (success) "" else intent.getStringExtra("error") ?: "SMS transport callback failed"
