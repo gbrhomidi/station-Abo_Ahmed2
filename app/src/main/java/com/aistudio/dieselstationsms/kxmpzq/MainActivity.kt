@@ -8640,13 +8640,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         @JavascriptInterface
         fun startSmsLiveUpdates(url: String): String {
             return try {
-                successResponse("تم تشغيل التحديث الحي داخل التطبيق")
+                successResponse(true, "تم تشغيل التحديث الحي داخل التطبيق")
             } catch (e: Exception) { errorResponse(e.message ?: "تعذر تشغيل التحديث الحي") }
         }
 
         @JavascriptInterface
         fun stopSmsLiveUpdates(): String {
-            return successResponse("التحديث الحي داخل التطبيق يعمل مع دورة الشاشة")
+            return successResponse(true, "التحديث الحي داخل التطبيق يعمل مع دورة الشاشة")
         }
 
         @JavascriptInterface
