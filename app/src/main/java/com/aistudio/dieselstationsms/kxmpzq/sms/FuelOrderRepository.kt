@@ -89,7 +89,7 @@ class FuelOrderRepository(private val db: DatabaseHelper) {
 
     fun getOrdersForPhone(phone: String, limit: Int = 50): JSONArray {
         val result = JSONArray()
-        db.readableDatabase.rawQuery("SELECT order_id, customer_id, phone, fuel_type_id, quantity, unit, liters, unit_price, total_amount, quote_id, payment_mode, payment_status, delivery_location, delivery_location_original, requested_delivery_at, driver_id, vehicle_id, status, created_at, expires_at FROM fuel_orders WHERE phone = ? ORDER BY created_at DESC LIMIT ?", arrayOf(phone, limit.coerceIn(1, 200).toString())).use { c ->
+        db.readableDatabase.rawQuery("SELECT o.order_id, o.customer_id, o.phone, o.fuel_type_id, o.quantity, o.unit, o.liters, o.unit_price, o.total_amount, o.quote_id, o.payment_mode, o.payment_status, o.delivery_location, o.delivery_location_original, o.requested_delivery_at, o.driver_id, o.vehicle_id, o.status, o.created_at, o.expires_at, COALESCE(r.status, 'NOT_RESERVED') AS reservation_status, COALESCE((SELECT SUM(il.quantity_on_hand - il.quantity_committed) FROM inventory_levels il JOIN products p ON p.id = il.product_id WHERE p.fuel_type_id = o.fuel_type_id AND p.is_deleted = 0), 0) AS available_stock, (SELECT t.status FROM sms_delivery_tasks t WHERE t.order_id = o.order_id ORDER BY t.created_at DESC LIMIT 1) AS delivery_task_status FROM fuel_orders o LEFT JOIN fuel_reservations r ON r.order_id = o.order_id WHERE o.phone = ? ORDER BY o.created_at DESC LIMIT ?", arrayOf(phone, limit.coerceIn(1, 200).toString())).use { c ->
             while (c.moveToNext()) {
                 result.put(JSONObject().apply { for (i in 0 until c.columnCount) put(c.getColumnName(i), if (c.isNull(i)) JSONObject.NULL else c.getString(i)) })
             }
