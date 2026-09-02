@@ -951,7 +951,31 @@ button{
    ========================================================= */
 .performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}.performance-toolbar .form-group{margin-bottom:0}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
 @media(max-width:640px){.performance-toolbar,.performance-summary,.performance-form-grid{grid-template-columns:1fr}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
-.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding:4px;background:var(--surface-3);border:1px solid var(--border);border-radius:16px;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:var(--muted);font-weight:800;font-size:.74rem;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}.segment.active{background:var(--primary);color:#fff;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:right}</style></head><body class="ui-rehab"><div class="offline" id="offline">
+.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding:4px;background:var(--surface-3);border:1px solid var(--border);border-radius:16px;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:var(--muted);font-weight:800;font-size:.74rem;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}.segment.active{background:var(--primary);color:#fff;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:right}
+
+/* APK/WebView compatibility: keep this screen's desktop-correct two-column layout.
+   theme.css contains broad ui-rehab mobile fallbacks that must not collapse this screen. */
+@media (max-width:767px){
+    body.ui-rehab .stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.ui-rehab .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.ui-rehab .modal{
+        width:min(920px,100%);
+        max-width:100%;
+        max-height:94vh;
+        overflow-x:hidden;
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
+        touch-action:pan-y;
+    }
+    body.ui-rehab .modal-body{overflow:visible;}
+    body.ui-rehab .modal-bg{touch-action:pan-y;}
+    body.ui-rehab .title-icon{width:43px;height:43px;min-width:43px;font-size:1.15rem;}
+    body.ui-rehab .icon-btn{width:44px;height:44px;min-width:44px;font-size:1.38rem;}
+}
+@media (max-width:430px){
+    body.ui-rehab .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+}
+</style></head><body class="ui-rehab"><div class="offline" id="offline">
     اتصال Android Bridge غير متاح — لا توجد بيانات بديلة.
 </div><div class="loading" id="loading">
     <div class="spinner"></div>
@@ -3411,6 +3435,7 @@ PULL TO REFRESH
 ========================================================= */
 
 let startY = 0;
+let startTarget = null;
 
 document.addEventListener(
 'touchstart',
@@ -3419,6 +3444,7 @@ event => {
     startY =
         event.touches[0]
             .clientY;
+    startTarget = event.target;
 
 },
 {
@@ -3435,6 +3461,8 @@ event => {
         event.changedTouches[0]
             .clientY -
         startY;
+
+    if(startTarget && startTarget.closest && startTarget.closest('.modal')) return;
 
     if(
         window.scrollY <= 4 &&

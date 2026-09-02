@@ -1883,10 +1883,29 @@ textarea.form-input{
 [data-theme="dark"] .nav-item.active {
     border-color: #63c7ff !important;
 }
+/* APK/WebView compatibility: the shift form contract requires paired fields on every phone width. */
+@media (max-width:767px){
+    body.shifts-screen .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    body.shifts-screen .form-group.full,
+    body.shifts-screen .section-title{grid-column:1/-1;}
+    body.shifts-screen .modal{
+        overflow-x:hidden;
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
+        touch-action:pan-y;
+        max-height:calc(100svh - 1rem);
+    }
+    body.shifts-screen .modal-body{overflow:visible;}
+}
+@media (max-width:430px){
+    body.shifts-screen .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+    body.shifts-screen .form-group.full,
+    body.shifts-screen .section-title{grid-column:1/-1;}
+}
 </style>
 </head>
 
-<body>
+<body class="shifts-screen">
 
 <!-- =======================================================
      LOADING
@@ -3621,6 +3640,13 @@ function detectShiftType(){
    OPTIONS
 ========================================================= */
 
+// Keep the active control visible above the sticky footer when Android opens the keyboard.
+document.addEventListener('focusin', event => {
+    const target = event.target;
+    if (!target || !target.matches || !target.matches('#shiftForm input, #shiftForm select, #shiftForm textarea')) return;
+    window.setTimeout(() => target.scrollIntoView({block:'nearest', inline:'nearest'}), 120);
+});
+
 async function loadFormOptions(force = false){
 
     if(state.optionsLoaded && !force){
@@ -3637,6 +3663,7 @@ async function loadFormOptions(force = false){
         const data = parseBridge(result) || {};
 
         const station = data.station || null;
+        const stationId = station?.id ?? station?.station_id ?? null;
         const currentUser = data.current_user || data.currentUser || null;
 
         state.options = {
@@ -3657,8 +3684,8 @@ async function loadFormOptions(force = false){
         renderAttendantOptions();
 
         // تعبئة المحطة وأمين الصندوق تلقائياً من البيانات
-        if(station?.id){
-            $("station_id").value = String(station.id);
+        if(stationId){
+            $("station_id").value = String(stationId);
             $("station_id").disabled = true;
         }
 
