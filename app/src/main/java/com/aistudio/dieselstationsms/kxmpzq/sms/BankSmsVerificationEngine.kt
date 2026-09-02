@@ -9,7 +9,7 @@ import java.util.UUID
 class BankSmsVerificationEngine(private val db: DatabaseHelper, private val parser: BankMessageParser = BankMessageParser()) {
     fun verifyAndRecord(senderPhone: String, rawMessage: String, receivedAt: Long = System.currentTimeMillis()): String {
         val phone = PhoneUtils.normalize(senderPhone) ?: senderPhone.trim().takeIf { it.matches(Regex("[0-9+]{3,20}")) } ?: return "REJECTED_INVALID_SENDER"
-        val identity = db.readableDatabase.rawQuery("SELECT bank_id, bank_account_id, verified, active FROM sms_sender_identities WHERE sender_phone = ? AND source_type = 'BANK' LIMIT 1", arrayOf(phone)).use { c ->
+        val identity = db.readableDatabase.rawQuery("SELECT bank_id, bank_account_id, verified, active FROM sms_sender_identities WHERE sender_phone IN (?, ?) AND source_type = 'BANK' LIMIT 1", arrayOf(phone, phone.removePrefix("967"))).use { c ->
             if (!c.moveToFirst()) null else arrayOf(c.getString(0), c.getString(1), c.getInt(2).toString(), c.getInt(3).toString())
         } ?: return "REJECTED_UNTRUSTED_SENDER"
         if (identity[2] != "1" || identity[3] != "1") return "REJECTED_UNVERIFIED_SENDER"
@@ -41,7 +41,7 @@ class BankSmsVerificationEngine(private val db: DatabaseHelper, private val pars
 
     fun verifyAndMatch(senderPhone: String, rawMessage: String, receivedAt: Long = System.currentTimeMillis()): PaymentMatch {
         val phone = PhoneUtils.normalize(senderPhone) ?: senderPhone.trim().takeIf { it.matches(Regex("[0-9+]{3,20}")) } ?: return PaymentMatch(false, false, null, "invalid_sender")
-        val identity = db.readableDatabase.rawQuery("SELECT bank_id, bank_account_id, verified, active FROM sms_sender_identities WHERE sender_phone = ? AND source_type = 'BANK' LIMIT 1", arrayOf(phone)).use { c -> if (!c.moveToFirst()) null else Triple(c.getString(0), c.getString(1), c.getInt(2) == 1 && c.getInt(3) == 1) } ?: return PaymentMatch(false, false, null, "untrusted_bank_sender")
+        val identity = db.readableDatabase.rawQuery("SELECT bank_id, bank_account_id, verified, active FROM sms_sender_identities WHERE sender_phone IN (?, ?) AND source_type = 'BANK' LIMIT 1", arrayOf(phone, phone.removePrefix("967"))).use { c -> if (!c.moveToFirst()) null else Triple(c.getString(0), c.getString(1), c.getInt(2) == 1 && c.getInt(3) == 1) } ?: return PaymentMatch(false, false, null, "untrusted_bank_sender")
         if (!identity.third) return PaymentMatch(false, false, null, "unverified_bank_sender")
         val parsed = parser.parse(phone, rawMessage, receivedAt) ?: return PaymentMatch(false, false, null, "unparseable_bank_message")
         val candidate = parsed.copy(bankAccountId = identity.second)
