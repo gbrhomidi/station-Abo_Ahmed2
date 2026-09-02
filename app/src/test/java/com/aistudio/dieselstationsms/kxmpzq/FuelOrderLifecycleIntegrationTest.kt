@@ -31,6 +31,16 @@ class FuelOrderLifecycleIntegrationTest {
 
     @After fun tearDown() { DatabaseHelper.closeInstance(); context.deleteDatabase(DatabaseHelper.DATABASE_NAME) }
 
+    @Test fun refusalIsRecordedAsPayrollPenaltyWithoutCancellingTask() {
+        val db = helper.writableDatabase
+        helper.setSetting("driver_refusal_penalty", "150")
+        val id = com.aistudio.dieselstationsms.kxmpzq.sms.DriverDisciplineRepository(helper).recordRefusal(77L, "FO-REFUSAL", "DT-REFUSAL")
+        assertTrue(id > 0)
+        db.rawQuery("SELECT amount, status FROM driver_penalties WHERE task_code = ?", arrayOf("DT-REFUSAL")).use { cursor ->
+            assertTrue(cursor.moveToFirst()); assertEquals(150.0, cursor.getDouble(0), 0.0001); assertEquals("PENDING_PAYROLL", cursor.getString(1))
+        }
+    }
+
     @Test fun smsOrderMovesFromQuoteToPaymentDriverAcceptanceAndDelivery() {
         val db = helper.writableDatabase
         val partyType = db.rawQuery("SELECT id FROM party_types WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }

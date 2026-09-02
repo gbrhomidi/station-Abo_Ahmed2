@@ -51,7 +51,7 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
             appendEvent(database, orderId, "DRIVER_ASSIGNED", JSONObject().put("driver_id", candidate[0] as Long).put("vehicle_id", candidate[3] as Long).put("task_code", taskCode))
             database.setTransactionSuccessful()
         } finally { database.endTransaction() }
-        val sent = driverPhone?.let { replyManager.sendReplyOnce(it, "لديك مهمة توصيل رقم $taskCode للطلب $orderId إلى $driverName. أرسل 1 للقبول أو 2 للرفض.") } ?: false
+        val sent = driverPhone?.let { replyManager.sendReplyOnce(it, "لديك مهمة توصيل رقم $taskCode للطلب $orderId إلى $driverName. أرسل 1 لتوثيق استلام المهمة؛ التوصيل إلزامي ضمن مهامك الوظيفية.") } ?: false
         sent
     }
 
@@ -67,13 +67,21 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
         try {
             val task = database.rawQuery("SELECT delivery_id, order_id, driver_id FROM sms_delivery_tasks t JOIN drivers d ON d.id = t.driver_id WHERE (d.phone = ? OR d.phone2 = ?) AND t.status = 'ASSIGNED' ORDER BY t.created_at ASC LIMIT 1", arrayOf(normalized, normalized)).use { c -> if (c.moveToFirst()) Triple(c.getString(0), c.getString(1), c.getLong(2)) else null } ?: return@withContext false
             taskCode = task.first; orderId = task.second
-            val nextTask = if (accepted) "ACCEPTED" else "CANCELLED"
-            database.update("sms_delivery_tasks", ContentValues().apply { put("status", nextTask); put("assigned_at", if (accepted) System.currentTimeMillis() else null); put("updated_at", System.currentTimeMillis()); if (!accepted) put("failure_reason", "DRIVER_REJECTED") }, "delivery_id = ? AND status = 'ASSIGNED'", arrayOf(task.first))
-            if (!accepted) database.update("fuel_orders", ContentValues().apply { put("status", "READY_FOR_DISPATCH"); put("driver_id", null) }, "order_id = ? AND status = 'DRIVER_ASSIGNED'", arrayOf(task.second))
-            appendEvent(database, task.second, if (accepted) "DRIVER_ACCEPTED" else "DRIVER_REJECTED", JSONObject().put("driver_id", task.third).put("task_code", task.first))
+            if (accepted) {
+                database.update("sms_delivery_tasks", ContentValues().apply { put("status", "ACCEPTED"); put("assigned_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis()) }, "delivery_id = ? AND status = 'ASSIGNED'", arrayOf(task.first))
+                appendEvent(database, task.second, "DRIVER_ACCEPTED", JSONObject().put("driver_id", task.third).put("task_code", task.first).put("mandatory", true))
+            } else {
+                val penaltyId = DriverDisciplineRepository(db).recordRefusal(task.third, task.second, task.first)
+                database.update("sms_delivery_tasks", ContentValues().apply { put("updated_at", System.currentTimeMillis()); put("failure_reason", "DRIVER_REFUSAL_PENALTY:$penaltyId") }, "delivery_id = ? AND status = 'ASSIGNED'", arrayOf(task.first))
+                appendEvent(database, task.second, "DRIVER_REFUSAL_RECORDED", JSONObject().put("driver_id", task.third).put("task_code", task.first).put("penalty_id", penaltyId).put("mandatory", true))
+            }
             database.setTransactionSuccessful()
         } finally { database.endTransaction() }
-        if (orderId != null && rejected == true) assign(orderId!!)
+        if (accepted) {
+            replyManager.sendReplyOnce(normalized, "تم تسجيل قبول مهمة التوصيل $taskCode. التوصيل جزء إلزامي من مهامك الوظيفية.")
+        } else {
+            replyManager.sendReplyOnce(normalized, "لا يمكن رفض مهمة التوصيل. تم تسجيل المخالفة وإدراج الجزاء المستحق: خصم الراتب يحدد وفق سياسة المحطة.")
+        }
         true
     }
 

@@ -23216,6 +23216,16 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         ensureColumn(db, "sms_payment_events", "balance", "REAL")
         ensureColumn(db, "sms_payment_events", "matched_order_key", "TEXT")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_payment_fingerprint ON sms_payment_events(fingerprint) WHERE fingerprint IS NOT NULL")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS driver_penalties (
+                penalty_id TEXT PRIMARY KEY, driver_id INTEGER NOT NULL, order_id TEXT NOT NULL,
+                task_code TEXT NOT NULL UNIQUE, penalty_type TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0,
+                currency TEXT NOT NULL DEFAULT 'YER', status TEXT NOT NULL DEFAULT 'PENDING_PAYROLL',
+                created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                CHECK(amount >= 0), CHECK(status IN ('PENDING_PAYROLL','APPLIED','WAIVED'))
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_driver_penalties_driver_status ON driver_penalties(driver_id, status, created_at)")
     }
 
     }
