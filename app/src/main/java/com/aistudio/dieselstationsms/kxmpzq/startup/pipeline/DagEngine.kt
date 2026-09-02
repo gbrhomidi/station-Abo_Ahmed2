@@ -32,7 +32,7 @@ class DagEngine(private val phases: List<InitializationPhase>) {
         while (queue.isNotEmpty()) {
             val current = queue.poll()
             result.add(current)
-            graph[current]?.forEach { neighbor ->
+            graph[current].orEmpty().forEach { neighbor ->
                 inDegree[neighbor] = (inDegree[neighbor] ?: 0) - 1
                 if (inDegree[neighbor] == 0) queue.add(neighbor)
             }

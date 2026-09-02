@@ -49,7 +49,7 @@ class DriverAssignmentPolicyRobolectricTest {
         val fuel = helper.writableDatabase.rawQuery("SELECT id FROM fuel_types WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val repo = FuelOrderRepository(helper)
         val created = repo.createDraft(customer, phone, fuel, 100.0, "LITER", 100.0, 5.0, "PREPAID", "موقع الاختبار", System.currentTimeMillis() + 3_600_000, "POL-ORDER-$suffix")
-        repo.createImmutableQuote(created.orderId, "POL-PRICE")
+        repo.createImmutableQuote(created.orderId, priceVersion = "POL-PRICE")
         repo.reserve(created.orderId); repo.transition(created.orderId, com.aistudio.dieselstationsms.kxmpzq.sms.FuelOrderStatus.AWAITING_PAYMENT); repo.transition(created.orderId, com.aistudio.dieselstationsms.kxmpzq.sms.FuelOrderStatus.PAYMENT_VERIFIED); repo.transition(created.orderId, com.aistudio.dieselstationsms.kxmpzq.sms.FuelOrderStatus.AWAITING_DELIVERY)
         return created.orderId
     }

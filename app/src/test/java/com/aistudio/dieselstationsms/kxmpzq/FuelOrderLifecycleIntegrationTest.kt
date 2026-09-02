@@ -41,7 +41,7 @@ class FuelOrderLifecycleIntegrationTest {
         }
     }
 
-    @Test fun smsOrderMovesFromQuoteToPaymentDriverAcceptanceAndDelivery() {
+    @Test fun smsOrderMovesFromQuoteToPaymentDriverAcceptanceAndDelivery() = kotlinx.coroutines.runBlocking {
         val db = helper.writableDatabase
         val partyType = db.rawQuery("SELECT id FROM party_types WHERE is_deleted = 0 ORDER BY id LIMIT 1", null).use { check(it.moveToFirst()); it.getLong(0) }
         val customerId = db.insertOrThrow("parties", null, ContentValues().apply {
@@ -55,7 +55,7 @@ class FuelOrderLifecycleIntegrationTest {
 
         val repo = FuelOrderRepository(helper)
         val order = repo.createDraft(customerId, "967771234567", fuelTypeId, 500.0, "LITER", 500.0, 10.0, "PREPAID", "بئر شعبان", System.currentTimeMillis() + 3_600_000, "integration-sms-order")
-        val quote = repo.createImmutableQuote(order.orderId, "TEST-PRICE-V1")
+        val quote = repo.createImmutableQuote(order.orderId, priceVersion = "TEST-PRICE-V1")
         assertEquals(FuelOrderStatus.QUOTED, repo.get(order.orderId)!!.status)
         repo.reserve(order.orderId)
         repo.transition(order.orderId, FuelOrderStatus.AWAITING_PAYMENT)
