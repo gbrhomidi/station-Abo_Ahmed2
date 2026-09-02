@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity() {
 
             fun attachWebView(webView: WebView?) {
                 webViewRef = WeakReference(webView)
-                isVConsoleReady = true
+                isVConsoleReady = BuildConfig.DEBUG
                 info("DebugLogger", "Attached to WebView")
             }
 
@@ -258,12 +258,8 @@ class MainActivity : AppCompatActivity() {
             DebugLogger.warn("onCreate", "enableEdgeToEdge failed: ${e.message}")
         }
 
-        try {
-            initEncryptedPrefs()
-        } catch (e: Exception) {
-            sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            DebugLogger.warn("onCreate", "Encrypted prefs fallback to regular")
-        }
+        // يفشل التطبيق صراحةً إذا تعذر إنشاء التفضيلات المشفرة؛ لا يوجد مسار تخزين بديل غير آمن.
+        initEncryptedPrefs()
 
         try {
             dbHelper = DatabaseHelper.getInstance(applicationContext)
@@ -1060,8 +1056,9 @@ class MainActivity : AppCompatActivity() {
             )
             DebugLogger.info("Prefs", "Encrypted prefs initialized")
         } catch (e: Exception) {
-            sharedPrefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            DebugLogger.warn("Prefs", "Encrypted prefs fallback: ${e.message}")
+            // لا نسمح بالتراجع إلى SharedPreferences غير مشفرة؛ قد تحتوي هذه القيم على رمز الجلسة.
+            DebugLogger.error("Prefs", "Encrypted prefs initialization failed", e)
+            throw IllegalStateException("Secure preferences are required", e)
         }
     }
 
@@ -1089,6 +1086,7 @@ class MainActivity : AppCompatActivity() {
 
                     val wv = if (this@MainActivity.webView == null) {
                         WebView(context).apply {
+                            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             layoutParams = FrameLayout.LayoutParams(
@@ -1142,9 +1140,11 @@ class MainActivity : AppCompatActivity() {
                                     val msg = consoleMessage.message()
                                     val line = consoleMessage.lineNumber()
                                     val source = consoleMessage.sourceId()
-                                    Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
-                                    DebugLogger.info("WebViewConsole", "$msg")
-                                    if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                                    if (isDebugMode) {
+                                        Log.d("WebViewConsole", "$msg (source: $source, line: $line)")
+                                        DebugLogger.info("WebViewConsole", "$msg")
+                                    }
+                                    if (isDebugMode && consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
                                         DebugLogger.error("WebViewConsole", "JS Error: $msg at $source:$line")
                                     }
                                     return true

@@ -86,8 +86,9 @@ class MyApplication : Application() {
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to create encrypted prefs, falling back to default", e)
-                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                // لا نرجع إلى تخزين غير مشفر؛ هذه التفضيلات قد تحتوي أسرارًا أو رموز جلسات.
+                Log.e(TAG, "Failed to create encrypted preferences", e)
+                throw IllegalStateException("Secure preferences are required", e)
             }
         }
 
