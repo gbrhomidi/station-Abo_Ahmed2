@@ -27,6 +27,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Run notification and SMS screens smoke tests
+        run: python3 screen-smoke-test.py
+
       - name: Run Kotlin and Robolectric regression tests
         run: ./gradlew testDebugUnitTest --no-daemon
 
