@@ -2592,7 +2592,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             CREATE TABLE IF NOT EXISTS fuel_types (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 uuid TEXT UNIQUE NOT NULL,
-                fuel_code VARCHAR(20) UNIQUE NOT NULL,
+                fuel_code VARCHAR(20) COLLATE NOCASE UNIQUE NOT NULL,
                 fuel_name VARCHAR(100) NOT NULL,
                 fuel_name_ar VARCHAR(100),
                 description TEXT,
@@ -6551,7 +6551,9 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
 
         db.execSQL("""
             INSERT OR IGNORE INTO stations (id, uuid, station_code, station_name, station_name_ar, company_id, country, city, phone, email, license_number, tax_number, status, is_24_hours, station_type, default_currency_id)
-            VALUES (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2)
+            VALUES
+            (1, 'STA-001-UUID', 'STA-001', 'Abu Ahmed Main Station', 'محطة ابو أحمد الرئيسية', 1, 'Yemen', 'rda', '+967 776 979 279', 'https://www.facebook.com/share/1YAz73x6LY/', 'LIC-2024-001', 'TAX-123456789', 'active', 1, 'both', 2),
+            (2, 'STA-002-UUID', 'STA-002', 'Abu Ahmed Secondary Station', 'محطة ابو أحمد الفرعية', 1, 'Yemen', 'sanaa', '+967 777 000 002', 'info@abuahmed.com', 'LIC-2024-002', 'TAX-123456790', 'active', 1, 'both', 2)
         """)
 
         db.execSQL("""

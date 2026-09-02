@@ -115,14 +115,20 @@ object DeliveryTimeResolver {
 }
 
 object LocationResolver {
+    /** مفاتيح مضغوطة حتى تعمل المطابقة مع أو بدون مسافات وباختلاف الهمزات الشائع في SMS. */
     private val aliases = mapOf(
-        "بير شعبان" to "بئر شعبان", "بئر شعبان" to "بئر شعبان",
-        "بيرالشعبان" to "بئر شعبان", "بئرالشعبان" to "بئر شعبان"
+        "بيرشعبان" to "بئر شعبان",
+        "بئرشعبان" to "بئر شعبان",
+        "بيرالشعبان" to "بئر شعبان",
+        "بئرالشعبان" to "بئر شعبان",
+        "شارع60" to "شارع الستين",
+        "شارعالستين" to "شارع الستين"
     )
     fun normalize(original: String?): String? {
         val value = original?.trim()?.replace(Regex("\\s+"), " ") ?: return null
         if (value.isBlank()) return null
-        return aliases[value.replace(" ", "").lowercase()] ?: aliases[value.lowercase()] ?: value
+        val compact = value.replace(" ", "").lowercase()
+        return aliases[compact] ?: value
     }
 }
 

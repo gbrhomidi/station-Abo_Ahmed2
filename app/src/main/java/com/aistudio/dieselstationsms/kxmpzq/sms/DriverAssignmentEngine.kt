@@ -25,17 +25,18 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
             } ?: return@withContext false
             if (order.third !in setOf("AWAITING_DELIVERY", "READY_FOR_DISPATCH", "DELIVERY_FAILED")) return@withContext false
             val candidate = database.rawQuery("""
-                SELECT d.id, d.full_name, COALESCE(d.full_name_ar, d.full_name), d.phone, d.vehicle_id, d.station_id,
+                SELECT d.id, d.full_name, COALESCE(d.full_name_ar, d.full_name), d.phone, d.vehicle_id,
+                       COALESCE(d.station_id, vehicle_owner.station_id, 1) AS assignment_station_id,
                        (SELECT COUNT(*) FROM sms_delivery_tasks t WHERE t.driver_id = d.id AND t.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY')) AS active_tasks
                 FROM drivers d
                 JOIN vehicles v ON v.id = d.vehicle_id
                 LEFT JOIN parties vehicle_owner ON vehicle_owner.id = v.party_id
-                WHERE d.status = 'active' AND d.is_deleted = 0 AND d.station_id IS NOT NULL AND d.phone IS NOT NULL AND d.phone <> ''
+                WHERE d.status = 'active' AND d.is_deleted = 0 AND d.phone IS NOT NULL AND d.phone <> ''
                   AND v.status = 'active' AND v.is_deleted = 0
-                  AND vehicle_owner.station_id = d.station_id
-                  AND NOT EXISTS (SELECT 1 FROM sms_delivery_tasks busy WHERE busy.driver_id = d.id AND busy.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY') AND busy.scheduled_at IS NOT NULL AND (? IS NULL OR busy.scheduled_at <= ?))
+                  AND (vehicle_owner.station_id = d.station_id OR (vehicle_owner.station_id IS NULL AND d.station_id IS NULL))
+                  AND NOT EXISTS (SELECT 1 FROM sms_delivery_tasks busy WHERE busy.driver_id = d.id AND busy.status IN ('ASSIGNED','ACCEPTED','OUT_FOR_DELIVERY'))
                 ORDER BY active_tasks ASC, d.updated_at ASC, d.id ASC LIMIT 1
-            """.trimIndent(), arrayOf(order.second?.toString(), order.second?.toString())).use { c ->
+            """.trimIndent(), null).use { c ->
                 if (!c.moveToFirst()) null else arrayOf(c.getLong(0), c.getString(2), c.getString(3), c.getLong(4), c.getLong(5))
             } ?: return@withContext false
             taskCode = "DT-${UUID.randomUUID().toString().take(8).uppercase()}"
