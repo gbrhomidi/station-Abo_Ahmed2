@@ -4,9 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>نظام إدارة محطة الوقود – إدارة الموظفين</title>
-    <link href="file:///android_asset/assets-local/css/css2" rel="stylesheet">
-    <link rel="stylesheet" href="file:///android_asset/assets-local/css/all.min.css">
+    <link href="../assets-local/css/css2" rel="stylesheet">
+    <link rel="stylesheet" href="../assets-local/css/all.min.css">
     <style>
+
+        /* خطوط محلية: تمنع اختلاف المقاسات عند عدم اتصال WebView بخدمة الخطوط الخارجية. */
+        @font-face { font-family: 'Tajawal Local'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets-local/fonts/tajawal-ar-400.woff2') format('woff2'); }
+        @font-face { font-family: 'Tajawal Local'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets-local/fonts/tajawal-ar-500.woff2') format('woff2'); }
+        @font-face { font-family: 'Tajawal Local'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets-local/fonts/tajawal-ar-700.woff2') format('woff2'); }
+        @font-face { font-family: 'Tajawal Local'; font-style: normal; font-weight: 800 900; font-display: swap; src: url('../assets-local/fonts/tajawal-ar-800.woff2') format('woff2'); }
+
+        /* ثبات مقياس النص والحقول في Chrome وAndroid WebView. */
+        html { min-height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        body { min-height: 100vh; min-height: 100dvh; }
+        button, input, select, textarea { font-family: 'Tajawal Local', Arial, sans-serif; }
+        body.modal-open { overflow: hidden; }
+        @supports not (backdrop-filter: blur(1px)) {
+            .top-bar, .bottom-nav { background: var(--surface-elevated); }
+        }
         /* ============================================================
            المتغيرات الأساسية (دعم الوضع الداكن والنهاري)
            ============================================================ */
@@ -90,7 +105,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             direction: rtl;
@@ -140,6 +155,18 @@
             align-items: center;
             backdrop-filter: blur(8px);
         }
+
+
+        /* توافق النوافذ المنبثقة والحقول مع مساحة العرض الفعلية في Android WebView. */
+        .loading-indicator.show { display: flex; }
+        @supports (height: 100dvh) { .modal, .report-modal { max-height: 92dvh; } }
+        @media (max-width: 640px) {
+            .top-bar { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+            .bottom-nav { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+            .fab { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+            .form-input { min-height: 44px; font-size: 16px; }
+        }
+
         .spinner {
             width: 50px; height: 50px;
             border: 4px solid rgba(0,212,255,0.2);
@@ -300,7 +327,7 @@
             border: var(--border-width) var(--border-style) var(--border-color);
             background: var(--surface-elevated);
             color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.9rem;
             transition: all 0.3s;
             outline: none;
@@ -332,7 +359,7 @@
             background: var(--surface-color);
             color: var(--text-muted);
             font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             cursor: pointer;
             white-space: nowrap;
             transition: all 0.3s;
@@ -526,7 +553,7 @@
             border: var(--border-width) var(--border-style) var(--border-color);
             background: var(--surface-color);
             color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.8rem;
             font-weight: 600;
             cursor: pointer;
@@ -697,7 +724,7 @@
             min-height: 55px;
             text-align: center;
             font-size: 0.75rem;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             touch-action: manipulation;
         }
         .sidebar-btn:active { transform: scale(0.95); }
@@ -734,7 +761,7 @@
             background: none;
             border: none;
             color: var(--text-muted);
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.55rem;
             cursor: pointer;
             transition: all 0.3s;
@@ -836,7 +863,7 @@
             border: var(--border-width) var(--border-style) var(--border-color);
             background: var(--surface-color);
             color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.85rem;
             transition: all 0.3s;
             outline: none;
@@ -856,7 +883,7 @@
             border-radius: 14px;
             border: none;
             font-weight: 700;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.9rem;
             cursor: pointer;
             transition: all 0.3s;
@@ -985,7 +1012,7 @@
             border: var(--border-width) var(--border-style) var(--border-color);
             background: var(--surface-color);
             color: var(--text-color);
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 0.9rem;
             transition: all 0.3s;
             outline: none;
@@ -1006,7 +1033,7 @@
             border: none;
             background: linear-gradient(135deg, var(--primary-color), #6366f1);
             color: white;
-            font-family: 'Cairo', sans-serif;
+            font-family: 'Tajawal Local', Arial, sans-serif;
             font-size: 1rem;
             font-weight: 700;
             cursor: pointer;
@@ -1265,6 +1292,17 @@
         .utility-card p { color:var(--text-muted); font-size:.75rem; line-height:1.8; margin-bottom:12px; }
         .hidden { display:none !important; }
         @media(max-width:640px){ .form-grid { grid-template-columns:1fr; } .form-group.full { grid-column:auto; } .data-card-head { flex-direction:column; } .data-card-value { align-self:flex-start; } }
+
+
+        /* اتساق تخطيط الموظفين على المتصفح وWebView. */
+        .top-title p { margin-top: 3px; color: var(--text-muted); font-size: .72rem; }
+        .modal { width: min(100%, 760px); }
+        @media (min-width: 641px) {
+            .modal-overlay { align-items: center; padding: 20px; }
+            .modal { border-radius: 24px; transform: translateY(24px); }
+            .modal-overlay.show .modal { transform: translateY(0); }
+        }
+
         @media print { .top-bar,.bottom-nav,.sidebar-toggle,.sidebar,.fab,.offline-banner,.action-row,.icon-btn,.notice-card { display:none !important; } body { background:#fff; color:#111; padding:0; } .data-panel,.data-card,.stat-card { box-shadow:none; color:#111; border:1px solid #aaa; } }
 </style>
 </head>
@@ -1391,14 +1429,21 @@
         }
         function findRow(id) { return state.rows.find((row,index)=>String(idOf(row)||index)===String(id)); }
         function openDetails(id) { const row=findRow(id); if(!row)return; $('detailsBody').innerHTML=`<div class="detail-grid">${Object.entries(row).map(([k,v])=>`<div class="detail-item"><span>${esc(k)}</span><strong>${esc(typeof v==='object'?JSON.stringify(v):v)}</strong></div>`).join('')}</div><details style="margin-top:14px"><summary>JSON الخام</summary><pre class="raw-json">${esc(JSON.stringify(row,null,2))}</pre></details>`; openModal(null,'detailsModal'); }
-        function inputHtml(def,row) { const value=row&&row[def.key]!==undefined?row[def.key]:''; const req=def.required?'required':''; const placeholder=def.placeholder?`placeholder="${esc(def.placeholder)}"`:''; if(def.type==='textarea')return `<div class="form-group full"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><textarea class="form-input" data-key="${esc(def.key)}" rows="3" ${req} ${placeholder}>${esc(value)}</textarea></div>`; if(def.type==='select')return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input" data-key="${esc(def.key)}" ${req}><option value="">اختر...</option><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="open">مفتوح</option><option value="pending">معلق</option><option value="cash">نقدي</option><option value="credit">آجل</option><option value="morning">صباحية</option><option value="evening">مسائية</option><option value="night">ليلية</option><option value="in">إيراد</option><option value="out">مصروف</option><option value="high">عالية</option><option value="medium">متوسطة</option><option value="low">منخفضة</option><option value="completed">مكتمل</option></select></div>`; return `<div class="form-group ${def.type==='datetime-local'?'full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder}></div>`; }
-        function openForm(row=null) { if(!CFG.createMethod && !CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة في العقد الحالي',true);return;} state.editing=row; $('formTitle').textContent=row?'تعديل السجل':'إضافة سجل جديد'; $('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join(''); if(row) (CFG.fields||[]).forEach(def=>{const el=document.querySelector(`[data-key="${CSS.escape(def.key)}"]`); if(el&&def.type==='select')el.value=row[def.key]??'';}); $('formModal').classList.add('show'); }
+        function inputValue(def,row) {
+            const raw=row&&row[def.key]!==undefined&&row[def.key]!==null?row[def.key]:'';
+            const value=String(raw);
+            if(def.type==='date') return value.slice(0,10);
+            if(def.type==='datetime-local') return value.replace(' ','T').replace(/(\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/, '').slice(0,16);
+            return value;
+        }
+        function inputHtml(def,row) { const value=inputValue(def,row); const req=def.required?'required':''; const placeholder=def.placeholder?`placeholder="${esc(def.placeholder)}"`:''; if(def.type==='textarea')return `<div class="form-group full"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><textarea class="form-input" data-key="${esc(def.key)}" rows="3" ${req} ${placeholder}>${esc(value)}</textarea></div>`; if(def.type==='select')return `<div class="form-group"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><select class="form-input" data-key="${esc(def.key)}" ${req}><option value="">اختر...</option><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="open">مفتوح</option><option value="pending">معلق</option><option value="cash">نقدي</option><option value="credit">آجل</option><option value="morning">صباحية</option><option value="evening">مسائية</option><option value="night">ليلية</option><option value="in">إيراد</option><option value="out">مصروف</option><option value="high">عالية</option><option value="medium">متوسطة</option><option value="low">منخفضة</option><option value="completed">مكتمل</option></select></div>`; return `<div class="form-group ${def.type==='datetime-local'?'full':''}"><label class="form-label">${esc(def.label)}${def.required?' *':''}</label><input class="form-input" data-key="${esc(def.key)}" type="${esc(def.type)}" value="${esc(value)}" ${req} ${placeholder}></div>`; }
+        function openForm(row=null) { if(!CFG.createMethod && !CFG.updateMethod){toast('لا توجد عملية كتابة مدعومة لهذه الشاشة في العقد الحالي',true);return;} state.editing=row; $('formTitle').textContent=row?'تعديل السجل':'إضافة سجل جديد'; $('recordForm').innerHTML=(CFG.fields||[]).map(def=>inputHtml(def,row)).join(''); if(row) (CFG.fields||[]).forEach(def=>{const el=document.querySelector(`[data-key="${CSS.escape(def.key)}"]`); if(el&&def.type==='select')el.value=row[def.key]??'';}); openModal(null,'formModal'); }
         function collectForm() { const payload={}; document.querySelectorAll('#recordForm [data-key]').forEach(el=>{ let value=el.value; const type=el.type; if(type==='number') value=value===''?0:Number(value); payload[el.dataset.key]=value; }); if(CFG.module==='vehicles' && CFG.title==='إدارة السائقين') payload.party_type='driver'; return payload; }
         async function saveForm() { const form=$('recordForm'); if(!form.reportValidity())return; const payload=collectForm(); setLoading(true); try { let result; if(state.editing && CFG.updateMethod) { const id=idOf(state.editing); if(!id)throw new Error('معرف السجل غير صالح'); if(CFG.updateAction==='tankQuantity') result=await invoke(CFG.updateMethod,[Number(id),Number(payload.current_quantity||0)]); else if(CFG.updateAction==='maintenanceStatus') result=await invoke(CFG.updateMethod,[JSON.stringify({request_id:Number(id),status:payload.status||'completed'})]); else if(CFG.updateAction==='endShift') result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); else result=await invoke(CFG.updateMethod,[Number(id),JSON.stringify(payload)]); } else if(CFG.createMethod) { if(CFG.createMethod==='saveBalanceSheet') result=await invoke(CFG.createMethod,[today(),0]); else result=await invoke(CFG.createMethod,[JSON.stringify(payload)]); } else throw new Error('لا توجد عملية حفظ مدعومة'); parse(result); toast('تم تنفيذ العملية والتحقق من نجاحها'); closeModal(null,'formModal'); await reloadData(); } catch(error) { toast(error.message||'فشلت العملية',true); } finally { setLoading(false); } }
         async function deleteRow(row) { const id=row&&idOf(row); if(!id||!CFG.deleteMethod)return; if(!confirm('هل تريد تنفيذ الحذف الفعلي لهذا السجل؟'))return; setLoading(true); try { const result=await invoke(CFG.deleteMethod,[Number(id)]); parse(result); toast('تم الحذف فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل الحذف',true); } finally { setLoading(false); } }
         async function resolveRow(row) { const id=row&&idOf(row); if(!id||!CFG.resolveMethod)return; const note=prompt('أدخل ملاحظة الاعتماد/الحل إن لزم:',''); if(note===null)return; setLoading(true); try { const result=await invoke(CFG.resolveMethod,[Number(id),String(note)]); parse(result); toast('تم تنفيذ العملية فعلياً'); await reloadData(); } catch(error) { toast(error.message||'فشل تنفيذ العملية',true); } finally { setLoading(false); } }
         async function reloadData() { if(CFG.mode==='unsupported'||CFG.mode==='ai'){ renderCards(); return; } if(CFG.mode==='backup'){ loadBackupHistory(); return; } if(!CFG.listMethod){ renderCards(); return; } if(!bridge){ $('offlineBanner').classList.add('show'); renderCards(); return; } setLoading(true); try { const result=await invoke(CFG.listMethod,argsForLoad()); state.rows=rowsFrom(result); state.loadedAt=new Date(); $('offlineBanner').classList.remove('show'); applyFilter(); } catch(error) { state.rows=[]; state.loadedAt=new Date(); renderCards(); toast(error.message||'فشل تحميل البيانات',true); } finally { setLoading(false); } }
-        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); }
+        function openModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.add('show'); document.body.classList.add('modal-open'); } function closeModal(event,id) { if(event&&event.target!==event.currentTarget)return; $(id).classList.remove('show'); if(!document.querySelector('.modal-overlay.show')) document.body.classList.remove('modal-open'); }
         function openReport() { setDateDefaults(); $('reportResults').innerHTML='<div class="empty-state"><i class="fas fa-file-alt"></i><p>اضغط توليد التقرير لعرض البيانات المحملة من SQLite.</p></div>'; openModal(null,'reportModal'); }
         async function generateReport() { setLoading(true); try { let result; if(CFG.reportKind==='balanceSheet') result=await invoke('getBalanceSheet',[($('reportTo').value||today()),0]); else if(CFG.reportKind==='eod') result=await invoke('getEodReport',[]); else if(String(CFG.reportKind||'').startsWith('operational:')) { const suffix=String(CFG.reportKind).split(':')[1]; result=await invoke('generate'+suffix+'Report',[JSON.stringify({from_date:$('reportFrom').value||'',to_date:$('reportTo').value||'',search:$('searchInput').value||'',include_archived:true,limit:1000})]); } else result={data:state.filtered}; $('reportResults').innerHTML=renderReport(rowsFrom(result)); toast('تم توليد التقرير من المصدر الفعلي'); } catch(e) { toast(e.message||'فشل التقرير',true); } finally { setLoading(false); } }
         function renderReport(rows) { if(!rows.length)return '<div class="empty-state">لا توجد بيانات للتقرير.</div>'; return `<div class="data-fields">${rows.slice(0,100).map(row=>`<div class="data-field"><span>${esc(titleOf(row))}</span><strong>${esc(subtitleOf(row)||JSON.stringify(row))}</strong></div>`).join('')}</div>`; }
