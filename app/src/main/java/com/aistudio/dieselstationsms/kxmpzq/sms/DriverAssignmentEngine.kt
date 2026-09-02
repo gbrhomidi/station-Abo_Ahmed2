@@ -52,8 +52,10 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
             appendEvent(database, orderId, "DRIVER_ASSIGNED", JSONObject().put("driver_id", candidate[0] as Long).put("vehicle_id", candidate[3] as Long).put("task_code", taskCode))
             database.setTransactionSuccessful()
         } finally { database.endTransaction() }
-        val sent = driverPhone?.let { replyManager.sendReplyOnce(it, "لديك مهمة توصيل رقم $taskCode للطلب $orderId إلى $driverName. أرسل 1 لتوثيق استلام المهمة؛ التوصيل إلزامي ضمن مهامك الوظيفية.") } ?: false
-        sent
+        // نجاح التعيين يعني أن المهمة سُجلت ذرياً؛ تعذر وضع SMS في outbox
+        // لا يلغي التعيين، بل يُعالج لاحقاً عبر آلية إعادة الإرسال.
+        driverPhone?.let { replyManager.sendReplyOnce(it, "لديك مهمة توصيل رقم $taskCode للطلب $orderId إلى $driverName. أرسل 1 لتوثيق استلام المهمة؛ التوصيل إلزامي ضمن مهامك الوظيفية.") }
+        true
     }
 
     suspend fun handleDriverReply(phone: String, body: String): Boolean = withContext(Dispatchers.IO) {
