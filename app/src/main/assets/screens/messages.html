@@ -1737,6 +1737,7 @@ body {
         <button class="tab-btn" data-tab="observability">⌁ التتبع</button>
         <button class="tab-btn" data-tab="weekly">▥ أسبوعي</button>
         <button class="tab-btn" data-tab="orders">⛽ طلبات الوقود</button>
+        <button class="tab-btn" data-tab="dashboard">▦ Dashboard</button>
         <button class="tab-btn" data-tab="incoming">📥 واردة</button>
         <button class="tab-btn" data-tab="outgoing">📤 صادرة</button>
         <button class="tab-btn" data-tab="pending">⏳ قيد</button>
@@ -1827,6 +1828,13 @@ body {
             <section class="trace-panel" style="margin-bottom:16px;"><div class="trace-search"><input id="orderPhoneInput" type="tel" placeholder="رقم العميل لعرض طلباته" inputmode="tel" autocomplete="off"><button class="btn btn-primary" id="orderLookupBtn">عرض الطلبات</button></div></section>
             <div id="fuelOrdersList" class="message-list"><div class="empty-state" style="padding:28px 8px;"><div class="empty-icon">⛽</div><p>أدخل رقم العميل لعرض طلبات الوقود</p></div></div>
             <div id="fuelOrderTimeline" class="trace-list" style="margin-top:16px;"><div class="empty-state" style="padding:20px 8px;"><p>اختر طلبًا لعرض الخط الزمني</p></div></div>
+        </div>
+
+        <!-- Analytics Dashboard -->
+        <div class="tab-content" id="tab-dashboard">
+            <div class="section-heading"><div><h2>لوحة التحليلات التشغيلية</h2><p>أداء السائقين، نسب قبول الطلبات، وإجمالي المدفوعات البنكية المطابقة من البيانات الفعلية</p></div><span id="liveSocketStatus" class="message-type-badge badge-incoming">تحديث حي</span></div>
+            <div class="weekly-kpis"><div class="weekly-kpi"><span class="kpi-label">متوسط قبول السائقين</span><strong class="kpi-value" id="dashAcceptance">—</strong><span class="kpi-detail">آخر 30 يومًا</span></div><div class="weekly-kpi"><span class="kpi-label">إجمالي المدفوعات المطابقة</span><strong class="kpi-value" id="dashPayments">—</strong><span class="kpi-detail">ريال يمني</span></div><div class="weekly-kpi"><span class="kpi-label">عدد المطابقات</span><strong class="kpi-value" id="dashPaymentCount">—</strong><span class="kpi-detail">عمليات موثقة</span></div></div>
+            <div class="observability-grid"><section class="trace-panel"><h3>أداء السائقين</h3><div id="driverPerformanceList" class="trace-list"><div class="empty-state" style="padding:24px 8px;"><p>جارٍ التحميل...</p></div></div></section><section class="trace-panel"><h3>المدفوعات المطابقة يوميًا</h3><div id="matchedPaymentsList" class="trace-list"><div class="empty-state" style="padding:24px 8px;"><p>جارٍ التحميل...</p></div></div></section></div>
         </div>
 
         <!-- Conversations -->
@@ -2099,6 +2107,8 @@ body {
         fuelOrders: [],
         selectedFuelOrder: null,
         fuelTimeline: [],
+        driverPerformance: [],
+        matchedPaymentsDaily: [],
         filters: {
             search: '',
             status: '',
@@ -2149,6 +2159,9 @@ body {
         getSmsWeeklyAnalytics(days = 7) { return this.call('getSmsWeeklyAnalytics', days); },
         getFuelOrdersByPhone(phone) { return this.call('getFuelOrdersByPhoneTyped', phone); },
         getFuelOrderTimeline(orderId) { return this.call('getFuelOrderTimelineTyped', orderId); },
+        getDriverPerformance(days = 30) { return this.call('getDriverPerformanceTyped', days); },
+        getMatchedPaymentsDaily(days = 30) { return this.call('getMatchedPaymentsDailyTyped', days); },
+        startSmsLiveUpdates(url) { return this.call('startSmsLiveUpdates', url); },
         goToHome() { return this.call('goToHome'); },
 
         // Templates
@@ -2315,6 +2328,7 @@ body {
                     case 'observability': await loadOperational(); break;
                     case 'weekly': await loadWeeklyAnalytics(); break;
                     case 'orders': await loadFuelOrders(); break;
+                    case 'dashboard': await loadAnalyticsDashboard(); break;
                     case 'incoming': await loadFilteredMessages('message_type', 'incoming'); break;
                     case 'outgoing': await loadFilteredMessages('message_type', 'outgoing'); break;
                     case 'pending': await loadFilteredMessages('status', 'pending'); break;
@@ -2378,6 +2392,27 @@ body {
         if (!state.selectedFuelOrder) { container.innerHTML = '<div class="empty-state" style="padding:20px 8px;"><p>اختر طلبًا لعرض الخط الزمني</p></div>'; return; }
         if (!state.fuelTimeline.length) { container.innerHTML = '<div class="empty-state" style="padding:20px 8px;"><p>لا توجد أحداث محفوظة لهذا الطلب</p></div>'; return; }
         container.innerHTML = state.fuelTimeline.map(item => `<div class="trace-item"><span class="trace-line"></span><div><div class="trace-stage">${Utils.escapeHtml(item.event_type || 'حدث')}</div><div class="trace-payload">${Utils.escapeHtml(item.payload_json || '')}</div></div><time class="trace-time">${Utils.escapeHtml(Utils.formatDate(item.created_at))}</time></div>`).join('');
+    }
+
+    async function loadAnalyticsDashboard() {
+        const drivers = Utils.parseJSON(Bridge.getDriverPerformance(30));
+        const payments = Utils.parseJSON(Bridge.getMatchedPaymentsDaily(30));
+        state.driverPerformance = drivers?.success === false ? [] : Utils.dataArray(drivers);
+        state.matchedPaymentsDaily = payments?.success === false ? [] : Utils.dataArray(payments);
+        renderAnalyticsDashboard();
+    }
+
+    function renderAnalyticsDashboard() {
+        const drivers = state.driverPerformance || [], payments = state.matchedPaymentsDaily || [];
+        const avgAcceptance = drivers.length ? drivers.reduce((sum, d) => sum + Number(d.acceptance_rate || 0), 0) / drivers.length : 0;
+        const totalPayments = payments.reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+        const paymentCount = payments.reduce((sum, p) => sum + Number(p.matches || 0), 0);
+        const setText = (id, value) => { const node = document.getElementById(id); if (node) node.textContent = value; };
+        setText('dashAcceptance', `${(avgAcceptance * 100).toFixed(1)}%`); setText('dashPayments', totalPayments.toLocaleString('ar-YE')); setText('dashPaymentCount', paymentCount.toLocaleString('ar-YE'));
+        const driverBox = document.getElementById('driverPerformanceList');
+        if (driverBox) driverBox.innerHTML = drivers.length ? drivers.map(d => `<div class="trace-item"><div><div class="trace-stage">${Utils.escapeHtml(d.driver_name || 'سائق')}</div><div class="trace-payload">قبول: ${(Number(d.acceptance_rate || 0) * 100).toFixed(1)}% · إتمام: ${(Number(d.completion_rate || 0) * 100).toFixed(1)}% · ${Utils.escapeHtml(d.accepted || 0)}/${Utils.escapeHtml(d.offered || 0)} مهمة</div></div><time class="trace-time">${d.avg_response_ms == null ? '-' : `${Math.round(Number(d.avg_response_ms) / 1000)} ث`}</time></div>`).join('') : '<div class="empty-state" style="padding:24px 8px;"><p>لا توجد مهام سائقين خلال الفترة</p></div>';
+        const paymentBox = document.getElementById('matchedPaymentsList');
+        if (paymentBox) paymentBox.innerHTML = payments.length ? payments.map(p => `<div class="trace-item"><div><div class="trace-stage">${Utils.escapeHtml(p.day || '-')}</div><div class="trace-payload">${Utils.escapeHtml(Number(p.matches || 0))} مطابقة بنكية موثقة</div></div><strong class="trace-time">${Utils.escapeHtml(Number(p.total_amount || 0).toLocaleString('ar-YE'))} ريال</strong></div>`).join('') : '<div class="empty-state" style="padding:24px 8px;"><p>لا توجد مدفوعات مطابقة خلال الفترة</p></div>';
     }
 
     async function loadOperational() {
@@ -3441,6 +3476,18 @@ body {
         document.getElementById('tracePhoneInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadTrace(e.target.value); });
         document.getElementById('orderLookupBtn').addEventListener('click', () => loadFuelOrders());
         document.getElementById('orderPhoneInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFuelOrders(e.target.value); });
+        window.addEventListener('sms-live-update', (event) => {
+            const data = event.detail || {};
+            const status = document.getElementById('liveSocketStatus');
+            if (data.type === 'connection' && status) { status.textContent = data.status === 'connected' ? 'متصل حيًا' : 'إعادة اتصال'; status.className = `message-type-badge ${data.status === 'connected' ? 'badge-incoming' : 'badge-outgoing'}`; }
+            if (data.type !== 'connection') {
+                if (state.currentTab === 'orders') loadFuelOrders();
+                if (state.currentTab === 'dashboard') loadAnalyticsDashboard();
+                if (state.currentTab === 'observability') loadOperational();
+            }
+        });
+        const liveUrl = (localStorage.getItem('sms.liveSocketUrl') || '').trim();
+        if (liveUrl.startsWith('wss://')) Bridge.startSmsLiveUpdates(liveUrl);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {

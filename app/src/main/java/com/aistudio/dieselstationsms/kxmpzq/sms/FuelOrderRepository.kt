@@ -124,6 +124,15 @@ class FuelOrderRepository(private val db: DatabaseHelper) {
     }
 
     private fun appendEvent(database: android.database.sqlite.SQLiteDatabase, orderId: String, type: String, payload: JSONObject) {
-        database.insertWithOnConflict("sms_business_events", null, ContentValues().apply { put("event_id", "EV-${UUID.randomUUID()}"); put("conversation_id", orderId); put("event_type", type); put("aggregate_type", "FUEL_ORDER"); put("aggregate_id", orderId); put("payload_json", payload.toString()); put("created_at", System.currentTimeMillis()) }, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE)
+        database.insertWithOnConflict("sms_business_events", null, ContentValues().apply {
+            put("event_id", "EV-${UUID.randomUUID()}")
+            put("conversation_id", orderId)
+            put("event_type", type)
+            put("aggregate_type", "FUEL_ORDER")
+            put("aggregate_id", orderId)
+            put("payload_json", payload.toString())
+            put("created_at", System.currentTimeMillis())
+        }, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE)
+        LiveUpdateHub.publish(JSONObject().put("type", "fuel_order").put("order_id", orderId).put("event_type", type).put("payload", payload))
     }
 }

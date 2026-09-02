@@ -192,6 +192,10 @@ class MainActivity : AppCompatActivity() {
 
     // ====== مكونات النشاط ======
     private var webView: WebView? = null
+    private val smsLiveUpdatesClient = SmsLiveUpdatesClient()
+    private val liveUpdateListener: (String) -> Unit = { payload ->
+        runOnUiThread { webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('sms-live-update',{detail:$payload}))", null) }
+    }
     private var geminiApiKey: String = ""
     private var serverReady = false
     private val isDestroyed = AtomicBoolean(false)
@@ -268,6 +272,7 @@ class MainActivity : AppCompatActivity() {
                 applicationContext,
                 ServiceStatusRepository(applicationContext)
             )
+            LiveUpdateHub.subscribe(liveUpdateListener)
             DebugLogger.info("Database", "DatabaseHelper initialized")
         } catch (e: Exception) {
             DebugLogger.logException("Database", e)
@@ -400,6 +405,8 @@ class MainActivity : AppCompatActivity() {
 
         handler.removeCallbacksAndMessages(null)
 
+        LiveUpdateHub.unsubscribe(liveUpdateListener)
+        smsLiveUpdatesClient.disconnect()
         DebugLogger.detachWebView()
         pendingWebPermissionRequest?.deny()
         pendingWebPermissionRequest = null
@@ -8632,6 +8639,32 @@ fun getDashboardStats(jsonData: String = "{}"): String {
             } catch (e: Exception) { errorResponse(e.message ?: "خطأ غير معروف") }
         }
         
+        @JavascriptInterface
+        fun startSmsLiveUpdates(url: String): String {
+            return try {
+                val safeUrl = url.trim()
+                require(safeUrl.startsWith("wss://")) { "يجب استخدام اتصال WebSocket آمن wss://" }
+                smsLiveUpdatesClient.connect(safeUrl)
+                successResponse("تم تشغيل التحديث الحي")
+            } catch (e: Exception) { errorResponse(e.message ?: "تعذر تشغيل التحديث الحي") }
+        }
+
+        @JavascriptInterface
+        fun stopSmsLiveUpdates(): String {
+            smsLiveUpdatesClient.disconnect()
+            return successResponse("تم إيقاف التحديث الحي")
+        }
+
+        @JavascriptInterface
+        fun getDriverPerformanceTyped(days: Int): String {
+            return try { dataResponse(SmsAnalyticsRepository(db).driverPerformance(days)) } catch (e: Exception) { errorResponse(e.message ?: "تعذر تحميل أداء السائقين") }
+        }
+
+        @JavascriptInterface
+        fun getMatchedPaymentsDailyTyped(days: Int): String {
+            return try { dataResponse(SmsAnalyticsRepository(db).matchedPaymentsDaily(days)) } catch (e: Exception) { errorResponse(e.message ?: "تعذر تحميل المدفوعات اليومية") }
+        }
+
         @JavascriptInterface
         fun getFuelOrdersByPhoneTyped(phone: String): String {
             return try {

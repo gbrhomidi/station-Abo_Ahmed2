@@ -77,5 +77,6 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
 
     private fun appendEvent(database: android.database.sqlite.SQLiteDatabase, orderId: String, type: String, payload: JSONObject) {
         database.insertWithOnConflict("sms_business_events", null, ContentValues().apply { put("event_id", "EV-${UUID.randomUUID()}"); put("conversation_id", orderId); put("event_type", type); put("aggregate_type", "FUEL_ORDER"); put("aggregate_id", orderId); put("payload_json", payload.toString()); put("created_at", System.currentTimeMillis()) }, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE)
+        LiveUpdateHub.publish(JSONObject().put("type", "driver_task").put("order_id", orderId).put("event_type", type).put("payload", payload))
     }
 }
