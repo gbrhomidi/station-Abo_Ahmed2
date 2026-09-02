@@ -66,7 +66,7 @@ class DriverAssignmentEngine(private val context: Context, private val db: Datab
         var taskCode: String? = null
         database.beginTransaction()
         try {
-            val task = database.rawQuery("SELECT delivery_id, order_id, driver_id FROM sms_delivery_tasks t JOIN drivers d ON d.id = t.driver_id WHERE (d.phone = ? OR d.phone2 = ?) AND t.status = 'ASSIGNED' ORDER BY t.created_at ASC LIMIT 1", arrayOf(normalized, normalized)).use { c -> if (c.moveToFirst()) Triple(c.getString(0), c.getString(1), c.getLong(2)) else null } ?: return@withContext false
+            val task = database.rawQuery("SELECT delivery_id, order_id, driver_id FROM sms_delivery_tasks t JOIN drivers d ON d.id = t.driver_id WHERE (d.phone IN (?, ?) OR d.phone2 IN (?, ?)) AND t.status = 'ASSIGNED' ORDER BY t.created_at ASC LIMIT 1", arrayOf(normalized, normalized.removePrefix("967"), normalized, normalized.removePrefix("967"))).use { c -> if (c.moveToFirst()) Triple(c.getString(0), c.getString(1), c.getLong(2)) else null } ?: return@withContext false
             taskCode = task.first; orderId = task.second
             if (accepted) {
                 database.update("sms_delivery_tasks", ContentValues().apply { put("status", "ACCEPTED"); put("assigned_at", System.currentTimeMillis()); put("updated_at", System.currentTimeMillis()) }, "delivery_id = ? AND status = 'ASSIGNED'", arrayOf(task.first))
