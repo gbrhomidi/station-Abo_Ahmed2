@@ -1897,6 +1897,53 @@ class SmsProcessor(
             return false
         }
 
+        val fuelTypeId = customerResolver.fuelTypeId("diesel")?.toLong()
+            ?: return sendReplyRequired(sender, "تعذر تحديد نوع الوقود. تواصل مع المحطة.")
+        val partyId = customer.partyId?.toLong()
+            ?: return sendReplyRequired(sender, "لا يمكن إنشاء الطلب دون ملف عميل صالح.")
+        val requestedAt = DeliveryTimeResolver.resolve(order.deliveryTime)
+        val commerce = FuelOrderRepository(db)
+        val idempotencyKey = "sms-order:${normalizedPhone}:${order.totalAmount}:${order.deliveryLocation}:${order.deliveryTime}"
+        val fuelOrder = runCatching {
+            commerce.createDraft(
+                customerId = partyId,
+                phone = normalizedPhone,
+                fuelTypeId = fuelTypeId,
+                quantity = if (order.quantityDabbas > 0) order.quantityDabbas else order.quantityLiters,
+                unit = if (order.quantityDabbas > 0) "DABBA" else "LITER",
+                liters = order.quantityLiters,
+                unitPrice = order.unitPrice,
+                paymentMode = "PREPAID",
+                locationOriginal = order.deliveryLocation,
+                requestedDeliveryAt = requestedAt,
+                idempotencyKey = idempotencyKey
+            )
+        }.getOrElse {
+            Log.e(TAG, "FuelOrder creation failed", it)
+            return sendReplyRequired(sender, "تعذر إنشاء طلب الوقود. يرجى المحاولة لاحقاً.")
+        }
+        val quote = runCatching { commerce.createImmutableQuote(fuelOrder.orderId, priceVersion = "SMS-CURRENT") }.getOrElse {
+            Log.e(TAG, "FuelQuote creation failed", it)
+            return sendReplyRequired(sender, "تعذر إنشاء عرض السعر. يرجى المحاولة لاحقاً.")
+        }
+        val credit = customerResolver.creditSnapshot(partyId)?.let { CreditEligibilityEngine.decide(it.first, it.second, quote.total) }
+        val isCredit = credit?.eligible == true
+        if (isCredit) {
+            commerce.transition(fuelOrder.orderId, FuelOrderStatus.PAYMENT_VERIFIED, JSONObject().put("payment_mode", "CREDIT").put("available_credit", credit?.availableCredit ?: 0.0))
+            commerce.transition(fuelOrder.orderId, FuelOrderStatus.AWAITING_DELIVERY, JSONObject().put("payment_mode", "CREDIT"))
+        } else {
+            commerce.transition(fuelOrder.orderId, FuelOrderStatus.AWAITING_PAYMENT, JSONObject().put("payment_mode", "PREPAID").put("reason", credit?.reason ?: "prepaid_required"))
+        }
+        commerce.reserve(fuelOrder.orderId)
+        conversationManager.markDraftConfirmed(normalizedPhone)
+        ctx.awaitingResponse = false
+        ctx.pendingAction = ""
+        conversationManager.saveContext(normalizedPhone, ctx)
+        val paymentText = if (isCredit) "تم اعتماد البيع الآجل ضمن الحد المتاح." else "أرسل SMS التحويل البنكي بنفس قيمة العرض ليتم التحقق منه تلقائياً."
+        val workflowReply = sendReplyRequired(sender, "✅ $name، تم إنشاء طلب الوقود بنجاح.\nرقم الطلب: ${fuelOrder.orderId}\nنوع الوقود: ديزل\nالكمية: ${order.quantityLiters.toInt()} لتر\nالموقع: ${order.deliveryLocation}\nموعد الطلب: ${order.deliveryTime}\nالسعر المثبت: ${quote.total.toInt()} ريال\n$paymentText")
+        if (!workflowReply) Log.e(TAG, "FUEL_ORDER_REPLY_FAILED orderId=${fuelOrder.orderId}")
+        return workflowReply
+
         val orderId =
             "ORD-${System.currentTimeMillis() % 1000000}"
 

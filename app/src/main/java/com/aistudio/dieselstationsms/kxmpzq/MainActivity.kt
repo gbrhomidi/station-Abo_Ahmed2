@@ -8633,6 +8633,22 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         }
         
         @JavascriptInterface
+        fun getFuelOrdersByPhoneTyped(phone: String): String {
+            return try {
+                val normalized = PhoneUtils.normalize(phone) ?: throw IllegalArgumentException("رقم الهاتف غير صالح")
+                dataResponse(FuelOrderRepository(db).getOrdersForPhone(normalized))
+            } catch (e: Exception) { errorResponse(e.message ?: "تعذر تحميل طلبات الوقود") }
+        }
+
+        @JavascriptInterface
+        fun getFuelOrderTimelineTyped(orderId: String): String {
+            return try {
+                require(orderId.isNotBlank()) { "رقم الطلب مطلوب" }
+                dataResponse(FuelOrderRepository(db).timeline(orderId.trim()))
+            } catch (e: Exception) { errorResponse(e.message ?: "تعذر تحميل خط الطلب الزمني") }
+        }
+
+        @JavascriptInterface
         fun sendSmsMessageTyped(jsonData: String): String {
             return try {
                 val obj = JSONObject(jsonData)

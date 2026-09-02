@@ -1300,6 +1300,15 @@ class SmsCustomerResolver(
     // Fuel Type ID
     // ═══════════════════════════════════════════════════════════════
 
+    suspend fun fuelTypeId(fuelCode: String): Int? = getFuelTypeId(fuelCode)
+
+    suspend fun creditSnapshot(partyId: Long): Pair<Double, Double>? = withContext(Dispatchers.IO) {
+        if (partyId <= 0) return@withContext null
+        db.readableDatabase.rawQuery("SELECT COALESCE(credit_limit, 0), COALESCE(current_balance, 0) FROM parties WHERE id = ? AND is_deleted = 0 LIMIT 1", arrayOf(partyId.toString())).use { c ->
+            if (c.moveToFirst()) c.getDouble(0) to c.getDouble(1) else null
+        }
+    }
+
     private suspend fun getFuelTypeId(
         fuelCode: String
     ): Int? = withContext(Dispatchers.IO) {

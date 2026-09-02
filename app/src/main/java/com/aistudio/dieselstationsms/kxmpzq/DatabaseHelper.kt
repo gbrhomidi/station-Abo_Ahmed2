@@ -45,7 +45,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         private const val TAG = "DatabaseHelper"
         private const val DB_NAME = "diesel_station.db"
         const val DATABASE_NAME = DB_NAME
-        const val VERSION = 33
+        const val VERSION = 34
 
         private const val HASH_ITERATIONS = 10000
         private const val SMS_HASH_RETENTION_DAYS = 30
@@ -167,6 +167,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
             ensureTaskPermissions(db)
             ensureMessagingPermissions(db)
             ensureSmsSettings(db)
+            ensureFuelCommerceSchema(db)
             db.setTransactionSuccessful()
             Log.d(TAG, "Database V$VERSION created successfully")
         } finally {
@@ -207,6 +208,7 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                     30 -> migrateV30ToV31(db)
                     31 -> migrateV31ToV32(db)
                     32 -> migrateV32ToV33(db)
+                    33 -> ensureFuelCommerceSchema(db)
                 }
             }
             ensureModule006Schema(db)
@@ -23146,6 +23148,62 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
         val result = mutableMapOf<String, Any>()
         readableDatabase.rawQuery("SELECT COUNT(*) total_count, COALESCE(SUM(amount),0) total_amount, COALESCE(SUM(CASE WHEN status='paid' THEN amount ELSE 0 END),0) paid_amount, COALESCE(SUM(CASE WHEN type='salary' THEN amount ELSE 0 END),0) salary_total FROM employee_payments WHERE ${conditions.joinToString(" AND ")}", args.toTypedArray()).use { c -> if (c.moveToFirst()) for (i in 0 until c.columnCount) result[c.getColumnName(i)] = if (c.getType(i) == Cursor.FIELD_TYPE_INTEGER) c.getLong(i) else c.getDouble(i) }
         return result
+    }
+
+    private fun ensureFuelCommerceSchema(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_orders (
+                order_id TEXT PRIMARY KEY, customer_id INTEGER NOT NULL, phone TEXT NOT NULL,
+                fuel_type_id INTEGER NOT NULL, quantity REAL NOT NULL, unit TEXT NOT NULL,
+                liters REAL NOT NULL, unit_price REAL NOT NULL, total_amount REAL NOT NULL,
+                quote_id TEXT, payment_mode TEXT NOT NULL DEFAULT 'PREPAID',
+                payment_status TEXT NOT NULL DEFAULT 'PENDING', delivery_location TEXT,
+                delivery_location_original TEXT, requested_delivery_at INTEGER, dispatch_at INTEGER,
+                estimated_arrival_at INTEGER, driver_id INTEGER, vehicle_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'DRAFT', created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL, idempotency_key TEXT NOT NULL UNIQUE,
+                CHECK(quantity > 0), CHECK(liters > 0), CHECK(total_amount >= 0),
+                CHECK(payment_mode IN ('PREPAID','CREDIT')),
+                CHECK(status IN ('DRAFT','QUOTED','AWAITING_PAYMENT','PAYMENT_VERIFIED','AWAITING_DELIVERY','READY_FOR_DISPATCH','DRIVER_ASSIGNED','OUT_FOR_DELIVERY','DELIVERED','COMPLETED','CANCELLED','EXPIRED','PAYMENT_FAILED','PAYMENT_MISMATCH','DELIVERY_FAILED') )
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_orders_status_expiry ON fuel_orders(status, expires_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_orders_customer ON fuel_orders(customer_id, created_at)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_quotes (
+                quote_id TEXT PRIMARY KEY, order_id TEXT NOT NULL, fuel_type_id INTEGER NOT NULL,
+                quantity REAL NOT NULL, liters REAL NOT NULL, unit_price REAL NOT NULL,
+                discount REAL NOT NULL DEFAULT 0, delivery_fee REAL NOT NULL DEFAULT 0,
+                total REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'YER', price_version TEXT NOT NULL,
+                expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+                FOREIGN KEY(order_id) REFERENCES fuel_orders(order_id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fuel_quotes_order ON fuel_quotes(order_id, created_at)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS fuel_reservations (
+                reservation_id TEXT PRIMARY KEY, order_id TEXT NOT NULL UNIQUE,
+                fuel_type_id INTEGER NOT NULL, liters REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'RESERVED', created_at INTEGER NOT NULL,
+                released_at INTEGER, FOREIGN KEY(order_id) REFERENCES fuel_orders(order_id),
+                CHECK(status IN ('RESERVED','CONSUMED','RELEASED','EXPIRED'))
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS sms_sender_identities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, sender_phone TEXT NOT NULL UNIQUE,
+                bank_id TEXT NOT NULL, bank_account_id TEXT NOT NULL, source_type TEXT NOT NULL DEFAULT 'BANK',
+                verified INTEGER NOT NULL DEFAULT 0, verification_method TEXT,
+                active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+                CHECK(source_type = 'BANK')
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_sms_sender_identity_bank ON sms_sender_identities(bank_id, bank_account_id, active)")
+        ensureColumn(db, "sms_payment_events", "fingerprint", "TEXT")
+        ensureColumn(db, "sms_payment_events", "bank_id", "TEXT")
+        ensureColumn(db, "sms_payment_events", "bank_account_id", "TEXT")
+        ensureColumn(db, "sms_payment_events", "balance", "REAL")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_payment_fingerprint ON sms_payment_events(fingerprint) WHERE fingerprint IS NOT NULL")
     }
 
     }
