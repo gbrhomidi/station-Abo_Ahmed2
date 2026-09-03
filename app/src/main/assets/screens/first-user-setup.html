@@ -66,7 +66,7 @@
 
         /* ========== FORM AREA (بدون Hero) ========== */
         .form-area {
-            padding: 30px 38px 36px;
+            padding: 30px 38px 110px;
         }
 
         /* ========== TOAST الترحيبي (يظهر كإشعار عائم) ========== */
@@ -188,11 +188,48 @@
             text-align: center;
             /* توسيط النص داخلياً */
         }
+        .field select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-input);
+            background: #fff;
+            font: inherit;
+            font-size: .95rem;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+            text-align: center;
+            cursor: pointer;
+        }
+        .field select:focus {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 4px rgba(25, 118, 184, .15);
+            transform: translateY(-1px);
+        }
+        .field select:disabled {
+            background: #f2f6f9;
+            color: var(--text-muted);
+            cursor: not-allowed;
+            opacity: .9;
+        }
+
         .field input:focus {
             border-color: var(--blue);
             box-shadow: 0 0 0 4px rgba(25, 118, 184, .15);
             transform: translateY(-1px);
         }
+        .field input.input-error,
+        .field select.input-error {
+            border-color: var(--red) !important;
+            box-shadow: 0 0 0 4px rgba(180, 35, 24, .14) !important;
+            animation: fieldErrorShake .22s ease-in-out 0s 2;
+        }
+        @keyframes fieldErrorShake {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(-4px); }
+        }
+
         .field input[readonly] {
             background: var(--blue-light);
             border-color: #b0d4ec;
@@ -269,12 +306,18 @@
 
         /* ========== ACTIONS ========== */
         .actions {
+            position: fixed;
+            left: 50%;
+            bottom: max(14px, env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            z-index: 10000;
             display: flex;
             justify-content: center;
-            /* توسيط الزر */
-            margin-top: 28px;
-            padding-top: 22px;
-            border-top: 1px solid #e5ecf2;
+            width: min(560px, calc(100vw - 28px));
+            margin: 0;
+            padding: 0;
+            border-top: 0;
+            pointer-events: none;
         }
         .primary-btn {
             display: inline-flex;
@@ -292,6 +335,7 @@
             cursor: pointer;
             box-shadow: 0 10px 22px rgba(25, 118, 184, .28);
             transition: transform var(--transition), box-shadow var(--transition);
+            pointer-events: auto;
         }
         .primary-btn:hover:not(:disabled) {
             transform: scale(1.02);
@@ -499,7 +543,8 @@
             .form-grid {
                 gap: 10px 12px;
             }
-            .field input {
+            .field input,
+            .field select {
                 padding: 10px 12px;
                 font-size: .9rem;
             }
@@ -510,6 +555,7 @@
             }
             .actions {
                 justify-content: stretch;
+                width: calc(100vw - 24px);
             }
             .dialog-actions {
                 flex-direction: column;
@@ -544,7 +590,8 @@
                 grid-template-columns: 1fr 1fr;
                 gap: 8px 10px;
             }
-            .field input {
+            .field input,
+            .field select {
                 padding: 8px 10px;
                 font-size: .85rem;
             }
@@ -595,30 +642,55 @@
                         <input id="fullName" type="text" required maxlength="200" autocomplete="name" placeholder="الاسم الكامل">
                     </div>
 
-                    <!-- Full-row: الاسم الكامل بالعربي -->
-                    <div class="field full-row">
+                    <!-- Full-row: الاسم الكامل بالعربي (مخفي ويُنسخ تلقائياً من الاسم الكامل) -->
+                    <div class="field full-row" id="fullNameArContainer" hidden aria-hidden="true">
                         <label for="fullNameAr">الاسم الكامل بالعربي</label>
-                        <input id="fullNameAr" type="text" maxlength="200" placeholder="الاسم باللغة العربية">
+                        <input id="fullNameAr" type="hidden" maxlength="200" aria-hidden="true">
                     </div>
 
                     <!-- Two columns: البريد الإلكتروني + رقم الهاتف -->
                     <div class="field">
-                        <label for="email">البريد الإلكتروني</label>
-                        <input id="email" type="email" maxlength="100" autocomplete="email" placeholder="اختياري ويجب أن يكون فريداً">
+                        <label for="email">البريد الإلكتروني <span class="required">*</span></label>
+                        <input id="email" type="email" required maxlength="100" autocomplete="email" inputmode="email" placeholder="البريد الإلكتروني">
                     </div>
                     <div class="field">
-                        <label for="phone">رقم الهاتف</label>
-                        <input id="phone" type="tel" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="اختياري ويجب أن يكون فريداً">
+                        <label for="phone">رقم الهاتف <span class="required">*</span></label>
+                        <input id="phone" type="tel" required maxlength="20" autocomplete="tel" inputmode="numeric" pattern="[0-9+ ]{7,20}" placeholder="رقم الهاتف">
                     </div>
 
-                    <!-- Two columns: المسمى الوظيفي + القسم -->
+                    <!-- Two columns: القسم + المسمى الوظيفي -->
                     <div class="field">
-                        <label for="jobTitle">المسمى الوظيفي</label>
-                        <input id="jobTitle" type="text" maxlength="100" placeholder="مدير النظام">
+                        <label for="department">القسم <span class="required">*</span></label>
+                        <select id="department" required autocomplete="organization-title">
+                            <option value="">-- اختر القسم --</option>
+                            <option value="1">الإدارة العليا</option>
+                            <option value="2">الشؤون المالية</option>
+                            <option value="3">الشؤون الإدارية</option>
+                            <option value="4">المبيعات</option>
+                            <option value="5">خدمة العملاء</option>
+                            <option value="6">الصيانة والمرافق</option>
+                            <option value="7">الأمن والسلامة</option>
+                            <option value="8">البيئة والجودة</option>
+                            <option value="9">النقل واللوجستيات</option>
+                            <option value="10">التسويق</option>
+                            <option value="11">النظافة والخدمات العامة</option>
+                        </select>
                     </div>
                     <div class="field">
-                        <label for="department">القسم</label>
-                        <input id="department" type="text" maxlength="100" placeholder="الإدارة">
+                        <label for="jobTitle">المسمى الوظيفي <span class="required">*</span></label>
+                        <select id="jobTitle" required autocomplete="organization-title" disabled>
+                            <option value="">-- اختر القسم أولاً --</option>
+                        </select>
+                    </div>
+
+                    <!-- Two columns: رقم المحطة + رقم الفرع -->
+                    <div class="field">
+                        <label for="stationId">رقم المحطة <span class="required">*</span></label>
+                        <input id="stationId" type="number" required min="1" step="1" inputmode="numeric" value="1" placeholder="رقم المحطة">
+                    </div>
+                    <div class="field">
+                        <label for="branchId">رقم الفرع <span class="required">*</span></label>
+                        <input id="branchId" type="number" required min="1" step="1" inputmode="numeric" value="1" placeholder="رقم الفرع">
                     </div>
 
                     <!-- Full-row: رقم المستخدم (readonly) -->
@@ -723,12 +795,52 @@
             }
 
             function setFormEnabled(enabled) {
-                document.querySelectorAll('#setupForm input, #setupForm button').forEach((element) => {
+                document.querySelectorAll('#setupForm input, #setupForm select, #setupForm button').forEach((element) => {
                     if (element.id !== 'retryCheck') element.disabled = !enabled;
                 });
             }
 
+            const JOB_TITLES_MAP = Object.freeze({
+                "1": ['مدير المحطة', 'نائب مدير المحطة', 'مشرف وردية', 'مساعد مدير العمليات'],
+                "2": ['المدير المالي', 'محاسب عام', 'أمين صندوق', 'محاسب مبيعات يومية', 'مسؤول الرواتب والأجور', 'مراجع داخلي', 'مسؤول تسويات بنكية'],
+                "3": ['المدير الاداري', 'النائب الاداري', 'مسؤول مشتريات', 'أخصائي توظيف وتدريب', 'سكرتارية'],
+                "4": ['عامل', 'كاشير', 'عامل/كاشير', 'مشرف مضخات', 'مسؤول مخزن الوقود', 'مراقب مخزون الوقود والزيوت', 'منسق طلبات الوقود من الموردين'],
+                "5": ['مدير خدمة عملاء', 'موظف استقبال', 'عامل مغسلة سيارات', 'عامل تلميع وتنظيف داخلي', 'بائع البقالة', 'مسؤول ولاء العملاء وبطاقات الخصم'],
+                "6": ['فني صيانة مضخات', 'مهندس المركبات', 'عامل صيانة عامة', 'مشرف صيانة'],
+                "7": ['حارس', 'مشرف أمن', 'مراقب كاميرات مراقبة', 'مسؤول سلامة وصحة مهنية', 'مسعف / ممرض', 'مسؤول إطفاء وحرائق'],
+                "8": ['مسؤول بيئة', 'مراقب جودة الوقود', 'ممثل قانوني'],
+                "9": ['سائق', 'عامل تحميل وتنزيل', 'منسق لوجستي'],
+                "10": ['علاقات عامة', 'مسؤول تسويق', 'مندوب مبيعات', 'مسؤول عقود توريد'],
+                "11": ['عامل نظافة داخلية', 'عامل نظافة خارجية', 'عامل عام']
+            });
+
+            function updateJobTitleOptions() {
+                const department = document.getElementById('department');
+                const jobTitle = document.getElementById('jobTitle');
+                if (!department || !jobTitle) return;
+                const titles = JOB_TITLES_MAP[String(department.value || '')] || [];
+                jobTitle.replaceChildren();
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = titles.length ? '-- اختر المسمى الوظيفي --' : '-- اختر القسم أولاً --';
+                jobTitle.appendChild(placeholder);
+                titles.forEach(function(title) {
+                    const option = document.createElement('option');
+                    option.value = title;
+                    option.textContent = title;
+                    jobTitle.appendChild(option);
+                });
+                jobTitle.disabled = titles.length === 0;
+            }
+
+            function syncFullNameArabic() {
+                const fullName = document.getElementById('fullName');
+                const fullNameAr = document.getElementById('fullNameAr');
+                if (fullName && fullNameAr) fullNameAr.value = fullName.value.trim();
+            }
+
             function getPayload() {
+                syncFullNameArabic();
                 return {
                     username: document.getElementById('username').value.trim(),
                     password: document.getElementById('password').value,
@@ -738,17 +850,60 @@
                     email: document.getElementById('email').value.trim(),
                     phone: document.getElementById('phone').value.trim(),
                     job_title: document.getElementById('jobTitle').value.trim(),
-                    department: document.getElementById('department').value.trim()
+                    department: document.getElementById('department').value.trim(),
+                    station_id: document.getElementById('stationId').value.trim(),
+                    branch_id: document.getElementById('branchId').value.trim()
                 };
             }
 
             function validate(payload) {
+                if (!payload.username) return 'اسم المستخدم مطلوب.';
                 if (payload.username.length < 3) return 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل.';
-                if (!payload.full_name) return 'الاسم الكامل مطلوب.';
+                if (!/^[A-Za-z0-9_]+$/.test(payload.username)) return 'اسم المستخدم يجب أن يحتوي على أحرف إنجليزية أو أرقام أو الشرطة السفلية فقط.';
+                if (!payload.password) return 'كلمة المرور مطلوبة.';
                 if (payload.password.length < 6) return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل.';
+                if (!payload.password_confirmation) return 'تأكيد كلمة المرور مطلوب.';
                 if (payload.password !== payload.password_confirmation) return 'تأكيد كلمة المرور غير مطابق.';
-                if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) return 'صيغة البريد الإلكتروني غير صحيحة.';
+                if (!payload.full_name) return 'الاسم الكامل مطلوب.';
+                if (!/^[A-Za-z؀-ۿݐ-ݿࢠ-ࣿ\s.'-]+$/.test(payload.full_name)) return 'الاسم الكامل يجب أن يحتوي على حروف ومسافات فقط.';
+                if (!payload.full_name_ar) return 'تعذر إنشاء الاسم الكامل بالعربي.';
+                if (!payload.email) return 'البريد الإلكتروني مطلوب.';
+                if (!/^\S+@\S+\.\S+$/.test(payload.email)) return 'صيغة البريد الإلكتروني غير صحيحة.';
+                if (!payload.phone) return 'رقم الهاتف مطلوب.';
+                if (!/^\+?[0-9 ]{7,20}$/.test(payload.phone)) return 'رقم الهاتف يجب أن يحتوي على أرقام فقط ويمكن أن يبدأ بعلامة +.';
+                if (!payload.department || !JOB_TITLES_MAP[payload.department]) return 'يجب اختيار القسم.';
+                if (!payload.job_title || !JOB_TITLES_MAP[payload.department].includes(payload.job_title)) return 'يجب اختيار المسمى الوظيفي المرتبط بالقسم.';
+                if (!/^\d+$/.test(payload.station_id) || Number(payload.station_id) < 1) return 'رقم المحطة يجب أن يكون رقماً صحيحاً أكبر من صفر.';
+                if (!/^\d+$/.test(payload.branch_id) || Number(payload.branch_id) < 1) return 'رقم الفرع يجب أن يكون رقماً صحيحاً أكبر من صفر.';
                 return '';
+            }
+
+            function showInputError(message, fieldId) {
+                const field = fieldId ? document.getElementById(fieldId) : null;
+                if (field) {
+                    field.classList.add('input-error');
+                    window.setTimeout(() => field.classList.remove('input-error'), 1800);
+                    field.focus();
+                }
+                setStatus(message, 'error');
+                toast(message, 'error');
+            }
+
+            function validateFieldLive(field) {
+                if (!field || field.disabled) return true;
+                const id = field.id;
+                const value = String(field.value || '').trim();
+                let message = '';
+                if (field.required && !value) message = 'هذا الحقل مطلوب.';
+                else if (id === 'stationId' || id === 'branchId') {
+                    if (!/^\d+$/.test(value) || Number(value) < 1) message = id === 'stationId' ? 'رقم المحطة يجب أن يكون رقماً صحيحاً أكبر من صفر.' : 'رقم الفرع يجب أن يكون رقماً صحيحاً أكبر من صفر.';
+                } else if (id === 'phone' && !/^\+?[0-9 ]{7,20}$/.test(value)) message = 'رقم الهاتف يجب أن يحتوي على أرقام فقط ويمكن أن يبدأ بعلامة +.';
+                else if (id === 'email' && !/^\S+@\S+\.\S+$/.test(value)) message = 'صيغة البريد الإلكتروني غير صحيحة.';
+                if (message) {
+                    showInputError(message, id);
+                    return false;
+                }
+                return true;
             }
 
             // ========== إظهار وإخفاء الـ Toast الترحيبي ==========
@@ -849,6 +1004,20 @@
 
             // ========== إعداد المستمعين ==========
             document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('department').addEventListener('change', updateJobTitleOptions);
+                document.getElementById('fullName').addEventListener('input', syncFullNameArabic);
+                document.getElementById('fullName').addEventListener('change', syncFullNameArabic);
+                updateJobTitleOptions();
+                syncFullNameArabic();
+
+                document.querySelectorAll('#setupForm input:not([type="hidden"]), #setupForm select').forEach(function(field) {
+                    field.addEventListener('blur', function() { validateFieldLive(field); });
+                    field.addEventListener('invalid', function(event) {
+                        event.preventDefault();
+                        validateFieldLive(field);
+                    });
+                });
+
                 document.getElementById('setupForm').addEventListener('submit', saveFirstUser);
                 document.getElementById('retryCheck').addEventListener('click', checkInitialState);
                 document.getElementById('continueLogin').addEventListener('click', function() {
