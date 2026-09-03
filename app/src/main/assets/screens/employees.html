@@ -974,10 +974,17 @@ button{
 /* =========================================================
    PERFORMANCE PANEL - إدارة الأداء والتقييمات الشهرية (منقول من employees.html)
    ========================================================= */
-.performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}.performance-toolbar .form-group{margin-bottom:0}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
-@media(max-width:640px){.performance-toolbar,.performance-summary,.performance-form-grid{grid-template-columns:1fr}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
-.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin:0 -13px 12px;padding:4px 13px;background:linear-gradient(135deg,#dbeafe,#bfdbfe 55%,#93c5fd);border:1px solid var(--border);border-radius:0;box-shadow:inset 0 1px 2px rgba(15,23,42,.08);width:calc(100% + 26px)}
-[data-theme="dark"] .segmented-control{background:linear-gradient(135deg,#e6dccb,#d6c7ae 55%,#f1e3c4);border-color:#d5c3a4}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:var(--muted);font-weight:800;font-size:.74rem;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}.segment.active{background:var(--primary);color:#fff;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:center}.file-path-input{cursor:pointer}.file-path-input[readonly]{opacity:1}.file-path-input::placeholder{color:var(--muted)}
+.performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;margin-bottom:12px}.performance-toolbar .form-group{flex:1 1 auto;min-width:0;margin-bottom:0}.performance-toolbar .form-group label{font-size:.74rem;font-weight:800;color:var(--muted);display:block;margin-bottom:4px}.performance-toolbar .form-group .form-input{width:100%;min-height:42px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);color:var(--text);padding:6px 10px;font-size:.82rem;outline:none;text-align:center}.performance-toolbar .form-group .form-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}.performance-toolbar .btn{flex:0 0 auto;min-height:42px;padding:6px 16px;white-space:nowrap}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
+@media(max-width:640px){.performance-toolbar{flex-wrap:wrap}.performance-toolbar .form-group{flex:1 1 100%}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
+.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin:0 -13px 12px;padding:4px 13px;background:linear-gradient(135deg,#dbeafe,#bfdbfe 55%,#93c5fd);border:1px solid var(--border);border-radius:0;box-shadow:inset 0 1px 2px rgba(15,23,42,.08);width:calc(100% + 26px);padding-left:0.25rem;padding-right:0.25rem;box-shadow:0 4px 12px rgba(0,0,0,0.12),inset 0 1px 2px rgba(255,255,255,0.7)}
+[data-theme="dark"] .segmented-control{background:linear-gradient(135deg,#e6dccb,#d6c7ae 55%,#f1e3c4);border-color:#d5c3a4;box-shadow:0 4px 12px rgba(0,0,0,0.4),inset 0 1px 2px rgba(255,255,255,0.1)}
+.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:#000000;font-weight:800;font-size:15px;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}
+[data-theme="dark"] .segment{color:#000000}
+.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.segment.active{background:var(--primary);color:#000000;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}
+[data-theme="dark"] .segment.active{color:#000000}
+.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}
+.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:center}.file-path-input{cursor:pointer}.file-path-input[readonly]{opacity:1}.file-path-input::placeholder{color:var(--muted)}
 
 /* APK/WebView compatibility: keep this screen's desktop-correct two-column layout.
    theme.css contains broad ui-rehab mobile fallbacks that must not collapse this screen. */
@@ -1001,6 +1008,14 @@ button{
 @media (max-width:430px){
     body.ui-rehab .form-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
 }
+
+/* =========================================================
+   تحسين تصميم تشك بوكس في التقارير
+   ========================================================= */
+.report-columns{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;justify-content:center}
+.report-columns label{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:.78rem;font-weight:800;color:var(--text);cursor:pointer;transition:background .2s,border-color .2s,box-shadow .2s}
+.report-columns label:hover{background:var(--primary-soft);border-color:var(--primary)}
+.report-columns input[type="checkbox"]{width:17px;height:17px;accent-color:var(--primary);cursor:pointer;margin:0}
 </style></head><body class="ui-rehab"><div class="offline" id="offline">
     اتصال Android Bridge غير متاح — لا توجد بيانات بديلة.
 </div><div class="loading" id="loading">
@@ -1112,7 +1127,7 @@ button{
      ========================================================= -->
 <section class="performance-panel" id="performancePanel">
   <div class="performance-head"><div><h3><i class="fas fa-chart-line"></i> إدارة الأداء والتقييمات الشهرية</h3><p>سجّل تقييمًا شهريًا لكل موظف، واحفظه فعليًا داخل الحقل <code>extra_data</code> في سجل الموظف.</p></div><span class="performance-badge"><i class="fas fa-database"></i> SQLite / Android Bridge</span></div>
-  <div class="performance-toolbar"><div class="form-group"><label class="form-label">شهر التقييم</label><input class="form-input" id="performanceMonth" type="month"></div><div class="form-group"><label class="form-label">الموظف</label><select class="form-input" id="performanceEmployeeSelect"><option value="">اختر الموظف</option></select></div><button type="button" class="btn primary" id="openPerformanceBtn"><i class="fas fa-pen-to-square"></i> إضافة تقييم</button></div>
+  <div class="performance-toolbar"><div class="form-group"><label for="performanceMonth">شهر التقييم</label><input class="form-input" id="performanceMonth" type="month"></div><div class="form-group"><label for="performanceEmployeeSelect">الموظف</label><select class="form-input" id="performanceEmployeeSelect"><option value="">اختر الموظف</option></select></div><button type="button" class="btn primary" id="openPerformanceBtn"><i class="fas fa-pen-to-square"></i> إضافة تقييم</button></div>
   <div class="performance-summary"><div class="performance-kpi"><strong id="performanceReviewed">0</strong><span>تقييمات الشهر</span></div><div class="performance-kpi"><strong id="performanceAverage">—</strong><span>متوسط التقييم</span></div><div class="performance-kpi"><strong id="performanceTop">—</strong><span>أفضل تقييم</span></div></div>
   <div id="performanceResults"><div class="performance-empty">لا توجد تقييمات محفوظة للشهر المحدد.</div></div>
 </section>
@@ -1530,7 +1545,7 @@ const defs = [
         Object.keys(departments).map(x=>[x,x])
     ],
 
-    ['job_title','text',1,0,0,0],
+    ['job_title','select',1,0,0,0, []],
 
     ['job_title_ar','text',0,0,0,1],
 
@@ -1538,7 +1553,7 @@ const defs = [
 
     ['hire_date','date',1,0,0],
 
-    ['station_id','number',0,0,0,0,null,0],
+    ['station_id','number',0,0,0,1,null,0],
 
     ['branch_id','number',0,0,1,1,null,1],
 
@@ -1852,6 +1867,23 @@ function buildForm(row=null){
 
         if(t === 'select'){
 
+            let optionsHtml = '<option value="">اختر...</option>';
+
+            // إذا كان job_title، سنقوم بتحديث الخيارات لاحقاً في configureForm
+            if(k === 'job_title'){
+                // سنقوم بملء الخيارات في configureForm بناءً على القسم
+                optionsHtml += '';
+            } else if (opts && Array.isArray(opts)) {
+                optionsHtml += opts
+                    .map(
+                        o =>
+                        `<option value="${esc(o[0])}">
+                            ${esc(o[1])}
+                        </option>`
+                    )
+                    .join('');
+            }
+
             return `
             <div class="${cls}">
                 <label>
@@ -1862,20 +1894,7 @@ function buildForm(row=null){
                 <select
                     data-key="${k}"
                     ${req?'required':''}>
-
-                    <option value="">
-                        اختر...
-                    </option>
-
-                    ${(opts || [])
-                        .map(
-                            o =>
-                            `<option value="${esc(o[0])}">
-                                ${esc(o[1])}
-                            </option>`
-                        )
-                        .join('')}
-
+                    ${optionsHtml}
                 </select>
             </div>`;
         }
@@ -1969,13 +1988,15 @@ if(code){
     code.readOnly = true;
 }
 
-/* المحطة */
+/* المحطة - تُجلب من جلسة المستخدم، وتُخبأ */
 if(station){
 
-    /* المحطة لا تُعبأ تلقائيًا؛ تُحفظ قيمة السجل عند التعديل فقط. */
-    station.value = row?.station_id || '';
-    station.readOnly = false;
-    station.disabled = false;
+    // جلب station_id من user أو تعيين 1
+    const stationId = state.user?.station_id ?? state.user?.stationId ?? '1';
+    station.value = stationId;
+    station.readOnly = true;
+    // إخفاء الحقل بإضافة class
+    station.closest('.field')?.classList.add('hidden');
 }
 
 /* الفرع */
@@ -2017,67 +2038,126 @@ if(full){
             full.value || '';
 }
 
-/* القسم */
-const dep =
-    $('[data-key="department"]');
+/* =========================================================
+   القسم ← المسمى الوظيفي ← المسمى الوظيفي بالعربية
+   تحديث ديناميكي متوافق مع Android WebView
+   ========================================================= */
+function getEmployeeFormField(key){
+    const form = $('employeeForm');
+    if(!form) return null;
+    return form.querySelector(`[data-key="${key}"]`);
+}
 
-/* المسمى */
-const job =
-    $('[data-key="job_title"]');
+function getEmployeeJobTitles(department){
+    const key = String(department || '').trim();
+    const titles = departments[key];
+    return Array.isArray(titles) ? titles.slice() : [];
+}
 
-/* المسمى العربي */
-const jobArabic =
-    $('[data-key="job_title_ar"]');
+function refreshEmployeeJobTitleOptions(preserveValue = false, preferredValue = ''){
+    const dep = getEmployeeFormField('department');
+    const job = getEmployeeFormField('job_title');
+    const jobArabic = getEmployeeFormField('job_title_ar');
 
-    function updateJobs({preserve=false} = {}){
-        /* المسمى الوظيفي أصبح إدخالاً نصياً حراً وليس قائمة قيم. */
-        if(!job) return;
-        job.disabled = false;
-        if(jobArabic && !preserve) jobArabic.value = '';
+    if(!dep || !job) return;
+
+    const selectedDepartment = String(dep.value || '').trim();
+    const titles = getEmployeeJobTitles(selectedDepartment);
+    const oldValue = preserveValue
+        ? String(preferredValue || job.value || '').trim()
+        : '';
+
+    job.replaceChildren();
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = selectedDepartment
+        ? 'اختر المسمى الوظيفي'
+        : 'اختر القسم أولاً';
+    job.appendChild(placeholder);
+
+    titles.forEach(function(title){
+        const option = document.createElement('option');
+        option.value = title;
+        option.textContent = title;
+        job.appendChild(option);
+    });
+
+    job.disabled = titles.length === 0;
+    job.removeAttribute('readonly');
+
+    if(oldValue && titles.includes(oldValue)){
+        job.value = oldValue;
+    }else{
+        job.value = '';
     }
 
-if(dep){
-
-    dep.addEventListener(
-        'change',
-        () => updateJobs({preserve:false})
-    );
-
-    /* تهيئة القائمة فور إنشاء النموذج، وليس بعد أول تغيير فقط. */
-    updateJobs({preserve:Boolean(row)});
+    if(jobArabic){
+        jobArabic.value = job.value || '';
+    }
 }
 
-if(job){
+function configureEmployeeDepartmentJobTitle(row){
+    const form = $('employeeForm');
+    const dep = getEmployeeFormField('department');
+    const job = getEmployeeFormField('job_title');
+    const jobArabic = getEmployeeFormField('job_title_ar');
 
-    job.addEventListener(
-        'input',
-        () => {
+    if(!form || !dep || !job) return;
 
-            if(jobArabic)
-                jobArabic.value =
-                    job.value;
+    dep.value = String(row?.department || '').trim();
 
+    refreshEmployeeJobTitleOptions(
+        Boolean(row?.job_title),
+        row?.job_title || ''
+    );
+
+    if(row?.job_title){
+        const normalizedJobTitle = String(row.job_title).trim();
+        if(Array.from(job.options).some(function(option){
+            return option.value === normalizedJobTitle;
+        })){
+            job.value = normalizedJobTitle;
         }
-    );
-}
+    }
 
-if(row && dep){
-
-    dep.value =
-        row.department || '';
-
-    if(job)
-        job.value =
-            row.job_title || '';
-
-    updateJobs({preserve:true});
-
-    if(jobArabic)
+    if(jobArabic){
         jobArabic.value =
-            row.job_title_ar ||
-            row.job_title ||
+            job.value ||
+            row?.job_title_ar ||
+            row?.job_title ||
             '';
+    }
+
+    /* التغيير الأساسي: إعادة بناء القائمة قبل أن يفتح Android قائمة select الأصلية. */
+    dep.addEventListener('change', function(){
+        refreshEmployeeJobTitleOptions(false, '');
+    });
+
+    dep.addEventListener('input', function(){
+        refreshEmployeeJobTitleOptions(false, '');
+    });
+
+    const prepareJobPicker = function(){
+        refreshEmployeeJobTitleOptions(
+            true,
+            job.value || row?.job_title || ''
+        );
+    };
+
+    job.addEventListener('pointerdown', prepareJobPicker, true);
+    job.addEventListener('touchstart', prepareJobPicker, true);
+    job.addEventListener('focus', prepareJobPicker, true);
+
+    job.addEventListener('change', function(){
+        if(jobArabic){
+            jobArabic.value = job.value || '';
+        }
+    });
 }
+
+/* القسم ← المسمى الوظيفي ← المسمى العربي */
+configureEmployeeDepartmentJobTitle(row);
 
 /* التنقل بين الحقول بزر Enter على الهاتف والكيبورد */
 const form = $('employeeForm');
