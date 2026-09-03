@@ -225,8 +225,11 @@ button:disabled{
 }
 
 .icon-btn{
-    width:42px;
-    height:42px;
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    max-width:44px!important;
+    flex:0 0 44px;
 
     display:grid;
     place-items:center;
@@ -1248,6 +1251,19 @@ button:disabled{
     gap:13px;
 }
 
+/* حاوية مشتركة لعناصر السطر الواحد داخل نموذج الوردية */
+.form-row{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:13px;
+    min-width:0;
+}
+
+.form-row > .form-group.full{
+    grid-column:1/-1;
+}
+
 .form-group{
     min-width:0;
 
@@ -1915,8 +1931,10 @@ body.shifts-screen .section-title{text-align:center;}
 /* Mobile form matrix: two-column pairs and three-column groups remain explicit at every phone width. */
 @media (max-width:767px){
     body.shifts-screen #shiftForm{grid-template-columns:repeat(6,minmax(0,1fr));}
-    body.shifts-screen #shiftForm > .form-group{grid-column:span 3;order:var(--shift-order,0);}
-    body.shifts-screen #shiftForm > .form-group.shift-form-triple{grid-column:span 2;}
+    body.shifts-screen #shiftForm > .form-row{grid-column:1/-1;order:var(--shift-order,0);}
+    body.shifts-screen #shiftForm > .form-row > .form-group{grid-column:auto;}
+    body.shifts-screen #shiftForm > .form-row.shift-row-triple{grid-template-columns:repeat(3,minmax(0,1fr));}
+    body.shifts-screen #shiftForm > .form-row > .form-group.shift-form-triple{grid-column:auto;}
     body.shifts-screen #shiftForm > .form-group.full,
     body.shifts-screen #shiftForm > .section-title{grid-column:1/-1;order:var(--shift-order,0);}
 }
@@ -3665,6 +3683,21 @@ document.addEventListener('focusin', event => {
     window.setTimeout(() => target.scrollIntoView({block:'nearest', inline:'nearest'}), 120);
 });
 
+function wrapShiftFormRows(rows){
+    const form = $('shiftForm');
+    if(!form) return;
+    rows.forEach(ids => {
+        const fields = ids.map(id => document.getElementById(id)?.closest('.form-group')).filter(Boolean);
+        if(!fields.length) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-row' + (ids.length === 3 ? ' shift-row-triple' : '');
+        fields.forEach(field => wrapper.appendChild(field));
+        const anchor = fields[0];
+        form.insertBefore(wrapper, anchor.nextSibling);
+        fields.forEach(field => field.remove());
+        wrapper.append(...fields);
+    });
+}
 function applyShiftMobileFormOrder(){
     const rows = [
         ['shift_type','shift_date'],
@@ -3684,6 +3717,7 @@ function applyShiftMobileFormOrder(){
         ['cash_variance'],
         ['variance_reason']
     ];
+    wrapShiftFormRows(rows);
     rows.forEach((ids, rowIndex) => ids.forEach((id, columnIndex) => {
         const field = document.getElementById(id);
         const group = field && field.closest('.form-group');

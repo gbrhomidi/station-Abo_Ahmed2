@@ -96,6 +96,8 @@ class MainActivity : AppCompatActivity() {
 
         private var webViewInstanceId = 0
         private var pendingWebPermissionRequest: android.webkit.PermissionRequest? = null
+        private var pendingFilePathCallback: ValueCallback<Array<Uri>>? = null
+        private val fileChooserRequestCode = 4207
 
         // ============================
         // DebugLogger - نظام التشخيص المركزي
@@ -1105,7 +1107,7 @@ class MainActivity : AppCompatActivity() {
                                 displayZoomControls = false
                                 allowFileAccess = true
                                 // واجهات التطبيق من android_asset فقط، ولا تحتاج قراءة content:// داخل WebView.
-                                allowContentAccess = false
+                                allowContentAccess = true
                                 allowFileAccessFromFileURLs = false
                                 allowUniversalAccessFromFileURLs = false
                                 javaScriptCanOpenWindowsAutomatically = false
@@ -1121,6 +1123,31 @@ class MainActivity : AppCompatActivity() {
 
                             webViewClient = createWebViewClient()
                             webChromeClient = object : WebChromeClient() {
+                                override fun onShowFileChooser(
+                                    webView: WebView?,
+                                    filePathCallback: ValueCallback<Array<Uri>>?,
+                                    fileChooserParams: FileChooserParams?
+                                ): Boolean {
+                                    pendingFilePathCallback?.onReceiveValue(null)
+                                    pendingFilePathCallback = filePathCallback
+                                    return try {
+                                        val acceptType = fileChooserParams?.acceptTypes
+                                            ?.firstOrNull { it.isNotBlank() } ?: "*/*"
+                                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                            addCategory(Intent.CATEGORY_OPENABLE)
+                                            type = acceptType
+                                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
+                                        }
+                                        startActivityForResult(intent, fileChooserRequestCode)
+                                        true
+                                    } catch (e: Exception) {
+                                        pendingFilePathCallback?.onReceiveValue(null)
+                                        pendingFilePathCallback = null
+                                        DebugLogger.warn("WebView", "file chooser unavailable: ${e.message}")
+                                        false
+                                    }
+                                }
+
                                 override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
                                     val wantsCamera = request.resources?.contains(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE) == true
                                     if (!wantsCamera) {
@@ -1178,6 +1205,26 @@ class MainActivity : AppCompatActivity() {
             },
             update = { }
         )
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == fileChooserRequestCode) {
+            val callback = pendingFilePathCallback
+            pendingFilePathCallback = null
+            if (callback != null) {
+                val results = if (resultCode == RESULT_OK && data != null) {
+                    val clipData = data.clipData
+                    when {
+                        clipData != null -> Array(clipData.itemCount) { index -> clipData.getItemAt(index).uri }
+                        data.data != null -> arrayOf(data.data!!)
+                        else -> null
+                    }
+                } else null
+                callback.onReceiveValue(results)
+            }
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun createWebViewClient(): WebViewClient {

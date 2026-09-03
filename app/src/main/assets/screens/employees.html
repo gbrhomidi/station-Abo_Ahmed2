@@ -176,6 +176,16 @@ button{
     border-color:#63c7ff!important;
 }
 
+/* أزرار الوضع والرجوع ثابتة الأبعاد على WebView وAPK */
+.icon-btn,
+.header-actions .icon-btn{
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    max-width:44px!important;
+    flex:0 0 44px;
+}
+
 /* =========================================================
    PAGE / SEARCH / TABS
    ========================================================= */
@@ -581,6 +591,20 @@ button{
     gap:12px;
 }
 
+/* حاوية مشتركة لعناصر السطر الواحد داخل نماذج APK */
+.form-row{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    min-width:0;
+}
+
+.form-row > .field.full,
+.form-row > .field.email-full{
+    grid-column:1/-1;
+}
+
 .field{
     min-width:0;
     text-align:center;
@@ -920,8 +944,9 @@ button{
     }
 
     .icon-btn{
-        width:40px;
-        height:40px;
+        width:44px!important;
+        min-width:44px!important;
+        height:44px!important;
     }
 
     .title-text h1{
@@ -951,7 +976,8 @@ button{
    ========================================================= */
 .performance-panel{margin-top:16px;background:var(--surface-elevated);border:var(--border-width) var(--border-style) var(--border-color);border-radius:18px;padding:16px;border-color:var(--border);border-style:solid;border-width:1px}.performance-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.performance-head h3{font-size:1rem;font-weight:800}.performance-head p{color:var(--muted);font-size:.72rem;line-height:1.8;margin-top:4px}.performance-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 9px;background:rgba(139,92,246,.12);color:#8b5cf6;font-size:.66rem;font-weight:800;white-space:nowrap}.performance-toolbar{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}.performance-toolbar .form-group{margin-bottom:0}.performance-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:14px 0}.performance-kpi{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:11px}.performance-kpi strong{display:block;font-size:1.05rem;color:var(--text)}.performance-kpi span{display:block;color:var(--muted);font-size:.66rem;margin-top:3px}.performance-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}.performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.72rem}.performance-table th{background:var(--primary-soft);color:var(--primary);padding:9px;text-align:center;white-space:nowrap}.performance-table td{padding:8px;text-align:center;border-top:1px solid var(--border);color:var(--text)}.score-pill{display:inline-flex;min-width:42px;justify-content:center;padding:4px 8px;border-radius:12px;font-weight:800}.score-high{background:rgba(16,185,129,.14);color:var(--success)}.score-mid{background:rgba(245,158,11,.14);color:var(--warning)}.score-low{background:rgba(239,68,68,.14);color:var(--danger)}.performance-empty{padding:22px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.9}.performance-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.performance-form-grid .form-group.full{grid-column:1/-1}.performance-note{margin-top:10px;padding:9px 11px;background:var(--primary-soft);color:var(--primary);border-radius:10px;font-size:.7rem;line-height:1.8}.performance-history{margin-top:14px}.performance-history h4{font-size:.8rem;color:var(--primary);margin-bottom:8px}.performance-history-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px;border-top:1px solid var(--border);font-size:.7rem}.performance-history-item span{color:var(--muted)}
 @media(max-width:640px){.performance-toolbar,.performance-summary,.performance-form-grid{grid-template-columns:1fr}.performance-toolbar .btn{width:100%}.performance-head{flex-direction:column}}
-.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px;padding:4px;background:var(--surface-3);border:1px solid var(--border);border-radius:16px;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:var(--muted);font-weight:800;font-size:.74rem;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}.segment.active{background:var(--primary);color:#fff;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:right}
+.segmented-control{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;margin:0 -13px 12px;padding:4px 13px;background:linear-gradient(135deg,#dbeafe,#bfdbfe 55%,#93c5fd);border:1px solid var(--border);border-radius:0;box-shadow:inset 0 1px 2px rgba(15,23,42,.08);width:calc(100% + 26px)}
+[data-theme="dark"] .segmented-control{background:linear-gradient(135deg,#e6dccb,#d6c7ae 55%,#f1e3c4);border-color:#d5c3a4}.segmented-control::-webkit-scrollbar{display:none}.segment{flex:0 0 auto;min-height:44px;border:1px solid transparent;border-radius:11px;padding:8px 15px;background:transparent;color:var(--muted);font-weight:800;font-size:.74rem;line-height:1.2;white-space:nowrap;transition:background .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease}.segment:hover{color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}.segment.active{background:var(--primary);color:#fff;box-shadow:0 3px 9px color-mix(in srgb,var(--primary) 28%,transparent)}.segment:focus-visible{outline:2px solid var(--primary);outline-offset:2px;box-shadow:0 0 0 3px var(--primary-soft)}.field input[type=date]{cursor:pointer}.field input[type=tel]{direction:ltr;text-align:center}.file-path-input{cursor:pointer}.file-path-input[readonly]{opacity:1}.file-path-input::placeholder{color:var(--muted)}
 
 /* APK/WebView compatibility: keep this screen's desktop-correct two-column layout.
    theme.css contains broad ui-rehab mobile fallbacks that must not collapse this screen. */
@@ -1504,7 +1530,7 @@ const defs = [
         Object.keys(departments).map(x=>[x,x])
     ],
 
-    ['job_title','select',1,0,0,0],
+    ['job_title','text',1,0,0,0],
 
     ['job_title_ar','text',0,0,0,1],
 
@@ -1512,7 +1538,7 @@ const defs = [
 
     ['hire_date','date',1,0,0],
 
-    ['station_id','number',0,0,1,1,null,1],
+    ['station_id','number',0,0,1,0,null,1],
 
     ['branch_id','number',0,0,1,1,null,1],
 
@@ -1520,7 +1546,7 @@ const defs = [
 
     ['insurance_deduction','number',0,0,0],
 
-    ['total_salary','number',0,0,0,0,null,1],
+    ['total_salary','number',0,0,0,0,null,0],
 
     ['status','select',1,0,0,0,status],
 
@@ -1774,8 +1800,7 @@ function buildForm(row=null){
     $('formAlert').classList.remove('show');
     $('formAlert').textContent = '';
 
-    $('employeeForm').innerHTML =
-        defs.map(def => {
+    const fieldsMarkup = defs.map(def => {
 
             const [
                 k,
@@ -1895,13 +1920,34 @@ function buildForm(row=null){
         </div>`;
     }).join('');
 
-configureForm(row);
+    $('employeeForm').innerHTML = fieldsMarkup;
+    groupEmployeeFieldsIntoRows();
+    configureForm(row);
 
 }
 
 /* =========================================================
 FORM CONFIGURATION
 ========================================================= */
+
+function groupEmployeeFieldsIntoRows(){
+    const form = $('employeeForm');
+    if(!form) return;
+    const fields = Array.from(form.children).filter(node => node.classList.contains('field'));
+    const fragment = document.createDocumentFragment();
+    let row = null;
+    fields.forEach(field => {
+        const full = field.classList.contains('full') || field.classList.contains('email-full');
+        if(full || !row || row.children.length >= 2){
+            row = document.createElement('div');
+            row.className = 'form-row';
+            fragment.appendChild(row);
+        }
+        row.appendChild(field);
+        if(full) row = null;
+    });
+    form.replaceChildren(fragment);
+}
 
 function configureForm(row){
 
@@ -1988,38 +2034,12 @@ const job =
 const jobArabic =
     $('[data-key="job_title_ar"]');
 
-function updateJobs({preserve=false} = {}){
-
-    if(!job)
-        return;
-
-    const department =
-        dep?.value || '';
-
-    const previous =
-        preserve ? (job.value || '') : '';
-
-    const jobs =
-        departments[department] || [];
-
-    job.innerHTML =
-        `<option value="">${department ? 'اختر المسمى الوظيفي...' : 'اختر القسم أولاً...'}</option>` +
-        jobs
-            .map(
-                x =>
-                `<option value="${esc(x)}" ${x===previous?'selected':''}>
-                    ${esc(x)}
-                </option>`
-            )
-            .join('');
-
-    job.disabled = !department;
-
-    if(previous && jobs.includes(previous))
-        job.value = previous;
-    else if(jobArabic && !preserve)
-        jobArabic.value = '';
-}
+    function updateJobs({preserve=false} = {}){
+        /* المسمى الوظيفي أصبح إدخالاً نصياً حراً وليس قائمة قيم. */
+        if(!job) return;
+        job.disabled = false;
+        if(jobArabic && !preserve) jobArabic.value = '';
+    }
 
 if(dep){
 
@@ -2035,7 +2055,7 @@ if(dep){
 if(job){
 
     job.addEventListener(
-        'change',
+        'input',
         () => {
 
             if(jobArabic)
@@ -2063,6 +2083,44 @@ if(row && dep){
             row.job_title ||
             '';
 }
+
+/* التنقل بين الحقول بزر Enter على الهاتف والكيبورد */
+const form = $('employeeForm');
+if(form){
+    form.addEventListener('keydown', event => {
+        if(event.key !== 'Enter' || event.target.tagName === 'TEXTAREA') return;
+        event.preventDefault();
+        const controls = Array.from(form.querySelectorAll('input,select,textarea'))
+            .filter(el => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null);
+        const index = controls.indexOf(event.target);
+        if(index >= 0 && controls[index + 1]) controls[index + 1].focus();
+    });
+}
+
+/* اختيار مسار الملف لحقول العقد والهوية والصورة */
+['contract_path','id_doc_path','photo_path'].forEach(key => {
+    const field = $(`[data-key="${key}"]`);
+    if(!field) return;
+    field.classList.add('file-path-input');
+    field.readOnly = true;
+    field.placeholder = 'انقر لاختيار ملف';
+    field.addEventListener('click', () => {
+        const picker = document.createElement('input');
+        picker.type = 'file';
+        picker.accept = key === 'photo_path' ? 'image/*' : '*/*';
+        picker.style.display = 'none';
+        picker.addEventListener('change', () => {
+            const file = picker.files?.[0];
+            if(!file) return;
+            field.value = file.webkitRelativePath || file.name;
+            field.title = field.value;
+            field.dataset.selectedPath = picker.value || field.value;
+        });
+        document.body.appendChild(picker);
+        picker.click();
+        setTimeout(() => picker.remove(), 60000);
+    });
+});
 
 /* تاريخ التعيين */
 const hire =
