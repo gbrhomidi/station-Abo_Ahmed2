@@ -1538,7 +1538,7 @@ const defs = [
 
     ['hire_date','date',1,0,0],
 
-    ['station_id','number',0,0,1,0,null,1],
+    ['station_id','number',0,0,0,0,null,0],
 
     ['branch_id','number',0,0,1,1,null,1],
 
@@ -1972,15 +1972,10 @@ if(code){
 /* المحطة */
 if(station){
 
-    station.value =
-        row?.station_id ||
-        userVal([
-            'station_id',
-            'stationId'
-        ]) ||
-        '';
-
-    station.readOnly = true;
+    /* المحطة لا تُعبأ تلقائيًا؛ تُحفظ قيمة السجل عند التعديل فقط. */
+    station.value = row?.station_id || '';
+    station.readOnly = false;
+    station.disabled = false;
 }
 
 /* الفرع */
