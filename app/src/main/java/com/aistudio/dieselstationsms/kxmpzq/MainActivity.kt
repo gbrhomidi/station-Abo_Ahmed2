@@ -8095,7 +8095,8 @@ fun getDashboardStats(jsonData: String = "{}"): String {
         fun saveShiftRecord(jsonData: String) = operationalSave("sales", "shifts", jsonData)
         @JavascriptInterface
         fun saveShiftRecordTyped(
-            stationId: Int,
+            // Kept for JavaScript bridge compatibility; never trusted as an authority.
+            stationIdFromUi: Int,
             branchId: Int,
             shiftType: String,
             startTime: String,
@@ -8113,8 +8114,13 @@ fun getDashboardStats(jsonData: String = "{}"): String {
                 if (activity.currentUserId <= 0L) {
                     return errorResponse("لا توجد جلسة مستخدم صالحة")
                 }
+                // The authenticated user's station is the only source of station scope.
+                // The stationIdFromUi argument remains only for bridge compatibility.
+                val stationScopeId = requireCurrentStationId(
+                    db, activity.currentUserId
+                )
                 val id = db.saveShiftRecordTyped(
-                    stationId = stationId,
+                    stationId = stationScopeId,
                     branchId = branchId,
                     shiftType = shiftType,
                     startTime = startTime,

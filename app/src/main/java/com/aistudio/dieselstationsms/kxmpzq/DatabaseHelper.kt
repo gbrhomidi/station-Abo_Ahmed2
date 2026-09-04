@@ -8332,6 +8332,15 @@ class DatabaseHelper private constructor(context: Context) : SQLiteOpenHelper(co
                 val id = db.insertOrThrow(
                     "shifts", null, cv
                 )
+                require(id > 0L) { "تعذر الحصول على معرف الوردية بعد الحفظ" }
+                db.rawQuery(
+                    "SELECT id FROM shifts WHERE id = ? AND station_id = ? AND is_deleted = 0 LIMIT 1",
+                    arrayOf(id.toString(), stationId.toString())
+                ).use { cursor ->
+                    require(cursor.moveToFirst()) {
+                        "تم إدراج الوردية لكن تعذر التحقق من نطاق المحطة بعد الحفظ"
+                    }
+                }
                 db.setTransactionSuccessful()
                 id
             } finally {
